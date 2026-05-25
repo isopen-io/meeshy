@@ -66,7 +66,7 @@ struct SecurityView: View {
             ConversationLockSheet(
                 mode: .setupMasterPin,
                 conversationId: nil,
-                conversationName: "toutes les conversations",
+                conversationName: String(localized: "settings.security.all_conversations", defaultValue: "toutes les conversations", bundle: .main),
                 onSuccess: {}
             )
             .environmentObject(theme)
@@ -76,7 +76,7 @@ struct SecurityView: View {
             ConversationLockSheet(
                 mode: .changeMasterPin,
                 conversationId: nil,
-                conversationName: "toutes les conversations",
+                conversationName: String(localized: "settings.security.all_conversations", defaultValue: "toutes les conversations", bundle: .main),
                 onSuccess: {}
             )
             .environmentObject(theme)
@@ -86,7 +86,7 @@ struct SecurityView: View {
             ConversationLockSheet(
                 mode: .removeMasterPin,
                 conversationId: nil,
-                conversationName: "toutes les conversations",
+                conversationName: String(localized: "settings.security.all_conversations", defaultValue: "toutes les conversations", bundle: .main),
                 onSuccess: {}
             )
             .environmentObject(theme)
@@ -96,7 +96,7 @@ struct SecurityView: View {
             ConversationLockSheet(
                 mode: .unlockAll,
                 conversationId: nil,
-                conversationName: "toutes les conversations",
+                conversationName: String(localized: "settings.security.all_conversations", defaultValue: "toutes les conversations", bundle: .main),
                 onSuccess: {}
             )
             .environmentObject(theme)
@@ -136,7 +136,7 @@ struct SecurityView: View {
             )
             .environmentObject(theme)
         }
-        .onChange(of: scenePhase) { _, newPhase in
+        .adaptiveOnChange(of: scenePhase) { _, newPhase in
             if newPhase == .active, emailSent {
                 Task { await authManager.checkExistingSession() }
             }
@@ -155,7 +155,7 @@ struct SecurityView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14, weight: .semibold))
-                    Text("Retour")
+                    Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(.system(size: 15, weight: .medium))
                 }
                 .foregroundColor(MeeshyColors.indigo500)
@@ -163,7 +163,7 @@ struct SecurityView: View {
 
             Spacer()
 
-            Text("Securite")
+            Text(String(localized: "settings.security.title", defaultValue: "Securite", bundle: .main))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
@@ -197,7 +197,7 @@ struct SecurityView: View {
 
     private var passwordSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Mot de passe", icon: "lock.fill", color: "6366F1")
+            sectionHeader(title: String(localized: "settings.security.password", defaultValue: "Mot de passe", bundle: .main), icon: "lock.fill", color: "6366F1")
 
             Button {
                 HapticFeedback.light()
@@ -206,7 +206,7 @@ struct SecurityView: View {
                 HStack(spacing: 12) {
                     fieldIcon("key.fill", color: "6366F1")
 
-                    Text("Changer le mot de passe")
+                    Text(String(localized: "settings.security.change_password", defaultValue: "Changer le mot de passe", bundle: .main))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(theme.textPrimary)
 
@@ -227,18 +227,18 @@ struct SecurityView: View {
 
     private var emailSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Email", icon: "envelope.fill", color: accentColor)
+            sectionHeader(title: String(localized: "settings.security.email", defaultValue: "Email", bundle: .main), icon: "envelope.fill", color: accentColor)
 
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
                     fieldIcon("envelope.fill", color: accentColor)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Email actuel")
+                        Text(String(localized: "settings.security.email.current", defaultValue: "Email actuel", bundle: .main))
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(theme.textMuted)
 
-                        Text(user?.email ?? "Non defini")
+                        Text(user?.email ?? String(localized: "settings.security.not_set", defaultValue: "Non defini", bundle: .main))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(user?.email != nil ? theme.textPrimary : theme.textMuted)
                     }
@@ -267,14 +267,14 @@ struct SecurityView: View {
                             HStack(spacing: 8) {
                                 Image(systemName: "pencil")
                                     .font(.system(size: 12, weight: .semibold))
-                                Text("Modifier")
+                                Text(String(localized: "common.edit", defaultValue: "Modifier", bundle: .main))
                                     .font(.system(size: 13, weight: .semibold))
                             }
                             .foregroundColor(MeeshyColors.indigo500)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
                         }
-                        
+
                         if let email = user?.email, !email.isEmpty, user?.emailVerifiedAt == nil {
                             Button {
                                 HapticFeedback.light()
@@ -284,7 +284,7 @@ struct SecurityView: View {
                                 HStack(spacing: 8) {
                                     Image(systemName: "checkmark.seal.fill")
                                         .font(.system(size: 12, weight: .semibold))
-                                    Text("Vérifier")
+                                    Text(String(localized: "common.verify", defaultValue: "Vérifier", bundle: .main))
                                         .font(.system(size: 13, weight: .semibold))
                                 }
                                 .foregroundColor(MeeshyColors.success)
@@ -316,7 +316,7 @@ struct SecurityView: View {
             HStack(spacing: 12) {
                 fieldIcon("at", color: accentColor)
 
-                TextField("Nouvel email", text: $newEmail)
+                TextField(String(localized: "settings.security.email.new", defaultValue: "Nouvel email", bundle: .main), text: $newEmail)
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(theme.textPrimary)
                     .textContentType(.emailAddress)
@@ -332,7 +332,7 @@ struct SecurityView: View {
                     HapticFeedback.light()
                     withAnimation { isEditingEmail = false; newEmail = ""; emailError = nil }
                 } label: {
-                    Text("Annuler")
+                    Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                         .padding(.horizontal, 16)
@@ -348,7 +348,7 @@ struct SecurityView: View {
                         if emailLoading {
                             ProgressView().scaleEffect(0.7).tint(.white)
                         }
-                        Text("Envoyer")
+                        Text(String(localized: "common.send", defaultValue: "Envoyer", bundle: .main))
                             .font(.system(size: 13, weight: .bold))
                     }
                     .foregroundColor(.white)
@@ -375,7 +375,7 @@ struct SecurityView: View {
                 Image(systemName: "envelope.badge.fill")
                     .font(.system(size: 14))
                     .foregroundColor(MeeshyColors.success)
-                Text("Email de verification envoye")
+                Text(String(localized: "settings.security.email.verification_sent", defaultValue: "Email de verification envoye", bundle: .main))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(MeeshyColors.success)
             }
@@ -385,7 +385,9 @@ struct SecurityView: View {
                 HapticFeedback.light()
                 resendEmailVerification()
             } label: {
-                Text(resendCooldown > 0 ? "Renvoyer (\(resendCooldown)s)" : "Renvoyer l'email")
+                Text(resendCooldown > 0
+                     ? "\(String(localized: "settings.security.email.resend", defaultValue: "Renvoyer", bundle: .main)) (\(resendCooldown)s)"
+                     : String(localized: "settings.security.email.resend_email", defaultValue: "Renvoyer l'email", bundle: .main))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(resendCooldown > 0 ? theme.textMuted : MeeshyColors.indigo500)
             }
@@ -398,18 +400,18 @@ struct SecurityView: View {
 
     private var phoneSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Telephone", icon: "phone.fill", color: "818CF8")
+            sectionHeader(title: String(localized: "settings.security.phone", defaultValue: "Telephone", bundle: .main), icon: "phone.fill", color: "818CF8")
 
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
                     fieldIcon("phone.fill", color: "818CF8")
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Telephone actuel")
+                        Text(String(localized: "settings.security.phone.current", defaultValue: "Telephone actuel", bundle: .main))
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(theme.textMuted)
 
-                        Text(user?.phoneNumber ?? "Non defini")
+                        Text(user?.phoneNumber ?? String(localized: "settings.security.not_set", defaultValue: "Non defini", bundle: .main))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(user?.phoneNumber != nil ? theme.textPrimary : theme.textMuted)
                     }
@@ -438,14 +440,14 @@ struct SecurityView: View {
                             HStack(spacing: 8) {
                                 Image(systemName: "pencil")
                                     .font(.system(size: 12, weight: .semibold))
-                                Text("Modifier")
+                                Text(String(localized: "common.edit", defaultValue: "Modifier", bundle: .main))
                                     .font(.system(size: 13, weight: .semibold))
                             }
                             .foregroundColor(MeeshyColors.indigo400)
                             .padding(.horizontal, 14)
                             .padding(.vertical, 8)
                         }
-                        
+
                         if let phone = user?.phoneNumber, !phone.isEmpty, user?.phoneVerifiedAt == nil {
                             Button {
                                 HapticFeedback.light()
@@ -455,7 +457,7 @@ struct SecurityView: View {
                                 HStack(spacing: 8) {
                                     Image(systemName: "checkmark.seal.fill")
                                         .font(.system(size: 12, weight: .semibold))
-                                    Text("Vérifier")
+                                    Text(String(localized: "common.verify", defaultValue: "Vérifier", bundle: .main))
                                         .font(.system(size: 13, weight: .semibold))
                                 }
                                 .foregroundColor(MeeshyColors.success)
@@ -501,7 +503,7 @@ struct SecurityView: View {
                     HapticFeedback.light()
                     withAnimation { isEditingPhone = false; newPhone = ""; phoneError = nil }
                 } label: {
-                    Text("Annuler")
+                    Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                         .padding(.horizontal, 16)
@@ -517,7 +519,7 @@ struct SecurityView: View {
                         if phoneLoading {
                             ProgressView().scaleEffect(0.7).tint(.white)
                         }
-                        Text("Envoyer le code")
+                        Text(String(localized: "settings.security.phone.send_code", defaultValue: "Envoyer le code", bundle: .main))
                             .font(.system(size: 13, weight: .bold))
                     }
                     .foregroundColor(.white)
@@ -544,7 +546,7 @@ struct SecurityView: View {
                 Image(systemName: "ellipsis.message.fill")
                     .font(.system(size: 14))
                     .foregroundColor(MeeshyColors.success)
-                Text("Code envoye par SMS")
+                Text(String(localized: "settings.security.phone.code_sent", defaultValue: "Code envoye par SMS", bundle: .main))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(MeeshyColors.success)
             }
@@ -553,11 +555,11 @@ struct SecurityView: View {
             HStack(spacing: 12) {
                 fieldIcon("number", color: "818CF8")
 
-                TextField("Code a 6 chiffres", text: $phoneCode)
+                TextField(String(localized: "settings.security.phone.code_placeholder", defaultValue: "Code a 6 chiffres", bundle: .main), text: $phoneCode)
                     .font(.system(size: 16, weight: .semibold, design: .monospaced))
                     .foregroundColor(theme.textPrimary)
                     .keyboardType(.numberPad)
-                    .onChange(of: phoneCode) { _, newValue in
+                    .adaptiveOnChange(of: phoneCode) { _, newValue in
                         phoneCode = String(newValue.prefix(6).filter(\.isNumber))
                     }
             }
@@ -569,7 +571,7 @@ struct SecurityView: View {
                     HapticFeedback.light()
                     withAnimation { phoneSent = false; isEditingPhone = false; phoneCode = ""; newPhone = ""; phoneError = nil }
                 } label: {
-                    Text("Annuler")
+                    Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                         .padding(.horizontal, 16)
@@ -585,7 +587,7 @@ struct SecurityView: View {
                         if phoneVerifying {
                             ProgressView().scaleEffect(0.7).tint(.white)
                         }
-                        Text("Verifier")
+                        Text(String(localized: "common.verify", defaultValue: "Verifier", bundle: .main))
                             .font(.system(size: 13, weight: .bold))
                     }
                     .foregroundColor(.white)
@@ -613,7 +615,7 @@ struct SecurityView: View {
         let lockedCount = lockManager.lockedConversationIds.count
         let lockColor = "F87171"
         return VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Conversations verrouillées", icon: "lock.shield.fill", color: lockColor)
+            sectionHeader(title: String(localized: "settings.security.locked_conversations", defaultValue: "Conversations verrouillées", bundle: .main), icon: "lock.shield.fill", color: lockColor)
 
             VStack(spacing: 0) {
                 // Status row
@@ -621,10 +623,12 @@ struct SecurityView: View {
                     fieldIcon("lock.shield.fill", color: lockColor)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Master PIN")
+                        Text(String(localized: "settings.security.master_pin", defaultValue: "Master PIN", bundle: .main))
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(theme.textMuted)
-                        Text(hasMasterPIN ? "Configuré" : "Non configuré")
+                        Text(hasMasterPIN
+                             ? String(localized: "settings.security.configured", defaultValue: "Configuré", bundle: .main)
+                             : String(localized: "settings.security.not_configured", defaultValue: "Non configuré", bundle: .main))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(hasMasterPIN ? MeeshyColors.success : theme.textMuted)
                     }
@@ -634,7 +638,7 @@ struct SecurityView: View {
                     if hasMasterPIN {
                         HStack(spacing: 8) {
                             if lockedCount > 0 {
-                                Text("\(lockedCount) verrou(s)")
+                                Text("\(lockedCount) \(String(localized: "settings.security.locks", defaultValue: "verrou(s)", bundle: .main))")
                                     .font(.system(size: 11, weight: .semibold))
                                     .foregroundColor(MeeshyColors.error)
                                     .padding(.horizontal, 8)
@@ -660,7 +664,7 @@ struct SecurityView: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "plus.circle.fill")
                                     .font(.system(size: 12))
-                                Text("Configurer")
+                                Text(String(localized: "settings.security.configure", defaultValue: "Configurer", bundle: .main))
                                     .font(.system(size: 13, weight: .semibold))
                             }
                             .foregroundColor(.white)
@@ -678,7 +682,7 @@ struct SecurityView: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "pencil.circle.fill")
                                     .font(.system(size: 12))
-                                Text("Modifier")
+                                Text(String(localized: "common.edit", defaultValue: "Modifier", bundle: .main))
                                     .font(.system(size: 13, weight: .semibold))
                             }
                             .foregroundColor(MeeshyColors.error)
@@ -695,7 +699,7 @@ struct SecurityView: View {
                                 HStack(spacing: 6) {
                                     Image(systemName: "lock.open.fill")
                                         .font(.system(size: 12))
-                                    Text("Déverrouiller tout (\(lockedCount))")
+                                    Text("\(String(localized: "settings.security.unlock_all", defaultValue: "Déverrouiller tout", bundle: .main)) (\(lockedCount))")
                                         .font(.system(size: 13, weight: .semibold))
                                 }
                                 .foregroundColor(.white)
@@ -713,7 +717,7 @@ struct SecurityView: View {
                                 HStack(spacing: 6) {
                                     Image(systemName: "trash.circle.fill")
                                         .font(.system(size: 12))
-                                    Text("Supprimer")
+                                    Text(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main))
                                         .font(.system(size: 13, weight: .semibold))
                                 }
                                 .foregroundColor(MeeshyColors.error)
@@ -913,13 +917,17 @@ struct SecurityView: View {
     }
 
     private func verificationBadge(verified: Bool) -> some View {
-        Text(verified ? "Verifie" : "Non verifie")
+        Text(verified
+             ? String(localized: "settings.security.verified", defaultValue: "Verifie", bundle: .main)
+             : String(localized: "settings.security.not_verified", defaultValue: "Non verifie", bundle: .main))
             .font(.system(size: 10, weight: .semibold))
             .foregroundColor(.white)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(Capsule().fill(verified ? MeeshyColors.success : MeeshyColors.warning))
-            .accessibilityLabel(verified ? "Verifie" : "Non verifie")
+            .accessibilityLabel(verified
+                                ? String(localized: "settings.security.verified", defaultValue: "Verifie", bundle: .main)
+                                : String(localized: "settings.security.not_verified", defaultValue: "Non verifie", bundle: .main))
     }
 
     // MARK: - Actions
@@ -942,7 +950,7 @@ struct SecurityView: View {
                 emailError = error.errorDescription
             } catch {
                 HapticFeedback.error()
-                emailError = "Une erreur est survenue"
+                emailError = String(localized: "common.error.generic", defaultValue: "Une erreur est survenue", bundle: .main)
             }
             emailLoading = false
         }
@@ -958,7 +966,7 @@ struct SecurityView: View {
                 startResendCooldown()
             } catch {
                 HapticFeedback.error()
-                emailError = "Impossible de renvoyer l'email"
+                emailError = String(localized: "settings.security.email.resend_failed", defaultValue: "Impossible de renvoyer l'email", bundle: .main)
             }
         }
     }
@@ -991,7 +999,7 @@ struct SecurityView: View {
                 phoneError = error.errorDescription
             } catch {
                 HapticFeedback.error()
-                phoneError = "Une erreur est survenue"
+                phoneError = String(localized: "common.error.generic", defaultValue: "Une erreur est survenue", bundle: .main)
             }
             phoneLoading = false
         }
@@ -1016,13 +1024,13 @@ struct SecurityView: View {
                 HapticFeedback.error()
                 switch error {
                 case .serverError(400, _):
-                    phoneError = "Code incorrect ou expire"
+                    phoneError = String(localized: "settings.security.phone.code_invalid", defaultValue: "Code incorrect ou expire", bundle: .main)
                 default:
                     phoneError = error.errorDescription
                 }
             } catch {
                 HapticFeedback.error()
-                phoneError = "Une erreur est survenue"
+                phoneError = String(localized: "common.error.generic", defaultValue: "Une erreur est survenue", bundle: .main)
             }
             phoneVerifying = false
         }

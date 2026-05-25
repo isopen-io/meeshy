@@ -332,7 +332,9 @@ class MeeshySocketIOService {
     return this.orchestrator.onUnreadUpdated(listener);
   }
 
-  public onPreferencesUpdated(listener: (data: { userId: string; category: string }) => void): () => void {
+  public onPreferencesUpdated(
+    listener: (data: import('@meeshy/shared/types/socketio-events').UserPreferencesUpdatedEventData) => void,
+  ): () => void {
     return this.orchestrator.onPreferencesUpdated(listener);
   }
 
@@ -370,6 +372,14 @@ class MeeshySocketIOService {
    */
   public getConnectionDiagnostics(): any {
     return this.orchestrator.getConnectionDiagnostics();
+  }
+
+  /**
+   * Souscrit aux changements d'état de connexion (event-driven, pas de polling).
+   * Retourne une fonction de désinscription.
+   */
+  public onStatusChange(callback: (diag: any) => void): () => void {
+    return this.orchestrator.onStatusChange(callback);
   }
 
   /**

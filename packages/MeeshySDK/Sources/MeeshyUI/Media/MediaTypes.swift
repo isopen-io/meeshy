@@ -154,20 +154,20 @@ public enum PlaybackSpeed: Double, CaseIterable {
 
 public struct TranscriptionDisplaySegment: Identifiable {
     public let id = UUID()
-    public let text: String
-    public let startTime: Double
-    public let endTime: Double
-    public let speakerId: String?
-    public let speakerColor: String
+    public nonisolated let text: String
+    public nonisolated let startTime: Double
+    public nonisolated let endTime: Double
+    public nonisolated let speakerId: String?
+    public nonisolated let speakerColor: String
 
-    public init(text: String, startTime: Double, endTime: Double, speakerId: String?, speakerColor: String) {
+    public nonisolated init(text: String, startTime: Double, endTime: Double, speakerId: String?, speakerColor: String) {
         self.text = text; self.startTime = startTime; self.endTime = endTime
         self.speakerId = speakerId; self.speakerColor = speakerColor
     }
 
-    public static let speakerPalette = ["08D9D6", "FF6B6B", "9B59B6", "F8B500", "2ECC71", "E91E63", "3498DB", "FF7F50"]
+    public nonisolated static let speakerPalette = ["08D9D6", "FF6B6B", "9B59B6", "F8B500", "2ECC71", "E91E63", "3498DB", "FF7F50"]
 
-    public static func from(_ segment: MessageTranscriptionSegment, speakerIndex: Int = 0) -> TranscriptionDisplaySegment {
+    public nonisolated static func from(_ segment: MessageTranscriptionSegment, speakerIndex: Int = 0) -> TranscriptionDisplaySegment {
         TranscriptionDisplaySegment(
             text: segment.text,
             startTime: segment.startTime ?? 0,
@@ -177,14 +177,16 @@ public struct TranscriptionDisplaySegment: Identifiable {
         )
     }
 
-    public static func buildFrom(_ transcription: MessageTranscription) -> [TranscriptionDisplaySegment] {
+    public nonisolated static func buildFrom(_ transcription: MessageTranscription) -> [TranscriptionDisplaySegment] {
         buildFrom(segments: transcription.segments)
     }
 
-    public static func buildFrom(segments: [MessageTranscriptionSegment]) -> [TranscriptionDisplaySegment] {
+    public nonisolated static func buildFrom(segments: [MessageTranscriptionSegment]) -> [TranscriptionDisplaySegment] {
         var speakerMap: [String: Int] = [:]
         var nextIndex = 0
-        return segments.map { seg in
+        return segments
+            .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .map { seg in
             let sid = seg.speakerId ?? "default"
             if speakerMap[sid] == nil {
                 speakerMap[sid] = nextIndex
@@ -467,7 +469,7 @@ public enum CodeLanguage: String, CaseIterable, Sendable {
 
 // MARK: - Crop Ratio
 
-public enum CropRatio: Equatable {
+public enum CropRatio: Equatable, Hashable {
     case square
     case ratio4x3
     case ratio16x9

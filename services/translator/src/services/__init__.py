@@ -2,7 +2,6 @@
 Meeshy Translation Services Module
 Contient les services essentiels du système de traduction
 
-✅ Migration terminée : QuantizedMLService actif
 ✅ Audio Pipeline: Transcription, Voice Clone, TTS
 ✅ Voice API: VoiceAnalyzer, TranslationPipeline, Analytics
 """

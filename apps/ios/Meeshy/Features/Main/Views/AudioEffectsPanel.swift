@@ -37,7 +37,7 @@ struct AudioEffectsPanel: View {
             Image(systemName: "waveform.path.ecg")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(MeeshyColors.indigo400)
-            Text("Effets audio")
+            Text(String(localized: "audio.effects.title", defaultValue: "Effets audio", bundle: .main))
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .foregroundColor(.primary)
             Spacer()
@@ -46,7 +46,7 @@ struct AudioEffectsPanel: View {
                     selectedEffect = nil
                     callManager.clearAudioEffect()
                 } label: {
-                    Text("Desactiver")
+                    Text(String(localized: "audio.effects.disable", defaultValue: "Desactiver", bundle: .main))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(MeeshyColors.error)
                 }
@@ -59,11 +59,11 @@ struct AudioEffectsPanel: View {
     private var effectSelector: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
-                effectChip(label: "Off", icon: "speaker.slash", type: nil)
-                effectChip(label: "Auto-tune", icon: "waveform.path.ecg", type: .voiceCoder)
-                effectChip(label: "Baby", icon: "face.smiling", type: .babyVoice)
-                effectChip(label: "Demon", icon: "flame", type: .demonVoice)
-                effectChip(label: "Ambiance", icon: "music.note", type: .backSound)
+                effectChip(label: String(localized: "audio.effects.chip.off", defaultValue: "Off", bundle: .main), icon: "speaker.slash", type: nil)
+                effectChip(label: String(localized: "audio.effects.chip.autoTune", defaultValue: "Auto-tune", bundle: .main), icon: "waveform.path.ecg", type: .voiceCoder)
+                effectChip(label: String(localized: "audio.effects.chip.baby", defaultValue: "Baby", bundle: .main), icon: "face.smiling", type: .babyVoice)
+                effectChip(label: String(localized: "audio.effects.chip.demon", defaultValue: "Demon", bundle: .main), icon: "flame", type: .demonVoice)
+                effectChip(label: String(localized: "audio.effects.chip.ambiance", defaultValue: "Ambiance", bundle: .main), icon: "music.note", type: .backSound)
             }
         }
     }
@@ -102,40 +102,40 @@ struct AudioEffectsPanel: View {
         switch selectedEffect {
         case .voiceCoder:
             VStack(spacing: 10) {
-                effectSlider(icon: "arrow.up.arrow.down", label: "Pitch", value: $voiceCoderParams.pitch, range: -12...12, format: "%.0f st")
-                effectSlider(icon: "dial.medium", label: "Force", value: $voiceCoderParams.strength, range: 0...100, format: "%.0f%%")
-                effectSlider(icon: "metronome", label: "Retune", value: $voiceCoderParams.retuneSpeed, range: 0...100, format: "%.0f%%")
+                effectSlider(icon: "arrow.up.arrow.down", label: String(localized: "audio.effects.slider.pitch", defaultValue: "Pitch", bundle: .main), value: $voiceCoderParams.pitch, range: -12...12, format: "%.0f st")
+                effectSlider(icon: "dial.medium", label: String(localized: "audio.effects.slider.strength", defaultValue: "Force", bundle: .main), value: $voiceCoderParams.strength, range: 0...100, format: "%.0f%%")
+                effectSlider(icon: "metronome", label: String(localized: "audio.effects.slider.retune", defaultValue: "Retune", bundle: .main), value: $voiceCoderParams.retuneSpeed, range: 0...100, format: "%.0f%%")
             }
-            .onChange(of: voiceCoderParams) { _, params in
+            .adaptiveOnChange(of: voiceCoderParams) { _, params in
                 debouncedUpdate(.voiceCoder(params))
             }
 
         case .babyVoice:
             VStack(spacing: 10) {
-                effectSlider(icon: "arrow.up", label: "Pitch", value: $babyVoiceParams.pitch, range: 6...12, format: "+%.0f st")
-                effectSlider(icon: "waveform", label: "Formant", value: $babyVoiceParams.formant, range: 1.2...1.5, format: "%.2fx")
-                effectSlider(icon: "wind", label: "Souffle", value: $babyVoiceParams.breathiness, range: 0...100, format: "%.0f%%")
+                effectSlider(icon: "arrow.up", label: String(localized: "audio.effects.slider.pitch", defaultValue: "Pitch", bundle: .main), value: $babyVoiceParams.pitch, range: 6...12, format: "+%.0f st")
+                effectSlider(icon: "waveform", label: String(localized: "audio.effects.slider.formant", defaultValue: "Formant", bundle: .main), value: $babyVoiceParams.formant, range: 1.2...1.5, format: "%.2fx")
+                effectSlider(icon: "wind", label: String(localized: "audio.effects.slider.breath", defaultValue: "Souffle", bundle: .main), value: $babyVoiceParams.breathiness, range: 0...100, format: "%.0f%%")
             }
-            .onChange(of: babyVoiceParams) { _, params in
+            .adaptiveOnChange(of: babyVoiceParams) { _, params in
                 debouncedUpdate(.babyVoice(params))
             }
 
         case .demonVoice:
             VStack(spacing: 10) {
-                effectSlider(icon: "arrow.down", label: "Pitch", value: $demonVoiceParams.pitch, range: -12...(-8), format: "%.0f st")
-                effectSlider(icon: "bolt.fill", label: "Distorsion", value: $demonVoiceParams.distortion, range: 0...100, format: "%.0f%%")
-                effectSlider(icon: "drop.halffull", label: "Reverb", value: $demonVoiceParams.reverb, range: 0...100, format: "%.0f%%")
+                effectSlider(icon: "arrow.down", label: String(localized: "audio.effects.slider.pitch", defaultValue: "Pitch", bundle: .main), value: $demonVoiceParams.pitch, range: -12...(-8), format: "%.0f st")
+                effectSlider(icon: "bolt.fill", label: String(localized: "audio.effects.slider.distortion", defaultValue: "Distorsion", bundle: .main), value: $demonVoiceParams.distortion, range: 0...100, format: "%.0f%%")
+                effectSlider(icon: "drop.halffull", label: String(localized: "audio.effects.slider.reverb", defaultValue: "Reverb", bundle: .main), value: $demonVoiceParams.reverb, range: 0...100, format: "%.0f%%")
             }
-            .onChange(of: demonVoiceParams) { _, params in
+            .adaptiveOnChange(of: demonVoiceParams) { _, params in
                 debouncedUpdate(.demonVoice(params))
             }
 
         case .backSound:
             VStack(spacing: 10) {
                 soundSelector
-                effectSlider(icon: "speaker.wave.2", label: "Volume", value: $backSoundParams.volume, range: 0...100, format: "%.0f%%")
+                effectSlider(icon: "speaker.wave.2", label: String(localized: "audio.effects.slider.volume", defaultValue: "Volume", bundle: .main), value: $backSoundParams.volume, range: 0...100, format: "%.0f%%")
             }
-            .onChange(of: backSoundParams) { _, params in
+            .adaptiveOnChange(of: backSoundParams) { _, params in
                 debouncedUpdate(.backSound(params))
             }
 
@@ -169,9 +169,9 @@ struct AudioEffectsPanel: View {
 
     private func soundLabel(_ key: String) -> String {
         switch key {
-        case "rain": return "Pluie"
-        case "cafe": return "Cafe"
-        case "nature": return "Nature"
+        case "rain": return String(localized: "audio.effects.sound.rain", defaultValue: "Pluie", bundle: .main)
+        case "cafe": return String(localized: "audio.effects.sound.cafe", defaultValue: "Cafe", bundle: .main)
+        case "nature": return String(localized: "audio.effects.sound.nature", defaultValue: "Nature", bundle: .main)
         default: return key
         }
     }

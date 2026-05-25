@@ -24,10 +24,26 @@ final class BubbleEquatableTests: XCTestCase {
         XCTAssertNotEqual(a, b)
     }
 
-    func test_mediaTimestampOverlay_sameInputs_equal() {
-        let a = BubbleMediaTimestampOverlay(time: "12:34", isMe: true, deliveryStatus: .read)
-        let b = BubbleMediaTimestampOverlay(time: "12:34", isMe: true, deliveryStatus: .read)
+    func test_footer_sameModel_equal() {
+        let model = BubbleFooterModel(
+            sender: nil, flags: [], showsTranslate: false,
+            timestamp: "12:34", delivery: .read, isOffline: false, isMe: true
+        )
+        let a = BubbleFooter(model: model, actions: .none, style: .overlay, isDark: false)
+        let b = BubbleFooter(model: model, actions: .none, style: .overlay, isDark: false)
         XCTAssertEqual(a, b)
+    }
+
+    func test_footer_differentTimestamp_notEqual() {
+        let base = BubbleFooterModel(
+            sender: nil, flags: [], showsTranslate: false,
+            timestamp: "12:34", delivery: .sent, isOffline: false, isMe: true
+        )
+        var other = base
+        other.timestamp = "12:35"
+        let a = BubbleFooter(model: base, actions: .none, style: .row, isDark: false)
+        let b = BubbleFooter(model: other, actions: .none, style: .row, isDark: false)
+        XCTAssertNotEqual(a, b)
     }
 
     func test_pinnedIndicator_isStateless() {

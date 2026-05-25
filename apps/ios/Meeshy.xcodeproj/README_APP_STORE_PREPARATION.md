@@ -2,7 +2,7 @@
 
 **Date d'analyse** : 14 mars 2026  
 **Application** : Meeshy - Messagerie avec traduction  
-**Plateforme** : iOS 17.0+  
+**Plateforme** : iOS 16.0+  
 **Bundle ID** : me.meeshy.app
 
 ---

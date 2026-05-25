@@ -6,7 +6,7 @@ import MeeshySDK
 
 public struct ComposerControlsLayer: View {
 
-    @Bindable var viewModel: StoryComposerViewModel
+    @ObservedObject var viewModel: StoryComposerViewModel
 
     @Binding var bandStateMachine: BandStateMachine
     @Binding var areFabsVisible: Bool
@@ -62,13 +62,15 @@ public struct ComposerControlsLayer: View {
             if shouldShowFABs {
                 HStack {
                     ComposerFABColumn(
-                        contenuBadge: contenuBadge,
-                        effetsBadge: effetsBadge,
+                        mediaBadge: mediaBadge,
+                        sonBadge: sonBadge,
+                        textBadge: textBadge,
+                        drawingBadge: drawingBadge,
+                        filtersBadge: filtersBadge,
+                        timelineBadge: timelineBadge,
                         activeCategory: nil, // band is hidden so no active category
-                        onTapContenu: { bandStateMachine.tapFAB(.contenu) },
-                        onTapEffets: { bandStateMachine.tapFAB(.effets) },
-                        onSwipeUpContenu: { bandStateMachine.swipeUpOnFAB(.contenu) },
-                        onSwipeUpEffets: { bandStateMachine.swipeUpOnFAB(.effets) },
+                        onTap: { cat in bandStateMachine.tapFAB(cat) },
+                        onSwipeUp: { cat in bandStateMachine.swipeUpOnFAB(cat) },
                         onSwipeDownAny: { areFabsVisible = false }
                     )
                     Spacer()
@@ -158,7 +160,7 @@ public struct ComposerControlsLayer: View {
         .ignoresSafeArea(edges: .bottom)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: bandStateMachine.state)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: areFabsVisible)
-        .onChange(of: viewModel.currentSlideIndex) { _, _ in
+        .adaptiveOnChange(of: viewModel.currentSlideIndex) { _, _ in
             // Slide switch invalidates any open formatPanel (id from previous slide).
             bandStateMachine.reset()
             areFabsVisible = true
@@ -167,17 +169,27 @@ public struct ComposerControlsLayer: View {
 
     // MARK: - Badges
 
-    private var contenuBadge: Int {
-        let media = viewModel.currentEffects.mediaObjects?.count ?? 0
-        let audio = viewModel.currentEffects.audioPlayerObjects?.count ?? 0
-        let text = viewModel.currentEffects.textObjects.count
-        let drawing = viewModel.drawingData != nil ? 1 : 0
-        return media + audio + text + drawing
+    private var mediaBadge: Int {
+        viewModel.currentEffects.mediaObjects?.count ?? 0
     }
 
-    private var effetsBadge: Int {
-        let filter = viewModel.selectedFilter != nil ? 1 : 0
-        let timeline = viewModel.timelineHasCustomizations ? 1 : 0
-        return filter + timeline
+    private var sonBadge: Int {
+        viewModel.currentEffects.audioPlayerObjects?.count ?? 0
+    }
+
+    private var textBadge: Int {
+        viewModel.currentEffects.textObjects.count
+    }
+
+    private var drawingBadge: Int {
+        viewModel.drawingData != nil ? 1 : 0
+    }
+
+    private var filtersBadge: Int {
+        viewModel.selectedFilter != nil ? 1 : 0
+    }
+
+    private var timelineBadge: Int {
+        viewModel.timelineHasCustomizations ? 1 : 0
     }
 }

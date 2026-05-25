@@ -9,9 +9,12 @@ enum DeepLinkDestination {
     case ownProfile
     case userProfile(username: String)
     case conversation(id: String)
+    case post(id: String)
     case magicLink(token: String)
     case share(text: String?, url: String?)
     case userLinks
+    case postDetail(postId: String)
+    case storyDetail(postId: String)
     case external(URL)
 }
 
@@ -21,18 +24,69 @@ enum DeepLinkParser {
 
     private static let meeshyHosts: Set<String> = ["meeshy.me", "www.meeshy.me", "app.meeshy.me"]
 
+    /// Segments accepted as the "post" keyword in any deep link shape. The
+    /// short alias `p` mirrors the long form `post` so handwritten/dictated
+    /// `meeshy://p/<id>` or `meeshy://feeds/p/<id>` URLs resolve to the
+    /// same destination as the canonical `meeshy://post/<id>` /
+    /// `meeshy://feeds/post/<id>` (and their web Universal Link siblings).
+    private static let postSegments: Set<String> = ["post", "p"]
+
+    /// `true` when `segment` is a valid alias for the "post" keyword
+    /// (long-form `post` or short-form `p`). Single source of truth so
+    /// `DeepLinkRouter` and the parser stay in lockstep — adding a new
+    /// alias requires extending only `postSegments`.
+    static func isPostSegment(_ segment: String) -> Bool {
+        postSegments.contains(segment)
+    }
+
+    /// Segments accepted as the "story" keyword. Stories share the post
+    /// identifier namespace (a story is a `Post` with `type: STORY` in the
+    /// schema), so the deep link only needs to carry the postId — the
+    /// dispatch side decides whether to surface the story viewer or fall
+    /// back to PostDetailView when the story has expired / isn't in the
+    /// local tray. Plural `stories` and short `s` accepted as aliases.
+    private static let storySegments: Set<String> = ["story", "stories", "s"]
+
+    /// `true` when `segment` is a valid alias for the "story" keyword.
+    static func isStorySegment(_ segment: String) -> Bool {
+        storySegments.contains(segment)
+    }
+
+    /// Segments accepted as the "user profile" keyword. Canonical `u` is
+    /// claimed by AASA today; `users` (plural) is accepted for symmetry
+    /// with the gateway REST surface (`/api/v1/users/...`) and to align
+    /// with how third-party tools commonly write user URLs.
+    private static let userSegments: Set<String> = ["u", "users"]
+
+    /// `true` when `segment` is a valid alias for the user-profile keyword.
+    static func isUserSegment(_ segment: String) -> Bool {
+        userSegments.contains(segment)
+    }
+
     /// Parse any URL into a deep link destination.
     ///
-    /// Handles:
-    /// - `https://meeshy.me/me`          -> own profile
-    /// - `https://meeshy.me/u/{username}` -> user profile
-    /// - `https://meeshy.me/c/{id}`       -> conversation
-    /// - `meeshy://me`                    -> own profile
-    /// - `meeshy://u/{username}`          -> user profile
-    /// - `meeshy://c/{id}`               -> conversation
-    /// - `meeshy://share?text=...`        -> share text content
-    /// - `meeshy://share?url=...`         -> share URL content
-    /// - Everything else                  -> open externally
+    /// Universal Links (https://meeshy.me/...):
+    /// - `/me`                                   -> own profile
+    /// - `/links`                                -> user links hub
+    /// - `/u/{username}` or `/users/{username}`  -> user profile
+    /// - `/c/{id}`                               -> conversation
+    /// - `/feeds/post/{id}` or `/feeds/p/{id}`   -> post detail
+    /// - `/post/{id}` or `/p/{id}`               -> post detail (short)
+    /// - `/story/{id}`, `/stories/{id}`, `/s/{id}` -> story detail
+    /// - `/share?text=...&url=...`               -> share content
+    /// - `/auth/magic-link?token=...`            -> passwordless auth
+    ///
+    /// Custom scheme (meeshy://...):
+    /// - `meeshy://me`, `meeshy://links`
+    /// - `meeshy://u/{username}`, `meeshy://users/{username}`
+    /// - `meeshy://c/{id}`
+    /// - `meeshy://post/{id}`, `meeshy://p/{id}`
+    /// - `meeshy://feeds/post/{id}`, `meeshy://feeds/p/{id}`
+    /// - `meeshy://story/{id}`, `meeshy://stories/{id}`, `meeshy://s/{id}`
+    /// - `meeshy://share?text=...&url=...`
+    /// - `meeshy://auth/magic-link?token=...`
+    ///
+    /// Everything else -> `.external` (caller opens in Safari).
     static func parse(_ url: URL) -> DeepLinkDestination {
         if url.scheme == "meeshy" {
             return parseCustomScheme(url)
@@ -93,10 +147,30 @@ enum DeepLinkParser {
                let token = queryItems.first(where: { $0.name == "token" })?.value {
                 return .magicLink(token: token)
             }
-        case "u":
+        case "u", "users":
+            // meeshy://u/{username} (or meeshy://users/{username}).
             if components.count >= 2 { return .userProfile(username: components[1]) }
         case "c":
             if components.count >= 2 { return .conversation(id: components[1]) }
+        case "post", "p":
+            // meeshy://post/{postId} (or meeshy://p/{postId}) — direct
+            // shortcut to a post detail view.
+            if components.count >= 2 { return .postDetail(postId: components[1]) }
+        case "feeds":
+            // meeshy://feeds/post/{postId} — mirror of the web Universal Link
+            // path so the custom scheme accepts the same shape as the
+            // production URL recipients see in clipboards / email previews.
+            // `feeds/p/{postId}` is accepted as a short alias.
+            if components.count >= 3, postSegments.contains(components[1]) {
+                return .postDetail(postId: components[2])
+            }
+        case "story", "stories", "s":
+            // meeshy://story/{postId} (or meeshy://stories/{postId} or
+            // meeshy://s/{postId}) — matches the canonical share URL the
+            // iOS app already mints (`https://meeshy.me/story/<postId>`).
+            // Stories carry a `postId` because they live in the `Post`
+            // table with `type: STORY`.
+            if components.count >= 2 { return .storyDetail(postId: components[1]) }
         default:
             break
         }
@@ -127,9 +201,35 @@ enum DeepLinkParser {
             return .magicLink(token: token)
         }
 
+        // https://meeshy.me/feeds/post/{postId} -> post detail.
+        // Claimed as a Universal Link in apple-app-site-association so iOS
+        // opens this directly inside the app whenever it's installed; the
+        // Next.js rewrite serves the same path on the web for non-iOS
+        // recipients (or when the app rejects the link).
+        // The short alias `feeds/p/{postId}` resolves to the same destination
+        // so any pasted shorthand still routes in-app.
+        if components.count >= 3, components[0] == "feeds", postSegments.contains(components[1]) {
+            return .postDetail(postId: components[2])
+        }
+
         if components.count >= 2 {
-            switch components[0] {
-            case "u": return .userProfile(username: components[1])
+            let head = components[0]
+            // User profile — `u` (canonical) and `users` (plural alias).
+            if userSegments.contains(head) {
+                return .userProfile(username: components[1])
+            }
+            // Story — `story`, `stories`, `s`.
+            if storySegments.contains(head) {
+                return .storyDetail(postId: components[1])
+            }
+            // Post — short forms at root (`post/<id>`, `p/<id>`). The
+            // canonical share URL stays `/feeds/post/<id>` (handled above)
+            // but pasted/handwritten variants without the `feeds` prefix
+            // are accepted so any sensible shape lands in the app.
+            if postSegments.contains(head) {
+                return .postDetail(postId: components[1])
+            }
+            switch head {
             case "c": return .conversation(id: components[1])
             default: break
             }
@@ -156,6 +256,11 @@ enum DeepLink: Equatable {
     case chatLink(identifier: String)
     case magicLink(token: String)
     case conversation(id: String)
+    case postDetail(postId: String)
+    case storyDetail(postId: String)
+    case userProfile(username: String)
+    case ownProfile
+    case userLinks
 }
 
 // MARK: - Deep Link Router (ObservableObject for join/conversation deep links)
@@ -185,7 +290,9 @@ final class DeepLinkRouter: ObservableObject {
 
         guard !pathComponents.isEmpty else { return false }
 
-        switch pathComponents[0] {
+        let head = pathComponents[0]
+
+        switch head {
         case "join", "l":
             guard let identifier = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
             pendingDeepLink = .joinLink(identifier: identifier)
@@ -207,7 +314,69 @@ final class DeepLinkRouter: ObservableObject {
             pendingDeepLink = .conversation(id: conversationId)
             return true
 
+        case "me":
+            // `/me` — own profile. Single-segment path, no identifier
+            // needed. Dispatch pops to the conversation list root then
+            // pushes the profile screen so the back-swipe takes the user
+            // back to the home surface (not the previous nav stack).
+            pendingDeepLink = .ownProfile
+            return true
+
+        case "links":
+            // `/links` — own user links hub (tracking links, share links,
+            // affiliate, etc.). Same surface as the in-app `Link` tap that
+            // already routes to `.links` via Router.handleDeepLink.
+            pendingDeepLink = .userLinks
+            return true
+
+        case "feeds":
+            // `/feeds/post/{postId}` — Universal Link surface for the public
+            // share URL minted by the gateway (`FRONTEND_URL/feeds/post/<id>`).
+            // The recipient lands directly inside PostDetailView when the app
+            // is installed; the same path is served by the Next.js rewrite
+            // for non-iOS recipients. `/feeds/p/{postId}` is accepted as a
+            // short alias so the handler stays in lockstep with the parser
+            // (in-app Link taps on either shape both resolve in-app).
+            guard pathComponents.count >= 3,
+                  DeepLinkParser.isPostSegment(pathComponents[1]) else { return false }
+            guard let postId = nonEmptyIdentifier(at: 2, in: pathComponents) else { return false }
+            pendingDeepLink = .postDetail(postId: postId)
+            return true
+
         default:
+            // Multi-segment helpers — collapsed under `default` so we can
+            // share the same `nonEmptyIdentifier(at: 1, ...)` validation
+            // across every `/<keyword>/<id>` shape. Each branch checks the
+            // helper set declared on `DeepLinkParser` so the parser
+            // (in-app Link tap) and this router stay in lockstep — adding
+            // a new alias requires extending only the set.
+
+            if DeepLinkParser.isPostSegment(head) {
+                // `/post/{postId}` or `/p/{postId}` at root — short form
+                // accepted alongside the canonical `/feeds/post/<id>`.
+                guard let postId = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
+                pendingDeepLink = .postDetail(postId: postId)
+                return true
+            }
+
+            if DeepLinkParser.isStorySegment(head) {
+                // `/story/{postId}`, `/stories/{postId}`, `/s/{postId}` —
+                // dispatch prefers StoryViewer when the story is in the
+                // local tray, with a PostDetailView fallback for expired /
+                // unknown stories.
+                guard let postId = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
+                pendingDeepLink = .storyDetail(postId: postId)
+                return true
+            }
+
+            if DeepLinkParser.isUserSegment(head) {
+                // `/u/{username}` or `/users/{username}` — opens the user
+                // profile sheet over the conversation list.
+                guard let username = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
+                pendingDeepLink = .userProfile(username: username)
+                return true
+            }
+
             return false
         }
     }
@@ -259,6 +428,49 @@ final class DeepLinkRouter: ObservableObject {
         case "conversation":
             guard let conversationId = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
             pendingDeepLink = .conversation(id: conversationId)
+            return true
+
+        case "me":
+            // meeshy://me — single-host shortcut to own profile.
+            pendingDeepLink = .ownProfile
+            return true
+
+        case "links":
+            // meeshy://links — single-host shortcut to the user links hub.
+            pendingDeepLink = .userLinks
+            return true
+
+        case "u", "users":
+            // meeshy://u/{username} (or meeshy://users/{username}) — opens
+            // the user profile sheet over the conversation list.
+            guard let username = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
+            pendingDeepLink = .userProfile(username: username)
+            return true
+
+        case "post", "p":
+            // meeshy://post/{postId} (or meeshy://p/{postId}) — direct
+            // custom-scheme shortcut to the post detail view.
+            guard let postId = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
+            pendingDeepLink = .postDetail(postId: postId)
+            return true
+
+        case "feeds":
+            // meeshy://feeds/post/{postId} — mirror of the Universal Link
+            // shape so any pasted form of the share URL works identically.
+            // `feeds/p/{postId}` is accepted as a short alias.
+            guard !pathComponents.isEmpty,
+                  DeepLinkParser.isPostSegment(pathComponents[0]) else { return false }
+            guard let postId = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
+            pendingDeepLink = .postDetail(postId: postId)
+            return true
+
+        case "story", "stories", "s":
+            // meeshy://story/{postId} — direct custom-scheme shortcut to
+            // the story viewer (or PostDetailView fallback). Plural alias
+            // `meeshy://stories/{postId}` and short alias `meeshy://s/{id}`
+            // accepted for symmetry with the web Universal Link surface.
+            guard let postId = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
+            pendingDeepLink = .storyDetail(postId: postId)
             return true
 
         default:

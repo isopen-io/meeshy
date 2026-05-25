@@ -123,99 +123,100 @@ export function runDeterministicChecks(
 
 export function createQualityGateNode(llm: LlmProvider) {
   return async function qualityGate(state: ConversationState) {
-    const actions = state.pendingActions;
-    if (actions.length === 0) return {
-      pendingActions: [],
-      _traceInputTokens: 0, _traceOutputTokens: 0, _traceModel: 'skipped', _traceExtra: { skipped: true },
-    };
-
-    const messages = actions.filter((a): a is PendingMessage => a.type === 'message');
-    const reactions = actions.filter((a) => a.type === 'reaction');
-
-    if (messages.length === 0) {
-      return {
-        pendingActions: reactions,
-        _traceInputTokens: 0, _traceOutputTokens: 0, _traceModel: 'skipped', _traceExtra: { skipped: true, reactionsPassthrough: reactions.length },
+    try {
+      const actions = state.pendingActions;
+      if (actions.length === 0) return {
+        pendingActions: [],
+        _traceInputTokens: 0, _traceOutputTokens: 0, _traceModel: 'skipped', _traceExtra: { skipped: true },
       };
-    }
 
-    const globalMinWords = state.minWordsPerMessage ?? 3;
-    const globalMaxWords = state.maxWordsPerMessage ?? 400;
-    const qualityGateEnabled = state.qualityGateEnabled ?? true;
-    const minScore = state.qualityGateMinScore ?? 0.5;
+      const messages = actions.filter((a): a is PendingMessage => a.type === 'message');
+      const reactions = actions.filter((a) => a.type === 'reaction');
 
-    const validatedMessages: PendingAction[] = [];
-    const rejectionReasons: Array<{ asUserId: string; reason: string }> = [];
-    const seenContents = new Set<string>();
-
-    const pastContents = new Set(
-      (state.agentHistory ?? []).map((h) => h.contentHash),
-    );
-
-    for (const msg of messages) {
-      const userId = msg.asUserId;
-      const profile = state.controlledUsers.find((u) => u.userId === userId)?.role;
-
-      if (!profile) {
-        console.warn(`[QualityGate] No profile found for user ${userId}, skipping`);
-        rejectionReasons.push({ asUserId: userId, reason: 'no_profile' });
-        continue;
+      if (messages.length === 0) {
+        return {
+          pendingActions: reactions,
+          _traceInputTokens: 0, _traceOutputTokens: 0, _traceModel: 'skipped', _traceExtra: { skipped: true, reactionsPassthrough: reactions.length },
+        };
       }
 
-      const archetype = profile.archetypeId ? getArchetype(profile.archetypeId) : null;
-      const effectiveMinWords = archetype?.minWords ?? globalMinWords;
-      const effectiveMaxWords = archetype?.maxWords ?? globalMaxWords;
+      const globalMinWords = state.minWordsPerMessage ?? 3;
+      const globalMaxWords = state.maxWordsPerMessage ?? 400;
+      const qualityGateEnabled = state.qualityGateEnabled ?? true;
+      const minScore = state.qualityGateMinScore ?? 0.5;
 
-      const deterministicResult = runDeterministicChecks(
-        msg.content,
-        effectiveMinWords,
-        effectiveMaxWords,
-        state.messages,
+      const validatedMessages: PendingAction[] = [];
+      const rejectionReasons: Array<{ asUserId: string; reason: string }> = [];
+      const seenContents = new Set<string>();
+
+      const pastContents = new Set(
+        (state.agentHistory ?? []).map((h) => h.contentHash),
       );
-      if (!deterministicResult.ok) {
-        console.warn(`[QualityGate] Deterministic check failed for user ${userId}: ${deterministicResult.reason}`);
-        rejectionReasons.push({ asUserId: userId, reason: `deterministic: ${deterministicResult.reason}` });
-        continue;
-      }
 
-      const contentKey = contentHash(msg.content);
-      if (seenContents.has(contentKey)) {
-        console.warn(`[QualityGate] Duplicate content detected, skipping`);
-        rejectionReasons.push({ asUserId: userId, reason: 'duplicate_content' });
-        continue;
-      }
+      for (const msg of messages) {
+        const userId = msg.asUserId;
+        const profile = state.controlledUsers.find((u) => u.userId === userId)?.role;
 
-      if (pastContents.has(contentKey)) {
-        console.warn(`[QualityGate] Content too similar to past agent message, skipping`);
-        rejectionReasons.push({ asUserId: userId, reason: 'past_duplicate' });
-        continue;
-      }
-
-      const significantWords = extractSignificantWords(msg.content);
-      const recentTopicWords = (state.agentHistory ?? [])
-        .slice(-20)
-        .flatMap((h) => extractSignificantWords(h.topic));
-      if (significantWords.length > 0 && recentTopicWords.length > 0) {
-        const recentTopicSet = new Set(recentTopicWords);
-        const overlap = significantWords.filter((w) => recentTopicSet.has(w));
-        const overlapRatio = overlap.length / significantWords.length;
-        if (overlapRatio > 0.5) {
-          console.warn(`[QualityGate] Topic too similar to recent history (${Math.round(overlapRatio * 100)}% keyword overlap), skipping`);
-          rejectionReasons.push({ asUserId: userId, reason: `topic_overlap_${Math.round(overlapRatio * 100)}pct` });
+        if (!profile) {
+          console.warn(`[QualityGate] No profile found for user ${userId}, skipping`);
+          rejectionReasons.push({ asUserId: userId, reason: 'no_profile' });
           continue;
         }
-      }
 
-      if (isGreeting(msg.content) && hasRecentGreeting(state.agentHistory ?? [], 240)) {
-        console.warn(`[QualityGate] Greeting blocked — recent greeting already in history (4h window)`);
-        rejectionReasons.push({ asUserId: userId, reason: 'greeting_blocked' });
-        continue;
-      }
+        const archetype = profile.archetypeId ? getArchetype(profile.archetypeId) : null;
+        const effectiveMinWords = archetype?.minWords ?? globalMinWords;
+        const effectiveMaxWords = archetype?.maxWords ?? globalMaxWords;
 
-      if (qualityGateEnabled) {
-        const expectedLanguage = msg.originalLanguage || state.controlledUsers.find((u) => u.userId === userId)?.systemLanguage || 'fr';
+        const deterministicResult = runDeterministicChecks(
+          msg.content,
+          effectiveMinWords,
+          effectiveMaxWords,
+          state.messages,
+        );
+        if (!deterministicResult.ok) {
+          console.warn(`[QualityGate] Deterministic check failed for user ${userId}: ${deterministicResult.reason}`);
+          rejectionReasons.push({ asUserId: userId, reason: `deterministic: ${deterministicResult.reason}` });
+          continue;
+        }
 
-        const checkPrompt = `Verifie cette reponse pour coherence avec le profil.
+        const contentKey = contentHash(msg.content);
+        if (seenContents.has(contentKey)) {
+          console.warn(`[QualityGate] Duplicate content detected, skipping`);
+          rejectionReasons.push({ asUserId: userId, reason: 'duplicate_content' });
+          continue;
+        }
+
+        if (pastContents.has(contentKey)) {
+          console.warn(`[QualityGate] Content too similar to past agent message, skipping`);
+          rejectionReasons.push({ asUserId: userId, reason: 'past_duplicate' });
+          continue;
+        }
+
+        const significantWords = extractSignificantWords(msg.content);
+        const recentTopicWords = (state.agentHistory ?? [])
+          .slice(-20)
+          .flatMap((h) => extractSignificantWords(h.topic));
+        if (significantWords.length > 0 && recentTopicWords.length > 0) {
+          const recentTopicSet = new Set(recentTopicWords);
+          const overlap = significantWords.filter((w) => recentTopicSet.has(w));
+          const overlapRatio = overlap.length / significantWords.length;
+          if (overlapRatio > 0.5) {
+            console.warn(`[QualityGate] Topic too similar to recent history (${Math.round(overlapRatio * 100)}% keyword overlap), skipping`);
+            rejectionReasons.push({ asUserId: userId, reason: `topic_overlap_${Math.round(overlapRatio * 100)}pct` });
+            continue;
+          }
+        }
+
+        if (isGreeting(msg.content) && hasRecentGreeting(state.agentHistory ?? [], 240)) {
+          console.warn(`[QualityGate] Greeting blocked — recent greeting already in history (4h window)`);
+          rejectionReasons.push({ asUserId: userId, reason: 'greeting_blocked' });
+          continue;
+        }
+
+        if (qualityGateEnabled) {
+          const expectedLanguage = msg.originalLanguage || state.controlledUsers.find((u) => u.userId === userId)?.systemLanguage || 'fr';
+
+          const checkPrompt = `Verifie cette reponse pour coherence avec le profil.
 
 Profil attendu:
 - Ton: ${profile.tone}
@@ -227,70 +228,85 @@ Reponse a verifier: "${msg.content}"
 
 Retourne un JSON: { "coherent": boolean, "score": 0-1, "correctLanguage": boolean, "reason": "..." }`;
 
-        try {
-          const response = await llm.chat({
-            messages: [{ role: 'user', content: checkPrompt }],
-            temperature: 0.1,
-            maxTokens: 192,
-          });
-
-          let result: { coherent: boolean; score: number; correctLanguage?: boolean; reason: string };
           try {
-            result = parseJsonLlm<typeof result>(response.content);
-          } catch {
-            console.warn(`[QualityGate] Failed to parse LLM response for ${userId}, allowing message through`);
+            const response = await llm.chat({
+              messages: [{ role: 'user', content: checkPrompt }],
+              temperature: 0.1,
+              maxTokens: 192,
+            });
+
+            let result: { coherent: boolean; score: number; correctLanguage?: boolean; reason: string };
+            try {
+              result = parseJsonLlm<typeof result>(response.content);
+            } catch {
+              console.warn(`[QualityGate] Failed to parse LLM response for ${userId}, allowing message through`);
+              seenContents.add(contentKey);
+              validatedMessages.push(msg);
+              continue;
+            }
+
+            if (result.correctLanguage === false) {
+              console.warn(`[QualityGate] Wrong language for user ${userId} (expected ${expectedLanguage}): ${result.reason}`);
+              rejectionReasons.push({ asUserId: userId, reason: `wrong_language: ${result.reason}` });
+              continue;
+            }
+
+            const score = Math.max(0, Math.min(1, result.score ?? 0));
+            if (score < minScore) {
+              console.warn(`[QualityGate] Low score (${score}) for user ${userId}: ${result.reason}`);
+              rejectionReasons.push({ asUserId: userId, reason: `low_score_${score}: ${result.reason}` });
+              continue;
+            }
+          } catch (error) {
+            console.warn(`[QualityGate] LLM error for ${userId}, allowing message through:`, error instanceof Error ? error.message : 'unknown');
             seenContents.add(contentKey);
             validatedMessages.push(msg);
             continue;
           }
-
-          if (result.correctLanguage === false) {
-            console.warn(`[QualityGate] Wrong language for user ${userId} (expected ${expectedLanguage}): ${result.reason}`);
-            rejectionReasons.push({ asUserId: userId, reason: `wrong_language: ${result.reason}` });
-            continue;
-          }
-
-          const score = Math.max(0, Math.min(1, result.score ?? 0));
-          if (score < minScore) {
-            console.warn(`[QualityGate] Low score (${score}) for user ${userId}: ${result.reason}`);
-            rejectionReasons.push({ asUserId: userId, reason: `low_score_${score}: ${result.reason}` });
-            continue;
-          }
-        } catch (error) {
-          console.warn(`[QualityGate] LLM error for ${userId}, allowing message through:`, error instanceof Error ? error.message : 'unknown');
-          seenContents.add(contentKey);
-          validatedMessages.push(msg);
-          continue;
         }
+
+        seenContents.add(contentKey);
+        validatedMessages.push(msg);
       }
 
-      seenContents.add(contentKey);
-      validatedMessages.push(msg);
+      console.log(`[QualityGate] Validated ${validatedMessages.length}/${messages.length} messages, ${reactions.length} reactions pass-through`);
+
+      const newHistory: AgentHistoryEntry[] = validatedMessages
+        .filter((a): a is PendingMessage => a.type === 'message')
+        .map((a) => ({
+          userId: a.asUserId,
+          topic: extractTopicSummary(a.content),
+          contentHash: contentHash(a.content),
+          timestamp: Date.now(),
+        }));
+
+      return {
+        pendingActions: [...validatedMessages, ...reactions],
+        agentHistory: newHistory,
+        _traceInputTokens: 0,
+        _traceOutputTokens: 0,
+        _traceModel: 'aggregate',
+        _traceExtra: {
+          accepted: validatedMessages.filter((a) => a.type === 'message').length,
+          rejected: rejectionReasons.length,
+          rejections: rejectionReasons,
+        },
+      };
+    } catch (error) {
+      console.error('[QualityGate] Error:', error);
+      return {
+        pendingActions: [],
+        _traceInputTokens: 0,
+        _traceOutputTokens: 0,
+        _traceModel: 'error',
+        _traceExtra: {
+          error: true,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorCode: (error as any)?.code ?? 'UNKNOWN',
+          errorStack: error instanceof Error ? error.stack : undefined,
+        },
+      };
     }
-
-    console.log(`[QualityGate] Validated ${validatedMessages.length}/${messages.length} messages, ${reactions.length} reactions pass-through`);
-
-    const newHistory: AgentHistoryEntry[] = validatedMessages
-      .filter((a): a is PendingMessage => a.type === 'message')
-      .map((a) => ({
-        userId: a.asUserId,
-        topic: extractTopicSummary(a.content),
-        contentHash: contentHash(a.content),
-        timestamp: Date.now(),
-      }));
-
-    return {
-      pendingActions: [...validatedMessages, ...reactions],
-      agentHistory: newHistory,
-      _traceInputTokens: 0,
-      _traceOutputTokens: 0,
-      _traceModel: 'aggregate',
-      _traceExtra: {
-        accepted: validatedMessages.filter((a) => a.type === 'message').length,
-        rejected: rejectionReasons.length,
-        rejections: rejectionReasons,
-      },
-    };
   };
 }
 

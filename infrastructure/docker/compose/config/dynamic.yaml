@@ -30,6 +30,23 @@ http:
         burst: 50
         period: 1s
 
+    # Gzip / Brotli compression for HTTP responses (Traefik 3 supports both
+    # via Accept-Encoding negotiation). Skips payloads below 1 KB and any
+    # response already declared as compressed by upstream.
+    compress:
+      compress:
+        minResponseBodyBytes: 1024
+        excludedContentTypes:
+          - "image/png"
+          - "image/jpeg"
+          - "image/webp"
+          - "image/avif"
+          - "video/mp4"
+          - "audio/mpeg"
+          - "audio/ogg"
+          - "audio/webm"
+          - "application/octet-stream"
+
     # CORS for production
     cors-prod:
       headers:

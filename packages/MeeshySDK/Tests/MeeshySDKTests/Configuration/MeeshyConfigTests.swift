@@ -96,6 +96,34 @@ final class MeeshyConfigTests: XCTestCase {
         XCTAssertNil(url)
     }
 
+    // MARK: - file:// Passthrough (Sprint 3 RC3.1)
+
+    func test_resolveMediaURL_withFileScheme_returnsURLUnchanged() {
+        let local = "file:///var/mobile/Containers/Data/Application/ABC/tmp/camera_42.jpg"
+        let url = MeeshyConfig.resolveMediaURL(local)
+        XCTAssertEqual(url?.absoluteString, local)
+        XCTAssertTrue(url?.isFileURL == true)
+    }
+
+    func test_resolveMediaURL_withFileScheme_isNotPrefixedWithServerOrigin() {
+        MeeshyConfig.shared.configure(apiURL: defaultAPIURL)
+        let url = MeeshyConfig.resolveMediaURL("file:///private/var/tmp/recording.m4a")
+        XCTAssertEqual(url?.scheme, "file")
+        XCTAssertEqual(url?.absoluteString, "file:///private/var/tmp/recording.m4a")
+        XCTAssertFalse(url?.absoluteString.contains("meeshy.me") ?? true,
+                       "A file:// URL must never be prefixed with the server origin")
+    }
+
+    func test_resolveMediaURL_withFileScheme_skipsSSRFChecks() {
+        // A file path that happens to embed "127.0.0.1" must NOT be rejected:
+        // the file:// fast-path short-circuits before the SSRF host checks.
+        let url = MeeshyConfig.resolveMediaURL("file:///var/tmp/127.0.0.1/photo.png")
+        XCTAssertNotNil(url)
+        XCTAssertTrue(url?.isFileURL == true)
+        // A genuine network URL pointing at loopback is still rejected.
+        XCTAssertNil(MeeshyConfig.resolveMediaURL("https://127.0.0.1/secret"))
+    }
+
     // MARK: - SSRF Protection
 
     func testResolveMediaURLRejectsLoopback127() {

@@ -74,7 +74,8 @@ final class StoryRepostFlowTests: XCTestCase {
             isPinned: false, isEdited: false, media: nil, comments: nil,
             repostOf: repostOf, originalRepostOfId: nil, isQuote: false,
             moodEmoji: nil, audioUrl: nil, audioDuration: nil, storyEffects: nil,
-            translations: nil, isLikedByMe: nil, isViewedByMe: nil,
+            translations: nil, isLikedByMe: nil, isBookmarkedByMe: nil,
+            isRepostedByMe: nil, isViewedByMe: nil,
             currentUserReactions: nil, mentionedUsers: nil, viaUsername: nil
         )
     }

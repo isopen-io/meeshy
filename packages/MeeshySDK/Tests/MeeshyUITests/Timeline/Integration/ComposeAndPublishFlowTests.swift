@@ -80,6 +80,9 @@ final class MockPostService: PostServiceProviding, @unchecked Sendable {
         throw NSError(domain: "mock", code: -1)
     }
     func share(postId: String) async throws {}
+    func share(postId: String, platform: String?, generateLink: Bool) async throws -> PostShareResult {
+        PostShareResult(shared: true, shareCount: 0, shortUrl: nil, token: nil)
+    }
     func createWithType(_ type: PostType, content: String, visibility: String,
                         moodEmoji: String?, storyEffects: StoryEffects?) async throws -> APIPost {
         throw NSError(domain: "mock", code: -1)

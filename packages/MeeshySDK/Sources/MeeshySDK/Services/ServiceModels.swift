@@ -186,15 +186,18 @@ public struct TranslateRequest: Encodable {
     public let text: String
     public let sourceLanguage: String
     public let targetLanguage: String
+    public let messageId: String?
 
-    public init(text: String, sourceLanguage: String, targetLanguage: String) {
+    public init(text: String, sourceLanguage: String, targetLanguage: String, messageId: String? = nil) {
         self.text = text; self.sourceLanguage = sourceLanguage; self.targetLanguage = targetLanguage
+        self.messageId = messageId
     }
 
     enum CodingKeys: String, CodingKey {
         case text
         case sourceLanguage = "source_language"
         case targetLanguage = "target_language"
+        case messageId = "message_id"
     }
 }
 
@@ -258,8 +261,103 @@ public struct AttachmentStatusUser: Decodable, Identifiable {
     public var id: String { participantId }
 }
 
+// MARK: - Attachment Transcription
+
+public struct TranscribeRequest: Encodable {
+    public let force: Bool
+
+    public init(force: Bool) {
+        self.force = force
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case force
+    }
+}
+
 // MARK: - Generic empty success for fire-and-forget
 
 public struct EmptySuccess: Decodable {
     public init() {}
+}
+
+// MARK: - Attachment Translation
+
+public struct AttachmentTranslateRequest: Encodable {
+    public let targetLanguages: [String]
+    public let sourceLanguage: String?
+    public let generateVoiceClone: Bool?
+
+    public init(
+        targetLanguages: [String],
+        sourceLanguage: String? = nil,
+        generateVoiceClone: Bool? = nil
+    ) {
+        self.targetLanguages = targetLanguages
+        self.sourceLanguage = sourceLanguage
+        self.generateVoiceClone = generateVoiceClone
+    }
+}
+
+public struct AttachmentTranslationResult: Decodable, Sendable {
+    public let id: String
+    public let targetLanguage: String
+    public let translatedText: String?
+    public let audioUrl: String?
+    public let durationMs: Int?
+    public let voiceCloned: Bool?
+
+    public init(
+        id: String,
+        targetLanguage: String,
+        translatedText: String? = nil,
+        audioUrl: String? = nil,
+        durationMs: Int? = nil,
+        voiceCloned: Bool? = nil
+    ) {
+        self.id = id
+        self.targetLanguage = targetLanguage
+        self.translatedText = translatedText
+        self.audioUrl = audioUrl
+        self.durationMs = durationMs
+        self.voiceCloned = voiceCloned
+    }
+}
+
+public struct AttachmentTranslateResponse: Decodable, Sendable {
+    public let status: String?
+    public let jobId: String?
+    public let translations: [AttachmentTranslationResult]
+
+    public init(status: String?, jobId: String?, translations: [AttachmentTranslationResult]) {
+        self.status = status
+        self.jobId = jobId
+        self.translations = translations
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        status = try container.decodeIfPresent(String.self, forKey: .status)
+        jobId = try container.decodeIfPresent(String.self, forKey: .jobId)
+        translations = (try? container.decodeIfPresent([AttachmentTranslationResult].self, forKey: .translations)) ?? []
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case status, jobId, translations
+    }
+}
+
+/// Thrown by `AttachmentService.translate` when the gateway returns HTTP 403
+/// with a consent-required payload (e.g. `AUDIO_TRANSLATION_NOT_ENABLED`).
+public struct AttachmentConsentError: Error, Sendable {
+    public let code: String
+    public let message: String
+    public let requiredConsents: [String]
+}
+
+/// Decodable shape of the HTTP 403 body for consent-required 403 responses.
+struct AttachmentConsentErrorBody: Decodable {
+    let error: String
+    let message: String?
+    let requiredConsents: [String]?
 }

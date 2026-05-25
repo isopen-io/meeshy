@@ -134,19 +134,34 @@ struct StoryTrayView: View {
 
     private var storyScrollView: some View {
         let currentUserId = AuthManager.shared.currentUser?.id ?? ""
+        // F5 — cap stagger to first 10 visible rings. Beyond that the
+        // 0.05s × index delay becomes a multi-second "pop-in" parade
+        // (50 rings = 2.5s) which feels like lag, not animation.
+        // Late rings appear instantly when scrolled into view.
+        let staggerCap = 10
         return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
+            // F5 — `LazyHStack` instead of `HStack` so off-screen rings
+            // are not materialised. A heavy user with 50+ story groups
+            // previously instantiated all 50 `MeeshyAvatar` instances at
+            // tray load (~8-12MB) even when only 4-5 fit on screen.
+            LazyHStack(spacing: 12) {
                 myStoryButton
                     .bounceOnAppear(delay: 0)
 
                 ForEach(Array(viewModel.storyGroups.filter { $0.id != currentUserId }.enumerated()), id: \.element.id) { visibleIndex, group in
-                    storyRing(group: group, userId: group.id)
-                        .staggeredAppear(index: visibleIndex, baseDelay: 0.05)
-                        .onTapGesture {
-                            HapticFeedback.medium()
-                            Logger.messages.info("[StoryTrayView] tap ring group.id=\(group.id, privacy: .public) username=\(group.username, privacy: .public)")
-                            onViewStory(group.id)
+                    Group {
+                        if visibleIndex < staggerCap {
+                            storyRing(group: group, userId: group.id)
+                                .staggeredAppear(index: visibleIndex, baseDelay: 0.05)
+                        } else {
+                            storyRing(group: group, userId: group.id)
                         }
+                    }
+                    .onTapGesture {
+                        HapticFeedback.medium()
+                        Logger.messages.info("[StoryTrayView] tap ring group.id=\(group.id, privacy: .public) username=\(group.username, privacy: .public)")
+                        onViewStory(group.id)
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -356,11 +371,11 @@ private struct MyStoryButton: View {
                 }
             }
 
-            Text("Moi")
+            Text(String(localized: "story.tray.me", defaultValue: "Moi", bundle: .main))
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(.white.opacity(0.8))
         }
-        .accessibilityLabel(hasMyStory ? "Ma story" : "Changer mon mood")
+        .accessibilityLabel(hasMyStory ? String(localized: "story.tray.a11y.myStory", defaultValue: "Ma story", bundle: .main) : String(localized: "story.tray.a11y.changeMood", defaultValue: "Changer mon mood", bundle: .main))
     }
 }
 
@@ -419,10 +434,10 @@ private struct StoryUploadOverlay: View {
         .contextMenu {
             if isFailed {
                 Button { onRetry() } label: {
-                    Label("Reessayer", systemImage: "arrow.clockwise")
+                    Label(String(localized: "story.tray.retry", defaultValue: "Reessayer", bundle: .main), systemImage: "arrow.clockwise")
                 }
                 Button(role: .destructive) { onCancel() } label: {
-                    Label("Annuler", systemImage: "trash")
+                    Label(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), systemImage: "trash")
                 }
             }
         }

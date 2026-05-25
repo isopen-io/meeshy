@@ -3,14 +3,11 @@ import Combine
 import MeeshySDK
 import MeeshyUI
 
-struct MediaDownloadPreferences: Codable, Equatable, Sendable {
-    var imagesOnWifi: Bool = true
-    var imagesOnCellular: Bool = true
-    var audioOnWifi: Bool = true
-    var audioOnCellular: Bool = false
-    var videoOnWifi: Bool = true
-    var videoOnCellular: Bool = false
-}
+// MediaDownloadPreferences is now defined in MeeshySDK
+// (packages/MeeshySDK/Sources/MeeshySDK/Networking/MediaDownloadPreferences.swift).
+// The store that persists it lives in MeeshyUI
+// (MediaDownloadPreferencesStore.shared) and handles migration from the
+// previous 6-booleans format automatically on first load.
 
 struct MediaDownloadSettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -18,14 +15,9 @@ struct MediaDownloadSettingsView: View {
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
 
-    @State private var prefs: MediaDownloadPreferences
+    @ObservedObject private var store = MediaDownloadPreferencesStore.shared
 
     private let accentColor = "E67E22"
-
-    init() {
-        let loaded = Self.loadPrefs()
-        _prefs = State(initialValue: loaded)
-    }
 
     var body: some View {
         ZStack {
@@ -35,9 +27,6 @@ struct MediaDownloadSettingsView: View {
                 header
                 scrollContent
             }
-        }
-        .onChange(of: prefs) { _, newValue in
-            Self.savePrefs(newValue)
         }
     }
 
@@ -52,16 +41,16 @@ struct MediaDownloadSettingsView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14, weight: .semibold))
-                    Text("Retour")
+                    Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(.system(size: 15, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
-            .accessibilityLabel("Retour")
+            .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
 
             Spacer()
 
-            Text("Telechargement auto")
+            Text(String(localized: "settings.media.download.title", defaultValue: "Telechargement auto", bundle: .main))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
@@ -81,9 +70,22 @@ struct MediaDownloadSettingsView: View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 20) {
                 infoSection
-                imagesSection
-                audioSection
-                videoSection
+                policyPicker(
+                    title: String(localized: "settings.media.download.images", defaultValue: "Images", bundle: .main), icon: "photo.fill", color: "4ECDC4",
+                    binding: $store.preferences.image
+                )
+                policyPicker(
+                    title: String(localized: "settings.media.download.audio", defaultValue: "Audio", bundle: .main), icon: "waveform", color: "9B59B6",
+                    binding: $store.preferences.audio
+                )
+                policyPicker(
+                    title: String(localized: "settings.media.download.audio_translation", defaultValue: "Traductions audio", bundle: .main), icon: "character.bubble.fill", color: "F39C12",
+                    binding: $store.preferences.audioTranslation
+                )
+                policyPicker(
+                    title: String(localized: "settings.media.download.video", defaultValue: "Video", bundle: .main), icon: "play.rectangle.fill", color: "E74C3C",
+                    binding: $store.preferences.video
+                )
                 Spacer().frame(height: 40)
             }
             .padding(.horizontal, 16)
@@ -95,18 +97,18 @@ struct MediaDownloadSettingsView: View {
 
     private var infoSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Information", icon: "info.circle.fill", color: "6B7280")
+            sectionHeader(title: String(localized: "settings.media.download.info_header", defaultValue: "Information", bundle: .main), icon: "info.circle.fill", color: "6B7280")
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 12) {
                     fieldIcon("arrow.down.circle.fill", color: accentColor)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Telechargement automatique")
+                        Text(String(localized: "settings.media.download.auto_title", defaultValue: "Telechargement automatique", bundle: .main))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(theme.textPrimary)
 
-                        Text("Choisissez les types de medias a telecharger automatiquement selon votre connexion.")
+                        Text(String(localized: "settings.media.download.auto_subtitle", defaultValue: "Choisissez quand telecharger automatiquement chaque type de media selon votre connexion.", bundle: .main))
                             .font(.system(size: 12, weight: .regular))
                             .foregroundColor(theme.textMuted)
                             .lineSpacing(2)
@@ -119,117 +121,63 @@ struct MediaDownloadSettingsView: View {
         }
     }
 
-    // MARK: - Images Section
+    // MARK: - Policy picker section
 
-    private var imagesSection: some View {
+    @ViewBuilder
+    private func policyPicker(
+        title: String,
+        icon: String,
+        color: String,
+        binding: Binding<AutoDownloadPolicy>
+    ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Images", icon: "photo.fill", color: "4ECDC4")
+            sectionHeader(title: title, icon: icon, color: color)
 
             VStack(spacing: 0) {
-                toggleRow(
-                    icon: "wifi",
-                    title: "Wi-Fi",
-                    color: "4ECDC4",
-                    isOn: $prefs.imagesOnWifi
-                )
-                .accessibilityLabel("Telecharger les images en Wi-Fi")
-                .accessibilityValue(prefs.imagesOnWifi ? "active" : "desactive")
+                ForEach(Array(AutoDownloadPolicy.allCases.enumerated()), id: \.element) { index, policy in
+                    Button {
+                        HapticFeedback.light()
+                        binding.wrappedValue = policy
+                    } label: {
+                        HStack(spacing: 12) {
+                            fieldIcon(policyIcon(policy), color: color)
+                            Text(policy.shortLabel)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(theme.textPrimary)
+                            Spacer()
+                            if binding.wrappedValue == policy {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(Color(hex: accentColor))
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(title), \(policy.shortLabel)")
+                    .accessibilityValue(binding.wrappedValue == policy ? String(localized: "common.selected", defaultValue: "selectionne", bundle: .main) : "")
 
-                toggleRow(
-                    icon: "antenna.radiowaves.left.and.right",
-                    title: "Donnees cellulaires",
-                    color: "4ECDC4",
-                    isOn: $prefs.imagesOnCellular
-                )
-                .accessibilityLabel("Telecharger les images en donnees cellulaires")
-                .accessibilityValue(prefs.imagesOnCellular ? "active" : "desactive")
+                    if index != AutoDownloadPolicy.allCases.count - 1 {
+                        Divider().padding(.leading, 54)
+                    }
+                }
             }
-            .background(sectionBackground(tint: "4ECDC4"))
+            .background(sectionBackground(tint: color))
         }
     }
 
-    // MARK: - Audio Section
-
-    private var audioSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Audio", icon: "waveform", color: "9B59B6")
-
-            VStack(spacing: 0) {
-                toggleRow(
-                    icon: "wifi",
-                    title: "Wi-Fi",
-                    color: "9B59B6",
-                    isOn: $prefs.audioOnWifi
-                )
-                .accessibilityLabel("Telecharger l'audio en Wi-Fi")
-                .accessibilityValue(prefs.audioOnWifi ? "active" : "desactive")
-
-                toggleRow(
-                    icon: "antenna.radiowaves.left.and.right",
-                    title: "Donnees cellulaires",
-                    color: "9B59B6",
-                    isOn: $prefs.audioOnCellular
-                )
-                .accessibilityLabel("Telecharger l'audio en donnees cellulaires")
-                .accessibilityValue(prefs.audioOnCellular ? "active" : "desactive")
-            }
-            .background(sectionBackground(tint: "9B59B6"))
-        }
-    }
-
-    // MARK: - Video Section
-
-    private var videoSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Video", icon: "play.rectangle.fill", color: "E74C3C")
-
-            VStack(spacing: 0) {
-                toggleRow(
-                    icon: "wifi",
-                    title: "Wi-Fi",
-                    color: "E74C3C",
-                    isOn: $prefs.videoOnWifi
-                )
-                .accessibilityLabel("Telecharger les videos en Wi-Fi")
-                .accessibilityValue(prefs.videoOnWifi ? "active" : "desactive")
-
-                toggleRow(
-                    icon: "antenna.radiowaves.left.and.right",
-                    title: "Donnees cellulaires",
-                    color: "E74C3C",
-                    isOn: $prefs.videoOnCellular
-                )
-                .accessibilityLabel("Telecharger les videos en donnees cellulaires")
-                .accessibilityValue(prefs.videoOnCellular ? "active" : "desactive")
-            }
-            .background(sectionBackground(tint: "E74C3C"))
+    private func policyIcon(_ policy: AutoDownloadPolicy) -> String {
+        switch policy {
+        case .always:              return "infinity"
+        case .wifiAndGoodCellular: return "antenna.radiowaves.left.and.right"
+        case .wifiOnly:            return "wifi"
+        case .never:               return "xmark.octagon"
         }
     }
 
     // MARK: - Helpers
-
-    private func toggleRow(
-        icon: String,
-        title: String,
-        color: String,
-        isOn: Binding<Bool>
-    ) -> some View {
-        HStack(spacing: 12) {
-            fieldIcon(icon, color: color)
-
-            Text(title)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundColor(theme.textPrimary)
-
-            Spacer()
-
-            Toggle("", isOn: isOn)
-                .labelsHidden()
-                .tint(Color(hex: accentColor))
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-    }
 
     private func sectionHeader(title: String, icon: String, color: String) -> some View {
         HStack(spacing: 6) {
@@ -262,22 +210,5 @@ struct MediaDownloadSettingsView: View {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(Color(hex: color).opacity(0.12))
             )
-    }
-
-    // MARK: - Persistence
-
-    private static let storageKey = "meeshy_media_download_prefs"
-
-    private static func loadPrefs() -> MediaDownloadPreferences {
-        guard let data = UserDefaults.standard.data(forKey: storageKey),
-              let decoded = try? JSONDecoder().decode(MediaDownloadPreferences.self, from: data) else {
-            return MediaDownloadPreferences()
-        }
-        return decoded
-    }
-
-    private static func savePrefs(_ prefs: MediaDownloadPreferences) {
-        guard let data = try? JSONEncoder().encode(prefs) else { return }
-        UserDefaults.standard.set(data, forKey: storageKey)
     }
 }

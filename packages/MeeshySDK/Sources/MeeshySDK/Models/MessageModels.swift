@@ -66,19 +66,84 @@ public struct APIAttachmentTranslation: Codable, Sendable {
 }
 
 public struct APIMessageAttachment: Decodable, Sendable {
+    // ── Identifiers ──
     public let id: String
+    public let messageId: String?
+
+    // ── File info ──
     public let fileName: String?
     public let originalName: String?
     public let mimeType: String?
     public let fileSize: Int?
     public let fileUrl: String?
+
+    // ── Visual / thumbnail ──
     public let thumbnailUrl: String?
     public let thumbHash: String?
     public let width: Int?
     public let height: Int?
+
+    // ── Audio / video ──
     public let duration: Int?
+    public let bitrate: Int?
+    public let sampleRate: Int?
+    public let codec: String?
+    public let channels: Int?
+    public let fps: Double?
+    public let videoCodec: String?
+
+    // ── Document ──
+    public let pageCount: Int?
+    public let lineCount: Int?
+
+    // ── Location (legacy fields, kept for compat) ──
     public let latitude: Double?
     public let longitude: Double?
+
+    // ── Uploader / timestamps ──
+    public let uploadedBy: String?
+    public let isAnonymous: Bool?
+    public let createdAt: Date?
+
+    // NOTE: `metadata` (generic JSON blob) is intentionally NOT decoded
+    // here — iOS has no JSONValue-style any-codable helper yet and no
+    // current consumer reads it. Add when needed.
+
+    // ── Forwarding ──
+    public let forwardedFromAttachmentId: String?
+    public let isForwarded: Bool?
+
+    // ── View-once / Effects / Blur ──
+    public let isViewOnce: Bool?
+    public let maxViewOnceCount: Int?
+    public let viewOnceCount: Int?
+    public let isBlurred: Bool?
+    public let effectFlags: UInt32?
+
+    // ── Consumption tracking (R5 — denormalized counters surfaced in
+    //    attachmentFullSelect; required to render the consumption strip
+    //    and the per-attachment "delivered / viewed / listened / watched
+    //    by all" timestamps). Pre-R7 these fields existed on the wire
+    //    but iOS dropped them silently because `APIMessageAttachment`
+    //    didn't declare them.
+    public let deliveredToAllAt: Date?
+    public let viewedByAllAt: Date?
+    public let downloadedByAllAt: Date?
+    public let listenedByAllAt: Date?
+    public let watchedByAllAt: Date?
+    public let viewedCount: Int?
+    public let downloadedCount: Int?
+    public let consumedCount: Int?
+
+    // ── E2EE envelope (R5 — clients MUST receive these to decrypt the
+    //    attachment payload. Pre-R7 they were sent by the gateway but
+    //    dropped silently here because the iOS struct didn't declare them.
+    public let isEncrypted: Bool?
+    public let encryptionMode: String?
+    public let encryptionIv: String?
+    public let encryptionAuthTag: String?
+
+    // ── Prisme Linguistique JSON blobs ──
     public let transcription: APIAttachmentTranscription?
     public let translations: [String: APIAttachmentTranslation]?
 }
@@ -118,6 +183,48 @@ public struct APITextTranslation: Decodable, Identifiable, Sendable {
     public let sourceLanguage: String?
 }
 
+/// Métadonnées enrichies de la story citée — renvoyées par le gateway dans
+/// `GET /messages` quand le message répond à une story. `nil` si la story a
+/// été supprimée.
+public struct APIStoryReplyTarget: Decodable, Sendable {
+    public let id: String
+    public let reactionCount: Int
+    public let commentCount: Int
+    public let createdAt: Date
+    public let thumbnailUrl: String?
+    public let previewText: String
+
+    private enum CodingKeys: String, CodingKey {
+        case id, reactionCount, commentCount, createdAt, thumbnailUrl, previewText
+    }
+
+    nonisolated(unsafe) private static let isoFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    nonisolated(unsafe) private static let isoPlain = ISO8601DateFormatter()
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        reactionCount = try c.decode(Int.self, forKey: .reactionCount)
+        commentCount = try c.decode(Int.self, forKey: .commentCount)
+        thumbnailUrl = try c.decodeIfPresent(String.self, forKey: .thumbnailUrl)
+        previewText = try c.decode(String.self, forKey: .previewText)
+        // `createdAt` est décodé depuis une String puis parsé ici — agnostique
+        // de la `dateDecodingStrategy` du JSONDecoder appelant (la prod utilise
+        // une stratégie `.custom`, les tests `.iso8601`). Tolère les
+        // millisecondes (`.000Z`) que le gateway émet via `Date.toISOString()`.
+        let raw = try c.decode(String.self, forKey: .createdAt)
+        guard let date = Self.isoFractional.date(from: raw) ?? Self.isoPlain.date(from: raw) else {
+            throw DecodingError.dataCorruptedError(forKey: .createdAt, in: c,
+                debugDescription: "Date ISO8601 invalide: \(raw)")
+        }
+        createdAt = date
+    }
+}
+
 public struct APIMessage: Sendable {
     public let id: String
     /// Stable end-to-end identifier (`cid_<uuid v4 lowercase>`) emitted by the
@@ -136,6 +243,7 @@ public struct APIMessage: Sendable {
     public var isDeleted: Bool { deletedAt != nil }
     public let replyToId: String?
     public let storyReplyToId: String?
+    public let storyReplyTo: APIStoryReplyTarget?
     public let forwardedFromId: String?
     public let forwardedFromConversationId: String?
     public let pinnedAt: String?
@@ -168,7 +276,7 @@ extension APIMessage: Decodable {
     private enum CodingKeys: String, CodingKey {
         case id, clientMessageId, conversationId, senderId, content, originalLanguage
         case messageType, messageSource, isEdited, deletedAt
-        case replyToId, storyReplyToId, forwardedFromId, forwardedFromConversationId
+        case replyToId, storyReplyToId, storyReplyTo, forwardedFromId, forwardedFromConversationId
         case pinnedAt, pinnedBy, isViewOnce, isBlurred, expiresAt
         case isEncrypted, encryptionMode, createdAt, updatedAt
         case sender, attachments, replyTo, forwardedFrom, forwardedFromConversation
@@ -198,6 +306,7 @@ extension APIMessage: Decodable {
         deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
         replyToId = try c.decodeIfPresent(String.self, forKey: .replyToId)
         storyReplyToId = try c.decodeIfPresent(String.self, forKey: .storyReplyToId)
+        storyReplyTo = try c.decodeIfPresent(APIStoryReplyTarget.self, forKey: .storyReplyTo)
         forwardedFromId = try c.decodeIfPresent(String.self, forKey: .forwardedFromId)
         forwardedFromConversationId = try c.decodeIfPresent(String.self, forKey: .forwardedFromConversationId)
         pinnedAt = try c.decodeIfPresent(String.self, forKey: .pinnedAt)
@@ -366,11 +475,31 @@ extension APIMessage {
                 let isReplyMe = reply.senderId == currentUserId
                 let authorName = reply.sender?.name ?? "?"
                 let firstAtt = reply.attachments?.first
+                // Single source of truth for mime → category: AttachmentKind
+                // (see `AttachmentKind.swift`). Pre-fix this stored the raw
+                // MIME (`"image/jpeg"`) which broke the reply-preview icon
+                // resolution — consumers expect a short kind (`"image"`,
+                // `"video"`, ...) matching `AttachmentKind.rawValue`.
+                let kindRaw = firstAtt?.mimeType.map { AttachmentKind(mimeType: $0).rawValue }
                 return ReplyReference(
                     messageId: reply.id, authorName: authorName,
                     previewText: reply.content ?? "", isMe: isReplyMe,
-                    attachmentType: firstAtt?.mimeType,
+                    attachmentType: kindRaw,
                     attachmentThumbnailUrl: firstAtt?.thumbnailUrl
+                )
+            }
+            // Enriched story-reply target (thumbnail + reaction/comment
+            // counts + publish date) — lets the quoted-reply citation show
+            // the real story preview instead of a bare "Story" placeholder.
+            if let target = storyReplyTo {
+                return ReplyReference(
+                    messageId: target.id, authorName: "Story",
+                    previewText: target.previewText.isEmpty ? "\u{1F4F7} Story" : target.previewText,
+                    isStoryReply: true,
+                    storyPublishedAt: target.createdAt,
+                    storyReactionCount: target.reactionCount,
+                    storyCommentCount: target.commentCount,
+                    storyThumbnailUrl: target.thumbnailUrl
                 )
             }
             if let storyId = storyReplyToId, !storyId.isEmpty {
@@ -386,6 +515,9 @@ extension APIMessage {
             guard let fwd = forwardedFrom else { return nil }
             let fwdSenderName = fwd.sender?.name ?? "?"
             let firstAtt = fwd.attachments?.first
+            // Same mime → short kind contract as `uiReplyTo` above —
+            // single source of truth is `AttachmentKind`.
+            let fwdKindRaw = firstAtt?.mimeType.map { AttachmentKind(mimeType: $0).rawValue }
             return ForwardReference(
                 originalMessageId: fwd.id,
                 senderName: fwdSenderName,
@@ -393,7 +525,7 @@ extension APIMessage {
                 previewText: fwd.content ?? "",
                 conversationId: forwardedFromConversation?.id,
                 conversationName: forwardedFromConversation?.title,
-                attachmentType: firstAtt?.mimeType,
+                attachmentType: fwdKindRaw,
                 attachmentThumbnailUrl: firstAtt?.thumbnailUrl
             )
         }()

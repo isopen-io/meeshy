@@ -40,7 +40,7 @@ struct SkeletonFeedPost: View {
         )
         .padding(.horizontal, 16)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("Chargement d'une publication"))
+        .accessibilityLabel(Text(String(localized: "skeleton.feed.post.loading", defaultValue: "Chargement d'une publication", bundle: .main)))
     }
 
     // MARK: - Sections

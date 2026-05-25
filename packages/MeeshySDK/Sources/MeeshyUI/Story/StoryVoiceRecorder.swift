@@ -15,6 +15,7 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
     @State private var wavePhase: CGFloat = 0
     @State private var phaseTimer: Timer?
     @State private var errorMessage: String?
+    @State private var hasCompleted = false
 
     private let maxDuration: TimeInterval = 60
 
@@ -103,6 +104,11 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
         .onDisappear {
             stopPhaseTimer()
         }
+        .onChange(of: recorder.isRecording) { isRecording in
+            if !isRecording {
+                stopRecording()
+            }
+        }
     }
 
     // MARK: - Waveform
@@ -150,14 +156,23 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
 
     private func startRecording() {
         guard !recorder.isRecording else { return }
+        hasCompleted = false
 
+        // `requestRecordPermission` invokes its completion on the
+        // `com.avaudiosession.tccserver` queue. Hopping back via
+        // `DispatchQueue.main.async` does NOT prove `@MainActor` isolation
+        // to Swift 6's runtime; calling `@MainActor`-isolated APIs from
+        // there trips `swift_task_isCurrentExecutorImpl` and crashes with
+        // `EXC_BREAKPOINT`. `Task { @MainActor in ... }` is the
+        // Swift-6-correct hop.
         AVAudioSession.sharedInstance().requestRecordPermission { granted in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 guard granted else {
                     errorMessage = String(localized: "audio.recorder.micDenied", defaultValue: "Permission micro refus\u{00E9}e", bundle: .module)
                     return
                 }
                 errorMessage = nil
+                recorder.configure(with: .story)
                 recorder.startRecording()
                 HapticFeedback.medium()
 
@@ -173,13 +188,20 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
     }
 
     private func stopRecording() {
-        guard recorder.isRecording else { return }
-        let capturedDuration = recorder.duration
-        guard let url = recorder.stopRecording() else { return }
+        guard !hasCompleted else { return }
+        hasCompleted = true
+
+        let url: URL?
+        if recorder.isRecording {
+            url = recorder.stopRecording()
+        } else {
+            url = recorder.recordedFileURL
+        }
+
         stopPhaseTimer()
         HapticFeedback.success()
 
-        if capturedDuration > 0.5 {
+        if let url, recorder.duration > 0.5 {
             onRecordComplete(url)
         }
     }

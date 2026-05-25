@@ -44,7 +44,7 @@ public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
         case solidColor(UIColor)
         case gradient(colors: [UIColor], direction: GradientDirection)
         case image(postMediaId: String, thumbHash: String?)
-        case video(postMediaId: String, looping: Bool, mute: Bool)
+        case video(postMediaId: String, looping: Bool, mute: Bool, thumbHash: String?)
     }
 
     public enum GradientDirection: Sendable, Equatable {
@@ -54,10 +54,56 @@ public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
     public private(set) nonisolated(unsafe) var kind: Kind = .solidColor(.black)
     public private(set) nonisolated(unsafe) var transform3D: BackgroundTransform = BackgroundTransform()
 
+    /// Reflète l'état mute global du reader (bouton Mute / Son de la sidebar).
+    /// Le canvas (`StoryCanvasUIView`) synchronise cette propriété à chaque
+    /// `handleComposerMute()` / `handleComposerUnmute()` et au moment du
+    /// `setReaderContext` pour propager le toggle au player vidéo de fond
+    /// sans recréer la layer. Avant cette propriété, le renderer hardcodait
+    /// `mute: true` à l'attach, donc l'audio des vidéos de fond restait
+    /// inaccessible quelle que soit l'intention de l'utilisateur.
+    @MainActor
+    public var isMuted: Bool = false {
+        didSet {
+            guard oldValue != isMuted else { return }
+            avPlayer?.isMuted = isMuted
+        }
+    }
+
+    /// Drapeau levé par le canvas (`StoryCanvasUIView`) en mode `.play` pour
+    /// autoriser la lecture du player vidéo de fond. Quand un nouveau player
+    /// est attaché alors que le canvas est déjà actif (slide change durant
+    /// un viewing), on le démarre tout de suite ; sinon (prefetcher en
+    /// `.edit`, composer preview), on attache silencieux et on attend
+    /// l'activation explicite. Garantie : pas d'audio de vidéo de fond
+    /// off-screen ni de lecture « avant son tour ».
+    @MainActor
+    public var isPlaybackActive: Bool = false {
+        didSet {
+            guard oldValue != isPlaybackActive else { return }
+            if isPlaybackActive {
+                avPlayer?.play()
+            } else {
+                avPlayer?.pause()
+            }
+        }
+    }
+
     nonisolated(unsafe) var contentLayer: CALayer?
     nonisolated(unsafe) var avPlayer: AVPlayer?
     nonisolated(unsafe) var avPlayerLayer: AVPlayerLayer?
     nonisolated(unsafe) var avPlayerLooper: AVPlayerLooper?
+    private nonisolated(unsafe) var backgroundLoopObserver: NSObjectProtocol?
+
+    /// `true` quand `configure(kind:)` a stampé `contentLayer.contents` avec
+    /// une image FINALE (warm L1 cache hit OU bytes téléchargés via HTTP),
+    /// pas juste un placeholder ThumbHash. Lu par
+    /// `StoryCanvasUIView.scheduleContentReadyEvaluation(.image)` pour
+    /// court-circuiter le KVO observer : quand le NSCache rend la même
+    /// instance UIImage entre le warm-hit synchrone et le re-stamp async,
+    /// `contents` ne change pas d'identité et l'observer ne fire jamais —
+    /// d'où le loader infini à 0% sur les stories image (régression du
+    /// commit a60f636b5 / 2026-05-20).
+    @MainActor public private(set) var hasFinalContentStamped: Bool = false
 
     public override nonisolated init() { super.init() }
     public override nonisolated init(layer: Any) { super.init(layer: layer) }
@@ -66,6 +112,7 @@ public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
     public required nonisolated init?(coder: NSCoder) {
         fatalError("StoryBackgroundLayer does not support NSCoder")
     }
+
 }
 
 // MARK: - Configure
@@ -77,18 +124,53 @@ extension StoryBackgroundLayer {
                           geometry: CanvasGeometry,
                           resolver: ((String) -> URL?)?,
                           imageCache: ImageCacheReader?) {
+        // FAST PATH ANTI-FLASH :
+        // `configure(...)` est appelé à CHAQUE `rebuildLayers()` du canvas
+        // (i.e. à chaque slide.didSet, drop d'un élément foreground, lancement
+        // preview / viewer, etc.). Le clear+rebuild systématique détachait
+        // `contentLayer` puis le recréait vide en attendant un `img.contents`
+        // async — visible 1-2 frames comme un FLASH NOIR / TRANSPARENT à
+        // travers `StoryCanvasUIView`.
+        //
+        // Quand l'IDENTITÉ du contenu n'a pas changé (même postMediaId pour
+        // image / video, même type pour color/gradient), on garde le
+        // `contentLayer` existant et on rafraîchit juste frame + transform.
+        // Le bitmap déjà affiché reste à l'écran sans interruption.
+        let previousIdentity = Self.contentIdentity(for: self.kind)
+        let nextIdentity = Self.contentIdentity(for: kind)
+        let canReuseContent = (previousIdentity == nextIdentity) && (contentLayer != nil)
+
         self.kind = kind
         self.transform3D = transform
         self.frame = CGRect(origin: .zero, size: geometry.renderSize)
+
+        if canReuseContent {
+            // Même contenu visuel : on garde le sublayer en place pour éviter
+            // un détachement transitoire. Resync frame (resize du canvas) +
+            // transform (pinch / pan utilisateur sur l'image bg).
+            contentLayer?.frame = bounds
+            avPlayerLayer?.frame = bounds
+            self.transform = transform.caTransform()
+            return
+        }
 
         // Clear existing content
         contentLayer?.removeFromSuperlayer()
         avPlayerLayer?.removeFromSuperlayer()
         avPlayer?.pause()
+        if let observer = backgroundLoopObserver {
+            NotificationCenter.default.removeObserver(observer)
+            backgroundLoopObserver = nil
+        }
         avPlayer = nil
         avPlayerLayer = nil
         avPlayerLooper = nil
         contentLayer = nil
+        // Reset readiness flag — sera re-armé par les fast-paths (warm hit /
+        // HTTP load) en `case .image`. Couleur / gradient n'utilisent pas ce
+        // flag (ils ont leur propre chemin `.solidColor` / `.gradient` dans
+        // `scheduleContentReadyEvaluation`).
+        hasFinalContentStamped = false
 
         switch kind {
         case .solidColor(let color):
@@ -109,7 +191,6 @@ extension StoryBackgroundLayer {
             addSublayer(g)
             contentLayer = g
         case .image(let postMediaId, let thumbHash):
-            backgroundColor = UIColor.black.cgColor
             let img = CALayer()
             img.frame = bounds
             img.contentsGravity = .resizeAspectFill
@@ -117,18 +198,45 @@ extension StoryBackgroundLayer {
             addSublayer(img)
             contentLayer = img
 
-            // Synchronous thumbHash placeholder (if any)
-            if let hash = thumbHash,
+            // Fast-path cache chaud : si on peut résoudre le bitmap MAINTENANT
+            // (sync NSCache via `warmedImage`), on stamp `contents` direct sans
+            // afficher de ThumbHash placeholder. Évite le flash placeholder→
+            // bitmap réel quand on revisite une story.
+            let directURLForWarm = Self.directURLIfAny(from: postMediaId)
+            let warmURL: URL? = directURLForWarm ?? resolver?(postMediaId)
+            var hasVisual = false
+            if let warm = warmURL,
+               let cached = CacheCoordinator.warmedImage(for: warm.absoluteString)?.cgImage {
+                img.contents = cached
+                hasVisual = true
+                hasFinalContentStamped = true
+            }
+
+            // Synchronous thumbHash placeholder (si pas de hit cache chaud).
+            if !hasVisual,
+               let hash = thumbHash,
                let placeholderImage = ThumbHashDecoder.decodeIfAvailable(hash) {
                 img.contents = placeholderImage.cgImage
+                hasVisual = true
             }
+
+            // Toujours `.clear` : le parent (`StoryCanvasUIView` lui-même
+            // déjà `.clear`, qui laisse voir le composer ou le viewer
+            // derrière) porte le fond cinéma. Avant ce changement on posait
+            // un `.black` cgColor en fallback "aucun visuel" ; pendant les
+            // transitions (slide change, rebuildLayers pendant un edit /
+            // validation d'élément) cette couche flashait NOIR ~1 frame
+            // avant que le bitmap réel arrive — exactement le scintillement
+            // décrit par l'utilisateur. Garder `.clear` rend la couche
+            // muette pendant la latence d'async ; le parent reste visible.
+            backgroundColor = UIColor.clear.cgColor
 
             // Charge le bitmap réel par-dessus le placeholder thumbHash.
             // Trois sources, dans l'ordre : (1) cache image fourni par le
             // reader (preview composer via `PreloadedImageCacheReader`, ou un
             // cache disque), (2) URL directe embarquée dans `postMediaId`
             // (file:// du composer après PhotosPicker, ou URL distante),
-            // (3) resolver `postMediaId` distant → URL → téléchargement réseau.
+            // (3) resolver `postMediaId` distant → URL → cache global.
             //
             // BUGFIX : le chemin (3) était auparavant imbriqué dans un
             // `if let imageCache` — or le viewer en ligne passe `imageCache: nil`
@@ -136,17 +244,20 @@ extension StoryBackgroundLayer {
             // dont le background référence un `postMediaId` distant ne chargeait
             // jamais son image (rectangle noir + loader infini, le timer ne
             // démarrant jamais car `onContentReady` ne se déclenchait pas). Le
-            // téléchargement réseau est désormais gardé par le `resolver` seul ;
-            // le cache image n'est qu'un fast-path optionnel.
+            // chemin (3) est désormais gardé par le `resolver` seul, et passe
+            // par `CacheCoordinator.shared.images` (NSCache → disque TTL 1 an →
+            // réseau, requêtes dédupliquées) : une slide déjà vue — ou
+            // préchauffée par le prefetcher — s'affiche sans re-télécharger.
             let directURL = Self.directURLIfAny(from: postMediaId)
             let imageCacheReader = imageCache
             let urlResolver = resolver
             if directURL != nil || imageCacheReader != nil || urlResolver != nil {
-                Task { @MainActor [weak img] in
+                Task { @MainActor [weak self, weak img] in
                     // (1) Fast-path cache (preview / disque).
                     if let imageCacheReader,
                        let cached = await imageCacheReader.cachedImage(for: postMediaId) {
                         img?.contents = cached.cgImage
+                        self?.hasFinalContentStamped = true
                         return
                     }
                     // (2) URL directe embarquée, sinon (3) resolver distant.
@@ -155,45 +266,166 @@ extension StoryBackgroundLayer {
                         if let data = try? Data(contentsOf: url),
                            let uiImage = UIImage(data: data) {
                             img?.contents = uiImage.cgImage
+                            self?.hasFinalContentStamped = true
                         }
-                    } else if let (data, _) = try? await URLSession.shared.data(from: url),
+                    } else if let data = try? await CacheCoordinator.shared.images.data(for: url.absoluteString),
                               let uiImage = UIImage(data: data) {
                         img?.contents = uiImage.cgImage
+                        self?.hasFinalContentStamped = true
                     }
                 }
+                break
             }
-        case .video(let postMediaId, let looping, let mute):
-            backgroundColor = UIColor.black.cgColor
+        case .video(let postMediaId, let looping, let mute, let thumbHash):
             // Édition composer : même fallback URL directe qu'en image.
             let resolvedURL: URL? = {
                 if let direct = Self.directURLIfAny(from: postMediaId) { return direct }
                 return resolver?(postMediaId)
             }()
-            guard let url = resolvedURL else { break }
-            let item = AVPlayerItem(url: url)
-            if looping {
-                let queuePlayer = AVQueuePlayer()
-                self.avPlayerLooper = AVPlayerLooper(player: queuePlayer, templateItem: item)
-                self.avPlayer = queuePlayer
-            } else {
-                self.avPlayer = AVPlayer(playerItem: item)
+            guard let remoteURL = resolvedURL else {
+                // Pas d'URL : on laisse le layer transparent, le parent
+                // (composer / viewer) porte le fond. Évite un flash noir
+                // pendant qu'une vidéo de fond async se résout (le
+                // resolver peut retourner nil 1-2 frames le temps que le
+                // postMediaId soit enregistré côté cache).
+                backgroundColor = UIColor.clear.cgColor
+                break
             }
-            self.avPlayer?.isMuted = mute
-            let pl = AVPlayerLayer(player: avPlayer)
-            pl.frame = bounds
-            pl.videoGravity = .resizeAspectFill
-            addSublayer(pl)
-            self.avPlayerLayer = pl
-            self.avPlayer?.play()
+
+            // Fast-path : URL locale immédiate ou cache disk hit → AVPlayer
+            // direct, sans placeholder noir ni ThumbHash (la première frame
+            // de la vidéo est rendue très vite).
+            if remoteURL.isFileURL {
+                backgroundColor = UIColor.clear.cgColor
+                attachBackgroundPlayer(url: remoteURL, looping: looping, mute: mute)
+                break
+            }
+            if let local = CacheCoordinator.videoLocalFileURL(for: remoteURL.absoluteString) {
+                backgroundColor = UIColor.clear.cgColor
+                attachBackgroundPlayer(url: local, looping: looping, mute: mute)
+                break
+            }
+
+            // Cache miss : placeholder ThumbHash dans un sublayer si dispo,
+            // sinon on garde le layer transparent (le parent porte le fond
+            // cinéma — ne JAMAIS forcer un `.black` ici, ça provoque le
+            // flash NOIR transitoire pendant les rebuildLayers).
+            if let hash = thumbHash,
+               let placeholderImage = ThumbHashDecoder.decodeIfAvailable(hash) {
+                let placeholder = CALayer()
+                placeholder.frame = bounds
+                placeholder.contents = placeholderImage.cgImage
+                placeholder.contentsGravity = .resizeAspectFill
+                placeholder.masksToBounds = true
+                addSublayer(placeholder)
+                contentLayer = placeholder
+            }
+            backgroundColor = UIColor.clear.cgColor
+
+            // Précache async puis play. AVPlayerLayer s'ajoute par-dessus
+            // le placeholder, qui disparaît visuellement quand la vidéo joue.
+            Task { @MainActor [weak self] in
+                let url = await CacheCoordinator.videoLocalFileURLAwait(for: remoteURL) ?? remoteURL
+                self?.attachBackgroundPlayer(url: url, looping: looping, mute: mute)
+            }
         }
 
         self.transform = transform.caTransform()
+    }
+
+    /// Identité visuelle du `Kind`, utilisée par le fast-path de `configure()`
+    /// pour décider si on peut garder le `contentLayer` actuel (même contenu)
+    /// ou s'il faut tout reconstruire (changement réel de slide bg).
+    ///
+    /// On ignore les paramètres dynamiques (mute, color associé) car leur
+    /// changement n'impose pas de recréer le layer (mute = property AVPlayer,
+    /// color = backgroundColor du layer). Seule l'IDENTITÉ du média compte.
+    nonisolated private static func contentIdentity(for kind: Kind) -> String {
+        switch kind {
+        case .solidColor:                       return "color"
+        case .gradient:                         return "gradient"
+        case .image(let postMediaId, _):        return "image:\(postMediaId)"
+        case .video(let postMediaId, let looping, _, _):
+            return "video:\(postMediaId):\(looping)"
+        }
     }
 }
 
 // MARK: - App Lifecycle
 
 extension StoryBackgroundLayer {
+
+    /// Attache un AVPlayer pour une URL `file://` locale. Factorisé pour les
+    /// deux chemins (cache chaud immédiat / cache froid après fetch async).
+    /// Garantit que l'URL passée est un fichier local — les URLs HTTPS doivent
+    /// être pré-cachées en amont via `videoLocalFileURLAwait`.
+    @MainActor
+    func attachBackgroundPlayer(url: URL, looping: Bool, mute: Bool) {
+        let item = AVPlayerItem(url: url)
+        item.preferredForwardBufferDuration = 2.0
+        if looping {
+            let queuePlayer = AVQueuePlayer()
+            self.avPlayerLooper = AVPlayerLooper(player: queuePlayer, templateItem: item)
+            self.avPlayer = queuePlayer
+        } else {
+            self.avPlayer = AVPlayer(playerItem: item)
+        }
+        // Le paramètre `mute` reste pris en compte pour compat avec les call
+        // sites existants (renderer), mais on respecte aussi l'état dynamique
+        // `self.isMuted` mis à jour par le canvas. Le OR garantit que si l'un
+        // OU l'autre demande mute, le player démarre silencieux ; le toggle
+        // unmute du sidebar passera ensuite par `isMuted.didSet`.
+        self.avPlayer?.isMuted = mute || self.isMuted
+        // Volume explicite (l'AVPlayer démarre à 1.0 mais soyons déterministes
+        // pour les paths de re-attach via cache LRU).
+        self.avPlayer?.volume = 1.0
+        // Defensive : assurer la catégorie `.playback` avant de jouer. La
+        // session est normalement déjà `.playback` (via `StoryMediaCoordinator
+        // .activate` sync depuis `onAppear`), mais le re-attach peut intervenir
+        // entre un retour foreground et l'activation `MediaSessionCoordinator`
+        // — sans cette ligne, la vidéo joue sous `.ambient` et reste silencieuse
+        // en mode silent (simulator OU device avec switch).
+        let session = AVAudioSession.sharedInstance()
+        if session.category != .playback {
+            try? session.setCategory(.playback, mode: .default, options: [.mixWithOthers, .duckOthers])
+            try? session.setActive(true)
+        }
+        let pl = AVPlayerLayer(player: avPlayer)
+        pl.frame = bounds
+        pl.videoGravity = .resizeAspectFill
+        addSublayer(pl)
+        self.avPlayerLayer = pl
+        // IMPORTANT — on n'appelle PLUS `play()` ici inconditionnellement.
+        // `attachBackgroundPlayer` peut être invoqué depuis un canvas en
+        // `.edit` mode (prefetcher, composer preview), auquel cas démarrer
+        // la lecture leakerait l'audio d'une story qui n'est PAS encore à
+        // l'écran (« vidéo joue avant son tour »). C'est désormais le canvas
+        // qui décide via `isPlaybackActive` (drapeau levé en mode `.play`).
+        // La vidéo prefetchée reste prête à jouer instantanément sans
+        // gaspiller le décodeur audio.
+        if isPlaybackActive {
+            self.avPlayer?.play()
+        }
+
+        // Background loop observer — ensures the video repeats until the slide
+        // duration is reached (Section 5 of the review). Background videos are
+        // authoritative for slide duration only when NOT looping; when looping,
+        // they must fill the user-defined duration.
+        if looping {
+            if let observer = backgroundLoopObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            backgroundLoopObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: item,
+                queue: .main
+            ) { [weak self] _ in
+                self?.avPlayer?.seek(to: .zero)
+                self?.avPlayer?.play()
+            }
+        }
+    }
+
     @MainActor
     public func handleAppLifecycle(active: Bool) {
         guard let player = avPlayer else { return }

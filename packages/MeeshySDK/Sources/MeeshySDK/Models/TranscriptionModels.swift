@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Message Transcription Segment
 
-public struct MessageTranscriptionSegment: Identifiable, Sendable, Codable {
+public struct MessageTranscriptionSegment: Identifiable, Sendable, Codable, Equatable {
     public let id: UUID
     public let text: String
     public let startTime: Double?
@@ -17,7 +17,7 @@ public struct MessageTranscriptionSegment: Identifiable, Sendable, Codable {
 
 // MARK: - Message Transcription
 
-public struct MessageTranscription: Sendable, Codable {
+public struct MessageTranscription: Sendable, Codable, Equatable {
     public let attachmentId: String
     public let text: String
     public let language: String
@@ -36,7 +36,7 @@ public struct MessageTranscription: Sendable, Codable {
 
 // MARK: - Message Translated Audio
 
-public struct MessageTranslatedAudio: Identifiable, Sendable {
+public struct MessageTranslatedAudio: Identifiable, Sendable, Equatable {
     public let id: String
     public let attachmentId: String
     public let targetLanguage: String
@@ -60,3 +60,4 @@ public struct MessageTranslatedAudio: Identifiable, Sendable {
         self.voiceModelId = voiceModelId; self.ttsModel = ttsModel; self.segments = segments
     }
 }
+

@@ -8,6 +8,14 @@ public protocol ConversationSyncEngineProviding: AnyObject, Sendable {
     var conversationsDidChange: AnyPublisher<Void, Never> { get }
     var messagesDidChange: AnyPublisher<String, Never> { get }
 
+    /// Sum of `unreadCount` across every cached conversation. CurrentValue-
+    /// based: emits the current value on subscribe and again on every
+    /// mutation. Consumers must NOT reduce the list themselves.
+    var totalConversationsUnread: AnyPublisher<Int, Never> { get }
+
+    /// Synchronous snapshot of the aggregate. Always ≥ 0.
+    var totalConversationsUnreadValue: Int { get }
+
     @discardableResult
     func fullSync() async -> Bool
     @discardableResult
@@ -19,6 +27,21 @@ public protocol ConversationSyncEngineProviding: AnyObject, Sendable {
     func stopSocketRelay() async
     func markConversationReadLocally(_ conversationId: String) async
     func updateConversationAfterSend(conversationId: String, messagePreview: String, messageAt: Date, senderName: String?) async
+
+    /// Declare which conversation is currently visible to the user.
+    /// While set, the engine will:
+    ///   1. Force the open conversation's `unreadCount` to 0 on every
+    ///      `conversation:unread-updated` event (the user IS reading it,
+    ///      so any non-zero value is a visual lie).
+    ///   2. Exclude the open conversation from `totalConversationsUnread`
+    ///      so cross-conversation surfaces (back-button pill, side menus)
+    ///      count OTHER conversations only.
+    ///   3. Reset the open conversation's `unreadCount` to 0 immediately
+    ///      on entry, defending against stale snapshots that pushed an
+    ///      inflated count (e.g. 75) into the cache before we knew the
+    ///      user was looking at it.
+    /// Pass `nil` (on view disappear) to restore pass-through behaviour.
+    func setCurrentlyOpenConversation(_ conversationId: String?)
 }
 
 // MARK: - Implementation
@@ -32,9 +55,26 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     private let _conversationsDidChange = PassthroughSubject<Void, Never>()
     private let _messagesDidChange = PassthroughSubject<String, Never>()
 
+    /// Cross-conversation aggregator of `unreadCount`. Rebuilt from the
+    /// authoritative cache on every mutation that may change the total —
+    /// `conversation:unread-updated`, `conversation:read-status-updated`,
+    /// and after each successful sync that overwrites the list. UI surfaces
+    /// (back-button pill, side menus) subscribe here instead of reducing
+    /// the list themselves so the math lives in one place.
+    private let _totalConversationsUnread = CurrentValueSubject<Int, Never>(0)
+
     // Protocol-exposed publishers (read-only)
     public var conversationsDidChange: AnyPublisher<Void, Never> { _conversationsDidChange.eraseToAnyPublisher() }
     public var messagesDidChange: AnyPublisher<String, Never> { _messagesDidChange.eraseToAnyPublisher() }
+
+    /// Publisher of the total unread count across all cached conversations.
+    /// Emits the current value on subscribe (CurrentValueSubject semantics),
+    /// then a new value each time the cache mutates.
+    public var totalConversationsUnread: AnyPublisher<Int, Never> { _totalConversationsUnread.eraseToAnyPublisher() }
+
+    /// Synchronous snapshot of the current aggregated total. Always
+    /// ≥ 0 — negative `unreadCount` values from the backend are clamped.
+    public var totalConversationsUnreadValue: Int { _totalConversationsUnread.value }
 
     // State (protected by serial queue)
     private let stateQueue = DispatchQueue(label: "me.meeshy.sync-engine.state")
@@ -42,6 +82,14 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     private var isSyncing: Bool {
         get { stateQueue.sync { _isSyncing } }
         set { stateQueue.sync { _isSyncing = newValue } }
+    }
+    /// Currently-visible conversation. While non-nil the engine forces this
+    /// conversation's `unreadCount` to 0 on every server broadcast and
+    /// excludes it from the cross-conversation aggregator.
+    private var _currentlyOpenConversationId: String?
+    private var currentlyOpenConversationId: String? {
+        get { stateQueue.sync { _currentlyOpenConversationId } }
+        set { stateQueue.sync { _currentlyOpenConversationId = newValue } }
     }
     private var socketSubscriptions = Set<AnyCancellable>()
 
@@ -361,6 +409,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         lastDeltaSyncAt = now
         isSyncing = true
         defer { isSyncing = false }
+        Self.logger.info("[RT-DIAG] deltaSync START — no delivery ACK is sent for synced messages (bug A)")
 
         do {
             let since = lastSyncTimestamp
@@ -399,6 +448,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             await SearchIndex.shared.indexConversations(deltaConversations.filter { $0.isActive })
             _conversationsDidChange.send()
 
+            Self.logger.info("[RT-DIAG] deltaSync END merged=\(merged.count, privacy: .public) conversations")
             lastSyncTimestamp = Date()
             return true
         } catch {
@@ -498,6 +548,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     // MARK: - Socket Relay
 
     public func startSocketRelay() async {
+        Self.logger.info("[RT-DIAG] startSocketRelay() called — (re)subscribing to message socket events")
         socketSubscriptions.removeAll()
 
         // Message events
@@ -646,6 +697,14 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 Task { await self.syncSinceLastCheckpoint() }
             }
             .store(in: &socketSubscriptions)
+
+        Self.logger.info("[RT-DIAG] startSocketRelay() done — \(self.socketSubscriptions.count, privacy: .public) subscriptions active")
+
+        // Initial recompute so cold-start (cache already hydrated from disk
+        // before any socket event arrives) publishes the correct aggregate
+        // to subscribers. Without this, `totalConversationsUnreadValue`
+        // stays at 0 until the first `unread-updated` event lands.
+        await recomputeTotalUnread()
     }
 
     public func stopSocketRelay() async {
@@ -662,6 +721,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         let username = await currentUsername()
         let isMe = apiMessage.senderId == userId
         let msg = apiMessage.toMessage(currentUserId: userId, currentUsername: username)
+        Self.logger.info("[RT-DIAG] handleNewMessage conv=\(msg.conversationId, privacy: .public) msg=\(msg.id, privacy: .public) isMe=\(isMe, privacy: .public)")
         await cache.messages.upsert(item: msg, for: msg.conversationId) { existing, new in
             existing.contains(where: { $0.id == new.id }) ? existing : existing + [new]
         }
@@ -713,10 +773,16 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                     updated.insert(domainConv, at: 0)
                     return updated
                 }
+                // The freshly-fetched conversation may carry an `unreadCount`
+                // > 0 (group the user was added to, missed during fullSync).
+                // Recompute now so the back-button pill is correct before
+                // the next `conversation:unread-updated` arrives.
+                await recomputeTotalUnread()
             } catch {
                 Self.logger.error("[SyncEngine] Failed to fetch missing conversation \(msg.conversationId): \(error.localizedDescription)")
             }
         }
+        Self.logger.info("[RT-DIAG] handleNewMessage -> conversationsDidChange.send conv=\(msg.conversationId, privacy: .public)")
         _conversationsDidChange.send()
 
         // Auto mark-as-received for messages from other users
@@ -731,6 +797,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         let userId = await currentUserId()
         let username = await currentUsername()
         let msg = apiMessage.toMessage(currentUserId: userId, currentUsername: username)
+        Self.logger.info("[RT-DIAG] handleEditedMessage conv=\(msg.conversationId, privacy: .public) msg=\(msg.id, privacy: .public)")
         await cache.messages.upsertPatch(for: msg.conversationId, itemId: msg.id) { existing in
             existing = msg
         }
@@ -738,6 +805,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     }
 
     private func handleDeletedMessage(_ event: MessageDeletedEvent) async {
+        Self.logger.info("[RT-DIAG] handleDeletedMessage conv=\(event.conversationId, privacy: .public) msg=\(event.messageId, privacy: .public)")
         await cache.messages.upsertPatch(for: event.conversationId, itemId: event.messageId) { msg in
             msg.deletedAt = Date()
             msg.content = ""
@@ -795,22 +863,44 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     }
 
     private func handleUnreadUpdated(_ event: UnreadUpdateEvent) async {
+        Self.logger.info("[RT-DIAG] handleUnreadUpdated conv=\(event.conversationId, privacy: .public) unread=\(event.unreadCount, privacy: .public)")
+        // Gate the server-provided value on whether the user is currently
+        // viewing this conversation. The gateway broadcasts the same
+        // `unreadCount` to every recipient regardless of presence; the
+        // client overrides it to 0 for the open conversation because the
+        // user IS reading it. This avoids the "11 → 75 then back to 0"
+        // visual flicker when a stale server count momentarily lands.
+        let effectiveUnread = (event.conversationId == currentlyOpenConversationId)
+            ? 0
+            : event.unreadCount
         await cache.conversations.update(for: "list") { conversations in
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == event.conversationId }) {
-                updated[idx].unreadCount = event.unreadCount
+                updated[idx].unreadCount = effectiveUnread
             }
             return updated
         }
         _conversationsDidChange.send()
+        await recomputeTotalUnread()
     }
 
     private func handleReadStatusUpdated(_ event: ReadStatusUpdateEvent) async {
         let userId = await currentUserId()
+        Self.logger.info("[RT-DIAG] handleReadStatusUpdated conv=\(event.conversationId, privacy: .public) type=\(event.type, privacy: .public)")
 
         // Update conversation unread count (userId is preferred, fallback to participantId)
         let eventUserId = event.userId ?? event.participantId
-        if eventUserId == userId {
+
+        // CRITICAL: only zero unreadCount on a true 'read' event. The gateway
+        // also emits this event with type=='received' when the delivery cursor
+        // advances (e.g. our own AppDelegate.willPresent → PushDeliveryReceiptService.ack
+        // → POST /mark-as-received). A 'received' event means "the message
+        // reached this device" — NOT "the user opened the conversation".
+        // Wiping unreadCount on 'received' caused the badge flicker the user
+        // saw: handleUnreadUpdated bumps it to 1 when the message lands, then
+        // a 'received' read-status:updated arrives moments later and wipes
+        // it to 0 even though the conversation is still unread.
+        if eventUserId == userId && event.type == "read" {
             await cache.conversations.update(for: "list") { conversations in
                 var updated = conversations
                 if let idx = updated.firstIndex(where: { $0.id == event.conversationId }) {
@@ -819,6 +909,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 return updated
             }
             _conversationsDidChange.send()
+            await recomputeTotalUnread()
         }
 
         // Update delivery status of own messages in the message cache
@@ -840,6 +931,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             }
             return updated
         }
+        Self.logger.info("[RT-DIAG] handleReadStatusUpdated -> messagesDidChange.send conv=\(event.conversationId, privacy: .public) newStatus=\(String(describing: newStatus), privacy: .public) delivered=\(summary.deliveredCount, privacy: .public) read=\(summary.readCount, privacy: .public)")
         _messagesDidChange.send(event.conversationId)
     }
 
@@ -871,6 +963,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             return updated
         }
         _conversationsDidChange.send()
+        await recomputeTotalUnread()
     }
 
     public func markConversationReadLocally(_ conversationId: String) async {
@@ -882,6 +975,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             return updated
         }
         _conversationsDidChange.send()
+        await recomputeTotalUnread()
     }
 
     // MARK: - Helpers
@@ -907,6 +1001,53 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             try await cache.conversations.save(sorted, for: cacheKey)
         } catch {
             Logger.cache.error("ConversationSyncEngine saveSorted failed for \(cacheKey, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+        if cacheKey == "list" {
+            await recomputeTotalUnread()
+        }
+    }
+
+    /// Reads the authoritative cache for the conversation list, sums the
+    /// `unreadCount` of every entry (clamped to ≥ 0 to defend against bogus
+    /// negative values), and publishes the result. The currently-open
+    /// conversation is excluded — cross-conversation surfaces (back-button
+    /// pill, side menus) count OTHER conversations only. Cheap: one cache
+    /// read + a linear reduce; runs only when a mutation likely changed
+    /// the total.
+    private func recomputeTotalUnread() async {
+        let cached = await cache.conversations.load(for: "list").snapshot() ?? []
+        let openId = currentlyOpenConversationId
+        let total = cached.reduce(0) { acc, conv in
+            guard conv.id != openId else { return acc }
+            return acc + max(0, conv.unreadCount)
+        }
+        _totalConversationsUnread.send(total)
+    }
+
+    // MARK: - Currently-open conversation
+
+    public func setCurrentlyOpenConversation(_ conversationId: String?) {
+        currentlyOpenConversationId = conversationId
+        guard let id = conversationId else {
+            // Restoring pass-through: recompute the aggregator so the
+            // previously-excluded conversation is now counted.
+            Task { await self.recomputeTotalUnread() }
+            return
+        }
+        // On entry, defensively zero the unread count of the open
+        // conversation. The cache may carry an inflated value left over
+        // from a stale `conversation:unread-updated` broadcast or from a
+        // REST refresh that ran against the buggy server fallback.
+        Task {
+            await self.cache.conversations.update(for: "list") { conversations in
+                var updated = conversations
+                if let idx = updated.firstIndex(where: { $0.id == id }) {
+                    updated[idx].unreadCount = 0
+                }
+                return updated
+            }
+            self._conversationsDidChange.send()
+            await self.recomputeTotalUnread()
         }
     }
 }

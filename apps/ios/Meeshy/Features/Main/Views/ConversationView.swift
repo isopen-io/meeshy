@@ -39,6 +39,24 @@ struct ConversationOverlayState {
     var detailSheetMessage: Message? = nil
     var detailSheetInitialTab: DetailTab? = nil
     var quickReactionMessageId: String? = nil
+
+    // MARK: - Context overlay (iMessage-style long-press)
+    /// Phase of the new long-press overlay (`MessageContextOverlay`).
+    /// `.closed` = idle, `.opening`/`.open`/`.closing` = transitions and live state.
+    var contextOverlayPhase: OverlayPhase = .closed
+    /// Message currently elevated by the context overlay. Frozen at long-press
+    /// time so subsequent message updates don't shift the visible bubble.
+    var contextOverlayMessage: Message? = nil
+    /// Source frame captured at long-press time. Used by the layout engine
+    /// to compute lift / menu placement; the overlay reads this snapshot
+    /// rather than tracking the live frame (which can shift during scroll).
+    var contextOverlayTargetFrame: CGRect? = nil
+    /// Output of `MessageOverlayLayoutEngine.compute` — pre-computed once
+    /// at opening so the algorithm doesn't re-run on every drag tick.
+    var contextOverlayLayoutOutput: OverlayLayoutOutput? = nil
+    /// Interactive swipe-down dismiss progress (pixels). Resets to 0 when
+    /// the gesture is cancelled or the overlay closes.
+    var contextOverlayDragOffset: CGFloat = 0
     /// Bubble cell frame (window coordinates) of the message whose
     /// add-reaction button opened the quick-reaction bar. Anchors the bar's
     /// placement; `nil` falls back to the legacy bottom-pinned position.
@@ -74,13 +92,21 @@ struct ConversationScrollState {
     var videosToPreview: [URL] = []
     var editingPendingAttachmentId: String? = nil
     var videoToEdit: URL? = nil
-    var audioToEdit: URL? = nil
+    var audioToEdit: PendingAudioEdit? = nil
 }
 
 struct PreviewMedia: Identifiable {
     let id = UUID()
     let url: URL
     let type: String?
+}
+
+/// A pending audio attachment opened for editing — carries the attachment id
+/// so the editor can replace that exact tray chip on confirm (never append).
+struct PendingAudioEdit: Identifiable, Equatable {
+    /// The id of the `MessageAttachment` being edited.
+    let id: String
+    let url: URL
 }
 
 struct ConversationComposerState {
@@ -95,6 +121,13 @@ struct ConversationComposerState {
     var pendingMediaFiles: [String: URL] = [:]
     var pendingThumbnails: [String: UIImage] = [:]
     var isLoadingMedia = false
+
+    /// In-flight attachment preparations (decompression → compression →
+    /// thumbnailing → ThumbHash). Each entry renders an `AttachmentLoadingTile`
+    /// in the composer tray until it transitions to `.ready`, at which point
+    /// the result is moved into `pendingAttachments`/`pendingMediaFiles`/
+    /// `pendingThumbnails` and the handle is dropped from this array.
+    var preparingAttachments: [PreparingAttachment] = []
     
     // Pickers
     var showPhotoPicker = false
@@ -127,13 +160,41 @@ struct ConversationComposerState {
     var emojiToInject = ""
 }
 
+extension ConversationComposerState {
+    /// Replaces the audio attachment `attachmentId` in place with the freshly
+    /// edited recording. Editing a media attachment must never spawn a second
+    /// tray chip — this mirrors the image editor's replace-by-id contract
+    /// (`pendingAttachments[idx] = …`). Returns the now-stale audio file URL so
+    /// the caller can delete it from disk.
+    @discardableResult
+    mutating func applyEditedAudio(attachmentId: String, editedURL: URL, durationMs: Int) -> URL? {
+        let staleURL = pendingAudioURL
+        let duration = max(durationMs, 500)
+        pendingAudioURL = editedURL
+        pendingMediaFiles[attachmentId] = editedURL
+        if let index = pendingAttachments.firstIndex(where: { $0.id == attachmentId }) {
+            pendingAttachments[index] = MessageAttachment(
+                id: attachmentId,
+                mimeType: "audio/mp4",
+                duration: duration,
+                channels: 2,
+                thumbnailColor: pendingAttachments[index].thumbnailColor
+            )
+        } else {
+            pendingAttachments.append(
+                MessageAttachment(id: attachmentId, mimeType: "audio/mp4", duration: duration, channels: 2)
+            )
+        }
+        return staleURL == editedURL ? nil : staleURL
+    }
+}
+
 struct ConversationHeaderState {
     var showStoryViewerFromHeader = false
     var storyUserIdForHeader: String?
     var showSearch = false
     var searchQuery = ""
     var typingDotPhase: Int = 0
-    var inlineTypingDotPhase: Int = 0
 }
 
 struct ConversationView: View {
@@ -169,6 +230,12 @@ struct ConversationView: View {
 
     // Overlay & Detail state
     @State var overlayState = ConversationOverlayState()
+
+    /// Per-cell screen-frame map populated by `MessageFramePreferenceKey`
+    /// publishes from each `BubbleSwipeContainer`. The long-press handler
+    /// looks up the target message's frame here at gesture fire time and
+    /// freezes it into `overlayState.contextOverlayTargetFrame`.
+    @State var frameTracker = MessageFrameTracker()
 
     // Scroll, Media & Swipe state
     @State var scrollState = ConversationScrollState()
@@ -249,7 +316,7 @@ struct ConversationView: View {
     }
 
     var conversationSection: ConversationSection? {
-        guard let sectionId = conversation?.sectionId else { return nil }
+        guard let sectionId = conversation?.userState.sectionId else { return nil }
         // ConversationSection.allSections should be accessed via a fast dictionary in production apps,
         // but since we only have the Array here, we can lazily build a static dictionary.
         return Self.sectionLookup[sectionId]
@@ -267,7 +334,7 @@ struct ConversationView: View {
         viewModel.topActiveMembersList(accentColor: accentColor)
     }
 
-    private var isCurrentUserAdminOrMod: Bool {
+    var isCurrentUserAdminOrMod: Bool {
         let convRole = conversation?.currentUserRole?.uppercased() ?? ""
         let platformRole = AuthManager.shared.currentUser?.role?.uppercased() ?? ""
         let modRoles: Set<String> = ["ADMIN", "MODERATOR", "BIGBOSS"]
@@ -282,7 +349,7 @@ struct ConversationView: View {
         self.anonymousSession = anonymousSession
         _viewModel = StateObject(wrappedValue: ConversationViewModel(
             conversationId: conversation?.id ?? "",
-            unreadCount: conversation?.unreadCount ?? 0,
+            unreadCount: conversation?.userState.unreadCount ?? 0,
             isDirect: conversation?.type == .direct,
             participantUserId: conversation?.participantUserId,
             memberJoinedAt: conversation?.currentUserJoinedAt,
@@ -346,7 +413,7 @@ struct ConversationView: View {
             Spacer()
             Image(systemName: "person.badge.plus")
                 .font(.system(size: 10, weight: .semibold))
-            Text("conversation.joined_on \(Self.joinedDateFormatter.string(from: date))")
+            Text(String(localized: "conversation.view.joined_on", defaultValue: "Rejoint le \(Self.joinedDateFormatter.string(from: date))", bundle: .main))
                 .font(.system(size: 11, weight: .medium))
             Spacer()
         }
@@ -410,7 +477,7 @@ struct ConversationView: View {
                     .padding(8)
                     .background(Circle().fill(Color(hex: "4ECDC4").opacity(0.15)))
 
-                Text("Les messages dans cette conversation sont chiffrés de bout en bout. Personne, pas même Meeshy, ne peut les lire.")
+                Text(String(localized: "conversation.view.e2e_notice", defaultValue: "Les messages dans cette conversation sont chiffrés de bout en bout. Personne, pas même Meeshy, ne peut les lire.", bundle: .main))
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -434,7 +501,7 @@ struct ConversationView: View {
         HStack(spacing: 8) {
             Image(systemName: "lock.fill")
                 .foregroundColor(.secondary)
-            Text("Cette conversation a ete fermee")
+            Text(String(localized: "conversation.view.closed", defaultValue: "Cette conversation a ete fermee", bundle: .main))
                 .font(.subheadline)
                 .foregroundColor(.secondary)
         }
@@ -485,7 +552,7 @@ struct ConversationView: View {
                 .fill(MeeshyColors.error.opacity(0.5))
                 .frame(height: 1)
                 .accessibilityHidden(true)
-            Text("Nouveaux messages")
+            Text(String(localized: "conversation.view.new_messages", defaultValue: "Nouveaux messages", bundle: .main))
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(MeeshyColors.error)
                 .lineLimit(1)
@@ -499,7 +566,7 @@ struct ConversationView: View {
         .id("unread_separator")
         .transition(.opacity)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Nouveaux messages non lus")
+        .accessibilityLabel(String(localized: "conversation.view.new_messages_unread", defaultValue: "Nouveaux messages non lus", bundle: .main))
         .accessibilityAddTraits(.isHeader)
     }
 
@@ -553,11 +620,11 @@ struct ConversationView: View {
             .sheet(isPresented: $composerState.showConversationInfo) {
                 if let conv = conversation { ConversationInfoSheet(conversation: conv, accentColor: accentColor, messages: viewModel.messages) }
             }
-            .alert("Action sélectionnée", isPresented: Binding(get: { composerState.actionAlert != nil }, set: { if !$0 { composerState.actionAlert = nil } })) {
-                Button("OK") { composerState.actionAlert = nil }
+            .alert(String(localized: "conversation.view.action_selected", defaultValue: "Action sélectionnée", bundle: .main), isPresented: Binding(get: { composerState.actionAlert != nil }, set: { if !$0 { composerState.actionAlert = nil } })) {
+                Button(String(localized: "common.ok", defaultValue: "OK", bundle: .main)) { composerState.actionAlert = nil }
             } message: { Text(composerState.actionAlert ?? "") }
             .confirmationDialog(
-                "Supprimer ce message ?",
+                String(localized: "conversation.view.delete_message.title", defaultValue: "Supprimer ce message ?", bundle: .main),
                 isPresented: Binding(
                     get: { overlayState.deleteConfirmMessageId != nil },
                     set: { if !$0 { overlayState.deleteConfirmMessageId = nil } }
@@ -570,18 +637,18 @@ struct ConversationView: View {
                 // WhatsApp's "Delete for everyone" gating.
                 if let idx = viewModel.messageIndex(for: msgId),
                    viewModel.canDeleteForEveryone(viewModel.messages[idx]) {
-                    Button("Supprimer pour tout le monde", role: .destructive) {
+                    Button(String(localized: "conversation.view.delete_for_everyone", defaultValue: "Supprimer pour tout le monde", bundle: .main), role: .destructive) {
                         Task { await viewModel.deleteMessage(messageId: msgId, mode: .everyone) }
                         overlayState.deleteConfirmMessageId = nil
                     }
                 }
-                Button("Supprimer pour moi", role: .destructive) {
+                Button(String(localized: "conversation.view.delete_for_me", defaultValue: "Supprimer pour moi", bundle: .main), role: .destructive) {
                     Task { await viewModel.deleteMessage(messageId: msgId, mode: .local) }
                     overlayState.deleteConfirmMessageId = nil
                 }
-                Button("Annuler", role: .cancel) { overlayState.deleteConfirmMessageId = nil }
+                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { overlayState.deleteConfirmMessageId = nil }
             } message: { _ in
-                Text("La suppression pour tout le monde est disponible pendant 2 h après l'envoi.")
+                Text(String(localized: "conversation.view.delete_for_everyone.hint", defaultValue: "La suppression pour tout le monde est disponible pendant 2 h après l'envoi.", bundle: .main))
             }
             .sheet(item: $composerState.forwardMessage) { msgToForward in
                 ForwardPickerSheet(message: msgToForward, sourceConversationId: conversation?.id ?? "", accentColor: accentColor) { composerState.forwardMessage = nil }
@@ -589,6 +656,16 @@ struct ConversationView: View {
             }
             .overlay { overlayMenuContent }
             .overlay { replyThreadOverlayContent }
+            .onPreferenceChange(MessageFramePreferenceKey.self) { frames in
+                frameTracker.update(frames)
+            }
+            .sheet(isPresented: $overlayState.showReplyThread) {
+                if let parentId = overlayState.replyThreadParentId,
+                   let parent = viewModel.messages.first(where: { $0.id == parentId }) {
+                    ThreadView(parentMessage: parent, conversationId: viewModel.conversationId)
+                        .environmentObject(statusViewModel)
+                }
+            }
             .withStatusBubble()
     }
 
@@ -680,15 +757,24 @@ struct ConversationView: View {
             }
             .onAppear {
                 if let context = replyContext { composerState.pendingReplyReference = context.toReplyReference }
-                // Language priority: keyboard layout > system language > current default
+                // Language priority: active keyboard layout > user's primary
+                // content language (Prisme Linguistique source of truth) >
+                // existing composer default.
+                //
+                // Locale.current is intentionally NOT consulted here: it
+                // reflects the device's UI language, which is decoupled from
+                // the user's chosen content language (CLAUDE.md "Prisme
+                // Linguistique"). A French-speaker on an English iPhone must
+                // compose in French unless their keyboard says otherwise.
                 if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
                     let code = String(kbd.prefix(2))
                     if LanguageOption.defaults.contains(where: { $0.code == code }) {
                         composerState.selectedLanguage = code
                     }
-                } else if let sysLang = Locale.current.language.languageCode?.identifier,
-                          LanguageOption.defaults.contains(where: { $0.code == sysLang }) {
-                    composerState.selectedLanguage = sysLang
+                } else if let userLang = AuthManager.shared.currentUser?
+                            .preferredContentLanguages.first,
+                          LanguageOption.defaults.contains(where: { $0.code == userLang }) {
+                    composerState.selectedLanguage = userLang
                 }
                 if messageText.isEmpty, let draft = DraftStore.shared.load(for: viewModel.conversationId) {
                     messageText = draft.text
@@ -728,25 +814,25 @@ struct ConversationView: View {
                 typingDotConnection?.cancel()
                 typingDotConnection = nil
             }
-            .onChange(of: messageText) { _, newValue in
+            .adaptiveOnChange(of: messageText) { _, newValue in
                 persistDraft(text: newValue)
             }
-            .onChange(of: composerState.pendingReplyReference?.messageId) { _, _ in persistDraft(text: messageText) }
-            .onChange(of: composerState.selectedLanguage) { _, _ in persistDraft(text: messageText) }
-            .onChange(of: viewModel.pendingEffects.flags.rawValue) { _, _ in persistDraft(text: messageText) }
-            .onChange(of: viewModel.isBlurEnabled) { _, _ in persistDraft(text: messageText) }
-            .onChange(of: viewModel.ephemeralDuration?.rawValue) { _, _ in persistDraft(text: messageText) }
-            .onChange(of: scrollState.isNearBottom) { _, _ in
+            .adaptiveOnChange(of: composerState.pendingReplyReference?.messageId) { _, _ in persistDraft(text: messageText) }
+            .adaptiveOnChange(of: composerState.selectedLanguage) { _, _ in persistDraft(text: messageText) }
+            .adaptiveOnChange(of: viewModel.pendingEffects.flags.rawValue) { _, _ in persistDraft(text: messageText) }
+            .adaptiveOnChange(of: viewModel.isBlurEnabled) { _, _ in persistDraft(text: messageText) }
+            .adaptiveOnChange(of: viewModel.ephemeralDuration?.rawValue) { _, _ in persistDraft(text: messageText) }
+            .adaptiveOnChange(of: scrollState.isNearBottom) { _, _ in
                 if composerState.showTextEmojiPicker {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { composerState.showTextEmojiPicker = false }
                 }
             }
-            .onChange(of: isTyping) { _, focused in
+            .adaptiveOnChange(of: isTyping) { _, focused in
                 if focused && composerState.showTextEmojiPicker {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { composerState.showTextEmojiPicker = false }
                 }
             }
-            .onChange(of: viewModel.accessRevoked) { _, revoked in
+            .adaptiveOnChange(of: viewModel.accessRevoked) { _, revoked in
                 // Server signalled the user no longer has access to this
                 // conversation (kicked, group deleted, blocked, etc.). The
                 // ViewModel has already wiped per-conversation cache and
@@ -784,7 +870,7 @@ struct ConversationView: View {
         .padding(.bottom, composerHeight + 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("Chargement des messages"))
+        .accessibilityLabel(Text(String(localized: "conversation.view.loading_messages", defaultValue: "Chargement des messages", bundle: .main)))
     }
 
     // MARK: - Body Content (extracted to help type-checker)
@@ -888,9 +974,10 @@ struct ConversationView: View {
                     composerState.forwardMessage = msg
                 },
                 onLongPress: { messageId in
-                    // Open the contextual options menu — same overlay used by
-                    // the legacy SwiftUI list path. Bypasses the gesture if
-                    // overlay-disabled (e.g. while a sheet is presented).
+                    // Preserve l'overlay menu existant (MessageOverlayMenu panel).
+                    // L'infrastructure frame-tracking + LayoutEngine reste en place
+                    // et sera utilisée ensuite pour lifter la bulle dans le flow
+                    // du menu existant (sans remplacer le menu lui-même).
                     guard overlayState.longPressEnabled else { return }
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
                     overlayState.overlayMessage = msg
@@ -915,6 +1002,14 @@ struct ConversationView: View {
                     overlayState.detailSheetInitialTab = .react
                 },
                 onShowMessageInfo: { messageId in
+                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                    overlayState.detailSheetMessage = msg
+                    overlayState.detailSheetInitialTab = .views
+                },
+                onShowReadStatus: { messageId in
+                    // Tap sur les coches (✓ / ✓✓ / ✓✓ bleu) d'un message envoyé.
+                    // Ouvre la sheet detail sur l'onglet "Vues" pour consulter
+                    // qui a reçu / qui a lu — sans passer par le long-press.
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
                     overlayState.detailSheetMessage = msg
                     overlayState.detailSheetInitialTab = .views
@@ -947,6 +1042,10 @@ struct ConversationView: View {
                     MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: targetLang)
                 }
             )
+
+            // L'indicateur de frappe n'est PAS un overlay : c'est une vraie
+            // cellule du flux de messages, rendue en dernier par
+            // `MessageListViewController` (voir `MessageListItem.typingIndicator`).
 
             floatingHeaderSection
 
@@ -1024,6 +1123,10 @@ struct ConversationView: View {
                     .transition(.asymmetric(insertion: .scale(scale: 0.8).combined(with: .opacity), removal: .scale(scale: 0.6).combined(with: .opacity)))
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: scrollState.isNearBottom)
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isSearchingQuotedMessage)
+                    .onReceive(typingDotPublisher) { _ in
+                        guard !viewModel.typingUsernames.isEmpty else { return }
+                        headerState.typingDotPhase = (headerState.typingDotPhase + 1) % 3
+                    }
             }
 
             VStack {
@@ -1055,7 +1158,7 @@ struct ConversationView: View {
                     GeometryReader { geo in
                         Color.clear
                             .onAppear { updateComposerHeight(geo.size.height) }
-                            .onChange(of: geo.size.height) { _, h in updateComposerHeight(h) }
+                            .adaptiveOnChange(of: geo.size.height) { _, h in updateComposerHeight(h) }
                     }
                 )
             }
@@ -1098,7 +1201,7 @@ struct ConversationView: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
                     }
-                    .accessibilityLabel("Mentionner \(candidate.displayName)")
+                    .accessibilityLabel(String(localized: "conversation.view.mention", defaultValue: "Mentionner \(candidate.displayName)", bundle: .main))
                     if candidate.id != viewModel.mentionSuggestions.last?.id {
                         Divider()
                             .padding(.leading, 58)
@@ -1122,7 +1225,7 @@ struct ConversationView: View {
                 anonymousHeaderBar
             } else if isTyping {
                 HStack(spacing: 8) {
-                    ThemedBackButton(color: accentColor) { HapticFeedback.light(); router.pop() }
+                    ThemedBackButton(color: accentColor, unreadCount: viewModel.otherConversationsUnread) { HapticFeedback.light(); router.pop() }
                     Spacer()
                     ThemedAvatarButton(
                         name: conversation?.name ?? "?", color: accentColor, secondaryColor: secondaryColor,
@@ -1171,7 +1274,7 @@ struct ConversationView: View {
                     .frame(width: 32, height: 32)
                     .background(Circle().fill(theme.textMuted.opacity(0.12)))
             }
-            .accessibilityLabel("Fermer la conversation")
+            .accessibilityLabel(String(localized: "conversation.view.close", defaultValue: "Fermer la conversation", bundle: .main))
         }
         .padding(.horizontal, 16)
         .padding(.top, 12)
@@ -1194,7 +1297,7 @@ struct ConversationView: View {
     private var expandedHeaderBandBody: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                ThemedBackButton(color: accentColor, compactMode: composerState.showOptions) { HapticFeedback.light(); router.pop() }
+                ThemedBackButton(color: accentColor, compactMode: composerState.showOptions, unreadCount: viewModel.otherConversationsUnread) { HapticFeedback.light(); router.pop() }
                 expandedHeaderMidContent
                 headerAvatarView
             }
@@ -1217,7 +1320,10 @@ struct ConversationView: View {
         if composerState.showOptions {
             expandedHeaderTitleAndTags
         } else {
-            Spacer()
+            HStack {
+                Spacer()
+                expandedHeaderSearchButton
+            }
         }
     }
 
@@ -1230,7 +1336,7 @@ struct ConversationView: View {
                     expandedHeaderTitleLabel
                 }
                 .accessibilityLabel(conversation?.name ?? "Conversation")
-                .accessibilityHint("Ouvre les informations de la conversation")
+                .accessibilityHint(String(localized: "conversation.view.open_info", defaultValue: "Ouvre les informations de la conversation", bundle: .main))
 
                 Spacer(minLength: 4)
                 headerCallButtons.layoutPriority(1)
@@ -1271,7 +1377,7 @@ struct ConversationView: View {
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.85))
                     .adaptiveSymbolPulse()
-                    .accessibilityLabel("Actualisation en arriere-plan")
+                    .accessibilityLabel(String(localized: "conversation.view.refreshing_background", defaultValue: "Actualisation en arriere-plan", bundle: .main))
             }
         }
     }
@@ -1287,7 +1393,7 @@ struct ConversationView: View {
                 .frame(width: 28, height: 28)
                 .background(Circle().fill(Color(hex: accentColor).opacity(0.15)))
         }
-        .accessibilityLabel("Rechercher dans la conversation")
+        .accessibilityLabel(String(localized: "conversation.view.search_in_conversation", defaultValue: "Rechercher dans la conversation", bundle: .main))
     }
 
     @ViewBuilder
@@ -1311,19 +1417,8 @@ struct ConversationView: View {
 
     @ViewBuilder
     private var replyThreadOverlayContent: some View {
-        if overlayState.showReplyThread, let parentId = overlayState.replyThreadParentId {
-            ReplyThreadOverlay(
-                conversationId: viewModel.conversationId,
-                parentMessageId: parentId,
-                accentColor: accentColor,
-                isDark: isDark,
-                allMessages: viewModel.messages,
-                translationResolver: { messageId in
-                    viewModel.preferredTranslation(for: messageId)?.translatedContent
-                },
-                isPresented: $overlayState.showReplyThread
-            )
-        }
+        // Deactivated in favor of ThreadView sheet presentation
+        EmptyView()
     }
 
     // MARK: - Overlay Menu Content (extracted to help type-checker)
@@ -1335,7 +1430,7 @@ struct ConversationView: View {
                 message: msg,
                 contactColor: accentColor,
                 conversationId: viewModel.conversationId,
-                messageBubbleFrame: .zero,
+                messageBubbleFrame: frameTracker.frame(for: msg.id) ?? .zero,
                 isPresented: $overlayState.showOverlayMenu,
                 canDelete: msg.isMe || isCurrentUserAdminOrMod,
                 canEdit: msg.isMe || isCurrentUserAdminOrMod,
@@ -1385,6 +1480,20 @@ struct ConversationView: View {
                 },
                 onDeleteAttachment: { attachmentId in
                     Task { await viewModel.deleteAttachment(messageId: msg.id, attachmentId: attachmentId) }
+                },
+                onShowThread: {
+                    overlayState.replyThreadParentId = msg.id
+                    overlayState.showReplyThread = true
+                },
+                isDirect: isDirect,
+                preferredTranslation: viewModel.preferredTranslation(for: msg.id),
+                mentionDisplayNames: viewModel.mentionDisplayNames,
+                currentUserId: AuthManager.shared.currentUser?.id ?? "",
+                userRegionalLanguage: AuthManager.shared.currentUser?.regionalLanguage,
+                userCustomDestinationLanguage: AuthManager.shared.currentUser?.customDestinationLanguage,
+                onShowTranslate: {
+                    overlayState.detailSheetMessage = msg
+                    overlayState.detailSheetInitialTab = .language
                 }
             )
             .transition(.opacity).zIndex(999)

@@ -33,11 +33,22 @@ struct BubbleAttachmentView: View {
             )
 
         case .video:
-            VideoPlayerView(
-                attachment: attachment,
-                context: .messageBubble,
-                accentColor: accentHex
-            )
+            // Dead path in practice — videos route through visualMediaGrid in
+            // BubbleStandardLayout. Keep a sound fallback that uses the
+            // unified MeeshyVideoPlayer so we don't ship a UX regression
+            // if a routing change ever lands a video in this branch.
+            VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
+                MeeshyVideoPlayer(
+                    attachment: attachment,
+                    style: .inline,
+                    controls: .inlineDefault,
+                    accentColor: accentHex,
+                    frame: .bubble,
+                    availability: availability,
+                    performance: .inline,
+                    onDownload: onDownload
+                )
+            }
 
         case .audio:
             AudioPlayerView(
@@ -45,7 +56,14 @@ struct BubbleAttachmentView: View {
                 context: .messageBubble,
                 accentColor: accentHex,
                 transcription: transcription,
-                translatedAudios: translatedAudios.filter { $0.attachmentId == attachment.id }
+                translatedAudios: translatedAudios.filter { $0.attachmentId == attachment.id },
+                onRetranscribe: {
+                    Task {
+                        try? await AttachmentService.shared.requestTranscription(
+                            attachmentId: attachment.id, force: true
+                        )
+                    }
+                }
             )
 
         case .file:
@@ -92,13 +110,13 @@ struct BubbleAttachmentView: View {
                                 .font(.system(size: 36))
                                 .foregroundColor(.white)
 
-                            Text("Position partagee")
+                            Text(String(localized: "bubble.attachment.locationShared", defaultValue: "Position partagee", bundle: .main))
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(.white.opacity(0.9))
                         }
                     )
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Position partagee")
+                    .accessibilityLabel(String(localized: "bubble.attachment.locationShared", defaultValue: "Position partagee", bundle: .main))
             }
         }
     }

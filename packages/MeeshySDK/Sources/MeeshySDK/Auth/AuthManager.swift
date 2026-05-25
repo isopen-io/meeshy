@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import os
 
 // MARK: - Profile Snapshot
 
@@ -29,6 +30,9 @@ public protocol AuthManaging: AnyObject {
     var savedAccounts: [SavedAccount] { get }
     var authToken: String? { get }
     var currentUserPublisher: AnyPublisher<MeeshyUser?, Never> { get }
+    var requires2FA: Bool { get }
+    var twoFactorToken: String? { get }
+    func completeLoginWith2FA(code: String) async
     func login(username: String, password: String) async
     func register(request: RegisterRequest) async
     func requestMagicLink(email: String) async -> Bool
@@ -37,6 +41,8 @@ public protocol AuthManaging: AnyObject {
     func logout()
     func checkExistingSession() async
     func handleUnauthorized()
+    @discardableResult
+    func refreshSession(force: Bool) async throws -> String
     func removeSavedAccount(userId: String)
 
     /// Applies up to three profile field changes locally, without any
@@ -69,8 +75,22 @@ public final class AuthManager: ObservableObject, AuthManaging {
     @Published public var currentUser: MeeshyUser?
     @Published public var isLoading = false
     @Published public var errorMessage: String?
+    @Published public var requires2FA = false
+    @Published public var twoFactorToken: String?
     /// All accounts that have saved credentials on this device, sorted by most recently active.
     @Published public var savedAccounts: [SavedAccount] = []
+
+    /// Fires every time the SDK rotates the JWT for the currently active
+    /// user — i.e. `applySession` ran while the same userId was already
+    /// authenticated. `MessageSocketManager` already reacts to this via a
+    /// direct `forceReconnect()` call inside `applySession`; the publisher
+    /// is exposed so other long-lived subscribers (NSE, widgets) can also
+    /// react to a fresh token without coupling to `MessageSocketManager`.
+    ///
+    /// P2.2 — the audit suspected this signal was missing; in fact the
+    /// direct socket-reconnect chain has existed since the initial
+    /// implementation. The publisher pins the contract for future readers.
+    public let tokenDidRotate = PassthroughSubject<Void, Never>()
 
     // MARK: - Protocol Publisher
 
@@ -80,11 +100,17 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     // MARK: - Private
 
-    private let keychain = KeychainManager.shared
-    private let authService = AuthService.shared
+    private let keychain: any KeychainStoring
+    private let userDefaults: UserDefaults
+    private let groupDefaults: UserDefaults?
+
+    /// Backed by the protocol type so tests can inject a stub conforming
+    /// to `AuthServiceProviding` without subclassing the production
+    /// `final` `AuthService`.
+    internal var authService: AuthServiceProviding = AuthService.shared
 
     /// Prevents concurrent refresh loops when APIClient fires multiple 401s.
-    private var isRefreshing = false
+    private var tokenRefreshTask: Task<String, Error>?
 
     // Legacy global keys kept only for one-time migration
     private let legacyTokenKey = "meeshy_auth_token"
@@ -94,7 +120,15 @@ public final class AuthManager: ObservableObject, AuthManaging {
     private let activeUserIdUDKey = "meeshy_active_user_id"
     private let savedAccountsUDKey = "meeshy_saved_accounts"
 
-    private init() {}
+    private init(
+        keychain: any KeychainStoring = KeychainManager.shared,
+        userDefaults: UserDefaults = .standard,
+        groupDefaults: UserDefaults? = UserDefaults(suiteName: "group.me.meeshy.apps")
+    ) {
+        self.keychain = keychain
+        self.userDefaults = userDefaults
+        self.groupDefaults = groupDefaults
+    }
 
     // MARK: - Namespaced keys
 
@@ -106,10 +140,14 @@ public final class AuthManager: ObservableObject, AuthManaging {
     // MARK: - Active user
 
     private var activeUserId: String? {
-        get { UserDefaults.standard.string(forKey: activeUserIdUDKey) }
+        get { keychain.load(forKey: activeUserIdUDKey, account: nil) }
         set {
-            UserDefaults.standard.set(newValue, forKey: activeUserIdUDKey)
-            UserDefaults(suiteName: "group.me.meeshy.apps")?.set(newValue, forKey: activeUserIdUDKey)
+            if let value = newValue {
+                try? keychain.save(value, forKey: activeUserIdUDKey, account: nil)
+            } else {
+                keychain.delete(forKey: activeUserIdUDKey, account: nil)
+            }
+            groupDefaults?.set(newValue, forKey: activeUserIdUDKey)
         }
     }
 
@@ -118,14 +156,14 @@ public final class AuthManager: ObservableObject, AuthManaging {
     public var authToken: String? {
         get {
             guard let userId = activeUserId else { return nil }
-            return keychain.load(forKey: tokenKey(for: userId))
+            return keychain.load(forKey: tokenKey(for: userId), account: nil)
         }
         set {
             guard let userId = activeUserId else { return }
             if let value = newValue {
-                try? keychain.save(value, forKey: tokenKey(for: userId))
+                try? keychain.save(value, forKey: tokenKey(for: userId), account: nil)
             } else {
-                keychain.delete(forKey: tokenKey(for: userId))
+                keychain.delete(forKey: tokenKey(for: userId), account: nil)
             }
             APIClient.shared.authToken = newValue
         }
@@ -135,18 +173,44 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     /// Returns true if the stored JWT is expired (with 30s margin).
     /// Decodes the payload inline to read `exp`.
+    ///
+    /// D2 — every "malformed → expired" branch now logs a structured
+    /// reason so the next time a user complains about a silent logout
+    /// we can trace whether the JWT was truncated, base64-corrupted,
+    /// or just missing `exp`. Returning `true` is the safe default
+    /// (forces refresh) but the silence was actively hurting support.
     public var isCurrentTokenExpired: Bool {
-        guard let token = authToken else { return true }
+        Self.isTokenExpired(authToken, now: Date())
+    }
+
+    /// D2 — pure decoder so tests can probe every branch without driving
+    /// the singleton's Keychain/UserDefaults state. Returns `true` for
+    /// every malformed input (safe default) and logs the reason so a
+    /// silent-logout report can be traced.
+    nonisolated public static func isTokenExpired(_ token: String?, now: Date) -> Bool {
+        guard let token else { return true }
         let parts = token.split(separator: ".")
-        guard parts.count == 3 else { return true }
+        guard parts.count == 3 else {
+            Logger.auth.warning("JWT structurally invalid (parts=\(parts.count)); treating as expired")
+            return true
+        }
         var base64 = String(parts[1])
             .replacingOccurrences(of: "-", with: "+")
             .replacingOccurrences(of: "_", with: "/")
         while base64.count % 4 != 0 { base64.append("=") }
-        guard let data = Data(base64Encoded: base64),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let exp = json["exp"] as? TimeInterval else { return true }
-        return Date(timeIntervalSince1970: exp).addingTimeInterval(-30) < Date()
+        guard let data = Data(base64Encoded: base64) else {
+            Logger.auth.warning("JWT payload base64 decode failed; treating as expired")
+            return true
+        }
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            Logger.auth.warning("JWT payload not JSON; treating as expired")
+            return true
+        }
+        guard let exp = json["exp"] as? TimeInterval else {
+            Logger.auth.warning("JWT payload missing `exp` claim; treating as expired")
+            return true
+        }
+        return Date(timeIntervalSince1970: exp).addingTimeInterval(-30) < now
     }
 
     // MARK: - Login
@@ -154,10 +218,45 @@ public final class AuthManager: ObservableObject, AuthManaging {
     public func login(username: String, password: String) async {
         isLoading = true
         errorMessage = nil
+        requires2FA = false
+        twoFactorToken = nil
 
         do {
-            let data = try await authService.login(username: username, password: password)
-            applySession(token: data.token, sessionToken: data.sessionToken, user: data.user)
+            let data = try await authService.login(username: username, password: password, rememberDevice: true)
+            if data.requires2FA == true {
+                self.requires2FA = true
+                self.twoFactorToken = data.twoFactorToken
+            } else if let token = data.token, let user = data.user {
+                applySession(token: token, sessionToken: data.sessionToken, user: user)
+            } else {
+                throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
+            }
+        } catch let error as APIError {
+            errorMessage = error.errorDescription
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+
+        isLoading = false
+    }
+
+    public func completeLoginWith2FA(code: String) async {
+        guard let twoFactorToken = twoFactorToken else {
+            errorMessage = "Session 2FA expirée ou invalide"
+            return
+        }
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            let data = try await authService.completeLoginWith2FA(twoFactorToken: twoFactorToken, code: code)
+            if let token = data.token, let user = data.user {
+                self.requires2FA = false
+                self.twoFactorToken = nil
+                applySession(token: token, sessionToken: data.sessionToken, user: user)
+            } else {
+                throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
+            }
         } catch let error as APIError {
             errorMessage = error.errorDescription
         } catch {
@@ -175,7 +274,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         do {
             let data = try await authService.register(request: request)
-            applySession(token: data.token, sessionToken: data.sessionToken, user: data.user)
+            if let token = data.token, let user = data.user {
+                applySession(token: token, sessionToken: data.sessionToken, user: user)
+            } else {
+                throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
+            }
         } catch let error as APIError {
             errorMessage = error.errorDescription
         } catch {
@@ -192,7 +295,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         errorMessage = nil
 
         do {
-            try await authService.requestMagicLink(email: email)
+            _ = try await authService.requestMagicLink(email: email, deviceFingerprint: nil)
             isLoading = false
             return true
         } catch let error as APIError {
@@ -211,7 +314,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         do {
             let data = try await authService.validateMagicLink(token: token)
-            applySession(token: data.token, sessionToken: data.sessionToken, user: data.user)
+            if let token = data.token, let user = data.user {
+                applySession(token: token, sessionToken: data.sessionToken, user: user)
+            } else {
+                throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
+            }
         } catch let error as APIError {
             errorMessage = error.errorDescription
         } catch {
@@ -250,27 +357,61 @@ public final class AuthManager: ObservableObject, AuthManaging {
             return
         }
 
-        Task { await authService.logout() }
+        // D5 — drive the server-side logout with retries (network blip
+        // should not leave the session live on the gateway).
+        Task { await self.performServerLogoutWithRetries() }
 
-        keychain.delete(forKey: tokenKey(for: userId))
-        keychain.delete(forKey: sessionTokenKey(for: userId))
-        keychain.delete(forKey: userKey(for: userId))
-        UserDefaults.standard.removeObject(forKey: tokenDateUDKey(for: userId))
+        keychain.delete(forKey: tokenKey(for: userId), account: nil)
+        keychain.delete(forKey: sessionTokenKey(for: userId), account: nil)
+        keychain.delete(forKey: userKey(for: userId), account: nil)
+        keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)
         removeFromSavedAccounts(userId: userId)
 
         activeUserId = nil
         currentUser = nil
         isAuthenticated = false
         APIClient.shared.authToken = nil
+
+        // D3 — wipe every cached store so a subsequent login (same device,
+        // different user) cannot momentarily render the previous user's
+        // conversations / friends / profiles. `CacheCoordinator.reset()`
+        // also tears down lifecycle subscriptions so the next login starts
+        // from a clean slate. Best-effort: the local logout already
+        // succeeded above, so a cache reset failure here cannot block UX.
+        Task {
+            await CacheCoordinator.shared.reset()
+        }
+    }
+
+    /// D5 — best-effort server logout with bounded retries. Returns once
+    /// the server has acked OR after 3 attempts (10s total) have failed.
+    /// The local logout state is already gone by the time this runs, so
+    /// failures are tolerated — the worst case is the gateway sees the
+    /// next request, fails token verification, and lazily kills the
+    /// session.
+    private func performServerLogoutWithRetries() async {
+        let delays: [TimeInterval] = [0, 1, 5] // total ≈ 6s wall-clock
+        for delay in delays {
+            if delay > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            }
+            do {
+                try await authService.logoutThrowing()
+                return
+            } catch {
+                Logger.auth.warning("Server logout attempt failed: \(error.localizedDescription)")
+            }
+        }
+        Logger.auth.error("Server logout exhausted retries — session may linger on gateway")
     }
 
     // MARK: - Remove Saved Account
 
     public func removeSavedAccount(userId: String) {
-        keychain.delete(forKey: tokenKey(for: userId))
-        keychain.delete(forKey: sessionTokenKey(for: userId))
-        keychain.delete(forKey: userKey(for: userId))
-        UserDefaults.standard.removeObject(forKey: tokenDateUDKey(for: userId))
+        keychain.delete(forKey: tokenKey(for: userId), account: nil)
+        keychain.delete(forKey: sessionTokenKey(for: userId), account: nil)
+        keychain.delete(forKey: userKey(for: userId), account: nil)
+        keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)
         removeFromSavedAccounts(userId: userId)
 
         if activeUserId == userId {
@@ -289,7 +430,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         guard let userId = activeUserId else { return }
 
-        guard let token = keychain.load(forKey: tokenKey(for: userId)) else {
+        guard let token = keychain.load(forKey: tokenKey(for: userId), account: nil) else {
             // Keychain empty for this user. Saved accounts stay intact so
             // re-login is one tap, but we have no session to restore.
             activeUserId = nil
@@ -297,19 +438,19 @@ public final class AuthManager: ObservableObject, AuthManaging {
             return
         }
 
-        let sessionToken = keychain.load(forKey: sessionTokenKey(for: userId))
+        let sessionToken = keychain.load(forKey: sessionTokenKey(for: userId), account: nil)
 
         // Show cached user immediately — authenticate from cache before any
         // network call so the UI never blanks on app launch. If the cached
         // JSON is corrupt or stale (schema migration etc.) we drop the entry
         // so the next launch starts clean and the background revalidation
         // below repopulates it from the server.
-        if let userJSON = keychain.load(forKey: userKey(for: userId)),
+        if let userJSON = keychain.load(forKey: userKey(for: userId), account: nil),
            let userData = userJSON.data(using: .utf8) {
             if let user = try? JSONDecoder().decode(MeeshyUser.self, from: userData) {
                 currentUser = user
             } else {
-                keychain.delete(forKey: userKey(for: userId))
+                keychain.delete(forKey: userKey(for: userId), account: nil)
             }
         }
 
@@ -321,10 +462,8 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // race in and trip the 401 path. With the gateway's sliding-window
         // semantics this also extends the session another 365 days, so an
         // active user is renewed indefinitely.
-        if isCurrentTokenExpired, let sessionToken = sessionToken {
-            isRefreshing = true
-            await attemptTokenRefresh(token: token, sessionToken: sessionToken, userId: userId)
-            isRefreshing = false
+        if isCurrentTokenExpired, let _ = sessionToken {
+            _ = try? await refreshSession(force: false)
         }
 
         // Background revalidation (stale-while-revalidate for the user
@@ -352,33 +491,35 @@ public final class AuthManager: ObservableObject, AuthManaging {
     // MARK: - Handle 401 (called from APIClient during active session)
 
     public func handleUnauthorized() {
-        guard !isRefreshing else { return }
         guard let userId = activeUserId else {
             // No active user at all — nothing to refresh, no state to clear.
             return
         }
 
-        // The gateway needs a parseable JWT to extract the userId for the
-        // trusted-session lookup (sessionToken alone isn't enough). In normal
-        // flow, login/refresh always store the JWT and sessionToken together,
-        // so a missing JWT means keychain corruption — surface re-auth.
-        guard let token = keychain.load(forKey: tokenKey(for: userId)) else {
-            requireReauthentication(userId: userId)
-            return
-        }
-
-        let sessionToken = keychain.load(forKey: sessionTokenKey(for: userId))
-
-        isRefreshing = true
-        Task {
-            await attemptTokenRefresh(token: token, sessionToken: sessionToken, userId: userId)
-            isRefreshing = false
+        // D1 — guard against concurrent refreshes by invoking refreshSession(force: true)
+        // asynchronously. Since refreshSession uses tokenRefreshTask to serialize,
+        // multiple concurrent calls to handleUnauthorized() will safely share the same refresh task.
+        Task { [weak self] in
+            _ = try? await self?.refreshSession(force: true)
         }
     }
 
     // MARK: - Internal session helpers
 
-    private func applySession(token: String, sessionToken: String?, user: MeeshyUser) {
+    /// Pure helper exposed for tests: returns true iff a new
+    /// `applySession(token:sessionToken:user:)` call constitutes a token
+    /// rotation (same user already authenticated). Pulled out of
+    /// `applySession` so the contract can be pinned without driving the
+    /// full keychain / sockets side effects.
+    nonisolated static func isTokenRotation(
+        currentlyAuthenticated: Bool,
+        currentActiveUserId: String?,
+        newUserId: String
+    ) -> Bool {
+        currentlyAuthenticated && currentActiveUserId == newUserId
+    }
+
+    internal func applySession(token: String, sessionToken: String?, user: MeeshyUser) {
         let userId = user.id
         // Capture BEFORE we mutate state. If we were already authenticated
         // when applySession runs, this is a token rotation (refresh) — the
@@ -386,14 +527,19 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // The `onChange(isAuthenticated:)` observer in MeeshyApp would
         // otherwise miss this transition because the boolean stays true
         // throughout the rotation.
-        let isTokenRotation = isAuthenticated && activeUserId == userId
+        let isTokenRotation = Self.isTokenRotation(
+            currentlyAuthenticated: isAuthenticated,
+            currentActiveUserId: activeUserId,
+            newUserId: userId
+        )
 
-        try? keychain.save(token, forKey: tokenKey(for: userId))
+        try? keychain.save(token, forKey: tokenKey(for: userId), account: nil)
         if let sessionToken = sessionToken, !sessionToken.isEmpty {
-            try? keychain.save(sessionToken, forKey: sessionTokenKey(for: userId))
+            try? keychain.save(sessionToken, forKey: sessionTokenKey(for: userId), account: nil)
         }
         saveUserToKeychain(user, userId: userId)
-        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: tokenDateUDKey(for: userId))
+        let now = String(Date().timeIntervalSince1970)
+        try? keychain.save(now, forKey: tokenDateUDKey(for: userId), account: nil)
 
         activeUserId = userId
         APIClient.shared.authToken = token
@@ -405,6 +551,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         if isTokenRotation {
             MessageSocketManager.shared.forceReconnect()
             SocialSocketManager.shared.forceReconnect()
+            tokenDidRotate.send(())
         }
     }
 
@@ -415,9 +562,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// to false so the UI can prompt for re-login. The saved account is
     /// preserved — the user just needs to enter their password again.
     private func requireReauthentication(userId: String) {
-        keychain.delete(forKey: tokenKey(for: userId))
-        keychain.delete(forKey: sessionTokenKey(for: userId))
-        UserDefaults.standard.removeObject(forKey: tokenDateUDKey(for: userId))
+        keychain.delete(forKey: tokenKey(for: userId), account: nil)
+        keychain.delete(forKey: sessionTokenKey(for: userId), account: nil)
+        keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)
         activeUserId = nil
         currentUser = nil
         isAuthenticated = false
@@ -428,7 +575,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         let sanitized = sanitizeDataURIs(user)
         guard let encoded = try? JSONEncoder().encode(sanitized),
               let jsonString = String(data: encoded, encoding: .utf8) else { return }
-        try? keychain.save(jsonString, forKey: userKey(for: userId))
+        try? keychain.save(jsonString, forKey: userKey(for: userId), account: nil)
     }
 
     private func sanitizeDataURIs(_ user: MeeshyUser) -> MeeshyUser {
@@ -472,42 +619,84 @@ public final class AuthManager: ObservableObject, AuthManaging {
         self.updateSavedAccountActivity(from: user)
     }
 
-    private func attemptTokenRefresh(token: String, sessionToken: String?, userId: String) async {
-        do {
-            let data = try await authService.refreshToken(token, sessionToken: sessionToken)
-            applySession(token: data.token, sessionToken: data.sessionToken, user: data.user)
-        } catch let error as MeeshyError {
-            switch error {
-            case .auth:
-                // The server refuses both the JWT and the sessionToken — the
-                // session is genuinely invalid (revoked / expired beyond the
-                // sliding window / account disabled). Surface the re-auth
-                // screen; saved account is kept so it's still one-tap.
-                requireReauthentication(userId: userId)
-            case .network, .server, .message, .media, .forbidden, .unknown:
-                // Transient or scoped (resource 403) — preserve session,
-                // the next 401 will retry the refresh.
-                break
-            }
-        } catch {
-            // Cancellation / unknown — preserve session.
+    @discardableResult
+    public func refreshSession(force: Bool = false) async throws -> String {
+        if let task = tokenRefreshTask {
+            return try await task.value
         }
+
+        guard let userId = activeUserId else {
+            throw MeeshyError.auth(.sessionExpired)
+        }
+
+        guard let token = keychain.load(forKey: tokenKey(for: userId), account: nil) else {
+            requireReauthentication(userId: userId)
+            throw MeeshyError.auth(.sessionExpired)
+        }
+        let sessionToken = keychain.load(forKey: sessionTokenKey(for: userId), account: nil)
+
+        // If not forcing AND token is not expired, return current token
+        if !force && !Self.isTokenExpired(token, now: Date()) {
+            return token
+        }
+
+        let task = Task<String, Error> { [weak self] in
+            guard let self = self else { throw CancellationError() }
+            do {
+                let data = try await self.authService.refreshToken(token, sessionToken: sessionToken)
+                guard let newToken = data.token, let newUser = data.user else {
+                    throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
+                }
+                await self.applySession(token: newToken, sessionToken: data.sessionToken, user: newUser)
+                return newToken
+            } catch let error as MeeshyError {
+                if case .auth = error {
+                    await self.requireReauthentication(userId: userId)
+                }
+                throw error
+            } catch {
+                throw error
+            }
+        }
+
+        tokenRefreshTask = task
+
+        defer {
+            tokenRefreshTask = nil
+        }
+
+        return try await task.value
     }
 
     // MARK: - Saved Accounts persistence
 
     private func loadSavedAccounts() {
-        guard let data = UserDefaults.standard.data(forKey: savedAccountsUDKey),
+        guard let json = keychain.load(forKey: savedAccountsUDKey, account: nil),
+              let data = json.data(using: .utf8),
               let accounts = try? JSONDecoder().decode([SavedAccount].self, from: data) else {
             savedAccounts = []
             return
         }
-        savedAccounts = accounts.sorted { $0.lastActiveAt > $1.lastActiveAt }
+        // D4 — sort with a stable secondary key (`id`). When two accounts
+        // share the same `lastActiveAt` (rare but possible across rapid
+        // automated logins or sub-millisecond switches) the prior code
+        // could produce a different ordering on each cold start because
+        // Swift's `sorted(by:)` only guarantees stability since 5.0 and
+        // even then only for the *exact same input order*; the input is
+        // a Decodable dict-roundtripped Array whose order isn't
+        // contractually stable.
+        savedAccounts = accounts.sorted { a, b in
+            if a.lastActiveAt != b.lastActiveAt {
+                return a.lastActiveAt > b.lastActiveAt
+            }
+            return a.id < b.id
+        }
     }
 
     private func persistSavedAccounts() {
-        guard let data = try? JSONEncoder().encode(savedAccounts) else { return }
-        UserDefaults.standard.set(data, forKey: savedAccountsUDKey)
+        guard let data = try? JSONEncoder().encode(savedAccounts),
+              let json = String(data: data, encoding: .utf8) else { return }
+        try? keychain.save(json, forKey: savedAccountsUDKey, account: nil)
     }
 
     private func upsertSavedAccount(from user: MeeshyUser) {
@@ -539,28 +728,49 @@ public final class AuthManager: ObservableObject, AuthManaging {
     // MARK: - Migration from legacy global keys (one-time, at first launch)
 
     private func migrateFromLegacyKeysIfNeeded() {
-        // First migrate any UserDefaults → Keychain entries
-        keychain.migrateFromUserDefaults(keys: [legacyTokenKey, legacyUserKey])
+        // 1. Migrate activeUserId from UserDefaults to Keychain
+        if let legacyActiveId = userDefaults.string(forKey: activeUserIdUDKey) {
+            if keychain.load(forKey: activeUserIdUDKey, account: nil) == nil {
+                try? keychain.save(legacyActiveId, forKey: activeUserIdUDKey, account: nil)
+            }
+            userDefaults.removeObject(forKey: activeUserIdUDKey)
+        }
 
-        // Only migrate if no active user is set yet
+        // 2. Migrate savedAccounts from UserDefaults to Keychain
+        if let legacyData = userDefaults.data(forKey: savedAccountsUDKey),
+           let legacyJson = String(data: legacyData, encoding: .utf8) {
+            if keychain.load(forKey: savedAccountsUDKey, account: nil) == nil {
+                try? keychain.save(legacyJson, forKey: savedAccountsUDKey, account: nil)
+            }
+            userDefaults.removeObject(forKey: savedAccountsUDKey)
+        }
+
+        // 3. First migrate any UserDefaults → Keychain entries
+        // (Uses the default keychain implementation's migration helper if available)
+        if let manager = keychain as? KeychainManager {
+            manager.migrateFromUserDefaults(keys: [legacyTokenKey, legacyUserKey])
+        }
+
+        // 4. Only migrate if no active user is set yet
         guard activeUserId == nil,
-              let token = keychain.load(forKey: legacyTokenKey),
-              let userJSON = keychain.load(forKey: legacyUserKey),
+              let token = keychain.load(forKey: legacyTokenKey, account: nil),
+              let userJSON = keychain.load(forKey: legacyUserKey, account: nil),
               let userData = userJSON.data(using: .utf8),
               let user = try? JSONDecoder().decode(MeeshyUser.self, from: userData) else {
             return
         }
 
         let userId = user.id
-        try? keychain.save(token, forKey: tokenKey(for: userId))
-        try? keychain.save(userJSON, forKey: userKey(for: userId))
+        try? keychain.save(token, forKey: tokenKey(for: userId), account: nil)
+        try? keychain.save(userJSON, forKey: userKey(for: userId), account: nil)
         // Use now as tokenSavedAt (we don't know the original date — within 1 year is safe)
-        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: tokenDateUDKey(for: userId))
+        let now = String(Date().timeIntervalSince1970)
+        try? keychain.save(now, forKey: tokenDateUDKey(for: userId), account: nil)
         activeUserId = userId
         upsertSavedAccount(from: user)
 
-        keychain.delete(forKey: legacyTokenKey)
-        keychain.delete(forKey: legacyUserKey)
+        keychain.delete(forKey: legacyTokenKey, account: nil)
+        keychain.delete(forKey: legacyUserKey, account: nil)
     }
 
     // MARK: - Local Profile Mutation (optimistic)

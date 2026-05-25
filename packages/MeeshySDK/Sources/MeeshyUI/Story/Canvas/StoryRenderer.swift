@@ -107,6 +107,8 @@ public enum StoryRenderer {
                               at time: CMTime,
                               mode: RenderMode,
                               languages: [String] = [],
+                              resolver: (@Sendable (String) -> URL?)? = nil,
+                              imageCache: ImageCacheReader? = nil,
                               cache: StoryRendererCache? = nil,
                               backdropProvider: BackdropProvider? = nil,
                               contentsScale: CGFloat = UIScreen.main.scale) -> CALayer {
@@ -130,10 +132,18 @@ public enum StoryRenderer {
                                into: geometry,
                                at: time,
                                mode: mode,
-                               languages: languages)
+                               languages: languages,
+                               resolver: resolver,
+                               imageCache: imageCache)
                 }
             } else {
-                layer = renderItem(item, into: geometry, at: time, mode: mode, languages: languages)
+                layer = renderItem(item,
+                                   into: geometry,
+                                   at: time,
+                                   mode: mode,
+                                   languages: languages,
+                                   resolver: resolver,
+                                   imageCache: imageCache)
             }
 
             // Feed glass-style text layers with a backdrop snapshot when the
@@ -213,10 +223,16 @@ public enum StoryRenderer {
                                    into geometry: CanvasGeometry,
                                    at time: CMTime,
                                    mode: RenderMode,
-                                   languages: [String] = []) -> CALayer {
+                                   languages: [String] = [],
+                                   resolver: (@Sendable (String) -> URL?)? = nil,
+                                   imageCache: ImageCacheReader? = nil) -> CALayer {
         if let media = item as? StoryMediaObject {
             let layer = StoryMediaLayer()
-            layer.configure(with: media, geometry: geometry, mode: mode)
+            layer.configure(with: media,
+                            geometry: geometry,
+                            mode: mode,
+                            resolver: resolver,
+                            imageCache: imageCache)
             // Keyframe overrides for media objects (position, scale, opacity)
             if mode == .play, let kfs = media.keyframes, !kfs.isEmpty {
                 applyKeyframeOverrides(kfs,
@@ -334,9 +350,18 @@ extension StoryRenderer {
             let routingKey = (!bgVideo.postMediaId.isEmpty)
                 ? bgVideo.postMediaId
                 : (bgVideo.mediaURL ?? "")
+            // `mute` reste à `false` au niveau du renderer : c'est l'état
+            // initial souhaité (la vidéo de fond porte de l'audio que le
+            // viewer DOIT entendre par défaut). Le mute global de la sidebar
+            // est ensuite propagé par le canvas via
+            // `StoryBackgroundLayer.isMuted` à chaque toggle, donc l'état
+            // dynamique reste géré in place sans recréer le layer. Avant cette
+            // correction `mute: true` était hardcodé ici, ce qui silenciait
+            // toutes les vidéos de fond quels que soient les réglages user.
             return .video(postMediaId: routingKey,
                           looping: bgVideo.loop ?? true,
-                          mute: true)
+                          mute: false,
+                          thumbHash: bgVideo.thumbHash)
         }
         // Image background object or slide.mediaURL
         if let bgImage = slide.effects.mediaObjects?.first(where: { $0.isBackground && $0.kind == .image }) {
@@ -481,6 +506,16 @@ extension StoryRenderer {
     /// Pure computation — no UIKit access. `nonisolated` so tests can call it
     /// without hopping to `@MainActor`. Delegates per-channel arithmetic to
     /// `KeyframeInterpolator`. Returns `nil` overrides when `keyframes` is empty.
+    ///
+    /// **Base-position semantics** : when `currentTime` is BEFORE the first
+    /// keyframe of a channel, we return `nil` for that channel so the
+    /// renderer keeps the layer's authored base position / scale / opacity.
+    /// Without this, a single keyframe at relative t=2s would lock the
+    /// element to the keyframed value from t=0..2 instead of leaving it at
+    /// its base, producing the visual "the text starts somewhere unexpected
+    /// then jumps into place" complaint. The behaviour after the first
+    /// keyframe is unchanged: interpolation between consecutive keyframes,
+    /// then clamp on the last keyframe's value past the end of the track.
     public nonisolated static func applyKeyframes(keyframes: [StoryKeyframe],
                                                   at currentTime: Double,
                                                   startTime: Double = 0) -> KeyframeOverrides {
@@ -488,6 +523,15 @@ extension StoryRenderer {
             return KeyframeOverrides(position: nil, scale: nil, opacity: nil)  // nonisolated init
         }
         let local = Float(max(0, currentTime - startTime))
+
+        // Per-channel "before first keyframe" gate. Each animated channel
+        // (x, y, scale, opacity) is keyed independently — a text object can
+        // animate scale starting at t=1 and opacity starting at t=0 — so we
+        // need a per-channel first-keyframe lookup, not a global one.
+        let firstX = keyframes.compactMap { kf in kf.x.map { _ in kf.time } }.min()
+        let firstY = keyframes.compactMap { kf in kf.y.map { _ in kf.time } }.min()
+        let firstScale = keyframes.compactMap { kf in kf.scale.map { _ in kf.time } }.min()
+        let firstOpacity = keyframes.compactMap { kf in kf.opacity.map { _ in kf.time } }.min()
 
         let xTuples: [(time: Float, value: CGFloat, easing: StoryEasing)] = keyframes.compactMap { kf in
             kf.x.map { (kf.time, $0, kf.easing ?? .linear) }
@@ -502,10 +546,17 @@ extension StoryRenderer {
             kf.opacity.map { (kf.time, $0, kf.easing ?? .linear) }
         }
 
-        let xVal = KeyframeInterpolator.interpolate(keyframes: xTuples, at: local)
-        let yVal = KeyframeInterpolator.interpolate(keyframes: yTuples, at: local)
-        let sVal = KeyframeInterpolator.interpolate(keyframes: scaleTuples, at: local)
-        let oVal = KeyframeInterpolator.interpolate(keyframes: opacityTuples, at: local)
+        // Gate each channel : skip interpolation when the playhead is BEFORE
+        // its earliest authored keyframe. The renderer then leaves the layer
+        // at its base value for that channel (see doc comment above).
+        let xVal: CGFloat? = (firstX.map { local >= $0 } ?? false)
+            ? KeyframeInterpolator.interpolate(keyframes: xTuples, at: local) : nil
+        let yVal: CGFloat? = (firstY.map { local >= $0 } ?? false)
+            ? KeyframeInterpolator.interpolate(keyframes: yTuples, at: local) : nil
+        let sVal: CGFloat? = (firstScale.map { local >= $0 } ?? false)
+            ? KeyframeInterpolator.interpolate(keyframes: scaleTuples, at: local) : nil
+        let oVal: CGFloat? = (firstOpacity.map { local >= $0 } ?? false)
+            ? KeyframeInterpolator.interpolate(keyframes: opacityTuples, at: local) : nil
 
         let pos: CGPoint? = (xVal != nil && yVal != nil) ? CGPoint(x: xVal!, y: yVal!) : nil
         return KeyframeOverrides(

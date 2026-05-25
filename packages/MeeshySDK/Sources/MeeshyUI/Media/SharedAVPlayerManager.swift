@@ -61,12 +61,15 @@ public final class SharedAVPlayerManager: ObservableObject {
             return
         }
 
-        // 3. Fallback: stream from network + cache in background
-        let newPlayer = AVPlayer(url: url)
-        player = newPlayer
-        setupObservers(for: newPlayer)
-
-        Task { _ = try? await CacheCoordinator.shared.video.data(for: resolved) }
+        // 3. Streaming fallback removed (spec §4.10).
+        // Callers MUST gate on `availability == .ready` before calling
+        // `.load(urlString:)`. Reaching this branch means the caller didn't
+        // gate — log defensively and leave `player` nil so the surrounding
+        // UI (VideoMediaView / InlineVideoPlayerView / VideoFullscreenPlayerView)
+        // shows the download overlay instead of a silent network stream.
+        // Stories don't pass through this manager (their pipeline is
+        // StoryReaderPrefetcher + StoryMediaLoader), so removing the
+        // fallback only affects conversation/feed video.
     }
 
     // MARK: - Playback Controls
@@ -213,6 +216,13 @@ public final class SharedAVPlayerManager: ObservableObject {
                 self.watchStartTime = nil
                 self.isPlaying = false
                 self.seek(to: 0)
+                // Clear `activeURL` + tear down player + release `AVAudioSession`.
+                // Sans ce stop, `isThisActive` reste `true` dans `_InlineRenderer`,
+                // la surface reste mountée sur la dernière frame de la vidéo et
+                // l'utilisateur ne revient jamais au thumbnail + play badge.
+                // Le re-tap relancera `load(urlString:)` qui hit le cache disk
+                // (lecture instantanée — pas de re-download).
+                self.stop()
             }
             .store(in: &cancellables)
     }

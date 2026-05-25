@@ -83,7 +83,11 @@ public enum MeeshyError: LocalizedError {
     /// blocked by another user, etc.). Callers must NEVER treat this as
     /// a session failure. The auth refresh / re-authentication paths
     /// only react to `.auth(...)` cases.
-    case forbidden(reason: String?)
+    ///
+    /// `body` carries the raw HTTP response body so that callers who need
+    /// structured 403 payloads (e.g. consent-required errors with
+    /// `requiredConsents`) can decode them without a second round-trip.
+    case forbidden(reason: String?, body: Data?)
     case server(statusCode: Int, message: String)
     case unknown(Error)
 
@@ -93,7 +97,7 @@ public enum MeeshyError: LocalizedError {
         case .auth(let error): return error.errorDescription
         case .message(let error): return error.errorDescription
         case .media(let error): return error.errorDescription
-        case .forbidden(let reason): return reason ?? "Acces refuse a cette ressource"
+        case .forbidden(let reason, _): return reason ?? "Acces refuse a cette ressource"
         case .server(_, let message): return message
         case .unknown(let error): return error.localizedDescription
         }
@@ -173,7 +177,7 @@ public enum MeeshyError: LocalizedError {
             // session is still valid; only this specific resource is off
             // limits. Callers (ViewModels) decide what to do (purge stale
             // cache, dismiss a conversation, etc.).
-            return .forbidden(reason: message)
+            return .forbidden(reason: message, body: nil)
         case 429:
             return .server(statusCode: 429, message: "Trop de requetes")
         default:

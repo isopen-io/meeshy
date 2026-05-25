@@ -16,10 +16,10 @@ extension View {
         action: @escaping () -> Void
     ) -> some View {
         self
-            .onChange(of: filter) { _, _ in action() }
-            .onChange(of: hasImage) { _, _ in action() }
-            .onChange(of: stickersCount) { _, _ in action() }
-            .onChange(of: drawingCount) { _, _ in action() }
-            .onChange(of: bgColor) { _, _ in action() }
+            .adaptiveOnChange(of: filter) { _, _ in action() }
+            .adaptiveOnChange(of: hasImage) { _, _ in action() }
+            .adaptiveOnChange(of: stickersCount) { _, _ in action() }
+            .adaptiveOnChange(of: drawingCount) { _, _ in action() }
+            .adaptiveOnChange(of: bgColor) { _, _ in action() }
     }
 }

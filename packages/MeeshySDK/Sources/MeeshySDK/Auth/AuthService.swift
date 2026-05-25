@@ -2,6 +2,7 @@ import Foundation
 
 public protocol AuthServiceProviding: Sendable {
     func login(username: String, password: String, rememberDevice: Bool) async throws -> LoginResponseData
+    func completeLoginWith2FA(twoFactorToken: String, code: String) async throws -> LoginResponseData
     func register(request: RegisterRequest) async throws -> LoginResponseData
     func requestMagicLink(email: String, deviceFingerprint: String?) async throws -> Int
     func validateMagicLink(token: String) async throws -> LoginResponseData
@@ -16,6 +17,21 @@ public protocol AuthServiceProviding: Sendable {
     func refreshToken(_ currentToken: String, sessionToken: String?) async throws -> LoginResponseData
     func me() async throws -> MeeshyUser
     func logout() async
+    /// D5 — throwing variant so AuthManager.performServerLogoutWithRetries
+    /// can detect transient failures and retry. Default implementation
+    /// below falls back to the legacy fire-and-forget `logout()` for
+    /// conformers that don't override it.
+    func logoutThrowing() async throws
+}
+
+public extension AuthServiceProviding {
+    /// Default fallback for conformers that haven't implemented the
+    /// throwing variant yet: best-effort, swallows errors. New tests
+    /// (`AuthLogoutRetryTests`) override this on a mock to assert the
+    /// retry loop behaves correctly.
+    func logoutThrowing() async throws {
+        await logout()
+    }
 }
 
 /// Stateless auth API calls. All state management is in AuthManager.
@@ -32,6 +48,16 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
     public func login(username: String, password: String, rememberDevice: Bool = true) async throws -> LoginResponseData {
         let body = LoginRequest(username: username, password: password, rememberDevice: rememberDevice)
         let response: APIResponse<LoginResponseData> = try await api.post(endpoint: "/auth/login", body: body)
+        return response.data
+    }
+
+    public func completeLoginWith2FA(twoFactorToken: String, code: String) async throws -> LoginResponseData {
+        struct TwoFactorLoginRequest: Encodable {
+            let twoFactorToken: String
+            let code: String
+        }
+        let body = TwoFactorLoginRequest(twoFactorToken: twoFactorToken, code: code)
+        let response: APIResponse<LoginResponseData> = try await api.post(endpoint: "/auth/login/2fa", body: body)
         return response.data
     }
 
@@ -212,5 +238,14 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
 
     public func logout() async {
         let _: APIResponse<[String: Bool]>? = try? await api.request(endpoint: "/auth/logout", method: "POST")
+    }
+
+    /// D5 — throwing variant used by `AuthManager.performServerLogoutWithRetries`
+    /// so the retry loop can distinguish network failures (worth retrying)
+    /// from a successful ack. The legacy `logout()` swallowed errors which
+    /// silently left the session live on the gateway when the device was
+    /// offline at the moment of logout.
+    public func logoutThrowing() async throws {
+        let _: APIResponse<[String: Bool]> = try await api.request(endpoint: "/auth/logout", method: "POST")
     }
 }

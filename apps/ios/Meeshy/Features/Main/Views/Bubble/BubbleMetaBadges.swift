@@ -28,13 +28,13 @@ struct BubbleEditedIndicator: View, Equatable {
                     .font(.system(size: 8, weight: .semibold))
                     .rotationEffect(.degrees(isSaving ? 360 : 0))
                     .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: isSaving)
-                Text("Enregistrement…")
+                Text(String(localized: "bubble.meta.saving", defaultValue: "Enregistrement…", bundle: .main))
                     .font(.system(size: 9, weight: .medium))
                     .italic()
             } else {
                 Image(systemName: "pencil")
                     .font(.system(size: 8, weight: .semibold))
-                Text("modifie")
+                Text(String(localized: "bubble.meta.edited", defaultValue: "modifie", bundle: .main))
                     .font(.system(size: 9, weight: .medium))
                     .italic()
                 if hasEditHistory {
@@ -47,96 +47,6 @@ struct BubbleEditedIndicator: View, Equatable {
             }
         }
         .foregroundColor(metaColor)
-    }
-}
-
-// MARK: - Media Timestamp Overlay (was: ThemedMessageBubble.mediaTimestampOverlay)
-
-/// Capsule sombre semi-transparente affichant l'heure (et delivery status pour
-/// les messages emis) en surimpression d'une grille media.
-struct BubbleMediaTimestampOverlay: View, Equatable {
-    let time: String
-    let isMe: Bool
-    let deliveryStatus: MeeshyMessage.DeliveryStatus?
-
-    var body: some View {
-        HStack(spacing: 3) {
-            Text(time)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(.white)
-
-            if isMe, let status = deliveryStatus {
-                BubbleMediaDeliveryCheckmark(status: status)
-            }
-        }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
-        .background(
-            Capsule()
-                .fill(Color.black.opacity(0.55))
-        )
-    }
-}
-
-// MARK: - Media Delivery Checkmark (was: ThemedMessageBubble.mediaDeliveryCheckmark)
-
-/// Checkmarks de livraison pour la timestamp overlay des grilles media.
-/// Affiche un glyph par etat (`.sending` -> `.failed`).
-struct BubbleMediaDeliveryCheckmark: View, Equatable {
-    let status: MeeshyMessage.DeliveryStatus
-
-    var body: some View {
-        switch status {
-        case .sending:
-            Image(systemName: "clock")
-                .font(.system(size: 9))
-                .foregroundColor(.white.opacity(0.8))
-        case .invisible:
-            // Spec §6.2 — debounced pre-clock state, no glyph on the dark
-            // capsule overlay. Keeps the timestamp row stable during the
-            // perceived-instant send.
-            EmptyView()
-        case .clock:
-            Image(systemName: "clock")
-                .font(.system(size: 9))
-                .foregroundColor(.white.opacity(0.65))
-        case .slow:
-            Image(systemName: "clock.badge.exclamationmark")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(MeeshyColors.warning)
-        case .sent:
-            Image(systemName: "checkmark")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(.white.opacity(0.8))
-        case .delivered:
-            ZStack(alignment: .leading) {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .regular))
-                Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .regular))
-                    .offset(x: 3)
-            }
-            .foregroundColor(.white.opacity(0.8))
-            .frame(width: 14)
-        case .read:
-            // Match the bubble identity bar: full-opacity bold double-check on
-            // the dark capsule overlay, sized one point larger than `.delivered`
-            // so the read state is unambiguously distinct.
-            ZStack(alignment: .leading) {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .black))
-                Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .black))
-                    .offset(x: 3)
-            }
-            .foregroundColor(.white)
-            .frame(width: 15)
-            .accessibilityLabel("Read")
-        case .failed:
-            Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundColor(MeeshyColors.error)
-        }
     }
 }
 
@@ -155,14 +65,14 @@ struct BubblePinnedIndicator: View, Equatable {
                 .foregroundColor(MeeshyColors.pinnedBlue)
                 .rotationEffect(.degrees(45))
 
-            Text("Epingle")
+            Text(String(localized: "bubble.meta.pinned", defaultValue: "Epingle", bundle: .main))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(MeeshyColors.pinnedBlue)
         }
         .padding(.horizontal, 4)
         .padding(.bottom, 2)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Message epingle")
+        .accessibilityLabel(String(localized: "bubble.meta.pinned.a11y", defaultValue: "Message epingle", bundle: .main))
     }
 }
 
@@ -186,20 +96,20 @@ struct BubbleForwardedIndicator: View, Equatable {
 
             if let senderName {
                 if let conversationName {
-                    Text("Transf. de \(senderName) \u{2022} \(conversationName)")
+                    Text(String(localized: "bubble.meta.forwarded.fromConversation", defaultValue: "Transf. de \(senderName) \u{2022} \(conversationName)", bundle: .main))
                         .font(.system(size: 10))
                         .italic()
                         .foregroundColor(theme.textMuted)
                         .lineLimit(1)
                 } else {
-                    Text("Transf. de \(senderName)")
+                    Text(String(localized: "bubble.meta.forwarded.from", defaultValue: "Transf. de \(senderName)", bundle: .main))
                         .font(.system(size: 10))
                         .italic()
                         .foregroundColor(theme.textMuted)
                         .lineLimit(1)
                 }
             } else {
-                Text("Transfere")
+                Text(String(localized: "bubble.meta.forwarded", defaultValue: "Transfere", bundle: .main))
                     .font(.system(size: 10))
                     .italic()
                     .foregroundColor(theme.textMuted)
@@ -211,58 +121,9 @@ struct BubbleForwardedIndicator: View, Equatable {
     }
 }
 
-// MARK: - Delivery Offline/Retry Badge (Phase 4 Task 4.6)
-
-/// Hourglass + retry control surfaced on outgoing bubbles when the user is
-/// offline or the outbox flusher has exhausted its retry budget. Stateless +
-/// Equatable so it never re-evaluates unless its primitive inputs change.
-///
-/// Visibility matrix (only rendered when `isMe == true`):
-///   - `.sending` + `!isOnline` -> hourglass glyph (offline-pending)
-///   - `.failed`                -> tap-to-retry button (arrow.clockwise)
-///   - everything else          -> `EmptyView` (no overhead in the bubble row)
-struct BubbleDeliveryBadge: View, Equatable {
-    let status: MeeshyMessage.DeliveryStatus
-    let isMe: Bool
-    let isOnline: Bool
-    let onRetry: () -> Void
-
-    static func == (lhs: BubbleDeliveryBadge, rhs: BubbleDeliveryBadge) -> Bool {
-        lhs.status == rhs.status &&
-        lhs.isMe == rhs.isMe &&
-        lhs.isOnline == rhs.isOnline
-    }
-
-    var body: some View {
-        if !isMe {
-            EmptyView()
-        } else {
-            switch status {
-            case .sending where !isOnline:
-                Image(systemName: "hourglass")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(MeeshyColors.warning)
-                    .accessibilityLabel("Pending offline")
-            case .failed:
-                Button(action: {
-                    HapticFeedback.light()
-                    onRetry()
-                }) {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(MeeshyColors.error)
-                        .padding(4)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Retry sending")
-                .accessibilityHint("Resends this message")
-            default:
-                EmptyView()
-            }
-        }
-    }
-}
+// Note: the offline-pending hourglass + failed-retry control are now rendered
+// inline by `BubbleFooter` / `BubbleDeliveryCheck`. The former standalone
+// `BubbleDeliveryBadge` has been removed.
 
 // MARK: - Ephemeral Badge (was: ThemedMessageBubble.ephemeralTimerOverlay)
 
@@ -292,6 +153,6 @@ struct BubbleEphemeralBadge: View, Equatable {
                         .stroke(Color(hex: "FF6B6B").opacity(0.3), lineWidth: 0.5)
                 )
         )
-        .accessibilityLabel("Message ephemere, expire dans \(timerText)")
+        .accessibilityLabel(String(localized: "bubble.meta.ephemeral.a11y", defaultValue: "Message ephemere, expire dans \(timerText)", bundle: .main))
     }
 }

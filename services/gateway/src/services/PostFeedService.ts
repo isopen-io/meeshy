@@ -1,67 +1,10 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
+import { authorSelect, postInclude } from './posts/postIncludes';
 
-const authorSelect = {
-  id: true,
-  username: true,
-  displayName: true,
-  avatar: true,
-};
-
-const mediaSelect = {
-  id: true,
-  fileName: true,
-  originalName: true,
-  mimeType: true,
-  fileSize: true,
-  fileUrl: true,
-  width: true,
-  height: true,
-  thumbnailUrl: true,
-  thumbHash: true,
-  duration: true,
-  order: true,
-  caption: true,
-  alt: true,
-};
-
-const feedPostInclude = {
-  author: { select: authorSelect },
-  media: { select: mediaSelect, orderBy: { order: 'asc' as const } },
-  comments: {
-    where: { isDeleted: false, OR: [{ parentId: null }, { parentId: { isSet: false } }] },
-    select: {
-      id: true,
-      content: true,
-      originalLanguage: true,
-      translations: true,
-      likeCount: true,
-      replyCount: true,
-      createdAt: true,
-      author: { select: authorSelect },
-    },
-    orderBy: { likeCount: 'desc' as const },
-    take: 3,
-  },
-  repostOf: {
-    select: {
-      id: true,
-      type: true,
-      content: true,
-      originalLanguage: true,
-      translations: true,
-      storyEffects: true,
-      audioUrl: true,
-      originalRepostOfId: true,
-      author: { select: authorSelect },
-      media: { select: mediaSelect, orderBy: { order: 'asc' as const } },
-      createdAt: true,
-      likeCount: true,
-      commentCount: true,
-    },
-  },
-};
+// Feed payloads share the canonical postInclude — alias kept for callsite clarity.
+const feedPostInclude = postInclude;
 
 // ============================================
 // SCORING FUNCTIONS
@@ -170,23 +113,40 @@ export class PostFeedService {
       : null;
 
     const postIds = items.map((s) => s.post.id);
-    const userReactions = postIds.length > 0
-      ? await this.prisma.postReaction.findMany({
-          where: { userId, postId: { in: postIds } },
-          select: { postId: true, emoji: true },
-        })
-      : [];
+    const [userReactions, userBookmarks, userReposts] = postIds.length > 0
+      ? await Promise.all([
+          this.prisma.postReaction.findMany({
+            where: { userId, postId: { in: postIds } },
+            select: { postId: true, emoji: true },
+          }),
+          this.prisma.postBookmark.findMany({
+            where: { userId, postId: { in: postIds } },
+            select: { postId: true },
+          }),
+          // A repost is any post whose `repostOfId` is in our candidate
+          // set AND whose author is the viewer. Drives the "I've already
+          // reposted this" green icon on the feed.
+          this.prisma.post.findMany({
+            where: { authorId: userId, repostOfId: { in: postIds }, isDeleted: false },
+            select: { repostOfId: true },
+          }),
+        ])
+      : [[], [], []];
     const userReactionsMap = new Map<string, string[]>();
     for (const r of userReactions) {
       const list = userReactionsMap.get(r.postId) ?? [];
       list.push(r.emoji);
       userReactionsMap.set(r.postId, list);
     }
+    const bookmarkedIds = new Set(userBookmarks.map((b) => b.postId));
+    const repostedIds = new Set(userReposts.map((r) => r.repostOfId).filter(Boolean) as string[]);
 
     return {
       items: items.map((s) => ({
         ...this.enrichWithLikeStatus(s.post, userId),
         currentUserReactions: userReactionsMap.get(s.post.id) ?? [],
+        isBookmarkedByMe: bookmarkedIds.has(s.post.id),
+        isRepostedByMe: repostedIds.has(s.post.id),
       })),
       nextCursor,
       hasMore,

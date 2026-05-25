@@ -1,3 +1,5 @@
+process.env.DATABASE_URL = 'mongodb://mock';
+process.env.OPENAI_API_KEY = 'mock-key';
 import { createLlmProvider } from '../../llm/llm-factory';
 
 describe('LLM Factory', () => {

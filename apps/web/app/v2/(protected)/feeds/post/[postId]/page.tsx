@@ -88,7 +88,8 @@ export default function PostDetailPage() {
 
   const handleShare = async () => {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/v2/feeds/post/${post.id}`);
+      // Share with the canonical (v1) URL — see comment in feeds/page.tsx.
+      await navigator.clipboard.writeText(`${window.location.origin}/feeds/post/${post.id}`);
       shareMutation.mutate({ postId: post.id });
       showToast('Link copied!', 'success');
     } catch { /* silent */ }

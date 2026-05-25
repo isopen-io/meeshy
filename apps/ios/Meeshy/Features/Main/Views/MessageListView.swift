@@ -19,9 +19,17 @@ import MeeshyUI
 /// banding past the zone (15% resistance) and haptic feedback at commit.
 struct BubbleSwipeContainer<Content: View>: View {
     let isMine: Bool
+    /// Identifier published via `MessageFramePreferenceKey` so the long-press
+    /// overlay can locate this cell's screen frame at gesture fire time.
+    let messageId: String
     /// Used by the swipe indicator to display a "day month / hh:mm" stamp
     /// before the user has dragged past the reply threshold.
     let messageCreatedAt: Date
+    /// `true` while the long-press overlay is presenting this exact cell —
+    /// the live row fades to `opacity: 0` so only the elevated copy in the
+    /// overlay is visible. Frame publication continues so the overlay can
+    /// keep the bubble pinned to its real position.
+    var isHiddenForOverlay: Bool = false
     let onSwipeReply: () -> Void
     let onSwipeForward: () -> Void
     /// Long press triggers the message's contextual options (reply, forward,
@@ -60,16 +68,27 @@ struct BubbleSwipeContainer<Content: View>: View {
 
             content()
                 .offset(x: offset)
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: MessageFramePreferenceKey.self,
+                            value: [messageId: proxy.frame(in: .global)]
+                        )
+                    }
+                )
+                .opacity(isHiddenForOverlay ? 0 : 1)
+                .animation(BubbleAnimations.overlayRevealCrossfade, value: isHiddenForOverlay)
                 .simultaneousGesture(dragGesture)
                 // Long press surfaces via `simultaneousGesture` so it
                 // cooperates with the inner reaction "+" tap. The parent
-                // (ConversationView) renders a custom overlay with a
-                // light-blur backdrop, the bubble re-rendered at the
-                // center with a spring scale, and a compact action menu
-                // sliding up from the bottom — that's what `onLongPress`
-                // is wired to.
+                // (ConversationView) renders a custom overlay that keeps
+                // the bubble at its source position (looked up via
+                // MessageFramePreferenceKey above), with adaptive lift
+                // and a compact action menu — that's what `onLongPress`
+                // is wired to. Duration tightened from 0.45 → 0.35 to
+                // match iMessage/WhatsApp reactivity.
                 .simultaneousGesture(
-                    LongPressGesture(minimumDuration: 0.45)
+                    LongPressGesture(minimumDuration: 0.35)
                         .onEnded { _ in
                             HapticFeedback.medium()
                             onLongPress()
@@ -162,142 +181,6 @@ struct BubbleSwipeContainer<Content: View>: View {
     }
 }
 
-/// Long-press contextual overlay — iMessage-style spring entry + WhatsApp-
-/// flavored bottom menu. Renders:
-///
-/// - A LIGHT backdrop (Color.black.opacity(0.28)) so the rest of the
-///   conversation stays distinguishable behind, instead of the dense system
-///   blur UIContextMenuInteraction would impose.
-/// - The pressed message re-rendered at its current accent color, scaled
-///   from 0.92 → 1.0 via spring on appear (and reverse on dismiss).
-/// - A compact horizontal action row (icon + tiny label) hugging the
-///   bottom safe area — small enough that the bubble stays the focal
-///   point, but rich enough to expose Reply / Forward / React / Translate
-///   / Copy / Delete in a single tap.
-struct MessagePressedOverlay: View {
-    let message: Message
-    let contactColor: String
-    let isDirect: Bool
-    let isDark: Bool
-    let isMine: Bool
-    let userLanguages: (regional: String?, custom: String?)
-    let mentionDisplayNames: [String: String]
-    let currentUserId: String
-    let translations: [MessageTranslation]
-    let preferredTranslation: MessageTranslation?
-    let transcription: MessageTranscription?
-    let translatedAudios: [MessageTranslatedAudio]
-
-    let onReply: () -> Void
-    let onForward: () -> Void
-    let onReact: () -> Void
-    let onShowTranslations: () -> Void
-    let onCopy: () -> Void
-    let onDelete: () -> Void
-    let onDismiss: () -> Void
-
-    @State private var didAppear = false
-
-    var body: some View {
-        ZStack {
-            Color.black.opacity(didAppear ? 0.28 : 0)
-                .ignoresSafeArea()
-                .contentShape(Rectangle())
-                .onTapGesture { dismiss() }
-
-            VStack(spacing: 16) {
-                Spacer()
-
-                ThemedMessageBubble(
-                    message: message,
-                    contactColor: contactColor,
-                    isDirect: isDirect,
-                    isDark: isDark,
-                    transcription: transcription,
-                    translatedAudios: translatedAudios,
-                    textTranslations: translations,
-                    preferredTranslation: preferredTranslation,
-                    showAvatar: !isDirect,
-                    isLastInGroup: true,
-                    isLastReceivedMessage: true,
-                    isLastSentMessage: true,
-                    mentionDisplayNames: mentionDisplayNames,
-                    currentUserId: currentUserId,
-                    userLanguages: userLanguages
-                )
-                .padding(.horizontal, 24)
-                .scaleEffect(didAppear ? 1.0 : 0.92)
-                .opacity(didAppear ? 1.0 : 0)
-
-                Spacer()
-
-                actionMenu
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 12)
-                    .opacity(didAppear ? 1.0 : 0)
-                    .offset(y: didAppear ? 0 : 32)
-            }
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.35, dampingFraction: 0.78)) {
-                didAppear = true
-            }
-        }
-    }
-
-    private func dismiss() {
-        withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
-            didAppear = false
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-            onDismiss()
-        }
-    }
-
-    private var actionMenu: some View {
-        HStack(spacing: 0) {
-            actionButton(label: "Répondre", icon: "arrowshape.turn.up.left.fill") { fire(onReply) }
-            actionButton(label: "Transférer", icon: "arrowshape.turn.up.right.fill") { fire(onForward) }
-            actionButton(label: "Réagir", icon: "face.smiling.fill") { fire(onReact) }
-            actionButton(label: "Traduire", icon: "globe") { fire(onShowTranslations) }
-            actionButton(label: "Copier", icon: "doc.on.doc.fill") { fire(onCopy) }
-            if isMine {
-                actionButton(label: "Supprimer", icon: "trash.fill", destructive: true) { fire(onDelete) }
-            }
-        }
-        .padding(.vertical, 10)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color(hex: contactColor).opacity(0.18), lineWidth: 0.5)
-        )
-        .shadow(color: Color.black.opacity(0.18), radius: 12, y: 4)
-    }
-
-    private func actionButton(label: String, icon: String, destructive: Bool = false, handler: @escaping () -> Void) -> some View {
-        Button(action: handler) {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(destructive ? .red : .primary)
-                Text(label)
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(destructive ? .red : .secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-            }
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-    }
-
-    private func fire(_ action: () -> Void) {
-        HapticFeedback.light()
-        action()
-    }
-}
 
 struct MessageListView: UIViewControllerRepresentable {
     let store: MessageStore
@@ -355,6 +238,10 @@ struct MessageListView: UIViewControllerRepresentable {
     var onOpenReactPicker: ((String) -> Void)?
     /// Open the message detail sheet on the "info / views" tab.
     var onShowMessageInfo: ((String) -> Void)?
+    /// Tap on the delivery checkmarks (✓ / ✓✓ / ✓✓ bleu) of a sent message —
+    /// opens the detail sheet directly on the "vues" tab so the author can
+    /// inspect read receipts without going through the long-press menu.
+    var onShowReadStatus: ((String) -> Void)?
     /// Open the message detail sheet on the "reactions" tab.
     var onShowReactions: ((String) -> Void)?
     /// Open the message detail sheet on the "language / translation" tab.
@@ -404,6 +291,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onToggleReaction = onToggleReaction
         vc.onOpenReactPicker = onOpenReactPicker
         vc.onShowMessageInfo = onShowMessageInfo
+        vc.onShowReadStatus = onShowReadStatus
         vc.onShowReactions = onShowReactions
         vc.onShowTranslationDetail = onShowTranslationDetail
         vc.onMediaTap = onMediaTap
@@ -449,6 +337,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onToggleReaction = onToggleReaction
         vc.onOpenReactPicker = onOpenReactPicker
         vc.onShowMessageInfo = onShowMessageInfo
+        vc.onShowReadStatus = onShowReadStatus
         vc.onShowReactions = onShowReactions
         vc.onShowTranslationDetail = onShowTranslationDetail
         vc.onMediaTap = onMediaTap

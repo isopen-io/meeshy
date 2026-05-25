@@ -31,6 +31,13 @@ struct ThemedConversationRow: View {
     /// la ligne affiche « Brouillon : … » au lieu de l'aperçu du dernier
     /// message.
     var draftSummary: DraftSummary? = nil
+    /// B1 (Prisme Linguistique) — viewer's preferred content languages,
+    /// passed by `ConversationListView` from `AuthManager.currentUser?
+    /// .preferredContentLanguages`. Used to resolve `lastMessagePreview`
+    /// through `MeeshyConversation.resolvedLastMessagePreview(...)`.
+    /// Falls back to the raw preview if the conversation has no
+    /// translations attached (e.g., gateway not yet providing them).
+    var preferredContentLanguages: [String] = []
 
     private var accentColor: String { conversation.accentColor }
 
@@ -45,7 +52,7 @@ struct ThemedConversationRow: View {
 
     // MARK: - Activity Heat (0 = cold/pastel, 1 = hot/vibrant)
     private var conversationHeat: CGFloat {
-        guard !conversation.isMuted else { return 0.05 }
+        guard !conversation.userState.isMuted else { return 0.05 }
 
         let seconds = Date().timeIntervalSince(conversation.lastMessageAt)
         let recency: CGFloat
@@ -55,9 +62,9 @@ struct ThemedConversationRow: View {
         else if seconds < 604_800 { recency = 0.2 }
         else { recency = 0.0 }
 
-        let unread  = min(CGFloat(conversation.unreadCount) / 10.0, 1.0)
+        let unread  = min(CGFloat(conversation.userState.unreadCount) / 10.0, 1.0)
         let members = min(CGFloat(conversation.memberCount) / 50.0, 1.0)
-        let pinned: CGFloat = conversation.isPinned ? 1.0 : 0.0
+        let pinned: CGFloat = conversation.userState.isPinned ? 1.0 : 0.0
 
         return 0.40 * recency + 0.35 * unread + 0.15 * members + 0.10 * pinned
     }
@@ -133,13 +140,13 @@ struct ThemedConversationRow: View {
                     // Name with type indicator
                     HStack(spacing: 6) {
                         Text(conversation.displayName)
-                            .font(.system(size: 15, weight: conversation.unreadCount > 0 ? .bold : .semibold))
+                            .font(.system(size: 15, weight: conversation.userState.unreadCount > 0 ? .bold : .semibold))
                             .foregroundColor(textPrimary)
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
 
                         // Reaction emoji (favorites classification)
-                        if let r = conversation.reaction, !r.isEmpty {
+                        if let r = conversation.userState.reaction, !r.isEmpty {
                             Text(r)
                                 .font(.system(size: 12))
                                 .accessibilityLabel(Text("réaction \(r)"))
@@ -157,7 +164,7 @@ struct ThemedConversationRow: View {
                     // Timestamp — layoutPriority(1) pour ne jamais être écrasé
                     Text(timeAgo(conversation.lastMessageAt))
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(Self.timestampColor(unreadCount: conversation.unreadCount, accent: accent))
+                        .foregroundColor(Self.timestampColor(unreadCount: conversation.userState.unreadCount, accent: accent))
                         .layoutPriority(1)
                         .padding(.top, 2)
                 }
@@ -168,7 +175,7 @@ struct ThemedConversationRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             // Unread badge
-            if conversation.unreadCount > 0 {
+            if conversation.userState.unreadCount > 0 {
                 unreadBadge
                     .accessibilityHidden(true)
             }
@@ -211,11 +218,11 @@ struct ThemedConversationRow: View {
         )
         .scaleEffect(isDragging ? 1.02 : 1.0)
         .opacity(isDragging ? 0.8 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isDragging)
-        .animation(.spring(response: 0.35, dampingFraction: 0.82), value: isSelected)
+        .animation(.easeOut(duration: 0.15), value: isDragging)
+        .animation(.easeOut(duration: 0.2), value: isSelected)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(conversationAccessibilityLabel)
-        .accessibilityValue(conversation.unreadCount > 0 ? "\(conversation.unreadCount) messages non lus" : "")
+        .accessibilityValue(conversation.userState.unreadCount > 0 ? "\(conversation.userState.unreadCount) messages non lus" : "")
         .accessibilityHint("Ouvre la conversation")
         .accessibilityAddTraits(.isButton)
     }
@@ -240,11 +247,11 @@ struct ThemedConversationRow: View {
             }
         }
         parts.append(timeAgo(conversation.lastMessageAt))
-        if conversation.unreadCount > 0 {
-            parts.append("\(conversation.unreadCount) non lus")
+        if conversation.userState.unreadCount > 0 {
+            parts.append("\(conversation.userState.unreadCount) non lus")
         }
-        if conversation.isMuted { parts.append("en silence") }
-        if conversation.isPinned { parts.append("epingle") }
+        if conversation.userState.isMuted { parts.append("en silence") }
+        if conversation.userState.isPinned { parts.append("epingle") }
         return parts.joined(separator: ", ")
     }
 
@@ -327,7 +334,7 @@ struct ThemedConversationRow: View {
                 .frame(width: 24, height: 24)
                 .shadow(color: badgeColor.opacity(0.25), radius: 3)
 
-            Text("\(min(conversation.unreadCount, 99))")
+            Text("\(min(conversation.userState.unreadCount, 99))")
                 .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.white)
         }
@@ -433,7 +440,9 @@ struct ThemedConversationRow: View {
                     attachmentIcon(for: attachments[0].mimeType)
                         .font(.system(size: 11))
                 }
-                Text(conversation.lastMessagePreview ?? "")
+                // B1 — apply Prisme Linguistique. Falls back to the raw
+                // preview when no translations are attached.
+                Text(conversation.resolvedLastMessagePreview(preferredLanguages: preferredContentLanguages) ?? "")
                     .font(.system(size: 13))
                     .foregroundColor(textSecondary)
                     .lineLimit(1)
@@ -515,40 +524,32 @@ struct ThemedConversationRow: View {
     // MARK: - Attachment Helpers
 
     private func attachmentIcon(for mimeType: String) -> some View {
-        let (icon, color) = attachmentIconInfo(mimeType)
-        return Image(systemName: icon)
+        let display = AttachmentDisplay.make(for: mimeType)
+        return Image(systemName: display.icon)
             .font(.system(size: 12, weight: .medium))
-            .foregroundColor(color)
-    }
-
-    private func attachmentIconInfo(_ mimeType: String) -> (String, Color) {
-        if mimeType.hasPrefix("image/") { return ("camera.fill", .blue) }
-        if mimeType.hasPrefix("video/") { return ("video.fill", .red) }
-        if mimeType.hasPrefix("audio/") { return ("waveform", .purple) }
-        if mimeType == "application/pdf" { return ("doc.fill", .orange) }
-        return ("paperclip", .gray)
+            .foregroundColor(display.tintColor)
     }
 
     private func attachmentMeta(for attachment: MessageAttachment) -> some View {
-        let mimeType = attachment.mimeType
-        var meta = ""
+        let kind = AttachmentKind(mimeType: attachment.mimeType)
+        let meta: String
 
-        if mimeType.hasPrefix("image/") {
+        switch kind {
+        case .image:
             if let w = attachment.width, let h = attachment.height {
                 meta = "\(w)x\(h)"
-            } else { meta = "Photo" }
-        } else if mimeType.hasPrefix("video/") {
+            } else { meta = kind.shortLabel }
+        case .video, .audio:
             if let d = attachment.duration {
                 meta = formatDurationMs(d)
-            } else { meta = "Video" }
-        } else if mimeType.hasPrefix("audio/") {
-            if let d = attachment.duration {
-                meta = formatDurationMs(d)
-            } else { meta = "Audio" }
-        } else if mimeType == "application/pdf" {
-            meta = "PDF"
-        } else {
-            meta = attachment.originalName.isEmpty ? "Fichier" : attachment.originalName
+            } else { meta = kind.shortLabel }
+        case .pdf, .spreadsheet, .document, .presentation,
+             .archive, .code, .text, .other:
+            // Prefer the original file name (e.g. "rapport.xlsx") since the
+            // user picked it deliberately; fall back to the family label
+            // ("Excel", "Word", ...) so unnamed payloads still convey
+            // something more useful than "Fichier".
+            meta = attachment.originalName.isEmpty ? kind.shortLabel : attachment.originalName
         }
 
         return Text(meta)
@@ -578,7 +579,8 @@ extension ThemedConversationRow: @MainActor Equatable {
         lhs.moodStatus?.id == rhs.moodStatus?.id &&
         lhs.presenceState == rhs.presenceState &&
         lhs.isSelected == rhs.isSelected &&
-        lhs.draftSummary == rhs.draftSummary
+        lhs.draftSummary == rhs.draftSummary &&
+        lhs.preferredContentLanguages == rhs.preferredContentLanguages
     }
 }
 

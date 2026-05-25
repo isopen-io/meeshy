@@ -13,6 +13,16 @@ import MeeshyUI
 /// (Codable & Sendable seulement), donc on projette les champs
 /// rendus dans `ReplySlice` pour comparer manuellement.
 struct BubbleQuotedReply: View, Equatable {
+    /// Style d'enveloppe de la citation.
+    /// - `.card` : variante historique — RR12 + bgColor teinté + paddings extérieurs (top 6, horizontal 6). Hôte = bulle chat colorée.
+    /// - `.inline` : sans RR12 ni paddings extérieurs — la surface vient du parent (widget audio `playerBackground` ou conteneur unifié média+reply).
+    /// Spec : `docs/superpowers/specs/2026-05-20-ios-reply-no-bubble-around-media-design.md` §4.2
+    enum Style: Equatable {
+        case card
+        case inline
+    }
+
+    var style: Style = .card
     let reply: ReplyReference
     let parentIsMe: Bool
     let accentHex: String
@@ -20,6 +30,7 @@ struct BubbleQuotedReply: View, Equatable {
     let mentionDisplayNames: [String: String]
 
     static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.style == rhs.style &&
         lhs.parentIsMe == rhs.parentIsMe &&
         lhs.accentHex == rhs.accentHex &&
         lhs.isDark == rhs.isDark &&
@@ -79,7 +90,7 @@ struct BubbleQuotedReply: View, Equatable {
             ? Color.white.opacity(0.15)
             : (isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
 
-        HStack(spacing: 0) {
+        let contentBody = HStack(spacing: 0) {
             // Left accent bar
             RoundedRectangle(cornerRadius: 2)
                 .fill(parentIsMe ? Color.white.opacity(0.7) : accentBarColor)
@@ -87,7 +98,7 @@ struct BubbleQuotedReply: View, Equatable {
 
             HStack(spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(reply.isMe ? "Vous" : reply.authorName)
+                    Text(reply.isMe ? String(localized: "bubble.reply.you", defaultValue: "Vous", bundle: .main) : reply.authorName)
                         .font(.system(size: 12, weight: .bold))
                         .foregroundColor(nameColor)
                         .lineLimit(1)
@@ -96,14 +107,20 @@ struct BubbleQuotedReply: View, Equatable {
                         BubbleStoryReplyPreview(reply: reply, previewColor: previewColor)
                     } else {
                         HStack(spacing: 5) {
-                            if let attType = reply.attachmentType {
-                                Image(systemName: BubbleQuotedReply.replyAttachmentIcon(attType))
+                            let attachmentKind = BubbleQuotedReply.resolveAttachmentKind(reply.attachmentType)
+                            if let kind = attachmentKind {
+                                Image(systemName: kind.sfSymbolName)
                                     .font(.system(size: 10, weight: .medium))
                                     .foregroundColor(previewColor)
                             }
 
+                            // Empty preview text + attachment → use the kind's
+                            // localized short label ("Photo", "Vidéo", ...)
+                            // instead of the hardcoded "Media" fallback that
+                            // surfaced before the AttachmentKind plumbing fix.
+                            let fallback = attachmentKind?.shortLabel ?? String(localized: "bubble.reply.media", defaultValue: "Media", bundle: .main)
                             MessageTextRenderer.render(
-                                reply.previewText.isEmpty ? "Media" : reply.previewText,
+                                reply.previewText.isEmpty ? fallback : reply.previewText,
                                 fontSize: 12, color: previewColor,
                                 mentionColor: mentionTint, accentColor: previewColor,
                                 mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
@@ -130,26 +147,41 @@ struct BubbleQuotedReply: View, Equatable {
             .padding(.trailing, 10)
         }
         .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(bgColor)
-        )
-        .padding(.horizontal, 6)
-        .padding(.top, 6)
         .contentShape(Rectangle())
+
+        switch style {
+        case .card:
+            contentBody
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(bgColor)
+                )
+                .padding(.horizontal, 6)
+                .padding(.top, 6)
+        case .inline:
+            contentBody
+        }
     }
 
-    // MARK: - Attachment icon helper (was: replyAttachmentIcon)
+    // MARK: - Attachment kind resolution
 
-    static func replyAttachmentIcon(_ type: String) -> String {
-        switch type {
-        case "image": return "photo"
-        case "video": return "video"
-        case "audio": return "waveform"
-        case "file": return "doc"
-        case "location": return "mappin"
-        default: return "paperclip"
-        }
+    /// Decodes `ReplyReference.attachmentType` to the canonical
+    /// `AttachmentKind` (single source of truth — see
+    /// `AttachmentKind.swift`).
+    ///
+    /// Two-step fallback for forward-compat with any cached payload that
+    /// still carries the raw MIME (`"image/jpeg"`) instead of the short
+    /// kind rawValue (`"image"`):
+    ///   1. try `AttachmentKind(rawValue:)` — new payloads
+    ///   2. fall back to `AttachmentKind(mimeType:)` — legacy / cached
+    ///
+    /// Returns `nil` only when the input is `nil`. Unknown values still
+    /// resolve to `.other` (paperclip + "Fichier") so the UI never shows
+    /// an unlabeled glyph.
+    static func resolveAttachmentKind(_ type: String?) -> AttachmentKind? {
+        guard let type, !type.isEmpty else { return nil }
+        if let exact = AttachmentKind(rawValue: type) { return exact }
+        return AttachmentKind(mimeType: type)
     }
 }
 
@@ -190,7 +222,7 @@ struct BubbleStoryReplyPreview: View, Equatable {
             Image(systemName: "camera.fill")
                 .font(.system(size: 9, weight: .medium))
                 .foregroundColor(previewColor)
-            Text("Story")
+            Text(String(localized: "bubble.reply.story", defaultValue: "Story", bundle: .main))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(previewColor)
 

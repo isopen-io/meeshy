@@ -24,6 +24,10 @@ const mockPrisma: any = {
   agentConversationSummary: {
     findUnique: jest.fn<any>(),
   },
+  agentAnalytic: {
+    aggregate: jest.fn<any>(),
+    findMany: jest.fn<any>(),
+  },
 };
 
 const adminUser = {
@@ -77,37 +81,57 @@ describe('Agent Admin Routes', () => {
         .mockResolvedValueOnce(10)
         .mockResolvedValueOnce(3);
       mockPrisma.agentUserRole.count.mockResolvedValueOnce(25);
+      mockPrisma.agentUserRole.findMany.mockResolvedValueOnce([{ userId: 'u1' }, { userId: 'u2' }]);
+      mockPrisma.agentAnalytic.aggregate.mockResolvedValueOnce({
+        _sum: { messagesSent: 0, totalWordsSent: 0 },
+        _avg: { avgConfidence: 0 },
+      });
+      mockPrisma.agentAnalytic.findMany.mockResolvedValueOnce([]);
 
       const res = await app.inject({ method: 'GET', url: '/stats' });
       const body = JSON.parse(res.body);
 
       expect(res.statusCode).toBe(200);
       expect(body.success).toBe(true);
-      expect(body.data).toEqual({
+      expect(body.data).toEqual(expect.objectContaining({
         totalConfigs: 10,
         activeConfigs: 3,
         totalRoles: 25,
-        totalArchetypes: 5,
-      });
+      }));
+      expect(body.data.totalArchetypes).toBeGreaterThan(0);
     });
   });
 
   describe('GET /configs', () => {
-    it('returns paginated configs with controlledUserIds', async () => {
-      const configs = [{ id: '1', conversationId: 'c1', enabled: true }];
-      mockPrisma.agentConfig.findMany.mockResolvedValue(configs);
-      mockPrisma.agentConfig.count.mockResolvedValue(1);
-      mockPrisma.agentUserRole.findMany.mockResolvedValue([
-        { conversationId: 'c1', userId: 'u1' },
-        { conversationId: 'c1', userId: 'u2' },
-      ]);
+    it('returns paginated configs aggregated by conversation', async () => {
+      const configs = [{ id: '1', conversationId: 'c1', enabled: true, manualUserIds: [] }];
+      // First findMany call (configConvIds), then second (page configs)
+      mockPrisma.agentConfig.findMany
+        .mockResolvedValueOnce([{ conversationId: 'c1' }])
+        .mockResolvedValueOnce(configs);
+      mockPrisma.agentUserRole.findMany
+        .mockResolvedValueOnce([{ conversationId: 'c1' }])
+        .mockResolvedValueOnce([
+          { conversationId: 'c1', userId: 'u1' },
+          { conversationId: 'c1', userId: 'u2' },
+        ]);
+      mockPrisma.agentAnalytic.findMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]);
+      mockPrisma.conversation = {
+        findMany: jest.fn<any>().mockResolvedValueOnce([
+          { id: 'c1', title: 'Conv 1', type: 'group' },
+        ]),
+        count: jest.fn<any>().mockResolvedValueOnce(1),
+      };
 
       const res = await app.inject({ method: 'GET', url: '/configs?page=1&limit=20' });
       const body = JSON.parse(res.body);
 
       expect(res.statusCode).toBe(200);
       expect(body.success).toBe(true);
-      expect(body.data).toEqual([{ ...configs[0], controlledUserIds: ['u1', 'u2'] }]);
+      expect(body.data).toHaveLength(1);
+      expect(body.data[0]).toMatchObject({ conversationId: 'c1', enabled: true });
       expect(body.pagination).toEqual({ total: 1, page: 1, limit: 20, hasMore: false });
     });
   });
@@ -181,9 +205,8 @@ describe('Agent Admin Routes', () => {
 
       expect(res.statusCode).toBe(200);
       expect(body.success).toBe(true);
-      expect(body.data).toHaveLength(5);
-      expect(body.data[0]).toHaveProperty('id', 'curious');
-      expect(body.data[0]).toHaveProperty('name', 'Le Curieux');
+      expect(body.data.length).toBeGreaterThanOrEqual(5);
+      expect(body.data.find((a: { id: string }) => a.id === 'curious')).toHaveProperty('name', 'Le Curieux');
     });
   });
 

@@ -132,6 +132,29 @@ struct BubbleContent: Equatable {
         return hasText || hasNonMedia
     }
 
+    /// Routing pur : un audio seul en reply héberge sa citation dans le widget
+    /// audio (topSlot), pas de chat bubble parasite. True iff `reply != nil`,
+    /// not emoji-only, no text/non-media content, et `.audio` attachments.
+    /// Spec : `docs/superpowers/specs/2026-05-20-ios-reply-no-bubble-around-media-design.md` §4.4
+    var audioHostsReply: Bool {
+        guard reply != nil, !isEmojiOnly else { return false }
+        guard !hasTextOrNonMediaContent else { return false }
+        if case .audio = attachments { return true }
+        return false
+    }
+
+    /// Routing pur : un visual-grid seul en reply rend la citation et la grille
+    /// dans un conteneur unifié bordé, pas de chat bubble séparée. True iff
+    /// `reply != nil`, not emoji-only, no text/non-media content, et
+    /// `.visualGrid` attachments.
+    /// Spec : `docs/superpowers/specs/2026-05-20-ios-reply-no-bubble-around-media-design.md` §4.4
+    var visualHostsReply: Bool {
+        guard reply != nil, !isEmojiOnly else { return false }
+        guard !hasTextOrNonMediaContent else { return false }
+        if case .visualGrid = attachments { return true }
+        return false
+    }
+
     static func == (lhs: BubbleContent, rhs: BubbleContent) -> Bool {
         lhs.messageId == rhs.messageId
             && lhs.kind == rhs.kind

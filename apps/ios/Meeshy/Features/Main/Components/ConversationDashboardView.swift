@@ -86,7 +86,7 @@ struct ConversationDashboardView: View {
     private func heroHealthCard(_ analysis: ConversationAnalysis) -> some View {
         if let summary = analysis.summary {
             sectionCard {
-                sectionHeader(icon: "brain.head.profile.fill", title: "Analyse IA")
+                sectionHeader(icon: "brain.head.profile.fill", title: String(localized: "dashboard.section.ai-analysis", defaultValue: "Analyse IA", bundle: .main))
 
                 if let health = summary.healthScore {
                     VStack(spacing: 4) {
@@ -97,7 +97,7 @@ struct ConversationDashboardView: View {
                         )
                         .frame(height: 100)
 
-                        Text("Sante")
+                        Text(String(localized: "dashboard.health", defaultValue: "Sante", bundle: .main))
                             .font(.system(size: 11, weight: .heavy, design: .rounded))
                             .foregroundColor(theme.textMuted)
                             .tracking(1.0)
@@ -183,7 +183,7 @@ struct ConversationDashboardView: View {
                         Image(systemName: "theatermasks.fill")
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundColor(accent)
-                        Text("Ton : \(summary.overallTone)")
+                        Text(String(format: String(localized: "dashboard.tone", defaultValue: "Ton : %@", bundle: .main), summary.overallTone))
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(theme.textPrimary)
                     }
@@ -219,7 +219,7 @@ struct ConversationDashboardView: View {
 
     private var statsRingsSection: some View {
         sectionCard {
-            sectionHeader(icon: "chart.bar.fill", title: "Statistiques")
+            sectionHeader(icon: "chart.bar.fill", title: String(localized: "dashboard.section.statistics", defaultValue: "Statistiques", bundle: .main))
 
             let maxMsg = max(effectiveTotalMessages, 1)
             let maxWords = max(effectiveTotalWords, 1)
@@ -229,7 +229,7 @@ struct ConversationDashboardView: View {
                 StatRing(
                     value: effectiveTotalMessages,
                     maxValue: maxMsg,
-                    label: "Messages",
+                    label: String(localized: "dashboard.stat.messages", defaultValue: "Messages", bundle: .main),
                     accent: accent,
                     textColor: theme.textPrimary,
                     mutedColor: theme.textMuted,
@@ -238,7 +238,7 @@ struct ConversationDashboardView: View {
                 StatRing(
                     value: effectiveTotalWords,
                     maxValue: maxWords,
-                    label: "Mots",
+                    label: String(localized: "dashboard.stat.words", defaultValue: "Mots", bundle: .main),
                     accent: accent,
                     textColor: theme.textPrimary,
                     mutedColor: theme.textMuted,
@@ -247,7 +247,7 @@ struct ConversationDashboardView: View {
                 StatRing(
                     value: effectiveImageCount,
                     maxValue: mediaMax,
-                    label: "Photos",
+                    label: String(localized: "dashboard.stat.photos", defaultValue: "Photos", bundle: .main),
                     accent: accent,
                     textColor: theme.textPrimary,
                     mutedColor: theme.textMuted,
@@ -259,7 +259,7 @@ struct ConversationDashboardView: View {
                 StatRing(
                     value: effectiveAudioCount,
                     maxValue: mediaMax,
-                    label: "Audio",
+                    label: String(localized: "dashboard.stat.audio", defaultValue: "Audio", bundle: .main),
                     accent: accent,
                     textColor: theme.textPrimary,
                     mutedColor: theme.textMuted,
@@ -268,7 +268,7 @@ struct ConversationDashboardView: View {
                 StatRing(
                     value: effectiveVideoCount,
                     maxValue: mediaMax,
-                    label: "Videos",
+                    label: String(localized: "dashboard.stat.videos", defaultValue: "Videos", bundle: .main),
                     accent: accent,
                     textColor: theme.textPrimary,
                     mutedColor: theme.textMuted,
@@ -277,7 +277,7 @@ struct ConversationDashboardView: View {
                 StatRing(
                     value: effectiveLinkCount,
                     maxValue: mediaMax,
-                    label: "Liens",
+                    label: String(localized: "dashboard.stat.links", defaultValue: "Liens", bundle: .main),
                     accent: accent,
                     textColor: theme.textPrimary,
                     mutedColor: theme.textMuted,
@@ -290,7 +290,7 @@ struct ConversationDashboardView: View {
                     StatRing(
                         value: effectiveDocCount,
                         maxValue: mediaMax,
-                        label: "Documents",
+                        label: String(localized: "dashboard.stat.documents", defaultValue: "Documents", bundle: .main),
                         accent: accent,
                         textColor: theme.textPrimary,
                         mutedColor: theme.textMuted,
@@ -308,7 +308,7 @@ struct ConversationDashboardView: View {
     private var activityChartSection: some View {
         sectionCard {
             HStack {
-                sectionHeader(icon: "chart.line.uptrend.xyaxis", title: "Activite")
+                sectionHeader(icon: "chart.line.uptrend.xyaxis", title: String(localized: "dashboard.section.activity", defaultValue: "Activite", bundle: .main))
                 Spacer()
                 periodPicker
             }
@@ -404,7 +404,7 @@ struct ConversationDashboardView: View {
             Image(systemName: "chart.line.uptrend.xyaxis")
                 .font(.system(size: 24, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.3))
-            Text("Pas assez de donnees")
+            Text(String(localized: "dashboard.activity.empty", defaultValue: "Pas assez de donnees", bundle: .main))
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
@@ -416,7 +416,7 @@ struct ConversationDashboardView: View {
 
     private func agentParticipantProfilesSection(_ profiles: [ParticipantProfile]) -> some View {
         sectionCard {
-            sectionHeader(icon: "brain.fill", title: "Profils participants")
+            sectionHeader(icon: "brain.fill", title: String(localized: "dashboard.section.participant-profiles", defaultValue: "Profils participants", bundle: .main))
 
             ForEach(profiles) { profile in
                 VStack(alignment: .leading, spacing: 10) {
@@ -540,25 +540,25 @@ struct ConversationDashboardView: View {
             if let comm = traits.communication {
                 let scores = extractTraitScores(from: comm)
                 if !scores.isEmpty {
-                    traitBarCategory("Communication", traits: scores)
+                    traitBarCategory(String(localized: "dashboard.trait.communication", defaultValue: "Communication", bundle: .main), traits: scores)
                 }
             }
             if let pers = traits.personality {
                 let scores = extractTraitScores(from: pers)
                 if !scores.isEmpty {
-                    traitBarCategory("Personnalite", traits: scores)
+                    traitBarCategory(String(localized: "dashboard.trait.personality", defaultValue: "Personnalite", bundle: .main), traits: scores)
                 }
             }
             if let inter = traits.interpersonal {
                 let scores = extractTraitScores(from: inter)
                 if !scores.isEmpty {
-                    traitBarCategory("Interpersonnel", traits: scores)
+                    traitBarCategory(String(localized: "dashboard.trait.interpersonal", defaultValue: "Interpersonnel", bundle: .main), traits: scores)
                 }
             }
             if let emot = traits.emotional {
                 let scores = extractTraitScores(from: emot)
                 if !scores.isEmpty {
-                    traitBarCategory("Emotionnel", traits: scores)
+                    traitBarCategory(String(localized: "dashboard.trait.emotional", defaultValue: "Emotionnel", bundle: .main), traits: scores)
                 }
             }
         }
@@ -617,7 +617,7 @@ struct ConversationDashboardView: View {
 
     private var participantBreakdownSection: some View {
         sectionCard {
-            sectionHeader(icon: "person.2.fill", title: "Activite par participant")
+            sectionHeader(icon: "person.2.fill", title: String(localized: "dashboard.section.participant-activity", defaultValue: "Activite par participant", bundle: .main))
 
             let stats = participantStats.prefix(10)
             let maxCount = stats.first?.messageCount ?? 1
@@ -641,7 +641,7 @@ struct ConversationDashboardView: View {
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(1)
-                        Text("\(formatNumber(stat.wordCount)) mots")
+                        Text(String(format: String(localized: "dashboard.words-count", defaultValue: "%@ mots", bundle: .main), formatNumber(stat.wordCount)))
                             .font(.system(size: 10, weight: .medium))
                             .foregroundColor(theme.textMuted)
                     }
@@ -678,26 +678,26 @@ struct ConversationDashboardView: View {
         let analysis = sentimentAnalysis
         if analysis.total > 0 {
             sectionCard {
-                sectionHeader(icon: "face.smiling", title: "Sentiment")
+                sectionHeader(icon: "face.smiling", title: String(localized: "dashboard.section.sentiment", defaultValue: "Sentiment", bundle: .main))
 
                 HStack(spacing: 0) {
                     sentimentSegment(
                         emoji: "\u{1F604}",
-                        label: "Positif",
+                        label: String(localized: "dashboard.sentiment.positive", defaultValue: "Positif", bundle: .main),
                         count: analysis.positive,
                         total: analysis.total,
                         color: Color(hex: "34D399")
                     )
                     sentimentSegment(
                         emoji: "\u{1F610}",
-                        label: "Neutre",
+                        label: String(localized: "dashboard.sentiment.neutral", defaultValue: "Neutre", bundle: .main),
                         count: analysis.neutral,
                         total: analysis.total,
                         color: Color(hex: "FBBF24")
                     )
                     sentimentSegment(
                         emoji: "\u{1F614}",
-                        label: "Negatif",
+                        label: String(localized: "dashboard.sentiment.negative", defaultValue: "Negatif", bundle: .main),
                         count: analysis.negative,
                         total: analysis.total,
                         color: Color(hex: "F87171")
@@ -768,7 +768,7 @@ struct ConversationDashboardView: View {
         if !types.isEmpty {
             let maxCount = types.map(\.count).max() ?? 1
             sectionCard {
-                sectionHeader(icon: "square.grid.2x2.fill", title: "Types de contenu")
+                sectionHeader(icon: "square.grid.2x2.fill", title: String(localized: "dashboard.section.content-types", defaultValue: "Types de contenu", bundle: .main))
 
                 ForEach(types, id: \.type) { stat in
                     HStack(spacing: 10) {
@@ -1108,11 +1108,11 @@ struct ConversationDashboardView: View {
         }
 
         return [
-            ContentTypeStat(type: "Texte", icon: "text.bubble.fill", color: accentColor, count: textOnly),
-            ContentTypeStat(type: "Photos", icon: "photo.fill", color: "34D399", count: images),
-            ContentTypeStat(type: "Audio", icon: "waveform", color: "818CF8", count: audio),
-            ContentTypeStat(type: "Videos", icon: "video.fill", color: "F87171", count: videos),
-            ContentTypeStat(type: "Fichiers", icon: "doc.fill", color: "FBBF24", count: files),
+            ContentTypeStat(type: String(localized: "dashboard.content.text", defaultValue: "Texte", bundle: .main), icon: "text.bubble.fill", color: accentColor, count: textOnly),
+            ContentTypeStat(type: String(localized: "dashboard.stat.photos", defaultValue: "Photos", bundle: .main), icon: "photo.fill", color: "34D399", count: images),
+            ContentTypeStat(type: String(localized: "dashboard.stat.audio", defaultValue: "Audio", bundle: .main), icon: "waveform", color: "818CF8", count: audio),
+            ContentTypeStat(type: String(localized: "dashboard.stat.videos", defaultValue: "Videos", bundle: .main), icon: "video.fill", color: "F87171", count: videos),
+            ContentTypeStat(type: String(localized: "dashboard.content.files", defaultValue: "Fichiers", bundle: .main), icon: "doc.fill", color: "FBBF24", count: files),
         ].filter { $0.count > 0 }
     }
 

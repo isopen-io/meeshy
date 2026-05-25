@@ -205,7 +205,12 @@ describe('NotificationService — message push title/body', () => {
       });
     });
 
-    it('test_createMessageNotification_group_titleIsSenderNamePipeConversationName', async () => {
+    it('test_createMessageNotification_group_titleIsSenderName_subtitleIsConversation', async () => {
+      // Previously the title was "<sender> | <conversation>" but iOS
+      // Communication Notifications (INSendMessageIntent.donate) clobbered
+      // the concatenated form. The gateway now sends the sender as title
+      // and the conversation name as a separate APN-native `subtitle`,
+      // which iOS preserves and renders between title and body.
       (prisma.user.findUnique as jest.Mock).mockResolvedValue({
         username: 'alice',
         displayName: 'Alice Martin',
@@ -220,7 +225,9 @@ describe('NotificationService — message push title/body', () => {
         messagePreview: 'On démarre le sprint demain',
       });
 
-      expect(lastPushPayload().title).toBe('Alice Martin | Équipe Dev');
+      const payload = lastPushPayload();
+      expect(payload.title).toBe('Alice Martin');
+      expect((payload as { subtitle?: string }).subtitle).toBe('Équipe Dev');
     });
 
     it('test_createMessageNotification_group_bodyHasNoSenderNamePrefix', async () => {
@@ -258,7 +265,9 @@ describe('NotificationService — message push title/body', () => {
         messagePreview: 'On démarre le sprint demain',
       });
 
-      expect(lastPushPayload().title).toBe('alice | Équipe Dev');
+      const payload = lastPushPayload();
+      expect(payload.title).toBe('alice');
+      expect((payload as { subtitle?: string }).subtitle).toBe('Équipe Dev');
     });
   });
 
@@ -344,7 +353,9 @@ describe('NotificationService — message push title/body', () => {
       await sendWith({
         messagePreview: '',
         attachments: [{ type: 'audio', filename: 'voice.m4a' }],
-        firstAttachmentDuration: 34,
+        // `duration` est en MILLISECONDES (cf. schema.prisma) — 34000 ms = 0:34.
+        // Régression corrigée : un `* 1000` parasite affichait 566:40 pour 34 s.
+        firstAttachmentDuration: 34000,
       });
 
       expect(lastPushPayload().body).toBe('🎵 Audio · 0:34');
@@ -363,7 +374,7 @@ describe('NotificationService — message push title/body', () => {
       expect(lastPushPayload().body).toBe('Les fichiers 📎 2 fichiers');
     });
 
-    it('test_body_group_titleStillSenderPipeConversation_withBadges', async () => {
+    it('test_body_group_titleIsSenderName_subtitleIsConversation_withBadges', async () => {
       (prisma.conversation.findUnique as jest.Mock).mockResolvedValue({
         title: 'Équipe Dev',
         type: 'group',
@@ -378,7 +389,8 @@ describe('NotificationService — message push title/body', () => {
       });
 
       const payload = lastPushPayload();
-      expect(payload.title).toBe('Alice Martin | Équipe Dev');
+      expect(payload.title).toBe('Alice Martin');
+      expect((payload as { subtitle?: string }).subtitle).toBe('Équipe Dev');
       expect(payload.body).toBe('Sprint +1🎬');
     });
   });

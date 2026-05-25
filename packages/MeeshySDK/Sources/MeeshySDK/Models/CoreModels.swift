@@ -107,8 +107,37 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public let createdAt: Date
     public var updatedAt: Date
 
-    public var unreadCount: Int = 0
+    /// Per-user state (read state, preferences, organization, sync meta).
+    ///
+    /// Source of truth for the legacy inline flags (`isPinned`, `isMuted`,
+    /// `mentionsOnly`, `isArchivedByUser`, `customName`, `reaction`,
+    /// `sectionId`, `unreadCount`) — those are now deprecated computed
+    /// proxies into this struct. Wire format stays flat: each field
+    /// continues to appear as a top-level key in conversation JSON. See
+    /// the custom `init(from:)` / `encode(to:)` below.
+    public var userState: ConversationUserState
+
     public var lastMessagePreview: String?
+    /// B1 (Prisme Linguistique) — `[targetLanguage: translatedContent]`
+    /// pairs for the last message, bundled at the conversation level so
+    /// the list row can resolve the preview in the viewer's preferred
+    /// language without a per-row GRDB lookup.
+    ///
+    /// Currently populated by the in-memory message cache attach path
+    /// (see `ConversationListViewModel.attachLastMessageTranslations`).
+    /// When the gateway starts shipping these in `/conversations` it will
+    /// be wired through the API → domain converter; until then the field
+    /// stays `nil` and the list falls back to the raw `lastMessagePreview`.
+    ///
+    /// `[String: String]` (not `[APITextTranslation]`) is intentional:
+    /// `APITextTranslation` is `Decodable`-only, but `MeeshyConversation`
+    /// must stay `Codable` for the cache round-trip. Language codes are
+    /// stored lower-cased to make resolution case-insensitive.
+    public var lastMessageTranslations: [String: String]? = nil
+    /// B1 — original language of the last message. Combined with
+    /// `lastMessageTranslations` and the viewer's preferred languages by
+    /// `resolvedLastMessagePreview` to apply the Prisme Linguistique.
+    public var lastMessageOriginalLanguage: String? = nil
     public var lastMessageAttachments: [MeeshyMessageAttachment] = []
     public var lastMessageAttachmentCount: Int = 0
     public var lastMessageId: String? = nil
@@ -117,6 +146,9 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public var lastMessageIsViewOnce: Bool = false
     public var lastMessageExpiresAt: Date? = nil
     public var recentMessages: [RecentMessagePreview] = []
+    /// Display-layer tags (separate concept from `userState.tags`, which
+    /// is the wire-format `String[]` from `UserConversationPreferences`).
+    /// Phase 6/7 will reconcile these into a single source.
     public var tags: [MeeshyConversationTag] = []
 
     public var isAnnouncementChannel: Bool = false
@@ -124,12 +156,6 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public var slowModeSeconds: Int? = nil
     public var autoTranslateEnabled: Bool? = nil
 
-    public var isPinned: Bool = false
-    public var sectionId: String? = nil
-    public var isMuted: Bool = false
-    public var mentionsOnly: Bool = false
-    public var isArchivedByUser: Bool = false
-    public var customName: String? = nil
     public var participantUserId: String? = nil
     public var participantUsername: String? = nil
     public var participantAvatarURL: String? = nil
@@ -140,10 +166,64 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
 
     public var currentUserRole: String? = nil
     public var currentUserJoinedAt: Date? = nil
-    public var reaction: String? = nil
 
     public var language: ConversationContext.ConversationLanguage = .french
     public var theme: ConversationContext.ConversationTheme = .general
+
+    // MARK: - Deprecated per-user shims
+    //
+    // These computed properties forward to `userState`. They preserve the
+    // existing API surface (call sites read/write `conv.isPinned`,
+    // `conv.unreadCount`, etc.) while the storage moves into the unified
+    // struct. Phase 8 removes them along with their call sites.
+
+    @available(*, deprecated, message: "Use `userState.unreadCount` instead.")
+    public var unreadCount: Int {
+        get { userState.unreadCount }
+        set { userState.unreadCount = newValue }
+    }
+
+    @available(*, deprecated, message: "Use `userState.isPinned` instead.")
+    public var isPinned: Bool {
+        get { userState.isPinned }
+        set { userState.isPinned = newValue }
+    }
+
+    @available(*, deprecated, message: "Use `userState.sectionId` instead.")
+    public var sectionId: String? {
+        get { userState.sectionId }
+        set { userState.sectionId = newValue }
+    }
+
+    @available(*, deprecated, message: "Use `userState.isMuted` instead.")
+    public var isMuted: Bool {
+        get { userState.isMuted }
+        set { userState.isMuted = newValue }
+    }
+
+    @available(*, deprecated, message: "Use `userState.mentionsOnly` instead.")
+    public var mentionsOnly: Bool {
+        get { userState.mentionsOnly }
+        set { userState.mentionsOnly = newValue }
+    }
+
+    @available(*, deprecated, message: "Use `userState.isArchived` instead.")
+    public var isArchivedByUser: Bool {
+        get { userState.isArchived }
+        set { userState.isArchived = newValue }
+    }
+
+    @available(*, deprecated, message: "Use `userState.customName` instead.")
+    public var customName: String? {
+        get { userState.customName }
+        set { userState.customName = newValue }
+    }
+
+    @available(*, deprecated, message: "Use `userState.reaction` instead.")
+    public var reaction: String? {
+        get { userState.reaction }
+        set { userState.reaction = newValue }
+    }
 
     public enum ConversationType: String, Codable, CaseIterable, Sendable {
         case direct, group, `public`, global, community, channel, bot, broadcast
@@ -153,7 +233,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
 
     public var accentColor: String { colorPalette.primary }
     public var name: String { title ?? identifier }
-    public var displayName: String { customName ?? title ?? identifier }
+    public var displayName: String { userState.customName ?? title ?? identifier }
     public var isArchived: Bool { !isActive }
 
     public var lastSeenText: String? {
@@ -165,12 +245,51 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         return "Vu il y a \(Int(interval / 86400))j"
     }
 
+    /// B1 — applies the Prisme Linguistique to `lastMessagePreview`.
+    ///
+    /// Resolution mirrors `resolveUserLanguage` in
+    /// `packages/shared/utils/conversation-helpers.ts`:
+    ///
+    /// 1. Walk the viewer's preferred languages in order.
+    /// 2. Return the first matching translation found in
+    ///    `lastMessageTranslations`.
+    /// 3. If no preferred language matches, return the original
+    ///    `lastMessagePreview` (which is the message in its source
+    ///    language).
+    ///
+    /// **Critical Prisme rule**: never fall back to `translations.first`.
+    /// The absence of a preferred-language translation means the content
+    /// is already in that language OR no translation has been generated —
+    /// surfacing an unrelated language would be worse than the original.
+    ///
+    /// `preferredLanguages` must be ordered: systemLanguage first, then
+    /// regionalLanguage, then customDestinationLanguage. Empty/nil entries
+    /// are tolerated and skipped.
+    public func resolvedLastMessagePreview(preferredLanguages: [String]) -> String? {
+        guard let translations = lastMessageTranslations, !translations.isEmpty else {
+            return lastMessagePreview
+        }
+        let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
+        // If the message is already in one of the preferred languages, the
+        // raw preview is canonical — no translation needed.
+        if let original = lastMessageOriginalLanguage?.lowercased(),
+           preferred.contains(original) {
+            return lastMessagePreview
+        }
+        for lang in preferred {
+            if let translated = translations[lang] {
+                return translated
+            }
+        }
+        return lastMessagePreview
+    }
+
     /// Hash des champs visuels — utilisé dans ThemedConversationRow.== pour détecter les changements de contenu.
     /// Mettre à jour ce hash quand un nouveau champ est affiché dans ThemedConversationRow.
     public var renderFingerprint: Int {
         var h = Hasher()
         h.combine(lastMessagePreview)
-        h.combine(unreadCount)
+        h.combine(userState.unreadCount)
         h.combine(lastMessageAt)
         h.combine(lastMessageSenderName)
         h.combine(lastMessageAttachmentCount)
@@ -178,17 +297,26 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         h.combine(lastMessageIsBlurred)
         h.combine(lastMessageIsViewOnce)
         h.combine(lastMessageExpiresAt)
+        // B1 — make the row re-render when a fresh translation arrives.
+        if let translations = lastMessageTranslations {
+            h.combine(translations.keys.sorted().joined(separator: ","))
+        }
+        h.combine(lastMessageOriginalLanguage)
         h.combine(name)
-        h.combine(isMuted)
-        h.combine(isPinned)
-        h.combine(isArchivedByUser)
-        h.combine(mentionsOnly)
-        h.combine(customName)
+        h.combine(userState.isMuted)
+        h.combine(userState.isPinned)
+        h.combine(userState.isArchived)
+        h.combine(userState.mentionsOnly)
+        h.combine(userState.customName)
         h.combine(avatar)
         h.combine(participantUsername)
         h.combine(participantAvatarURL)
         h.combine(tags)
-        h.combine(reaction)
+        h.combine(userState.reaction)
+        // New userState fields surfaced to the row (locked, draft, pending sync).
+        h.combine(userState.isLocked)
+        h.combine(userState.hasDraft)
+        h.combine(userState.hasPendingSync)
         return h.finalize()
     }
 
@@ -229,7 +357,8 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
                 currentUserRole: String? = nil, currentUserJoinedAt: Date? = nil, reaction: String? = nil,
                 language: ConversationContext.ConversationLanguage = .french,
                 theme: ConversationContext.ConversationTheme = .general,
-                colorPalette: ConversationColorPalette? = nil) {
+                colorPalette: ConversationColorPalette? = nil,
+                userState: ConversationUserState? = nil) {
         self.id = id; self.identifier = identifier; self.type = type
         self.title = title; self.description = description; self.avatar = avatar; self.avatarThumbHash = avatarThumbHash; self.banner = banner; self.bannerThumbHash = bannerThumbHash
         self.communityId = communityId; self.isActive = isActive; self.memberCount = memberCount
@@ -237,12 +366,10 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.createdAt = createdAt; self.updatedAt = updatedAt
         self.isAnnouncementChannel = isAnnouncementChannel
         self.defaultWriteRole = defaultWriteRole; self.slowModeSeconds = slowModeSeconds; self.autoTranslateEnabled = autoTranslateEnabled
-        self.isPinned = isPinned; self.sectionId = sectionId; self.isMuted = isMuted
-        self.mentionsOnly = mentionsOnly; self.isArchivedByUser = isArchivedByUser; self.customName = customName
         self.participantUserId = participantUserId; self.participantUsername = participantUsername; self.participantAvatarURL = participantAvatarURL; self.lastSeenAt = lastSeenAt
         self.closedAt = closedAt; self.closedBy = closedBy
-        self.currentUserRole = currentUserRole; self.currentUserJoinedAt = currentUserJoinedAt; self.reaction = reaction
-        self.unreadCount = unreadCount; self.lastMessagePreview = lastMessagePreview
+        self.currentUserRole = currentUserRole; self.currentUserJoinedAt = currentUserJoinedAt
+        self.lastMessagePreview = lastMessagePreview
         self.lastMessageAttachments = lastMessageAttachments
         self.lastMessageAttachmentCount = lastMessageAttachmentCount
         self.lastMessageId = lastMessageId
@@ -257,10 +384,220 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
             type: type, title: title, identifier: identifier,
             language: language, theme: theme, memberCount: memberCount
         )
+        // Build userState from either the explicit parameter (preferred,
+        // used by Phase 4+ code) or from the legacy inline params for
+        // backward compatibility with all current call sites.
+        self.userState = userState ?? ConversationUserState(
+            unreadCount: unreadCount,
+            isPinned: isPinned,
+            isMuted: isMuted,
+            mentionsOnly: mentionsOnly,
+            isArchived: isArchivedByUser,
+            customName: customName,
+            reaction: reaction,
+            sectionId: sectionId
+        )
     }
 
     public func hash(into hasher: inout Hasher) { hasher.combine(id) }
     public static func == (lhs: MeeshyConversation, rhs: MeeshyConversation) -> Bool { lhs.id == rhs.id }
+
+    // MARK: - Codable
+    //
+    // Custom Codable preserves the wire format: every `userState` field
+    // appears as a top-level key (`isPinned`, `isMuted`, `unreadCount`,
+    // ...) for backward compatibility with `/conversations` responses,
+    // the GRDB cache rows, and the iOS samples in `SampleData.swift`.
+    // New userState fields (lastReadAt, version, deletedForUserAt,
+    // clearHistoryBefore, orderInCategory, tagsLite, lastSyncedAt,
+    // pendingMutationCount, isLocked, hasDraft, draftPreview) become new
+    // top-level keys, optional on decode with sensible defaults.
+
+    private enum CodingKeys: String, CodingKey {
+        // Conversation-level
+        case id, identifier, type, title, description, avatar, avatarThumbHash, banner, bannerThumbHash
+        case communityId, isActive, memberCount, lastMessageAt, encryptionMode, createdAt, updatedAt
+        case lastMessagePreview, lastMessageTranslations, lastMessageOriginalLanguage
+        case lastMessageAttachments, lastMessageAttachmentCount, lastMessageId
+        case lastMessageSenderName, lastMessageIsBlurred, lastMessageIsViewOnce, lastMessageExpiresAt
+        case recentMessages, tags
+        case isAnnouncementChannel, defaultWriteRole, slowModeSeconds, autoTranslateEnabled
+        case participantUserId, participantUsername, participantAvatarURL, lastSeenAt
+        case closedAt, closedBy, currentUserRole, currentUserJoinedAt
+        case language, theme, colorPalette
+
+        // Per-user (flat) — legacy wire keys
+        case unreadCount, isPinned, isMuted, mentionsOnly, customName, reaction
+        case sectionId
+        case isArchivedByUser
+
+        // New per-user wire keys (introduced in Phase 2)
+        case lastReadAt, lastDeliveredAt
+        case deletedForUserAt, clearHistoryBefore
+        case orderInCategory
+        case userStateTags
+        case version, lastSyncedAt, pendingMutationCount
+        case isLocked, hasDraft, draftPreview
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(String.self, forKey: .id)
+        self.identifier = try c.decode(String.self, forKey: .identifier)
+        self.type = try c.decode(ConversationType.self, forKey: .type)
+        self.title = try c.decodeIfPresent(String.self, forKey: .title)
+        self.description = try c.decodeIfPresent(String.self, forKey: .description)
+        self.avatar = try c.decodeIfPresent(String.self, forKey: .avatar)
+        self.avatarThumbHash = try c.decodeIfPresent(String.self, forKey: .avatarThumbHash)
+        self.banner = try c.decodeIfPresent(String.self, forKey: .banner)
+        self.bannerThumbHash = try c.decodeIfPresent(String.self, forKey: .bannerThumbHash)
+        self.communityId = try c.decodeIfPresent(String.self, forKey: .communityId)
+        self.isActive = try c.decodeIfPresent(Bool.self, forKey: .isActive) ?? true
+        self.memberCount = try c.decodeIfPresent(Int.self, forKey: .memberCount) ?? 0
+        self.lastMessageAt = try c.decode(Date.self, forKey: .lastMessageAt)
+        self.encryptionMode = try c.decodeIfPresent(String.self, forKey: .encryptionMode)
+        self.createdAt = try c.decode(Date.self, forKey: .createdAt)
+        self.updatedAt = try c.decode(Date.self, forKey: .updatedAt)
+
+        self.lastMessagePreview = try c.decodeIfPresent(String.self, forKey: .lastMessagePreview)
+        self.lastMessageTranslations = try c.decodeIfPresent([String: String].self, forKey: .lastMessageTranslations)
+        self.lastMessageOriginalLanguage = try c.decodeIfPresent(String.self, forKey: .lastMessageOriginalLanguage)
+        self.lastMessageAttachments = try c.decodeIfPresent([MeeshyMessageAttachment].self, forKey: .lastMessageAttachments) ?? []
+        self.lastMessageAttachmentCount = try c.decodeIfPresent(Int.self, forKey: .lastMessageAttachmentCount) ?? 0
+        self.lastMessageId = try c.decodeIfPresent(String.self, forKey: .lastMessageId)
+        self.lastMessageSenderName = try c.decodeIfPresent(String.self, forKey: .lastMessageSenderName)
+        self.lastMessageIsBlurred = try c.decodeIfPresent(Bool.self, forKey: .lastMessageIsBlurred) ?? false
+        self.lastMessageIsViewOnce = try c.decodeIfPresent(Bool.self, forKey: .lastMessageIsViewOnce) ?? false
+        self.lastMessageExpiresAt = try c.decodeIfPresent(Date.self, forKey: .lastMessageExpiresAt)
+        self.recentMessages = try c.decodeIfPresent([RecentMessagePreview].self, forKey: .recentMessages) ?? []
+        self.tags = try c.decodeIfPresent([MeeshyConversationTag].self, forKey: .tags) ?? []
+
+        self.isAnnouncementChannel = try c.decodeIfPresent(Bool.self, forKey: .isAnnouncementChannel) ?? false
+        self.defaultWriteRole = try c.decodeIfPresent(String.self, forKey: .defaultWriteRole)
+        self.slowModeSeconds = try c.decodeIfPresent(Int.self, forKey: .slowModeSeconds)
+        self.autoTranslateEnabled = try c.decodeIfPresent(Bool.self, forKey: .autoTranslateEnabled)
+
+        self.participantUserId = try c.decodeIfPresent(String.self, forKey: .participantUserId)
+        self.participantUsername = try c.decodeIfPresent(String.self, forKey: .participantUsername)
+        self.participantAvatarURL = try c.decodeIfPresent(String.self, forKey: .participantAvatarURL)
+        self.lastSeenAt = try c.decodeIfPresent(Date.self, forKey: .lastSeenAt)
+        self.closedAt = try c.decodeIfPresent(Date.self, forKey: .closedAt)
+        self.closedBy = try c.decodeIfPresent(String.self, forKey: .closedBy)
+        self.currentUserRole = try c.decodeIfPresent(String.self, forKey: .currentUserRole)
+        self.currentUserJoinedAt = try c.decodeIfPresent(Date.self, forKey: .currentUserJoinedAt)
+
+        self.language = try c.decodeIfPresent(ConversationContext.ConversationLanguage.self, forKey: .language) ?? .french
+        self.theme = try c.decodeIfPresent(ConversationContext.ConversationTheme.self, forKey: .theme) ?? .general
+
+        // colorPalette is non-optional in storage; if absent (e.g. legacy
+        // cache row from before this field shipped) recompute from context.
+        if let palette = try c.decodeIfPresent(ConversationColorPalette.self, forKey: .colorPalette) {
+            self.colorPalette = palette
+        } else {
+            self.colorPalette = Self.computeColorPalette(
+                type: self.type, title: self.title, identifier: self.identifier,
+                language: self.language, theme: self.theme, memberCount: self.memberCount
+            )
+        }
+
+        // Per-user — assemble userState from flat wire keys.
+        self.userState = ConversationUserState(
+            unreadCount: try c.decodeIfPresent(Int.self, forKey: .unreadCount) ?? 0,
+            lastReadAt: try c.decodeIfPresent(Date.self, forKey: .lastReadAt),
+            lastDeliveredAt: try c.decodeIfPresent(Date.self, forKey: .lastDeliveredAt),
+            isPinned: try c.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false,
+            isMuted: try c.decodeIfPresent(Bool.self, forKey: .isMuted) ?? false,
+            mentionsOnly: try c.decodeIfPresent(Bool.self, forKey: .mentionsOnly) ?? false,
+            isArchived: try c.decodeIfPresent(Bool.self, forKey: .isArchivedByUser) ?? false,
+            deletedForUserAt: try c.decodeIfPresent(Date.self, forKey: .deletedForUserAt),
+            clearHistoryBefore: try c.decodeIfPresent(Date.self, forKey: .clearHistoryBefore),
+            customName: try c.decodeIfPresent(String.self, forKey: .customName),
+            reaction: try c.decodeIfPresent(String.self, forKey: .reaction),
+            tags: try c.decodeIfPresent([String].self, forKey: .userStateTags) ?? [],
+            sectionId: try c.decodeIfPresent(String.self, forKey: .sectionId),
+            orderInCategory: try c.decodeIfPresent(Int.self, forKey: .orderInCategory),
+            isLocked: try c.decodeIfPresent(Bool.self, forKey: .isLocked) ?? false,
+            hasDraft: try c.decodeIfPresent(Bool.self, forKey: .hasDraft) ?? false,
+            draftPreview: try c.decodeIfPresent(String.self, forKey: .draftPreview),
+            version: try c.decodeIfPresent(Int.self, forKey: .version) ?? 0,
+            lastSyncedAt: try c.decodeIfPresent(Date.self, forKey: .lastSyncedAt),
+            pendingMutationCount: try c.decodeIfPresent(Int.self, forKey: .pendingMutationCount) ?? 0
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(identifier, forKey: .identifier)
+        try c.encode(type, forKey: .type)
+        try c.encodeIfPresent(title, forKey: .title)
+        try c.encodeIfPresent(description, forKey: .description)
+        try c.encodeIfPresent(avatar, forKey: .avatar)
+        try c.encodeIfPresent(avatarThumbHash, forKey: .avatarThumbHash)
+        try c.encodeIfPresent(banner, forKey: .banner)
+        try c.encodeIfPresent(bannerThumbHash, forKey: .bannerThumbHash)
+        try c.encodeIfPresent(communityId, forKey: .communityId)
+        try c.encode(isActive, forKey: .isActive)
+        try c.encode(memberCount, forKey: .memberCount)
+        try c.encode(lastMessageAt, forKey: .lastMessageAt)
+        try c.encodeIfPresent(encryptionMode, forKey: .encryptionMode)
+        try c.encode(createdAt, forKey: .createdAt)
+        try c.encode(updatedAt, forKey: .updatedAt)
+
+        try c.encodeIfPresent(lastMessagePreview, forKey: .lastMessagePreview)
+        try c.encodeIfPresent(lastMessageTranslations, forKey: .lastMessageTranslations)
+        try c.encodeIfPresent(lastMessageOriginalLanguage, forKey: .lastMessageOriginalLanguage)
+        try c.encode(lastMessageAttachments, forKey: .lastMessageAttachments)
+        try c.encode(lastMessageAttachmentCount, forKey: .lastMessageAttachmentCount)
+        try c.encodeIfPresent(lastMessageId, forKey: .lastMessageId)
+        try c.encodeIfPresent(lastMessageSenderName, forKey: .lastMessageSenderName)
+        try c.encode(lastMessageIsBlurred, forKey: .lastMessageIsBlurred)
+        try c.encode(lastMessageIsViewOnce, forKey: .lastMessageIsViewOnce)
+        try c.encodeIfPresent(lastMessageExpiresAt, forKey: .lastMessageExpiresAt)
+        try c.encode(recentMessages, forKey: .recentMessages)
+        try c.encode(tags, forKey: .tags)
+
+        try c.encode(isAnnouncementChannel, forKey: .isAnnouncementChannel)
+        try c.encodeIfPresent(defaultWriteRole, forKey: .defaultWriteRole)
+        try c.encodeIfPresent(slowModeSeconds, forKey: .slowModeSeconds)
+        try c.encodeIfPresent(autoTranslateEnabled, forKey: .autoTranslateEnabled)
+
+        try c.encodeIfPresent(participantUserId, forKey: .participantUserId)
+        try c.encodeIfPresent(participantUsername, forKey: .participantUsername)
+        try c.encodeIfPresent(participantAvatarURL, forKey: .participantAvatarURL)
+        try c.encodeIfPresent(lastSeenAt, forKey: .lastSeenAt)
+        try c.encodeIfPresent(closedAt, forKey: .closedAt)
+        try c.encodeIfPresent(closedBy, forKey: .closedBy)
+        try c.encodeIfPresent(currentUserRole, forKey: .currentUserRole)
+        try c.encodeIfPresent(currentUserJoinedAt, forKey: .currentUserJoinedAt)
+
+        try c.encode(language, forKey: .language)
+        try c.encode(theme, forKey: .theme)
+        try c.encode(colorPalette, forKey: .colorPalette)
+
+        // Per-user — flat top-level wire keys (legacy + new).
+        try c.encode(userState.unreadCount, forKey: .unreadCount)
+        try c.encode(userState.isPinned, forKey: .isPinned)
+        try c.encode(userState.isMuted, forKey: .isMuted)
+        try c.encode(userState.mentionsOnly, forKey: .mentionsOnly)
+        try c.encode(userState.isArchived, forKey: .isArchivedByUser)
+        try c.encodeIfPresent(userState.customName, forKey: .customName)
+        try c.encodeIfPresent(userState.reaction, forKey: .reaction)
+        try c.encodeIfPresent(userState.sectionId, forKey: .sectionId)
+
+        try c.encodeIfPresent(userState.lastReadAt, forKey: .lastReadAt)
+        try c.encodeIfPresent(userState.lastDeliveredAt, forKey: .lastDeliveredAt)
+        try c.encodeIfPresent(userState.deletedForUserAt, forKey: .deletedForUserAt)
+        try c.encodeIfPresent(userState.clearHistoryBefore, forKey: .clearHistoryBefore)
+        try c.encodeIfPresent(userState.orderInCategory, forKey: .orderInCategory)
+        try c.encode(userState.tags, forKey: .userStateTags)
+        try c.encode(userState.version, forKey: .version)
+        try c.encodeIfPresent(userState.lastSyncedAt, forKey: .lastSyncedAt)
+        try c.encode(userState.pendingMutationCount, forKey: .pendingMutationCount)
+        try c.encode(userState.isLocked, forKey: .isLocked)
+        try c.encode(userState.hasDraft, forKey: .hasDraft)
+        try c.encodeIfPresent(userState.draftPreview, forKey: .draftPreview)
+    }
 }
 
 // MARK: - Community Model

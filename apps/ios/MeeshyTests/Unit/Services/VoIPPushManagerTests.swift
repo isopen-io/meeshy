@@ -118,4 +118,84 @@ final class VoIPPushManagerTests: XCTestCase {
         )
         XCTAssertEqual(name, "Appel entrant")
     }
+
+    // MARK: - VoIP token storage migration (P1.2)
+
+    /// Once the keychain-backed store is in place, the VoIP token MUST NOT
+    /// be readable from UserDefaults. This is the regression test for the
+    /// previous behaviour where the token was stored in UserDefaults at
+    /// VoIPPushManager.swift:325-326.
+    func test_voipToken_isNeverWrittenToUserDefaults() async {
+        let legacyTokenKey = KeychainVoIPTokenStore.legacyTokenKey
+        let legacyDateKey = KeychainVoIPTokenStore.legacyDateKey
+        UserDefaults.standard.removeObject(forKey: legacyTokenKey)
+        UserDefaults.standard.removeObject(forKey: legacyDateKey)
+
+        let store = MockVoIPTokenStore()
+        let sut = VoIPPushManager(tokenStore: store)
+
+        // Prime the cooldown snapshot the way the production cooldown path
+        // would have written it. The token MUST be in the (mock) keychain,
+        // not in UserDefaults.
+        sut.debug_setLastRegisteredRecord(VoIPTokenRecord(token: "abcd1234", at: Date()))
+        try? await store.save(token: "abcd1234", at: Date())
+
+        XCTAssertNil(
+            UserDefaults.standard.string(forKey: legacyTokenKey),
+            "The VoIP token must not leak into UserDefaults under the legacy key"
+        )
+        XCTAssertEqual(store.snapshot()?.token, "abcd1234")
+    }
+
+    /// On boot, ``VoIPPushManager`` must drain the legacy UserDefaults
+    /// entry and move it into the keychain so a returning user is not
+    /// re-prompted for VoIP authorization.
+    func test_init_migratesLegacyUserDefaultsTokenIntoStore() async throws {
+        let legacyToken = "legacy_voip_\(UUID().uuidString)"
+        let store = MockVoIPTokenStore(
+            legacy: VoIPTokenRecord(token: legacyToken, at: Date(timeIntervalSince1970: 1_000))
+        )
+
+        // Keep a strong reference until the assertions run.
+        // ``VoIPPushManager.init`` spawns ``Task { [weak self] ... }`` to
+        // perform the one-shot migration. Discarding the SUT with `_ =`
+        // releases it before that task fires and ``guard let self else {
+        // return }`` short-circuits the call to
+        // ``migrateFromUserDefaultsIfNeeded()`` entirely — the bounded
+        // polling fix in 9065f3a2 was treating a timing symptom of this
+        // ownership bug, not its cause.
+        let sut = VoIPPushManager(tokenStore: store)
+
+        // The migration runs in a detached `Task` inside `init`. Poll up
+        // to 2 s, exiting as soon as the migration lands. Fast runs wake
+        // within a few ms; only the genuinely slow simulator pays the
+        // full budget.
+        let deadline = Date().addingTimeInterval(2.0)
+        while store.migrateCallCount < 1, Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+
+        XCTAssertGreaterThanOrEqual(store.migrateCallCount, 1)
+        XCTAssertEqual(store.snapshot()?.token, legacyToken)
+        withExtendedLifetime(sut) {}
+    }
+
+    /// Idempotence guard: when the keychain already holds a matching token
+    /// inside the cooldown window, calling `registerToken` is a no-op.
+    /// This test asserts via the debug snapshot since the actual POST flow
+    /// hits APIClient.shared.
+    func test_cooldownSnapshot_isHydratedFromStoreAtInit() async throws {
+        let priorRecord = VoIPTokenRecord(
+            token: "priorToken",
+            at: Date()
+        )
+        let store = MockVoIPTokenStore(initial: priorRecord)
+
+        let sut = VoIPPushManager(tokenStore: store)
+
+        // Wait for the init Task to hydrate the snapshot.
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.debug_lastRegisteredRecord?.token, "priorToken")
+    }
 }

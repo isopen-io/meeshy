@@ -88,21 +88,21 @@ struct VoiceProfileWizardView: View {
                         )
                     )
 
-                Text("Profil vocal")
+                Text(String(localized: "voice.profile.wizard.title", defaultValue: "Profil vocal", bundle: .main))
                     .font(.system(size: 24, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
 
-                Text("Enregistrez votre voix pour activer le clonage vocal personnalise. Vos messages audio traduits garderont votre voix naturelle.")
+                Text(String(localized: "voice.profile.wizard.intro", defaultValue: "Enregistrez votre voix pour activer le clonage vocal personnalise. Vos messages audio traduits garderont votre voix naturelle.", bundle: .main))
                     .font(.system(size: 15))
                     .multilineTextAlignment(.center)
                     .foregroundColor(theme.textSecondary)
                     .padding(.horizontal, 24)
 
                 VStack(alignment: .leading, spacing: 12) {
-                    consentInfoRow(icon: "mic.fill", text: "3 echantillons vocaux de 10 secondes minimum")
-                    consentInfoRow(icon: "lock.shield.fill", text: "Donnees chiffrees et stockees de maniere securisee")
-                    consentInfoRow(icon: "trash.fill", text: "Suppression possible a tout moment (RGPD)")
-                    consentInfoRow(icon: "waveform.path", text: "Utilise pour generer des traductions avec votre voix")
+                    consentInfoRow(icon: "mic.fill", text: String(localized: "voice.profile.wizard.consent.samples", defaultValue: "3 echantillons vocaux de 10 secondes minimum", bundle: .main))
+                    consentInfoRow(icon: "lock.shield.fill", text: String(localized: "voice.profile.wizard.consent.encrypted", defaultValue: "Donnees chiffrees et stockees de maniere securisee", bundle: .main))
+                    consentInfoRow(icon: "trash.fill", text: String(localized: "voice.profile.wizard.consent.rgpd", defaultValue: "Suppression possible a tout moment (RGPD)", bundle: .main))
+                    consentInfoRow(icon: "waveform.path", text: String(localized: "voice.profile.wizard.consent.use", defaultValue: "Utilise pour generer des traductions avec votre voix", bundle: .main))
                 }
                 .padding(16)
                 .background(
@@ -127,7 +127,7 @@ struct VoiceProfileWizardView: View {
                             ProgressView()
                                 .tint(.white)
                         }
-                        Text("J'accepte et je continue")
+                        Text(String(localized: "voice.profile.wizard.acceptContinue", defaultValue: "J'accepte et je continue", bundle: .main))
                             .font(.system(size: 16, weight: .semibold))
                     }
                     .foregroundColor(.white)
@@ -168,17 +168,17 @@ struct VoiceProfileWizardView: View {
                 .font(.system(size: 64))
                 .foregroundColor(Color(hex: accentColor))
 
-            Text("Verification de l'age")
+            Text(String(localized: "voice.profile.wizard.ageVerification", defaultValue: "Verification de l'age", bundle: .main))
                 .font(.system(size: 24, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
-            Text("Le clonage vocal necessite une verification d'age pour les mineurs.")
+            Text(String(localized: "voice.profile.wizard.ageVerification.description", defaultValue: "Le clonage vocal necessite une verification d'age pour les mineurs.", bundle: .main))
                 .font(.system(size: 15))
                 .multilineTextAlignment(.center)
                 .foregroundColor(theme.textSecondary)
                 .padding(.horizontal, 32)
 
-            DatePicker("Date de naissance", selection: $viewModel.birthDate, displayedComponents: .date)
+            DatePicker(String(localized: "voice.profile.wizard.birthDate", defaultValue: "Date de naissance", bundle: .main), selection: $viewModel.birthDate, displayedComponents: .date)
                 .datePickerStyle(.wheel)
                 .labelsHidden()
                 .padding(.horizontal, 20)
@@ -187,7 +187,7 @@ struct VoiceProfileWizardView: View {
                 HapticFeedback.medium()
                 viewModel.confirmAgeVerification()
             } label: {
-                Text("Confirmer")
+                Text(String(localized: "voice.profile.wizard.confirm", defaultValue: "Confirmer", bundle: .main))
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -210,11 +210,11 @@ struct VoiceProfileWizardView: View {
             VStack(spacing: 20) {
                 Spacer().frame(height: 16)
 
-                Text("Enregistrez votre voix")
+                Text(String(localized: "voice.profile.wizard.recording.title", defaultValue: "Enregistrez votre voix", bundle: .main))
                     .font(.system(size: 22, weight: .bold, design: .rounded))
                     .foregroundColor(theme.textPrimary)
 
-                Text("Lisez les phrases affichees a voix haute. Minimum 3 echantillons de 10 secondes.")
+                Text(String(localized: "voice.profile.wizard.recording.description", defaultValue: "Lisez les phrases affichees a voix haute. Minimum 3 echantillons de 10 secondes.", bundle: .main))
                     .font(.system(size: 14))
                     .multilineTextAlignment(.center)
                     .foregroundColor(theme.textSecondary)
@@ -244,12 +244,12 @@ struct VoiceProfileWizardView: View {
                 .scaleEffect(1.5)
                 .tint(Color(hex: accentColor))
 
-            Text("Analyse en cours...")
+            Text(String(localized: "voice.profile.wizard.analyzing", defaultValue: "Analyse en cours...", bundle: .main))
                 .font(.system(size: 22, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             if viewModel.totalToUpload > 0 {
-                Text("Envoi \(viewModel.uploadedCount)/\(viewModel.totalToUpload) echantillons")
+                Text(String(localized: "voice.profile.wizard.uploadProgress", defaultValue: "Envoi \(viewModel.uploadedCount)/\(viewModel.totalToUpload) echantillons", bundle: .main))
                     .font(.system(size: 14, weight: .medium, design: .monospaced))
                     .foregroundColor(theme.textSecondary)
 
@@ -258,7 +258,7 @@ struct VoiceProfileWizardView: View {
                     .padding(.horizontal, 60)
             }
 
-            Text("Votre profil vocal est en cours de creation. Cela peut prendre quelques instants.")
+            Text(String(localized: "voice.profile.wizard.creating", defaultValue: "Votre profil vocal est en cours de creation. Cela peut prendre quelques instants.", bundle: .main))
                 .font(.system(size: 14))
                 .multilineTextAlignment(.center)
                 .foregroundColor(theme.textMuted)
@@ -284,18 +284,18 @@ struct VoiceProfileWizardView: View {
                 .font(.system(size: 72))
                 .foregroundColor(MeeshyColors.success)
 
-            Text("Profil vocal cree !")
+            Text(String(localized: "voice.profile.wizard.created", defaultValue: "Profil vocal cree !", bundle: .main))
                 .font(.system(size: 24, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
             if let profile = viewModel.profile {
                 VStack(spacing: 8) {
-                    profileInfoRow(label: "Echantillons", value: "\(profile.sampleCount)")
-                    profileInfoRow(label: "Duree totale", value: "\(profile.totalDurationSeconds)s")
+                    profileInfoRow(label: String(localized: "voice.profile.samples", defaultValue: "Echantillons", bundle: .main), value: "\(profile.sampleCount)")
+                    profileInfoRow(label: String(localized: "voice.profile.totalDuration", defaultValue: "Duree totale", bundle: .main), value: "\(profile.totalDurationSeconds)s")
                     if let quality = profile.quality {
-                        profileInfoRow(label: "Qualite", value: "\(Int(quality * 100))%")
+                        profileInfoRow(label: String(localized: "voice.profile.quality", defaultValue: "Qualite", bundle: .main), value: "\(Int(quality * 100))%")
                     }
-                    profileInfoRow(label: "Statut", value: profile.status.rawValue.capitalized)
+                    profileInfoRow(label: String(localized: "voice.profile.status", defaultValue: "Statut", bundle: .main), value: profile.status.rawValue.capitalized)
                 }
                 .padding(16)
                 .background(
@@ -305,7 +305,7 @@ struct VoiceProfileWizardView: View {
                 .padding(.horizontal, 20)
             }
 
-            Text("Vos messages audio traduits utiliseront desormais votre voix clonee.")
+            Text(String(localized: "voice.profile.wizard.success.message", defaultValue: "Vos messages audio traduits utiliseront desormais votre voix clonee.", bundle: .main))
                 .font(.system(size: 14))
                 .multilineTextAlignment(.center)
                 .foregroundColor(theme.textSecondary)
@@ -315,7 +315,7 @@ struct VoiceProfileWizardView: View {
                 HapticFeedback.success()
                 dismiss()
             } label: {
-                Text("Terminer")
+                Text(String(localized: "voice.profile.wizard.finish", defaultValue: "Terminer", bundle: .main))
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)

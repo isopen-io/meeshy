@@ -125,7 +125,7 @@ export default function V2FeedsPage() {
   };
 
   const handleShare = async (postId: number) => {
-    const postUrl = `${window.location.origin}/v2/feeds/post/${postId}`;
+    const postUrl = `${window.location.origin}/feeds/post/${postId}`;
 
     try {
       await navigator.clipboard.writeText(postUrl);

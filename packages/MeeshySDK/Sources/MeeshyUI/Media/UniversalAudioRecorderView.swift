@@ -72,11 +72,10 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
         }
         .fullScreenCover(isPresented: $showPreview) {
             if let url = recordedURL {
-                MeeshyAudioPreviewView(
+                MeeshyAudioEditorView(
                     url: url,
-                    context: context,
                     accentColor: accentColor,
-                    onAccept: { editedURL, transcriptions, trimStart, trimEnd in
+                    onConfirm: { editedURL, transcriptions, trimStart, trimEnd in
                         showPreview = false
                         onComplete(editedURL, transcriptions, trimStart, trimEnd)
                     },
@@ -85,6 +84,15 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                         recordedURL = nil
                     }
                 )
+            }
+        }
+        .onChange(of: recorder.isRecording) { isRecording in
+            if !isRecording {
+                if recordedURL == nil, let url = recorder.recordedFileURL, recorder.duration >= settings.minimumDuration {
+                    recordedURL = url
+                    showPreview = true
+                    HapticFeedback.success()
+                }
             }
         }
     }
@@ -307,9 +315,15 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
     // MARK: - Actions
 
     private func handleStartRecording() {
+        // See `StoryVoiceRecorder.startRecording` for the same fix rationale:
+        // `requestRecordPermission`'s callback runs on the TCC server queue
+        // and `DispatchQueue.main.async` does not prove `@MainActor` to
+        // Swift 6, so calling `@MainActor` APIs from there crashes with
+        // `swift_task_isCurrentExecutorImpl`.
         AVAudioSession.sharedInstance().requestRecordPermission { granted in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 guard granted else { return }
+                recorder.configure(with: settings)
                 recorder.startRecording()
                 HapticFeedback.medium()
             }

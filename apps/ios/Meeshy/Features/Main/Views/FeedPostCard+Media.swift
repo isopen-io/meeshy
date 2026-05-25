@@ -113,7 +113,8 @@ extension FeedPostCard {
                 ProgressiveCachedImage(
                     thumbHash: media.thumbHash,
                     thumbnailUrl: media.thumbnailUrl,
-                    fullUrl: media.url
+                    fullUrl: media.url,
+                    autoLoad: true
                 ) {
                     Color(hex: media.thumbnailColor).shimmer()
                 }
@@ -212,7 +213,8 @@ extension FeedPostCard {
         return ProgressiveCachedImage(
             thumbHash: media.thumbHash,
             thumbnailUrl: media.thumbnailUrl,
-            fullUrl: media.url
+            fullUrl: media.url,
+            autoLoad: true
         ) {
             Color(hex: media.thumbnailColor).shimmer()
         }
@@ -225,11 +227,20 @@ extension FeedPostCard {
 
     func videoMediaView(_ media: FeedMedia) -> some View {
         let attachment = media.toMessageAttachment()
-        return InlineVideoPlayerView(
-            attachment: attachment,
-            accentColor: accentColor
-        )
-        .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 280)
+        return VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
+            MeeshyVideoPlayer(
+                attachment: attachment,
+                style: .inline,
+                controls: .inlineDefault,
+                accentColor: accentColor,
+                frame: .card,
+                availability: availability,
+                performance: .inline,
+                onDownload: onDownload,
+                onExpand: { openFullscreen(media) }
+            )
+        }
+        .frame(maxWidth: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 

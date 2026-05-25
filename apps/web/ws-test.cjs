@@ -2,15 +2,23 @@ const { io } = require('socket.io-client');
 const https = require('https');
 
 const GATEWAY = 'https://192.168.1.62:3000';
+const WS_TEST_USER = process.env.WS_TEST_USER;
+const WS_TEST_PASSWORD = process.env.WS_TEST_PASSWORD;
+
+if (!WS_TEST_USER || !WS_TEST_PASSWORD) {
+  console.error('[ERROR] Set WS_TEST_USER and WS_TEST_PASSWORD env vars before running this script.');
+  console.error('        e.g. WS_TEST_USER=atabeth WS_TEST_PASSWORD=... node ws-test.cjs');
+  process.exit(1);
+}
 
 async function main() {
   // 1. Login
   const agent = new https.Agent({ rejectUnauthorized: false });
-  
+
   const resRaw = await fetch(`${GATEWAY}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ login: 'atabeth', password: 'pD5p1ir9uxLUf2X2FpNE' }),
+    body: JSON.stringify({ login: WS_TEST_USER, password: WS_TEST_PASSWORD }),
     agent,
   });
   const json = await resRaw.json();

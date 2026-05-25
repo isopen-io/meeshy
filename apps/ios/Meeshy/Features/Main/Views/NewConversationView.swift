@@ -10,15 +10,30 @@ struct NewConversationView: View {
     private var theme: ThemeManager { ThemeManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @StateObject private var router = Router()
+    @StateObject private var viewModel: NewConversationViewModel
 
     @State private var searchQuery = ""
-    @State private var searchResults: [SearchedUser] = []
     @State private var selectedUsers: [SearchedUser] = []
-    @State private var isSearching = false
-    @State private var isCreating = false
     @State private var groupTitle = ""
-    @State private var searchTask: Task<Void, Never>?
-    @State private var errorMessage: String?
+
+    /// Default initializer used by production callers. The `wrappedValue:`
+    /// argument of `StateObject` is `@autoclosure @escaping`, so the
+    /// `NewConversationViewModel()` expression is only evaluated by
+    /// SwiftUI the first time the view appears — not on every re-render
+    /// of the parent. Constructing the VM inside the body of `init` is
+    /// the only shape that gets the lazy semantics; passing a default
+    /// argument (`viewModel: VM = VM()`) defeats them.
+    init() {
+        _viewModel = StateObject(wrappedValue: NewConversationViewModel())
+    }
+
+    /// Test- and preview-only initializer. Tests build the VM with a mock
+    /// `APIClientProviding` and inject it ready-made; SwiftUI still
+    /// honours the StateObject identity contract because the instance is
+    /// captured exactly once.
+    init(testHook viewModel: NewConversationViewModel) {
+        _viewModel = StateObject(wrappedValue: viewModel)
+    }
 
     private let accentColor = "818CF8"
 
@@ -36,9 +51,54 @@ struct NewConversationView: View {
                 resultsList
             }
         }
-        .onChange(of: searchQuery) { _, newValue in
-            debounceSearch(query: newValue)
+        .adaptiveOnChange(of: searchQuery) { _, newValue in
+            viewModel.search(query: newValue)
         }
+        // Deployment target is iOS 16; the two-argument
+        // `onChange(of:initial:_:)` shape is iOS 17+. Use `adaptiveOnChange`
+        // (MeeshyUI/Compatibility/AdaptiveOnChange.swift) which backports the
+        // `(oldValue, newValue)` signature to iOS 16 — same call site is
+        // already used 7 lines above for `searchQuery`.
+        .adaptiveOnChange(of: viewModel.createdConversation) { _, conversation in
+            guard let conversation else { return }
+            HapticFeedback.success()
+            dismiss()
+            // Brief delay lets the dismiss animation start before the
+            // listener-side navigator pushes onto the stack — matches the
+            // pre-refactor 300 ms timing.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                NotificationCenter.default.post(
+                    name: .navigateToConversation,
+                    object: conversation
+                )
+            }
+            viewModel.consumeCreatedConversation()
+        }
+        .adaptiveOnChange(of: viewModel.errorMessage) { _, message in
+            guard message != nil else { return }
+            HapticFeedback.error()
+        }
+        // Surface the error to the user — not just to the haptic engine.
+        // The previous shape silently swallowed failures, exactly the
+        // pattern the audit flagged. The dismiss path goes through
+        // `viewModel.dismissError()` so the view never mutates the
+        // VM's `@Published` state directly.
+        .alert(
+            String(localized: "new_conversation.error.title", defaultValue: "Erreur"),
+            isPresented: Binding(
+                get: { viewModel.errorMessage != nil },
+                set: { isPresented in
+                    if !isPresented { viewModel.dismissError() }
+                }
+            ),
+            presenting: viewModel.errorMessage,
+            actions: { _ in
+                Button(String(localized: "common.ok", defaultValue: "OK"), role: .cancel) { }
+            },
+            message: { message in
+                Text(message)
+            }
+        )
         .withStatusBubble()
     }
 
@@ -66,9 +126,9 @@ struct NewConversationView: View {
             if !selectedUsers.isEmpty {
                 Button {
                     HapticFeedback.medium()
-                    createConversation()
+                    Task { await viewModel.createConversation(selectedUsers: selectedUsers, groupTitle: groupTitle) }
                 } label: {
-                    if isCreating {
+                    if viewModel.isCreating {
                         ProgressView()
                             .tint(MeeshyColors.indigo400)
                     } else {
@@ -77,7 +137,7 @@ struct NewConversationView: View {
                             .foregroundColor(MeeshyColors.indigo400)
                     }
                 }
-                .disabled(isCreating || (isGroupMode && groupTitle.trimmingCharacters(in: .whitespaces).isEmpty))
+                .disabled(viewModel.isCreating || (isGroupMode && groupTitle.trimmingCharacters(in: .whitespaces).isEmpty))
             } else {
                 Color.clear.frame(width: 40, height: 24)
             }
@@ -185,13 +245,13 @@ struct NewConversationView: View {
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
 
-            if isSearching {
+            if viewModel.isSearching {
                 ProgressView()
                     .scaleEffect(0.7)
             } else if !searchQuery.isEmpty {
                 Button {
                     searchQuery = ""
-                    searchResults = []
+                    viewModel.clearSearch()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 14))
@@ -218,10 +278,10 @@ struct NewConversationView: View {
     private var resultsList: some View {
         ScrollView(showsIndicators: false) {
             LazyVStack(spacing: 4) {
-                if searchResults.isEmpty && !searchQuery.isEmpty && !isSearching {
+                if viewModel.searchResults.isEmpty && !searchQuery.isEmpty && !viewModel.isSearching {
                     emptyState
                 } else {
-                    ForEach(searchResults) { user in
+                    ForEach(viewModel.searchResults) { user in
                         userRow(user)
                     }
                 }
@@ -310,98 +370,9 @@ struct NewConversationView: View {
         }
     }
 
-    // MARK: - Actions
-
-    private func debounceSearch(query: String) {
-        searchTask?.cancel()
-        let trimmed = query.trimmingCharacters(in: .whitespaces)
-        guard trimmed.count >= 2 else {
-            searchResults = []
-            isSearching = false
-            return
-        }
-        isSearching = true
-        searchTask = Task {
-            try? await Task.sleep(nanoseconds: 350_000_000) // 350ms debounce
-            guard !Task.isCancelled else { return }
-            await performSearch(query: trimmed)
-        }
-    }
-
-    private func performSearch(query: String) async {
-        do {
-            let queryItems = [
-                URLQueryItem(name: "q", value: query),
-                URLQueryItem(name: "limit", value: "20"),
-                URLQueryItem(name: "offset", value: "0")
-            ]
-            let response: APIResponse<[SearchedUser]> = try await APIClient.shared.request(
-                endpoint: "/users/search",
-                queryItems: queryItems
-            )
-            let currentUserId = AuthManager.shared.currentUser?.id
-            await MainActor.run {
-                searchResults = response.data.filter { $0.id != currentUserId }
-                isSearching = false
-            }
-        } catch {
-            await MainActor.run {
-                searchResults = []
-                isSearching = false
-            }
-        }
-    }
-
-    private func createConversation() {
-        guard !selectedUsers.isEmpty else { return }
-        isCreating = true
-        errorMessage = nil
-
-        Task {
-            do {
-                let type = selectedUsers.count == 1 ? "direct" : "group"
-                let title = isGroupMode ? groupTitle.trimmingCharacters(in: .whitespaces) : nil
-
-                struct CreateConversationBody: Encodable {
-                    let type: String
-                    let title: String?
-                    let participantIds: [String]
-                }
-
-                let body = CreateConversationBody(
-                    type: type,
-                    title: title,
-                    participantIds: selectedUsers.map(\.id)
-                )
-
-                let response: APIResponse<APIConversation> = try await APIClient.shared.post(
-                    endpoint: "/conversations",
-                    body: body
-                )
-
-                let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-                let conversation = response.data.toConversation(currentUserId: currentUserId)
-
-                await MainActor.run {
-                    HapticFeedback.success()
-                    isCreating = false
-                    dismiss()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        NotificationCenter.default.post(
-                            name: .navigateToConversation,
-                            object: conversation
-                        )
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    HapticFeedback.error()
-                    isCreating = false
-                    errorMessage = String(localized: "Impossible de creer la conversation", defaultValue: "Impossible de cr\u{00E9}er la conversation")
-                }
-            }
-        }
-    }
+    // Networking is delegated to `NewConversationViewModel`. The view no
+    // longer holds Task / APIClient / AuthManager references — see
+    // ViewModels/NewConversationViewModel.swift for the search + create flow.
 }
 
 // MARK: - Searched User Model

@@ -497,6 +497,10 @@ export class SocketIOOrchestrator {
     };
   }
 
+  onStatusChange(callback: (diag: ConnectionDiagnostics) => void): () => void {
+    return this.connectionService.onStatusChange(callback);
+  }
+
   getSocket(): TypedSocket | null {
     return this.connectionService.getSocket();
   }
@@ -587,7 +591,9 @@ export class SocketIOOrchestrator {
     return this.presenceService.onUnreadUpdated(listener);
   }
 
-  onPreferencesUpdated(listener: (data: { userId: string; category: string }) => void): UnsubscribeFn {
+  onPreferencesUpdated(
+    listener: (data: import('@meeshy/shared/types/socketio-events').UserPreferencesUpdatedEventData) => void,
+  ): UnsubscribeFn {
     return this.preferencesSyncService.onPreferencesUpdated(listener);
   }
 

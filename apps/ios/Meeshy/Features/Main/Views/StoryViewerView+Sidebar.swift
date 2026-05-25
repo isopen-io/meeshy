@@ -27,8 +27,7 @@ struct StoryActionSidebarView: View {
     let currentGroup: StoryGroup?
     let storyCommentCount: Int
     let isStoryCommentsEmpty: Bool
-    let currentStoryNeedsVideoExport: Bool
-    let storyHasAudioOrVideo: Bool
+    let storyHasAudibleSound: Bool
     let storyHasTranslatableContent: Bool
     let isGlobalMuted: Bool
     let availableTranslationLanguages: [TranslationLanguage]
@@ -67,7 +66,26 @@ struct StoryActionSidebarView: View {
     }
 
     var body: some View {
-        VStack(spacing: 20) {
+        // On small iPhones (SE/mini) the 6–7 stacked action buttons can
+        // exceed the available canvas height between header and composer.
+        // `ViewThatFits` picks the natural VStack when it fits; otherwise
+        // it falls back to a vertically-scrollable strip so every action
+        // controller stays reachable. The parent (StoryCardView) bounds
+        // `maxHeight` to the safe canvas-content slot so ViewThatFits has
+        // a real constraint to evaluate against.
+        ViewThatFits(in: .vertical) {
+            sidebarContent(spacing: 20)
+            sidebarContent(spacing: 14)
+            ScrollView(.vertical, showsIndicators: false) {
+                sidebarContent(spacing: 14)
+                    .padding(.vertical, 4)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func sidebarContent(spacing: CGFloat) -> some View {
+        VStack(spacing: spacing) {
             // 1. Reaction (heart) — primary action, brand-colored when active
             if !isOwnStory {
                 StoryActionButton(
@@ -85,7 +103,7 @@ struct StoryActionSidebarView: View {
                 // Bounce on every reaction sent — via the quick strip below
                 // OR the full-screen picker — since heartBouncePulse ticks
                 // inside triggerStoryReaction, the single reaction-sent seam.
-                .onChange(of: heartBouncePulse) { _, _ in
+                .adaptiveOnChange(of: heartBouncePulse) { _, _ in
                     bounceHeart()
                 }
                 .overlay(alignment: .trailing) {
@@ -184,10 +202,12 @@ struct StoryActionSidebarView: View {
             }
 
             // Author-only export — bakes a fidèle-au-preview MP4 the user
-            // can share to Photos / Messages / WhatsApp. NEVER uploads to
-            // the Meeshy backend (stories publish RAW, see CLAUDE.md
-            // "Story Architecture").
-            if isOwnStory, currentStoryNeedsVideoExport {
+            // can share to Photos / Messages / WhatsApp. Available pour
+            // TOUTES les stories de l'auteur (static OU animée — le
+            // compositor synthétise un substrat pour les statiques).
+            // NEVER uploads to the Meeshy backend (stories publish RAW,
+            // see CLAUDE.md "Story Architecture").
+            if isOwnStory {
                 StoryActionButton(
                     icon: "square.and.arrow.up.fill",
                     label: "Exporter"
@@ -198,8 +218,10 @@ struct StoryActionSidebarView: View {
                 }
             }
 
-            // 4. Mute/Unmute — only shown if story has audio or video content
-            if storyHasAudioOrVideo {
+            // 4. Mute/Unmute — only shown when the story has genuinely audible
+            // sound (voice note, background audio, or a video carrying a real
+            // audio track). Silent videos keep the button hidden.
+            if storyHasAudibleSound {
                 StoryActionButton(
                     icon: isGlobalMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
                     label: isGlobalMuted ? "Mute" : "Son",
@@ -287,10 +309,9 @@ struct StoryActionSidebarView: View {
                                 }
                                 guard let story = currentStory else { return }
                                 Task {
-                                    let body: [String: String] = ["targetLanguage": lang.id]
-                                    let _: APIResponse<[String: AnyCodable]>? = try? await APIClient.shared.post(
-                                        endpoint: "/posts/\(story.id)/translate",
-                                        body: body
+                                    await StoryInteractionService().requestTranslation(
+                                        storyId: story.id,
+                                        targetLanguage: lang.id
                                     )
                                 }
                             } label: {
@@ -299,7 +320,7 @@ struct StoryActionSidebarView: View {
                                     .frame(width: 38, height: 38)
                                     .background(Circle().fill(Color.white.opacity(0.1)))
                             }
-                            .accessibilityLabel("Voir en \(lang.name)")
+                            .accessibilityLabel(String(localized: "story.viewer.a11y.viewIn", defaultValue: "Voir en \(lang.name)", bundle: .main))
                         }
                     }
                     .padding(.horizontal, 10)
@@ -328,8 +349,8 @@ struct StoryActionSidebarView: View {
             }
             .padding(.trailing, 10)
             .padding(.vertical, 6)
-            .accessibilityLabel("Demander une traduction")
-            .accessibilityHint("Ouvre la liste des langues pour demander une nouvelle traduction")
+            .accessibilityLabel(String(localized: "story.viewer.a11y.requestTranslation", defaultValue: "Demander une traduction", bundle: .main))
+            .accessibilityHint(String(localized: "story.viewer.a11y.requestTranslation.hint", defaultValue: "Ouvre la liste des langues pour demander une nouvelle traduction", bundle: .main))
         }
         .background(
             Capsule()
@@ -338,7 +359,7 @@ struct StoryActionSidebarView: View {
                 .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
         )
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Traductions disponibles")
+        .accessibilityLabel(String(localized: "story.viewer.a11y.availableTranslations", defaultValue: "Traductions disponibles", bundle: .main))
     }
 }
 
@@ -356,6 +377,41 @@ struct StoryHeaderView: View {
     @Binding var editAndRepostAsPostSource: RepostPostSourceWrapper?
     @Binding var showReportSheet: Bool
 
+    /// Holds the freshly-minted `meeshy.me/l/<token>` URL for the current
+    /// story share — the sheet at the end of `body` presents the system
+    /// share UI as soon as it's non-nil and clears it on dismiss.
+    @State private var shareableStoryLink: ShareableLink?
+
+    /// Mints a TrackingLink for the given story (gateway route is shared
+    /// with posts — a story IS a `PostType.STORY`), then surfaces the
+    /// `meeshy.me/l/<token>` URL through `shareableStoryLink` so the
+    /// system share sheet picks it up. Falls back to the raw URL when the
+    /// mint fails so the user always has something to share.
+    @MainActor
+    private func mintAndShareStory(_ storyId: String) async {
+        let fallback = makeStoryExternalShareURL(storyId)
+        do {
+            let result = try await PostService.shared.share(
+                postId: storyId,
+                platform: "system",
+                generateLink: true
+            )
+            if let shortUrl = result.shortUrl, let url = URL(string: shortUrl) {
+                shareableStoryLink = ShareableLink(url: url)
+                HapticFeedback.light()
+                return
+            }
+        } catch {
+            // intentional fall-through: try raw URL fallback
+        }
+        if let fallback {
+            shareableStoryLink = ShareableLink(url: fallback)
+            HapticFeedback.light()
+        } else {
+            ToastManager.shared.showError("Lien indisponible")
+        }
+    }
+
     let makeStoryExternalShareURL: (String) -> URL?
     let storyTimeRemaining: (Date) -> String
     let deleteCurrentStory: () -> Void
@@ -363,6 +419,15 @@ struct StoryHeaderView: View {
     let pauseTimer: () -> Void
     let dismissViewer: () -> Void
     let reportStory: (_ storyId: String, _ reportType: String, _ reason: String?) async throws -> Void
+    /// Toggle mode plein écran (session-scoped) exposé dans le menu hamburger.
+    /// Quand `true`, le chrome est caché par défaut pour la session entière
+    /// jusqu'au prochain toggle. Reseté par le parent quand le viewer se
+    /// ferme — pas de persistance cross-session voulue.
+    @Binding var isFullscreenStorySession: Bool
+    /// Visibilité courante du chrome — utilisée pour synchroniser
+    /// instantanément le glissement à l'activation du mode plein écran
+    /// (`isFullscreenStorySession = true` ⇒ `chromeVisible = false`).
+    @Binding var chromeVisible: Bool
 
     @State private var avatarLongPressGlow = false
 
@@ -454,7 +519,7 @@ struct StoryHeaderView: View {
                                             .font(.system(size: 10, weight: .semibold))
                                             .foregroundColor(.white.opacity(0.6))
                                         if let authorName = story.repostAuthorName {
-                                            Text("via @\(authorName)")
+                                            Text(String(localized: "story.viewer.via", defaultValue: "via @\(authorName)", bundle: .main))
                                                 .font(.system(size: 11, weight: .medium))
                                                 .foregroundColor(.white.opacity(0.55))
                                         }
@@ -478,38 +543,65 @@ struct StoryHeaderView: View {
                 }
                 .buttonStyle(.plain)
                 .frame(minHeight: 44)
-                .accessibilityLabel("Profil de \(group.username)")
-                .accessibilityHint("Ouvre le profil de \(group.username)")
+                .accessibilityLabel(String(localized: "story.viewer.a11y.profileOf", defaultValue: "Profil de \(group.username)", bundle: .main))
+                .accessibilityHint(String(localized: "story.viewer.a11y.profileOf.hint", defaultValue: "Ouvre le profil de \(group.username)", bundle: .main))
             }
 
             Spacer()
 
             // Options menu (three dots)
             Menu {
+                // Toggle mode plein écran (session-scoped) — pertinent quelle
+                // que soit la propriété de la story. Placé en tête du menu
+                // pour être accessible immédiatement, avec un `Divider`
+                // suivant qui le sépare visuellement des actions destructives
+                // ou de partage propres à la story courante.
+                Button {
+                    HapticFeedback.light()
+                    isFullscreenStorySession.toggle()
+                    // Synchronise instantanément l'état au repos du chrome :
+                    // mode actif ⇒ caché ; mode inactif ⇒ visible. Le
+                    // touch-and-hold inversera ce repos pendant le hold.
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
+                        chromeVisible = !isFullscreenStorySession
+                    }
+                } label: {
+                    Label(
+                        isFullscreenStorySession
+                            ? String(localized: "story.viewer.fullscreen.exit", defaultValue: "Quitter le plein écran", bundle: .main)
+                            : String(localized: "story.viewer.fullscreen.enter", defaultValue: "Plein écran", bundle: .main),
+                        systemImage: isFullscreenStorySession
+                            ? "arrow.down.right.and.arrow.up.left"
+                            : "arrow.up.left.and.arrow.down.right"
+                    )
+                }
+
+                Divider()
+
                 if let story = currentStory, let group = currentGroup {
                     if isOwnStory {
                         // External share via system share sheet (Messages,
                         // Mail, other apps). Only for public stories.
-                        if story.isPublic, let externalShareURL = makeStoryExternalShareURL(story.id) {
-                            ShareLink(
-                                item: externalShareURL,
-                                subject: Text("Story de @\(group.username)"),
-                                message: Text("Regardez cette story sur Meeshy")
-                            ) {
-                                Label("Partager hors Meeshy", systemImage: "square.and.arrow.up")
+                        // The link is minted on tap so the user always
+                        // shares a trackable `meeshy.me/l/<token>` URL.
+                        if story.isPublic {
+                            Button {
+                                Task { await mintAndShareStory(story.id) }
+                            } label: {
+                                Label(String(localized: "story.viewer.share.external", defaultValue: "Partager hors Meeshy", bundle: .main), systemImage: "square.and.arrow.up")
                             }
                             Divider()
                         }
                         Button(role: .destructive) {
                             deleteCurrentStory()
                         } label: {
-                            Label("Supprimer", systemImage: "trash")
+                            Label(String(localized: "story.viewer.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
                         }
                     } else {
                         Button {
                             selectedProfileUser = .from(storyGroup: group)
                         } label: {
-                            Label("Voir le profil", systemImage: "person.fill")
+                            Label(String(localized: "story.viewer.viewProfile", defaultValue: "Voir le profil", bundle: .main), systemImage: "person.fill")
                         }
 
                         // C.2: repost-as-post entry points. Gated on
@@ -519,7 +611,7 @@ struct StoryHeaderView: View {
                             Button {
                                 repostAsPostDirect()
                             } label: {
-                                Label("Republier en post", systemImage: "arrow.2.squarepath")
+                                Label(String(localized: "story.viewer.repostAsPost", defaultValue: "Republier en post", bundle: .main), systemImage: "arrow.2.squarepath")
                             }
 
                             Button {
@@ -530,20 +622,19 @@ struct StoryHeaderView: View {
                                     authorHandle: group.username
                                 )
                             } label: {
-                                Label("Éditer et republier en post", systemImage: "square.and.pencil")
+                                Label(String(localized: "story.viewer.editAndRepostAsPost", defaultValue: "Éditer et republier en post", bundle: .main), systemImage: "square.and.pencil")
                             }
 
                             // Pilier 18 SOTA — external share complement
                             // (Messages, Mail, other apps) alongside the
                             // internal SharePicker flow that lives elsewhere.
-                            if let externalShareURL = makeStoryExternalShareURL(story.id) {
-                                ShareLink(
-                                    item: externalShareURL,
-                                    subject: Text("Story de @\(group.username)"),
-                                    message: Text("Regardez cette story sur Meeshy")
-                                ) {
-                                    Label("Partager hors Meeshy", systemImage: "square.and.arrow.up")
-                                }
+                            // Mint the TrackingLink on tap so the shared
+                            // URL is `meeshy.me/l/<token>` and the author
+                            // can track external opens.
+                            Button {
+                                Task { await mintAndShareStory(story.id) }
+                            } label: {
+                                Label(String(localized: "story.viewer.share.external", defaultValue: "Partager hors Meeshy", bundle: .main), systemImage: "square.and.arrow.up")
                             }
                         }
 
@@ -552,7 +643,7 @@ struct StoryHeaderView: View {
                         Button(role: .destructive) {
                             showReportSheet = true
                         } label: {
-                            Label("Signaler", systemImage: "exclamationmark.triangle")
+                            Label(String(localized: "story.viewer.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
                         }
                     }
                 }
@@ -570,7 +661,7 @@ struct StoryHeaderView: View {
                     .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
             }
             .frame(minWidth: 44, minHeight: 44)
-            .accessibilityLabel("Options de la story")
+            .accessibilityLabel(String(localized: "story.viewer.a11y.options", defaultValue: "Options de la story", bundle: .main))
 
             // Close button
             Button {
@@ -590,8 +681,8 @@ struct StoryHeaderView: View {
                     .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
             }
             .frame(minWidth: 44, minHeight: 44)
-            .accessibilityLabel("Fermer")
-            .accessibilityHint("Ferme le lecteur de stories")
+            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
+            .accessibilityHint(String(localized: "story.viewer.a11y.close.hint", defaultValue: "Ferme le lecteur de stories", bundle: .main))
         }
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(user: user)
@@ -618,6 +709,11 @@ struct StoryHeaderView: View {
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $shareableStoryLink) { link in
+            // Trackable `meeshy.me/l/<token>` URL minted in
+            // `mintAndShareStory` — the author owns the analytics.
+            ShareSheet(activityItems: [link.url])
         }
     }
 }

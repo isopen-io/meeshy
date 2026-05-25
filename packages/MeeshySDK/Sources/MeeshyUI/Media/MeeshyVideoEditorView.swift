@@ -1,553 +1,304 @@
 import SwiftUI
-import AVKit
-import Speech
+import MeeshySDK
 
-// MARK: - Private Types
-
-private enum VideoTranscriptionState {
-    case idle, loading, done, failed
-}
-
-private struct VideoPlayPauseFlash: View {
-    let isPlaying: Bool
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .fill(.black.opacity(0.4))
-                .frame(width: 72, height: 72)
-            Circle()
-                .stroke(.white.opacity(0.12), lineWidth: 1)
-                .frame(width: 72, height: 72)
-            Image(systemName: isPlaying ? "play.fill" : "pause.fill")
-                .font(.system(size: 28, weight: .bold))
-                .foregroundStyle(.white)
-                .offset(x: isPlaying ? 2 : 0)
-        }
-    }
-}
-
-// MARK: - Meeshy Video Editor View
-
+/// Unified, immersive video editor.
+///
+/// Replaces the old two-step *edit* / *use* flow with a single fullscreen
+/// surface: a preview stage, a zoomable timeline, a Simple / Pro switch and
+/// the FAB-driven tool band borrowed from the Story composer. Editing is
+/// non-destructive — the source file is only flattened on confirm.
 public struct MeeshyVideoEditorView: View {
-    let url: URL
-    let accentColor: String
-    let onAccept: () -> Void
-    let onCancel: (() -> Void)?
+    @StateObject private var viewModel: VideoEditorViewModel
 
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.theme) private var theme
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.scenePhase) private var scenePhase
 
     public init(
         url: URL,
+        context: MediaPreviewContext = .post,
         accentColor: String = MeeshyColors.brandPrimaryHex,
-        onAccept: @escaping () -> Void,
+        onComplete: @escaping (VideoEditResult) -> Void,
         onCancel: (() -> Void)? = nil
     ) {
-        self.url = url
-        self.accentColor = accentColor
-        self.onAccept = onAccept
-        self.onCancel = onCancel
+        _viewModel = StateObject(wrappedValue: VideoEditorViewModel(
+            url: url,
+            context: context,
+            accentColor: accentColor,
+            onComplete: onComplete,
+            onCancel: onCancel ?? {}
+        ))
     }
 
-    // Player state
-    @State private var player: AVPlayer?
-    @State private var timeObserver: Any?
-    @State private var loopObserver: NSObjectProtocol?
-    @State private var isPlaying = true
-    @State private var isMuted = false
-    @State private var currentTime: Double = 0
-    @State private var totalDuration: Double = 1
-    @State private var durationText = "0:00"
-
-    // Controls visibility
-    @State private var controlsVisible = true
-    @State private var hideTask: Task<Void, Never>?
-
-    // Transcription
-    @State private var transcriptionState: VideoTranscriptionState = .idle
-    @State private var transcription: String = ""
-    @State private var showTranscription = false
-    @State private var recognitionTask: SFSpeechRecognitionTask?
-
-    private var accentGradient: LinearGradient {
-        LinearGradient(
-            colors: [Color(hex: accentColor), Color(hex: accentColor).opacity(0.85)],
-            startPoint: .leading, endPoint: .trailing
-        )
-    }
+    private var accent: Color { Color(hex: viewModel.accentColor) }
 
     public var body: some View {
-        ZStack(alignment: .bottom) {
-            Color.black.ignoresSafeArea()
-
-            if let player {
-                VideoPlayer(player: player)
-                    .ignoresSafeArea()
-                    .disabled(true)
-            }
-
-            Color.clear
-                .ignoresSafeArea()
-                .contentShape(Rectangle())
-                .onTapGesture { handleTap() }
-
-            LinearGradient(
-                colors: [.clear, .black.opacity(0.9)],
-                startPoint: UnitPoint(x: 0.5, y: 0.3),
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
-
-            if controlsVisible {
-                controlsOverlay
-                    .transition(.opacity)
-            }
-        }
-        .animation(.easeInOut(duration: 0.2), value: controlsVisible)
-        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showTranscription)
-        .onAppear { setup() }
-        .onDisappear { teardown() }
-    }
-
-    // MARK: - Controls Overlay
-
-    private var controlsOverlay: some View {
-        ZStack(alignment: .bottom) {
-            VideoPlayPauseFlash(isPlaying: isPlaying)
-
-            VStack {
-                topBar
-                Spacer()
-            }
-            .ignoresSafeArea(edges: .top)
+        ZStack {
+            theme.backgroundPrimary.ignoresSafeArea()
 
             VStack(spacing: 0) {
-                if showTranscription {
-                    transcriptionPanel
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-                scrubber
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 10)
-                actions
-                    .padding(.horizontal, 18)
-                    .padding(.bottom, 36)
+                topBar
+                historyRow
+                VideoEditorStage(viewModel: viewModel)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color.black)
+                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+                VideoEditorTimeline(viewModel: viewModel)
+                    .padding(.horizontal, 8)
+                bottomDock
             }
+            .padding(.top, 8)
+
+            if let banner = viewModel.banner {
+                bannerView(banner)
+            }
+
+            if viewModel.isExporting || exportFailed {
+                exportOverlay
+            }
+        }
+        .animation(.spring(response: 0.32, dampingFraction: 0.86), value: viewModel.panel)
+        .animation(.easeInOut(duration: 0.25), value: viewModel.banner)
+        .task { await viewModel.load() }
+        .onDisappear { viewModel.teardown() }
+        .adaptiveOnChange(of: scenePhase) { _, phase in viewModel.handleScenePhase(phase) }
+        .alert(
+            "Reprendre l'édition ?",
+            isPresented: Binding(
+                get: { viewModel.pendingRecovery != nil },
+                set: { if !$0 { viewModel.discardRecovery() } }
+            )
+        ) {
+            Button("Restaurer") { viewModel.acceptRecovery() }
+            Button("Recommencer", role: .cancel) { viewModel.discardRecovery() }
+        } message: {
+            Text("Une session d'édition non terminée a été retrouvée pour cette vidéo.")
         }
     }
 
-    // MARK: - Top Bar
+    // MARK: - Top bar
 
     private var topBar: some View {
         HStack(spacing: 10) {
             Button {
-                onCancel?()
-                dismiss()
+                viewModel.cancelEditing()
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(theme.textPrimary)
                     .frame(width: 38, height: 38)
-                    .background(.black.opacity(0.55), in: Circle())
-                    .overlay(Circle().stroke(.white.opacity(0.1), lineWidth: 0.5))
+                    .background(theme.glassMaterial, in: Circle())
             }
+            .buttonStyle(.plain)
 
             Spacer()
 
-            Text(durationText)
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                .foregroundStyle(.white.opacity(0.85))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(.black.opacity(0.55), in: Capsule())
+            VideoEditorModeSwitcher(
+                mode: viewModel.mode,
+                isDark: colorScheme == .dark,
+                onSelect: viewModel.setMode
+            )
+            .equatable()
+
+            Spacer()
 
             Button {
-                isMuted.toggle()
-                player?.isMuted = isMuted
-                HapticFeedback.light()
-                rescheduleHide()
-            } label: {
-                Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(isMuted ? Color(hex: accentColor) : .white)
-                    .frame(width: 38, height: 38)
-                    .background(
-                        isMuted
-                            ? Color(hex: accentColor).opacity(0.18)
-                            : Color.black.opacity(0.55),
-                        in: Circle()
-                    )
-                    .overlay(Circle().stroke(.white.opacity(0.1), lineWidth: 0.5))
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 52)
-        .padding(.bottom, 10)
-    }
-
-    // MARK: - Scrubber
-
-    private var scrubber: some View {
-        VStack(spacing: 5) {
-            GeometryReader { geo in
-                let progress = totalDuration > 0 ? min(1, max(0, currentTime / totalDuration)) : 0
-                let w = geo.size.width
-
-                ZStack(alignment: .leading) {
-                    Capsule().fill(.white.opacity(0.2)).frame(height: 3)
-
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [Color(hex: accentColor), Color(hex: accentColor).opacity(0.6)],
-                                startPoint: .leading,
-                                endPoint: UnitPoint(x: progress, y: 0.5)
-                            )
-                        )
-                        .frame(width: w * progress, height: 3)
-
-                    Circle()
-                        .fill(.white)
-                        .frame(width: 14, height: 14)
-                        .shadow(color: Color(hex: accentColor).opacity(0.5), radius: 4)
-                        .offset(x: w * progress - 7)
-                }
-                .frame(height: 22, alignment: .center)
-                .contentShape(Rectangle())
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { val in
-                            let pct = max(0, min(1, val.location.x / w))
-                            currentTime = pct * totalDuration
-                            player?.seek(to: CMTime(seconds: currentTime, preferredTimescale: 600))
-                            rescheduleHide()
-                        }
-                )
-            }
-            .frame(height: 22)
-
-            HStack {
-                Text(formatTime(currentTime))
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.45))
-                Spacer()
-                Text(durationText)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.45))
-            }
-        }
-    }
-
-    // MARK: - Transcription Panel
-
-    private var transcriptionPanel: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 7) {
-                Circle()
-                    .fill(Color(hex: accentColor).opacity(0.2))
-                    .frame(width: 26, height: 26)
-                    .overlay(
-                        Image(systemName: "waveform")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(Color(hex: accentColor))
-                    )
-                Text(String(localized: "media.video.transcription", defaultValue: "Transcription", bundle: .module))
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.white)
-                Spacer()
-                Button { withAnimation { showTranscription = false } } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.4))
-                        .frame(width: 24, height: 24)
-                }
-            }
-
-            Rectangle().fill(.white.opacity(0.08)).frame(height: 0.5)
-
-            switch transcriptionState {
-            case .idle:
-                EmptyView()
-            case .loading:
-                HStack(spacing: 10) {
-                    ProgressView()
-                        .tint(Color(hex: accentColor))
-                        .scaleEffect(0.85)
-                    Text(String(localized: "media.video.analyzingAudio", defaultValue: "Analyse de l'audio\u{2026}", bundle: .module))
-                        .font(.system(size: 13))
-                        .foregroundStyle(.white.opacity(0.55))
-                }
-                .padding(.vertical, 2)
-            case .done:
-                ScrollView(.vertical, showsIndicators: false) {
-                    Text(transcription.isEmpty ? String(localized: "media.video.noAudioDetected", defaultValue: "Aucun audio d\u{00E9}tect\u{00E9}.", bundle: .module) : transcription)
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundStyle(.white.opacity(0.88))
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .frame(maxHeight: 110)
-            case .failed:
-                HStack(spacing: 7) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 12))
-                        .foregroundStyle(Color(hex: "FF453A"))
-                    Text(String(localized: "media.video.transcriptionUnavailable", defaultValue: "Transcription indisponible.", bundle: .module))
-                        .font(.system(size: 13))
-                        .foregroundStyle(Color(hex: "FF453A").opacity(0.9))
-                }
-            }
-        }
-        .padding(14)
-        .background {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(Color(hex: accentColor).opacity(0.15), lineWidth: 0.5)
-                )
-        }
-        .padding(.horizontal, 16)
-        .padding(.bottom, 10)
-    }
-
-    // MARK: - Actions
-
-    private var actions: some View {
-        HStack(spacing: 10) {
-            Button { handleTranscriptionTap() } label: {
-                HStack(spacing: 7) {
-                    if case .loading = transcriptionState {
-                        ProgressView()
-                            .tint(Color(hex: accentColor))
-                            .scaleEffect(0.72)
-                    } else {
-                        Image(systemName: transcriptionIcon)
-                            .font(.system(size: 13, weight: .semibold))
-                    }
-                    Text(transcriptionLabel)
-                        .font(.system(size: 14, weight: .semibold))
-                }
-                .foregroundStyle(transcriptionAccentColor)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 13)
-                .background {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(.black.opacity(0.5))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(transcriptionAccentColor.opacity(0.25), lineWidth: 0.5)
-                        )
-                }
-            }
-            .disabled(isTranscribing)
-
-            Button {
-                onAccept()
-                HapticFeedback.success()
-                dismiss()
+                viewModel.confirm()
             } label: {
                 HStack(spacing: 5) {
-                    Image(systemName: "eye")
-                        .font(.system(size: 13, weight: .bold))
-                    Text(String(localized: "media.video.preview", defaultValue: "Aper\u{00E7}u", bundle: .module))
-                        .font(.system(size: 15, weight: .bold))
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 12, weight: .bold))
+                    Text("Terminer")
+                        .font(.system(size: 14, weight: .bold))
                 }
                 .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 13)
-                .background {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(accentGradient)
-                        .shadow(color: Color(hex: accentColor).opacity(0.45), radius: 10, y: 4)
-                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 9)
+                .background(Capsule().fill(MeeshyColors.brandGradient))
             }
+            .buttonStyle(.plain)
+            .disabled(viewModel.isExporting)
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 6)
+    }
+
+    // MARK: - History row
+
+    private var historyRow: some View {
+        HStack(spacing: 8) {
+            historyButton(icon: "arrow.uturn.backward", enabled: viewModel.canUndo) {
+                viewModel.undo()
+            }
+            historyButton(icon: "arrow.uturn.forward", enabled: viewModel.canRedo) {
+                viewModel.redo()
+            }
+            Spacer()
+            if viewModel.document.hasEdits {
+                Button {
+                    viewModel.resetAllEdits()
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.counterclockwise")
+                        Text("Réinitialiser")
+                    }
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(theme.textSecondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 4)
+    }
+
+    private func historyButton(icon: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(enabled ? theme.textPrimary : theme.textMuted.opacity(0.5))
+                .frame(width: 32, height: 32)
+                .background(theme.glassMaterial, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+    }
+
+    // MARK: - Bottom dock
+
+    @ViewBuilder
+    private var bottomDock: some View {
+        if viewModel.panel.isVisible {
+            VideoEditorBand(viewModel: viewModel)
+                .padding(.horizontal, 6)
+                .padding(.top, 6)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+        } else {
+            HStack {
+                VideoEditorFABColumn(
+                    activeCategory: viewModel.panel.activeCategory,
+                    onTap: viewModel.tapFAB
+                )
+                Spacer()
+            }
+            .padding(.leading, 16)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
+            .transition(.opacity)
         }
     }
 
-    // MARK: - Computed
+    // MARK: - Banner
 
-    private var isTranscribing: Bool {
-        if case .loading = transcriptionState { return true }
+    private func bannerView(_ banner: VideoEditorViewModel.Banner) -> some View {
+        VStack {
+            HStack(spacing: 8) {
+                Image(systemName: banner.isError ? "exclamationmark.triangle.fill" : "info.circle.fill")
+                Text(banner.message)
+                    .font(.system(size: 12, weight: .medium))
+                    .lineLimit(2)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(banner.isError ? theme.error : accent)
+            )
+            .padding(.horizontal, 20)
+            .padding(.top, 70)
+            Spacer()
+        }
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .onTapGesture { viewModel.banner = nil }
+        .task(id: banner.id) {
+            try? await Task.sleep(for: .seconds(4))
+            if viewModel.banner?.id == banner.id { viewModel.banner = nil }
+        }
+    }
+
+    // MARK: - Export overlay
+
+    private var exportFailed: Bool {
+        if case .failed = viewModel.exportPhase { return true }
         return false
     }
 
-    private var transcriptionAccentColor: Color {
-        switch transcriptionState {
-        case .failed: return Color(hex: "FF453A")
-        default: return Color(hex: accentColor)
-        }
+    private var exportProgress: Double {
+        if case .exporting(let value) = viewModel.exportPhase { return value }
+        return 0
     }
 
-    private var transcriptionIcon: String {
-        switch transcriptionState {
-        case .idle:    return "waveform"
-        case .loading: return "waveform"
-        case .done:    return showTranscription ? "eye.slash" : "eye"
-        case .failed:  return "arrow.clockwise"
-        }
-    }
+    private var exportOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.72).ignoresSafeArea()
 
-    private var transcriptionLabel: String {
-        switch transcriptionState {
-        case .idle:    return String(localized: "media.video.transcribe", defaultValue: "Transcrire", bundle: .module)
-        case .loading: return "\u{2026}"
-        case .done:    return showTranscription ? String(localized: "media.video.hide", defaultValue: "Masquer", bundle: .module) : String(localized: "media.video.show", defaultValue: "Voir", bundle: .module)
-        case .failed:  return String(localized: "media.video.retry", defaultValue: "R\u{00E9}essayer", bundle: .module)
-        }
-    }
-
-    // MARK: - Player setup
-
-    private func setup() {
-        let avPlayer = AVPlayer(url: url)
-        player = avPlayer
-        avPlayer.isMuted = isMuted
-        avPlayer.play()
-        loadTotalDuration()
-        addTimeObserver(avPlayer)
-        addLoopObserver(avPlayer)
-        scheduleHide()
-    }
-
-    private func teardown() {
-        hideTask?.cancel()
-        recognitionTask?.cancel()
-        if let obs = timeObserver { player?.removeTimeObserver(obs) }
-        if let obs = loopObserver { NotificationCenter.default.removeObserver(obs) }
-        player?.pause()
-        player = nil
-    }
-
-    private func addTimeObserver(_ avPlayer: AVPlayer) {
-        let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
-        timeObserver = avPlayer.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
-            Task { @MainActor in self.currentTime = time.seconds }
-        }
-    }
-
-    private func addLoopObserver(_ avPlayer: AVPlayer) {
-        loopObserver = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime,
-            object: avPlayer.currentItem,
-            queue: .main
-        ) { _ in
-            avPlayer.seek(to: .zero)
-            avPlayer.play()
-        }
-    }
-
-    private func loadTotalDuration() {
-        Task {
-            let asset = AVURLAsset(url: url)
-            if let dur = try? await asset.load(.duration) {
-                let s = CMTimeGetSeconds(dur)
-                await MainActor.run {
-                    totalDuration = max(1, s)
-                    durationText = formatTime(s)
-                }
-            }
-        }
-    }
-
-    // MARK: - Interaction
-
-    private func handleTap() {
-        if isPlaying {
-            player?.pause()
-            isPlaying = false
-            hideTask?.cancel()
-            withAnimation { controlsVisible = true }
-        } else {
-            player?.play()
-            isPlaying = true
-            scheduleHide()
-            withAnimation { controlsVisible = true }
-        }
-        HapticFeedback.light()
-    }
-
-    private func scheduleHide() {
-        hideTask?.cancel()
-        hideTask = Task {
-            try? await Task.sleep(for: .seconds(2.5))
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    controlsVisible = false
-                }
-            }
-        }
-    }
-
-    private func rescheduleHide() {
-        scheduleHide()
-    }
-
-    // MARK: - Transcription (Apple Speech framework)
-
-    private func handleTranscriptionTap() {
-        switch transcriptionState {
-        case .idle, .failed: startTranscription()
-        case .done: withAnimation { showTranscription.toggle() }
-        case .loading: break
-        }
-        rescheduleHide()
-    }
-
-    private func startTranscription() {
-        transcriptionState = .loading
-        withAnimation { showTranscription = true }
-
-        Task {
-            let status = await withCheckedContinuation { (continuation: CheckedContinuation<SFSpeechRecognizerAuthorizationStatus, Never>) in
-                SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0) }
-            }
-            guard status == .authorized else {
-                await MainActor.run { transcriptionState = .failed }
-                return
-            }
-
-            guard let recognizer = SFSpeechRecognizer(), recognizer.isAvailable else {
-                await MainActor.run { transcriptionState = .failed }
-                return
-            }
-
-            let request = SFSpeechURLRecognitionRequest(url: url)
-            request.shouldReportPartialResults = false
-
-            do {
-                let text = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
-                    var resumed = false
-                    let task = recognizer.recognitionTask(with: request) { result, error in
-                        guard !resumed else { return }
-                        if let error {
-                            resumed = true
-                            continuation.resume(throwing: error)
-                        } else if let result, result.isFinal {
-                            resumed = true
-                            continuation.resume(returning: result.bestTranscription.formattedString)
-                        }
+            VStack(spacing: 16) {
+                if case .failed(let message) = viewModel.exportPhase {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 34))
+                        .foregroundStyle(theme.warning)
+                    Text("Export impossible")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(.white)
+                    Text(message)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white.opacity(0.7))
+                        .multilineTextAlignment(.center)
+                    HStack(spacing: 12) {
+                        overlayButton("Fermer", filled: false) { viewModel.cancelExport() }
+                        overlayButton("Réessayer", filled: true) { viewModel.confirm() }
                     }
-                    recognitionTask = task
+                } else {
+                    progressRing
+                    Text(viewModel.exportPhase == .preparing ? "Préparation…" : "Export \(Int(exportProgress * 100)) %")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.white)
+                    overlayButton("Annuler", filled: false) { viewModel.cancelExport() }
                 }
-                await MainActor.run {
-                    transcription = text
-                    transcriptionState = .done
-                }
-            } catch {
-                await MainActor.run { transcriptionState = .failed }
             }
+            .padding(28)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(theme.backgroundSecondary)
+            )
+            .padding(40)
         }
+        .transition(.opacity)
     }
 
-    // MARK: - Helpers
+    private var progressRing: some View {
+        ZStack {
+            Circle()
+                .stroke(.white.opacity(0.15), lineWidth: 6)
+            Circle()
+                .trim(from: 0, to: max(0.02, exportProgress))
+                .stroke(accent, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+            Image(systemName: "film")
+                .font(.system(size: 20))
+                .foregroundStyle(.white.opacity(0.8))
+        }
+        .frame(width: 78, height: 78)
+        .animation(.easeOut(duration: 0.2), value: exportProgress)
+    }
 
-    private func formatTime(_ s: Double) -> String {
-        let seconds = max(0, s)
-        let m = Int(seconds) / 60
-        let sec = Int(seconds) % 60
-        return String(format: "%d:%02d", m, sec)
+    private func overlayButton(_ title: String, filled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(filled ? Color.white : theme.textPrimary)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 9)
+                .background(
+                    Capsule().fill(filled
+                        ? AnyShapeStyle(MeeshyColors.brandGradient)
+                        : AnyShapeStyle(theme.glassMaterial))
+                )
+        }
+        .buttonStyle(.plain)
     }
 }

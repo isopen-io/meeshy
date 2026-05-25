@@ -180,12 +180,15 @@ export class UploadProcessor {
       // Écrire le buffer temporairement
       fs.writeFile(tempInputPath, buffer)
         .then(() => {
-          // Amplifier avec ffmpeg (+9dB)
+          // Amplifier avec ffmpeg (+9dB). Bitrate aligné sur la source iOS
+          // (64 kbps mono AAC) — ré-encoder à 128 kbps doublait la taille
+          // sans bénéfice perceptif puisque l'audio est déjà mono parlé.
           const ffmpeg = spawn('ffmpeg', [
             '-i', tempInputPath,
             '-af', 'volume=9dB',  // Amplification de +9dB
             '-c:a', 'aac',        // Codec audio AAC (universel)
-            '-b:a', '128k',       // Bitrate 128kbps
+            '-b:a', '64k',        // Bitrate aligné sur la source mobile
+            '-ac', '1',           // Mono (voix)
             '-f', ffmpegFormat,   // Format de sortie explicite
             '-y',                 // Overwrite output
             tempOutputPath
@@ -330,8 +333,15 @@ export class UploadProcessor {
     }
     metadata.thumbnailGenerated = !!thumbnailPath;
 
-    // ThumbHash: backend fallback — skip if client already computed it
-    let thumbHash: string | null = providedMetadata?.thumbHash ?? null;
+    // ThumbHash: backend fallback — skip if client already computed it.
+    // Defense-in-depth length cap (cf. tus-handler.ts) — protège contre un
+    // payload malformé / malveillant qui ferait gonfler la doc DB.
+    const MAX_THUMBHASH_LENGTH = 100;
+    const rawClientThumbHash = providedMetadata?.thumbHash ?? null;
+    let thumbHash: string | null =
+      (rawClientThumbHash && rawClientThumbHash.length <= MAX_THUMBHASH_LENGTH)
+        ? rawClientThumbHash
+        : null;
     if (!thumbHash) {
       const { ThumbHashGenerator } = await import('./ThumbHashGenerator.js');
       thumbHash = await ThumbHashGenerator.generate(path.join(this.uploadBasePath, filePath), file.mimeType);

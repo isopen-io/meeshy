@@ -80,6 +80,15 @@ class TranslationJob:
     model_version: str = "mshy_gen_v1"
     embedding_type: str = "openvoice_v2"
 
+    # Private in-process reference to the PipelineResult instance produced by
+    # _process_job. Kept separately from `result` (which is the Gateway-format
+    # dict published via ZMQ) so that translate_sync can return the dataclass
+    # directly without round-tripping through `PipelineResult(**job.result)` —
+    # that round-trip used to crash with
+    #   TypeError: PipelineResult.__init__() got an unexpected keyword argument 'translationId'
+    # because to_dict() emits camelCase Gateway keys, not the dataclass field names.
+    _pipeline_result: Optional[Any] = field(default=None, repr=False, compare=False)
+
     def to_dict(self) -> Dict[str, Any]:
         """Convertit en dictionnaire"""
         return {
@@ -668,6 +677,7 @@ class TranslationPipelineService:
             job.current_step = "completed"
             job.completed_at = datetime.now()
             job.result = result.to_dict()
+            job._pipeline_result = result
 
             # Stats
             self._stats["jobs_completed"] += 1
@@ -858,7 +868,12 @@ class TranslationPipelineService:
             job = await self.get_job(job.id)
 
         if job.status == JobStatus.COMPLETED:
-            return PipelineResult(**job.result) if job.result else PipelineResult(job_id=job.id)
+            # Prefer the in-process PipelineResult ref over reconstructing from the
+            # Gateway-format dict (which uses camelCase keys that don't match the
+            # dataclass __init__).
+            if job._pipeline_result is not None:
+                return job._pipeline_result
+            return PipelineResult(job_id=job.id)
         else:
             raise Exception(f"Job failed: {job.error}")
 

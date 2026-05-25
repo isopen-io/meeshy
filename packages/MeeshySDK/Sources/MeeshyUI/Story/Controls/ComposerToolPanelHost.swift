@@ -5,7 +5,7 @@ import MeeshySDK
 
 struct ComposerToolPanelHost: View {
     let tool: StoryToolMode
-    @Bindable var viewModel: StoryComposerViewModel
+    @ObservedObject var viewModel: StoryComposerViewModel
     @Binding var drawingCanvas: PKCanvasView
     @Binding var drawingTool: DrawingTool
     @Binding var selectedFilter: StoryFilter?
@@ -13,6 +13,7 @@ struct ComposerToolPanelHost: View {
     @Binding var showAudioDocumentPicker: Bool
     @Binding var showVoiceRecorderSheet: Bool
     let onBack: () -> Void
+    var onSwitchTool: ((StoryToolMode) -> Void)? = nil
     var onEditMedia: ((String) -> Void)? = nil
     var onEditText: ((String) -> Void)? = nil
     /// Suppression d'un texte depuis la liste : remontée jusqu'à
@@ -37,21 +38,9 @@ struct ComposerToolPanelHost: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            HStack {
-                Button(action: { onBack() }) {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 14, weight: .semibold))
-                    Text(toolTitle).font(.system(size: 14, weight: .semibold))
-                }
-                .foregroundColor(primaryText)
-                .buttonStyle(.plain)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(.ultraThinMaterial, in: Capsule())
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            headerRow
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
 
             // Tool-specific body — Phase 2 placeholder. Wired in Phase 4.
             placeholderPanel
@@ -65,9 +54,103 @@ struct ComposerToolPanelHost: View {
         // et rendait certaines icônes ultra pâles.
     }
 
-    private var toolTitle: String {
+    /// En-tête du panel : `< {Tool}` à gauche + chips de switch direct vers
+    /// les autres éditeurs à droite (scroll horizontal si la largeur ne suffit
+    /// pas). Tap d'un chip → `viewModel.selectTool(other)` (l'overlay du band
+    /// gère la transition vers le nouveau panel).
+    @ViewBuilder
+    private var headerRow: some View {
+        HStack(spacing: 8) {
+            backButton
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(otherTools, id: \.rawValue) { other in
+                        switchChip(for: other)
+                    }
+                }
+            }
+        }
+    }
+
+    private var backButton: some View {
+        Button(action: { onBack() }) {
+            HStack(spacing: 4) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 14, weight: .semibold))
+                Text(toolTitle).font(.system(size: 14, weight: .semibold))
+            }
+        }
+        .foregroundColor(primaryText)
+        .buttonStyle(.plain)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(.ultraThinMaterial, in: Capsule())
+        .accessibilityLabel(String(
+            localized: "story.composer.tool.back",
+            defaultValue: "Retour",
+            bundle: .module
+        ))
+        .accessibilityHint(toolTitle)
+    }
+
+    private func switchChip(for other: StoryToolMode) -> some View {
+        Button {
+            onSwitchTool?(other)
+            HapticFeedback.light()
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: Self.icon(for: other))
+                    .font(.system(size: 11, weight: .semibold))
+                Text(Self.title(for: other))
+                    .font(.system(size: 12, weight: .medium))
+            }
+            .foregroundColor(secondaryText)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                Capsule()
+                    .fill(colorScheme == .dark
+                          ? Color.white.opacity(0.08)
+                          : MeeshyColors.indigo950.opacity(0.06))
+            )
+            .overlay(
+                Capsule()
+                    .stroke(mutedText.opacity(0.25), lineWidth: 0.5)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Self.title(for: other))
+        .accessibilityHint(String(
+            localized: "story.composer.tool.switch.hint",
+            defaultValue: "Ouvre l'éditeur",
+            bundle: .module
+        ))
+    }
+
+    /// Tous les éditeurs SAUF celui couramment ouvert. Ordre stable depuis
+    /// `StoryToolMode.allCases` (media, drawing, text, texture, filters,
+    /// timeline) — i.e. l'ordre des FABs du composer.
+    private var otherTools: [StoryToolMode] {
+        StoryToolMode.allCases.filter { $0 != tool }
+    }
+
+    private static func icon(for tool: StoryToolMode) -> String {
+        switch tool {
+        case .media:    return "play.rectangle.fill"
+        case .audio:    return "music.note"
+        case .drawing:  return "pencil.tip"
+        case .text:     return "textformat"
+        case .texture:  return "paintpalette.fill"
+        case .filters:  return "camera.filters"
+        case .timeline: return "clock"
+        }
+    }
+
+    private static func title(for tool: StoryToolMode) -> String {
         switch tool {
         case .media:    return "Médias"
+        case .audio:    return "Son"
         case .drawing:  return "Dessin"
         case .text:     return "Texte"
         case .texture:  return "Fond"
@@ -76,9 +159,12 @@ struct ComposerToolPanelHost: View {
         }
     }
 
+    private var toolTitle: String { Self.title(for: tool) }
+
     private var panelHeight: CGFloat {
         switch tool {
-        case .media:    return 280
+        case .media:    return 220
+        case .audio:    return 220
         case .drawing:  return 140
         case .text:     return 280
         case .texture:  return 160
@@ -92,6 +178,8 @@ struct ComposerToolPanelHost: View {
         switch tool {
         case .media:
             mediaPanel
+        case .audio:
+            audioPanel
         case .drawing:
             drawingPanel
         case .text:
@@ -105,6 +193,43 @@ struct ComposerToolPanelHost: View {
         }
     }
 
+    // MARK: - Audio Panel
+
+    private var audioPanel: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 8) {
+                if viewModel.canAddAudio {
+                    Button { showAudioDocumentPicker = true } label: {
+                        MediaPillLabel(icon: "waveform", text: String(localized: "story.composer.addAudioFile", defaultValue: "Audio", bundle: .module), destructive: false)
+                    }
+                    Button { showVoiceRecorderSheet = true } label: {
+                        MediaPillLabel(icon: "mic.fill", text: String(localized: "story.composer.record", defaultValue: "Enregistrer", bundle: .module), destructive: false)
+                    }
+                }
+                Spacer()
+            }
+
+            if let audios = viewModel.currentEffects.audioPlayerObjects, !audios.isEmpty {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 4) {
+                        ForEach(audios) { audio in
+                            StoryAudioCell(
+                                audio: audio,
+                                url: viewModel.loadedAudioURLs[audio.id],
+                                isBackground: viewModel.isBackground(id: audio.id),
+                                onToggleBackground: { viewModel.toggleBackground(id: audio.id) },
+                                onVolumeChanged: { viewModel.setAudioVolume(audioId: audio.id, volume: $0) },
+                                onDelete: { viewModel.deleteElement(id: audio.id) }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                }
+                .frame(maxHeight: 150)
+            }
+        }
+    }
+
     // MARK: - Media Panel
 
     private var mediaPanel: some View {
@@ -114,14 +239,6 @@ struct ComposerToolPanelHost: View {
                 if viewModel.canAddMedia {
                     PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos])) {
                         MediaPillLabel(icon: "photo.on.rectangle.angled", text: String(localized: "story.composer.addPhotoVideo", defaultValue: "Photo/Video", bundle: .module), destructive: false)
-                    }
-                }
-                if viewModel.canAddAudio {
-                    Button { showAudioDocumentPicker = true } label: {
-                        MediaPillLabel(icon: "waveform", text: String(localized: "story.composer.addAudioFile", defaultValue: "Audio", bundle: .module), destructive: false)
-                    }
-                    Button { showVoiceRecorderSheet = true } label: {
-                        MediaPillLabel(icon: "mic.fill", text: String(localized: "story.composer.record", defaultValue: "Enregistrer", bundle: .module), destructive: false)
                     }
                 }
                 Spacer()
@@ -308,11 +425,7 @@ struct ComposerToolPanelHost: View {
             HStack(spacing: 8) {
                 if viewModel.canAddText {
                     Button {
-                        let new = viewModel.addText()
-                        HapticFeedback.light()
-                        if let id = new?.id {
-                            onEditText?(id)
-                        }
+                        addTextAndEdit()
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "plus.circle.fill")
@@ -348,6 +461,24 @@ struct ComposerToolPanelHost: View {
                 }
                 .frame(maxHeight: 170)
             }
+        }
+        // Ouvrir le panel Texte sur une slide vierge déclenche directement
+        // l'ajout + l'édition inline : pas besoin de re-tapper "Ajouter du
+        // texte" alors qu'on vient explicitement d'entrer dans l'éditeur
+        // texte. Si la slide a déjà du texte, on respecte l'intent (l'user
+        // veut probablement éditer un existant via la liste).
+        .onAppear {
+            if viewModel.currentEffects.textObjects.isEmpty && viewModel.canAddText {
+                addTextAndEdit()
+            }
+        }
+    }
+
+    private func addTextAndEdit() {
+        let new = viewModel.addText()
+        HapticFeedback.light()
+        if let id = new?.id {
+            onEditText?(id)
         }
     }
 

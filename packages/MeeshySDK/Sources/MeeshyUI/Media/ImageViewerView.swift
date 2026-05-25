@@ -84,7 +84,14 @@ public struct ImageViewerView: View {
             : attachment.fileUrl
 
         if !urlStr.isEmpty {
-            CachedAsyncImage(url: urlStr, targetSize: CGSize(width: 280, height: 280)) {
+            // Pass the ThumbHash so the bubble fills in with a recognisable
+            // blur the instant it appears, instead of an empty shimmer while
+            // the network fetch runs.
+            CachedAsyncImage(
+                url: urlStr,
+                targetSize: CGSize(width: 280, height: 280),
+                thumbHash: attachment.thumbHash
+            ) {
                 placeholder(icon: "photo")
                     .shimmer()
             }
@@ -208,8 +215,9 @@ public struct ImageFullscreen: View {
                 .scaleEffect(scale)
                 .offset(offset)
                 .simultaneousGesture(
-                    MagnifyGesture()
-                        .onChanged { value in scale = value.magnification }
+                    // MagnificationGesture (iOS 13+) au lieu de MagnifyGesture (iOS 17+).
+                    MagnificationGesture()
+                        .onChanged { value in scale = value }
                         .onEnded { _ in
                             withAnimation(.spring()) {
                                 scale = max(1, min(5, scale))
@@ -325,31 +333,26 @@ public struct ImageFullscreen: View {
         saveState = .saving
         HapticFeedback.light()
         Task {
-            do {
-                let (data, _) = try await URLSession.shared.data(from: url)
-                let saved = await PhotoLibraryManager.shared.saveImage(data)
-                if saved, let attId = attachmentId {
-                    let body = AttachmentStatusBody(action: "downloaded", playPositionMs: 0, durationMs: 0, complete: true)
-                    let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
-                        endpoint: "/attachments/\(attId)/status", body: body
-                    )
+            // Route through the shared cache pipeline: the bytes are almost
+            // always already resident from rendering the bubble, so this
+            // avoids a redundant network round-trip, works offline, and
+            // PhotoLibraryManager gates on add-only authorization (the app's
+            // Info.plist carries NSPhotoLibraryAddUsageDescription) so a
+            // denied permission resolves to `false` rather than crashing.
+            let saved = await PhotoLibraryManager.shared.saveFromURL(url.absoluteString)
+            if saved, let attId = attachmentId {
+                let body = AttachmentStatusBody(action: "downloaded", playPositionMs: 0, durationMs: 0, complete: true)
+                let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
+                    endpoint: "/attachments/\(attId)/status", body: body
+                )
+            }
+            await MainActor.run {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    saveState = saved ? .saved : .failed
                 }
-                await MainActor.run {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        saveState = saved ? .saved : .failed
-                    }
-                    if saved { HapticFeedback.success() } else { HapticFeedback.error() }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation { saveState = .idle }
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    withAnimation { saveState = .failed }
-                    HapticFeedback.error()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation { saveState = .idle }
-                    }
+                if saved { HapticFeedback.success() } else { HapticFeedback.error() }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                    withAnimation { saveState = .idle }
                 }
             }
         }

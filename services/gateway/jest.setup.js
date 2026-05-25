@@ -9,6 +9,35 @@ process.env.DATABASE_URL = 'file:./test.db';
 process.env.JWT_SECRET = 'test-jwt-secret';
 process.env.GRPC_SERVER_URL = 'localhost:50051';
 
+// Mock isomorphic-dompurify (pulls in jsdom which has ESM deps Jest can't handle)
+jest.mock('isomorphic-dompurify', () => ({
+  __esModule: true,
+  default: {
+    sanitize: (dirty) => {
+      if (typeof dirty !== 'string') return '';
+      return dirty
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+        .replace(/<\/?[^>]+(>|$)/g, '')
+        .replace(/on\w+\s*=\s*"[^"]*"/gi, '')
+        .replace(/javascript:/gi, '');
+    },
+    isValidAttribute: () => true,
+    addHook: () => {},
+    removeHook: () => {},
+    removeAllHooks: () => {},
+  },
+}));
+
+// Mock thumbhash (ESM-only module)
+jest.mock('thumbhash', () => ({
+  __esModule: true,
+  rgbaToThumbHash: () => new Uint8Array(24),
+  thumbHashToRGBA: () => ({ w: 1, h: 1, rgba: new Uint8Array(4) }),
+  thumbHashToDataURL: () => 'data:image/png;base64,',
+  thumbHashToApproximateAspectRatio: () => 1,
+}));
+
 // Mock @signalapp/libsignal-client (ESM module that Jest can't handle)
 jest.mock('@signalapp/libsignal-client', () => {
   // Helper to generate random bytes

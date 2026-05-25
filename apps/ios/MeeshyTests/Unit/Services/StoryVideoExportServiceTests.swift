@@ -6,13 +6,14 @@ import XCTest
 //
 // Covers the orchestration responsibilities of `StoryVideoExportService`
 // in the author-only "Export to share" flow :
-//   1. Routing  — `needsVideoExport == false` slides skip export entirely.
-//   2. Drive    — `needsVideoExport == true` slides trigger the injected
-//                  exporter, propagate progress / phase callbacks, and
-//                  thread the chosen `languages` array to the bake.
-//   3. Fallback — exporter throws → service returns `nil` so the share UI
+//   1. Drive    — every slide (static or animated) triggers the injected
+//                  exporter, propagates progress / phase callbacks, and
+//                  threads the chosen `languages` array to the bake. The
+//                  compositor synthesises a transparent video track when
+//                  no background video exists (see StoryExporter B1).
+//   2. Fallback — exporter throws → service returns `nil` so the share UI
 //                  surfaces a friendly error to the user.
-//   4. Cleanup  — `cleanupExport(at:)` removes the temp MP4 deterministically.
+//   3. Cleanup  — `cleanupExport(at:)` removes the temp MP4 deterministically.
 
 @MainActor
 final class StoryVideoExportServiceTests: XCTestCase {
@@ -38,9 +39,13 @@ final class StoryVideoExportServiceTests: XCTestCase {
                           effects: StoryEffects(mediaObjects: [media]))
     }
 
-    // MARK: - 1. Routing
+    // MARK: - 1. Drive
 
-    func test_prepareExport_staticSlide_skipsExport_returnsNil() async {
+    func test_prepareExport_staticSlide_triggersExport_returnsURL() async {
+        // Universal export — static slides bake via the same path as
+        // animated ones. The synthetic transparent track in
+        // StoryExporter (B1) provides a substrate so the compositor can
+        // still render text/sticker/image overlays into an MP4.
         let (sut, exporter) = makeSUT()
 
         let result = await sut.prepareExport(
@@ -50,26 +55,35 @@ final class StoryVideoExportServiceTests: XCTestCase {
             onPhaseChange: nil
         )
 
-        XCTAssertNil(result)
-        XCTAssertEqual(exporter.exportCallCount, 0,
-                       "Static slide must NOT invoke the exporter.")
+        XCTAssertNotNil(result)
+        XCTAssertEqual(exporter.exportCallCount, 1,
+                       "Static slide must still invoke the exporter.")
+        XCTAssertEqual(result?.pathExtension, "mp4")
+        XCTAssertEqual(result, exporter.lastOutputURL)
+
+        if let url = result {
+            sut.cleanupExport(at: url)
+        }
     }
 
-    func test_prepareExport_staticSlide_doesNotEmitPhase() async {
+    func test_prepareExport_staticSlide_emitsExportingPhase() async {
+        // The phase callback fires for every export — the share UI relies
+        // on `.exporting` to render its progress feedback regardless of
+        // the slide's animated content.
         let (sut, _) = makeSUT()
         var phases: [StoryExportPhase] = []
 
-        _ = await sut.prepareExport(
+        let url = await sut.prepareExport(
             slide: makeStaticSlide(),
             languages: [],
             onProgress: nil,
             onPhaseChange: { phases.append($0) }
         )
 
-        XCTAssertEqual(phases, [])
-    }
+        XCTAssertEqual(phases, [.exporting])
 
-    // MARK: - 2. Drive
+        if let url { sut.cleanupExport(at: url) }
+    }
 
     func test_prepareExport_videoSlide_triggersExport_returnsURL() async {
         let (sut, exporter) = makeSUT(exporterBehavior: .success)
@@ -145,7 +159,7 @@ final class StoryVideoExportServiceTests: XCTestCase {
         if let url { sut.cleanupExport(at: url) }
     }
 
-    // MARK: - 3. Fallback
+    // MARK: - 2. Fallback
 
     func test_prepareExport_exportFailure_returnsNil() async {
         let (sut, exporter) = makeSUT(
@@ -185,7 +199,7 @@ final class StoryVideoExportServiceTests: XCTestCase {
         XCTAssertEqual(phases, [.exporting])
     }
 
-    // MARK: - 4. Cleanup
+    // MARK: - 3. Cleanup
 
     func test_cleanupExport_existingFile_removesIt() throws {
         let (sut, _) = makeSUT()

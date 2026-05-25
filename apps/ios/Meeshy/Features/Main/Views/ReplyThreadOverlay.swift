@@ -93,18 +93,19 @@ struct ReplyThreadOverlay: View {
     private func loadThreadFromAPI() async {
         isLoading = true
         loadError = nil
+        let user = AuthManager.shared.currentUser
         do {
-            let response: APIResponse<ThreadData> = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/threads/\(parentMessageId)"
+            let result = try await ReplyThreadLoader().loadThread(
+                conversationId: conversationId,
+                parentMessageId: parentMessageId,
+                currentUserId: user?.id ?? "",
+                currentUsername: user?.username
             )
-            let data = response.data
-            let userId = AuthManager.shared.currentUser?.id ?? ""
-            let username = AuthManager.shared.currentUser?.username
-            parentMessage = data.parent.toMessage(currentUserId: userId, currentUsername: username)
-            replies = data.replies.map { $0.toMessage(currentUserId: userId, currentUsername: username) }
+            parentMessage = result.parent
+            replies = result.replies
         } catch {
             Logger.messages.error("Failed to load thread: \(error.localizedDescription)")
-            loadError = "Impossible de charger la discussion"
+            loadError = String(localized: "reply.thread.load_error", defaultValue: "Impossible de charger la discussion", bundle: .main)
         }
         isLoading = false
     }
@@ -150,12 +151,12 @@ struct ReplyThreadOverlay: View {
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Discussion")
+                Text(String(localized: "reply.thread.title", defaultValue: "Discussion", bundle: .main))
                     .font(.system(size: 17, weight: .bold))
                     .foregroundColor(theme.textPrimary)
 
                 if !replies.isEmpty {
-                    Text("\(replies.count) reponse\(replies.count > 1 ? "s" : "")")
+                    Text("\(replies.count) \(replies.count > 1 ? String(localized: "reply.thread.replies_plural", defaultValue: "reponses", bundle: .main) : String(localized: "reply.thread.replies_singular", defaultValue: "reponse", bundle: .main))")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
@@ -187,7 +188,7 @@ struct ReplyThreadOverlay: View {
                     repliesDivider
                     repliesList
                 } else {
-                    Text("Aucune reponse pour le moment")
+                    Text(String(localized: "reply.thread.empty", defaultValue: "Aucune reponse pour le moment", bundle: .main))
                         .font(.system(size: 13))
                         .foregroundColor(theme.textMuted)
                         .frame(maxWidth: .infinity, alignment: .center)
@@ -214,7 +215,7 @@ struct ReplyThreadOverlay: View {
                 )
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(msg.senderName ?? "Inconnu")
+                    Text(msg.senderName ?? String(localized: "reply.thread.unknown_sender", defaultValue: "Inconnu", bundle: .main))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
 
@@ -243,7 +244,7 @@ struct ReplyThreadOverlay: View {
                 .fill(Color(hex: accentColor).opacity(0.3))
                 .frame(height: 1)
 
-            Text("\(replies.count) reponse\(replies.count > 1 ? "s" : "")")
+            Text("\(replies.count) \(replies.count > 1 ? String(localized: "reply.thread.replies_plural", defaultValue: "reponses", bundle: .main) : String(localized: "reply.thread.replies_singular", defaultValue: "reponse", bundle: .main))")
                 .font(.system(size: 11, weight: .bold))
                 .foregroundColor(Color(hex: accentColor))
                 .padding(.horizontal, 8)
@@ -277,7 +278,7 @@ struct ReplyThreadOverlay: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack {
-                        Text(message.senderName ?? "Inconnu")
+                        Text(message.senderName ?? String(localized: "reply.thread.unknown_sender", defaultValue: "Inconnu", bundle: .main))
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(Color(hex: message.senderColor ?? accentColor))
 
@@ -303,7 +304,7 @@ struct ReplyThreadOverlay: View {
                 .fill(Color(hex: reply.authorColor))
                 .frame(width: 3)
 
-            Text("\u{21A9} \(reply.isMe ? "Vous" : reply.authorName): \(reply.previewText)")
+            Text("\u{21A9} \(reply.isMe ? String(localized: "reply.thread.you", defaultValue: "Vous", bundle: .main) : reply.authorName): \(reply.previewText)")
                 .font(.system(size: 11))
                 .foregroundColor(theme.textMuted)
                 .lineLimit(1)
@@ -334,7 +335,7 @@ struct ReplyThreadOverlay: View {
             Button {
                 Task { await loadThreadFromAPI() }
             } label: {
-                Text("Reessayer")
+                Text(String(localized: "reply.thread.retry", defaultValue: "Reessayer", bundle: .main))
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
             }

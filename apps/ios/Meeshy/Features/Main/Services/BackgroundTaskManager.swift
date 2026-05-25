@@ -152,7 +152,7 @@ final class BackgroundTaskManager {
             let conversations = await CacheCoordinator.shared.conversations.load(for: "list")
             guard let items = conversations.snapshot() else { return }
 
-            let unreadConversations = items.filter { $0.unreadCount > 0 }
+            let unreadConversations = items.filter { $0.userState.unreadCount > 0 }
             for conversation in unreadConversations.prefix(10) {
                 guard !Task.isCancelled else { break }
                 await ConversationSyncEngine.shared.ensureMessages(for: conversation.id)

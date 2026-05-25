@@ -109,6 +109,10 @@ struct iPadRootView: View {
             .task {
                 MessageSocketManager.shared.connect()
                 statusViewModel.subscribeToSocketEvents()
+                // Sans cet appel, le SDK reçoit bien `story:created` mais
+                // personne n'est sink'é sur `socialSocket.storyCreated` → la
+                // story n'arrive jamais dans `storyGroups`.
+                storyViewModel.subscribeToSocketEvents()
                 await ConversationSyncEngine.shared.startSocketRelay()
 
                 Task.detached(priority: .background) {
@@ -173,7 +177,7 @@ struct iPadRootView: View {
             // returns nil for the typical cold-launch (no pending link), so
             // firing on the initial value is a free no-op when nothing
             // is queued.
-            .onChange(of: deepLinkRouter.pendingDeepLink, initial: true) { _, newValue in
+            .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink, initial: true) { _, newValue in
                 handleDeepLink(newValue)
             }
         )

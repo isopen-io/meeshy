@@ -8,274 +8,6 @@ nonisolated(unsafe) private var searchDebounceKey: UInt8 = 0
 // MARK: - Message Row, Reactions & Search
 extension ConversationView {
 
-    // MARK: - Extracted message row (avoids type-checker timeout)
-
-    @ViewBuilder
-    func messageRow(index: Int, msg: Message) -> some View {
-        let nextMsg: Message? = index + 1 < viewModel.messages.count ? viewModel.messages[index + 1] : nil
-        let isLastInGroup: Bool = nextMsg == nil || nextMsg?.senderId != msg.senderId
-        let bubblePresence: PresenceState = isDirect ? .offline : presenceManager.presenceState(for: msg.senderId)
-        let isLastReceived = !msg.isMe && index == cachedLastReceivedIndex
-
-        // Swipe direction: reply = swipe toward center (right for other, left for own)
-        let replyDirection: CGFloat = msg.isMe ? -1 : 1
-        let isActiveSwipe = scrollState.swipedMessageId == msg.id
-
-        ZStack {
-            // Icône répondre/transférer révélée élastiquement derrière la bulle
-            if isActiveSwipe {
-                let progress = min(abs(scrollState.swipeOffset) / 72.0, 1.0)
-                let isReplyDir = scrollState.swipeOffset * replyDirection > 0
-                let iconColor = isReplyDir ? "4ECDC4" : "F8B500"
-                HStack {
-                    // L'icône se place du côté révélé (opposé au déplacement de la bulle)
-                    if scrollState.swipeOffset <= 0 { Spacer() }
-                    Image(systemName: isReplyDir ? "arrowshape.turn.up.left.fill" : "arrowshape.turn.up.forward.fill")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(Color(hex: iconColor))
-                        .frame(width: 36, height: 36)
-                        .background(Circle().fill(Color(hex: iconColor).opacity(0.15)))
-                        .scaleEffect(0.4 + 0.6 * progress)
-                        .opacity(min(progress * 2.5, 1.0))
-                    if scrollState.swipeOffset > 0 { Spacer() }
-                }
-                .padding(.horizontal, 16)
-            }
-
-            VStack(spacing: 0) {
-                ThemedMessageBubble(
-                    message: msg,
-                    contactColor: accentColor,
-                    isDirect: isDirect,
-                    isDark: isDark,
-                    transcription: viewModel.messageTranscriptions[msg.id],
-                    translatedAudios: viewModel.messageTranslatedAudios[msg.id] ?? [],
-                    textTranslations: viewModel.messageTranslations[msg.id] ?? [],
-                    preferredTranslation: viewModel.preferredTranslation(for: msg.id),
-                    showAvatar: !isDirect && !msg.isMe,
-                    presenceState: bubblePresence,
-                    senderMoodEmoji: statusViewModel.statusForUser(userId: msg.senderId)?.moodEmoji,
-                    senderStoryRingState: storyViewModel.hasUnviewedStories(forUserId: msg.senderId)
-                        ? .unread
-                        : storyViewModel.hasStories(forUserId: msg.senderId) ? .read : .none,
-                    onViewStory: storyViewModel.hasStories(forUserId: msg.senderId) ? {
-                        if let groupIdx = storyViewModel.groupIndex(forUserId: msg.senderId) {
-                            overlayState.storyViewerUserId = msg.senderId
-                            overlayState.storyViewerGroupIndex = groupIdx
-                            overlayState.showStoryViewer = true
-                        }
-                    } : nil,
-                    onAddReaction: { messageId in
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            overlayState.emojiOnlyMode = true
-                            overlayState.quickReactionMessageId = messageId
-                        }
-                        HapticFeedback.light()
-                    },
-                    onToggleReaction: { emoji in
-                        viewModel.toggleReaction(messageId: msg.id, emoji: emoji)
-                    },
-                    onOpenReactPicker: { messageId in
-                        let target = viewModel.messageIndex(for: messageId).map { viewModel.messages[$0] } ?? msg
-                        overlayState.detailSheetMessage = target
-                        overlayState.detailSheetInitialTab = .react
-
-                    },
-                    onShowInfo: {
-                        overlayState.detailSheetMessage = msg
-                        overlayState.detailSheetInitialTab = .views
-
-                    },
-                    onShowReactions: { messageId in
-                        overlayState.detailSheetMessage = viewModel.messageIndex(for: messageId).map { viewModel.messages[$0] } ?? msg
-                        overlayState.detailSheetInitialTab = .reactions
-
-                    },
-                    onReplyTap: { messageId in
-                        overlayState.replyThreadParentId = messageId
-                        overlayState.showReplyThread = true
-                    },
-                    onStoryReplyTap: { storyId in
-                        if let groupIdx = storyViewModel.groupIndex(forStoryId: storyId) {
-                            let group = storyViewModel.storyGroups[groupIdx]
-                            let slideIdx = group.stories.firstIndex { $0.id == storyId } ?? 0
-                            overlayState.storyViewerUserId = group.id
-                            overlayState.storyViewerGroupIndex = groupIdx
-                            overlayState.storyViewerSlideIndex = slideIdx
-                            overlayState.showStoryViewer = true
-                        }
-                    },
-                    onMediaTap: { attachment in
-                        // User explicitly tapped media -> always cache (not conditional)
-                        if let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString {
-                            Task { _ = try? await CacheCoordinator.shared.images.data(for: resolved) }
-                        }
-                        scrollState.galleryStartAttachment = attachment
-                    },
-                    onConsumeViewOnce: { messageId, completion in
-                        Task {
-                            let success = await viewModel.consumeViewOnce(messageId: messageId)
-                            completion(success)
-                        }
-                    },
-                    onRequestTranslation: { messageId, targetLang in
-                        MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: targetLang)
-                    },
-                    onShowTranslationDetail: { messageId in
-                        overlayState.detailSheetMessage = viewModel.messageIndex(for: messageId).map { viewModel.messages[$0] } ?? msg
-                        overlayState.detailSheetInitialTab = .language
-
-                    },
-                    allAudioItems: viewModel.allAudioItems,
-                    onScrollToMessage: { messageId in
-                        scrollState.scrollToMessageId = messageId
-                    },
-                    activeAudioLanguage: viewModel.activeAudioLanguageOverrides[msg.id] ?? nil,
-                    isLastInGroup: isLastInGroup,
-                    isLastReceivedMessage: isLastReceived,
-                    mentionDisplayNames: viewModel.mentionDisplayNames,
-                    highlightSearchTerm: viewModel.currentSearchQuery,
-                    isEditSaving: viewModel.isEditSaving(messageId: msg.id),
-                    hasEditHistory: !viewModel.editRevisions(for: msg.id).isEmpty,
-                    activeVideoURL: SharedAVPlayerManager.shared.isPlaying ? SharedAVPlayerManager.shared.activeURL : nil,
-                    currentUserId: AuthManager.shared.currentUser?.id ?? "",
-                    userLanguages: (
-                        regional: AuthManager.shared.currentUser?.regionalLanguage,
-                        custom: AuthManager.shared.currentUser?.customDestinationLanguage
-                    )
-                )
-                .equatable()
-                .onLongPressGesture(minimumDuration: 0.5) {
-                    guard overlayState.longPressEnabled else { return }
-                    // Removed overlayMessageFrame (GeometryReader dependency)
-                    // We will center the overlay menu in screen if needed, 
-                    // or rely on native Menu in future iterations. 
-                    overlayState.overlayMessage = msg
-                    overlayState.showOverlayMenu = true
-                    HapticFeedback.medium()
-                }
-                .opacity(msg.deliveryStatus == .failed ? 0.7 : 1.0)
-
-                // Reply count pill
-                if let replyCount = replyCountFor(messageId: msg.id), replyCount > 0 {
-                    HStack {
-                        if msg.isMe { Spacer() }
-                        replyCountPill(count: replyCount, isMe: msg.isMe, parentMessageId: msg.id)
-                        if !msg.isMe { Spacer() }
-                    }
-                    .padding(.top, 2)
-                }
-
-                // Quick reaction bar (below message)
-                if overlayState.quickReactionMessageId == msg.id {
-                    HStack {
-                        if msg.isMe { Spacer() }
-                        quickReactionBar(for: msg.id)
-                        if !msg.isMe { Spacer() }
-                    }
-                    .transition(.scale(scale: 0.85, anchor: msg.isMe ? .topTrailing : .topLeading).combined(with: .opacity))
-                    .padding(.top, 4)
-                    .zIndex(100)
-                }
-
-                // Failed message retry bar
-                if msg.deliveryStatus == .failed && msg.isMe {
-                    failedMessageBar(for: msg)
-                }
-            }
-            .offset(x: isActiveSwipe ? scrollState.swipeOffset : 0)
-            .simultaneousGesture(
-                DragGesture(minimumDistance: overlayState.quickReactionMessageId != nil ? 10000 : 15)
-                    .onChanged { value in
-                        let h = value.translation.width
-                        let v = abs(value.translation.height)
-                        // Geste clairement horizontal (ratio 2:1)
-                        guard abs(h) > v * 2 else { return }
-                        guard abs(h) > 12 else { return }
-                        scrollState.swipedMessageId = msg.id
-                        // Rubber-band : libre jusqu'à 72 pt, résistance 15 % au-delà
-                        let zone: CGFloat = 72
-                        let absH = abs(h)
-                        let sign: CGFloat = h > 0 ? 1 : -1
-                        if absH > zone {
-                            scrollState.swipeOffset = sign * (zone + (absH - zone) * 0.15)
-                        } else {
-                            scrollState.swipeOffset = h
-                        }
-                    }
-                    .onEnded { value in
-                        let directed = scrollState.swipeOffset * replyDirection
-                        // Déclenchement à ≥ 92 % de la zone (≈ 66 pt sur 72 pt)
-                        if directed >= 66 {
-                            triggerReply(for: msg)
-                            HapticFeedback.success()
-                        } else if directed <= -66 {
-                            composerState.forwardMessage = msg
-                            HapticFeedback.success()
-                        } else if abs(scrollState.swipeOffset) > 15 {
-                            HapticFeedback.light()
-                        }
-                        withAnimation(.spring(response: 0.42, dampingFraction: 0.62, blendDuration: 0.04)) {
-                            scrollState.swipeOffset = 0
-                            scrollState.swipedMessageId = nil
-                        }
-                    }
-            )
-        }
-        .id(msg.id)
-        .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color(hex: "F8B500").opacity(scrollState.highlightedMessageId == msg.id ? 0.25 : 0))
-                .shadow(
-                    color: Color(hex: "F8B500").opacity(scrollState.highlightedMessageId == msg.id ? 0.4 : 0),
-                    radius: scrollState.highlightedMessageId == msg.id ? 12 : 0
-                )
-                .animation(.easeInOut(duration: 0.3), value: scrollState.highlightedMessageId)
-                .allowsHitTesting(false)
-        )
-        .transition(
-            .asymmetric(
-                insertion: .move(edge: msg.isMe ? .trailing : .leading).combined(with: .opacity),
-                removal: .opacity
-            )
-        )
-        .onTapGesture {
-            if overlayState.quickReactionMessageId != nil && overlayState.quickReactionMessageId != msg.id {
-                closeReactionBar()
-            }
-        }
-        .onAppear {
-            prefetchNearbyMedia(index: index)
-        }
-    }
-
-    // MARK: - Media Prefetch
-
-    func prefetchNearbyMedia(index: Int) {
-        guard index >= 0 && index < viewModel.messages.count else { return }
-        
-        // Optimize: Only prefetch the media for the CURRENT message appearing,
-        // rather than scanning 11 nearby messages every time a cell appears (O(N) overhead).
-        let msg = viewModel.messages[index]
-        
-        for attachment in msg.attachments {
-            let urls = [
-                attachment.thumbnailUrl,
-                attachment.type == .image ? attachment.fileUrl : nil,
-            ].compactMap { $0 }.filter { !$0.isEmpty }
-
-            for urlStr in urls {
-                guard let resolved = MeeshyConfig.resolveMediaURL(urlStr) else { continue }
-                Task { _ = try? await CacheCoordinator.shared.images.data(for: resolved.absoluteString) }
-            }
-        }
-
-        if let avatarURL = msg.senderAvatarURL, !avatarURL.isEmpty {
-            if let resolved = MeeshyConfig.resolveMediaURL(avatarURL) {
-                Task { _ = try? await CacheCoordinator.shared.images.data(for: resolved.absoluteString) }
-            }
-        }
-    }
 
     func triggerReply(for msg: Message) {
         let firstAttachment = msg.attachments.first
@@ -330,7 +62,7 @@ extension ConversationView {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(theme.textMuted)
 
-                TextField("Rechercher dans la conversation...", text: $headerState.searchQuery)
+                TextField(String(localized: "conversation.view.search.placeholder", defaultValue: "Rechercher dans la conversation...", bundle: .main), text: $headerState.searchQuery)
                     .font(.system(size: 15))
                     .foregroundColor(theme.textPrimary)
                     .focused($isSearchFocused)
@@ -338,7 +70,7 @@ extension ConversationView {
                     .textInputAutocapitalization(.never)
                     .submitLabel(.search)
                     .onSubmit { triggerBackendSearch() }
-                    .onChange(of: headerState.searchQuery) { _, _ in debounceSearch() }
+                    .adaptiveOnChange(of: headerState.searchQuery) { _, _ in debounceSearch() }
 
                 if !headerState.searchQuery.isEmpty {
                     Button {
@@ -349,7 +81,7 @@ extension ConversationView {
                             .font(.system(size: 16))
                             .foregroundColor(theme.textMuted)
                     }
-                    .accessibilityLabel("Effacer la recherche")
+                    .accessibilityLabel(String(localized: "conversation.view.search.clear", defaultValue: "Effacer la recherche", bundle: .main))
                 }
             }
             .padding(.horizontal, 10)
@@ -368,11 +100,11 @@ extension ConversationView {
             Button {
                 dismissSearch()
             } label: {
-                Text("Fermer")
+                Text(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
             }
-            .accessibilityLabel("Fermer la recherche")
+            .accessibilityLabel(String(localized: "conversation.view.search.close", defaultValue: "Fermer la recherche", bundle: .main))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -394,7 +126,7 @@ extension ConversationView {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 36, weight: .light))
                         .foregroundColor(theme.textMuted.opacity(0.5))
-                    Text("Aucun résultat")
+                    Text(String(localized: "conversation.view.search.no_results", defaultValue: "Aucun résultat", bundle: .main))
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
@@ -604,7 +336,7 @@ extension ConversationView {
                         HStack(spacing: 6) {
                             Image(systemName: "arrow.down.to.line")
                                 .font(.system(size: 12, weight: .bold))
-                            Text("Messages récents")
+                            Text(String(localized: "conversation.view.recent_messages", defaultValue: "Messages récents", bundle: .main))
                                 .font(.system(size: 12, weight: .semibold))
                         }
                         .foregroundColor(.white)
@@ -616,7 +348,7 @@ extension ConversationView {
                                 .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 8, y: 2)
                         )
                     }
-                    .accessibilityLabel("Retourner aux messages recents")
+                    .accessibilityLabel(String(localized: "conversation.view.return_to_recent", defaultValue: "Retourner aux messages recents", bundle: .main))
                     Spacer()
                 }
                 .padding(.bottom, composerHeight + 8)
@@ -772,7 +504,7 @@ extension ConversationView {
                 .foregroundColor(Color(hex: "FF6B6B"))
                 .accessibilityHidden(true)
 
-            Text("Échec de l'envoi")
+            Text(String(localized: "conversation.view.send_failed", defaultValue: "Échec de l'envoi", bundle: .main))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(Color(hex: "FF6B6B"))
 
@@ -784,22 +516,22 @@ extension ConversationView {
                 HapticFeedback.light()
                 Task { await viewModel.retryMessage(messageId: msg.id) }
             } label: {
-                Text("Réessayer")
+                Text(String(localized: "conversation.view.retry", defaultValue: "Réessayer", bundle: .main))
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(Color(hex: accentColor))
             }
-            .accessibilityLabel("Reessayer l'envoi du message")
+            .accessibilityLabel(String(localized: "conversation.view.retry_send", defaultValue: "Reessayer l'envoi du message", bundle: .main))
 
             Button {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     viewModel.removeFailedMessage(messageId: msg.id)
                 }
             } label: {
-                Text("Supprimer")
+                Text(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
-            .accessibilityLabel("Supprimer le message en echec")
+            .accessibilityLabel(String(localized: "conversation.view.delete_failed", defaultValue: "Supprimer le message en echec", bundle: .main))
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.horizontal, 16)
@@ -816,7 +548,9 @@ extension ConversationView {
 
     func replyCountPill(count: Int, isMe: Bool, parentMessageId: String) -> some View {
         let accent = Color(hex: accentColor)
-        let label = count == 1 ? "1 reponse" : "\(count) reponses"
+        let label = count == 1
+            ? String(localized: "conversation.view.reply.count.one", defaultValue: "1 reponse", bundle: .main)
+            : String(localized: "conversation.view.reply.count.many", defaultValue: "\(count) reponses", bundle: .main)
         return Button {
             HapticFeedback.light()
             if let firstReply = viewModel.messages.first(where: { $0.replyToId == parentMessageId }) {
@@ -842,7 +576,7 @@ extension ConversationView {
             )
         }
         .accessibilityLabel(label)
-        .accessibilityHint("Aller a la premiere reponse de ce message")
+        .accessibilityHint(String(localized: "conversation.view.go_to_first_reply", defaultValue: "Aller a la premiere reponse de ce message", bundle: .main))
     }
 }
 

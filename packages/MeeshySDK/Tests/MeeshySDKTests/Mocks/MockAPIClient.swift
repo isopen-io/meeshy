@@ -27,6 +27,15 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
     private var stubs: [String: Any] = [:]
     var errorToThrow: Error?
 
+    /// Per-endpoint errors — take precedence over `errorToThrow` when set.
+    private var endpointErrors: [String: Error] = [:]
+
+    /// Stub a specific endpoint to throw `error` instead of returning a stub value.
+    /// Used to simulate structured error responses (e.g. 403 consent payloads).
+    func stubError(_ endpoint: String, error: Error) {
+        endpointErrors[endpoint] = error
+    }
+
     /// Typed error thrown when a request hits an endpoint with no registered stub.
     /// Replaces the previous `fatalError` which caused process crashes when async
     /// background tasks (e.g. `ConversationSyncEngine.didReconnect → syncSinceLastCheckpoint`)
@@ -51,6 +60,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         requests.removeAll()
         stubs.removeAll()
         errorToThrow = nil
+        endpointErrors.removeAll()
         authToken = nil
         anonymousSessionToken = nil
     }
@@ -64,6 +74,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         queryItems: [URLQueryItem]?
     ) async throws -> T {
         recordRequest(endpoint: endpoint, method: method, bodyData: body, queryItems: queryItems)
+        if let error = endpointErrors[endpoint] { throw error }
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? T else {
             throw NoStubError.missing(endpoint: endpoint, type: "\(T.self)", available: Array(stubs.keys))
@@ -92,6 +103,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         body: U
     ) async throws -> APIResponse<T> {
         recordRequest(endpoint: endpoint, method: "POST", encodableBody: body)
+        if let error = endpointErrors[endpoint] { throw error }
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? APIResponse<T> else {
             throw NoStubError.missing(endpoint: endpoint, type: "APIResponse<\(T.self)>", available: Array(stubs.keys))

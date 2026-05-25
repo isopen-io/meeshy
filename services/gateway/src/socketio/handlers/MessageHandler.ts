@@ -14,6 +14,7 @@ import { MessagingService } from '../../services/MessagingService';
 import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
+import { attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
 import { validateMessageLength } from '../../config/message-limits';
 import {
   getConnectedUser,
@@ -121,6 +122,7 @@ export class MessageHandler {
       }
 
       const { participantId, userId, isAnonymous } = userContext;
+      console.log(`[RT-DIAG] message:send received conv=${validated.conversationId} from=${userId ?? participantId} anon=${isAnonymous}`);
 
       const rateLimitAllowed = await this.rateLimiter.checkLimit(userId || participantId, SOCKET_RATE_LIMITS.MESSAGE_SEND);
       if (!rateLimitAllowed) {
@@ -470,8 +472,11 @@ export class MessageHandler {
         (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
       );
 
-      // Récupérer traductions et stats en parallèle
-      const [translations, stats] = await Promise.allSettled([
+      // Récupérer traductions et déclencher le calcul des stats en parallèle.
+      // Les stats ne sont plus embarquées dans le payload message:new — elles
+      // sont diffusées via l'event dédié `conversation:stats`. L'appel
+      // updateOnNewMessage reste pour son side-effect (cache stats).
+      const [translations] = await Promise.allSettled([
         this._getMessageTranslations(message.id),
         conversationStatsService.updateOnNewMessage(
           this.prisma,
@@ -484,8 +489,7 @@ export class MessageHandler {
       const messagePayload: unknown = this._buildMessagePayload(
         message,
         normalizedId,
-        translations.status === 'fulfilled' ? translations.value : [],
-        stats.status === 'fulfilled' ? stats.value : null
+        translations.status === 'fulfilled' ? translations.value : []
       );
 
       // Enrichir avec les détails du forward si applicable
@@ -496,7 +500,7 @@ export class MessageHandler {
             select: {
               id: true, content: true, senderId: true, messageType: true, createdAt: true,
               sender: { select: { id: true, userId: true, displayName: true, avatar: true, type: true } },
-              attachments: { select: { id: true, mimeType: true, thumbnailUrl: true, fileUrl: true }, take: 1 }
+              attachments: { select: attachmentForwardPreviewSelect, take: 1 }
             }
           }),
           message.forwardedFromConversationId
@@ -563,6 +567,7 @@ export class MessageHandler {
         // reconcile via the REST / socket ACK path which carries the cid.
         this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
       }
+      console.log(`[RT-DIAG] message:new emitted conv=${normalizedId} msg=${message.id} senderUserId=${senderUserId ?? 'anon'} room=${room}`);
 
       // Notify each participant's user room that the conversation has
       // been updated (lastMessageAt advanced) so their conversation
@@ -592,6 +597,7 @@ export class MessageHandler {
             updatePayload
           );
         }
+        console.log(`[RT-DIAG] conversation:updated emitted conv=${normalizedId} to ${participants.filter((p) => p.userId).length} user room(s)`);
       } catch (err) {
         console.warn('[BROADCAST] CONVERSATION_UPDATED emit failed:', err);
       }
@@ -636,6 +642,7 @@ export class MessageHandler {
     const onlineRecipients = participants.filter(
       (p) => p.userId && this.connectedUsers.has(p.userId)
     );
+    console.log(`[RT-DIAG] autoDeliver conv=${conversationId} msg=${message.id} participants=${participants.length} onlineRecipients=${onlineRecipients.length}`);
     if (onlineRecipients.length === 0) return;
 
     const { PrivacyPreferencesService } = await import('../../services/PrivacyPreferencesService.js');
@@ -661,7 +668,10 @@ export class MessageHandler {
       }
     }
 
-    if (!didMarkAny || !firstAcker) return;
+    if (!didMarkAny || !firstAcker) {
+      console.log(`[RT-DIAG] autoDeliver conv=${conversationId} SKIP read-status:updated emit (didMarkAny=${didMarkAny}) — recipients likely have read receipts disabled`);
+      return;
+    }
 
     const summary = await this.readStatusService.getLatestMessageSummary(conversationId);
 
@@ -690,6 +700,7 @@ export class MessageHandler {
       emitter = emitter.to(userRoom);
     }
     emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
+    console.log(`[RT-DIAG] autoDeliver conv=${conversationId} read-status:updated EMITTED rooms=[${[...seen].join(', ')}] deliveredCount=${summary.deliveredCount}`);
   }
 
   /**
@@ -827,8 +838,7 @@ export class MessageHandler {
   private _buildMessagePayload(
     message: Message,
     conversationId: string,
-    translations: unknown[],
-    stats: unknown
+    translations: unknown[]
   ): unknown {
     // Build a backward-compatible sender object from Participant
     const senderParticipant = (message as unknown as Record<string, unknown>).sender as Record<string, unknown> | undefined;
@@ -883,7 +893,6 @@ export class MessageHandler {
         ciphertext: message.encryptedContent,
         ...(typeof message.encryptionMetadata === 'object' && message.encryptionMetadata ? message.encryptionMetadata : {})
       } : undefined,
-      meta: { conversationStats: stats }
     };
   }
 
@@ -911,11 +920,19 @@ export class MessageHandler {
       await Promise.all(participants.map(async (participant) => {
         // Use userId for registered users (for their personal room), participantId for anonymous
         const roomTarget = participant.userId || participant.id;
-        const unreadCount = await readStatusService.getUnreadCount(roomTarget, conversationId);
+        // CRITICAL: pass `participant.id` (not `roomTarget`) to
+        // `getUnreadCount`. `ConversationReadCursor.participantId` is the
+        // Participant.id per the schema — passing the userId here used to
+        // silently miss the cursor lookup and fall back to a "count all
+        // historical messages" path, returning wildly inflated unread
+        // counts (e.g. 75 for users who had read everything). The room
+        // target stays based on userId for socket delivery.
+        const unreadCount = await readStatusService.getUnreadCount(participant.id, conversationId);
         this.io.to(ROOMS.user(roomTarget)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
           conversationId,
           unreadCount
         });
+        console.log(`[RT-DIAG] conversation:unread-updated emitted conv=${conversationId} user=${roomTarget} unread=${unreadCount}`);
       }));
     } catch (error) {
       console.warn('⚠️ [UNREAD_COUNT] Erreur:', error);

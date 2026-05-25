@@ -6,7 +6,7 @@ import SwiftUI
 /// lives in `TimelineViewModel` so a swap never loses anything.
 public struct TimelineContainerSwitcher: View {
 
-    @Bindable private var viewModel: TimelineViewModel
+    @ObservedObject private var viewModel: TimelineViewModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
@@ -43,7 +43,7 @@ public struct TimelineContainerSwitcher: View {
         // (`.presentationBackground(.ultraThinMaterial)`); doubling it here
         // would flatten the canvas blur. We leave this container transparent.
         .animation(reduceMotion ? .none : .spring(response: 0.5, dampingFraction: 0.8), value: viewModel.mode)
-        .onChange(of: horizontalSizeClass) { _, newValue in
+        .adaptiveOnChange(of: horizontalSizeClass) { _, newValue in
             let resolved = Self.resolveAutoMode(horizontalSizeClass: newValue, currentMode: viewModel.mode)
             guard resolved != viewModel.mode else { return }
             viewModel.setMode(resolved)

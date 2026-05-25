@@ -72,8 +72,18 @@ public enum StoryExporter {
                               languages: [String] = [],
                               progress: (@Sendable (Double) -> Void)? = nil) async throws {
         let composition = AVMutableComposition()
-        let effective = slide.effectiveSlideDuration()
+        // Use the deterministic total duration so every element on the slide
+        // (text, foreground media, audio, transitions) is fully covered by
+        // the MP4. `effectiveSlideDuration` used to only account for looped
+        // background videos, which meant a 14s foreground video on a slide
+        // whose user-set duration was 12s got truncated to 12s of footage.
+        let effective = slide.computedTotalDuration()
         let totalDuration = CMTime(seconds: effective, preferredTimescale: 600)
+
+        // Asset référence du background video — capturée pour pouvoir
+        // composer **aussi son audio track** dans la pipeline audio mix
+        // (section 1.5 ci-dessous). nil quand la slide est static-only.
+        var backgroundVideoAsset: (asset: AVURLAsset, bg: StoryMediaObject)?
 
         // 1. If the slide has a background VIDEO (looped or not), drive the
         //    composition timing from it. The previous predicate required
@@ -99,6 +109,7 @@ public enum StoryExporter {
                 throw StoryExporterError.backgroundAssetVideoTrackMissing
             }
             let assetDuration = try await asset.load(.duration)
+            backgroundVideoAsset = (asset, bg)
 
             if bg.loop {
                 // Loop the background video to cover effectiveSlideDuration()
@@ -152,6 +163,27 @@ public enum StoryExporter {
                                        size: CanvasGeometry.designSize)
         }
 
+        // 1.5. Audio mixing. Le MP4 export est destiné au partage externe
+        //      (Photos, WhatsApp, AirDrop…) — un viewer sans la story logic
+        //      ne peut pas re-jouer l'audio à partir de raw assets. Il faut
+        //      donc baker l'audio dans le fichier de sortie. Cette étape
+        //      capture l'audio embedded dans le background video (cas le
+        //      plus courant pour les vlogs / clips capturés caméra).
+        //
+        //      **Sources additionnelles non encore couvertes** — les
+        //      `audioPlayerObjects` (audios fg + bg + voice) référencent
+        //      leurs assets par `postMediaId` plutôt que `mediaURL` direct.
+        //      Les inclure dans l'export nécessite d'injecter un resolver
+        //      `(postMediaId) -> URL?` dans `StoryExporter.export` (et de
+        //      le brancher au StoryItem.media côté caller). Suivi dans
+        //      un commit dédié (cf. PR #283).
+        let audioMix = try await composeBackgroundVideoAudio(
+            slide: slide,
+            composition: composition,
+            totalDuration: totalDuration,
+            backgroundVideoAsset: backgroundVideoAsset
+        )
+
         let videoComposition = AVMutableVideoComposition()
         videoComposition.frameDuration = CMTime(value: 1, timescale: 60) // 60 fps master
         videoComposition.renderSize = CanvasGeometry.designSize           // 1080×1920
@@ -173,6 +205,7 @@ public enum StoryExporter {
         session.outputURL = outputURL
         session.outputFileType = .mp4
         session.videoComposition = videoComposition
+        session.audioMix = audioMix
         session.shouldOptimizeForNetworkUse = true
 
         if FileManager.default.fileExists(atPath: outputURL.path) {
@@ -226,6 +259,93 @@ public enum StoryExporter {
                 "Unexpected status \(session.status.rawValue)"
             )
         }
+    }
+
+    // MARK: - Audio composition
+
+    /// Composes the audio track of the **background video** (if any) into
+    /// the export, applying the media object's `volume` parameter via
+    /// `AVMutableAudioMix`. Returns the configured `AVAudioMix`, or `nil`
+    /// when there's no audio to mix (silent bg, or static-only slide).
+    ///
+    /// **Looping** — mirrors the video track logic: when `bg.loop == true`
+    /// the audio is repeated to cover the full slide duration ; otherwise
+    /// played once with silent tail. AVFoundation handles silence
+    /// automatically — we simply don't insert anything past the asset's
+    /// natural duration when `loop == false`.
+    ///
+    /// **Out of scope (V1)** — `audioPlayerObjects` (foreground audios +
+    /// background audio entries + voice) are NOT included here. They
+    /// reference assets by `postMediaId` and require an external resolver
+    /// the exporter doesn't yet receive. Follow-up commit will inject a
+    /// resolver via `StoryExporter.export(_:to:..., audioResolver:)` and
+    /// extend this helper.
+    static func composeBackgroundVideoAudio(
+        slide: StorySlide,
+        composition: AVMutableComposition,
+        totalDuration: CMTime,
+        backgroundVideoAsset: (asset: AVURLAsset, bg: StoryMediaObject)?
+    ) async throws -> AVMutableAudioMix? {
+        guard let entry = backgroundVideoAsset else {
+            // Pas de bg video → pas d'audio à composer. Une étape future
+            // ajoutera l'audio des `audioPlayerObjects` ici même.
+            return nil
+        }
+
+        let assetAudioTracks = try await entry.asset.loadTracks(withMediaType: .audio)
+        guard let assetAudioTrack = assetAudioTracks.first else {
+            // Vidéo muette (clip d'écran, GIF converti, ...) — pas de
+            // piste audio à inclure. Pas une erreur.
+            return nil
+        }
+
+        guard let audioTrack = composition.addMutableTrack(
+            withMediaType: .audio,
+            preferredTrackID: kCMPersistentTrackID_Invalid
+        ) else {
+            throw StoryExporterError.sessionCreationFailed
+        }
+
+        let assetDuration = try await entry.asset.load(.duration)
+
+        if entry.bg.loop {
+            // Loop : insert l'audio en boucle pour couvrir totalDuration,
+            // exactement comme la piste vidéo plus haut.
+            var inserted = CMTime.zero
+            while inserted < totalDuration {
+                let remaining = totalDuration - inserted
+                let chunkDuration = CMTimeMinimum(assetDuration, remaining)
+                try audioTrack.insertTimeRange(
+                    CMTimeRange(start: .zero, duration: chunkDuration),
+                    of: assetAudioTrack,
+                    at: inserted
+                )
+                inserted = inserted + chunkDuration
+            }
+        } else {
+            // No-loop : on insère une fois, clippé à totalDuration. Le
+            // tail est silencieux par défaut (AVFoundation n'a pas besoin
+            // qu'on ajoute du silence explicite).
+            let playableDuration = CMTimeMinimum(assetDuration, totalDuration)
+            try audioTrack.insertTimeRange(
+                CMTimeRange(start: .zero, duration: playableDuration),
+                of: assetAudioTrack,
+                at: .zero
+            )
+        }
+
+        // AudioMix avec le `volume` du media object (0.0–1.0). Skip si
+        // c'est le volume nominal (1.0) pour économiser une struct AVAudioMix
+        // — AVFoundation traite la piste sans mix dans ce cas.
+        let bgVolume = entry.bg.volume
+        if abs(bgVolume - 1.0) < 0.001 {
+            return nil
+        }
+        let mix = AVMutableAudioMix()
+        let params = AVMutableAudioMixInputParameters(track: audioTrack)
+        params.setVolume(bgVolume, at: .zero)
+        mix.inputParameters = [params]
+        return mix
     }
 
     // MARK: - Synthetic video track (static-only slides)

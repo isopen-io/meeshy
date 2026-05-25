@@ -279,12 +279,15 @@ export default function V2FeedsPage() {
   }, [likeMutation, unlikeMutation]);
 
   const handleComment = useCallback((postId: string) => {
-    router.push(`/v2/feeds/post/${postId}`);
+    router.push(`/feeds/post/${postId}`);
   }, [router]);
 
   const handleShare = useCallback(async (postId: string) => {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}/v2/feeds/post/${postId}`);
+      // Share with the canonical (v1) URL so links pasted out remain stable
+      // even if the v2 prefix is eventually retired. The gateway mints the
+      // same path when generating tracking links.
+      await navigator.clipboard.writeText(`${window.location.origin}/feeds/post/${postId}`);
       shareMutation.mutate({ postId });
       showToast('Lien copi\u00e9 !', 'success');
     } catch {
@@ -542,7 +545,7 @@ export default function V2FeedsPage() {
                       onEdit={() => handleEditPost(post.id)}
                       onDelete={() => handleDeletePost(post.id)}
                       onPin={() => handlePinPost(post.id, post.isPinned)}
-                      onClick={() => router.push(`/v2/feeds/post/${post.id}`)}
+                      onClick={() => router.push(`/feeds/post/${post.id}`)}
                     />
                   );
                 })()}

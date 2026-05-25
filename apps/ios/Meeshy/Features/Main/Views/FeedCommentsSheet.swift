@@ -126,8 +126,8 @@ struct ThreadedCommentSection: View {
                     .font(.system(size: 10, weight: .bold))
 
                 Text(isExpanded
-                     ? "Masquer les r\u{00E9}ponses"
-                     : "Voir \(remainingRepliesCount) autre\(remainingRepliesCount > 1 ? "s" : "") r\u{00E9}ponse\(remainingRepliesCount > 1 ? "s" : "")")
+                     ? String(localized: "feed.comments.hide_replies", defaultValue: "Masquer les réponses", bundle: .main)
+                     : String(localized: "feed.comments.show_more_replies", defaultValue: "Voir \(remainingRepliesCount) autre\(remainingRepliesCount > 1 ? "s" : "") réponse\(remainingRepliesCount > 1 ? "s" : "")", bundle: .main))
                     .font(.system(size: 12, weight: .semibold))
             }
             .foregroundColor(Color(hex: accentColor))
@@ -271,7 +271,7 @@ struct CommentsSheetView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
-                    Text("\(commentCount) commentaires")
+                    Text(String(localized: "feed.comments.count", defaultValue: "\(commentCount) commentaires", bundle: .main))
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                 }
@@ -403,14 +403,19 @@ struct CommentsSheetView: View {
         onLikeComment?(post.id, commentId)
 
         do {
-            if wasLiked {
-                _ = try await SocialSocketManager.shared.removeCommentReaction(
-                    commentId: commentId, postId: post.id, emoji: StoryViewerView.heartEmoji
-                )
-            } else {
-                _ = try await SocialSocketManager.shared.addCommentReaction(
-                    commentId: commentId, postId: post.id, emoji: StoryViewerView.heartEmoji
-                )
+            // A6 — hard timeout: protects against a hung SocialSocketManager
+            // leaving the heart button locked forever (commentId stuck in
+            // heartInFlightIds because defer only fires on Task completion).
+            try await withTaskTimeout(seconds: 12) {
+                if wasLiked {
+                    _ = try await SocialSocketManager.shared.removeCommentReaction(
+                        commentId: commentId, postId: post.id, emoji: StoryViewerView.heartEmoji
+                    )
+                } else {
+                    _ = try await SocialSocketManager.shared.addCommentReaction(
+                        commentId: commentId, postId: post.id, emoji: StoryViewerView.heartEmoji
+                    )
+                }
             }
         } catch {
             if wasLiked {
@@ -481,7 +486,7 @@ struct CommentsSheetView: View {
                     onViewProfile: { selectedProfileUser = .from(feedPost: post) },
                     onMoodTap: statusViewModel.moodTapHandler(for: post.authorId),
                     contextMenuItems: [
-                        AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                        AvatarContextMenuItem(label: String(localized: "feed.comments.view_profile", defaultValue: "Voir le profil", bundle: .main), icon: "person.fill") {
                             selectedProfileUser = .from(feedPost: post)
                         }
                     ]
@@ -627,7 +632,7 @@ struct CommentsSheetView: View {
                         liveCommentCount = (liveCommentCount ?? post.comments.count) + 1
                         mentionController.clearDraft()
                     } catch {
-                        ToastManager.shared.showError("Erreur lors de l'envoi du commentaire")
+                        ToastManager.shared.showError(String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
                     }
                 }
             },
@@ -707,7 +712,7 @@ struct CommentRowView: View, Equatable {
                 presenceState: presenceState,
                 onViewProfile: { selectedProfileUser = .from(feedComment: comment) },
                 contextMenuItems: [
-                    AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                    AvatarContextMenuItem(label: String(localized: "feed.comments.view_profile", defaultValue: "Voir le profil", bundle: .main), icon: "person.fill") {
                         selectedProfileUser = .from(feedComment: comment)
                     }
                 ]
@@ -823,7 +828,7 @@ struct CommentRowView: View, Equatable {
                         HStack(spacing: 4) {
                             Image(systemName: "arrowshape.turn.up.left")
                                 .font(.system(size: isReply ? 11 : 13))
-                            Text("R\u{00E9}pondre")
+                            Text(String(localized: "feed.comments.reply", defaultValue: "Répondre", bundle: .main))
                                 .font(.system(size: 12, weight: .medium))
                         }
                         .foregroundColor(theme.textMuted)

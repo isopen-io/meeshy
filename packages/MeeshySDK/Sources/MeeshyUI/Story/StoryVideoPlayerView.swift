@@ -150,7 +150,7 @@ struct StoryVideoPlayerView: View {
         .onDisappear {
             coordinator.teardown()
         }
-        .onChange(of: muted) { _, newValue in
+        .adaptiveOnChange(of: muted) { _, newValue in
             coordinator.muted = newValue
             coordinator.player?.isMuted = newValue
         }
@@ -184,7 +184,7 @@ private class _PlayerUIView: UIView {
 
 extension StoryVideoPlayerView {
     func playing(_ isPlaying: Bool) -> some View {
-        self.onChange(of: isPlaying) { _, shouldPlay in
+        self.adaptiveOnChange(of: isPlaying) { _, shouldPlay in
             if shouldPlay {
                 coordinator.player?.play()
             } else {

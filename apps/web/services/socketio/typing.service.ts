@@ -20,10 +20,13 @@ import type {
  * TypingService
  * Single Responsibility: Handle typing indicators
  */
+const TYPING_EMIT_THROTTLE_MS = 2000;
+
 export class TypingService {
   private typingListeners: Set<TypingListener> = new Set();
   private typingUsers: Map<string, Set<string>> = new Map(); // conversationId -> Set<userId>
   private typingTimeouts: Map<string, NodeJS.Timeout> = new Map(); // userId:conversationId -> timeout
+  private lastStartEmitAt: Map<string, number> = new Map(); // conversationId -> epoch ms
 
   /**
    * Setup typing event listeners on socket
@@ -117,13 +120,22 @@ export class TypingService {
   }
 
   /**
-   * Start typing indicator
+   * Start typing indicator. Throttled to one emit per
+   * TYPING_EMIT_THROTTLE_MS — the server-side safety timeout and
+   * the receiver's 3s linger window keep the indicator visible
+   * between keystrokes without needing a packet per keystroke.
    */
   startTyping(socket: TypedSocket | null, conversationId: string): void {
     if (!socket || !socket.connected) {
       console.warn('[TypingService] Socket not available');
       return;
     }
+    const now = Date.now();
+    const last = this.lastStartEmitAt.get(conversationId) ?? 0;
+    if (now - last < TYPING_EMIT_THROTTLE_MS) {
+      return;
+    }
+    this.lastStartEmitAt.set(conversationId, now);
     socket.emit(CLIENT_EVENTS.TYPING_START, { conversationId });
   }
 
@@ -135,6 +147,7 @@ export class TypingService {
       console.warn('[TypingService] Socket not available');
       return;
     }
+    this.lastStartEmitAt.delete(conversationId);
     socket.emit(CLIENT_EVENTS.TYPING_STOP, { conversationId });
   }
 
@@ -176,6 +189,7 @@ export class TypingService {
     this.typingTimeouts.clear();
     this.typingUsers.clear();
     this.typingListeners.clear();
+    this.lastStartEmitAt.clear();
   }
 
   /**

@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshyUI
 import AVFoundation
 import Combine
 import MeeshySDK
@@ -92,7 +93,12 @@ struct UniversalComposerBar: View {
     // MARK: - Recording delegation (parent manages real AVAudioRecorder)
 
     var onStartRecording: (() -> Void)? = nil
-    var onStopRecording: (() -> Void)? = nil
+    /// Stop the recording and place the audio in the attachment tray (editable
+    /// before sending) — the `[stop]` control of the recording bar.
+    var onStopRecordingToAttachment: (() -> Void)? = nil
+    /// Stop the recording and send the voice message immediately (raw) — the
+    /// `[↑]` control of the recording bar.
+    var onSendRecording: (() -> Void)? = nil
     var onCancelRecording: (() -> Void)? = nil
     var externalIsRecording: Bool? = nil
     var externalRecordingDuration: TimeInterval? = nil
@@ -354,7 +360,7 @@ struct UniversalComposerBar: View {
                                     )
                                 )
                         }
-                        Text("Vocal")
+                        Text(String(localized: "composer.minimized.voice", defaultValue: "Vocal", bundle: .main))
                             .font(.system(size: 9, weight: .semibold))
                             .foregroundColor(style == .dark ? .white.opacity(0.5) : theme.textMuted)
                     }
@@ -382,7 +388,7 @@ struct UniversalComposerBar: View {
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundColor(.white)
                     }
-                    Text("\u{00C9}crire")
+                    Text(String(localized: "composer.minimized.write", defaultValue: "\u{00C9}crire", bundle: .main))
                         .font(.system(size: 9, weight: .semibold))
                         .foregroundColor(style == .dark ? .white.opacity(0.5) : theme.textMuted)
                 }
@@ -496,8 +502,8 @@ struct UniversalComposerBar: View {
                 : .spring(response: 0.35, dampingFraction: 0.8),
             value: effectiveIsRecording
         )
-        .onChange(of: attachments.count) { _, _ in notifyContentChange() }
-        .onChange(of: effectiveIsRecording) { _, _ in notifyContentChange() }
+        .adaptiveOnChange(of: attachments.count) { _, _ in notifyContentChange() }
+        .adaptiveOnChange(of: effectiveIsRecording) { _, _ in notifyContentChange() }
         .onAppear {
             currentLanguage = selectedLanguage
             // Load initial draft if available
@@ -506,10 +512,10 @@ struct UniversalComposerBar: View {
                 attachments = draft.attachments
             }
         }
-        .onChange(of: selectedLanguage) { _, newValue in
+        .adaptiveOnChange(of: selectedLanguage) { _, newValue in
             currentLanguage = newValue
         }
-        .onChange(of: storyId) { oldId, newId in
+        .adaptiveOnChange(of: storyId) { oldId, newId in
             if let oldId {
                 if isRecording { forceStopRecording() }
                 onSaveDraft?(oldId, text, attachments)
@@ -526,13 +532,13 @@ struct UniversalComposerBar: View {
             textAnalyzer.reset()
             notifyContentChange()
         }
-        .onChange(of: focusTrigger.wrappedValue) { _, shouldFocus in
+        .adaptiveOnChange(of: focusTrigger.wrappedValue) { _, shouldFocus in
             if shouldFocus {
                 isFocused = true
                 focusTrigger.wrappedValue = false
             }
         }
-        .onChange(of: isFocused) { _, focused in
+        .adaptiveOnChange(of: isFocused) { _, focused in
             withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
                 focusBounce = focused
             }
@@ -546,15 +552,45 @@ struct UniversalComposerBar: View {
             }
             onFocusChange?(focused)
         }
-        .onChange(of: textAnalyzer.isLanguageLocked) { _, locked in
-            guard locked, let detected = textAnalyzer.language else { return }
-            currentLanguage = detected.code
-            onLanguageChange?(detected.code)
+        // Détection de langue en temps réel (Prisme Linguistique).
+        //
+        // `TextAnalyzer.performAnalysis` mute `language` ET `languageConfidence`
+        // dans le **même** `DispatchQueue.main.async` — observer la confiance
+        // seule suffit (elle change toujours en même temps que la langue).
+        // Évite un double-fire de `applyDetectedLanguage` par cycle de
+        // détection.
+        //
+        // Adoption au seuil 86 % (`ComposerLanguageResolver.confidenceFloor`).
+        // Tant qu'aucune langue n'a atteint 86 %, le pill et la langue
+        // envoyée restent sur le défaut « fr ». À 10 mots, le détecteur se
+        // verrouille — la dernière langue à ≥ 86 % (ou « fr » si rien) est
+        // définitive pour ce message.
+        //
+        // Override manuel (menu) : prioritaire, propagé immédiatement
+        // (force=true) quelle que soit la confiance.
+        .adaptiveOnChange(of: textAnalyzer.languageConfidence) { _, _ in
+            applyDetectedLanguage()
         }
-        .onChange(of: text) { _, newValue in
+        .adaptiveOnChange(of: textAnalyzer.languageOverride?.code) { _, _ in
+            applyDetectedLanguage(force: true)
+        }
+        .adaptiveOnChange(of: text) { _, newValue in
             onAnyInteraction?()
             notifyContentChange()
             textAnalyzer.analyze(text: newValue)
+            // Texte vidé : on retombe sur le défaut (« fr ») pour que la
+            // prochaine frappe parte d'un état propre. **Sauf** si la
+            // langue a été choisie à la main (override) — dans ce cas on
+            // respecte le choix utilisateur même quand le champ se vide,
+            // sinon le pill afficherait EN (override) mais on enverrait FR.
+            if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               textAnalyzer.languageOverride == nil {
+                let defaultLanguage = DefaultComposerLanguage.resolve()
+                if currentLanguage != defaultLanguage {
+                    currentLanguage = defaultLanguage
+                    onLanguageChange?(defaultLanguage)
+                }
+            }
             onTextChange?(newValue)
             // Sync to external binding
             if let binding = textBinding, binding.wrappedValue != newValue {
@@ -576,7 +612,7 @@ struct UniversalComposerBar: View {
             // Clipboard content: auto-create when pasting 2000+ chars
             handleClipboardCheck(newValue)
         }
-        .onChange(of: textBinding?.wrappedValue) { _, newValue in
+        .adaptiveOnChange(of: textBinding?.wrappedValue) { _, newValue in
             guard let newValue, newValue != text else { return }
             text = newValue
         }
@@ -593,7 +629,7 @@ struct UniversalComposerBar: View {
                 onDismiss: { textAnalyzer.showLanguagePicker = false }
             )
         }
-        .onChange(of: injectedEmoji.wrappedValue) { _, emoji in
+        .adaptiveOnChange(of: injectedEmoji.wrappedValue) { _, emoji in
             if !emoji.isEmpty {
                 text += emoji
                 DispatchQueue.main.async {
@@ -845,6 +881,31 @@ struct UniversalComposerBar: View {
     }
 
     // ========================================================================
+    // MARK: - Language detection
+    // ========================================================================
+
+    /// Propagate the detected language (or an explicit user override) to
+    /// `currentLanguage` and notify the parent. Called in real-time as
+    /// `TextAnalyzer.language` updates — restores the « detection visible
+    /// before the 18-word lock » behaviour that was previously gated on
+    /// `isLanguageLocked` alone.
+    ///
+    /// - Parameter force: skip the confidence floor (used when the analyzer
+    ///   transitions to locked or the user picks a language explicitly).
+    func applyDetectedLanguage(force: Bool = false) {
+        let resolution = ComposerLanguageResolver.resolve(
+            current: currentLanguage,
+            override: textAnalyzer.languageOverride?.code,
+            detected: textAnalyzer.language?.code,
+            confidence: textAnalyzer.languageConfidence,
+            force: force
+        )
+        guard let next = resolution else { return }
+        currentLanguage = next
+        onLanguageChange?(next)
+    }
+
+    // ========================================================================
     // MARK: - Minimize / Expand Logic
     // ========================================================================
 
@@ -930,8 +991,8 @@ struct UniversalComposerBar: View {
             )
         }
         .accessibilityLabel(isActive
-                            ? "Mode ephemere actif: \(ephemeralDuration.wrappedValue?.displayLabel ?? "")"
-                            : "Activer le mode ephemere")
+                            ? String(localized: "composer.ephemeral.active", defaultValue: "Mode ephemere actif: \(ephemeralDuration.wrappedValue?.displayLabel ?? "")", bundle: .main)
+                            : String(localized: "composer.ephemeral.activate", defaultValue: "Activer le mode ephemere", bundle: .main))
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
     }
 
@@ -949,7 +1010,7 @@ struct UniversalComposerBar: View {
                         showEphemeralPicker = false
                     }
                 } label: {
-                    Text("Off")
+                    Text(String(localized: "composer.ephemeral.off", defaultValue: "Off", bundle: .main))
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(ephemeralDuration.wrappedValue == nil ? .white : mutedColor)
                         .padding(.horizontal, 14)
@@ -1027,7 +1088,7 @@ struct UniversalComposerBar: View {
                     .foregroundColor(isActive ? Color(hex: "A855F7") : mutedColor)
 
                 if isActive {
-                    Text("Flou")
+                    Text(String(localized: "composer.blur.label", defaultValue: "Flou", bundle: .main))
                         .font(.system(size: 10, weight: .bold))
                         .foregroundColor(Color(hex: "A855F7"))
                 }
@@ -1049,8 +1110,8 @@ struct UniversalComposerBar: View {
             )
         }
         .accessibilityLabel(isActive
-                            ? "Mode flou actif"
-                            : "Activer le mode flou")
+                            ? String(localized: "composer.blur.active", defaultValue: "Mode flou actif", bundle: .main)
+                            : String(localized: "composer.blur.activate", defaultValue: "Activer le mode flou", bundle: .main))
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
     }
 }
@@ -1095,8 +1156,8 @@ extension UniversalComposerBar {
             )
         }
         .accessibilityLabel(isActive
-                            ? "\(effectCount) effet(s) actif(s)"
-                            : "Ajouter des effets au message")
+                            ? String(localized: "composer.effects.active", defaultValue: "\(effectCount) effet(s) actif(s)", bundle: .main)
+                            : String(localized: "composer.effects.add", defaultValue: "Ajouter des effets au message", bundle: .main))
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
     }
 
@@ -1144,8 +1205,8 @@ extension UniversalComposerBar {
             )
         }
         .accessibilityLabel(isActive
-                            ? "\(activeCount) effet(s) permanent(s) actif(s)"
-                            : "Ajouter des effets permanents")
+                            ? String(localized: "composer.effects.permanent.active", defaultValue: "\(activeCount) effet(s) permanent(s) actif(s)", bundle: .main)
+                            : String(localized: "composer.effects.permanent.add", defaultValue: "Ajouter des effets permanents", bundle: .main))
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isActive)
     }
 
@@ -1155,10 +1216,10 @@ extension UniversalComposerBar {
 
     var permanentEffectsInlinePicker: some View {
         let items: [(flag: MessageEffectFlags, icon: String, label: String)] = [
-            (.glow, "sun.max", "Lueur"),
-            (.pulse, "heart.fill", "Pulsation"),
-            (.rainbow, "rainbow", "Arc-en-ciel"),
-            (.sparkle, "sparkle", "Scintillant"),
+            (.glow, "sun.max", String(localized: "composer.effects.glow", defaultValue: "Lueur", bundle: .main)),
+            (.pulse, "heart.fill", String(localized: "composer.effects.pulse", defaultValue: "Pulsation", bundle: .main)),
+            (.rainbow, "rainbow", String(localized: "composer.effects.rainbow", defaultValue: "Arc-en-ciel", bundle: .main)),
+            (.sparkle, "sparkle", String(localized: "composer.effects.sparkle", defaultValue: "Scintillant", bundle: .main)),
         ]
 
         return ScrollView(.horizontal, showsIndicators: false) {
@@ -1194,7 +1255,7 @@ extension UniversalComposerBar {
                         )
                     }
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isSelected)
-                    .accessibilityLabel("\(item.label), \(isSelected ? "actif" : "inactif")")
+                    .accessibilityLabel(String(localized: "composer.effects.item.state", defaultValue: "\(item.label), \(isSelected ? String(localized: "common.active", defaultValue: "actif", bundle: .main) : String(localized: "common.inactive", defaultValue: "inactif", bundle: .main))", bundle: .main))
                     .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
             }

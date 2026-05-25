@@ -74,16 +74,16 @@ struct DataExportView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14, weight: .semibold))
-                    Text("Retour")
+                    Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(.system(size: 15, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
-            .accessibilityLabel("Retour")
+            .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
 
             Spacer()
 
-            Text("Export de donnees")
+            Text(String(localized: "settings.data.export.title", defaultValue: "Export de donnees", bundle: .main))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
@@ -123,11 +123,11 @@ struct DataExportView: View {
                 .foregroundColor(Color(hex: accentColor))
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Vos donnees, votre controle")
+                Text(String(localized: "settings.data.export.info.title", defaultValue: "Vos donnees, votre controle", bundle: .main))
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(theme.textPrimary)
 
-                Text("Conformement au RGPD, vous pouvez exporter toutes vos donnees personnelles.")
+                Text(String(localized: "settings.data.export.info.body", defaultValue: "Conformement au RGPD, vous pouvez exporter toutes vos donnees personnelles.", bundle: .main))
                     .font(.system(size: 12))
                     .foregroundColor(theme.textMuted)
             }
@@ -145,7 +145,7 @@ struct DataExportView: View {
 
     private var formatSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(title: "FORMAT", icon: "doc.fill", color: accentColor)
+            sectionHeader(title: String(localized: "settings.data.export.section.format", defaultValue: "FORMAT", bundle: .main), icon: "doc.fill", color: accentColor)
 
             HStack(spacing: 12) {
                 ForEach(ExportFormat.allCases) { format in
@@ -182,12 +182,12 @@ struct DataExportView: View {
 
     private var optionsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(title: "CONTENU", icon: "checklist", color: "F8B500")
+            sectionHeader(title: String(localized: "settings.data.export.section.content", defaultValue: "CONTENU", bundle: .main), icon: "checklist", color: "F8B500")
 
             VStack(spacing: 0) {
-                toggleRow(title: "Messages", icon: "bubble.left.fill", color: "FF6B6B", isOn: $includeMessages)
-                toggleRow(title: "Media", icon: "photo.fill", color: "9B59B6", isOn: $includeMedia)
-                toggleRow(title: "Contacts", icon: "person.2.fill", color: "4ECDC4", isOn: $includeContacts)
+                toggleRow(title: String(localized: "settings.data.export.content.messages", defaultValue: "Messages", bundle: .main), icon: "bubble.left.fill", color: "FF6B6B", isOn: $includeMessages)
+                toggleRow(title: String(localized: "settings.data.export.content.media", defaultValue: "Media", bundle: .main), icon: "photo.fill", color: "9B59B6", isOn: $includeMedia)
+                toggleRow(title: String(localized: "settings.data.export.content.contacts", defaultValue: "Contacts", bundle: .main), icon: "person.2.fill", color: "4ECDC4", isOn: $includeContacts)
             }
             .background(
                 RoundedRectangle(cornerRadius: 16)
@@ -261,7 +261,9 @@ struct DataExportView: View {
                     Image(systemName: "square.and.arrow.up")
                         .font(.system(size: 16, weight: .semibold))
                 }
-                Text(exportComplete ? "Export termine" : "Exporter mes donnees")
+                Text(exportComplete
+                    ? String(localized: "settings.data.export.button.done", defaultValue: "Export termine", bundle: .main)
+                    : String(localized: "settings.data.export.button.start", defaultValue: "Exporter mes donnees", bundle: .main))
                     .font(.system(size: 15, weight: .semibold))
             }
             .foregroundColor(.white)
@@ -273,8 +275,10 @@ struct DataExportView: View {
             )
         }
         .disabled(isExporting || selectedFormats.isEmpty)
-        .accessibilityLabel("Exporter mes donnees")
-        .accessibilityHint(isExporting ? "Export en cours" : "Lance l'export de vos donnees")
+        .accessibilityLabel(String(localized: "settings.data.export.button.start", defaultValue: "Exporter mes donnees", bundle: .main))
+        .accessibilityHint(isExporting
+            ? String(localized: "settings.data.export.hint.exporting", defaultValue: "Export en cours", bundle: .main)
+            : String(localized: "settings.data.export.hint.start", defaultValue: "Lance l'export de vos donnees", bundle: .main))
     }
 
     private func sectionHeader(title: String, icon: String, color: String) -> some View {

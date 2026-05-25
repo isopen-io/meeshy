@@ -49,6 +49,46 @@ function resolveActorName(actor: NotificationActor | undefined): string {
   return actor?.displayName?.trim() || actor?.username?.trim() || 'Meeshy';
 }
 
+/**
+ * Build the APN/FCM push header (title + optional subtitle) for a notification.
+ *
+ * Keeps the title focused on the sender so iOS Communication Notifications
+ * (`INSendMessageIntent.donate`) can rewrite the banner around the sender's
+ * INPerson without losing the conversation name. The conversation name is
+ * carried in a separate `subtitle` field — APN-native, displayed by iOS
+ * between title and body and untouched by Communication Intent donation.
+ *
+ * Only `new_message` notifications get a subtitle (only kind iOS surfaces
+ * the conversation context for); reactions / mentions / system events keep
+ * the title-only layout where the actor name is the natural focus.
+ *
+ * Exported for unit testing — the helper is pure and side-effect free.
+ */
+export function buildPushHeader(input: {
+  type: string;
+  customTitle?: string;
+  actor?: NotificationActor;
+  context: {
+    conversationType?: string | null;
+    conversationTitle?: string | null;
+  };
+}): { title: string; subtitle: string | undefined } {
+  const isMessage = input.type === 'new_message';
+  const conversationType = input.context.conversationType?.trim() || '';
+  const conversationTitle = input.context.conversationTitle?.trim() || '';
+  const isGroupMessage = isMessage
+    && conversationType !== ''
+    && conversationType !== 'direct';
+
+  const actorName = resolveActorName(input.actor);
+  const title = input.customTitle?.trim() || actorName;
+  const subtitle = isGroupMessage && conversationTitle !== ''
+    ? conversationTitle
+    : undefined;
+
+  return { title, subtitle };
+}
+
 function extractExtension(filename: string | null | undefined): string | null {
   if (!filename) return null;
   const dot = filename.lastIndexOf('.');
@@ -97,7 +137,7 @@ function formatSingleAttachmentLabel(params: {
   type: NotificationAttachmentType;
   filename?: string | null;
   fileSize?: number | null;
-  /** Durée en secondes (champ `duration` de MessageAttachment). */
+  /** Durée en MILLISECONDES (champ `duration` de MessageAttachment, cf. schema.prisma). */
   duration?: number | null;
   width?: number | null;
   height?: number | null;
@@ -105,13 +145,13 @@ function formatSingleAttachmentLabel(params: {
   const details: string[] = [];
 
   if (params.type === 'audio') {
-    if (params.duration) details.push(formatDuration(params.duration * 1000));
+    if (params.duration) details.push(formatDuration(params.duration));
     if (params.fileSize) details.push(formatFileSize(params.fileSize));
     return details.length > 0 ? `🎵 Audio · ${details.join(' · ')}` : '🎵 Audio';
   }
 
   if (params.type === 'video') {
-    if (params.duration) details.push(formatDuration(params.duration * 1000));
+    if (params.duration) details.push(formatDuration(params.duration));
     if (params.fileSize) details.push(formatFileSize(params.fileSize));
     return details.length > 0 ? `🎬 Vidéo · ${details.join(' · ')}` : '🎬 Vidéo';
   }
@@ -427,6 +467,7 @@ export class NotificationService {
       // Émettre via Socket.IO
       if (this.io) {
         this.io.to(params.userId).emit(SERVER_EVENTS.NOTIFICATION_NEW, formatted);
+        console.log(`[RT-DIAG] notification:new emitted (socket) user=${params.userId} type=${params.type} conv=${params.context.conversationId ?? 'none'}`);
         // Update badge counters on client (fire-and-forget, non-blocking)
         this.emitCountsUpdate(params.userId).catch(() => {});
       }
@@ -440,20 +481,18 @@ export class NotificationService {
               `/conversations/${params.context.conversationId}`) :
             undefined;
 
-          const isMessage = params.type === 'new_message';
-          const isGroupMessage = isMessage
-            && params.context.conversationType
-            && params.context.conversationType !== 'direct';
-          const actorName = resolveActorName(params.actor);
-          const messageTitle = isGroupMessage && params.context.conversationTitle
-            ? `${actorName} | ${params.context.conversationTitle}`
-            : actorName;
-          const pushTitle = params.title
-            || (isMessage ? messageTitle : null)
-            || params.actor?.displayName
-            || 'Meeshy';
+          const { title: pushTitle, subtitle: pushSubtitle } = buildPushHeader({
+            type: params.type,
+            customTitle: params.title,
+            actor: params.actor,
+            context: {
+              conversationType: params.context.conversationType,
+              conversationTitle: params.context.conversationTitle,
+            },
+          });
           const pushBody = params.content.substring(0, 200);
 
+          console.log(`[RT-DIAG] push (APNs/FCM) sending user=${params.userId} type=${params.type} conv=${params.context.conversationId ?? 'none'}`);
           this.pushService.sendToUser({
             userId: params.userId,
             // CRITICAL: exclude 'voip' tokens — regular notifications must NEVER be
@@ -463,6 +502,10 @@ export class NotificationService {
             types: ['apns', 'fcm'],
             payload: {
               title: pushTitle,
+              // Subtitle carries the conversation name for group/global chats
+              // — survives iOS Communication Notification rewriting that would
+              // otherwise drop a "<sender> | <conv>" concatenated title.
+              ...(pushSubtitle ? { subtitle: pushSubtitle } : {}),
               body: pushBody,
               link,
               collapseId: params.collapseId,

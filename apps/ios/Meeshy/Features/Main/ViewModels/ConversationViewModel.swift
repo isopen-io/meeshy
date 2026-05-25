@@ -8,7 +8,7 @@ import os
 
 // MARK: - Real-time Translation Type (text translations, not in SDK)
 
-struct MessageTranslation: Identifiable {
+struct MessageTranslation: Identifiable, Equatable {
     let id: String
     let messageId: String
     let sourceLanguage: String
@@ -111,6 +111,25 @@ class ConversationViewModel: ObservableObject {
     /// the user knows fresher data is on its way without seeing a blocking
     /// spinner (cache-first + stale-while-revalidate discipline).
     @Published var isRevalidating = false
+
+    /// Canonical projection of the 4 message-loading booleans above into
+    /// a single mutually-exclusive `ConversationLoadingPhase`. Views and
+    /// future refactors should prefer reading this over the booleans —
+    /// the boolean state-machine is preserved as the source of truth for
+    /// now (additive migration, M2 follow-up to PR #280), but the
+    /// invariants (`loadingInitial` excludes `loadingOlder`, etc.) are
+    /// expressible only on the enum side. The `hasObservedAnyData` flag
+    /// distinguishes `.idle` (cold-open) from `.loaded` (finished load).
+    var paginationPhase: ConversationLoadingPhase {
+        ConversationLoadingPhase.derive(
+            isLoadingInitial: isLoadingInitial,
+            isLoadingOlder: isLoadingOlder,
+            isLoadingNewer: isLoadingNewer,
+            isRevalidating: isRevalidating,
+            hasObservedAnyData: !messages.isEmpty
+        )
+    }
+
     /// Message ids whose `messageService.edit` round-trip is in flight. The
     /// bubble renders a "Enregistrement…" indicator next to the "Modifie"
     /// badge while the set contains its id so the user never wonders if
@@ -123,8 +142,6 @@ class ConversationViewModel: ObservableObject {
 
     /// Set before prepend so the view can restore scroll position
     @Published var scrollAnchorId: String?
-    /// Incremented when a new message is appended at the end (not prepended)
-    @Published var newMessageAppended: Int = 0
 
     /// Users currently typing in this conversation
     @Published var typingUsernames: [String] = []
@@ -148,11 +165,31 @@ class ConversationViewModel: ObservableObject {
     /// nil value means user chose "show original audio"
     @Published var activeAudioLanguageOverrides: [String: String?] = [:]
 
+    /// B2 (Prisme Linguistique) — monotonically increasing counter bumped
+    /// every time the viewer's preferred-content languages change (user
+    /// edits `systemLanguage` / `regionalLanguage` / `customDestinationLanguage`
+    /// in Settings). Consumers (e.g., `MessageListViewController`) observe
+    /// this signal to re-snapshot bubbles so the previously-resolved
+    /// translation is replaced with the one matching the new preference.
+    @Published var preferredLanguageRevision: Int = 0
+
     /// Active live location sessions in this conversation
     @Published var activeLiveLocations: [ActiveLiveLocation] = []
 
     /// Last unread message from another user (set only via socket, cleared on scroll-to-bottom)
     @Published var lastUnreadMessage: Message?
+
+    /// Snapshot of the current conversation's unread count. Initialised
+    /// from `initialUnreadCount`, then dropped to 0 when the user reads
+    /// (markAsRead). Combined with `syncEngine.totalConversationsUnread`
+    /// to derive `otherConversationsUnread`.
+    @Published private(set) var currentConversationUnreadCount: Int = 0
+
+    /// Total unread across every OTHER conversation (excludes this one).
+    /// Drives the cross-conversation pill stuck next to the back button.
+    /// Always clamped ≥ 0 — never negative even when our local snapshot
+    /// of the current conv is briefly stale relative to the aggregate.
+    @Published private(set) var otherConversationsUnread: Int = 0
 
     /// Updated by the MessageListViewController's scroll delegate via the
     /// `onNearBottomChanged` callback. Drives the anticipatory prefetch:
@@ -475,6 +512,20 @@ class ConversationViewModel: ObservableObject {
     private var storeObservation: AnyCancellable?
     private var socketHandler: ConversationSocketHandler?
 
+    // MARK: - Split Orchestrators (incremental migration scaffold)
+    //
+    // The 3000-line legacy here is being progressively split into focused
+    // handlers under `ViewModels/Conversation/`. For now the legacy keeps
+    // owning `@Published var messages` and friends; the handlers mirror that
+    // state into `stateStore.messages` so that the delegated methods
+    // (currently `searchMessages`, `prefetchRecentMedia`, …) work against
+    // the same source of truth. See `[[project_conversation_vm_split_staged]]`.
+    private let stateStore: ConversationStateStore
+    private let commandHandler: ConversationCommandHandler
+    private let mediaHandler: ConversationMediaHandler
+    private let searchHandler: ConversationSearchHandler
+    private let translationResolver: TranslationResolver
+
     // MARK: - GRDB Persistence (additive — parallel data source alongside @Published messages)
 
     /// GRDB-backed observable store for UICollectionView bridge.
@@ -638,6 +689,31 @@ class ConversationViewModel: ObservableObject {
         self.messageSocket = messageSocket
         // Eagerly create GRDB persistence so messageStore is available at first paint.
         self.messagePersistence = dependencies.persistence
+
+        // Split-handler scaffolding — see ConversationStateStore et al.
+        // Built before MessageStore/socket so subsequent delegations always
+        // have a non-nil handler to call. The handlers don't drive any state
+        // yet; they mirror the legacy @Published values via the messages
+        // sink below so `searchHandler` / `mediaHandler` / `translationResolver`
+        // can read off `stateStore.messages` without forking the source of truth.
+        let stateStore = ConversationStateStore()
+        self.stateStore = stateStore
+        self.commandHandler = ConversationCommandHandler(
+            state: stateStore,
+            conversationId: conversationId,
+            messageService: messageService,
+            persistence: dependencies.persistence,
+            authManager: authManager,
+            messageSocket: messageSocket,
+            reportService: reportService
+        )
+        self.mediaHandler = ConversationMediaHandler(state: stateStore)
+        self.searchHandler = ConversationSearchHandler(
+            state: stateStore,
+            conversationId: conversationId,
+            messageService: messageService
+        )
+        self.translationResolver = TranslationResolver(state: stateStore, authManager: authManager)
         let store = MessageStore(
             conversationId: conversationId,
             persistence: dependencies.persistence
@@ -661,6 +737,11 @@ class ConversationViewModel: ObservableObject {
         handler.delegate = self
         handler.persistence = dependencies.persistence
         self.socketHandler = handler
+        // Declare this conversation as currently visible so the sync engine
+        // forces its `unreadCount` to 0 on every server broadcast (the user
+        // IS reading it) and excludes it from the cross-conversation
+        // aggregator. Cleared in `deinit`.
+        syncEngine.setCurrentlyOpenConversation(conversationId)
         store.startObserving(dbPool: dependencies.dbPool)
         Task { await store.loadInitial() }
         messagesPersistCancellable = $messages
@@ -675,6 +756,19 @@ class ConversationViewModel: ObservableObject {
         subscribeToMessageStore()
         subscribeToQueueReconciliation()
         subscribeToLanguagePreferenceChanges()
+        mirrorMessagesIntoStateStore()
+        // Cross-conversation unread aggregator powers the back-button pill.
+        // Seed `currentConversationUnreadCount` BEFORE wiring the CombineLatest
+        // so the initial `totalConversationsUnread` value (delivered as soon
+        // as the sink subscribes — CurrentValueSubject semantics) is reduced
+        // against the right baseline.
+        currentConversationUnreadCount = unreadCount
+        Publishers.CombineLatest(syncEngine.totalConversationsUnread, $currentConversationUnreadCount)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] total, current in
+                self?.otherConversationsUnread = max(0, total - current)
+            }
+            .store(in: &cancellables)
         if let session = anonymousSession {
             APIClient.shared.anonymousSessionToken = session.sessionToken
             MessageSocketManager.shared.connectAnonymous(sessionToken: session.sessionToken)
@@ -700,6 +794,11 @@ class ConversationViewModel: ObservableObject {
     /// When the store emits a change, this method maps the `[MessageRecord]`
     /// snapshot to `[MeeshyMessage]`, replaces `messages`, and calls
     /// `objectWillChange` so SwiftUI re-renders.
+    /// Monotonic token bumped on every store-driven refresh. An async
+    /// decryption pass that finishes after a newer refresh started checks this
+    /// before assigning, so a stale snapshot never overwrites a fresher one.
+    private var storeRefreshGeneration: Int = 0
+
     private func subscribeToMessageStore() {
         storeObservation = messageStore.messagesDidChange
             .sink { [weak self] in
@@ -712,15 +811,30 @@ class ConversationViewModel: ObservableObject {
                 // iteration AFTER the current view body evaluation completes.
                 DispatchQueue.main.async { [weak self] in
                     guard let self else { return }
+                    self.storeRefreshGeneration &+= 1
+                    let generation = self.storeRefreshGeneration
                     let userId = self.currentUserId
-                    let previousCount = self.messages.count
                     let mapped = self.messageStore.messages.map { $0.toMessage(currentUserId: userId) }
-                    self.messages = mapped
-                    // Increment scroll-to-bottom counter when an optimistic send
-                    // surfaces via store observation (replaces the former increment
-                    // that sat next to messages.append in sendMessage).
-                    if mapped.count > previousCount {
-                        self.newMessageAppended += 1
+                    // E2EE: encrypted DMs are persisted as ciphertext — the
+                    // socket and REST ingestion paths both store `api.content`
+                    // verbatim, so cleartext never touches disk. Decrypt the
+                    // mapped snapshot in memory so every store-driven refresh
+                    // surfaces readable content. Meeshy E2EE uses a per-peer
+                    // symmetric key, so re-decrypting the same ciphertext on
+                    // each refresh is idempotent and cheap.
+                    let needsDecryption = self.isDirect
+                        && mapped.contains { $0.isEncrypted && !$0.content.isEmpty }
+                    guard needsDecryption else {
+                        self.messages = mapped
+                        return
+                    }
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }
+                        var decrypted = mapped
+                        await self.decryptMessagesIfNeeded(&decrypted)
+                        // Drop a stale decrypt that lost the race to a newer refresh.
+                        guard generation == self.storeRefreshGeneration else { return }
+                        self.messages = decrypted
                     }
                 }
             }
@@ -804,6 +918,23 @@ class ConversationViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 
+    /// Mirror the legacy `@Published var messages` into the new
+    /// `ConversationStateStore.messages` so the split handlers
+    /// (`searchHandler`, `mediaHandler`, `translationResolver`) can read
+    /// off the shared store while the legacy ViewModel still owns the
+    /// canonical source. Removed once the migration of the message
+    /// pipeline (init/load/send/edit/delete) into `commandHandler` is
+    /// complete and the legacy `@Published messages` retired.
+    private func mirrorMessagesIntoStateStore() {
+        stateStore.messages = messages
+        $messages
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] snapshot in
+                self?.stateStore.messages = snapshot
+            }
+            .store(in: &cancellables)
+    }
+
     private func subscribeToLanguagePreferenceChanges() {
         authManager.currentUserPublisher
             .removeDuplicates { old, new in
@@ -813,8 +944,17 @@ class ConversationViewModel: ObservableObject {
             }
             .dropFirst()
             .sink { [weak self] _ in
-                self?._cachedPreferredLanguages = nil
-                self?._cachedPreferredLanguagesUserId = nil
+                // P4.2: cache invalidation follows the same rename that
+                // moved `preferredLanguages` into ``ConversationLanguagePreferences``;
+                // the old `_cachedPreferredLanguages` / `_cachedPreferredLanguagesUserId`
+                // pair was collapsed into a single Equatable cache slot.
+                self?._cachedLanguagePreferences = nil
+                // B2 (Prisme Linguistique) — bump the revision so any
+                // subscriber that selected a translation based on the
+                // previous preferred languages can re-resolve. Without
+                // this, the bubble keeps showing the old translation
+                // until a new translation event arrives.
+                self?.preferredLanguageRevision &+= 1
             }
             .store(in: &cancellables)
     }
@@ -823,6 +963,9 @@ class ConversationViewModel: ObservableObject {
         // socketHandler deinit handles room leave & typing cleanup
         socketHandler = nil
         APIClient.shared.anonymousSessionToken = nil
+        // Clear the currently-open conversation gate so cross-conversation
+        // surfaces (back-button pill on other screens) resume counting it.
+        syncEngine.setCurrentlyOpenConversation(nil)
     }
 
     // MARK: - Typing Emission (delegated to socketHandler)
@@ -879,8 +1022,13 @@ class ConversationViewModel: ObservableObject {
             // s'affichent dès le premier rendu avec le Prisme Linguistique.
             await hydratePersistedTranslations()
             await messageStore.loadInitial()
-            await hydrateTranslationsFromCache()
+            // `hydrateMetadataFromGRDB` AVANT tout `await` suivant : peuple
+            // `messageTranscriptions` de façon atomique avec la pose des
+            // messages. Sinon le MainActor cède pendant l'await et SwiftUI
+            // rend les bulles audio SANS transcription, puis re-rend — la
+            // transcription « pop » en second temps.
             hydrateMetadataFromGRDB()
+            await hydrateTranslationsFromCache()
             // Always revalidate from API in background — the GRDB local store may only
             // contain messages WE sent (optimistic inserts) while messages received from
             // other participants while the conversation was closed are absent because
@@ -905,8 +1053,10 @@ class ConversationViewModel: ObservableObject {
                 await refreshMessagesFromAPI()
                 await hydrateTranslationsFromCache()
             } else {
-                await hydrateTranslationsFromCache()
+                // `hydrateMetadataFromGRDB` AVANT l'`await` : transcriptions
+                // atomiques avec les messages, pas de flash (cf. cas .fresh).
                 hydrateMetadataFromGRDB()
+                await hydrateTranslationsFromCache()
                 isRevalidating = true
                 Task { [weak self] in
                     guard let self else { return }
@@ -964,13 +1114,18 @@ class ConversationViewModel: ObservableObject {
             // Upsert authoritative server data into GRDB; the MessageStore observation
             // surfaces new/updated rows to `messages` automatically — no direct assignment.
             try? await messagePersistence.upsertFromAPIMessages(response.data)
+            // Extrait transcriptions/traductions AVANT que `loadInitial` ne
+            // fasse surface les messages : `messageTranscriptions` est prêt au
+            // premier rendu, la transcription audio ne « pop » plus en second
+            // temps. `extractAttachmentTranscriptions` lit `response.data`
+            // directement, il n'a pas besoin du store.
+            extractAttachmentTranscriptions(from: response.data)
+            extractTextTranslations(from: response.data)
             await messageStore.loadInitial()
 
             // Keep legacy CacheCoordinator in sync so other parts of the app
             // (ConversationList preview, unread badge) that still read from it remain correct.
             let freshMessages = await processAPIMessages(response.data)
-            extractAttachmentTranscriptions(from: response.data)
-            extractTextTranslations(from: response.data)
             scheduleTranscriptionRetry(for: response.data)
             let snapshot = freshMessages
             await CacheCoordinator.shared.messages.mergeUpdate(for: conversationId) { cached in
@@ -980,7 +1135,7 @@ class ConversationViewModel: ObservableObject {
             }
         } catch let error as MeeshyError {
             switch error {
-            case .forbidden(let reason):
+            case .forbidden(let reason, _):
                 // 403: still authenticated, but no longer authorised on
                 // THIS resource (kicked, group dissolved, blocked, etc.).
                 await handleAccessRevoked(reason: reason)
@@ -1026,77 +1181,20 @@ class ConversationViewModel: ObservableObject {
         accessRevoked = true
     }
 
-    // MARK: - Media Prefetch
+    // MARK: - Media Prefetch (delegated to ConversationMediaHandler)
 
-    private var mediaPrefetchTask: Task<Void, Never>?
     private var mediaPrefetchDebounce: Task<Void, Never>?
 
-    /// Prefetch media for the most recent messages with attachments.
-    /// Debounced to avoid thrashing from rapid socket updates.
+    /// Prefetch media for the most recent messages with attachments. The
+    /// debounce stays here (300 ms collapses bursts of socket updates) and
+    /// the actual cache warming is delegated to `mediaHandler`, which owns
+    /// the in-flight task / cancellation contract.
     func prefetchRecentMedia() {
         mediaPrefetchDebounce?.cancel()
-        mediaPrefetchDebounce = Task {
+        mediaPrefetchDebounce = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(300))
-            guard !Task.isCancelled else { return }
-            executePrefetchRecentMedia()
-        }
-    }
-
-    private func executePrefetchRecentMedia() {
-        mediaPrefetchTask?.cancel()
-        let snapshot = Array(messages.suffix(30).filter { !$0.attachments.isEmpty })
-        mediaPrefetchTask = Task(priority: .utility) {
-            guard !snapshot.isEmpty else { return }
-
-            let imageStore = await CacheCoordinator.shared.images
-
-            // Parallel prefetch: images/thumbnails/audio in TaskGroup
-            await withTaskGroup(of: Void.self) { group in
-                for message in snapshot {
-                    for attachment in message.attachments {
-                        guard !Task.isCancelled else { return }
-
-                        switch attachment.type {
-                        case .image:
-                            if let thumbUrl = attachment.thumbnailUrl, !thumbUrl.isEmpty,
-                               let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
-                                group.addTask { _ = await imageStore.image(for: resolved) }
-                            }
-                            if !attachment.fileUrl.isEmpty,
-                               let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString {
-                                group.addTask { _ = await imageStore.image(for: resolved) }
-                            }
-
-                        case .video:
-                            if let thumbUrl = attachment.thumbnailUrl, !thumbUrl.isEmpty,
-                               let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
-                                group.addTask { _ = await imageStore.image(for: resolved) }
-                            } else if !attachment.fileUrl.isEmpty,
-                                      let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl) {
-                                group.addTask { _ = await StoryMediaLoader.shared.videoThumbnail(url: resolved) }
-                            }
-
-                        case .audio:
-                            if !attachment.fileUrl.isEmpty,
-                               let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString {
-                                group.addTask { _ = try? await CacheCoordinator.shared.audio.data(for: resolved) }
-                            }
-
-                        default:
-                            break
-                        }
-                    }
-                }
-            }
-
-            // Video preroll: fire-and-forget, non-blocking
-            if let firstVideoAtt = snapshot.flatMap(\.attachments).first(where: { $0.type == .video }),
-               !firstVideoAtt.fileUrl.isEmpty,
-               let resolved = MeeshyConfig.resolveMediaURL(firstVideoAtt.fileUrl) {
-                Task(priority: .utility) {
-                    await StoryMediaLoader.shared.preloadAndCachePlayer(url: resolved)
-                }
-            }
+            guard let self, !Task.isCancelled else { return }
+            self.mediaHandler.prefetchRecentMedia()
         }
     }
 
@@ -1109,6 +1207,7 @@ class ConversationViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] changedId in
                 guard changedId == targetId else { return }
+                Logger.messages.info("[RT-DIAG] VM(conv) messagesDidChange conv=\(targetId, privacy: .public) -> reconcile delivery badges")
                 Task { @MainActor [weak self] in
                     guard let self else { return }
                     let cached = await CacheCoordinator.shared.messages.load(for: targetId)
@@ -1271,12 +1370,11 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Send Message
 
-    private func detectKeyboardLanguage() -> String {
-        if let primaryLanguage = UITextInputMode.activeInputModes.first?.primaryLanguage {
-            return String(primaryLanguage.prefix(2))
-        }
-        return authManager.currentUser?.systemLanguage ?? "fr"
-    }
+    /// Send-time fallback for `originalLanguage` when the composer supplies
+    /// none. Forced to French — the keyboard layout must never drive content
+    /// language (Prisme Linguistique). The composer itself starts in `fr` and
+    /// `TextAnalyzer` re-detects from the typed text.
+    private func defaultComposeLanguage() -> String { "fr" }
 
     @discardableResult
     func sendMessage(content: String, replyToId: String? = nil, storyReplyToId: String? = nil, storyReplyReference: ReplyReference? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, originalLanguage: String? = nil, existingTempId: String? = nil) async -> Bool {
@@ -1425,34 +1523,14 @@ class ConversationViewModel: ObservableObject {
         guard !isSending else { return false }
         isSending = true
 
-        // Build ReplyReference from quoted message or story
-        var replyRef: ReplyReference?
-        if let storyRef = storyReplyReference {
-            replyRef = storyRef
-        } else if let replyId = replyToId, let quoted = messages.first(where: { $0.id == replyId }) {
-            let previewText: String = {
-                if !quoted.content.isEmpty { return quoted.content }
-                if let first = quoted.attachments.first {
-                    switch first.type {
-                    case .image: return "\u{1F4F7} Photo"
-                    case .video: return "\u{1F3AC} Video"
-                    case .audio: return "\u{1F3B5} Message vocal"
-                    case .file: return "\u{1F4CE} Fichier"
-                    default: return "\u{1F4CE} Piece jointe"
-                    }
-                }
-                return ""
-            }()
-            replyRef = ReplyReference(
-                messageId: replyId,
-                authorName: quoted.senderName ?? "Utilisateur",
-                previewText: previewText,
-                isMe: quoted.isMe,
-                authorColor: quoted.senderColor,
-                attachmentType: quoted.attachments.first?.type.rawValue,
-                attachmentThumbnailUrl: quoted.attachments.first?.thumbnailUrl
-            )
-        }
+        // Build ReplyReference from quoted message or story via la helper
+        // unifiee — meme logique que `insertOptimisticMediaMessage` pour
+        // garantir que la quoted-reply card apparait identiquement quel que
+        // soit le chemin d'envoi (texte-seul vs media).
+        let replyRef = makeReplyReference(
+            storyReplyReference: storyReplyReference,
+            replyToId: replyToId
+        )
 
         // Optimistic insert.
         // Phase 4 §6.1 — local id is the canonical `cid_<uuid v4 lowercase>`
@@ -1547,7 +1625,7 @@ class ConversationViewModel: ObservableObject {
 
             let body = SendMessageRequest(
                 content: finalContent,
-                originalLanguage: originalLanguage ?? detectKeyboardLanguage(),
+                originalLanguage: originalLanguage ?? defaultComposeLanguage(),
                 replyToId: replyToId,
                 storyReplyToId: storyReplyToId,
                 forwardedFromId: forwardedFromId,
@@ -1751,6 +1829,50 @@ class ConversationViewModel: ObservableObject {
     /// Linguistique pour les utilisateurs non-francophones — l'affichage
     /// optimiste afficherait le mauvais drapeau de langue jusqu'à la
     /// réconciliation serveur.
+    /// Construit le `ReplyReference` riche destine a la bulle optimiste a
+    /// partir d'un `replyToId` (message normal) ou d'un `storyReplyReference`
+    /// pre-fourni (story reply). Single source of truth pour les deux chemins
+    /// d'envoi : texte-seul (sendMessage) et avec attachements
+    /// (insertOptimisticMediaMessage).
+    ///
+    /// L'absence de cette helper laissait `replyToJson` a nil dans le chemin
+    /// avec attachements, ce qui faisait que la quoted-reply card n'apparaissait
+    /// jamais dans la bulle optimiste pour les replies audio/video/image/galerie.
+    private func makeReplyReference(
+        storyReplyReference: ReplyReference?,
+        replyToId: String?
+    ) -> ReplyReference? {
+        if let storyRef = storyReplyReference {
+            return storyRef
+        }
+        guard let rid = replyToId,
+              let quoted = messages.first(where: { $0.id == rid }) else {
+            return nil
+        }
+        let previewText: String = {
+            if !quoted.content.isEmpty { return quoted.content }
+            if let first = quoted.attachments.first {
+                switch first.type {
+                case .image: return "\u{1F4F7} Photo"
+                case .video: return "\u{1F3AC} Video"
+                case .audio: return "\u{1F3B5} Message vocal"
+                case .file: return "\u{1F4CE} Fichier"
+                default: return "\u{1F4CE} Piece jointe"
+                }
+            }
+            return ""
+        }()
+        return ReplyReference(
+            messageId: rid,
+            authorName: quoted.senderName ?? "Utilisateur",
+            previewText: previewText,
+            isMe: quoted.isMe,
+            authorColor: quoted.senderColor,
+            attachmentType: quoted.attachments.first?.type.rawValue,
+            attachmentThumbnailUrl: quoted.attachments.first?.thumbnailUrl
+        )
+    }
+
     func insertOptimisticMediaMessage(
         tempId: String,
         content: String,
@@ -1763,8 +1885,16 @@ class ConversationViewModel: ObservableObject {
     ) {
         let now = Date()
         let attachmentsJson = attachments.isEmpty ? nil : try? JSONEncoder().encode(attachments)
-        let replyToJson = replyReference.flatMap { try? JSONEncoder().encode($0) }
-        let resolvedOriginalLanguage = originalLanguage ?? detectKeyboardLanguage()
+        // Construit le ReplyReference riche AVANT l'insert : si `replyReference`
+        // est fourni (story reply), on l'utilise ; sinon on resout via
+        // `replyToId` depuis `self.messages`. Garantit que `replyToJson` est
+        // non-nil des que `replyToId` ou `replyReference` n'est pas nil.
+        let resolvedReplyRef = makeReplyReference(
+            storyReplyReference: replyReference,
+            replyToId: replyToId
+        )
+        let replyToJson = resolvedReplyRef.flatMap { try? JSONEncoder().encode($0) }
+        let resolvedOriginalLanguage = originalLanguage ?? defaultComposeLanguage()
         let record = MessageRecord(
             localId: tempId, serverId: nil,
             conversationId: conversationId, senderId: currentUserId,
@@ -1988,10 +2118,10 @@ class ConversationViewModel: ObservableObject {
         case everyone
     }
 
+    /// Pure predicate — delegated to `commandHandler` so the policy
+    /// (own message + within the 2h window) lives in one place.
     func canDeleteForEveryone(_ message: Message, window: TimeInterval = 2 * 3600) -> Bool {
-        guard message.isMe else { return false }
-        guard let sentAt = message.createdAt as Date? else { return false }
-        return Date().timeIntervalSince(sentAt) <= window
+        commandHandler.canDeleteForEveryone(message, window: window)
     }
 
     func deleteMessage(messageId: String, mode: DeleteMode = .everyone) async {
@@ -2085,17 +2215,13 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Consume View-Once Message
 
+    /// View-once consumption. Delegates to `commandHandler` with the
+    /// resolved server id — the handler runs the network call and the
+    /// persistence write under one optimistic transaction. Returns `true`
+    /// on success so the view can advance its UI (reveal + auto-dismiss
+    /// timer); `false` keeps the bubble blurred.
     func consumeViewOnce(messageId: String) async -> Bool {
-        do {
-            let result = try await messageService.consumeViewOnce(
-                conversationId: conversationId, messageId: serverId(for: messageId)
-            )
-            try? await messagePersistence.updateViewOnceCount(localId: messageId, count: result.viewOnceCount)
-            return true
-        } catch {
-            self.error = error.localizedDescription
-            return false
-        }
+        await commandHandler.consumeViewOnce(messageId: messageId, serverId: serverId(for: messageId))
     }
 
     func evictViewOnceMedia(message: Message) {
@@ -2186,6 +2312,11 @@ class ConversationViewModel: ObservableObject {
 
     func markAsRead() {
         let convId = conversationId
+        // 0. Drop our snapshot of the current conv's unread to 0 so the
+        // CombineLatest pipeline driving `otherConversationsUnread` no
+        // longer subtracts a stale count — without this, the back-button
+        // pill briefly under-shoots while the SDK aggregator catches up.
+        currentConversationUnreadCount = 0
         // 1. Update cache immediately (local-first) — survives reloadFromCache()
         Task { await ConversationSyncEngine.shared.markConversationReadLocally(convId) }
         // 2. Notify ConversationListViewModel to clear badge in current @Published state
@@ -2217,15 +2348,11 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
+    /// Server-side delivery confirmation. Fully delegated to the command
+    /// handler — the legacy variant did the exact same call with an
+    /// equally permissive error path.
     func markAsReceived() {
-        let convId = conversationId
-        Task {
-            do {
-                try await conversationService.markAsReceived(conversationId: convId)
-            } catch {
-                // Non-critical — server will still count as received on next sync
-            }
-        }
+        commandHandler.markAsReceived()
     }
 
 
@@ -2266,87 +2393,28 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Search Messages
+    // MARK: - Search Messages (delegated to ConversationSearchHandler)
 
+    /// First-page search. Delegates to `searchHandler`, then mirrors the
+    /// store-side state back onto the legacy `@Published` so the views
+    /// keep observing the ViewModel directly during the incremental
+    /// split. The local `searchNextCursor` legacy field becomes dead
+    /// weight (cursor lives in the handler) but is left assigned to
+    /// `nil` for any reader that still peeks at it.
     func searchMessages(query: String) async {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count >= 2 else {
-            searchResults = []
-            currentSearchQuery = nil
-            isSearching = false
-            return
-        }
-
-        isSearching = true
-        currentSearchQuery = trimmed
+        await searchHandler.searchMessages(query: query)
+        searchResults = stateStore.searchResults
+        currentSearchQuery = stateStore.currentSearchQuery
+        searchHasMore = stateStore.searchHasMore
+        isSearching = stateStore.isSearching
         searchNextCursor = nil
-
-        do {
-            let response = try await messageService.search(
-                conversationId: conversationId, query: trimmed, limit: 20
-            )
-
-            searchResults = response.data.map { buildSearchResult($0, query: trimmed) }
-            searchNextCursor = response.cursorPagination?.nextCursor
-            searchHasMore = response.cursorPagination?.hasMore ?? false
-        } catch {
-            searchResults = []
-        }
-
-        isSearching = false
     }
 
     func loadMoreSearchResults(query: String) async {
-        guard searchHasMore, let cursor = searchNextCursor, !isSearching else { return }
-        isSearching = true
-
-        do {
-            let response = try await messageService.searchWithCursor(
-                conversationId: conversationId, query: query, cursor: cursor
-            )
-
-            let newResults = response.data.map { buildSearchResult($0, query: query) }
-            searchResults.append(contentsOf: newResults)
-            searchNextCursor = response.cursorPagination?.nextCursor
-            searchHasMore = response.cursorPagination?.hasMore ?? false
-        } catch {
-            // Ignore pagination errors
-        }
-
-        isSearching = false
-    }
-
-    private func buildSearchResult(_ apiMsg: APIMessage, query: String) -> SearchResultItem {
-        let senderName = apiMsg.sender?.displayName ?? apiMsg.sender?.username ?? "?"
-        let content = apiMsg.content ?? ""
-        let queryLower = query.lowercased()
-
-        // Check if the match is in original content
-        if content.lowercased().contains(queryLower) {
-            return SearchResultItem(
-                id: apiMsg.id, conversationId: apiMsg.conversationId,
-                content: content, matchedText: content, matchType: "content",
-                senderName: senderName, senderAvatar: apiMsg.sender?.avatar, createdAt: apiMsg.createdAt
-            )
-        }
-
-        // Match is in a translation — find which one
-        if let translations = apiMsg.translations {
-            for t in translations where t.translatedContent.lowercased().contains(queryLower) {
-                return SearchResultItem(
-                    id: apiMsg.id, conversationId: apiMsg.conversationId,
-                    content: content, matchedText: t.translatedContent, matchType: "translation",
-                    senderName: senderName, senderAvatar: apiMsg.sender?.avatar, createdAt: apiMsg.createdAt
-                )
-            }
-        }
-
-        // Fallback (shouldn't happen but safe)
-        return SearchResultItem(
-            id: apiMsg.id, conversationId: apiMsg.conversationId,
-            content: content, matchedText: content, matchType: "content",
-            senderName: senderName, senderAvatar: apiMsg.sender?.avatar, createdAt: apiMsg.createdAt
-        )
+        await searchHandler.loadMoreSearchResults(query: query)
+        searchResults = stateStore.searchResults
+        searchHasMore = stateStore.searchHasMore
+        isSearching = stateStore.isSearching
     }
 
     // MARK: - Jump to Message (load messages around a specific message)
@@ -2656,34 +2724,21 @@ class ConversationViewModel: ObservableObject {
         activeAudioLanguageOverrides[messageId] = language
     }
 
-    private var _cachedPreferredLanguages: [String]?
-    private var _cachedPreferredLanguagesUserId: String?
+    private var _cachedLanguagePreferences: ConversationLanguagePreferences?
 
+    /// Ordered language priority used by `preferredTranslation(for:)`.
+    /// Extracted into ``ConversationLanguagePreferences`` (P4.2 step 1)
+    /// so the resolution can be unit-tested without spinning up a full
+    /// ViewModel + AuthManager + cached message graph. The cache is keyed
+    /// on the source `MeeshyUser` rather than just userId so a profile
+    /// edit (system/regional language change) is picked up immediately.
     private var preferredLanguages: [String] {
-        let userId = currentUserId
-        if let cached = _cachedPreferredLanguages, _cachedPreferredLanguagesUserId == userId {
-            return cached
+        let prefs = ConversationLanguagePreferences(user: authManager.currentUser)
+        if _cachedLanguagePreferences == prefs, let cached = _cachedLanguagePreferences {
+            return cached.resolved
         }
-        let user = authManager.currentUser
-        var preferred: [String] = []
-        // 1. Primary language (systemLanguage) — highest priority
-        if let sys = user?.systemLanguage, !preferred.contains(where: { $0.lowercased() == sys.lowercased() }) {
-            preferred.append(sys)
-        }
-        // 2. Secondary language (regionalLanguage)
-        if let reg = user?.regionalLanguage, !preferred.contains(where: { $0.lowercased() == reg.lowercased() }) {
-            preferred.append(reg)
-        }
-        // 3. Custom destination language (lowest auto-priority)
-        if let custom = user?.customDestinationLanguage, !preferred.contains(where: { $0.lowercased() == custom.lowercased() }) {
-            preferred.append(custom)
-        }
-        // NOTE: Device locale (Locale.current) is NOT added here — it is the UI interface
-        // language, not the user's content language preference. Content languages are
-        // systemLanguage (primary) and regionalLanguage (secondary) configured in-app.
-        _cachedPreferredLanguages = preferred
-        _cachedPreferredLanguagesUserId = userId
-        return preferred
+        _cachedLanguagePreferences = prefs
+        return prefs.resolved
     }
 
     func preferredTranslation(for messageId: String) -> MessageTranslation? {

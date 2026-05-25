@@ -116,6 +116,82 @@ public actor DiskCacheStore: ReadableCacheStore {
         }
         memoryCache.setObject(CacheBox(data), forKey: fileKey as NSString, cost: data.count)
         fileTimestamps[fileKey] = Date()
+
+        // E1 — auto-trigger eviction when the latest write may have
+        // pushed the cache over `CachePolicy.storageLocation.maxBytes`.
+        // Before this guard, `evictOverBudget()` was only callable from
+        // outside (memory-warning, BGProcessingTask) so a heavy user
+        // could grow the disk cache to 2GB+ before any cleanup fired.
+        //
+        // Cheap heuristic: skip the LRU scan when `data.count` alone is
+        // well under the budget — most writes won't trip it. We still
+        // tax once per N writes (`autoEvictionWriteCounter`) so even
+        // small writes accumulating past budget eventually reconcile.
+        await runBudgetEvictionIfNeeded(latestWriteSize: data.count)
+    }
+
+    /// E1 — bookkeeping counter so we don't scan the whole cache on
+    /// every write. The scan still runs:
+    /// - immediately when the latest write is itself > 1/10th of the
+    ///   budget (one big video would otherwise blow past the cap before
+    ///   the next checkpoint);
+    /// - once every `Self.autoEvictionEveryNWrites` writes regardless.
+    private var autoEvictionWriteCounter: Int = 0
+    private static let autoEvictionEveryNWrites: Int = 32
+
+    private func runBudgetEvictionIfNeeded(latestWriteSize: Int) async {
+        guard case .disk(_, let maxBytes) = policy.storageLocation else { return }
+        autoEvictionWriteCounter &+= 1
+        let bigWrite = latestWriteSize > maxBytes / 10
+        let periodic = autoEvictionWriteCounter % Self.autoEvictionEveryNWrites == 0
+        guard bigWrite || periodic else { return }
+        await evictOverBudget()
+    }
+
+    // MARK: - Adoption (PR B — optimistic local file → canonical cache key)
+
+    /// Adopts an existing local file as the cached entry for `canonicalKey`.
+    /// Move-if-same-volume (atomic), fallback copy + remove. Idempotent: if the
+    /// key already exists on disk, the source is left alone (cached version wins).
+    /// No memory-cache seeding: avoids blocking `Data(contentsOf:)` in the actor;
+    /// audio/video will populate the NSCache on first `data(for:)` (disk hit).
+    public func adopt(localFile localURL: URL, for canonicalKey: String) async {
+        guard fileManager.fileExists(atPath: localURL.path) else { return }
+
+        let key = Self.fileKey(for: canonicalKey)
+        let destination = diskFilePath(for: key)
+
+        if fileManager.fileExists(atPath: destination.path) {
+            return
+        }
+
+        do {
+            try fileManager.moveItem(at: localURL, to: destination)
+        } catch {
+            do {
+                try fileManager.copyItem(at: localURL, to: destination)
+                try? fileManager.removeItem(at: localURL)
+            } catch {
+                logger.error("adopt failed for key \(key): \(error.localizedDescription)")
+                return
+            }
+        }
+        try? fileManager.setAttributes([.modificationDate: Date()], ofItemAtPath: destination.path)
+        fileTimestamps[key] = Date()
+    }
+
+    /// Image variant of `adopt`: also seeds the static UIImage cache via
+    /// `cacheImageForPreview` so `ProgressiveCachedImage` renders instantly on
+    /// the next display without round-tripping through downsampling.
+    public func adoptImage(localFile localURL: URL, for canonicalKey: String) async {
+        let alreadyCached = fileManager.fileExists(atPath: diskFilePath(for: Self.fileKey(for: canonicalKey)).path)
+        await adopt(localFile: localURL, for: canonicalKey)
+        guard !alreadyCached else { return }
+
+        let key = Self.fileKey(for: canonicalKey)
+        let destination = diskFilePath(for: key)
+        guard let image = UIImage(contentsOfFile: destination.path) else { return }
+        DiskCacheStore.cacheImageForPreview(image, key: canonicalKey)
     }
 
     // MARK: - Queries
@@ -211,6 +287,26 @@ public actor DiskCacheStore: ReadableCacheStore {
 
     // MARK: - Eviction
 
+    /// E1 — current on-disk byte total, scanned via the file manager.
+    /// Exposed `public` for tests and for diagnostics surfaces (a future
+    /// "Cache size: X MB" row in Settings). Synchronous filesystem walk
+    /// inside the actor, so a no-op when called from outside the actor
+    /// context.
+    public func estimatedDiskBytes() async -> Int {
+        guard let enumerator = fileManager.enumerator(
+            at: baseDirectory,
+            includingPropertiesForKeys: [.fileSizeKey],
+            options: [.skipsHiddenFiles]
+        ) else { return 0 }
+        var total = 0
+        while let fileURL = enumerator.nextObject() as? URL {
+            if let size = (try? fileURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize {
+                total += size
+            }
+        }
+        return total
+    }
+
     public func evictExpired() async {
         guard let enumerator = fileManager.enumerator(at: baseDirectory, includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey], options: [.skipsHiddenFiles]) else { return }
         let now = Date()
@@ -275,6 +371,34 @@ public actor DiskCacheStore: ReadableCacheStore {
     nonisolated public static func cachedImage(for urlString: String) -> UIImage? {
         let key = fileKey(for: urlString) as NSString
         return _imageCache.object(forKey: key)
+    }
+
+    /// Cold-start synchronous warm : retourne l'image immediatement si elle
+    /// est en NSCache, sinon va lire le fichier du disque (sans IO reseau),
+    /// decode l'UIImage de maniere paresseuse via `contentsOfFile:`, store
+    /// le resultat dans la NSCache et le retourne.
+    ///
+    /// Conçu pour `CachedAsyncImage.init` à l'ouverture froide d'une
+    /// conversation : la NSCache est vide apres une liberation d'app, donc
+    /// `cachedImage(for:)` retourne nil meme si l'image est presente sur
+    /// disque. Sans `warmedImage`, la cellule rend d'abord son thumbHash
+    /// puis bascule sur l'image apres un `task { await ... }` async — d'ou
+    /// le flash "magenta/thumbhash → image" visible a chaque cold start.
+    ///
+    /// `UIImage(contentsOfFile:)` ne decompresse pas immediatement les
+    /// pixels (lazy decode au premier draw), donc le cout en init reste
+    /// minime. C'est le redraw initial qui paie le decodage — exactement
+    /// ce qu'on veut : un cycle de render, l'image visible directement,
+    /// pas de transition de placeholder.
+    nonisolated public func warmedImage(for urlString: String) -> UIImage? {
+        if let cached = Self.cachedImage(for: urlString) { return cached }
+        guard let fileURL = cachedFileURL(for: urlString),
+              let image = UIImage(contentsOfFile: fileURL.path) else {
+            return nil
+        }
+        let key = Self.fileKey(for: urlString) as NSString
+        Self._imageCache.setObject(image, forKey: key)
+        return image
     }
 
     /// Hard cap for the decoded bitmap we will keep resident in the NSCache

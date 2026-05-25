@@ -691,31 +691,28 @@ export function registerCoreRoutes(
         console.warn('⚠️ Failed to compute unreadCount for conversation', conversationId, unreadError);
       }
 
-      // Marquer automatiquement toutes les notifications de cette conversation comme lues
+      // Marquer automatiquement toutes les notifications de cette conversation comme lues.
+      // Le filtre conversationId reste client-side (champ JSON `context`), mais
+      // l'update est collapsé en un seul updateMany pour éviter le N+1 round-trip.
       try {
-        // Marquer les notifications comme lues (filtrage client-side car conversationId est dans context JSON)
         const notifications = await prisma.notification.findMany({
           where: {
             userId,
             isRead: false
-          }
+          },
+          select: { id: true, context: true }
         });
 
-        const relevantNotifications = notifications.filter((n: any) =>
-          n.context?.conversationId === conversationId
-        );
+        const idsToMark = notifications
+          .filter((n: any) => n.context?.conversationId === conversationId)
+          .map((n: any) => n.id);
 
-        let notificationsMarkedCount = 0;
-        for (const notif of relevantNotifications) {
-          await prisma.notification.update({
-            where: { id: notif.id },
+        if (idsToMark.length > 0) {
+          const result = await prisma.notification.updateMany({
+            where: { id: { in: idsToMark } },
             data: { isRead: true, readAt: new Date() }
           });
-          notificationsMarkedCount++;
-        }
-
-        if (notificationsMarkedCount > 0) {
-          fastify.log.info(`✅ Auto-marqué ${notificationsMarkedCount} notification(s) comme lues pour conversation ${conversationId}, userId ${userId}`);
+          fastify.log.info(`✅ Auto-marqué ${result.count} notification(s) comme lues pour conversation ${conversationId}, userId ${userId}`);
         }
       } catch (notifError) {
         // Ne pas bloquer la réponse si le marquage des notifications échoue

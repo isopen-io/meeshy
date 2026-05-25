@@ -323,15 +323,25 @@ export const messageAttachmentSchema = {
     },
     moderationReason: { type: 'string', nullable: true, description: 'Moderation reason' },
 
-    // Delivery status
+    // Delivery status (whole-conversation timestamps + counters)
     deliveredToAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Delivered to all timestamp' },
     viewedByAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Viewed by all timestamp' },
     downloadedByAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Downloaded by all timestamp' },
+    listenedByAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Listened by all timestamp (audio only)' },
+    watchedByAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Watched by all timestamp (video only)' },
     viewedCount: { type: 'number', description: 'Number of viewers' },
     downloadedCount: { type: 'number', description: 'Number of downloads' },
+    consumedCount: { type: 'number', description: 'Number of users who listened (audio) or watched (video)' },
 
-    // Encryption (encryptionMode is only on Conversation, not Attachment)
+    // Effects bitfield (lifecycle / appearance / persistent flags)
+    // @see packages/shared/types/message-effect-flags.ts
+    effectFlags: { type: 'number', description: 'Bitfield for attachment effects' },
+
+    // Encryption (E2EE envelope — required for clients to decrypt the file)
     isEncrypted: { type: 'boolean', description: 'Whether encrypted' },
+    encryptionMode: { type: 'string', nullable: true, description: 'Encryption mode: e2ee, server, hybrid' },
+    encryptionIv: { type: 'string', nullable: true, description: 'Base64-encoded AES-GCM initialization vector (12 bytes)' },
+    encryptionAuthTag: { type: 'string', nullable: true, description: 'Base64-encoded AES-GCM authentication tag (16 bytes)' },
 
     // Timestamps
     createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
@@ -563,6 +573,11 @@ export const messageSchema = {
   properties: {
     // Identifiers
     id: { type: 'string', description: 'Message unique identifier (MongoDB ObjectId)' },
+    clientMessageId: {
+      type: 'string',
+      nullable: true,
+      description: 'Client-generated idempotency key (cid_<uuid v4>) — optimistic-send reconciliation key. MUST be exposed so clients can match an optimistic row to its server record and avoid duplicate bubbles.'
+    },
     conversationId: { type: 'string', description: 'Parent conversation ID' },
     senderId: { type: 'string', description: 'Sender participant ID' },
 
@@ -587,6 +602,19 @@ export const messageSchema = {
 
     // Reply & Forward
     replyToId: { type: 'string', nullable: true, description: 'ID of message being replied to' },
+    storyReplyTo: {
+      type: 'object',
+      nullable: true,
+      description: 'Métadonnées enrichies de la story citée quand le message répond à une story (null si la story est supprimée)',
+      properties: {
+        id: { type: 'string' },
+        reactionCount: { type: 'integer' },
+        commentCount: { type: 'integer' },
+        createdAt: { type: 'string', format: 'date-time' },
+        thumbnailUrl: { type: 'string', nullable: true },
+        previewText: { type: 'string' }
+      }
+    },
     replyTo: {
       type: 'object',
       nullable: true,
@@ -786,7 +814,20 @@ export const messageMinimalSchema = {
         }
       },
       nullable: true,
-      description: 'Message attachments for preview'
+      description: 'Message attachments for preview (typically truncated to first item; total count lives in `_count.attachments`)'
+    },
+    // Prisma exposes a `_count` relation for nested counts. The gateway
+    // returns `_count: { attachments: N }` so the client can render the
+    // "+N" badge in conversation rows even when `attachments` above is
+    // truncated to a single preview item. Without this field declared,
+    // Fastify's response serializer silently strips it from the payload.
+    _count: {
+      type: 'object',
+      nullable: true,
+      description: 'Nested Prisma counts',
+      properties: {
+        attachments: { type: 'number', description: 'Total attachments on the message' }
+      }
     }
   }
 } as const;

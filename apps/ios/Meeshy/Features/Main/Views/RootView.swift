@@ -30,7 +30,7 @@ struct RootView: View {
     @StateObject private var conversationViewModel = ConversationListViewModel()
     @StateObject private var router = Router()
     @ObservedObject private var callManager = CallManager.shared
-    @ObservedObject private var networkMonitor = NetworkMonitor.shared
+    @StateObject private var connectionStatus = ConnectionStatusViewModel()
     @ObservedObject private var notificationManager = NotificationManager.shared
     @EnvironmentObject private var deepLinkRouter: DeepLinkRouter
     @Environment(\.colorScheme) private var systemColorScheme
@@ -262,14 +262,17 @@ struct RootView: View {
                 menuLadder
             }
 
-            // 7. Offline banner
-            if networkMonitor.isOffline {
+            // 7. Offline banner — source unique : ConnectionStatusViewModel.
+            // Quand le réseau revient, `status` cesse d'être `.offline` et la
+            // bannière disparaît immédiatement ; les sockets se reconnectent
+            // en parallèle (cf. NetworkMonitor → forceReconnect dans le SDK).
+            if connectionStatus.status == .offline {
                 VStack {
                     OfflineBanner()
                         .transition(.move(edge: .top).combined(with: .opacity))
                     Spacer()
                 }
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: networkMonitor.isOffline)
+                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: connectionStatus.status)
                 .zIndex(190)
             } else {
                 pendingSettingsBannerOverlay
@@ -307,7 +310,7 @@ struct RootView: View {
         .environmentObject(statusViewModel)
         .environmentObject(conversationViewModel)
         .environmentObject(storyViewerCoordinator)
-        .onChange(of: router.sceneTitle) { _, title in
+        .adaptiveOnChange(of: router.sceneTitle) { _, title in
             UIApplication.shared.connectedScenes
                 .compactMap { $0 as? UIWindowScene }
                 .first?.title = "Meeshy — \(title)"
@@ -321,6 +324,11 @@ struct RootView: View {
             // Connect Socket.IO early so the backend knows we're online
             MessageSocketManager.shared.connect()
             statusViewModel.subscribeToSocketEvents()
+            // Sans cet appel, le SDK reçoit bien `story:created` /
+            // `story:updated` / `story:deleted` mais personne n'est sink'é
+            // sur les publishers de SocialSocketManager → les stories des
+            // amis n'arrivent jamais dans `storyGroups` en temps réel.
+            storyViewModel.subscribeToSocketEvents()
 
             // Start SyncEngine socket relay
             await ConversationSyncEngine.shared.startSocketRelay()
@@ -437,7 +445,7 @@ struct RootView: View {
                     let conv = apiConv.toConversation(currentUserId: currentUserId)
                     router.navigateToConversation(conv)
                 } catch {
-                    ToastManager.shared.showError("Impossible de creer la conversation")
+                    ToastManager.shared.showError(String(localized: "root.create_conversation.error", defaultValue: "Impossible de creer la conversation", bundle: .main))
                 }
             }
         }
@@ -516,7 +524,7 @@ struct RootView: View {
                 .presentationDetents([.medium, .large])
             }
         }
-        .onChange(of: router.pendingShareContent != nil) { _, hasContent in
+        .adaptiveOnChange(of: router.pendingShareContent != nil) { _, hasContent in
             if hasContent {
                 showSharePicker = true
             }
@@ -527,7 +535,7 @@ struct RootView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
-        .onChange(of: router.path) { _, newPath in
+        .adaptiveOnChange(of: router.path) { _, newPath in
             if !newPath.isEmpty && showFeed {
                 feedWasVisibleBeforeNav = true
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -548,7 +556,7 @@ struct RootView: View {
         // returns nil for the typical cold-launch (no pending link), so
         // firing on the initial value is a free no-op when there's nothing
         // to process.
-        .onChange(of: deepLinkRouter.pendingDeepLink, initial: true) { _, newValue in
+        .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink, initial: true) { _, newValue in
             handleDeepLink(newValue)
         }
     }
@@ -578,6 +586,48 @@ struct RootView: View {
             // infinite loop to the user.
             navigateToConversationById(id)
 
+        case .postDetail(let postId):
+            // PostDetailView lazy-loads the post itself, so we can push
+            // immediately with `initialPost: nil`. The route case already
+            // exists for in-app feed taps; the deep link just reuses it.
+            router.push(.postDetail(postId))
+
+        case .storyDetail(let postId):
+            // Stories share the post identifier namespace. Prefer the
+            // dedicated viewer when the story is in the local tray, fall
+            // back to PostDetailView otherwise — matches the existing
+            // `storyDetail:` push-notification dispatch (line ~472 above)
+            // so cold-launch deep links and warm-launch push taps land on
+            // the same screen for the same id.
+            if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
+                storyViewerCoordinator.present(StoryViewerRequest(id: storyViewModel.storyGroups[groupIdx].id))
+            } else {
+                router.push(.postDetail(postId))
+            }
+
+        case .userProfile(let username):
+            // Opens the profile sheet over the conversation list (same
+            // surface as in-app `Link` taps via Router.handleDeepLink and
+            // as notification-driven profile navigation). `ProfileSheetUser`
+            // resolves the username server-side, so a typo just shows the
+            // empty state instead of crashing.
+            router.deepLinkProfileUser = ProfileSheetUser(username: username)
+
+        case .ownProfile:
+            // Pop to the conversation list root first so back-swipe from
+            // the profile screen lands on the home surface — not whatever
+            // happened to be on top of the nav stack at cold launch.
+            router.popToRoot()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                router.push(.profile)
+            }
+
+        case .userLinks:
+            router.popToRoot()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                router.push(.links)
+            }
+
         case .magicLink:
             break
         }
@@ -597,7 +647,7 @@ struct RootView: View {
                     message = msg.isEmpty
                         ? String(localized: "Ce lien n'est plus actif", defaultValue: "Ce lien n'est plus actif")
                         : msg
-                case .forbidden(let reason):
+                case .forbidden(let reason, _):
                     message = reason ?? String(localized: "Acces refuse a cette conversation", defaultValue: "Acces refuse a cette conversation")
                 default:
                     message = error.errorDescription ?? String(localized: "Impossible d'ouvrir le lien", defaultValue: "Impossible d'ouvrir le lien")
@@ -735,9 +785,21 @@ struct RootView: View {
     // either matches because the dedicated screen still degrades gracefully
     // (`expired` empty state) for posts that no longer exist.
     private func isStoryNotification(_ ctx: NotificationNavContext, postId: String) -> Bool {
+        // High confidence: explicit type from notification metadata
         if ctx.postType?.uppercased() == "STORY" { return true }
-        if let cached = StoryService.shared.cachedPost(id: postId), cached.expiresAt != nil {
+        if ctx.postType?.uppercased() == "POST" || ctx.postType?.uppercased() == "STATUS" { return false }
+
+        // Medium confidence: explicit notification types that are story-only
+        switch ctx.type {
+        case .storyReaction, .storyNewComment, .friendStoryComment, .storyThreadReply, .friendNewStory:
             return true
+        default:
+            break
+        }
+
+        // Low confidence fallback: check cache if it has an expiry date
+        if let cached = StoryService.shared.cachedPost(id: postId) {
+            return cached.expiresAt != nil
         }
         return false
     }
@@ -855,8 +917,8 @@ struct RootView: View {
         // 1. Fast path: in-memory list (post-load happy path)
         if let existing = conversationViewModel.conversations.first(where: { $0.id == conversationId }) {
             var conv = existing
-            if ensureUnread && conv.unreadCount == 0 {
-                conv.unreadCount = 1
+            if ensureUnread && conv.userState.unreadCount == 0 {
+                conv.userState.unreadCount = 1
             }
             router.navigateToConversation(conv, highlightMessageId: highlightMessageId)
             return
@@ -876,7 +938,7 @@ struct RootView: View {
             }()
             if let cached = cachedConversations?.first(where: { $0.id == conversationId }) {
                 var c = cached
-                if ensureUnread && c.unreadCount == 0 { c.unreadCount = 1 }
+                if ensureUnread && c.userState.unreadCount == 0 { c.userState.unreadCount = 1 }
                 router.navigateToConversation(c, highlightMessageId: highlightMessageId)
                 // Background refresh — keeps the displayed conversation in sync
                 // without blocking navigation. Failures are silent: the user
@@ -913,8 +975,8 @@ struct RootView: View {
                 do {
                     let apiConv = try await ConversationService.shared.getById(conversationId)
                     var conv = apiConv.toConversation(currentUserId: currentUserId)
-                    if ensureUnread && conv.unreadCount == 0 {
-                        conv.unreadCount = 1
+                    if ensureUnread && conv.userState.unreadCount == 0 {
+                        conv.userState.unreadCount = 1
                     }
                     router.navigateToConversation(conv, highlightMessageId: highlightMessageId)
                     return
@@ -1140,13 +1202,13 @@ private struct PendingSettingsBannerInline: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
 
-                    Text("Modifications en attente (\(pendingCount))")
+                    Text("\(String(localized: "root.pending_changes", defaultValue: "Modifications en attente", bundle: .main)) (\(pendingCount))")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
 
                     Spacer()
 
-                    Text("Synchronisation au retour en ligne")
+                    Text(String(localized: "root.sync_on_reconnect", defaultValue: "Synchronisation au retour en ligne", bundle: .main))
                         .font(.system(size: 10, weight: .regular))
                         .foregroundColor(.white.opacity(0.85))
                         .lineLimit(1)
@@ -1201,13 +1263,13 @@ private struct PendingStoryBannerInline: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
 
-                    Text("Stories en attente (\(publishService.pendingCount))")
+                    Text("\(String(localized: "root.pending_stories", defaultValue: "Stories en attente", bundle: .main)) (\(publishService.pendingCount))")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
 
                     Spacer()
 
-                    Text("Publication au retour en ligne")
+                    Text(String(localized: "root.publish_on_reconnect", defaultValue: "Publication au retour en ligne", bundle: .main))
                         .font(.system(size: 10, weight: .regular))
                         .foregroundColor(.white.opacity(0.85))
                         .lineLimit(1)

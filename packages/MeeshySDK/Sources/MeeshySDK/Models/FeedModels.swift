@@ -307,12 +307,30 @@ public struct FeedPost: Identifiable, Sendable {
     public let authorColor: String
     public let authorAvatarURL: String?
     public let type: String?
-    public let content: String
+    /// Mutable so optimistic edit flows (FeedViewModel.updatePost) can
+    /// rewrite the body without reconstructing the whole struct. All
+    /// other identity / authorship fields stay immutable.
+    public var content: String
     public let timestamp: Date
     public var likes: Int
     public var isLiked: Bool = false
+    /// Whether the current user has bookmarked this post. Server-enriched
+    /// via `PostFeedService.getFeed` — drives the filled amber bookmark
+    /// icon on first render without needing the cache-hydrate fallback.
+    public var isBookmarkedByMe: Bool = false
+    /// Whether the current user has reposted this post (any of their posts
+    /// has `repostOfId == this.id`). Drives the filled green repost icon.
+    public var isRepostedByMe: Bool = false
     public var comments: [FeedComment] = []
     public var commentCount: Int = 0
+    /// Server-issued repost count — total reposts of this post. Distinct from
+    /// `isReposted` which (when present, currently absent server-side) would
+    /// indicate whether the *current user* has reposted.
+    public var repostCount: Int = 0
+    /// Server-issued bookmark count.
+    public var bookmarkCount: Int = 0
+    /// Server-issued share count (every `POST /posts/:id/share` increments it).
+    public var shareCount: Int = 0
     public var repost: RepostContent? = nil
     public var repostAuthor: String? = nil
     public var isQuote: Bool = false
@@ -326,6 +344,39 @@ public struct FeedPost: Identifiable, Sendable {
     public var isTranslated: Bool { translatedContent != nil }
     public var displayContent: String { translatedContent ?? content }
     public var availableLanguages: [String] { Array(translations?.keys ?? [String: PostTranslation]().keys) }
+
+    /// B2 / B4 (Prisme Linguistique) — recomputes `translatedContent` for
+    /// the supplied preferred-language chain WITHOUT requiring the source
+    /// `APIPost`. Used by ViewModels (Feed, PostDetail) when the user
+    /// changes their preferred-content languages mid-session: the stored
+    /// `translations` dict is enough to flip the rendered language, no
+    /// re-fetch needed.
+    ///
+    /// Honours the Prisme rules:
+    /// - if `originalLanguage` is among `preferredLanguages`, the original
+    ///   content is canonical (translatedContent = nil);
+    /// - otherwise return the first translation matching a preferred
+    ///   language;
+    /// - never fall back to an arbitrary translation if none matches.
+    public func resolved(preferredLanguages: [String]) -> FeedPost {
+        guard let dict = translations, !dict.isEmpty else { return self }
+        let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
+        if let original = originalLanguage?.lowercased(), preferred.contains(original) {
+            var copy = self
+            copy.translatedContent = nil
+            return copy
+        }
+        for lang in preferred {
+            if let hit = dict.first(where: { $0.key.lowercased() == lang }) {
+                var copy = self
+                copy.translatedContent = hit.value.text
+                return copy
+            }
+        }
+        var copy = self
+        copy.translatedContent = nil
+        return copy
+    }
 
     public init(id: String = UUID().uuidString, author: String, authorId: String = "", authorUsername: String? = nil,
                 authorAvatarURL: String? = nil,

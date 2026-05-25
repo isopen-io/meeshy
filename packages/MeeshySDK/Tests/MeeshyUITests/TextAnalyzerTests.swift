@@ -49,7 +49,11 @@ final class TextAnalyzerTests: XCTestCase {
         XCTAssertEqual(sut.languageConfidence, 0)
     }
 
-    func test_analyze_emptyText_preservesLockedLanguage() {
+    func test_analyze_emptyText_clearsLock_whenNoOverride() {
+        // Spec (mai 2026) : vider le champ libère le verrou de détection
+        // SI aucun override manuel n'est en place. Sans ça, après un
+        // message envoyé + verrou à 10 mots, la prochaine frappe partirait
+        // avec `isLanguageLocked = true` et la détection serait morte.
         let sut = makeSUT()
         let french = DetectedLanguage.supported.first!
         sut.language = french
@@ -58,7 +62,26 @@ final class TextAnalyzerTests: XCTestCase {
 
         sut.analyze(text: "")
 
-        XCTAssertEqual(sut.language?.code, french.code)
+        XCTAssertNil(sut.language)
+        XCTAssertEqual(sut.languageConfidence, 0)
+        XCTAssertFalse(sut.isLanguageLocked)
+    }
+
+    func test_analyze_emptyText_preservesOverride() {
+        // Override manuel = choix utilisateur explicite. On le garde même
+        // quand le champ se vide, sinon le pill afficherait la langue
+        // choisie mais on enverrait la valeur par défaut.
+        let sut = makeSUT()
+        let english = DetectedLanguage.find(code: "en")!
+        sut.languageOverride = english
+        sut.language = english
+        sut.languageConfidence = 0.95
+        sut.isLanguageLocked = true
+
+        sut.analyze(text: "")
+
+        XCTAssertEqual(sut.languageOverride?.code, "en")
+        XCTAssertEqual(sut.language?.code, "en")
         XCTAssertTrue(sut.isLanguageLocked)
     }
 

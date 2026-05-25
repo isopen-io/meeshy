@@ -283,7 +283,6 @@ export interface SocketIOTranslation {
   readonly durationMs?: number;
   readonly cloned?: boolean;        // Clonage vocal (audio uniquement)
   readonly quality?: number;         // Qualité (0-1)
-  readonly path?: string;
   readonly format?: string;
   readonly ttsModel?: string;
   readonly voiceModelId?: string;
@@ -315,7 +314,6 @@ export function toSocketIOTranslation(
     durationMs: translation.durationMs,
     cloned: translation.cloned,        // ✅ Mapping direct: cloned → cloned
     quality: translation.quality,      // ✅ Mapping direct: quality → quality
-    path: translation.path,
     format: translation.format,
     ttsModel: translation.ttsModel,
     voiceModelId: translation.voiceModelId,

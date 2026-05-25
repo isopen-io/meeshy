@@ -64,6 +64,7 @@ struct ConversationListView: View {
     var selectedConversationId: String? = nil
 
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     // Lecture directe sans @ObservedObject — évite que chaque changement de thème ou de verrou
     // force un re-render complet de la liste (centaines de rows). Les valeurs sont lues
     // lors des refreshs naturels (scroll, interaction).
@@ -217,9 +218,15 @@ struct ConversationListView: View {
 
     @ViewBuilder
     private func sectionConversations(_ conversations: [Conversation]) -> some View {
-        // rowWidth = (screenWidth - sectionPadding) - innerPadding - avatar - badge - spacing
-        // sectionPadding: 16+16=32 applied by caller; innerPadding: 32; avatar: 52; badge: 28; spacing: 24
-        let rowWidth = UIScreen.main.bounds.width - 32 - 32 - 52 - 28 - 24
+        // rowWidth derives from the actual containing column width (iPad
+        // left column is much narrower than `UIScreen.main.bounds.width`)
+        // minus innerPadding(32) + avatar(52) + badge(28) + spacing(24).
+        // On iPad the column ratio is roughly 0.38 of the screen, so we
+        // clamp to that floor explicitly to avoid text overflow.
+        let baseWidth = horizontalSizeClass == .regular
+            ? min(UIScreen.main.bounds.width * 0.42, 520)
+            : UIScreen.main.bounds.width - 32
+        let rowWidth = max(120, baseWidth - 32 - 52 - 28 - 24)
         LazyVStack(spacing: 6) {
             ForEach(conversations, id: \.id) { conversation in
                 conversationRow(for: conversation, rowWidth: rowWidth)
@@ -273,6 +280,10 @@ struct ConversationListView: View {
             typingUsername: conversationViewModel.typingUsernames[conversation.id],
             isSelected: selectedConversationId == conversation.id,
             draftSummary: conversationViewModel.draftSummaries[conversation.id],
+            // B1 (Prisme Linguistique) — resolved once at row creation
+            // time. Re-evaluates when AuthManager publishes a new currentUser
+            // because the parent body re-runs on @Published changes.
+            preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
             cachedPreviewMessages: conversationViewModel.previewMessages[conversation.id] ?? [],
             leadingActions: leadingSwipeActions(for: conversation),
             trailingActions: trailingSwipeActions(for: conversation),
@@ -355,8 +366,8 @@ struct ConversationListView: View {
         let isLocked = lockManager.isLocked(conversation.id)
         return [
             SwipeAction(
-                icon: conversation.isPinned ? "pin.slash.fill" : "pin.fill",
-                label: conversation.isPinned
+                icon: conversation.userState.isPinned ? "pin.slash.fill" : "pin.fill",
+                label: conversation.userState.isPinned
                     ? String(localized: "swipe.unpin", defaultValue: "D\u{00e9}s\u{00e9}pingler")
                     : String(localized: "swipe.pin", defaultValue: "\u{00c9}pingler"),
                 color: Color(hex: "3B82F6")
@@ -364,8 +375,8 @@ struct ConversationListView: View {
                 Task { await conversationViewModel.togglePin(for: conversation.id) }
             },
             SwipeAction(
-                icon: conversation.isMuted ? "bell.fill" : "bell.slash.fill",
-                label: conversation.isMuted
+                icon: conversation.userState.isMuted ? "bell.fill" : "bell.slash.fill",
+                label: conversation.userState.isMuted
                     ? String(localized: "swipe.unmute", defaultValue: "Son")
                     : String(localized: "swipe.mute", defaultValue: "Silence"),
                 color: Color(hex: "6B7280")
@@ -394,7 +405,7 @@ struct ConversationListView: View {
 
     private func trailingSwipeActions(for conversation: Conversation) -> [SwipeAction] {
         let isArchived = !conversation.isActive
-        let isRead = conversation.unreadCount == 0
+        let isRead = conversation.userState.unreadCount == 0
         var actions: [SwipeAction] = [
             SwipeAction(
                 icon: isArchived ? "tray.and.arrow.up.fill" : "archivebox.fill",
@@ -494,7 +505,7 @@ struct ConversationListView: View {
 
     var body: some View {
         mainContent
-            .onChange(of: selectedProfileUser) { _, newValue in
+            .adaptiveOnChange(of: selectedProfileUser) { _, newValue in
                 if let user = newValue {
                     selectedProfileUser = nil
                     router.deepLinkProfileUser = user
@@ -532,13 +543,11 @@ struct ConversationListView: View {
 
     private var mainContent: some View {
         mainContentZStack
-            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: conversationViewModel.selectedFilter)
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: expandedSections)
-            .onChange(of: isScrollingDown) { wasHidden, isHidden in
+            .adaptiveOnChange(of: isScrollingDown) { wasHidden, isHidden in
                 if !wasHidden && isHidden { showSearchOverlay = false }
             }
             .onAppear {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isScrollingDown = false }
+                withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }
             }
             .task {
                 print("[DIAG] ConversationListView.task ENTERED")
@@ -546,26 +555,26 @@ struct ConversationListView: View {
                 async let communities: Void = loadUserCommunities()
                 _ = await (conversations, communities)
             }
-            .onChange(of: scenePhase) { _, newPhase in
+            .adaptiveOnChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
                     conversationViewModel.handleForegroundReturn()
                     conversationViewModel.handleForegroundReactivation()
                 }
             }
-            .onChange(of: conversationViewModel.userCategories) { _, categories in
+            .adaptiveOnChange(of: conversationViewModel.userCategories) { _, categories in
                 for cat in categories where cat.isExpanded { expandedSections.insert(cat.id) }
             }
-            .onChange(of: conversationViewModel.groupedConversations.isEmpty) { _, isEmpty in
+            .adaptiveOnChange(of: conversationViewModel.groupedConversations.isEmpty) { _, isEmpty in
                 if isEmpty && isScrollingDown {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isScrollingDown = false }
+                    withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }
                 }
             }
-            .onChange(of: conversationViewModel.selectedFilter) { _, _ in
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isScrollingDown = false }
+            .adaptiveOnChange(of: conversationViewModel.selectedFilter) { _, _ in
+                withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }
             }
-            .onChange(of: feedIsVisible) { wasVisible, isVisible in
+            .adaptiveOnChange(of: feedIsVisible) { wasVisible, isVisible in
                 if wasVisible && !isVisible {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isScrollingDown = false }
+                    withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }
                 }
             }
             .overlay {
@@ -587,11 +596,11 @@ struct ConversationListView: View {
                 )
                 .environmentObject(theme)
             }
-            .alert("Master PIN requis", isPresented: $showNoMasterPinAlert) {
-                Button("Configurer", role: .none) { router.push(.settings) }
-                Button("Annuler", role: .cancel) {}
+            .alert(String(localized: "conversation.list.master_pin_required.title", defaultValue: "Master PIN requis", bundle: .main), isPresented: $showNoMasterPinAlert) {
+                Button(String(localized: "conversation.list.master_pin_required.configure", defaultValue: "Configurer", bundle: .main), role: .none) { router.push(.settings) }
+                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
             } message: {
-                Text("Configurez d'abord un master PIN dans Paramètres > Sécurité pour verrouiller des conversations.")
+                Text(String(localized: "conversation.list.master_pin_required.message", defaultValue: "Configurez d'abord un master PIN dans Paramètres > Sécurité pour verrouiller des conversations.", bundle: .main))
             }
             .sheet(isPresented: $showWidgetPreview) {
                 WidgetPreviewView(onNewConversation: onNewConversation)
@@ -733,7 +742,7 @@ struct ConversationListView: View {
                     ConversationPaginationFooter()
 
                     Color.clear.frame(height: 280)
-                        .onChange(of: draggingConversation) { oldValue, newValue in
+                        .adaptiveOnChange(of: draggingConversation) { oldValue, newValue in
                             if oldValue != nil && newValue == nil {
                                 withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
                                     dropTargetSection = nil
@@ -758,8 +767,8 @@ struct ConversationListView: View {
             // Hide on scroll down
             .offset(y: isScrollingDown ? 150 : 0)
             .opacity(isScrollingDown ? 0 : 1)
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isScrollingDown)
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showSearchOverlay)
+            .animation(.easeOut(duration: 0.25), value: isScrollingDown)
+            .animation(.easeOut(duration: 0.25), value: showSearchOverlay)
         }
         // Layer 3: Collapsible header overlay — pinned to top, respects safe area
         .overlay(alignment: .top) {
@@ -917,7 +926,7 @@ struct ShareLinkPickerSheet: View {
                         Image(systemName: "link.badge.plus")
                             .font(.system(size: 48))
                             .foregroundStyle(MeeshyColors.indigo300)
-                        Text("Aucune conversation eligible")
+                        Text(String(localized: "conversation.list.no_eligible_conversation", defaultValue: "Aucune conversation eligible", bundle: .main))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                     }
@@ -956,11 +965,11 @@ struct ShareLinkPickerSheet: View {
                     .listStyle(.plain)
                 }
             }
-            .navigationTitle("Creer un lien de partage")
+            .navigationTitle(String(localized: "conversation.list.create_share_link.title", defaultValue: "Creer un lien de partage", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Fermer") { dismiss() }
+                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { dismiss() }
                 }
             }
         }

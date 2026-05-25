@@ -14,7 +14,8 @@ struct LocationPickerView: View {
     private var isDark: Bool { colorScheme == .dark }
     @StateObject private var viewModel = LocationPickerModel()
     @State private var searchText = ""
-    @State private var cameraPosition: MapCameraPosition = .userLocation(fallback: .automatic)
+    @State private var mapTarget: MapTarget?
+    @State private var didCenterOnUser = false
 
     var body: some View {
         NavigationStack {
@@ -30,38 +31,40 @@ struct LocationPickerView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Annuler") { dismiss() }
+                    Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) { dismiss() }
                         .foregroundColor(Color(hex: accentColor))
                 }
                 ToolbarItem(placement: .principal) {
-                    Text("Choisir un lieu")
+                    Text(String(localized: "location.title", defaultValue: "Choisir un lieu", bundle: .main))
                         .font(.system(size: 16, weight: .bold))
                 }
             }
             .onAppear { viewModel.requestPermission() }
+            .onReceive(viewModel.$userLocation.compactMap { $0 }) { loc in
+                // iOS 17 keeps `.userLocation(fallback:)` inside the adaptive
+                // map, so it self-centers. iOS 16 has no such mode — recenter
+                // explicitly on the first fix only.
+                guard !didCenterOnUser, !Platform.isIOS17OrLater else { return }
+                didCenterOnUser = true
+                mapTarget = MapTarget(center: loc, latitudinalMeters: 1000, longitudinalMeters: 1000)
+            }
         }
     }
 
     // MARK: - Map
 
     private var mapView: some View {
-        Map(position: $cameraPosition, interactionModes: .all) {
-            if let coord = viewModel.selectedCoordinate {
-                Annotation("", coordinate: coord) {
-                    Image(systemName: "mappin.circle.fill")
-                        .font(.system(size: 36))
-                        .foregroundStyle(Color(hex: accentColor), Color(hex: accentColor).opacity(0.3))
-                        .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 6, y: 3)
-                }
+        AdaptiveInteractiveMap(
+            target: mapTarget,
+            annotationCoordinate: viewModel.selectedCoordinate,
+            onRegionChange: { center in
+                viewModel.updateSelectedLocation(center)
             }
-        }
-        .onMapCameraChange(frequency: .onEnd) { context in
-            let center = context.camera.centerCoordinate
-            viewModel.updateSelectedLocation(center)
-        }
-        .mapControls {
-            MapUserLocationButton()
-            MapCompass()
+        ) {
+            Image(systemName: "mappin.circle.fill")
+                .font(.system(size: 36))
+                .foregroundStyle(Color(hex: accentColor), Color(hex: accentColor).opacity(0.3))
+                .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 6, y: 3)
         }
         .ignoresSafeArea(edges: .bottom)
     }
@@ -74,7 +77,7 @@ struct LocationPickerView: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(theme.textMuted)
 
-            TextField("Rechercher un lieu...", text: $searchText)
+            TextField(String(localized: "location.search-placeholder", defaultValue: "Rechercher un lieu...", bundle: .main), text: $searchText)
                 .font(.system(size: 14))
                 .textFieldStyle(.plain)
                 .autocorrectionDisabled()
@@ -117,11 +120,11 @@ struct LocationPickerView: View {
                     let coord = item.placemark.coordinate
                     viewModel.updateSelectedLocation(coord)
                     viewModel.reverseGeocode(coord)
-                    cameraPosition = .region(MKCoordinateRegion(
+                    mapTarget = MapTarget(
                         center: coord,
                         latitudinalMeters: 500,
                         longitudinalMeters: 500
-                    ))
+                    )
                     searchText = item.name ?? ""
                     viewModel.searchResults.removeAll()
                 } label: {
@@ -133,7 +136,7 @@ struct LocationPickerView: View {
                             .background(Circle().fill(Color(hex: accentColor).opacity(0.1)))
 
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(item.name ?? "Lieu inconnu")
+                            Text(item.name ?? String(localized: "location.unknown", defaultValue: "Lieu inconnu", bundle: .main))
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundColor(theme.textPrimary)
                                 .lineLimit(1)
@@ -182,12 +185,12 @@ struct LocationPickerView: View {
                         HStack(spacing: 6) {
                             ProgressView()
                                 .scaleEffect(0.7)
-                            Text("Recherche de l'adresse...")
+                            Text(String(localized: "location.geocoding", defaultValue: "Recherche de l'adresse...", bundle: .main))
                                 .font(.system(size: 12))
                                 .foregroundColor(theme.textSecondary)
                         }
                     } else {
-                        Text("Deplacez la carte pour choisir")
+                        Text(String(localized: "location.move-prompt", defaultValue: "Deplacez la carte pour choisir", bundle: .main))
                             .font(.system(size: 12))
                             .foregroundColor(theme.textMuted)
                     }
@@ -206,15 +209,15 @@ struct LocationPickerView: View {
                 Button {
                     viewModel.centerOnUser()
                     if let loc = viewModel.userLocation {
-                        cameraPosition = .region(MKCoordinateRegion(
+                        mapTarget = MapTarget(
                             center: loc, latitudinalMeters: 500, longitudinalMeters: 500
-                        ))
+                        )
                     }
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "location.circle.fill")
                             .font(.system(size: 14))
-                        Text("Ma position")
+                        Text(String(localized: "location.my-position", defaultValue: "Ma position", bundle: .main))
                             .font(.system(size: 12, weight: .semibold))
                     }
                     .foregroundColor(Color(hex: accentColor))
@@ -239,7 +242,7 @@ struct LocationPickerView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "checkmark")
                             .font(.system(size: 14, weight: .bold))
-                        Text("Confirmer")
+                        Text(String(localized: "common.confirm", defaultValue: "Confirmer", bundle: .main))
                             .font(.system(size: 13, weight: .bold))
                     }
                     .foregroundColor(.white)

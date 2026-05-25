@@ -216,7 +216,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     public var anchor: CGPoint           // NEW; uses CGPoint (x∈0..1, y∈0..1) — NOT UnitPoint (SwiftUI-only)
 
     // Typography (replace textSize with design-pixel fontSize)
-    public var fontSize: Double          // NEW: design pixels (1080-référentiel), default 64
+    public var fontSize: Double          // NEW: design pixels (1080-référentiel), default 96 (decoder legacy fallback = 64)
     public var fontFamily: String        // NEW: default "system"
 
     // Style per-objet (tous optionnels pour backward compat JSON existant)
@@ -270,7 +270,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
                 scale: Double = 1.0, rotation: Double = 0.0,
                 zIndex: Int = 0,
                 anchor: CGPoint = CGPoint(x: 0.5, y: 0.5),
-                fontSize: Double = 64.0,
+                fontSize: Double = 96.0,
                 fontFamily: String = "system",
                 textStyle: String? = "bold",
                 textColor: String? = "FFFFFF",
@@ -473,6 +473,27 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
     public var sourceLanguage: String?
     // Timeline V2 — animation keyframes (position/scale/opacity)
     public var keyframes: [StoryKeyframe]?
+    /// ThumbHash du contenu (première frame pour vidéo, image décompressée
+    /// pour image). Généré au publish (cf. spec § 2.4). Sert de placeholder
+    /// pendant le fetch via `applyThumbHashPlaceholder`. `nil` autorisé
+    /// (back-compat stories antérieures, médias sans génération).
+    ///
+    /// Format attendu : base64 d'un hash ThumbHash (~28-33 chars). Le setter
+    /// clamp à `maxThumbHashLength` (100 chars) — defense-in-depth contre un
+    /// payload malformé qui pourrait passer un blob de plusieurs MB dans la
+    /// slide effects JSON. Si > limite, le field est mis à `nil` (placeholder
+    /// noir au render — dégradation visuelle acceptable vs DB blow up).
+    public var thumbHash: String? {
+        didSet {
+            if let hash = thumbHash, hash.count > Self.maxThumbHashLength {
+                thumbHash = nil
+            }
+        }
+    }
+
+    /// Longueur max acceptée pour un thumbHash base64. ThumbHash spec produit
+    /// 5-25 bytes binaires ≈ 8-36 chars base64. Marge x3 pour tolérance future.
+    public static let maxThumbHashLength: Int = 100
 
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, mediaURL, mediaType, placement
@@ -480,7 +501,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         case aspectRatio, anchor, intrinsicDuration
         case isBackground, loop, zIndex
         case startTime, duration, fadeIn, fadeOut
-        case sourceLanguage, keyframes
+        case sourceLanguage, keyframes, thumbHash
     }
 
     public init(id: String = UUID().uuidString,
@@ -502,7 +523,8 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
                 fadeIn: Double? = nil,
                 fadeOut: Double? = nil,
                 sourceLanguage: String? = nil,
-                keyframes: [StoryKeyframe]? = nil) {
+                keyframes: [StoryKeyframe]? = nil,
+                thumbHash: String? = nil) {
         self.id = id
         self.postMediaId = postMediaId
         self.mediaURL = mediaURL
@@ -521,6 +543,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         self.fadeIn = fadeIn; self.fadeOut = fadeOut
         self.sourceLanguage = sourceLanguage
         self.keyframes = keyframes
+        self.thumbHash = thumbHash
     }
 
     // Custom init(from decoder:) for legacy backward compat
@@ -555,6 +578,11 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         fadeOut = try c.decodeIfPresent(Double.self, forKey: .fadeOut)
         sourceLanguage = try c.decodeIfPresent(String.self, forKey: .sourceLanguage)
         keyframes = try c.decodeIfPresent([StoryKeyframe].self, forKey: .keyframes)
+        // Decoder clamp : `didSet` ne se déclenche pas pendant init, donc on
+        // applique la limite explicitement pour protéger contre un payload
+        // malformé / malveillant (slide effects JSON externe → cache disque).
+        let rawThumbHash = try c.decodeIfPresent(String.self, forKey: .thumbHash)
+        thumbHash = (rawThumbHash?.count ?? 0) > Self.maxThumbHashLength ? nil : rawThumbHash
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -581,6 +609,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(fadeOut, forKey: .fadeOut)
         try c.encodeIfPresent(sourceLanguage, forKey: .sourceLanguage)
         try c.encodeIfPresent(keyframes, forKey: .keyframes)
+        try c.encodeIfPresent(thumbHash, forKey: .thumbHash)
     }
 
     private enum AnchorKeys: String, CodingKey { case x, y }
@@ -611,7 +640,8 @@ extension StoryMediaObject {
                 fadeIn: Double? = nil,
                 fadeOut: Double? = nil,
                 sourceLanguage: String? = nil,
-                keyframes: [StoryKeyframe]? = nil) {
+                keyframes: [StoryKeyframe]? = nil,
+                thumbHash: String? = nil) {
         self.init(id: id,
                   postMediaId: postMediaId,
                   mediaURL: mediaURL,
@@ -629,7 +659,8 @@ extension StoryMediaObject {
                   duration: duration,
                   fadeIn: fadeIn, fadeOut: fadeOut,
                   sourceLanguage: sourceLanguage,
-                  keyframes: keyframes)
+                  keyframes: keyframes,
+                  thumbHash: thumbHash)
     }
 }
 
@@ -864,24 +895,113 @@ public struct StorySlide: Identifiable, Codable, Sendable {
 }
 
 extension StorySlide {
-    /// Effective slide duration that completes any background looping video to a full repetition.
+    /// Deterministic total slide duration covering every element on the timeline.
     ///
-    /// If a media object has `isBackground == true && loop == true`, the slide
-    /// duration is rounded up to the next integer multiple of that video's
-    /// duration so the loop never freezes on a partial cycle (Section 3.6 of the
-    /// Story Canvas Fidelity spec). Otherwise returns the static `duration`.
+    /// Computed as the max of :
+    /// 1. The user-authored `slide.duration` (acts as the floor — the author
+    ///    can still pin a minimum length, e.g. for a static text-only slide).
+    /// 2. For every foreground media : `startTime + (duration ?? intrinsicDuration ?? 0)`.
+    /// 3. For every non-looped background media : same formula (a non-looping
+    ///    background video that runs past the user-set duration extends the
+    ///    slide so its tail isn't cut).
+    /// 4. For every non-looped audio (foreground or background) :
+    ///    `startTime + duration`.
+    /// 5. For every text object that declares an explicit `duration` :
+    ///    `startTime + duration`. (`duration == nil` means "permanent" — already
+    ///    covered by the slide-length floor.)
+    /// 6. For every clip transition : `start + duration` (implicit via the
+    ///    bounding media end-times — kept explicit for forward-compat).
+    ///
+    /// The result is then rounded UP to a full repetition of any looping
+    /// background video so the loop never freezes on a partial cycle (Section
+    /// 3.6 of the Story Canvas Fidelity spec).
+    ///
+    /// Use this everywhere a "story length" is needed — exporter, playhead,
+    /// progress bar, audio mixer fade envelope, AVPlayer composition.
+    /// `effectiveSlideDuration()` is now a thin alias kept for binary compat.
+    public func computedTotalDuration() -> TimeInterval {
+        let baseDuration = duration
+        var bound = baseDuration
+
+        // Extension dynamique basée sur la longueur du texte (Section 5 de la review)
+        // Les textes longs de plus de 30 mots devraient rajouter 1 seconde de plus à la story
+        // pour chaque 6 mots supplémentaire.
+        for text in effects.textObjects {
+            let words = text.text.split(separator: " ").count
+            if words > 30 {
+                let extraWords = words - 30
+                let extraSeconds = Double(extraWords) / 6.0
+                bound = max(bound, baseDuration + extraSeconds)
+            }
+        }
+
+        for media in effects.mediaObjects ?? [] {
+            // Backgrounds NEVER extend the slide. Looped backgrounds are
+            // handled in the rounding step below; non-looped backgrounds
+            // are clipped (longer → exporter truncates to slide.duration)
+            // or padded (shorter → exporter pads tail frames) by the
+            // render pipeline. The user-authored slide.duration is the
+            // single authoritative length for everything behind the
+            // foreground layer.
+            if media.isBackground { continue }
+            let start = media.startTime ?? 0
+            let dur = media.duration ?? media.intrinsicDuration ?? 0
+            if dur > 0 { bound = max(bound, start + dur) }
+        }
+
+        for audio in effects.audioPlayerObjects ?? [] {
+            if audio.isBackground == true && audio.loop == true { continue }
+            let start = Double(audio.startTime ?? 0)
+            guard let dur = audio.duration, dur > 0 else { continue }
+            bound = max(bound, start + Double(dur))
+        }
+
+        for text in effects.textObjects {
+            let start = text.startTime ?? 0
+            guard let dur = text.duration, dur > 0 else { continue }
+            bound = max(bound, start + dur)
+        }
+
+        for transition in effects.clipTransitions ?? [] {
+            // Transitions span between two clips; their tail extends the
+            // implied end-time of the `toClip`, which is already counted via
+            // the media bound above. Kept defensive in case a transition is
+            // longer than its bounding clips for any reason.
+            bound = max(bound, Double(transition.duration))
+        }
+
+        // Background Looping: ensure duration is a multiple of the video/voice duration.
+        // If content didn't force us over baseDuration, we pick the largest multiple <= baseDuration.
+        // If it did, we pick the smallest multiple >= bound to avoid cutting content.
+        let loopVideoDuration = effects.mediaObjects?.first(where: { $0.isBackground && $0.loop })?.duration
+        let loopAudioDuration = effects.audioPlayerObjects?.first(where: { $0.isBackground == true && $0.loop == true })?.duration
+
+        let L = loopVideoDuration ?? Double(loopAudioDuration ?? 0)
+        if L > 0 {
+            // Spec §3.6: "the loop never freezes on a partial cycle". When
+            // the loop period doesn't divide the slide duration evenly we
+            // round UP to the next full repetition, even if that extends
+            // past the user-authored slide.duration. Rounding DOWN would
+            // truncate the slide below the duration the author chose.
+            let target = max(bound, baseDuration)
+            let repetitions = max(1, ceil(target / L))
+            bound = repetitions * L
+        }
+
+        return bound
+    }
+
+    /// Effective slide duration that completes any background looping video to a full repetition.
     ///
     /// Examples:
     ///   slide=12s, video=5s → 15s (3 repetitions)
     ///   slide=12s, video=6s → 12s (exact 2 repetitions)
+    ///
+    /// Now an alias for `computedTotalDuration()`, which covers every element
+    /// on the slide — not just looped backgrounds. Kept as a function rather
+    /// than removed so out-of-tree callers (tests, fixtures) keep compiling.
     public func effectiveSlideDuration() -> TimeInterval {
-        let base = duration
-        guard let loopMedia = effects.mediaObjects?.first(where: { $0.isBackground && $0.loop }),
-              let videoDuration = loopMedia.duration, videoDuration > 0 else {
-            return base
-        }
-        let repetitions = ceil(base / videoDuration)
-        return repetitions * videoDuration
+        computedTotalDuration()
     }
 }
 
@@ -1374,6 +1494,25 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         self.translations = translations; self.backgroundAudio = backgroundAudio
         self.reactionCount = reactionCount; self.commentCount = commentCount
     }
+
+    /// A5 — returns `true` when the story has aged past its visibility window.
+    ///
+    /// Resolution order:
+    /// 1. If `expiresAt` is set and is `<= now`, the story is expired.
+    /// 2. Otherwise, fall back to the product rule of "stories live 24h" and
+    ///    consider the story expired when `createdAt + 24h <= now`.
+    ///
+    /// Used by the viewer to skip past stale stories the cache may have
+    /// surfaced (cache TTL > 24h is intentional so we don't redownload
+    /// avatars/text on every cold start, but the *content* must not be
+    /// rendered).
+    public func isExpired(at now: Date = Date()) -> Bool {
+        if let explicit = expiresAt {
+            return explicit <= now
+        }
+        let twentyFourHoursAfterCreation = createdAt.addingTimeInterval(24 * 60 * 60)
+        return twentyFourHoursAfterCreation <= now
+    }
 }
 
 // MARK: - Story Group
@@ -1614,13 +1753,28 @@ extension StoryItem {
     /// Reconstructs a renderable `StorySlide` from a published `StoryItem`.
     /// Resolves `content` via the Prisme Linguistique chain when available.
     /// Used by `StoryReaderRepresentable` to feed the canvas.
+    ///
+    /// `slide.mediaURL` est un champ LEGACY pour les stories antérieures à
+    /// `effects.mediaObjects` (où l'asset bg était directement dans
+    /// `StoryItem.media[0]`). Quand `effects.mediaObjects` existe — i.e. la
+    /// story moderne où chaque asset porte sa position / scale / isBackground
+    /// — il faut LAISSER `slide.mediaURL = nil` ; sinon `StoryRenderer
+    /// .renderBackground` tombe dans son chemin legacy
+    /// `if let urlString = slide.mediaURL` qui passe `slide.id` (= post id)
+    /// comme `postMediaId` au `StoryBackgroundLayer`. Le resolver ne sait
+    /// pas mapper un post id à une URL CDN (il indexe sur PostMedia.id),
+    /// donc le BG layer reste vide et le loader infini masque tout — y
+    /// compris le foreground correctement stampé par `StoryMediaLayer`.
     public func toRenderableSlide(preferredLanguages: [String]) -> StorySlide {
         let resolvedContent = self.resolvedContent(preferredLanguage: preferredLanguages.first)
                               ?? self.content
         let effects = self.storyEffects ?? StoryEffects()
+        let legacyMediaURL: String? = effects.mediaObjects?.isEmpty == false
+            ? nil
+            : self.media.first?.url
         return StorySlide(
             id: self.id,
-            mediaURL: self.media.first?.url,
+            mediaURL: legacyMediaURL,
             content: resolvedContent,
             effects: effects
         )
@@ -1655,7 +1809,12 @@ public struct TimelineProject: Codable, Sendable {
 
     public init(from slide: StorySlide) {
         self.slideId = slide.id
-        self.slideDuration = Float(slide.duration)
+        // Use the deterministic computed length so the timeline ruler,
+        // playhead range and progress bar cover every element — not just
+        // the user-typed slide.duration. Without this, a foreground video
+        // longer than slide.duration would have its tail unreachable by the
+        // scrub bar and clipped on playback / export.
+        self.slideDuration = Float(slide.computedTotalDuration())
         self.mediaObjects = slide.effects.mediaObjects ?? []
         self.audioPlayerObjects = slide.effects.audioPlayerObjects ?? []
         self.textObjects = slide.effects.textObjects
@@ -1667,7 +1826,12 @@ public struct TimelineProject: Codable, Sendable {
         // collections must round-trip to a slide with `nil` collections, not
         // `[]`, so `TimelineProject(from: slide).apply(to: &slide)` is a true
         // no-op when the slide had `nil` collections to begin with.
+        //
+        // Update the slide's floor duration to match the project's duration.
+        // This allows shrinking the duration (e.g., from 12s to 5s) via the
+        // timeline tool, fulfilling the "redefine story running time" requirement.
         slide.duration = TimeInterval(slideDuration)
+
         slide.effects.mediaObjects = mediaObjects.isEmpty ? nil : mediaObjects
         slide.effects.audioPlayerObjects = audioPlayerObjects.isEmpty ? nil : audioPlayerObjects
         slide.effects.textObjects = textObjects

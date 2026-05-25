@@ -187,8 +187,12 @@ public final class AudioMixer: AudioMixerProviding {
         }
         let nanosDouble = seconds * 1_000_000_000.0
         let hostUnitsDouble = nanosDouble * Double(timebase.denom) / Double(timebase.numer)
-        let clamped = min(max(0, hostUnitsDouble), Double(UInt64.max))
-        return UInt64(clamped)
+        guard hostUnitsDouble.isFinite, hostUnitsDouble >= 0 else { return 0 }
+        // `Double(UInt64.max)` rounds up to 2^64, a value that is OUTSIDE
+        // the UInt64 range — initializing a UInt64 from it traps. Saturate
+        // explicitly any value at or above that boundary.
+        guard hostUnitsDouble < Double(UInt64.max) else { return .max }
+        return UInt64(hostUnitsDouble)
     }
 
     public func pause() {

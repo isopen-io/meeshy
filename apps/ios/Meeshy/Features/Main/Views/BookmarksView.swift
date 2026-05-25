@@ -25,7 +25,7 @@ struct BookmarksView: View {
                             onReport: { postId in
                                 Task {
                                     try? await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
-                                    ToastManager.shared.showSuccess("Signalement envoye")
+                                    ToastManager.shared.showSuccess(String(localized: "bookmarks.report.success", defaultValue: "Signalement envoye", bundle: .main))
                                 }
                             }
                         )
@@ -50,7 +50,7 @@ struct BookmarksView: View {
             .padding(.bottom, 20)
         }
         .background(theme.backgroundGradient.ignoresSafeArea())
-        .navigationTitle("Favoris")
+        .navigationTitle(String(localized: "bookmarks.title", defaultValue: "Favoris", bundle: .main))
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await viewModel.refresh() }
         .task { await viewModel.loadBookmarks() }
@@ -61,10 +61,10 @@ struct BookmarksView: View {
             Image(systemName: "bookmark")
                 .font(.system(size: 48))
                 .foregroundColor(theme.textMuted)
-            Text("Aucun favori")
+            Text(String(localized: "bookmarks.empty.title", defaultValue: "Aucun favori", bundle: .main))
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundColor(theme.textSecondary)
-            Text("Les posts que vous sauvegardez apparaitront ici")
+            Text(String(localized: "bookmarks.empty.subtitle", defaultValue: "Les posts que vous sauvegardez apparaitront ici", bundle: .main))
                 .font(.system(size: 14))
                 .foregroundColor(theme.textMuted)
                 .multilineTextAlignment(.center)

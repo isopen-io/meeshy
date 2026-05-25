@@ -246,7 +246,7 @@ private struct WaveTileModifier: ViewModifier {
             .opacity(Double(t))
             .scaleEffect(entranceScale)
             .offset(y: riseOffset)
-            .onChange(of: hasEntered) { _, entered in
+            .adaptiveOnChange(of: hasEntered) { _, entered in
                 guard entered else { return }
                 animateIn()
             }
@@ -281,16 +281,27 @@ public struct EmojiFullPickerSheet: View {
     @State private var reactedEmoji: String?
     @State private var sheetHeight: CGFloat = 340
     @State private var dragOffset: CGFloat = 0
+    /// Dernière hauteur du conteneur lue dans le `GeometryReader` du body.
+    /// Captée ici parce que `sheetDragGesture` et `dismiss()` tournent en
+    /// dehors du scope du `GeometryReader` (computed properties) et ont
+    /// besoin de `maxHeight(for: containerHeight)` pour borner `sheetHeight`
+    /// / `dragOffset` proprement sur iPhone comme iPad.
+    @State private var containerHeight: CGFloat = 340
 
     private let minHeight: CGFloat = 340
-    private let maxHeight: CGFloat = UIScreen.main.bounds.height * 0.85
 
     public init(style: Style = .dark, onReact: ((String) -> Void)? = nil, onDismiss: (() -> Void)? = nil) {
         self.style = style; self.onReact = onReact; self.onDismiss = onDismiss
     }
 
-    private var currentHeight: CGFloat {
-        min(max(sheetHeight - dragOffset, minHeight), maxHeight)
+    private func maxHeight(for containerHeight: CGFloat) -> CGFloat {
+        // On large screens (iPad) cap the picker to avoid towering above
+        // the message it reacts to.
+        min(containerHeight * 0.85, 620)
+    }
+
+    private func currentHeight(for containerHeight: CGFloat) -> CGFloat {
+        min(max(sheetHeight - dragOffset, minHeight), maxHeight(for: containerHeight))
     }
 
     public var body: some View {
@@ -302,12 +313,17 @@ public struct EmojiFullPickerSheet: View {
                     categoryTabs
                     emojiGrid
                 }
-                .frame(height: currentHeight)
-                .frame(maxWidth: .infinity)
+                .frame(height: currentHeight(for: geo.size.height))
+                .frame(maxWidth: min(geo.size.width, 560))
                 .background(sheetBackground)
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .gesture(sheetDragGesture)
                 .transition(.move(edge: .bottom))
+            }
+            .frame(maxWidth: .infinity)
+            .onAppear { containerHeight = geo.size.height }
+            .adaptiveOnChange(of: geo.size.height) { _, newValue in
+                containerHeight = newValue
             }
         }
         .ignoresSafeArea()
@@ -392,7 +408,7 @@ public struct EmojiFullPickerSheet: View {
                     if dy > 100 || velocity > 300 {
                         if sheetHeight > minHeight + 50 { sheetHeight = minHeight }
                         else { dismiss(); return }
-                    } else if dy < -80 || velocity < -300 { sheetHeight = maxHeight }
+                    } else if dy < -80 || velocity < -300 { sheetHeight = maxHeight(for: containerHeight) }
                     dragOffset = 0
                 }
             }
@@ -406,7 +422,7 @@ public struct EmojiFullPickerSheet: View {
     }
 
     private func dismiss() {
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { dragOffset = maxHeight }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { dragOffset = maxHeight(for: containerHeight) }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { onDismiss?() }
     }
 }

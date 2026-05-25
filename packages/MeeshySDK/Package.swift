@@ -30,7 +30,7 @@ let uiSwiftSettings: [SwiftSetting] = coreSwiftSettings + [
 let package = Package(
     name: "MeeshySDK",
     defaultLocalization: "fr",
-    platforms: [.iOS(.v17)],
+    platforms: [.iOS(.v16)],
     products: [
         .library(name: "MeeshySDK", targets: ["MeeshySDK"]),
         .library(name: "MeeshyUI", targets: ["MeeshyUI"]),

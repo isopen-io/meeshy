@@ -2,6 +2,8 @@
 import SwiftUI
 import Combine
 import MeeshySDK
+import MeeshyUI
+import os
 
 final class MessageListViewController: UIViewController {
 
@@ -18,16 +20,24 @@ final class MessageListViewController: UIViewController {
     private let conversationListViewModel: ConversationListViewModel
     private var cancellables = Set<AnyCancellable>()
     private var isLoadingOlder = false
-    /// Tracks the item count from the last snapshot so we can detect genuinely
-    /// new messages (appended at the bottom) vs. older messages (prepended via
-    /// pagination). Only new messages bump the unread badge.
+    /// Tracks the item count from the last snapshot so we can detect that the
+    /// snapshot grew at all.
     private var previousSnapshotCount: Int = 0
+    /// The newest item (index 0 in the inverted layout) from the last snapshot.
+    /// A genuinely-new message changes item 0; older-message pagination
+    /// prepends to the tail and leaves item 0 untouched. Comparing against
+    /// this is deterministic — unlike the `isLoadingOlder` flag, which the
+    /// ViewModel's anticipatory prefetch bypasses entirely.
+    private var previousNewestItem: MessageListItem?
     /// Running counter of messages that arrived while the user was scrolled
     /// away from the bottom. Reset to 0 when the user returns to near-bottom.
     private var pendingUnreadCount: Int = 0
     /// Cached near-bottom state so applySnapshot can decide whether to bump
     /// the unread badge without querying contentOffset mid-layout.
     private var isCurrentlyNearBottom: Bool = true
+    /// Whether the previous snapshot included the typing-indicator cell — lets
+    /// the list scroll the indicator into view the moment it first appears.
+    private var previouslyShowedTyping: Bool = false
 
     // MARK: - Slow scroll for quoted message search
 
@@ -40,6 +50,22 @@ final class MessageListViewController: UIViewController {
     /// In the inverted layout, increasing `contentOffset.y` scrolls visually
     /// upward (toward older messages).
     private let slowScrollSpeed: CGFloat = 80
+
+    /// Maps each message's gateway-side `serverId` (MongoDB ObjectId) to
+    /// the client-side `localId` (UUID) that the diffable datasource uses
+    /// as its item identifier. Rebuilt from `store.messages` on every
+    /// `applySnapshot`. Consulted by `resolveLocalId(_:)` so the reply-tap
+    /// path can find a cited message even when the caller hands us a
+    /// server id (which is what `ReplyReference.messageId` carries —
+    /// gateway sends `replyTo.id`, not the local UUID).
+    private var serverIdToLocalId: [String: String] = [:]
+    private var lastMessageTranslations: [String: [MessageTranslation]] = [:]
+    private var lastMessageTranscriptions: [String: MessageTranscription] = [:]
+    private var lastMessageTranslatedAudios: [String: [MessageTranslatedAudio]] = [:]
+    private var lastActiveTranslationOverrides: [String: MessageTranslation?] = [:]
+    private var pendingReconfigureMessageIds = Set<String>()
+    private var reconfigureDebounceTimer: Timer?
+
     var onNewMessagesBadge: ((Int) -> Void)?
     var onScrollToMessage: ((String) -> Void)?
     /// Invoked when the scroll position approaches the older-messages
@@ -74,6 +100,11 @@ final class MessageListViewController: UIViewController {
     var onOpenReactPicker: ((String) -> Void)?
     /// Open the detail sheet on the message-info tab.
     var onShowMessageInfo: ((String) -> Void)?
+    /// Tap on the delivery checkmarks (✓ / ✓✓ / ✓✓ bleu) of a sent message.
+    /// Opens the detail sheet on the "vues" tab so the author can inspect who
+    /// received / read the message. Only fires for `isMe` messages — received
+    /// bubbles never render a delivery check.
+    var onShowReadStatus: ((String) -> Void)?
     /// Open the detail sheet on the reactions tab.
     var onShowReactions: ((String) -> Void)?
     /// Open the detail sheet on the language / translation tab.
@@ -128,6 +159,7 @@ final class MessageListViewController: UIViewController {
         if self.isDark != isDark { self.isDark = isDark; changed = true }
         if self.accentColor != accentColor { self.accentColor = accentColor; changed = true }
         if changed {
+            stickyDayState.isDark = isDark
             applySnapshot(animated: false)
         }
     }
@@ -145,9 +177,16 @@ final class MessageListViewController: UIViewController {
         }
     }
 
+    /// État réactif de la pill flottante « Aujourd'hui / Hier / … » posée au
+    /// top du collectionView. Mis à jour à chaque `scrollViewDidScroll` et
+    /// après `applySnapshot` pour que le label suive le message en haut visible.
+    private let stickyDayState = MessageDayStickyState()
+    private var stickyDayHost: UIHostingController<MessageDayStickyOverlay>?
+
     override func viewDidLoad() {
         super.viewDidLoad()
         configureCollectionView()
+        configureStickyDayOverlay()
         configureDataSource()
         observeStore()
         // Apply the initial snapshot from whatever the store already holds.
@@ -158,6 +197,80 @@ final class MessageListViewController: UIViewController {
         // emission is missed and the list would render empty even though
         // `store.messages` is non-empty.
         applySnapshot(animated: false)
+    }
+
+    private func configureStickyDayOverlay() {
+        stickyDayState.isDark = isDark
+        let host = UIHostingController(
+            rootView: MessageDayStickyOverlay(state: stickyDayState)
+        )
+        host.view.backgroundColor = .clear
+        host.view.isUserInteractionEnabled = false
+        addChild(host)
+        view.addSubview(host.view)
+        host.didMove(toParent: self)
+        host.view.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            host.view.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 4),
+            host.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            host.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+        ])
+        stickyDayHost = host
+    }
+
+    /// Recalcule le label de la pill sticky à partir de la cellule la plus
+    /// haute visuellement. Liste inversée : « plus haute » = plus grand index
+    /// dans le snapshot diffable. Si le séparateur natif de ce même jour est
+    /// déjà visible, on cache la sticky pour éviter le doublon visuel.
+    private func updateStickyDayLabel() {
+        guard let dataSource else { return }
+        let visibleIndices = collectionView.indexPathsForVisibleItems.map(\.item)
+        guard let topIndex = visibleIndices.max() else {
+            stickyDayState.label = nil
+            return
+        }
+        let items = dataSource.snapshot().itemIdentifiers
+        guard topIndex < items.count else {
+            stickyDayState.label = nil
+            return
+        }
+
+        let calendar = Calendar.current
+        let now = Date()
+        let topItem = items[topIndex]
+        let topDayStart: Date?
+        switch topItem {
+        case .dayHeader:
+            // Le séparateur natif est l'item du haut — la sticky doublonnerait,
+            // on la masque le temps qu'il défile hors écran.
+            stickyDayState.label = nil
+            return
+        case .message(let localId):
+            if let record = store.message(for: localId) {
+                let msg = record.toMessage(currentUserId: currentUserId)
+                topDayStart = calendar.startOfDay(for: msg.createdAt)
+            } else {
+                topDayStart = nil
+            }
+        case .typingIndicator:
+            topDayStart = nil
+        }
+        guard let dayStart = topDayStart else {
+            stickyDayState.label = nil
+            return
+        }
+        let label = MessageDayLabel.label(
+            for: dayStart,
+            now: now,
+            calendar: calendar,
+            locale: .current,
+            today: String(localized: "date.today", defaultValue: "Aujourd'hui"),
+            yesterday: String(localized: "date.yesterday", defaultValue: "Hier"),
+            dayBeforeYesterday: String(localized: "date.dayBeforeYesterday", defaultValue: "Avant-hier")
+        )
+        if stickyDayState.label != label {
+            stickyDayState.label = label
+        }
     }
 
     // MARK: - CollectionView Setup
@@ -207,8 +320,55 @@ final class MessageListViewController: UIViewController {
         // in UIKit. The hosting configuration diff-updates on reuse, so scroll
         // performance is preserved.
         let registration = UICollectionView.CellRegistration<UICollectionViewCell, MessageListItem> { [weak self] cell, _, item in
-            guard let self,
-                  case .message(let localId) = item,
+            guard let self else {
+                cell.contentConfiguration = nil
+                return
+            }
+
+            // Typing indicator — vraie cellule (dernière du flux inversé,
+            // donc bas visuel). Pas un overlay : un message reçu en direct
+            // s'insère au-dessus et remonte la conversation. La bulle anime
+            // ses points en autonomie ; le contre-flip annule la transform.
+            if case .typingIndicator = item {
+                let typingNames = self.conversationViewModel?.typingUsernames ?? []
+                let typingAccent = self.accentColor
+                let typingDark = self.isDark
+                cell.contentConfiguration = UIHostingConfiguration {
+                    TypingIndicatorBubble(names: typingNames, accentHex: typingAccent, isDark: typingDark)
+                        .scaleEffect(x: 1, y: -1)
+                }
+                .margins(.all, 0)
+                cell.backgroundColor = .clear
+                return
+            }
+
+            // Séparateur de jour — pill "Aujourd'hui / Hier / Lundi 9 mai"
+            // posée entre deux groupes de messages de jours distincts. Le
+            // label est recalculé à chaque rendu de cellule afin de suivre
+            // le passage de minuit sans avoir à reconstruire la datasource.
+            // Les libellés relatifs sont injectés depuis le catalogue de
+            // chaînes localisées pour suivre la langue d'interface de l'app.
+            if case .dayHeader(let dayStart) = item {
+                let label = MessageDayLabel.label(
+                    for: dayStart,
+                    now: Date(),
+                    calendar: .current,
+                    locale: .current,
+                    today: String(localized: "date.today", defaultValue: "Aujourd'hui"),
+                    yesterday: String(localized: "date.yesterday", defaultValue: "Hier"),
+                    dayBeforeYesterday: String(localized: "date.dayBeforeYesterday", defaultValue: "Avant-hier")
+                )
+                let dark = self.isDark
+                cell.contentConfiguration = UIHostingConfiguration {
+                    MessageDaySeparator(label: label, isDark: dark)
+                        .scaleEffect(x: 1, y: -1)
+                }
+                .margins(.all, 0)
+                cell.backgroundColor = .clear
+                return
+            }
+
+            guard case .message(let localId) = item,
                   let record = self.store.message(for: localId) else {
                 cell.contentConfiguration = nil
                 return
@@ -231,6 +391,12 @@ final class MessageListViewController: UIViewController {
             let preferred = vm?.preferredTranslation(for: message.id)
             let transcription = vm?.messageTranscriptions[message.id]
             let translatedAudios = vm?.messageTranslatedAudios[message.id] ?? []
+            // Galerie audio plein écran : `AudioFullscreenView` n'affiche son
+            // pager que si cette liste est non-vide. Sans ce wiring, le tap
+            // sur l'icône / chip plein écran d'une bulle audio ouvre un
+            // ZStack contenant uniquement le `Color.black` de fond — d'où
+            // l'écran noir observé en prod.
+            let allAudioItems = vm?.allAudioItems ?? []
             let mentionDisplayNames = vm?.mentionDisplayNames ?? [:]
             let isLastReceived = (vm?.lastReceivedMessageId == message.id)
             let isLastSent = (vm?.lastSentMessageId == message.id)
@@ -259,6 +425,7 @@ final class MessageListViewController: UIViewController {
             let toggleReactionHandler = self.onToggleReaction
             let openReactPickerHandler = self.onOpenReactPicker
             let showInfoHandler = self.onShowMessageInfo
+            let showReadStatusHandler = self.onShowReadStatus
             let showReactionsHandler = self.onShowReactions
             let showTranslationHandler = self.onShowTranslationDetail
             let mediaTapHandler = self.onMediaTap
@@ -280,6 +447,7 @@ final class MessageListViewController: UIViewController {
             cell.contentConfiguration = UIHostingConfiguration {
                 BubbleSwipeContainer(
                     isMine: isMine,
+                    messageId: messageId,
                     messageCreatedAt: message.createdAt,
                     onSwipeReply: { swipeReplyHandler?(messageId) },
                     onSwipeForward: { swipeForwardHandler?(messageId) },
@@ -300,12 +468,14 @@ final class MessageListViewController: UIViewController {
                         onOpenReactPicker: openReactPickerHandler,
                         onShowInfo: { showInfoHandler?(messageId) },
                         onShowReactions: showReactionsHandler,
+                        onShowReadStatus: showReadStatusHandler,
                         onReplyTap: scrollHandler,
                         onStoryReplyTap: storyReplyHandler,
                         onMediaTap: mediaTapHandler,
                         onConsumeViewOnce: consumeViewOnceHandler,
                         onRequestTranslation: requestTranslationHandler,
                         onShowTranslationDetail: showTranslationHandler,
+                        allAudioItems: allAudioItems,
                         onScrollToMessage: scrollHandler,
                         isLastInGroup: true,
                         isLastReceivedMessage: isLastReceived,
@@ -336,7 +506,47 @@ final class MessageListViewController: UIViewController {
     private func applySnapshot(animated: Bool = true) {
         var snapshot = NSDiffableDataSourceSnapshot<MessageListSection, MessageListItem>()
         snapshot.appendSections([.main])
-        let items = store.messages.reversed().map { MessageListItem.message(localId: $0.localId) }
+
+        // Liste inversée : index 0 = visuel bas (message le plus récent).
+        let reversedMessages = Array(store.messages.reversed())
+        let messageItems = reversedMessages.map { MessageListItem.message(localId: $0.localId) }
+
+        // Rebuild the serverId → localId map every time we apply a new
+        // snapshot. The reply chip in a bubble carries the cited message's
+        // SERVER id (gateway sends `replyTo.id` = MongoDB ObjectId), but the
+        // diffable datasource items are keyed on the LOCAL id (UUID minted
+        // client-side, kept stable across send → ack). Without this map,
+        // `scrollToMessage(localId:)` would never find a reply target that
+        // wasn't sent during this session — typical for any reply.
+        serverIdToLocalId.removeAll(keepingCapacity: true)
+        for record in reversedMessages {
+            if let serverId = record.serverId, !serverId.isEmpty {
+                serverIdToLocalId[serverId] = record.localId
+            }
+        }
+
+        // Pour chaque groupe de jour on aligne d'abord les messages dans
+        // l'ordre du flux puis on pousse le séparateur juste après — qui se
+        // retrouve visuellement AU-DESSUS de ses messages, à la WhatsApp.
+        // On part de `messageItems` (sans typing) pour pouvoir conserver le
+        // count "messages stricts" plus bas, intact des dayHeader insérés.
+        let groups = MessageDayGrouping.groupByDay(
+            dates: reversedMessages.map(\.createdAt),
+            calendar: .current
+        )
+        var bodyItems: [MessageListItem] = []
+        for group in groups {
+            for idx in group.indices {
+                bodyItems.append(messageItems[idx])
+            }
+            bodyItems.append(.dayHeader(dayStart: group.dayStart))
+        }
+
+        // The typing indicator is a real cell at index 0 — the visual bottom of
+        // the inverted layout, just below the newest message. A live message
+        // then inserts at index 1 and pushes the conversation up naturally.
+        let showTyping = !(conversationViewModel?.typingUsernames.isEmpty ?? true)
+        let items: [MessageListItem] = showTyping ? [.typingIndicator] + bodyItems : bodyItems
         snapshot.appendItems(items, toSection: .main)
         // The diffable datasource only re-runs the cell registration closure
         // when an item's IDENTIFIER changes — we key items by `localId` which
@@ -349,17 +559,48 @@ final class MessageListViewController: UIViewController {
         // without triggering the costly insert/move/delete diff animation.
         snapshot.reconfigureItems(items)
 
-        // Unread badge: if the snapshot grew at the BOTTOM (new messages, not
-        // older pagination) while the user is scrolled away, bump the counter.
-        let newCount = items.count
+        // Detect genuinely-new messages: the MESSAGE count grew AND the newest
+        // message changed. Tracking message items only (never the typing cell)
+        // means the typing indicator toggling on/off can never be mistaken for
+        // a new message nor bump the unread badge. Older-message pagination
+        // prepends to the tail and leaves the newest untouched, so it never
+        // counts — including the ViewModel's anticipatory prefetch, which
+        // loads older pages from an internal Task that bypasses the
+        // `isLoadingOlder` flag entirely (the flag is therefore NOT a
+        // reliable discriminator). The very first load
+        // (previousSnapshotCount == 0) is excluded.
+        let newCount = messageItems.count
         let delta = newCount - previousSnapshotCount
-        if delta > 0, !isCurrentlyNearBottom, !isLoadingOlder, previousSnapshotCount > 0 {
+        let newestItem = messageItems.first
+        let hasGenuinelyNewMessages = delta > 0
+            && previousSnapshotCount > 0
+            && newestItem != previousNewestItem
+        // RC2.1 — when the user is following the conversation (near bottom),
+        // auto-scroll onto the new message; otherwise bump the unread badge.
+        // The typing cell appearing also auto-scrolls (when near bottom) so it
+        // stays visible just below the last message.
+        let typingJustAppeared = showTyping && !previouslyShowedTyping
+        let shouldAutoScroll = (hasGenuinelyNewMessages || typingJustAppeared) && isCurrentlyNearBottom
+        if hasGenuinelyNewMessages && !isCurrentlyNearBottom {
             pendingUnreadCount += delta
             onNewMessagesBadge?(pendingUnreadCount)
         }
         previousSnapshotCount = newCount
+        previousNewestItem = newestItem
+        previouslyShowedTyping = showTyping
 
-        dataSource.apply(snapshot, animatingDifferences: animated)
+        // Scroll in the apply completion handler so the new item exists in the
+        // layout before `scrollToItem` runs (apply is asynchronous for the
+        // animated diff path).
+        dataSource.apply(snapshot, animatingDifferences: animated) { [weak self] in
+            guard let self else { return }
+            // La pill flottante doit refléter le nouveau top du flux dès que
+            // les cellules sont en place (insertion d'un nouveau message, etc.).
+            self.updateStickyDayLabel()
+            if shouldAutoScroll {
+                self.scrollToBottom(animated: animated)
+            }
+        }
     }
 
     // MARK: - Observation
@@ -383,18 +624,147 @@ final class MessageListViewController: UIViewController {
         // already collects translation events on that interval, so two
         // collapsed re-snapshots is the worst case).
         guard let vm = conversationViewModel else { return }
-        Publishers.MergeMany(
-            vm.$messageTranslations.map { _ in () }.eraseToAnyPublisher(),
-            vm.$messageTranscriptions.map { _ in () }.eraseToAnyPublisher(),
-            vm.$messageTranslatedAudios.map { _ in () }.eraseToAnyPublisher(),
-            vm.$activeTranslationOverrides.map { _ in () }.eraseToAnyPublisher()
-        )
-        .dropFirst() // skip the @Published initial emission
-        .debounce(for: .milliseconds(80), scheduler: DispatchQueue.main)
-        .sink { [weak self] in
-            self?.applySnapshot(animated: false)
+
+        // Initialize cache values to avoid stale diffing on subscription
+        lastMessageTranslations = vm.messageTranslations
+        lastMessageTranscriptions = vm.messageTranscriptions
+        lastMessageTranslatedAudios = vm.messageTranslatedAudios
+        lastActiveTranslationOverrides = vm.activeTranslationOverrides
+
+        vm.$messageTranslations
+            .receive(on: DispatchQueue.main)
+            .dropFirst()
+            .sink { [weak self] newTranslations in
+                guard let self = self else { return }
+                var changed: Set<String> = []
+                for (msgId, val) in newTranslations {
+                    if self.lastMessageTranslations[msgId] != val {
+                        changed.insert(msgId)
+                    }
+                }
+                for msgId in self.lastMessageTranslations.keys {
+                    if newTranslations[msgId] == nil {
+                        changed.insert(msgId)
+                    }
+                }
+                self.lastMessageTranslations = newTranslations
+                self.queueReconfigure(for: changed)
+            }
+            .store(in: &cancellables)
+
+        vm.$messageTranscriptions
+            .receive(on: DispatchQueue.main)
+            .dropFirst()
+            .sink { [weak self] newTranscriptions in
+                guard let self = self else { return }
+                var changed: Set<String> = []
+                for (msgId, val) in newTranscriptions {
+                    if self.lastMessageTranscriptions[msgId] != val {
+                        changed.insert(msgId)
+                    }
+                }
+                for msgId in self.lastMessageTranscriptions.keys {
+                    if newTranscriptions[msgId] == nil {
+                        changed.insert(msgId)
+                    }
+                }
+                self.lastMessageTranscriptions = newTranscriptions
+                self.queueReconfigure(for: changed)
+            }
+            .store(in: &cancellables)
+
+        vm.$messageTranslatedAudios
+            .receive(on: DispatchQueue.main)
+            .dropFirst()
+            .sink { [weak self] newAudios in
+                guard let self = self else { return }
+                var changed: Set<String> = []
+                for (msgId, val) in newAudios {
+                    if self.lastMessageTranslatedAudios[msgId] != val {
+                        changed.insert(msgId)
+                    }
+                }
+                for msgId in self.lastMessageTranslatedAudios.keys {
+                    if newAudios[msgId] == nil {
+                        changed.insert(msgId)
+                    }
+                }
+                self.lastMessageTranslatedAudios = newAudios
+                self.queueReconfigure(for: changed)
+            }
+            .store(in: &cancellables)
+
+        vm.$activeTranslationOverrides
+            .receive(on: DispatchQueue.main)
+            .dropFirst()
+            .sink { [weak self] newOverrides in
+                guard let self = self else { return }
+                var changed: Set<String> = []
+                for (msgId, val) in newOverrides {
+                    if self.lastActiveTranslationOverrides[msgId] != val {
+                        changed.insert(msgId)
+                    }
+                }
+                for msgId in self.lastActiveTranslationOverrides.keys {
+                    if newOverrides[msgId] == nil {
+                        changed.insert(msgId)
+                    }
+                }
+                self.lastActiveTranslationOverrides = newOverrides
+                self.queueReconfigure(for: changed)
+            }
+            .store(in: &cancellables)
+
+        vm.$preferredLanguageRevision
+            .receive(on: DispatchQueue.main)
+            .dropFirst()
+            .sink { [weak self] _ in
+                // Preferred language revision change requires full reconfigure of all items
+                self?.applySnapshot(animated: false)
+            }
+            .store(in: &cancellables)
+
+        // Typing roster — re-snapshot (animated) so the in-flow typing cell
+        // inserts / updates / removes fluidly. Low-frequency signal, no debounce.
+        vm.$typingUsernames
+            .receive(on: DispatchQueue.main)
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.applySnapshot(animated: true)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func queueReconfigure(for messageIds: Set<String>) {
+        guard !messageIds.isEmpty else { return }
+        pendingReconfigureMessageIds.formUnion(messageIds)
+
+        reconfigureDebounceTimer?.invalidate()
+        reconfigureDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                let ids = self.pendingReconfigureMessageIds
+                self.pendingReconfigureMessageIds.removeAll()
+                self.reconfigureMessages(serverIds: ids)
+            }
         }
-        .store(in: &cancellables)
+    }
+
+    private func reconfigureMessages(serverIds: Set<String>) {
+        guard let dataSource = dataSource, !serverIds.isEmpty else { return }
+
+        let localIds = serverIds.compactMap { self.serverIdToLocalId[$0] }
+        guard !localIds.isEmpty else { return }
+
+        var snapshot = dataSource.snapshot()
+        let itemsToReconfigure = localIds.map { MessageListItem.message(localId: $0) }
+
+        // Only reconfigure items that actually exist in the current snapshot
+        let existingItems = itemsToReconfigure.filter { snapshot.indexOfItem($0) != nil }
+        guard !existingItems.isEmpty else { return }
+
+        snapshot.reconfigureItems(existingItems)
+        dataSource.apply(snapshot, animatingDifferences: false)
     }
 
     // MARK: - Scroll to Bottom
@@ -402,6 +772,19 @@ final class MessageListViewController: UIViewController {
     func scrollToBottom(animated: Bool = true) {
         guard collectionView.numberOfItems(inSection: 0) > 0 else { return }
         collectionView.scrollToItem(at: IndexPath(item: 0, section: 0), at: .top, animated: animated)
+        // RC2.4 — a programmatic scroll does not reliably fire
+        // `scrollViewDidScroll` (no drag/decelerate phase), so the near-bottom
+        // state and the unread badge must be resynced here. Without this the
+        // NEXT `applySnapshot` re-bumps the badge against a stale
+        // `isCurrentlyNearBottom`, and the badge never reliably clears.
+        if !isCurrentlyNearBottom {
+            isCurrentlyNearBottom = true
+            onNearBottomChanged?(true)
+        }
+        if pendingUnreadCount > 0 {
+            pendingUnreadCount = 0
+            onNewMessagesBadge?(0)
+        }
     }
 
     // MARK: - Scroll to specific message (reply chip tap)
@@ -412,12 +795,32 @@ final class MessageListViewController: UIViewController {
     /// `onScrollToMessage` closure so the parent ConversationViewModel can
     /// also load older messages if the target lives outside the current
     /// window.
+    /// Resolves a message id — either a local UUID or a gateway-issued
+    /// server id — to the local UUID used by the diffable datasource. The
+    /// snapshot items are keyed on `localId`; reply chips pass the server
+    /// id; this method bridges the two without forcing every call site
+    /// to remember which kind it has.
+    private func resolveLocalId(_ id: String) -> String {
+        // Most call sites pass a localId already (e.g. the typing → message
+        // glue, the scroll-to-bottom action). Look it up via the
+        // server-side map only when we don't already match an item key —
+        // saves a dict probe on the hot scroll-to-bottom path.
+        serverIdToLocalId[id] ?? id
+    }
+
     func scrollToMessage(localId: String) {
         // Forward to parent first — if the message lives outside the current
         // window, the parent ViewModel will trigger a `loadWindow(around:)`
         // which repopulates the store. The store observer reapplies the
         // snapshot, then this method runs again with the message visible.
+        Logger.messages.debug("scrollToMessage requested target=\(localId, privacy: .public)")
         onScrollToMessage?(localId)
+
+        // Reply chips pass the citation's SERVER id; the snapshot uses
+        // LOCAL ids. Translate before the lookup so any message in the
+        // current window is reachable, regardless of which id flavour the
+        // caller has.
+        let resolvedId = resolveLocalId(localId)
 
         // Items are inserted reversed (newest first) for the inverted
         // collection view. Locate by linear scan over the snapshot — there
@@ -425,9 +828,17 @@ final class MessageListViewController: UIViewController {
         // negligible compared to the layout pass that follows.
         let snapshot = dataSource.snapshot()
         guard let index = snapshot.itemIdentifiers.firstIndex(where: {
-            if case .message(let id) = $0 { return id == localId }
+            if case .message(let id) = $0 { return id == resolvedId }
             return false
-        }) else { return }
+        }) else {
+            // Not in the current snapshot — `onScrollToMessage` was just
+            // asked to load it. When the store observer reapplies the
+            // snapshot, the second pass through `scrollToMessage` (driven
+            // by `scrollState.scrollToMessageId`) will find it. If it
+            // doesn't, the log below will show the gap during diagnostic.
+            Logger.messages.debug("scrollToMessage target=\(localId, privacy: .public) NOT in snapshot — relying on parent jump path")
+            return
+        }
 
         let indexPath = IndexPath(item: index, section: 0)
         collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: true)
@@ -441,9 +852,13 @@ final class MessageListViewController: UIViewController {
     func scrollToMessageFast(localId: String) {
         stopSlowScroll()
 
+        // Same id-flavour bridge as `scrollToMessage` — see
+        // `resolveLocalId(_:)` for the rationale.
+        let resolvedId = resolveLocalId(localId)
+
         let snapshot = dataSource.snapshot()
         guard let index = snapshot.itemIdentifiers.firstIndex(where: {
-            if case .message(let id) = $0 { return id == localId }
+            if case .message(let id) = $0 { return id == resolvedId }
             return false
         }) else { return }
 
@@ -462,9 +877,12 @@ final class MessageListViewController: UIViewController {
     /// transform, so the returned rect is the upright frame the user sees.
     /// Used to anchor the floating quick-reaction bar to the tapped bubble.
     func cellFrameInWindow(messageId: String) -> CGRect? {
+        // Quick-reaction bar anchors on a tap by id — same server/local
+        // id-flavour bridge as the scroll routines.
+        let resolvedId = resolveLocalId(messageId)
         let snapshot = dataSource.snapshot()
         guard let index = snapshot.itemIdentifiers.firstIndex(where: {
-            if case .message(let id) = $0 { return id == messageId }
+            if case .message(let id) = $0 { return id == resolvedId }
             return false
         }) else { return nil }
         guard let cell = collectionView.cellForItem(at: IndexPath(item: index, section: 0)) else {
@@ -556,6 +974,11 @@ extension MessageListViewController: UICollectionViewDelegate {
 
         store.isUserScrolling = scrollView.isDragging || scrollView.isDecelerating
 
+        // Met à jour le label de la pill flottante en fonction du message
+        // en haut visible. Léger : un lookup de l'item à l'index max + une
+        // string formatée. Aucune allocation inutile si le label ne change pas.
+        updateStickyDayLabel()
+
         // Near-bottom detection for the floating "scroll to latest" button.
         // In the inverted layout, contentOffset.y ≈ 0 means the user is at
         // the visual bottom (newest messages). A threshold of 200pt gives a
@@ -588,5 +1011,66 @@ extension MessageListViewController: UICollectionViewDelegate {
                 await onLoadOlder()
             }
         }
+    }
+}
+
+// MARK: - Typing Indicator Cell
+
+/// Bulle « X écrit… » rendue comme dernière cellule du flux de messages
+/// (bas visuel de la liste inversée). Alignée côté expéditeur ; les points
+/// s'animent en autonomie via `@State` (pas de timer externe).
+private struct TypingIndicatorBubble: View {
+    let names: [String]
+    let accentHex: String
+    let isDark: Bool
+
+    @State private var animating = false
+
+    private var label: String {
+        switch names.count {
+        case 0: return ""
+        case 1: return "\(names[0]) écrit"
+        case 2: return "\(names[0]) et \(names[1]) écrivent"
+        default: return "Plusieurs personnes écrivent"
+        }
+    }
+
+    var body: some View {
+        let accent = Color(hex: accentHex)
+        HStack(spacing: 0) {
+            HStack(spacing: 6) {
+                if !label.isEmpty {
+                    Text(label)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(isDark ? accent.opacity(0.85) : accent.opacity(0.7))
+                        .lineLimit(1)
+                }
+                HStack(spacing: 3) {
+                    ForEach(0..<3, id: \.self) { i in
+                        Circle()
+                            .fill(accent)
+                            .frame(width: 5, height: 5)
+                            .scaleEffect(animating ? 1.0 : 0.5)
+                            .opacity(animating ? 1.0 : 0.4)
+                            .animation(
+                                .easeInOut(duration: 0.5)
+                                    .repeatForever(autoreverses: true)
+                                    .delay(Double(i) * 0.18),
+                                value: animating
+                            )
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Capsule().fill(isDark ? Color.white.opacity(0.07) : Color.black.opacity(0.05)))
+            .overlay(Capsule().strokeBorder(accent.opacity(isDark ? 0.25 : 0.18), lineWidth: 1))
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .onAppear { animating = true }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(label)
     }
 }

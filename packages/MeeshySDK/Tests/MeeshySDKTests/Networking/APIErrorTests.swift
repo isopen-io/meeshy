@@ -237,7 +237,7 @@ final class APIErrorTests: XCTestCase {
     func testFromAPIErrorServerError403ConvertsToForbidden() {
         let converted = MeeshyError.from(APIError.serverError(403, "Forbidden"))
 
-        guard case .forbidden(let reason) = converted else {
+        guard case .forbidden(let reason, _) = converted else {
             XCTFail("Expected .forbidden, got \(converted)")
             return
         }

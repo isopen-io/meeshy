@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import AVFoundation
 import Combine
 import os
 import MeeshySDK
@@ -99,7 +100,19 @@ struct StoryViewerView: View {
     /// and the centered loading spinner.
     @State var isContentReady: Bool = false // internal for cross-file extension access
     @State var isPaused = false // internal for cross-file extension access
+    /// Spécifique au toggle long-press : `true` UNIQUEMENT entre le hold
+    /// confirmé (200 ms) et le tap suivant de reprise. Distinct de `isPaused`,
+    /// qui couvre **toutes** les pauses du timer (sheets, drag-to-dismiss,
+    /// composer engaged…). Le notification au canvas (`storyPlayerPause` /
+    /// `storyPlayerResume`) n'est postée QUE quand ce drapeau bascule —
+    /// sinon ouvrir une sheet ou drag pour dismiss freezerait la vidéo BG
+    /// et l'audio mixer (blip audible au play/pause rapide).
+    @State var isLongPressPaused = false // internal for cross-file extension access
     @State var isGlobalMuted = false // internal for cross-file extension access
+    /// Audio-track presence for the current slide's foreground videos, keyed by
+    /// `StoryMediaObject.id`. Populated by `refreshVideoAudioTrackPresence()` —
+    /// a video only counts toward `storyHasAudibleSound` once probed `true`.
+    @State private var videoAudioTrackPresence: [String: Bool] = [:]
     /// True when user is actively engaging with the composer (focused, recording, emoji panel, etc.)
     @State var isComposerEngaged = false // internal for cross-file extension access
     /// True when composer has pending content (text, attachments, or recording)
@@ -119,6 +132,21 @@ struct StoryViewerView: View {
     @State var computedStoryDuration: Double = 12.0 // internal for cross-file extension access
     @State var timerCancellable: AnyCancellable? // internal for cross-file extension access
     @State var hasFiredFadeOut = false // internal for cross-file extension access
+    @State var hasFiredNextPrefetch = false // déclencheur du prefetch de la slide N+1, armé à 5s de la fin de la slide en cours pour que la transition soit fluide.
+
+    /// Visibilité du chrome (header, sidebar droite, composer) — animé par
+    /// glissements directionnels. En mode normal `chromeVisible = true` au
+    /// repos, passe à `false` pendant un touch-and-hold pour révéler le
+    /// contenu en pleine surface (typique « immersion lecture »). En mode
+    /// `isFullscreenStorySession`, l'état au repos est inversé : `false`,
+    /// révélé temporairement par le toucher.
+    @State var chromeVisible: Bool = true // internal for cross-file extension access
+
+    /// Mode "plein écran" toggleable via le menu hamburger « … ». Quand actif,
+    /// le chrome est caché par défaut pour TOUTE la session story (jusqu'au
+    /// prochain toggle), et n'apparaît que pendant un touch-and-hold. La
+    /// distinction avec le toggle ponctuel : ici l'état au repos est inversé.
+    @State var isFullscreenStorySession: Bool = false // internal for cross-file extension access
 
     // MARK: - P3 wire-up : Prefetcher + gated timer
     //
@@ -229,9 +257,21 @@ struct StoryViewerView: View {
     /// presentation.
     @State var hasTriggeredInitialAction = false
 
-    private var screenH: CGFloat { UIScreen.main.bounds.height }
+    // Use the active window bounds rather than `UIScreen.main.bounds` so
+    // iPad split-screen / Stage Manager / multi-window scenes report the
+    // viewer's actual window (UIScreen reports the full display). Used by
+    // swipe-to-dismiss thresholds and horizontal-slide normalization.
+    private var windowSize: CGSize {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first(where: { $0.activationState == .foregroundActive })?
+            .windows.first(where: { $0.isKeyWindow })?
+            .bounds.size ?? UIScreen.main.bounds.size
+    }
 
-    var screenW: CGFloat { UIScreen.main.bounds.width } // internal for cross-file extension access
+    private var screenH: CGFloat { windowSize.height }
+
+    var screenW: CGFloat { windowSize.width } // internal for cross-file extension access
 
     // Drag dismiss progress 0–1
     private var dragProgress: CGFloat {
@@ -278,8 +318,29 @@ struct StoryViewerView: View {
             if initialStoryIndex > 0, currentGroupIndex < groups.count {
                 currentStoryIndex = min(initialStoryIndex, groups[currentGroupIndex].stories.count - 1)
             }
+            // A5 — skip past stories whose 24h visibility window has elapsed.
+            // Cache TTL > 24h is intentional (avoid redownloading avatars)
+            // but the *content* must not be rendered once expired. If no
+            // non-expired story remains in the current group, dismiss.
+            skipExpiredStoriesIfNeeded()
             StoryMediaCoordinator.shared.activate {
-                isGlobalMuted = true
+                // No-op : ne PAS forcer `isGlobalMuted = true` ici. Cette
+                // closure est invoquée par `PlaybackCoordinator` chaque fois
+                // qu'un autre `StoppablePlayer` claim le canal audio — y
+                // compris l'`audioMixer` interne à la story elle-même
+                // (cf. `StoryCanvasUIView.startAudioPlayback` →
+                // `willStartPlaying(external: audioMixer)` qui sweep tous
+                // les externals sauf lui-même → arrête `StoryMediaCoordinator`
+                // → invoque ce closure). Le résultat était que le viewer
+                // s'ouvrait toujours en muted parce que le canvas lui-même
+                // déclenchait le stop handler dès le premier `startAudioPlayback`.
+                //
+                // L'état `isGlobalMuted` doit rester un choix utilisateur. Si
+                // une vraie interruption externe arrive (appel iOS, autre app
+                // qui prend le canal), `AVAudioSession` s'occupera de
+                // l'interruption au niveau système, et le canvas réagira via
+                // `observeAudioSessionEvents` (interruption began/ended). Pas
+                // besoin de basculer la UI mute pour ça.
             }
             installPrefetchPipelineIfNeeded()
             refreshPrefetchWindowAndTimer()
@@ -295,25 +356,50 @@ struct StoryViewerView: View {
                 SocialSocketManager.shared.joinPostRoom(postId: story.id)
             }
         }
+        .task(id: currentStory?.id) {
+            await refreshVideoAudioTrackPresence()
+        }
         .onDisappear {
             timerCancellable?.cancel()
             slideTimer.reset()
             prefetcher.detach()
             hasInstalledPrefetchPipeline = false
             StoryMediaCoordinator.shared.deactivate()
+            // RC4.5 — cut the reader audio engine on exit. `ReaderAudioMixer`
+            // is a registered external player, so `stopAll()` reaches it
+            // without the viewer needing a direct reference.
+            PlaybackCoordinator.shared.stopAll()
             if let story = currentStory {
                 SocialSocketManager.shared.leavePostRoom(postId: story.id)
             }
         }
-        .onChange(of: scenePhase) { _, newPhase in
+        .adaptiveOnChange(of: scenePhase) { _, newPhase in
             if newPhase == .background {
                 timerCancellable?.cancel()
                 slideTimer.reset()
                 PlaybackCoordinator.shared.stopAll()
+                // Release the shared playback session so other apps' audio
+                // un-ducks while Meeshy is backgrounded (RC4.3 / RC4.5).
+                Task { await MediaSessionCoordinator.shared.deactivateForBackground() }
                 isPresented = false
             }
         }
-        .onChange(of: currentStoryIndex) { oldValue, _ in
+        // Long-press toggle UNIQUEMENT — pas les autres pauses du timer.
+        //
+        // Sheets, drag-to-dismiss, composer engaged… mutent `isPaused`
+        // (timer-only). Si on postait `.storyPlayerPause` dessus, chaque
+        // ouverture/fermeture de sheet ferait un cycle pause/play sur
+        // l'audio mixer et la vidéo BG — blip audible. Le canvas ne se
+        // freeze comme une vidéo que quand l'utilisateur le demande
+        // explicitement via long-press.
+        .adaptiveOnChange(of: isLongPressPaused) { _, paused in
+            NotificationCenter.default.post(
+                name: paused ? .storyPlayerPause : .storyPlayerResume,
+                object: nil
+            )
+        }
+        .adaptiveOnChange(of: currentStoryIndex) { oldValue, _ in
+            skipExpiredStoriesIfNeeded()
             isContentReady = false
             refreshPrefetchWindowAndTimer()
             let previousStory = currentGroup.flatMap { group in
@@ -321,7 +407,8 @@ struct StoryViewerView: View {
             }
             transitionPostRoom(from: previousStory, to: currentStory)
         }
-        .onChange(of: currentGroupIndex) { oldValue, _ in
+        .adaptiveOnChange(of: currentGroupIndex) { oldValue, _ in
+            skipExpiredStoriesIfNeeded()
             isContentReady = false
             refreshPrefetchWindowAndTimer()
             let previousStory: StoryItem? = (oldValue >= 0 && oldValue < groups.count &&
@@ -540,11 +627,30 @@ struct StoryViewerView: View {
             return
         }
         let chain = preferredContentLanguagesForReader
+        // Build a postMediaId → URL resolver across the whole prefetch window.
+        // The audio mixer needs this to map `StoryAudioPlayerObject.postMediaId`
+        // to a streamable URL — without it, `reconfigureAudioForPlayback`
+        // skips every clip silently (logged via `Logger.storyAudio`).
+        // Images bypass the resolver via `CachedAsyncImage`, but audio has no
+        // equivalent prefetch path, so we MUST provide a resolver here.
+        let windowItems = stories
+        let mediaIndex: [String: URL] = Dictionary(
+            windowItems
+                .flatMap { $0.media }
+                .compactMap { m -> (String, URL)? in
+                    guard let raw = m.url, let url = URL(string: raw) else { return nil }
+                    return (m.id, url)
+                },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let resolver: @Sendable (String) -> URL? = { postMediaId in
+            mediaIndex[postMediaId]
+        }
         let context = StoryReaderContext(
             preferredLanguages: chain,
             mute: isGlobalMuted,
             onCompletion: nil,
-            postMediaURLResolver: nil,
+            postMediaURLResolver: resolver,
             imageCache: nil
         )
         p.updateWindow(items: stories,
@@ -553,6 +659,11 @@ struct StoryViewerView: View {
                        preferredLanguages: chain)
 
         let current = stories[currentStoryIndex]
+        // Promote the current slide to `.play` and demote neighbours to
+        // `.edit`. Without this, all three prefetched canvases run in
+        // `.play` simultaneously, pre-caching + starting their audio at
+        // window mount time (NOT when the user actually arrives on the slide).
+        p.activate(currentId: current.id)
         t.setCurrentSlide(id: current.id, duration: currentSlideDuration)
 
         // Re-wire `onContentReady` on the prefetched canvas of the
@@ -566,11 +677,55 @@ struct StoryViewerView: View {
             canvas.onContentReady = { [weak t = t] in
                 t?.markContentReady(slideId: slideId)
             }
+            // The prefetcher bootstrapped this canvas before we could attach
+            // the callback — its `scheduleContentReadyEvaluation` may have
+            // already fired (solidColor backgrounds fire on the next runloop
+            // tick). When that happens `contentReadyFired == true` and our
+            // newly-attached callback would never be invoked. Fast-forward
+            // the timer here so the loader doesn't stick on already-settled
+            // backgrounds.
+            if canvas.contentReadyFired {
+                t.markContentReady(slideId: slideId)
+            }
         }
     }
 
     /// Direct repost-as-post action wired to the kebab menu's "Republier en
     /// post" item. Mirrors the share-button repost UX (C.1) but skips the
+    /// A5 — advance past stories whose 24h visibility window has elapsed.
+    ///
+    /// The cache TTL is intentionally longer than 24h (avoids redownloading
+    /// avatars + metadata on cold start), so the viewer may receive expired
+    /// stories from the local store. We skip them here rather than filter
+    /// at the tray level — the tray must keep showing the user's ring for
+    /// UX continuity, but rendering an expired story (deleted server-side
+    /// by the GC job) would 404 on reactions and confuse the user.
+    ///
+    /// Behavior:
+    /// - advance `currentStoryIndex` to the first non-expired story in the
+    ///   current group (forward only — never go back to an unexpired one);
+    /// - if every remaining story in the group is expired, dismiss the
+    ///   viewer (the user is opening an empty ring).
+    private func skipExpiredStoriesIfNeeded() {
+        let now = Date()
+        guard currentGroupIndex < groups.count else { return }
+        let group = groups[currentGroupIndex]
+        guard !group.stories.isEmpty else { return }
+
+        var idx = currentStoryIndex
+        while idx < group.stories.count, group.stories[idx].isExpired(at: now) {
+            idx += 1
+        }
+        if idx >= group.stories.count {
+            // Whole tail of the group is expired — close.
+            isPresented = false
+            return
+        }
+        if idx != currentStoryIndex {
+            currentStoryIndex = idx
+        }
+    }
+
     /// composer — fires `PostService.repost` immediately with no content and
     /// Transitions the Socket.IO post room subscription from `oldStory` to `newStory`.
     /// The old.id != new.id check makes redundant calls (e.g. double-fire from both
@@ -686,6 +841,7 @@ struct StoryViewerView: View {
             isOwnStory: isOwnStory,
             quickEmojis: quickEmojis,
             progress: progress,
+            currentSlideDuration: currentSlideDuration,
             outgoingOpacity: outgoingOpacity,
             closingScale: closingScale,
             contentOpacity: contentOpacity,
@@ -698,8 +854,7 @@ struct StoryViewerView: View {
             storyReactionCount: storyReactionCount,
             storyCommentCount: storyCommentCount,
             isStoryCommentsEmpty: storyComments.isEmpty,
-            currentStoryNeedsVideoExport: currentStoryNeedsVideoExport,
-            storyHasAudioOrVideo: storyHasAudioOrVideo,
+            storyHasAudibleSound: storyHasAudibleSound,
             storyHasTranslatableContent: storyHasTranslatableContent,
             isGlobalMuted: isGlobalMuted,
             availableTranslationLanguages: availableTranslationLanguages,
@@ -736,6 +891,9 @@ struct StoryViewerView: View {
             emojiToInject: $emojiToInject,
             composerFocusTrigger: $composerFocusTrigger,
             storyDrafts: $storyDrafts,
+            chromeVisible: $chromeVisible,
+            isFullscreenStorySession: $isFullscreenStorySession,
+            isLongPressPaused: $isLongPressPaused,
             keyboard: keyboard,
             triggerStoryReaction: { triggerStoryReaction($0) },
             pauseTimer: { pauseTimer() },
@@ -767,16 +925,6 @@ struct StoryViewerView: View {
 
     private var isOwnStory: Bool {
         currentGroup?.id == AuthManager.shared.currentUser?.id
-    }
-
-    /// Whether the currently shown story has time-evolving content worth
-    /// baking into an MP4 (animated text, background video, voice
-    /// attachment, opening transition, etc.). Reconstructs the
-    /// renderable slide via the same path the live canvas consumes so the
-    /// gate matches the export's own routing in `prepareExport`.
-    private var currentStoryNeedsVideoExport: Bool {
-        guard let story = currentStory else { return false }
-        return story.toRenderableSlide(preferredLanguages: preferredContentLanguagesForReader).needsVideoExport
     }
 
     // MARK: - Available Translation Languages
@@ -866,16 +1014,56 @@ struct StoryViewerView: View {
         AuthManager.shared.currentUser?.preferredContentLanguages ?? []
     }
 
-    var storyHasAudioOrVideo: Bool {
-        guard let story = currentStory else { return false }
-        guard let effects = story.storyEffects else { return false }
-        if effects.voiceAttachmentId != nil { return true }
-        if effects.backgroundAudioId != nil { return true }
-        if let audioObjs = effects.audioPlayerObjects, !audioObjs.isEmpty { return true }
-        if let mediaObjs = effects.mediaObjects {
-            if mediaObjs.contains(where: { $0.kind == .video }) { return true }
+    /// Drives the sidebar sound/mute button. A silent video (muted by the author
+    /// or shot without an audio track) keeps the button hidden — the video-track
+    /// presence is resolved asynchronously by `refreshVideoAudioTrackPresence()`.
+    var storyHasAudibleSound: Bool { // internal for cross-file extension access
+        StoryAudioAvailability.hasAudibleSound(
+            effects: currentStory?.storyEffects,
+            videoAudioTracks: videoAudioTrackPresence
+        )
+    }
+
+    /// Probes each foreground video of the current slide for a real audio track.
+    /// Until a video is confirmed to carry audio it does NOT count toward
+    /// `storyHasAudibleSound`, so the sound button never appears for a clip that
+    /// turns out silent. A probe failure (unreachable URL, decode error) is
+    /// treated as "no audio" — conservative, matching the no-false-button intent.
+    @MainActor
+    private func refreshVideoAudioTrackPresence() async {
+        let videos = StoryAudioAvailability.videosNeedingAudioProbe(effects: currentStory?.storyEffects)
+        guard let story = currentStory, !videos.isEmpty else {
+            videoAudioTrackPresence = [:]
+            return
         }
-        return false
+        var presence: [String: Bool] = [:]
+        for video in videos {
+            guard let url = resolveVideoURL(for: video, in: story) else {
+                presence[video.id] = false
+                continue
+            }
+            let tracks = try? await AVURLAsset(url: url).loadTracks(withMediaType: .audio)
+            presence[video.id] = (tracks?.isEmpty == false)
+        }
+        guard !Task.isCancelled else { return }
+        videoAudioTrackPresence = presence
+    }
+
+    /// Resolves the playable URL for a foreground video — mirrors the order used
+    /// by `StoryMediaLayer.resolvedMediaURL`: preloaded composer asset, then the
+    /// published `StoryItem.media` remote URL, then the embedded `mediaURL`.
+    private func resolveVideoURL(for media: StoryMediaObject, in story: StoryItem) -> URL? {
+        if !media.postMediaId.isEmpty {
+            if let preloaded = preloadedVideoURLs[media.postMediaId] { return preloaded }
+            if let feed = story.media.first(where: { $0.id == media.postMediaId }),
+               let urlString = feed.url, let url = URL(string: urlString) {
+                return url
+            }
+        }
+        if let urlString = media.mediaURL, let url = URL(string: urlString) {
+            return url
+        }
+        return nil
     }
 
     var storyHasTranslatableContent: Bool { // internal for cross-file extension access

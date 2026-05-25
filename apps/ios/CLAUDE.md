@@ -1,7 +1,7 @@
 # apps/ios - SwiftUI iOS App
 
 ## Tech Stack
-- SwiftUI (NOT UIKit), iOS 17.0+, Swift 6 (swift-tools-version 6.2)
+- SwiftUI (NOT UIKit), iOS 16.0+ (extension MeeshyWidgets : iOS 17.0+), Swift 6 (swift-tools-version 6.2)
 - MVVM architecture
 - Swift Package Manager (SPM)
 - Firebase 12.12 (Analytics, Crashlytics, Messaging, Performance)
@@ -247,9 +247,8 @@ Le backend **ne stocke jamais** de MP4 baked composite. Les viewers re-rendent l
 Le MP4 export (`StoryVideoExportService` + `StoryExporter`) est une feature **auteur-only**, partage externe via `UIActivityViewController` (Photos / Messages / WhatsApp / AirDrop) — **NE TOUCHE JAMAIS LE BACKEND MEESHY**.
 
 ### Entry point
-- `StoryViewerView` → bouton "Exporter" dans `storyActionSidebar`, visible uniquement si :
-  - `currentGroup?.id == currentUser.id` (l'utilisateur est l'auteur)
-  - `slide.needsVideoExport == true` (contenu animé / video / audio à graver)
+- `StoryViewerView` → bouton "Exporter" dans `storyActionSidebar`, visible dès que l'utilisateur est l'auteur (`currentGroup?.id == currentUser.id`)
+- **Universal export** : toute story de l'auteur est exportable, qu'elle contienne de la vidéo/audio/keyframes OU juste du texte/sticker/image statique. Le compositor synthétise un substrat vidéo transparent pour les slides sans background (cf. `StoryExporterStaticOnlyTests`)
 - Le tap présente `StoryExportShareSheet` driven par `StoryExportShareViewModel`
 - Le sheet expose un picker de langue d'export (Prisme Linguistique) → la langue choisie est gravée dans le MP4 (texte des overlays)
 
@@ -932,6 +931,14 @@ L'app iOS (`apps/ios/`) ne contient que :
 - Les Views/ecrans de l'app
 - Les models purement locaux a l'app (ex: `SearchResultItem`, etats UI)
 - La navigation, le theming, et la configuration app
+- **L'orchestration UX produit** : View wrappers qui cascadent cache → downloader → policy, Views qui encodent des décisions Meeshy ("quand auto-DL", "comment cascader fallbacks"). Exemples : `VideoAvailabilityResolver`, `AttachmentDownloader`, `VideoMediaView`. Ces composants APPELLENT les services SDK mais ENCODENT des règles produit — donc app, pas SDK.
+
+### Corollaire : ne PAS mettre dans le SDK
+Avant de migrer un composant vers le SDK, appliquer le **test du grain** (cf. `packages/MeeshySDK/CLAUDE.md` § REGLE CRITIQUE — SDK Purity) :
+- Composant atomique aux paramètres opaques → SDK
+- Composant qui orchestre + décide → APP
+
+Précédent : 2026-05-24 j'ai migré `AttachmentDownloader` au SDK sous prétexte de réutilisabilité. Rollback (commit `83e55297c`) — c'est de l'orchestration UX produit, pas un atome. "Réutilisable" n'est PAS un critère suffisant ; l'**atomicité** l'est.
 
 ## Quality Gate
 Codex will review your output once you are done. Self-evaluate and ensure consistent, coherent code before marking any task as complete.

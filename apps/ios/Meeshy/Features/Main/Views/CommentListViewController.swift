@@ -9,6 +9,9 @@ final class CommentListViewController: UIViewController {
     private let store: CommentStore
     var onToggleThread: ((String) -> Void)?
 
+    private var commentLookup: [String: CommentRecord] = [:]
+    private var isTopLevelComment: [String: Bool] = [:]
+
     init(store: CommentStore) {
         self.store = store
         super.init(nibName: nil, bundle: nil)
@@ -50,18 +53,14 @@ final class CommentListViewController: UIViewController {
     private func configureDataSource() {
         let commentReg = UICollectionView.CellRegistration<TopLevelCommentCell, CommentListItem> { [weak self] cell, _, item in
             guard let self, case .comment(let id) = item,
-                  let record = self.store.topLevelComments.first(where: { $0.id == id }) else { return }
+                  let record = self.commentLookup[id] else { return }
             cell.configure(with: record)
         }
 
         let replyReg = UICollectionView.CellRegistration<ReplyCell, CommentListItem> { [weak self] cell, _, item in
-            guard let self, case .comment(let id) = item else { return }
-            for parentId in self.store.expandedThreads {
-                if let record = self.store.replies(for: parentId).first(where: { $0.id == id }) {
-                    cell.configure(with: record, depth: 1)
-                    return
-                }
-            }
+            guard let self, case .comment(let id) = item,
+                  let record = self.commentLookup[id] else { return }
+            cell.configure(with: record, depth: 1)
         }
 
         let loadMoreReg = UICollectionView.CellRegistration<LoadMoreRepliesCell, CommentListItem> { cell, _, item in
@@ -75,7 +74,7 @@ final class CommentListViewController: UIViewController {
             }
             switch item {
             case .comment(let id):
-                let isReply = self.store.topLevelComments.first(where: { $0.id == id }) == nil
+                let isReply = !(self.isTopLevelComment[id] ?? false)
                 if isReply {
                     return cv.dequeueConfiguredReusableCell(using: replyReg, for: indexPath, item: item)
                 }
@@ -87,6 +86,20 @@ final class CommentListViewController: UIViewController {
     }
 
     func applySnapshot(animated: Bool = true) {
+        commentLookup.removeAll(keepingCapacity: true)
+        isTopLevelComment.removeAll(keepingCapacity: true)
+
+        for comment in store.topLevelComments {
+            commentLookup[comment.id] = comment
+            isTopLevelComment[comment.id] = true
+
+            let replies = store.replies(for: comment.id)
+            for reply in replies {
+                commentLookup[reply.id] = reply
+                isTopLevelComment[reply.id] = false
+            }
+        }
+
         var snapshot = NSDiffableDataSourceSnapshot<CommentListSection, CommentListItem>()
         for comment in store.topLevelComments {
             let section = CommentListSection.topLevel(commentId: comment.id)

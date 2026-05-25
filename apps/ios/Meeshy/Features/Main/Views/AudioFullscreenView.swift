@@ -24,34 +24,29 @@ struct AudioFullscreenView: View {
             Color.black.ignoresSafeArea()
 
             if !allAudioItems.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 0) {
-                        ForEach(Array(allAudioItems.enumerated()), id: \.element.id) { index, item in
-                            AudioFullscreenPage(
-                                item: item,
-                                contactColor: contactColor,
-                                mentionDisplayNames: mentionDisplayNames,
-                                isActive: index == currentIndex,
-                                pageIndex: index,
-                                totalPages: allAudioItems.count,
-                                onDismiss: { dismissView() },
-                                onDismissToMessage: { messageId in
-                                    onDismissToMessage?(messageId)
-                                    dismiss()
-                                }
-                            )
-                            .containerRelativeFrame(.horizontal)
-                            .containerRelativeFrame(.vertical)
+                AdaptiveHorizontalPager(
+                    items: allAudioItems,
+                    currentPageID: $currentPageID,
+                    fillVertical: true
+                ) { index, item in
+                    AudioFullscreenPage(
+                        item: item,
+                        contactColor: contactColor,
+                        mentionDisplayNames: mentionDisplayNames,
+                        isActive: index == currentIndex,
+                        pageIndex: index,
+                        totalPages: allAudioItems.count,
+                        onDismiss: { dismissView() },
+                        onDismissToMessage: { messageId in
+                            onDismissToMessage?(messageId)
+                            dismiss()
                         }
-                    }
-                    .scrollTargetLayout()
+                    )
                 }
-                .scrollTargetBehavior(.paging)
-                .scrollPosition(id: $currentPageID)
                 .offset(y: dragOffset)
                 .gesture(verticalDismissGesture)
                 .opacity(isDismissing ? 0 : 1)
-                .onChange(of: currentPageID) { _, newID in
+                .adaptiveOnChange(of: currentPageID) { _, newID in
                     guard let newID,
                           let newIdx = allAudioItems.firstIndex(where: { $0.id == newID })
                     else { return }
@@ -261,7 +256,7 @@ private struct AudioFullscreenPage: View {
             Spacer(minLength: 0)
         }
         .onAppear { startPlayback() }
-        .onChange(of: isActive) { _, active in
+        .adaptiveOnChange(of: isActive) { _, active in
             if active {
                 startPlayback()
             } else {
@@ -462,7 +457,7 @@ private struct AudioFullscreenPage: View {
                         HapticFeedback.light()
                     }
                 }
-                .onChange(of: playheadBarIndex) { _, newIdx in
+                .adaptiveOnChange(of: playheadBarIndex) { _, newIdx in
                     guard needsScroll else { return }
                     withAnimation(.linear(duration: 0.2)) {
                         proxy.scrollTo("bar-\(newIdx)", anchor: .center)
@@ -633,7 +628,7 @@ private struct AudioFullscreenPage: View {
                 .font(.system(size: 28, weight: .light))
                 .foregroundColor(.white.opacity(0.25))
 
-            Text("Aucune transcription")
+            Text(String(localized: "audio.fullscreen.transcription.empty", defaultValue: "Aucune transcription", bundle: .main))
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(.white.opacity(0.4))
 
@@ -649,7 +644,7 @@ private struct AudioFullscreenPage: View {
                         Image(systemName: "waveform.and.mic")
                             .font(.system(size: 13, weight: .semibold))
                     }
-                    Text("Transcrire")
+                    Text(String(localized: "audio.fullscreen.transcription.action", defaultValue: "Transcrire", bundle: .main))
                         .font(.system(size: 13, weight: .bold))
                 }
                 .foregroundColor(.white)
@@ -688,22 +683,29 @@ private struct AudioFullscreenPage: View {
     // MARK: - Inline Language Flags
 
     private var inlineLanguageFlags: some View {
-        HStack(spacing: 6) {
-            languagePill(flag: originalFlag, code: "orig",
-                         label: LanguageDisplay.from(code: message.originalLanguage)?.name ?? "Original",
-                         isSelected: selectedLanguage == "orig")
+        // Strip horizontalement scrollable des langues disponibles + bouton
+        // "ajouter une langue" ancré à droite (hors du scroll, toujours
+        // accessible). Sans ScrollView, les pills wrappaient en 2 lignes
+        // ("Fran/çais", "Deu/tsch"…) dès qu'on dépassait 3 langues.
+        HStack(spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    languagePill(flag: originalFlag, code: "orig",
+                                 label: LanguageDisplay.from(code: message.originalLanguage)?.name ?? String(localized: "audio.fullscreen.language.original", defaultValue: "Original", bundle: .main),
+                                 isSelected: selectedLanguage == "orig")
 
-            ForEach(translatedAudios, id: \.id) { audio in
-                let display = LanguageDisplay.from(code: audio.targetLanguage)
-                languagePill(
-                    flag: display?.flag ?? "\u{1F310}",
-                    code: audio.targetLanguage,
-                    label: display?.name ?? audio.targetLanguage,
-                    isSelected: selectedLanguage.lowercased() == audio.targetLanguage.lowercased()
-                )
+                    ForEach(translatedAudios, id: \.id) { audio in
+                        let display = LanguageDisplay.from(code: audio.targetLanguage)
+                        languagePill(
+                            flag: display?.flag ?? "\u{1F310}",
+                            code: audio.targetLanguage,
+                            label: display?.name ?? audio.targetLanguage,
+                            isSelected: selectedLanguage.lowercased() == audio.targetLanguage.lowercased()
+                        )
+                    }
+                }
+                .padding(.horizontal, 2)
             }
-
-            Spacer(minLength: 0)
 
             Button {
                 showLanguagePicker = true
@@ -738,7 +740,10 @@ private struct AudioFullscreenPage: View {
         } label: {
             HStack(spacing: 3) {
                 Text(flag).font(.system(size: 12))
-                Text(label).font(.system(size: 10, weight: isSelected ? .bold : .medium))
+                Text(label)
+                    .font(.system(size: 10, weight: isSelected ? .bold : .medium))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
             .foregroundColor(isSelected ? .white : .white.opacity(0.55))
             .padding(.horizontal, 8)
@@ -792,11 +797,11 @@ private struct AudioFullscreenPage: View {
                     }
                 }
             }
-            .navigationTitle("Langues")
+            .navigationTitle(String(localized: "audio.fullscreen.languages.title", defaultValue: "Langues", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Fermer") { showLanguagePicker = false }
+                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { showLanguagePicker = false }
                 }
             }
         }
@@ -855,25 +860,21 @@ private struct AudioFullscreenPage: View {
                 let tempFile = FileManager.default.temporaryDirectory
                     .appendingPathComponent("audio_\(UUID().uuidString).\(ext)")
                 try FileManager.default.moveItem(at: tempURL, to: tempFile)
+                defer { try? FileManager.default.removeItem(at: tempFile) }
 
-                let fileURL = tempFile
-                let items: [Any] = [fileURL]
+                // One-tap save into the Files app (Documents) — no share sheet
+                // detour (the previous UIActivityViewController was presented
+                // without an iPad popover anchor and crashed there).
+                let preferred = attachment.originalName.isEmpty
+                    ? "Audio Meeshy.\(ext)"
+                    : attachment.originalName
+                _ = try MediaFileSaver.save(tempFile, preferredName: preferred)
+
                 await MainActor.run {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         saveState = .saved
                     }
                     HapticFeedback.success()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        let activityVC = UIActivityViewController(activityItems: items, applicationActivities: nil)
-                        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                           let root = windowScene.windows.first?.rootViewController {
-                            var topVC = root
-                            while let presented = topVC.presentedViewController {
-                                topVC = presented
-                            }
-                            topVC.present(activityVC, animated: true)
-                        }
-                    }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                         withAnimation { saveState = .idle }
                     }

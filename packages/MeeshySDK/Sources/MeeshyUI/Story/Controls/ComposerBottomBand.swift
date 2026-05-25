@@ -5,7 +5,7 @@ import MeeshySDK
 
 struct ComposerBottomBand: View {
     let state: BandState
-    @Bindable var viewModel: StoryComposerViewModel
+    @ObservedObject var viewModel: StoryComposerViewModel
 
     @Binding var drawingCanvas: PKCanvasView
     @Binding var drawingTool: DrawingTool
@@ -38,7 +38,6 @@ struct ComposerBottomBand: View {
     private var stateKey: String {
         switch state {
         case .hidden: return "hidden"
-        case .tiles(let c): return "tiles-\(c)"
         case .toolPanel(let t): return "tool-\(t)"
         case .formatPanel(let k, let id): return "format-\(k)-\(id)"
         }
@@ -46,7 +45,7 @@ struct ComposerBottomBand: View {
 
     /// Binding pour un `StoryTextObject` identifié, dérivée à la volée de
     /// `viewModel.currentEffects.textObjects`. Le setter remplace l'élément
-    /// dans le tableau, ce qui propage aux observateurs `@Bindable` du modèle
+    /// dans le tableau, ce qui propage aux observateurs `@ObservedObject` du modèle
     /// (canvas, slideStrip, badges) et déclenche la re-sérialisation slide
     /// via le pipeline `granularCanvasSync`.
     private func textObjectBinding(for id: String) -> Binding<StoryTextObject>? {
@@ -86,17 +85,6 @@ struct ComposerBottomBand: View {
                 switch state {
                 case .hidden:
                     EmptyView()
-                case .tiles(let category):
-                    ComposerTilesGrid(
-                        category: category,
-                        mediaCount: viewModel.currentEffects.mediaObjects?.count ?? 0,
-                        drawingCount: viewModel.drawingData != nil ? 1 : 0,
-                        textCount: viewModel.currentEffects.textObjects.count,
-                        audioCount: viewModel.currentEffects.audioPlayerObjects?.count ?? 0,
-                        filterCount: viewModel.selectedFilter != nil ? 1 : 0,
-                        timelineCount: viewModel.timelineHasCustomizations ? 1 : 0,
-                        onTapTile: onTapTile
-                    )
                 case .toolPanel(let tool):
                     ComposerToolPanelHost(
                         tool: tool,
@@ -108,6 +96,16 @@ struct ComposerBottomBand: View {
                         showAudioDocumentPicker: $showAudioDocumentPicker,
                         showVoiceRecorderSheet: $showVoiceRecorderSheet,
                         onBack: onBackFromToolPanel,
+                        // Délègue à `onTapTile` qui est l'unique chemin de
+                        // commutation d'éditeur (cf. `ComposerControlsLayer`) :
+                        //   .timeline → `viewModel.isTimelineVisible = true`
+                        //   sinon     → `bandStateMachine.tapTile(tool)` +
+                        //               `viewModel.selectTool(tool)`
+                        // Sans ce relai, le chip ne changerait QUE
+                        // `viewModel.activeTool` — le BandStateMachine
+                        // resterait sur `.toolPanel(.media)` et le panel
+                        // ne switcherait pas visuellement.
+                        onSwitchTool: onTapTile,
                         onEditMedia: onEditMedia,
                         onEditText: onEditText,
                         onDeleteText: onDeleteText,

@@ -96,4 +96,38 @@ final class TranslationServiceTests: XCTestCase {
 
         XCTAssertEqual(mock.requestCount, 2)
     }
+
+    // MARK: - messageId support
+
+    func test_translateRequest_encodesMessageId_whenProvided() throws {
+        let request = TranslateRequest(
+            text: "hello", sourceLanguage: "en", targetLanguage: "fr", messageId: "msg_42"
+        )
+        let data = try JSONEncoder().encode(request)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(json["message_id"] as? String, "msg_42")
+        XCTAssertEqual(json["target_language"] as? String, "fr")
+    }
+
+    func test_translateRequest_omitsMessageId_whenNil() throws {
+        let request = TranslateRequest(
+            text: "hello", sourceLanguage: "en", targetLanguage: "fr"
+        )
+        let data = try JSONEncoder().encode(request)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertNil(json["message_id"])
+    }
+
+    func test_translate_withMessageId_postsMessageIdInBody() async throws {
+        let translateResponse = TranslateResponse(translatedText: "bonjour", detectedLanguage: "en")
+        let response = APIResponse<TranslateResponse>(success: true, data: translateResponse, error: nil)
+        mock.stub("/translate-blocking", result: response)
+
+        let result = try await service.translate(
+            text: "hello", sourceLanguage: "en", targetLanguage: "fr", messageId: "msg_42"
+        )
+
+        XCTAssertEqual(result.translatedText, "bonjour")
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["message_id"] as? String, "msg_42")
+    }
 }

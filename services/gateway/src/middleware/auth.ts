@@ -601,6 +601,3 @@ export async function requireEmailVerification(request: FastifyRequest, reply: F
   }
 }
 
-/** @deprecated Not used by any route — stub kept for backward compatibility */
-export async function requireActiveAccount(_request: FastifyRequest, _reply: FastifyReply) {
-}

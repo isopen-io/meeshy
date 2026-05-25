@@ -16,7 +16,7 @@ struct EntityImagePickerFlow: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .onChange(of: pickerItem) { _, newItem in
+            .adaptiveOnChange(of: pickerItem) { _, newItem in
                 guard let newItem else { return }
                 Task {
                     guard let data = try? await newItem.loadTransferable(type: Data.self),
@@ -25,7 +25,7 @@ struct EntityImagePickerFlow: ViewModifier {
                 }
             }
             .fullScreenCover(item: $imageForEditor) { image in
-                MeeshyImagePreviewView(
+                MeeshyImageEditorView(
                     image: image,
                     context: context,
                     accentColor: accentColor,

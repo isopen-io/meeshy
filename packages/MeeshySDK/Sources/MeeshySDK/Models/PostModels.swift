@@ -26,15 +26,35 @@ public struct APIPostMedia: Codable, Sendable {
     public let order: Int?
     public let caption: String?
     public let alt: String?
+
+    // Prisme Linguistique foundation (R1 — gateway now selects these on
+    // every PostMedia response). `language` is the media's base ISO 639-1
+    // code; `variantOf` is the FK to the source media when this row is an
+    // auto-generated variant (e.g. a TTS clone in another language).
+    // Pre-R7 these fields existed on the wire but iOS dropped them
+    // silently because the model didn't declare them — blocking any
+    // language-aware fallback resolution on the iOS side.
+    public let language: String?
+    public let variantOf: String?
+
     public let transcription: APIAttachmentTranscription?
     public let translations: [String: APIAttachmentTranslation]?
 
     public var mediaType: FeedMediaType {
-        guard let mime = mimeType else { return .image }
-        if mime.hasPrefix("video/") { return .video }
-        if mime.hasPrefix("audio/") { return .audio }
-        if mime.hasPrefix("application/") { return .document }
-        return .image
+        // Single source of truth for the mime → family dispatch.
+        // See `AttachmentKind` in MeeshySDK/Models.
+        // Missing/empty mime falls back to `.image` — feed posts are
+        // image-by-default and the gallery renderer needs SOMETHING to
+        // present rather than refusing to display the row.
+        guard let mime = mimeType, !mime.isEmpty else { return .image }
+        switch AttachmentKind(mimeType: mime) {
+        case .video:        return .video
+        case .audio:        return .audio
+        case .image:        return .image
+        case .pdf, .spreadsheet, .document, .presentation,
+             .archive, .code, .text, .other:
+            return .document
+        }
     }
 }
 
@@ -106,6 +126,8 @@ public struct APIPost: Decodable, Sendable {
     public let storyEffects: StoryEffects?
     public let translations: [String: APIPostTranslationEntry]?
     public let isLikedByMe: Bool?
+    public let isBookmarkedByMe: Bool?
+    public let isRepostedByMe: Bool?
     public let isViewedByMe: Bool?
     public let currentUserReactions: [String]?
     public let mentionedUsers: [MentionedUser]?
@@ -135,11 +157,9 @@ public struct PostViewersPagination: Decodable, Sendable {
 // MARK: - Conversion helpers
 
 private func thumbnailColorForMime(_ mimeType: String?) -> String {
-    guard let mime = mimeType else { return "4ECDC4" }
-    if mime.hasPrefix("video/") { return "FF6B6B" }
-    if mime.hasPrefix("audio/") { return "9B59B6" }
-    if mime.hasPrefix("application/") { return "F8B500" }
-    return "4ECDC4"
+    // Defers to `AttachmentKind.hexTintColor` — the single source of truth
+    // for attachment palette. Used by the feed thumbnail generator.
+    AttachmentKind(mimeType: mimeType ?? "").hexTintColor
 }
 
 private func formatFileSize(_ bytes: Int) -> String {
@@ -258,6 +278,15 @@ extension APIPost {
                         media: feedMedia,
                         originalLanguage: originalLanguage, translations: postTranslations, translatedContent: postTranslatedContent)
         feedPost.isLiked = isLikedByMe ?? false
+        feedPost.isBookmarkedByMe = isBookmarkedByMe ?? false
+        feedPost.isRepostedByMe = isRepostedByMe ?? false
+        // Map the three remaining server-issued counters. The init signature
+        // doesn't expose them (kept stable for legacy callers), so we set
+        // them post-construction. Missing fields default to 0 — which is
+        // honest for pre-migration backends.
+        feedPost.repostCount = repostCount ?? 0
+        feedPost.bookmarkCount = bookmarkCount ?? 0
+        feedPost.shareCount = shareCount ?? 0
         return feedPost
     }
 

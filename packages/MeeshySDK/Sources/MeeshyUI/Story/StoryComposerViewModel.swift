@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import UIKit
 import MeeshySDK
 import PencilKit
@@ -6,29 +7,16 @@ import PencilKit
 // MARK: - Tool Modes
 
 public nonisolated enum StoryToolMode: String, CaseIterable, Sendable {
-    // Contenu
-    case media      // Images, videos, audio (foreground + background)
+    case media
+    case audio
     case drawing
     case text
-    case texture    // Background color, patterns
-    // Effets
     case filters
     case timeline
+    case texture
 
-    // Legacy alias for code that still references .photo or .audio
+    // Legacy alias
     static let photo: StoryToolMode = .media
-    static let audio: StoryToolMode = .media
-
-    var tab: StoryTab {
-        switch self {
-        case .media, .drawing, .text, .texture: return .contenu
-        case .filters, .timeline: return .effets
-        }
-    }
-}
-
-nonisolated enum StoryTab: String {
-    case contenu, effets
 }
 
 
@@ -76,7 +64,7 @@ enum MediaAsset {
 // class declaration with no shim layer.
 //
 // Why a protocol? The host view's smoke / behavior tests need a way to drive
-// the composer surface without standing up the real `@Observable` class
+// the composer surface without standing up the real `ObservableObject` class
 // (which transitively pulls `AuthManager.shared`, `CacheCoordinator.shared`,
 // `StoryTimelineEngine`, `TimelineViewModel`, `PencilKit`, etc.). A protocol
 // existential lets the tests inject `MockStoryComposerViewModel` with
@@ -89,8 +77,8 @@ enum MediaAsset {
 // documents the contract for adopters defined in other modules.
 //
 // `AnyObject` constrains adopters to reference types: the composer is a
-// long-lived `@Observable final class` that views hold via `@State` /
-// `@Bindable`. Mocks use the same identity-based bookkeeping.
+// long-lived `ObservableObject final class` that views hold via `@StateObject` /
+// `@ObservedObject`. Mocks use the same identity-based bookkeeping.
 //
 // Members intentionally omitted (documented mismatches with earlier design):
 //   - selectElement(id:) / deselectElement() — selection happens via
@@ -136,6 +124,10 @@ protocol StoryComposerProviding: AnyObject {
     var loadedImages: [String: UIImage] { get set }
     var loadedVideoURLs: [String: URL] { get set }
     var loadedAudioURLs: [String: URL] { get set }
+    /// Captions de transcription (vidéo) produites par `MeeshyVideoEditorView`
+    /// au confirm. Keyed par `StoryMediaObject.id`. Metadata render-time —
+    /// pas persistée dans le slide model (cf. doc dans l'impl).
+    var loadedVideoCaptions: [String: StoryVideoCaptionMetadata] { get set }
     var mediaAspectRatios: [String: CGFloat] { get set }
     func setAspectRatio(_ ratio: CGFloat, for mediaId: String)
 
@@ -208,6 +200,7 @@ protocol StoryComposerProviding: AnyObject {
     func addMediaObject(kind: StoryMediaKind, toSlideId: String?) -> StoryMediaObject?
     func setMediaDuration(id: String, duration: Float, slideId: String?)
     func setMediaURL(id: String, url: String, slideId: String?)
+    func setMediaAspectRatio(id: String, aspectRatio: Double, slideId: String?)
     @discardableResult
     func addAudioObject() -> StoryAudioPlayerObject?
     func deleteElement(id: String)
@@ -217,6 +210,9 @@ protocol StoryComposerProviding: AnyObject {
     // MARK: Background toggle
     func toggleBackground(id: String)
     func isBackground(id: String) -> Bool
+
+    // MARK: Audio
+    func setAudioVolume(audioId: String, volume: Float)
 
     // MARK: Z-Order
     func zIndex(for id: String) -> Int
@@ -248,9 +244,8 @@ protocol StoryComposerProviding: AnyObject {
 
 // MARK: - ViewModel
 
-@Observable
 @MainActor
-public final class StoryComposerViewModel: StoryComposerProviding {
+public final class StoryComposerViewModel: StoryComposerProviding, ObservableObject {
 
     // MARK: - Source Language Resolution (Prisme Linguistique)
 
@@ -287,14 +282,14 @@ public final class StoryComposerViewModel: StoryComposerProviding {
 
     // MARK: - Slides
 
-    var slides: [StorySlide] = [StorySlide()]
-    var currentSlideIndex: Int = 0
-    var slideImages: [String: UIImage] = [:]
+    @Published var slides: [StorySlide] = [StorySlide()]
+    @Published var currentSlideIndex: Int = 0
+    @Published var slideImages: [String: UIImage] = [:]
 
     // MARK: - Repost source (Patch B.6 — exposed publicly so the iOS caller in Phase C
     // can read them before invoking PostService.create / createStory with repostOfId).
-    var repostOfId: String?
-    var originalRepostOfId: String?
+    @Published var repostOfId: String?
+    @Published var originalRepostOfId: String?
 
     // Cancellable preload Task started by `init(reposting:authorHandle:)`.
     // Marked `nonisolated(unsafe)` so the `nonisolated deinit` below can cancel it
@@ -333,7 +328,7 @@ public final class StoryComposerViewModel: StoryComposerProviding {
 
     // MARK: - Selection
 
-    var selectedElementId: String?
+    @Published var selectedElementId: String?
 
     // MARK: - Floating Text Edit Mode
 
@@ -342,24 +337,30 @@ public final class StoryComposerViewModel: StoryComposerProviding {
     /// transitions. La géométrie du texte (`x/y/scale/rotation/zIndex/fontSize`)
     /// n'est JAMAIS mutée pour l'édition : le texte est édité dans un overlay
     /// centré, le modèle reste la source de vérité pour le rendu et l'export.
-    var textEditingMode: TextEditingMode = .inactive
+    @Published var textEditingMode: TextEditingMode = .inactive
 
     // MARK: - Active Tool
 
-    var activeTool: StoryToolMode?
+    @Published var activeTool: StoryToolMode?
 
-    var isContentToolActive: Bool { activeTool?.tab == .contenu }
+    var isContentToolActive: Bool {
+        guard let tool = activeTool else { return false }
+        switch tool {
+        case .media, .audio, .drawing, .text, .texture: return true
+        case .filters, .timeline: return false
+        }
+    }
 
     // MARK: - Drawing
 
-    var drawingData: Data?
-    var drawingColor: Color = .white
-    var drawingWidth: CGFloat = 5
+    @Published var drawingData: Data?
+    @Published var drawingColor: Color = .white
+    @Published var drawingWidth: CGFloat = 5
     var isDrawingActive: Bool { activeTool == .drawing }
 
     // MARK: - Background
 
-    var backgroundColor: String = "#\(StoryBackgroundPalette.randomBackgroundColor())"
+    @Published var backgroundColor: String = "#\(StoryBackgroundPalette.randomBackgroundColor())"
 
     // Per-slide background image transforms (persisted across slide changes)
     struct BackgroundTransform {
@@ -368,7 +369,7 @@ public final class StoryComposerViewModel: StoryComposerProviding {
         var offsetY: CGFloat = 0
         var rotation: Double = 0
     }
-    var backgroundTransform: BackgroundTransform = BackgroundTransform()
+    @Published var backgroundTransform: BackgroundTransform = BackgroundTransform()
     /// Per-slide background transform cache, keyed by `slide.id` rather than its index.
     /// Index keying broke after slide reordering or removal: deleting slide 0 promoted
     /// slide 1's content to position 0 but `restoreBackgroundTransform()` would still
@@ -391,16 +392,28 @@ public final class StoryComposerViewModel: StoryComposerProviding {
 
     // MARK: - Media Storage (pre-publication)
 
-    var loadedImages: [String: UIImage] = [:]
-    var loadedVideoURLs: [String: URL] = [:]
-    var loadedAudioURLs: [String: URL] = [:]
+    @Published var loadedImages: [String: UIImage] = [:]
+    @Published var loadedVideoURLs: [String: URL] = [:]
+    @Published var loadedAudioURLs: [String: URL] = [:]
+
+    /// Captions / transcription metadata produced by `MeeshyVideoEditorView`
+    /// when the user transcribes a foreground video then taps « Terminer ».
+    /// Keyed by `StoryMediaObject.id` (same key space as `loadedVideoURLs`).
+    ///
+    /// **Why a sibling map and not a field on `StoryMediaObject`** — captions
+    /// are *render-time* metadata that the story canvas / exporter can
+    /// optionally honour ; they don't belong in the persisted slide model
+    /// (which is reused for re-rendering by viewers in their own language).
+    /// Keeping them in a `@Published` dict avoids polluting `StoryMediaObject`
+    /// and lets the consumer (canvas, exporter) read them lazily.
+    @Published var loadedVideoCaptions: [String: StoryVideoCaptionMetadata] = [:]
 
     // MARK: - Media Aspect Ratios (render-time only, not persisted)
 
     /// Natural aspect ratio (width/height) for each loaded media object, keyed by mediaObject.id.
     /// Computed from UIImage.size or AVAsset track size. Used to render media in its natural
     /// proportions instead of forcing a square frame. When unknown, `1.0` is used as fallback.
-    var mediaAspectRatios: [String: CGFloat] = [:]
+    @Published var mediaAspectRatios: [String: CGFloat] = [:]
 
     func setAspectRatio(_ ratio: CGFloat, for mediaId: String) {
         guard ratio.isFinite, ratio > 0 else { return }
@@ -418,7 +431,7 @@ public final class StoryComposerViewModel: StoryComposerProviding {
         var size: CGSize
     }
 
-    var activeDrag: ActiveDrag?
+    @Published var activeDrag: ActiveDrag?
 
     func beginDrag(elementId: String, position: CGPoint, size: CGSize) {
         activeDrag = ActiveDrag(elementId: elementId, position: position, size: size)
@@ -436,14 +449,14 @@ public final class StoryComposerViewModel: StoryComposerProviding {
 
     // MARK: - Timeline
 
-    var isTimelineVisible: Bool = false
-    var timelinePlaybackTime: Float = 0
-    var isTimelinePlaying: Bool = false
-    var timelineZoomScale: CGFloat = 1.0
-    var timelineScrollOffset: CGFloat = 0
-    var timelineAdvanced: Bool = false
-    var isMuted: Bool = false
-    var hasBackgroundImage: Bool = false
+    @Published var isTimelineVisible: Bool = false
+    @Published var timelinePlaybackTime: Float = 0
+    @Published var isTimelinePlaying: Bool = false
+    @Published var timelineZoomScale: CGFloat = 1.0
+    @Published var timelineScrollOffset: CGFloat = 0
+    @Published var timelineAdvanced: Bool = false
+    @Published var isMuted: Bool = false
+    @Published var hasBackgroundImage: Bool = false
 
     // MARK: - Timeline V2 wiring
 
@@ -476,17 +489,26 @@ public final class StoryComposerViewModel: StoryComposerProviding {
     /// `slideImages[id]` image but no real background media object. Returns
     /// `nil` when the slide either has no bg image, or already has a real
     /// background media object (in which case the real one wins).
+    ///
+    /// `bgImageSize` est la taille naturelle de l'image bg (typiquement via
+    /// `slideImages[slide.id]?.size`) — utilisée pour calculer l'aspectRatio
+    /// réel au lieu de forcer 1.0 (qui rendait l'image en carré 540×540).
     public static func makeSyntheticBgImageClip(for slide: StorySlide,
                                                 hasBgImage: Bool,
-                                                existingMediaObjects: [StoryMediaObject]) -> StoryMediaObject? {
+                                                existingMediaObjects: [StoryMediaObject],
+                                                bgImageSize: CGSize? = nil) -> StoryMediaObject? {
         guard hasBgImage else { return nil }
         guard !existingMediaObjects.contains(where: { $0.isBackground == true }) else { return nil }
+        let aspect: Double = {
+            guard let size = bgImageSize, size.width > 0, size.height > 0 else { return 1.0 }
+            return Double(size.width / size.height)
+        }()
         return StoryMediaObject(
             id: "\(syntheticTimelineClipIdPrefix)\(slide.id)",
             postMediaId: "_bg_image_\(slide.id)",
             mediaType: StoryMediaKind.image.rawValue,
             placement: "media",
-            aspectRatio: 1.0, // TODO Phase 2/3: compute real aspectRatio from asset
+            aspectRatio: aspect,
             x: 0.5, y: 0.5,
             scale: 1.0,
             rotation: 0,
@@ -512,7 +534,8 @@ public final class StoryComposerViewModel: StoryComposerProviding {
         if let synthetic = Self.makeSyntheticBgImageClip(
             for: slide,
             hasBgImage: slideImages[slide.id] != nil,
-            existingMediaObjects: project.mediaObjects
+            existingMediaObjects: project.mediaObjects,
+            bgImageSize: slideImages[slide.id]?.size
         ) {
             var medias = project.mediaObjects
             medias.insert(synthetic, at: 0)
@@ -612,10 +635,10 @@ public final class StoryComposerViewModel: StoryComposerProviding {
 
     // MARK: - Filter
 
-    var selectedFilter: String?
-    var filterIntensity: Double = 1.0
+    @Published var selectedFilter: String?
+    @Published var filterIntensity: Double = 1.0
     /// When true, filter applies to the entire slide (all layers). When false (default), only background.
-    var filterAppliesToEntireSlide: Bool = false
+    @Published var filterAppliesToEntireSlide: Bool = false
 
     func applyFilter(_ name: String?) {
         selectedFilter = name
@@ -663,9 +686,9 @@ public final class StoryComposerViewModel: StoryComposerProviding {
 
     // MARK: - Canvas Viewport
 
-    var canvasScale: CGFloat = 1.0
-    var canvasOffset: CGSize = .zero
-    var canvasSize: CGSize = .zero
+    @Published var canvasScale: CGFloat = 1.0
+    @Published var canvasOffset: CGSize = .zero
+    @Published var canvasSize: CGSize = .zero
 
     var isCanvasZoomed: Bool { canvasScale != 1.0 }
 
@@ -690,12 +713,12 @@ public final class StoryComposerViewModel: StoryComposerProviding {
 
     // MARK: - UI State
 
-    var showPhotoPicker: Bool = false
-    var showVideoPicker: Bool = false
-    var showAudioPicker: Bool = false
-    var publishProgress: (current: Int, total: Int)?
-    var errorMessage: String?
-    var showDraftAlert: Bool = false
+    @Published var showPhotoPicker: Bool = false
+    @Published var showVideoPicker: Bool = false
+    @Published var showAudioPicker: Bool = false
+    @Published var publishProgress: (current: Int, total: Int)?
+    @Published var errorMessage: String?
+    @Published var showDraftAlert: Bool = false
 
     // MARK: - Limits
 
@@ -902,13 +925,17 @@ public final class StoryComposerViewModel: StoryComposerProviding {
     func addText() -> StoryTextObject? {
         guard canAddText else { return nil }
         let center = CGPoint(x: 0.5, y: 0.5)
+        // fontSize en design units (référentiel 1080-px). 96 design ≈ 36 pt
+        // sur iPhone 16 Pro (scaleFactor ≈ 0.38) — taille parfaitement
+        // lisible. La valeur précédente de 24 produisait du 9 pt rendu
+        // (et un editor inline minuscule au moment de saisir).
         let obj = StoryTextObject(
             text: "",
             x: center.x,
             y: center.y,
             scale: 1.0,
             rotation: 0,
-            fontSize: 24,
+            fontSize: 96,
             textStyle: "classic",
             textColor: "FFFFFF",
             textAlign: "center",
@@ -945,8 +972,13 @@ public final class StoryComposerViewModel: StoryComposerProviding {
         let center = CGPoint(x: 0.5, y: 0.5)
         var targetEffects = slides[targetSlideIndex].effects
         // Auto-background uniquement si la slide n'a aucun media visuel (pre-migration
-        // inclus : resolvedBackgroundMedia retombe sur le 1er existant).
-        let shouldBeBackground = targetEffects.resolvedBackgroundMedia == nil
+        // inclus : resolvedBackgroundMedia retombe sur le 1er existant). Un fond
+        // statique stocké dans `slideImages` (slide-level bg image) compte aussi
+        // comme background — sans ce check, un media ajouté APRÈS un setImage(...)
+        // serait incorrectement marqué bg, masquerait l'image, et briserait le
+        // synthetic-clip injecté par loadCurrentSlideIntoTimeline.
+        let hasSlideLevelBgImage = slideImages[slides[targetSlideIndex].id] != nil
+        let shouldBeBackground = targetEffects.resolvedBackgroundMedia == nil && !hasSlideLevelBgImage
         let obj = StoryMediaObject(
             postMediaId: "",
             kind: kind,
@@ -1011,6 +1043,30 @@ public final class StoryComposerViewModel: StoryComposerProviding {
         medias[mediaIdx].mediaURL = url
         effects.mediaObjects = medias
         slides[targetIndex].effects = effects
+    }
+
+    /// Met à jour l'aspectRatio (width/height) d'un media. Appelé après le
+    /// pick PhotosPicker / record une fois que l'asset natural size est
+    /// mesurée via `UIImage.size` (image) ou `AVAssetTrack.naturalSize` +
+    /// `preferredTransform` (vidéo). Sans ça, l'aspectRatio reste à 1.0 et
+    /// la layer est rendue en carré 540x540 (cf. `baseMediaDesignSize`).
+    func setMediaAspectRatio(id: String, aspectRatio: Double, slideId: String? = nil) {
+        guard aspectRatio.isFinite, aspectRatio > 0 else { return }
+        let targetIndex: Int = {
+            if let slideId, let idx = slides.firstIndex(where: { $0.id == slideId }) {
+                return idx
+            }
+            return currentSlideIndex
+        }()
+        guard slides.indices.contains(targetIndex) else { return }
+        var effects = slides[targetIndex].effects
+        guard var medias = effects.mediaObjects,
+              let mediaIdx = medias.firstIndex(where: { $0.id == id }) else { return }
+        medias[mediaIdx].aspectRatio = aspectRatio
+        effects.mediaObjects = medias
+        slides[targetIndex].effects = effects
+        // Miroir dans le side-cache si d'autres surfaces le lisent.
+        mediaAspectRatios[id] = CGFloat(aspectRatio)
     }
 
     @discardableResult
@@ -1095,8 +1151,13 @@ public final class StoryComposerViewModel: StoryComposerProviding {
             if text.isLocked == true { return }
             guard canAddText else { return }
             text.id = UUID().uuidString
-            text.x = min(1.0, text.x + 0.05)
-            text.y = min(1.0, text.y + 0.05)
+            // Offset is 20 design pixels in the 1080x1920 canvas (≈2% x, ≈1% y).
+            // Small enough that the clone visibly overlaps its source so the
+            // user sees the duplication happened, large enough to be selectable
+            // independently. The previous 0.05 (54 design px) was too wide and
+            // jumped the clone outside the source's selection rect.
+            text.x = min(1.0, text.x + 20.0 / 1080.0)
+            text.y = min(1.0, text.y + 20.0 / 1920.0)
             effects.textObjects.append(text)
             selectedElementId = text.id
         } else if var media = effects.mediaObjects?.first(where: { $0.id == id }) {
@@ -1177,6 +1238,16 @@ public final class StoryComposerViewModel: StoryComposerProviding {
         return false
     }
 
+    /// Volume d'un audio (clamp [0, 1]). No-op si l'id ne match aucun audio.
+    func setAudioVolume(audioId: String, volume: Float) {
+        var effects = currentEffects
+        guard var audios = effects.audioPlayerObjects,
+              let i = audios.firstIndex(where: { $0.id == audioId }) else { return }
+        audios[i].volume = max(0, min(1, volume))
+        effects.audioPlayerObjects = audios
+        currentEffects = effects
+    }
+
     // MARK: - Media Reorder
 
     func moveMedia(from source: IndexSet, to destination: Int) {
@@ -1193,7 +1264,19 @@ public final class StoryComposerViewModel: StoryComposerProviding {
     private var nextZIndex: Int = 1
 
     func zIndex(for id: String) -> Int {
-        zIndexMap[id] ?? 0
+        if let mapped = zIndexMap[id] { return mapped }
+        // Fall back to the model-stored zIndex for elements that haven't
+        // been re-stamped via the in-memory map yet (e.g. media added
+        // directly to `currentEffects` from outside the composer, or
+        // elements loaded from a persisted slide). Mirrors the lookup
+        // used inside `allElementsSortedByZ` so the public accessor and
+        // the sort agree on the same value.
+        let effects = currentEffects
+        if let t = effects.textObjects.first(where: { $0.id == id }) { return t.zIndex ?? 0 }
+        if let m = effects.mediaObjects?.first(where: { $0.id == id }) { return m.zIndex ?? 0 }
+        if let a = effects.audioPlayerObjects?.first(where: { $0.id == id }) { return a.zIndex ?? 0 }
+        if let s = effects.stickerObjects?.first(where: { $0.id == id }) { return s.zIndex ?? 0 }
+        return 0
     }
 
     /// Promote an element to the front. Persists the value into the slide's effects so
@@ -1234,19 +1317,36 @@ public final class StoryComposerViewModel: StoryComposerProviding {
     func sendBackward(id: String) {
         let all = allElementsSortedByZ()
         guard let index = all.firstIndex(where: { $0.id == id }) else { return }
-        guard index > 0 else { return }
+        let currentZ = zIndex(for: id)
 
-        let prev = all[index - 1]
-        let currentZ = zIndexMap[id] ?? zIndex(for: id)
-        let prevZ = zIndexMap[prev.id] ?? zIndex(for: prev.id)
-        
-        let newCurrentZ = currentZ == prevZ ? prevZ : prevZ
-        let newPrevZ = currentZ == prevZ ? currentZ + 1 : currentZ
-        
-        persistZIndex(newCurrentZ, for: id)
-        persistZIndex(newPrevZ, for: prev.id)
-        zIndexMap[id] = newCurrentZ
-        zIndexMap[prev.id] = newPrevZ
+        // Pick the neighbor that needs to end up above us. When `index > 0`
+        // that's the predecessor in sort order. When we're already at
+        // sort-index 0 BUT tied at the same z with the next element, that
+        // next element is the de-facto predecessor — without this branch,
+        // a cross-kind tie (e.g. text bumped to the same z as a foreground
+        // media) silently no-ops and the ordering never settles.
+        let neighbor: AnyCanvasElement?
+        if index > 0 {
+            neighbor = all[index - 1]
+        } else if all.count > 1, zIndex(for: all[1].id) == currentZ {
+            neighbor = all[1]
+        } else {
+            neighbor = nil
+        }
+        guard let prev = neighbor else { return }
+
+        let prevZ = zIndex(for: prev.id)
+        if currentZ > prevZ {
+            // Strict above: swap z values (the standard send-backward step).
+            persistZIndex(prevZ, for: id)
+            persistZIndex(currentZ, for: prev.id)
+            zIndexMap[id] = prevZ
+            zIndexMap[prev.id] = currentZ
+        } else {
+            // Tie: leave us where we are and bump the neighbor strictly above.
+            persistZIndex(currentZ + 1, for: prev.id)
+            zIndexMap[prev.id] = currentZ + 1
+        }
     }
 
     func allElementsSortedByZ() -> [AnyCanvasElement] {
@@ -1291,7 +1391,12 @@ public final class StoryComposerViewModel: StoryComposerProviding {
         let hasKeyframes = p.mediaObjects.contains(where: { !($0.keyframes?.isEmpty ?? true) }) ||
                            p.textObjects.contains(where: { !($0.keyframes?.isEmpty ?? true) })
         let hasTransitions = !p.clipTransitions.isEmpty
-        let hasNonDefaultDuration = abs(p.slideDuration - 12.0) > 0.01
+        // `TimelineViewModel.init` seeds `slideDuration = 0` until
+        // `bootstrap(project:)` runs, so a fresh composer would otherwise
+        // report `hasNonDefaultDuration == true` (|0 - 12| > 0.01) before
+        // any actual user customization. Treat the un-bootstrapped 0 as
+        // the default value, not as a customization.
+        let hasNonDefaultDuration = p.slideDuration > 0 && abs(p.slideDuration - 12.0) > 0.01
         return hasKeyframes || hasTransitions || hasNonDefaultDuration
     }
 
@@ -1403,6 +1508,7 @@ public final class StoryComposerViewModel: StoryComposerProviding {
         loadedImages = [:]
         loadedVideoURLs = [:]
         loadedAudioURLs = [:]
+        loadedVideoCaptions = [:]
         isTimelineVisible = false
         timelinePlaybackTime = 0
         isTimelinePlaying = false

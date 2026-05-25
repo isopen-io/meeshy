@@ -52,7 +52,7 @@ struct ForwardPickerSheet: View {
                         Image(systemName: "bubble.left.and.bubble.right")
                             .font(.system(size: 40))
                             .foregroundColor(theme.textMuted)
-                        Text("Aucune conversation")
+                        Text(String(localized: "forward.empty", defaultValue: "Aucune conversation", bundle: .main))
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(theme.textMuted)
                     }
@@ -68,17 +68,17 @@ struct ForwardPickerSheet: View {
                 }
             }
             .background(theme.backgroundPrimary)
-            .navigationTitle("Transf\u{00e9}rer")
+            .navigationTitle(String(localized: "forward.title", defaultValue: "Transf\u{00e9}rer", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Fermer") {
+                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) {
                         dismiss()
                         onDismiss()
                     }
                 }
             }
-            .searchable(text: $searchText, prompt: "Rechercher une conversation")
+            .searchable(text: $searchText, prompt: String(localized: "forward.search-placeholder", defaultValue: "Rechercher une conversation", bundle: .main))
         }
         .task {
             await loadConversations()
@@ -104,7 +104,7 @@ struct ForwardPickerSheet: View {
                     .foregroundColor(Color(hex: accentColor))
                     .lineLimit(1)
 
-                Text(message.content.isEmpty ? "[Media]" : message.content)
+                Text(message.content.isEmpty ? String(localized: "forward.media-placeholder", defaultValue: "[Media]", bundle: .main) : message.content)
                     .font(.system(size: 11))
                     .foregroundColor(theme.textMuted)
                     .lineLimit(1)
@@ -120,6 +120,7 @@ struct ForwardPickerSheet: View {
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
+            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
@@ -169,7 +170,7 @@ struct ForwardPickerSheet: View {
                         .foregroundColor(theme.textMuted)
 
                     if conv.memberCount > 0 {
-                        Text("\u{2022} \(conv.memberCount) membres")
+                        Text(String(format: String(localized: "forward.members-count", defaultValue: "\u{2022} %d membres", bundle: .main), conv.memberCount))
                             .font(.system(size: 12))
                             .foregroundColor(theme.textMuted)
                     }
@@ -190,10 +191,12 @@ struct ForwardPickerSheet: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 24))
                 .foregroundColor(.green)
+                .accessibilityLabel(String(localized: "forward.sent", defaultValue: "Transféré", bundle: .main))
         } else if sendingToId == conv.id {
             ProgressView()
                 .scaleEffect(0.8)
                 .frame(width: 24, height: 24)
+                .accessibilityLabel(String(localized: "forward.sending", defaultValue: "Envoi en cours", bundle: .main))
         } else {
             Button {
                 forwardTo(conv)
@@ -202,6 +205,7 @@ struct ForwardPickerSheet: View {
                     .font(.system(size: 24))
                     .foregroundColor(Color(hex: accentColor))
             }
+            .accessibilityLabel(String(format: String(localized: "forward.send-a11y", defaultValue: "Transférer à %@", bundle: .main), conv.title ?? String(localized: "forward.this-conversation", defaultValue: "cette conversation", bundle: .main)))
             .disabled(sendingToId != nil)
         }
     }
@@ -244,7 +248,7 @@ struct ForwardPickerSheet: View {
                 sentToIds.insert(targetConversation.id)
                 HapticFeedback.success()
             } catch {
-                errorMessage = "Erreur: \(error.localizedDescription)"
+                errorMessage = String(format: String(localized: "common.error.format", defaultValue: "Erreur: %@", bundle: .main), error.localizedDescription)
                 HapticFeedback.error()
             }
             sendingToId = nil

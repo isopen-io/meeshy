@@ -83,7 +83,13 @@ public class TextAnalyzer: ObservableObject, @unchecked Sendable {
     }
 
     /// Word count threshold: once the user has typed this many words,
-    /// lock the detected language and stop re-analyzing.
+    /// lock the detected language and stop re-analyzing. Until then the
+    /// detector keeps re-interpreting the language on every keystroke.
+    ///
+    /// Spec (May 2026) : 10 mots. Avant le seuil, on ré-évalue à chaque
+    /// frappe ; au seuil, on fige la langue qui a été détectée à ≥ 86 %
+    /// (cf. `ComposerLanguageResolver.confidenceFloor`). Si rien n'a
+    /// atteint 86 %, la langue reste sur le défaut `fr`.
     private let wordCountThreshold = 10
 
     public func analyze(text: String) {
@@ -92,7 +98,17 @@ public class TextAnalyzer: ObservableObject, @unchecked Sendable {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             sentiment = .neutral
-            if !isLanguageLocked { language = nil; languageConfidence = 0 }
+            // Texte vidé → on libère **aussi** le verrou de détection
+            // (sauf si l'utilisateur a sélectionné une langue à la main —
+            // `languageOverride` reste prioritaire). Sans ça, après un
+            // message envoyé + verrou posé à 10 mots, la prochaine frappe
+            // démarrerait avec `isLanguageLocked = true` et la détection
+            // serait morte jusqu'au rebuild du composer.
+            if languageOverride == nil {
+                language = nil
+                languageConfidence = 0
+                isLanguageLocked = false
+            }
             return
         }
 
@@ -151,8 +167,10 @@ public class TextAnalyzer: ObservableObject, @unchecked Sendable {
             DispatchQueue.main.async {
                 self.language = DetectedLanguage.find(code: langCode)
                 self.languageConfidence = confidence
-                // Lock after 10 words (enough signal) or high confidence
-                if wordCount >= self.wordCountThreshold || confidence > 0.8 {
+                // Lock only once 18 words give a firm signal — keep
+                // re-interpreting before that, even at high confidence,
+                // so an early word in another language can still flip it.
+                if wordCount >= self.wordCountThreshold {
                     self.isLanguageLocked = true
                 }
             }

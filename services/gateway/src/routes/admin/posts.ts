@@ -4,6 +4,7 @@ import { permissionsService } from './services/PermissionsService';
 import { validatePagination, type UserRole } from './types';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { authorSelect, mediaSelect } from '../../services/posts/postIncludes';
 
 // Middleware d'autorisation admin
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
@@ -37,31 +38,10 @@ interface PostListQuery {
   isPinned?: string;
 }
 
-// Select fields for post author
-const authorSelect = {
-  id: true,
-  username: true,
-  displayName: true,
-  avatar: true,
-};
-
-// Select fields for post media
-const mediaSelect = {
-  id: true,
-  fileName: true,
-  originalName: true,
-  mimeType: true,
-  fileSize: true,
-  fileUrl: true,
-  width: true,
-  height: true,
-  thumbnailUrl: true,
-  thumbHash: true,
-  duration: true,
-  order: true,
-  caption: true,
-  alt: true,
-};
+// authorSelect / mediaSelect are shared from services/posts/postIncludes.
+// Adding `language`, `variantOf`, `transcription`, `translations` here (via the
+// shared select) closes the Prisme Linguistique drift that previously affected
+// the admin views.
 
 function buildPeriodFilter(period: string): Date {
   const startDate = new Date();

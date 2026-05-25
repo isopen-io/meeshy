@@ -39,6 +39,10 @@ export interface TranslateBody {
   priority?: number;
 }
 
+export interface TranscribeBody {
+  force?: boolean;
+}
+
 export interface ConversationAttachmentsQuery {
   type?: 'image' | 'document' | 'audio' | 'video' | 'text';
   limit?: number;

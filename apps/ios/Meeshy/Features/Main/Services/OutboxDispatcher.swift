@@ -490,6 +490,40 @@ struct OutboxDispatcher: OutboxDispatching {
 
     // MARK: - Send Message
 
+    /// Durably reconciles a successful message send — independent of whether a
+    /// `ConversationViewModel` is currently alive for the conversation.
+    ///
+    /// Fix A: before this, the optimistic→server transition (`serverAck`) ran
+    /// ONLY from `ConversationViewModel`'s `retrySucceeded` Combine sink. When
+    /// an outbox flush completed while the user was outside the conversation
+    /// (the canonical "leave → reconnect → return" path), that transient
+    /// `PassthroughSubject` event was dropped, the optimistic GRDB row stayed
+    /// `.sending`, and a cold reload duplicated it against the real server
+    /// message. Applying the `serverAck` here — at the always-alive dispatcher
+    /// — guarantees the row flips to `.sent` and a `PendingIdRecord` is written
+    /// regardless of UI state. When a VM IS alive its sink runs the same
+    /// `applyEvent` again as a harmless no-op on the already-`.sent` record.
+    private func reconcileSuccessfulMessageSend(
+        clientMessageId: String,
+        serverId: String,
+        conversationId: String
+    ) async {
+        let persistence = await DependencyContainer.shared.messagePersistence
+        _ = try? await persistence.applyEvent(
+            localId: clientMessageId,
+            event: .serverAck(serverId: serverId, at: Date())
+        )
+        await CacheCoordinator.shared.messages.mergeUpdate(for: conversationId) { cached in
+            cached.filter { $0.id != clientMessageId }
+        }
+        OfflineQueue.shared.retrySucceeded.send(OfflineRetrySuccess(
+            clientMessageId: clientMessageId,
+            serverId: serverId,
+            conversationId: conversationId,
+            kind: .sendMessage
+        ))
+    }
+
     private func dispatchSendMessage(_ record: OutboxRecord) async throws {
         if record.id.hasPrefix("ofq_") {
             guard let item = try? decoder.decode(OfflineQueueItem.self, from: record.payload) else {
@@ -558,14 +592,11 @@ struct OutboxDispatcher: OutboxDispatching {
                 // `OfflineQueue.cleanupOrphanFiles()` sweep will reclaim it.
                 try? FileManager.default.removeItem(atPath: absolutePath)
 
-                await CacheCoordinator.shared.messages.mergeUpdate(for: item.conversationId) { cached in
-                    cached.filter { $0.id != item.clientMessageId }
-                }
-                OfflineQueue.shared.retrySucceeded.send(OfflineRetrySuccess(
+                await reconcileSuccessfulMessageSend(
                     clientMessageId: item.clientMessageId,
                     serverId: ack.messageId,
                     conversationId: item.conversationId
-                ))
+                )
                 return
             }
 
@@ -580,16 +611,14 @@ struct OutboxDispatcher: OutboxDispatching {
             let response = try await MessageService.shared.send(
                 conversationId: item.conversationId, request: request
             )
-            // Reconcile the optimistic clientMessageId in the message cache so
-            // the incoming `message:new` socket event doesn't duplicate the row.
-            await CacheCoordinator.shared.messages.mergeUpdate(for: item.conversationId) { cached in
-                cached.filter { $0.id != item.clientMessageId }
-            }
-            OfflineQueue.shared.retrySucceeded.send(OfflineRetrySuccess(
+            // Reconcile the optimistic clientMessageId durably (GRDB row +
+            // PendingIdRecord + cache) so neither a `message:new` socket echo
+            // nor a cold reload duplicates the row.
+            await reconcileSuccessfulMessageSend(
                 clientMessageId: item.clientMessageId,
                 serverId: response.id,
                 conversationId: item.conversationId
-            ))
+            )
 
         } else if record.id.hasPrefix("mrq_") {
             // Wave 1 Task 3.6 — `MessageRetryQueue` was removed but legacy
@@ -626,15 +655,11 @@ struct OutboxDispatcher: OutboxDispatching {
             let response = try await MessageService.shared.send(
                 conversationId: item.conversationId, request: request
             )
-            await CacheCoordinator.shared.messages.mergeUpdate(for: item.conversationId) { cached in
-                cached.filter { $0.id != clientMessageId }
-            }
-            OfflineQueue.shared.retrySucceeded.send(OfflineRetrySuccess(
+            await reconcileSuccessfulMessageSend(
                 clientMessageId: clientMessageId,
                 serverId: response.id,
-                conversationId: item.conversationId,
-                kind: .sendMessage
-            ))
+                conversationId: item.conversationId
+            )
         }
         // Unknown namespace prefix — stale row, accept so the flusher removes it.
     }
@@ -750,6 +775,10 @@ enum OutboxFlushTrigger {
             dispatcher: OutboxDispatcher(),
             onOutcome: { @Sendable outcome in
                 Task { await OfflineQueue.shared.publishOutcome(outcome) }
+            },
+            // BW1 — bandwidth gate (cf. MeeshyApp boot flusher).
+            isNetworkReachable: { @Sendable in
+                await MainActor.run { NetworkConditionMonitor.shared.isOnline }
             }
         )
         let nextRetry = await flusher.flush()

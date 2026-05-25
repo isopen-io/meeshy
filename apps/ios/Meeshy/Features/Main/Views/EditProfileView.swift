@@ -36,7 +36,7 @@ struct EditProfileView: View {
                 successOverlay
             }
         }
-        .onChange(of: selectedPhotoItem) { _, newItem in
+        .adaptiveOnChange(of: selectedPhotoItem) { _, newItem in
             Task { await viewModel.loadSelectedPhoto(newItem) }
         }
     }
@@ -52,7 +52,7 @@ struct EditProfileView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14, weight: .semibold))
-                    Text("Retour")
+                    Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(.system(size: 15, weight: .medium))
                 }
                 .foregroundColor(MeeshyColors.indigo400)
@@ -60,7 +60,7 @@ struct EditProfileView: View {
 
             Spacer()
 
-            Text("Modifier le profil")
+            Text(String(localized: "profile.edit.title", defaultValue: "Modifier le profil", bundle: .main))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
@@ -134,7 +134,7 @@ struct EditProfileView: View {
                     ProgressView()
                         .scaleEffect(0.8)
                         .tint(MeeshyColors.indigo400)
-                    Text("Envoi de la photo...")
+                    Text(String(localized: "profile.edit.uploading_photo", defaultValue: "Envoi de la photo...", bundle: .main))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
@@ -147,16 +147,16 @@ struct EditProfileView: View {
     private var fieldsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             sectionHeader(
-                title: "Informations",
+                title: String(localized: "profile.edit.section.info", defaultValue: "Informations", bundle: .main),
                 icon: "pencil.circle.fill", color: accentColor
             )
 
             VStack(spacing: 0) {
                 editableField(
                     icon: "person.fill",
-                    title: "Nom d'affichage",
+                    title: String(localized: "profile.edit.field.display_name", defaultValue: "Nom d'affichage", bundle: .main),
                     text: $viewModel.displayName,
-                    placeholder: "Votre nom"
+                    placeholder: String(localized: "profile.edit.field.display_name.placeholder", defaultValue: "Votre nom", bundle: .main)
                 )
 
                 bioField
@@ -185,19 +185,19 @@ struct EditProfileView: View {
                 .padding(.top, 2)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Bio")
+                Text(String(localized: "profile.edit.field.bio", defaultValue: "Bio", bundle: .main))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(theme.textMuted)
 
                 TextField(
-                    "Parlez de vous...",
+                    String(localized: "profile.edit.field.bio.placeholder", defaultValue: "Parlez de vous...", bundle: .main),
                     text: $viewModel.bio,
                     axis: .vertical
                 )
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(3...6)
-                .onChange(of: viewModel.bio) { _, newValue in
+                .adaptiveOnChange(of: viewModel.bio) { _, newValue in
                     if newValue.count > viewModel.bioMaxLength {
                         viewModel.bio = String(newValue.prefix(viewModel.bioMaxLength))
                     }
@@ -226,7 +226,7 @@ struct EditProfileView: View {
     private var readOnlySection: some View {
         VStack(alignment: .leading, spacing: 8) {
             sectionHeader(
-                title: "Compte",
+                title: String(localized: "profile.edit.section.account", defaultValue: "Compte", bundle: .main),
                 icon: "lock.fill", color: "4338CA"
             )
 
@@ -234,7 +234,7 @@ struct EditProfileView: View {
                 if let email = user?.email {
                     readOnlyRow(
                         icon: "envelope.fill",
-                        title: "Email",
+                        title: String(localized: "profile.edit.field.email", defaultValue: "Email", bundle: .main),
                         value: email, color: "4338CA"
                     )
                 }
@@ -242,14 +242,14 @@ struct EditProfileView: View {
                 if let phone = user?.phoneNumber {
                     readOnlyRow(
                         icon: "phone.fill",
-                        title: "Telephone",
+                        title: String(localized: "profile.edit.field.phone", defaultValue: "Telephone", bundle: .main),
                         value: phone, color: "4338CA"
                     )
                 }
 
                 readOnlyRow(
                     icon: "at",
-                    title: "Nom d'utilisateur",
+                    title: String(localized: "profile.edit.field.username", defaultValue: "Nom d'utilisateur", bundle: .main),
                     value: "@\(user?.username ?? "—")",
                     color: "4338CA"
                 )
@@ -289,7 +289,7 @@ struct EditProfileView: View {
                             .scaleEffect(0.8)
                             .tint(.white)
                     }
-                    Text("Sauvegarder")
+                    Text(String(localized: "common.save", defaultValue: "Sauvegarder", bundle: .main))
                         .font(.system(size: 15, weight: .bold))
                 }
                 .foregroundColor(.white)
@@ -316,7 +316,7 @@ struct EditProfileView: View {
                 .font(.system(size: 48))
                 .foregroundColor(MeeshyColors.success)
 
-            Text("Profil mis a jour")
+            Text(String(localized: "profile.edit.success", defaultValue: "Profil mis a jour", bundle: .main))
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
         }

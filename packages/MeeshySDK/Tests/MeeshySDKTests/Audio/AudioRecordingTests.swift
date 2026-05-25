@@ -103,4 +103,13 @@ final class AudioRecordingTests: XCTestCase {
         let _: any AudioRecordingProviding = recorder
         XCTAssertNotNil(recorder)
     }
+
+    func test_defaultSDKAudioRecorder_configure_updatesSettings() {
+        let recorder = DefaultSDKAudioRecorder()
+        let customSettings = AudioRecordingSettings(maxDuration: 15.0, minimumDuration: 2.0)
+        recorder.configure(with: customSettings)
+
+        XCTAssertEqual(recorder.settings.maxDuration, 15.0)
+        XCTAssertEqual(recorder.settings.minimumDuration, 2.0)
+    }
 }

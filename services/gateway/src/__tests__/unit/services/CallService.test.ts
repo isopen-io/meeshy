@@ -399,7 +399,7 @@ describe('CallService', () => {
         where: { id: zombieCall.id },
         data: expect.objectContaining({
           status: CallStatus.ended,
-          metadata: expect.objectContaining({ endReason: 'zombie_cleanup' })
+          endReason: 'garbageCollected'
         })
       });
     });
@@ -879,7 +879,7 @@ describe('CallService', () => {
       );
     });
 
-    it('should throw error when non-initiator tries to end call (CVE-004)', async () => {
+    it('should allow any active participant to end a P2P call (spec C4)', async () => {
       const participantRole = createMockParticipant({
         id: 'p2',
         participantId: 'participant-456',
@@ -895,10 +895,11 @@ describe('CallService', () => {
       });
 
       mockPrisma.callSession.findUnique.mockResolvedValue(mockCall);
+      mockPrisma.$transaction.mockResolvedValue(undefined);
 
-      await expect(callService.endCall('call-123', 'user-456', 'participant-456')).rejects.toThrow(
-        'PERMISSION_DENIED: Only the call initiator can end the call'
-      );
+      await expect(
+        callService.endCall('call-123', 'user-456', 'participant-456')
+      ).resolves.toBeDefined();
     });
   });
 
@@ -1048,7 +1049,7 @@ describe('CallService', () => {
         where: { id: 'call-123' },
         data: expect.objectContaining({
           status: CallStatus.missed,
-          metadata: expect.objectContaining({ endReason: 'missed' })
+          endReason: 'missed'
         })
       });
     });
@@ -1088,7 +1089,7 @@ describe('CallService', () => {
         where: { id: 'call-123' },
         data: expect.objectContaining({
           status: CallStatus.rejected,
-          metadata: expect.objectContaining({ endReason: 'rejected' })
+          endReason: 'rejected'
         })
       });
     });
@@ -1241,6 +1242,7 @@ describe('CallService - Edge Cases', () => {
     const mockCall = createMockCallSession({
       status: CallStatus.active,
       startedAt: startTime,
+      answeredAt: startTime,
       participants: [participant]
     });
 
@@ -1395,7 +1397,7 @@ describe('CallService - Error Code Verification', () => {
     ).rejects.toThrow(/PERMISSION_DENIED/);
   });
 
-  it('should use PERMISSION_DENIED error code for non-initiator end call', async () => {
+  it('should allow non-initiator participants to end a P2P call (spec C4)', async () => {
     mockPrisma.callSession.findUnique.mockResolvedValue(
       createMockCallSession({
         status: CallStatus.active,
@@ -1410,9 +1412,10 @@ describe('CallService - Error Code Verification', () => {
         ]
       })
     );
+    mockPrisma.$transaction.mockResolvedValue(undefined);
 
     await expect(
       callService.endCall('call-123', 'user-456', 'participant-456')
-    ).rejects.toThrow(/PERMISSION_DENIED/);
+    ).resolves.toBeDefined();
   });
 });

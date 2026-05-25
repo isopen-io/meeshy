@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshyUI
 import Combine
 import MeeshySDK
 
@@ -162,7 +163,7 @@ struct InviteFriendsSheet: View {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(2...4)
-                    .onChange(of: inviteMessage) { _, _ in optionsModified = true }
+                    .adaptiveOnChange(of: inviteMessage) { _, _ in optionsModified = true }
             }
             .padding(.top, 4)
 
@@ -362,7 +363,7 @@ struct InviteFriendsSheet: View {
                         }
                         .pickerStyle(.menu)
                         .tint(Color(hex: conversation.accentColor))
-                        .onChange(of: expirationOption) { _, _ in optionsModified = true }
+                        .adaptiveOnChange(of: expirationOption) { _, _ in optionsModified = true }
                     }
 
                     sectionDivider
@@ -383,7 +384,7 @@ struct InviteFriendsSheet: View {
                         }
                         .padding(14)
                         .background(rowBackground)
-                        .onChange(of: maxUsesValue) { _, _ in optionsModified = true }
+                        .adaptiveOnChange(of: maxUsesValue) { _, _ in optionsModified = true }
                     }
                 }
             }
@@ -468,7 +469,7 @@ struct InviteFriendsSheet: View {
             TextField(placeholder, text: text)
                 .font(.system(size: 15))
                 .foregroundColor(theme.textPrimary)
-                .onChange(of: text.wrappedValue) { _, _ in optionsModified = true }
+                .adaptiveOnChange(of: text.wrappedValue) { _, _ in optionsModified = true }
         }
         .padding(14)
         .background(rowBackground)
@@ -503,7 +504,7 @@ struct InviteFriendsSheet: View {
                 }
             }
             .tint(Color(hex: conversation.accentColor))
-            .onChange(of: isOn.wrappedValue) { _, _ in optionsModified = true }
+            .adaptiveOnChange(of: isOn.wrappedValue) { _, _ in optionsModified = true }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)

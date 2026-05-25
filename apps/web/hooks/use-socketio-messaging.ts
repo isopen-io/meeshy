@@ -72,22 +72,23 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
     }
   }, [currentUser]); // Re-exécuter si currentUser change
 
-  // ÉTAPE 1C: Vérifier périodiquement la connexion et se reconnecter si nécessaire
-  // Ceci gère le cas où les tokens sont chargés après le montage du composant
+  // ÉTAPE 1C: Si les tokens sont chargés après le montage, retenter une fois.
+  // Le retry réseau est désormais géré par ConnectionService (online event).
   useEffect(() => {
-    const checkConnectionInterval = setInterval(() => {
-      const hasAuthToken = typeof window !== 'undefined' && !!authManager.getAuthToken();
-      const hasSessionToken = typeof window !== 'undefined' && !!authManager.getAnonymousSession()?.token;
+    const tryReconnectIfTokensAvailable = () => {
+      if (typeof window === 'undefined') return;
+      const hasAuthToken = !!authManager.getAuthToken();
+      const hasSessionToken = !!authManager.getAnonymousSession()?.token;
       const diagnostics = meeshySocketIOService.getConnectionDiagnostics();
-
-      // Si on a un token mais pas de connexion, tenter de se connecter
       if ((hasAuthToken || hasSessionToken) && !diagnostics.isConnected && !diagnostics.isConnecting) {
         meeshySocketIOService.reconnect();
       }
-    }, 3000); // Vérifier toutes les 3 secondes
+    };
 
-    return () => clearInterval(checkConnectionInterval);
-  }, []); // Exécuter une seule fois au montage
+    // Une seule vérification différée pour couvrir le cas où l'auth se charge après le montage.
+    const timeout = setTimeout(tryReconnectIfTokensAvailable, 1500);
+    return () => clearTimeout(timeout);
+  }, []);
 
   // ÉTAPE 2: Gérer le join/leave de conversation
   useEffect(() => {
@@ -129,7 +130,8 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
     
     if (onUserTyping) {
       const unsub = meeshySocketIOService.onTyping((event: TypingEvent) => {
-        onUserTyping(event.userId, event.username, event.isTyping || false, event.conversationId);
+        // Le front-end décide : displayName en priorité, username en repli.
+        onUserTyping(event.userId, event.displayName || event.username, event.isTyping || false, event.conversationId);
       });
       unsubscribers.push(unsub);
     }
@@ -156,28 +158,21 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
     };
   }, [onNewMessage, onMessageEdited, onMessageDeleted, onTranslation, onUserTyping, onUserStatus, onConversationStats, onConversationOnlineStats]);
 
-  // ÉTAPE 4: Surveiller l'état de connexion
-  // OPTIMISATION: Réduit la fréquence de polling de 1s à 3s (suffisant pour l'UX)
+  // ÉTAPE 4: Surveiller l'état de connexion (event-driven, plus de polling)
   useEffect(() => {
-    // Vérification immédiate au montage
-    const diagnostics = meeshySocketIOService.getConnectionDiagnostics();
-    setConnectionStatus({
-      isConnected: diagnostics.isConnected,
-      hasSocket: diagnostics.hasSocket
-    });
-
-    const interval = setInterval(() => {
+    const sync = () => {
       const diag = meeshySocketIOService.getConnectionDiagnostics();
-      // OPTIMISATION: Ne mettre à jour que si le statut a changé
       setConnectionStatus(prev => {
-        if (prev.isConnected !== diag.isConnected || prev.hasSocket !== diag.hasSocket) {
-          return { isConnected: diag.isConnected, hasSocket: diag.hasSocket };
+        if (prev.isConnected === diag.isConnected && prev.hasSocket === diag.hasSocket) {
+          return prev;
         }
-        return prev;
+        return { isConnected: diag.isConnected, hasSocket: diag.hasSocket };
       });
-    }, 3000); // OPTIMISATION: 3s au lieu de 1s
+    };
 
-    return () => clearInterval(interval);
+    // Synchro initiale puis abonnement aux changements d'état
+    sync();
+    return meeshySocketIOService.onStatusChange(sync);
   }, []);
 
   // ÉTAPE 5: Actions

@@ -5,6 +5,7 @@ import { MessageTranslationService } from '../../services/message-translation/Me
 import { MessagingService } from '../../services/messaging/MessagingService';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { AttachmentService } from '../../services/attachments';
+import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
 import { conversationStatsService } from '../../services/ConversationStatsService';
 import { ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
@@ -58,7 +59,12 @@ export const SendMessageBodySchema = z.object({
   forwardedFromConversationId: z.string().optional(),
   encryptedContent: z.string().optional(),
   encryptionMode: z.enum(['e2ee', 'server', 'hybrid']).optional(),
-  encryptionMetadata: z.record(z.unknown()).optional(),
+  encryptionMetadata: z.record(z.unknown())
+    .refine(
+      (m) => { try { return JSON.stringify(m).length <= 8 * 1024; } catch { return false; } },
+      { message: 'encryptionMetadata exceeds 8KB serialized' }
+    )
+    .optional(),
   isEncrypted: z.boolean().optional(),
   attachmentIds: z.array(z.string()).optional(),
   isBlurred: z.boolean().optional(),
@@ -473,6 +479,10 @@ export function registerMessagesRoutes(
       const messageSelect: any = {
         // ===== CHAMPS DE BASE =====
         id: true,
+        // Idempotency key — exposed so clients reconcile optimistic rows by
+        // `clientMessageId` on a cold message-list load (avoids duplicate
+        // bubbles when the optimistic→server ack was missed offline).
+        clientMessageId: true,
         content: true,
         originalLanguage: true,
         conversationId: true,
@@ -487,6 +497,7 @@ export function registerMessagesRoutes(
 
         // ===== REPLY / FORWARD =====
         replyToId: true,
+        storyReplyToId: true,
         forwardedFromId: true,
         forwardedFromConversationId: true,
 
@@ -551,36 +562,7 @@ export function registerMessagesRoutes(
             }
           }
         },
-        attachments: {
-          select: {
-            id: true,
-            messageId: true,
-            fileName: true,
-            originalName: true,
-            mimeType: true,
-            fileSize: true,
-            fileUrl: true,
-            thumbnailUrl: true,
-            width: true,
-            height: true,
-            duration: true,
-            bitrate: true,
-            sampleRate: true,
-            codec: true,
-            channels: true,
-            fps: true,
-            videoCodec: true,
-            pageCount: true,
-            lineCount: true,
-            metadata: true,
-            uploadedBy: true,
-            isAnonymous: true,
-            createdAt: true,
-            // V2: Champs JSON intégrés (pas de sous-sélection sur JSON scalaires)
-            transcription: true,
-            translations: true
-          }
-        },
+        attachments: { select: attachmentMediaSelect },
         _count: {
           select: {
             reactions: true,
@@ -659,44 +641,7 @@ export function registerMessagesRoutes(
                 }
               }
             },
-            attachments: {
-              select: {
-                id: true,
-                fileName: true,
-                originalName: true,
-                mimeType: true,
-                fileSize: true,
-                fileUrl: true,
-                thumbnailUrl: true,
-                width: true,
-                height: true,
-                duration: true,
-                bitrate: true,
-                sampleRate: true,
-                codec: true,
-                channels: true,
-                fps: true,
-                videoCodec: true,
-                pageCount: true,
-                lineCount: true,
-                metadata: true,
-                transcription: true,  // ✅ Champ JSON scalaire
-                translations: true,   // ✅ Champ JSON scalaire (pas translationsJson!)
-                uploadedBy: true,
-                isAnonymous: true,
-                createdAt: true,
-                isForwarded: true,
-                isViewOnce: true,
-                viewOnceCount: true,
-                isBlurred: true,
-                effectFlags: true,
-                viewedCount: true,
-                downloadedCount: true,
-                consumedCount: true,
-                isEncrypted: true
-              },
-              take: 4
-            },
+            attachments: { select: attachmentFullSelect, take: 4 },
             _count: {
               select: {
                 reactions: true
@@ -878,6 +823,9 @@ export function registerMessagesRoutes(
         const mappedMessage: any = {
           // Identifiants
           id: message.id,
+          // Idempotency key — lets clients reconcile an optimistic send with
+          // its server record by `clientMessageId` on a cold list load.
+          clientMessageId: message.clientMessageId ?? null,
           conversationId: message.conversationId,
           // CORRECTION senderId: en DB, senderId = Participant.id (FK).
           // Les clients (iOS/Web) comparent senderId avec leur userId (User.id).
@@ -1008,10 +956,7 @@ export function registerMessagesRoutes(
             sender: {
               select: { id: true, userId: true, displayName: true, avatar: true, user: { select: { username: true } } }
             },
-            attachments: {
-              select: { id: true, mimeType: true, thumbnailUrl: true, fileUrl: true },
-              take: 1
-            }
+            attachments: { select: attachmentForwardPreviewSelect, take: 1 }
           }
         });
 
@@ -1068,6 +1013,48 @@ export function registerMessagesRoutes(
       }
 
       timings.forwardedEnrichment = performance.now() - t0;
+
+      // ===== ENRICHIR LES RÉPONSES À UNE STORY =====
+      // Miroir de l'enrichissement forwardé : le client a besoin des détails
+      // de la story citée (compteurs, date, vignette, aperçu) pour rendre la
+      // bulle de citation. Le message ne porte que `storyReplyToId` en DB.
+      const storyReplyIds = mappedMessages
+        .filter((m: any) => m.storyReplyToId)
+        .map((m: any) => m.storyReplyToId as string);
+
+      if (storyReplyIds.length > 0) {
+        const uniqueStoryIds = [...new Set(storyReplyIds)];
+        const citedStories = await prisma.post.findMany({
+          where: { id: { in: uniqueStoryIds } },
+          select: {
+            id: true,
+            content: true,
+            reactionCount: true,
+            commentCount: true,
+            createdAt: true,
+            media: {
+              select: { thumbnailUrl: true },
+              orderBy: { order: 'asc' },
+              take: 1
+            }
+          }
+        });
+        const storyMap = new Map(citedStories.map((s) => [s.id, s]));
+        for (const m of mappedMessages) {
+          if (!m.storyReplyToId) continue;
+          const story = storyMap.get(m.storyReplyToId);
+          if (!story) continue; // story supprimée → storyReplyTo reste absent
+          const preview = (story.content ?? '').trim().slice(0, 80);
+          m.storyReplyTo = {
+            id: story.id,
+            reactionCount: story.reactionCount,
+            commentCount: story.commentCount,
+            createdAt: story.createdAt,
+            thumbnailUrl: story.media[0]?.thumbnailUrl ?? null,
+            previewText: preview
+          };
+        }
+      }
 
       // Marquer les messages comme lus (optimisé - ne marquer que les messages non lus)
       t0 = performance.now();

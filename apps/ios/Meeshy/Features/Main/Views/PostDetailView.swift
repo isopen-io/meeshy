@@ -25,6 +25,59 @@ struct PostDetailView: View {
     @State private var commentEffects: MessageEffects = .none
     @State private var composerFocusTrigger: Bool = false
     @State private var isTextExpanded = false
+    /// Set once `PostService.share(... generateLink: true)` returns — the
+    /// `.sheet(item:)` further down presents the system share UI as soon
+    /// as this becomes non-nil and clears it on dismiss.
+    @State private var shareableLink: ShareableLink?
+
+    /// Which post action the user just triggered from the `…` menu. Both
+    /// "Copier le lien" and "Partager" call the same gateway endpoint;
+    /// only the post-success behaviour differs (pasteboard vs share sheet).
+    private enum ShareLinkAction { case copyToPasteboard, presentShareSheet }
+
+    /// Calls `POST /posts/:id/share?generateLink=true`, then dispatches the
+    /// short URL to either the pasteboard or the system share sheet.
+    /// `medium=share` UTM is attached by the gateway so analytics can split
+    /// "share via copy-link" from "share via system sheet" later. If the
+    /// mint fails (offline, rate-limit, gateway error) the call still
+    /// surfaces the raw post URL so the user is never stuck with nothing to
+    /// share — only the attribution analytics are skipped.
+    private func mintShareLink(action: ShareLinkAction) async {
+        guard let post = viewModel.post else { return }
+        let trackingShortUrl: String? = await {
+            do {
+                let result = try await PostService.shared.share(
+                    postId: post.id,
+                    platform: action == .copyToPasteboard ? "copy" : "system",
+                    generateLink: true
+                )
+                return result.shortUrl
+            } catch {
+                return nil
+            }
+        }()
+
+        let fallbackUrlString = "\(ShareableLink.webBaseURL)/feeds/post/\(post.id)"
+        let resolvedString = trackingShortUrl ?? fallbackUrlString
+        guard let resolvedUrl = URL(string: resolvedString) else {
+            ToastManager.shared.showError("Lien indisponible")
+            return
+        }
+
+        await MainActor.run {
+            switch action {
+            case .copyToPasteboard:
+                UIPasteboard.general.string = resolvedString
+                HapticFeedback.success()
+                ToastManager.shared.show(
+                    String(localized: "feed.post.detail.copy_link.success", defaultValue: "Lien copié", bundle: .main)
+                )
+            case .presentShareSheet:
+                shareableLink = ShareableLink(url: resolvedUrl)
+                HapticFeedback.light()
+            }
+        }
+    }
 
     // Post reaction state — socket-driven, hoisted to this view (single-post context).
     // PostDetailView joins the post:{postId} room on appear and leaves on disappear,
@@ -32,6 +85,15 @@ struct PostDetailView: View {
     @State private var postLikedIds: Set<String> = []
     @State private var postLikeDelta: [String: Int] = [:]
     @State private var postHeartInFlightIds: Set<String> = []
+
+    // Bookmark / repost / share optimistic state — same pattern as FeedView.
+    @State private var isPostBookmarked: Bool = false
+    @State private var isBookmarkInFlight: Bool = false
+    @State private var isPostReposted: Bool = false
+    @State private var isRepostInFlight: Bool = false
+    @State private var isShareInFlight: Bool = false
+    @State private var showRepostOptions: Bool = false
+    @State private var isEditing: Bool = false
 
     private var detailIsLiked: Bool { postLikedIds.contains(postId) }
     private var detailLikeCount: Int {
@@ -71,14 +133,122 @@ struct PostDetailView: View {
                     )
                 }
             } catch {
-                // Rollback optimistic update on failure
-                if wasLiked {
-                    postLikedIds.insert(postId)
-                    postLikeDelta[postId, default: 0] += 1
-                } else {
-                    postLikedIds.remove(postId)
-                    postLikeDelta[postId, default: 0] -= 1
+                // REST fallback when socket fails (noSocket / timeout). Only
+                // rollback the optimistic flip when REST also fails — keeps
+                // the heart visible whenever the server actually persisted.
+                let restOK = await postLikeViaREST(like: !wasLiked)
+                if !restOK {
+                    if wasLiked {
+                        postLikedIds.insert(postId)
+                        postLikeDelta[postId, default: 0] += 1
+                    } else {
+                        postLikedIds.remove(postId)
+                        postLikeDelta[postId, default: 0] -= 1
+                    }
                 }
+            }
+        }
+    }
+
+    private struct LikeRESTPayload: Decodable { let liked: Bool? }
+    private struct BookmarkRESTPayload: Decodable { let bookmarked: Bool? }
+
+    private func postLikeViaREST(like: Bool) async -> Bool {
+        do {
+            let _: APIResponse<LikeRESTPayload> = try await APIClient.shared.request(
+                endpoint: "/posts/\(postId)/like",
+                method: like ? "POST" : "DELETE"
+            )
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    // MARK: - Bookmark / Repost / Share (post detail)
+
+    @MainActor
+    private func toggleDetailBookmark() {
+        guard !isBookmarkInFlight else { return }
+        let wasBookmarked = isPostBookmarked
+        isPostBookmarked.toggle()
+        isBookmarkInFlight = true
+        Task {
+            defer { Task { @MainActor in isBookmarkInFlight = false } }
+            let ok: Bool = await {
+                do {
+                    let _: APIResponse<BookmarkRESTPayload> = try await APIClient.shared.request(
+                        endpoint: "/posts/\(postId)/bookmark",
+                        method: wasBookmarked ? "DELETE" : "POST"
+                    )
+                    return true
+                } catch { return false }
+            }()
+            if !ok {
+                isPostBookmarked = wasBookmarked
+                ToastManager.shared.showError("Erreur lors de l'enregistrement")
+            } else {
+                ToastManager.shared.showSuccess(wasBookmarked
+                    ? String(localized: "Retire des favoris", defaultValue: "Retire des favoris")
+                    : String(localized: "Ajoute aux favoris", defaultValue: "Ajoute aux favoris"))
+            }
+        }
+    }
+
+    @MainActor
+    private func toggleDetailRepost(quote: Bool) {
+        guard !isRepostInFlight else { return }
+        isPostReposted = true
+        isRepostInFlight = true
+        Task {
+            defer { Task { @MainActor in isRepostInFlight = false } }
+            do {
+                _ = try await PostService.shared.repost(
+                    postId: postId,
+                    targetType: nil,
+                    content: nil,
+                    isQuote: quote
+                )
+                ToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
+            } catch {
+                isPostReposted = false
+                ToastManager.shared.showError("Erreur lors du repost")
+            }
+        }
+    }
+
+    @MainActor
+    private func sharePostFromDetail() {
+        guard !isShareInFlight else { return }
+        isShareInFlight = true
+        Task {
+            defer { Task { @MainActor in isShareInFlight = false } }
+            // Mint a tracking link; fall back to the raw post URL when the
+            // gateway can't issue a TrackingLink (offline / 5xx).
+            do {
+                struct SharePayload: Decodable {
+                    let shared: Bool?
+                    let shareCount: Int?
+                    let shortUrl: String?
+                    let token: String?
+                }
+                let body = try JSONSerialization.data(withJSONObject: ["generateLink": true])
+                let resp: APIResponse<SharePayload> = try await APIClient.shared.request(
+                    endpoint: "/posts/\(postId)/share",
+                    method: "POST",
+                    body: body
+                )
+                if let s = resp.data.shortUrl, let url = URL(string: s) {
+                    shareableLink = ShareableLink(url: url)
+                    return
+                }
+            } catch {
+                // fall through to raw fallback
+            }
+            if let raw = ShareableLink.fallback(forPostId: postId) {
+                shareableLink = raw
+            } else {
+                ToastManager.shared.showError("Erreur lors du partage")
             }
         }
     }
@@ -231,7 +401,7 @@ struct PostDetailView: View {
             Button {
                 Task { await viewModel.loadMoreComments(postId) }
             } label: {
-                Text("Charger plus")
+                Text(String(localized: "feed.post.detail.load_more", defaultValue: "Charger plus", bundle: .main))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(MeeshyColors.indigo500)
             }
@@ -292,17 +462,46 @@ struct PostDetailView: View {
             if let post = displayPost, post.isLiked {
                 postLikedIds.insert(postId)
             }
+            // Seed bookmark + repost state. Primary source: the server-
+            // enriched fields on the loaded post (PostFeedService provides
+            // isBookmarkedByMe + isRepostedByMe on the feed and detail
+            // payloads). Defensive fallback: the local "bookmarks" cache.
+            if !isBookmarkInFlight {
+                if let p = displayPost, p.isBookmarkedByMe {
+                    isPostBookmarked = true
+                } else {
+                    let cached = await CacheCoordinator.shared.feed.load(for: "bookmarks")
+                    let bookmarks: [FeedPost]
+                    switch cached {
+                    case .fresh(let v, _), .stale(let v, _): bookmarks = v
+                    case .expired, .empty: bookmarks = []
+                    }
+                    if bookmarks.contains(where: { $0.id == postId }) {
+                        isPostBookmarked = true
+                    }
+                }
+            }
+            if !isRepostInFlight, let p = displayPost, p.isRepostedByMe {
+                isPostReposted = true
+            }
             await viewModel.loadComments(postId)
             viewModel.subscribeToSocket(postId)
             // Join the post room for real-time reaction events (single focused post).
             SocialSocketManager.shared.joinPostRoom(postId: postId)
+            // Anti-spam banner: declare this post as "currently visible" so
+            // NotificationManager can drop in-app banners about it (the user
+            // already sees the content live).
+            NotificationManager.shared.activePostId = postId
             // Record view when post detail is opened
             try? await PostService.shared.viewPost(postId: postId, duration: nil)
         }
         .onDisappear {
             SocialSocketManager.shared.leavePostRoom(postId: postId)
+            if NotificationManager.shared.activePostId == postId {
+                NotificationManager.shared.activePostId = nil
+            }
         }
-        .onChange(of: viewModel.post) { _, updatedPost in
+        .adaptiveOnChange(of: viewModel.post) { _, updatedPost in
             // Re-seed when post loads from network (stale → fresh). Preserve
             // optimistic state: only update if no in-flight toggle is active.
             guard let updatedPost, !postHeartInFlightIds.contains(postId) else { return }
@@ -359,6 +558,23 @@ struct PostDetailView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
+        .sheet(item: $shareableLink) { link in
+            // Same `meeshy.me/l/<token>` URL that "Copier le lien" copies —
+            // the gateway already recorded the share + minted the
+            // TrackingLink owned by the current user.
+            ShareSheet(activityItems: [link.url])
+        }
+        .sheet(isPresented: $isEditing) {
+            if let post = displayPost {
+                EditPostSheet(
+                    originalContent: post.content,
+                    onSave: { newContent in
+                        await viewModel.updatePost(content: newContent)
+                    },
+                    onDismiss: { isEditing = false }
+                )
+            }
+        }
         .fullScreenCover(isPresented: $showFullscreenGallery) {
             if let post = displayPost {
                 let attachments = post.media
@@ -392,14 +608,28 @@ struct PostDetailView: View {
 
             Menu {
                 Button {
-                    HapticFeedback.light()
+                    Task { await mintShareLink(action: .copyToPasteboard) }
                 } label: {
-                    Label("Copier le lien", systemImage: "link")
+                    Label(String(localized: "feed.post.detail.copy_link", defaultValue: "Copier le lien", bundle: .main), systemImage: "link")
+                }
+                Button {
+                    Task { await mintShareLink(action: .presentShareSheet) }
+                } label: {
+                    Label(String(localized: "feed.post.detail.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
+                }
+                if displayPost?.authorId == AuthManager.shared.currentUser?.id {
+                    Button {
+                        isEditing = true
+                        HapticFeedback.light()
+                    } label: {
+                        Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
+                    }
                 }
                 Button(role: .destructive) {
                     HapticFeedback.light()
+                    Task { await viewModel.reportPost(postId) }
                 } label: {
-                    Label("Signaler", systemImage: "exclamationmark.triangle")
+                    Label(String(localized: "feed.post.detail.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
                 }
             } label: {
                 Image(systemName: "ellipsis")
@@ -429,7 +659,7 @@ struct PostDetailView: View {
                     onViewProfile: { selectedProfileUser = .from(feedPost: post) },
                     onMoodTap: statusViewModel.moodTapHandler(for: post.authorId),
                     contextMenuItems: [
-                        AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                        AvatarContextMenuItem(label: String(localized: "feed.post.detail.view_profile", defaultValue: "Voir le profil", bundle: .main), icon: "person.fill") {
                             selectedProfileUser = .from(feedPost: post)
                         }
                     ]
@@ -494,14 +724,14 @@ struct PostDetailView: View {
                     Text(truncation.text + "... ")
                         .font(.system(size: 16))
                         .foregroundColor(theme.textPrimary)
-                    + Text("voir plus")
+                    + Text(String(localized: "feed.post.detail.see_more", defaultValue: "voir plus", bundle: .main))
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(Color(hex: accentColor))
                 } else if truncation.isTruncated && isTextExpanded {
                     Text(effectiveContent + " ")
                         .font(.system(size: 16))
                         .foregroundColor(theme.textPrimary)
-                    + Text("voir moins")
+                    + Text(String(localized: "feed.post.detail.see_less", defaultValue: "voir moins", bundle: .main))
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(Color(hex: accentColor))
                 } else {
@@ -662,7 +892,8 @@ struct PostDetailView: View {
                     mute: true
                 )
                 .aspectRatio(9.0 / 16.0, contentMode: .fit)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: 460)
+                .frame(maxWidth: .infinity, alignment: .center)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)
@@ -842,24 +1073,66 @@ struct PostDetailView: View {
 
             Spacer()
 
+            // Repost
             Button {
-                Task { await viewModel.bookmarkPost() }
+                showRepostOptions = true
                 HapticFeedback.light()
             } label: {
-                Image(systemName: "bookmark")
+                Image(systemName: isPostReposted ? "arrow.2.squarepath.circle.fill" : "arrow.2.squarepath")
                     .font(.system(size: 17))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundColor(isPostReposted ? MeeshyColors.success : theme.textSecondary)
+                    .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isPostReposted)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRepostInFlight)
+            }
+            .disabled(isRepostInFlight)
+            .confirmationDialog("Repartager", isPresented: $showRepostOptions) {
+                Button(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main)) {
+                    toggleDetailRepost(quote: false)
+                }
+                Button(String(localized: "feed.post.quote", defaultValue: "Citer", bundle: .main)) {
+                    toggleDetailRepost(quote: true)
+                }
+                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
             }
 
             Spacer()
 
+            // Bookmark
             Button {
+                toggleDetailBookmark()
                 HapticFeedback.light()
             } label: {
-                Image(systemName: "square.and.arrow.up")
+                Image(systemName: isPostBookmarked ? "bookmark.fill" : "bookmark")
                     .font(.system(size: 17))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundColor(isPostBookmarked ? MeeshyColors.warning : theme.textSecondary)
+                    .scaleEffect(isBookmarkInFlight ? 0.85 : 1.0)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isPostBookmarked)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isBookmarkInFlight)
             }
+            .disabled(isBookmarkInFlight)
+
+            Spacer()
+
+            // Share
+            Button {
+                sharePostFromDetail()
+                HapticFeedback.light()
+            } label: {
+                ZStack {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 17))
+                        .foregroundColor(theme.textSecondary)
+                        .opacity(isShareInFlight ? 0 : 1)
+                    if isShareInFlight {
+                        ProgressView()
+                            .scaleEffect(0.6)
+                            .progressViewStyle(.circular)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.2), value: isShareInFlight)
+            }
+            .disabled(isShareInFlight)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
@@ -910,7 +1183,8 @@ struct PostDetailView: View {
             ProgressiveCachedImage(
                 thumbHash: media.thumbHash,
                 thumbnailUrl: media.thumbnailUrl,
-                fullUrl: media.url
+                fullUrl: media.url,
+                autoLoad: true
             ) {
                 Color(hex: media.thumbnailColor).shimmer()
             }
@@ -920,11 +1194,20 @@ struct PostDetailView: View {
             .onTapGesture { openMediaFullscreen(media) }
 
         case .video:
-            InlineVideoPlayerView(
-                attachment: media.toMessageAttachment(),
-                accentColor: accentColor,
-                onExpandFullscreen: { openMediaFullscreen(media) }
-            )
+            let attachment = media.toMessageAttachment()
+            VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
+                MeeshyVideoPlayer(
+                    attachment: attachment,
+                    style: .inline,
+                    controls: .inlineDefault,
+                    accentColor: accentColor,
+                    frame: .card,
+                    availability: availability,
+                    performance: .inline,
+                    onDownload: onDownload,
+                    onExpand: { openMediaFullscreen(media) }
+                )
+            }
             .frame(maxWidth: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: 12))
 
@@ -948,7 +1231,7 @@ struct PostDetailView: View {
                         .foregroundColor(Color(hex: media.thumbnailColor))
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(media.fileName ?? "Document")
+                    Text(media.fileName ?? String(localized: "feed.post.detail.document", defaultValue: "Document", bundle: .main))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
@@ -958,7 +1241,7 @@ struct PostDetailView: View {
                         }
                         if let pages = media.pageCount {
                             Text("\u{2022}").foregroundColor(theme.textMuted)
-                            Text("\(pages) pages").font(.system(size: 12)).foregroundColor(theme.textMuted)
+                            Text("\(pages) \(String(localized: "feed.post.detail.pages", defaultValue: "pages", bundle: .main))").font(.system(size: 12)).foregroundColor(theme.textMuted)
                         }
                     }
                 }
@@ -985,7 +1268,7 @@ struct PostDetailView: View {
                         .foregroundColor(Color(hex: media.thumbnailColor))
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(media.locationName ?? "Location")
+                    Text(media.locationName ?? String(localized: "feed.post.detail.location", defaultValue: "Location", bundle: .main))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                     if let lat = media.latitude, let lon = media.longitude {
@@ -1063,7 +1346,8 @@ struct PostDetailView: View {
             ProgressiveCachedImage(
                 thumbHash: media.thumbHash,
                 thumbnailUrl: media.thumbnailUrl,
-                fullUrl: media.url
+                fullUrl: media.url,
+                autoLoad: true
             ) {
                 Color(hex: media.thumbnailColor).shimmer()
             }
@@ -1098,7 +1382,7 @@ struct PostDetailView: View {
 
     private var commentsHeader: some View {
         HStack(spacing: 8) {
-            Text("Commentaires")
+            Text(String(localized: "feed.post.detail.comments", defaultValue: "Commentaires", bundle: .main))
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 

@@ -1,4 +1,5 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { attachmentMediaSelect } from '../../../services/attachments/attachmentIncludes';
 
 const senderInclude = {
   select: {
@@ -151,63 +152,11 @@ export async function getConversationMessagesWithDetails(
     skip: offset,
     include: {
       sender: senderInclude,
-      attachments: {
-        select: {
-          id: true,
-          messageId: true,
-          fileName: true,
-          originalName: true,
-          mimeType: true,
-          fileSize: true,
-          fileUrl: true,
-          thumbnailUrl: true,
-          width: true,
-          height: true,
-          duration: true,
-          bitrate: true,
-          sampleRate: true,
-          codec: true,
-          channels: true,
-          fps: true,
-          videoCodec: true,
-          pageCount: true,
-          lineCount: true,
-          metadata: true,
-          uploadedBy: true,
-          isAnonymous: true,
-          createdAt: true
-        }
-      },
+      attachments: { select: attachmentMediaSelect },
       replyTo: {
         include: {
           sender: senderInclude,
-          attachments: {
-            select: {
-              id: true,
-              messageId: true,
-              fileName: true,
-              originalName: true,
-              mimeType: true,
-              fileSize: true,
-              fileUrl: true,
-              thumbnailUrl: true,
-              width: true,
-              height: true,
-              duration: true,
-              bitrate: true,
-              sampleRate: true,
-              codec: true,
-              channels: true,
-              fps: true,
-              videoCodec: true,
-              pageCount: true,
-              lineCount: true,
-              metadata: true,
-              uploadedBy: true,
-              isAnonymous: true,
-              createdAt: true
-            }
-          },
+          attachments: { select: attachmentMediaSelect },
           reactions: {
             select: {
               id: true,

@@ -12,140 +12,65 @@ extension FeedView {
     // MARK: - Photo Selection
     func handleFeedPhotoSelection(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
-        let itemsCopy = items
         selectedPhotoItems.removeAll()
-        isLoadingMedia = true
         HapticFeedback.light()
-
-        Task {
-            for item in itemsCopy {
-                let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
-
-                if isVideo {
-                    if let movieData = try? await item.loadTransferable(type: Data.self) {
-                        let rawName = "video_raw_\(UUID().uuidString).mp4"
-                        let rawURL = FileManager.default.temporaryDirectory.appendingPathComponent(rawName)
-                        try? movieData.write(to: rawURL)
-
-                        let compressedURL: URL
-                        do {
-                            compressedURL = try await MediaCompressor.shared.compressVideo(rawURL, context: .feedPost)
-                            try? FileManager.default.removeItem(at: rawURL)
-                        } catch {
-                            compressedURL = rawURL
-                        }
-
-                        let fileSize = (try? FileManager.default.attributesOfItem(atPath: compressedURL.path)[.size] as? Int) ?? movieData.count
-                        let attachmentId = UUID().uuidString
-                        let attachment = MessageAttachment(
-                            id: attachmentId,
-                            fileName: compressedURL.lastPathComponent,
-                            originalName: compressedURL.lastPathComponent,
-                            mimeType: "video/mp4",
-                            fileSize: fileSize,
-                            fileUrl: compressedURL.absoluteString,
-                            thumbnailColor: "FF6B6B"
-                        )
-
-                        let thumb = await feedGenerateVideoThumbnail(url: compressedURL)
-
-                        await MainActor.run {
-                            pendingMediaFiles[attachmentId] = compressedURL
-                            if let thumb { pendingThumbnails[attachmentId] = thumb }
-                            pendingAttachments.append(attachment)
-                        }
-                    }
-                } else {
-                    if let imageData = try? await item.loadTransferable(type: Data.self),
-                       let uiImage = UIImage(data: imageData) {
-                        let result = await MediaCompressor.shared.compressImageData(imageData)
-                        let fileName = "image_\(UUID().uuidString).\(result.fileExtension)"
-                        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-                        try? result.data.write(to: tempURL)
-
-                        let attachmentId = UUID().uuidString
-                        let attachment = MessageAttachment(
-                            id: attachmentId,
-                            fileName: fileName,
-                            originalName: fileName,
-                            mimeType: result.mimeType,
-                            fileSize: result.data.count,
-                            fileUrl: tempURL.absoluteString,
-                            width: Int(uiImage.size.width),
-                            height: Int(uiImage.size.height),
-                            thumbnailColor: "4ECDC4"
-                        )
-
-                        await MainActor.run {
-                            pendingMediaFiles[attachmentId] = tempURL
-                            pendingThumbnails[attachmentId] = uiImage
-                            pendingAttachments.append(attachment)
-                        }
-                    }
-                }
-            }
-            await MainActor.run { isLoadingMedia = false }
+        for item in items {
+            let prep = AttachmentPreparationService.shared.preparePhotosPickerItem(
+                item,
+                context: .feedPost,
+                accentColor: ""
+            )
+            trackFeedPreparation(prep)
         }
     }
 
     // MARK: - Camera Capture
     func handleFeedCameraCapture(_ image: UIImage) {
-        Task {
-            let result = await MediaCompressor.shared.compressImage(image)
-            let fileName = "camera_\(UUID().uuidString).\(result.fileExtension)"
-            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-            try? result.data.write(to: tempURL)
-            let attachmentId = UUID().uuidString
-            let attachment = MessageAttachment(
-                id: attachmentId,
-                fileName: fileName,
-                originalName: fileName,
-                mimeType: result.mimeType,
-                fileSize: result.data.count,
-                fileUrl: tempURL.absoluteString,
-                width: Int(image.size.width),
-                height: Int(image.size.height),
-                thumbnailColor: "4ECDC4"
-            )
-            await MainActor.run {
-                pendingMediaFiles[attachmentId] = tempURL
-                pendingThumbnails[attachmentId] = image
-                pendingAttachments.append(attachment)
-                HapticFeedback.success()
-            }
-        }
+        let prep = AttachmentPreparationService.shared.prepareImage(
+            image,
+            context: .feedPost,
+            accentColor: "4ECDC4"
+        )
+        trackFeedPreparation(prep)
     }
 
     func handleFeedCameraVideo(_ url: URL) {
-        Task {
-            let compressedURL: URL
-            do {
-                compressedURL = try await MediaCompressor.shared.compressVideo(url, context: .feedPost)
-                try? FileManager.default.removeItem(at: url)
-            } catch {
-                compressedURL = url
-            }
+        let prep = AttachmentPreparationService.shared.prepareVideo(
+            sourceURL: url,
+            deleteSourceAfterCompression: true,
+            context: .feedPost,
+            accentColor: "FF6B6B"
+        )
+        trackFeedPreparation(prep)
+    }
 
-            let fileSize = feedGetFileSize(compressedURL)
-            let attachmentId = UUID().uuidString
-            let attachment = MessageAttachment(
-                id: attachmentId,
-                fileName: compressedURL.lastPathComponent,
-                originalName: compressedURL.lastPathComponent,
-                mimeType: "video/mp4",
-                fileSize: fileSize,
-                fileUrl: compressedURL.absoluteString,
-                thumbnailColor: "FF6B6B"
-            )
-
-            let thumb = await feedGenerateVideoThumbnail(url: compressedURL)
-            await MainActor.run {
-                pendingMediaFiles[attachmentId] = compressedURL
-                if let thumb { pendingThumbnails[attachmentId] = thumb }
-                pendingAttachments.append(attachment)
+    /// Append an in-flight preparation to the loading row and promote its
+    /// result into `pendingAttachments` / `pendingMediaFiles` /
+    /// `pendingThumbnails` once it reaches `.ready`. Mirrors
+    /// `ConversationView.trackPreparation` so the publish pipeline keeps
+    /// reading the same three dictionaries.
+    func trackFeedPreparation(_ prep: PreparingAttachment) {
+        preparingAttachments.append(prep)
+        Task { @MainActor [prep] in
+            let result = await prep.awaitCompletion()
+            switch result {
+            case .success(let prepared):
+                pendingMediaFiles[prepared.attachment.id] = prepared.fileURL
+                if let thumb = prep.thumbnail {
+                    pendingThumbnails[prepared.attachment.id] = thumb
+                }
+                pendingAttachments.append(prepared.attachment)
                 HapticFeedback.success()
+            case .failure(.preparationFailed(let message)):
+                HapticFeedback.error()
+                ToastManager.shared.showError(message)
             }
+            preparingAttachments.removeAll { $0.id == prep.id }
         }
+    }
+
+    func cancelFeedPreparation(_ prep: PreparingAttachment) {
+        preparingAttachments.removeAll { $0.id == prep.id }
     }
 
     // MARK: - File Import
@@ -343,10 +268,15 @@ extension FeedView {
         VStack(spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
+                    ForEach(preparingAttachments) { prep in
+                        AttachmentLoadingTile(prep: prep) {
+                            cancelFeedPreparation(prep)
+                        }
+                    }
                     ForEach(pendingAttachments) { attachment in
                         feedAttachmentTile(attachment)
                     }
-                    if isLoadingMedia {
+                    if isLoadingMedia && preparingAttachments.isEmpty {
                         ProgressView()
                             .tint(Color(hex: "4ECDC4"))
                             .padding(.horizontal, 12)
@@ -466,23 +396,13 @@ extension FeedView {
     }
 
     func feedMimeTypeForURL(_ url: URL) -> String {
-        let ext = url.pathExtension.lowercased()
-        switch ext {
-        case "jpg", "jpeg": return "image/jpeg"
-        case "png": return "image/png"
-        case "gif": return "image/gif"
-        case "webp": return "image/webp"
-        case "heic": return "image/heic"
-        case "mp4", "m4v": return "video/mp4"
-        case "mov": return "video/quicktime"
-        case "mp3": return "audio/mpeg"
-        case "m4a": return "audio/mp4"
-        case "wav": return "audio/wav"
-        case "pdf": return "application/pdf"
-        case "doc", "docx": return "application/msword"
-        case "zip": return "application/zip"
-        default: return "application/octet-stream"
-        }
+        // Single source of truth lives in `MimeTypeResolver` (MeeshySDK).
+        // NB: the legacy table here had a latent bug where `docx` was mapped
+        // to `application/msword` (the .doc mime), making Word docx files
+        // indistinguishable from .doc in downstream AttachmentKind dispatch.
+        // The resolver maps docx to its canonical
+        // `application/vnd.openxmlformats-officedocument.wordprocessingml.document`.
+        MimeTypeResolver.mimeType(forURL: url)
     }
 
     func feedIconForType(_ type: MessageAttachment.AttachmentType) -> String {
@@ -528,6 +448,7 @@ struct FeedComposerSheet: View {
     @State private var pendingMediaFiles: [String: URL] = [:]
     @State private var pendingThumbnails: [String: UIImage] = [:]
     @State private var pendingAudioURL: URL?
+    @State private var preparingAttachments: [PreparingAttachment] = []
     @State private var showPhotoPicker = false
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var showCamera = false
@@ -561,14 +482,14 @@ struct FeedComposerSheet: View {
                     Button {
                         cleanupAndDismiss()
                     } label: {
-                        Text("Annuler")
+                        Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                     }
 
                     Spacer()
 
-                    Text("Nouveau post")
+                    Text(String(localized: "feed.post.composer.title", defaultValue: "Nouveau post", bundle: .main))
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(theme.textPrimary)
 
@@ -582,7 +503,7 @@ struct FeedComposerSheet: View {
                                 .tint(MeeshyColors.indigo300)
                                 .scaleEffect(0.8)
                         } else {
-                            Text("Publier")
+                            Text(String(localized: "feed.post.composer.publish", defaultValue: "Publier", bundle: .main))
                                 .font(.system(size: 15, weight: .bold))
                                 .foregroundColor(hasContent ? MeeshyColors.indigo300 : theme.textMuted)
                         }
@@ -610,19 +531,23 @@ struct FeedComposerSheet: View {
 
                         Menu {
                             Button { postVisibility = "PUBLIC" } label: {
-                                Label("Public", systemImage: "globe")
+                                Label(String(localized: "feed.post.visibility.public", defaultValue: "Public", bundle: .main), systemImage: "globe")
                             }
                             Button { postVisibility = "FRIENDS" } label: {
-                                Label("Amis", systemImage: "person.2")
+                                Label(String(localized: "feed.post.visibility.friends", defaultValue: "Amis", bundle: .main), systemImage: "person.2")
                             }
                             Button { postVisibility = "PRIVATE" } label: {
-                                Label("Priv\u{00E9}", systemImage: "lock")
+                                Label(String(localized: "feed.post.visibility.private", defaultValue: "Privé", bundle: .main), systemImage: "lock")
                             }
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: postVisibility == "PUBLIC" ? "globe" : postVisibility == "FRIENDS" ? "person.2" : "lock")
                                     .font(.system(size: 10))
-                                Text(postVisibility == "PUBLIC" ? "Public" : postVisibility == "FRIENDS" ? "Amis" : "Priv\u{00E9}")
+                                Text(postVisibility == "PUBLIC"
+                                    ? String(localized: "feed.post.visibility.public", defaultValue: "Public", bundle: .main)
+                                    : postVisibility == "FRIENDS"
+                                        ? String(localized: "feed.post.visibility.friends", defaultValue: "Amis", bundle: .main)
+                                        : String(localized: "feed.post.visibility.private", defaultValue: "Privé", bundle: .main))
                                     .font(.system(size: 12))
                             }
                             .foregroundColor(theme.textMuted)
@@ -636,7 +561,7 @@ struct FeedComposerSheet: View {
                 // Text editor
                 ZStack(alignment: .topLeading) {
                     if composerText.isEmpty {
-                        Text("Qu'avez-vous en t\u{00EA}te ?")
+                        Text(String(localized: "feed.post.composer.placeholder", defaultValue: "Qu'avez-vous en tête ?", bundle: .main))
                             .font(.system(size: 17))
                             .foregroundColor(theme.textMuted)
                             .padding(.horizontal, 16)
@@ -689,7 +614,7 @@ struct FeedComposerSheet: View {
                 }
 
                 // Pending attachments
-                if !pendingAttachments.isEmpty || isLoadingMedia {
+                if !pendingAttachments.isEmpty || !preparingAttachments.isEmpty || isLoadingMedia {
                     sheetAttachmentsRow
                 }
 
@@ -810,7 +735,7 @@ struct FeedComposerSheet: View {
             },
             set: { editingAttachmentId = $0?.id }
         )) { item in
-            MeeshyImagePreviewView(image: item.image, context: .post) { editedImage in
+            MeeshyImageEditorView(image: item.image, context: .post) { editedImage in
                 pendingThumbnails[item.id] = editedImage
                 Task {
                     let result = await MediaCompressor.shared.compressImage(editedImage)
@@ -846,24 +771,34 @@ struct FeedComposerSheet: View {
             set: { if !$0 { videosToPreview.removeAll() } }
         )) {
             if let url = videosToPreview.first {
-                MeeshyVideoPreviewView(url: url, context: .post) {
-                    handleCameraVideo(url)
-                    videosToPreview.removeFirst()
-                }
+                MeeshyVideoEditorView(
+                    url: url,
+                    context: .post,
+                    onComplete: { result in
+                        handleCameraVideo(result.url)
+                        videosToPreview.removeFirst()
+                    },
+                    onCancel: {
+                        videosToPreview.removeFirst()
+                    }
+                )
             }
         }
-        // Tap pending video → VideoPreviewView
+        // Tap pending video → unified video editor
         .fullScreenCover(isPresented: Binding(
             get: { editingVideoURL != nil },
             set: { if !$0 { editingVideoURL = nil } }
         )) {
             if let url = editingVideoURL {
-                MeeshyVideoPreviewView(url: url, context: .post) {
-                    editingVideoURL = nil
-                }
+                MeeshyVideoEditorView(
+                    url: url,
+                    context: .post,
+                    onComplete: { _ in editingVideoURL = nil },
+                    onCancel: { editingVideoURL = nil }
+                )
             }
         }
-        .onChange(of: selectedPhotoItems) { _, items in
+        .adaptiveOnChange(of: selectedPhotoItems) { _, items in
             handlePhotoSelection(items)
         }
         .onAppear {
@@ -891,10 +826,15 @@ struct FeedComposerSheet: View {
     private var sheetAttachmentsRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
+                ForEach(preparingAttachments) { prep in
+                    AttachmentLoadingTile(prep: prep, size: 72) {
+                        cancelSheetPreparation(prep)
+                    }
+                }
                 ForEach(pendingAttachments) { attachment in
                     sheetAttachmentTile(attachment)
                 }
-                if isLoadingMedia {
+                if isLoadingMedia && preparingAttachments.isEmpty {
                     ProgressView()
                         .tint(Color(hex: "4ECDC4"))
                         .padding(.horizontal, 12)
@@ -984,18 +924,20 @@ struct FeedComposerSheet: View {
         }
     }
 
-    // MARK: - Handlers (Adapted from FeedView+Attachments)
+    // MARK: - Handlers (delegated to AttachmentPreparationService)
     private func handlePhotoSelection(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
-        let itemsCopy = items
         selectedPhotoItems.removeAll()
-        isLoadingMedia = true
         HapticFeedback.light()
-
-        Task {
-            for item in itemsCopy {
-                let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
-                if isVideo {
+        for item in items {
+            let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
+            if isVideo {
+                // Videos go through the editor first — compress + queue the
+                // compressed URL for the previewer. The editor is the source
+                // of truth for trimming/cover selection; once the user
+                // confirms there, `handleCameraVideo` (below) wires the
+                // preparation into the loading tray.
+                Task {
                     if let movieData = try? await item.loadTransferable(type: Data.self) {
                         let rawURL = FileManager.default.temporaryDirectory.appendingPathComponent("video_raw_\(UUID().uuidString).mp4")
                         try? movieData.write(to: rawURL)
@@ -1004,66 +946,57 @@ struct FeedComposerSheet: View {
                             compressedURL = try await MediaCompressor.shared.compressVideo(rawURL, context: .feedPost)
                             try? FileManager.default.removeItem(at: rawURL)
                         } catch { compressedURL = rawURL }
-                        await MainActor.run {
-                            videosToPreview.append(compressedURL)
-                        }
-                    }
-                } else {
-                    if let imageData = try? await item.loadTransferable(type: Data.self),
-                       let uiImage = UIImage(data: imageData) {
-                        let result = await MediaCompressor.shared.compressImageData(imageData)
-                        let fileName = "image_\(UUID().uuidString).\(result.fileExtension)"
-                        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-                        try? result.data.write(to: tempURL)
-                        let attachmentId = UUID().uuidString
-                        let attachment = MessageAttachment(id: attachmentId, fileName: fileName, originalName: fileName, mimeType: result.mimeType, fileSize: result.data.count, fileUrl: tempURL.absoluteString, width: Int(uiImage.size.width), height: Int(uiImage.size.height), thumbnailColor: "4ECDC4")
-                        await MainActor.run {
-                            pendingMediaFiles[attachmentId] = tempURL
-                            pendingThumbnails[attachmentId] = uiImage
-                            pendingAttachments.append(attachment)
-                        }
+                        await MainActor.run { videosToPreview.append(compressedURL) }
                     }
                 }
+            } else {
+                let prep = AttachmentPreparationService.shared.preparePhotosPickerItem(
+                    item, context: .feedPost, accentColor: "4ECDC4"
+                )
+                trackSheetPreparation(prep)
             }
-            await MainActor.run { isLoadingMedia = false }
         }
     }
 
     private func handleCameraCapture(_ image: UIImage) {
-        Task {
-            let result = await MediaCompressor.shared.compressImage(image)
-            let fileName = "camera_\(UUID().uuidString).\(result.fileExtension)"
-            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-            try? result.data.write(to: tempURL)
-            let attachmentId = UUID().uuidString
-            let attachment = MessageAttachment(id: attachmentId, fileName: fileName, originalName: fileName, mimeType: result.mimeType, fileSize: result.data.count, fileUrl: tempURL.absoluteString, width: Int(image.size.width), height: Int(image.size.height), thumbnailColor: "4ECDC4")
-            await MainActor.run {
-                pendingMediaFiles[attachmentId] = tempURL
-                pendingThumbnails[attachmentId] = image
-                pendingAttachments.append(attachment)
-                HapticFeedback.success()
-            }
-        }
+        let prep = AttachmentPreparationService.shared.prepareImage(
+            image, context: .feedPost, accentColor: "4ECDC4"
+        )
+        trackSheetPreparation(prep)
     }
 
     private func handleCameraVideo(_ url: URL) {
-        Task {
-            let compressedURL: URL
-            do {
-                compressedURL = try await MediaCompressor.shared.compressVideo(url, context: .feedPost)
-                try? FileManager.default.removeItem(at: url)
-            } catch { compressedURL = url }
-            let fileSize = (try? FileManager.default.attributesOfItem(atPath: compressedURL.path)[.size] as? Int) ?? 0
-            let attachmentId = UUID().uuidString
-            let attachment = MessageAttachment(id: attachmentId, fileName: compressedURL.lastPathComponent, originalName: compressedURL.lastPathComponent, mimeType: "video/mp4", fileSize: fileSize, fileUrl: compressedURL.absoluteString, thumbnailColor: "FF6B6B")
-            let thumb = await generateVideoThumbnail(url: compressedURL)
-            await MainActor.run {
-                pendingMediaFiles[attachmentId] = compressedURL
-                if let thumb { pendingThumbnails[attachmentId] = thumb }
-                pendingAttachments.append(attachment)
+        let prep = AttachmentPreparationService.shared.prepareVideo(
+            sourceURL: url,
+            deleteSourceAfterCompression: true,
+            context: .feedPost,
+            accentColor: "FF6B6B"
+        )
+        trackSheetPreparation(prep)
+    }
+
+    private func trackSheetPreparation(_ prep: PreparingAttachment) {
+        preparingAttachments.append(prep)
+        Task { @MainActor [prep] in
+            let result = await prep.awaitCompletion()
+            switch result {
+            case .success(let prepared):
+                pendingMediaFiles[prepared.attachment.id] = prepared.fileURL
+                if let thumb = prep.thumbnail {
+                    pendingThumbnails[prepared.attachment.id] = thumb
+                }
+                pendingAttachments.append(prepared.attachment)
                 HapticFeedback.success()
+            case .failure(.preparationFailed(let message)):
+                HapticFeedback.error()
+                ToastManager.shared.showError(message)
             }
+            preparingAttachments.removeAll { $0.id == prep.id }
         }
+    }
+
+    private func cancelSheetPreparation(_ prep: PreparingAttachment) {
+        preparingAttachments.removeAll { $0.id == prep.id }
     }
 
     private func handleFileImport(_ result: Result<[URL], Error>) {
@@ -1213,18 +1146,10 @@ struct FeedComposerSheet: View {
     }
 
     private func mimeTypeForURL(_ url: URL) -> String {
-        let ext = url.pathExtension.lowercased()
-        switch ext {
-        case "jpg", "jpeg": return "image/jpeg"
-        case "png": return "image/png"
-        case "gif": return "image/gif"
-        case "mp4", "m4v": return "video/mp4"
-        case "mov": return "video/quicktime"
-        case "mp3": return "audio/mpeg"
-        case "m4a": return "audio/mp4"
-        case "pdf": return "application/pdf"
-        default: return "application/octet-stream"
-        }
+        // Single source of truth lives in `MimeTypeResolver` (MeeshySDK).
+        // Replaces a deliberately-narrow table that excluded several formats
+        // (webp/heic/wav/audio/ogg/...) — the resolver covers all of them.
+        MimeTypeResolver.mimeType(forURL: url)
     }
 
     private func sheetIconForType(_ type: MessageAttachment.AttachmentType) -> String {

@@ -70,6 +70,7 @@ final class MockStoryComposerViewModel: StoryComposerProviding {
     var loadedImages: [String: UIImage] = [:]
     var loadedVideoURLs: [String: URL] = [:]
     var loadedAudioURLs: [String: URL] = [:]
+    var loadedVideoCaptions: [String: StoryVideoCaptionMetadata] = [:]
     var mediaAspectRatios: [String: CGFloat] = [:]
 
     var _setAspectRatioCalls: Int = 0
@@ -275,6 +276,13 @@ final class MockStoryComposerViewModel: StoryComposerProviding {
         _setMediaURLLastArgs = (id, url, slideId)
     }
 
+    var _setMediaAspectRatioCalls: Int = 0
+    var _setMediaAspectRatioLastArgs: (id: String, aspectRatio: Double, slideId: String?)?
+    func setMediaAspectRatio(id: String, aspectRatio: Double, slideId: String?) {
+        _setMediaAspectRatioCalls += 1
+        _setMediaAspectRatioLastArgs = (id, aspectRatio, slideId)
+    }
+
     var _addAudioObjectCalls: Int = 0
     var stubAddAudioObject: StoryAudioPlayerObject?
     @discardableResult
@@ -317,6 +325,14 @@ final class MockStoryComposerViewModel: StoryComposerProviding {
     func isBackground(id: String) -> Bool {
         _isBackgroundCalls += 1
         return stubIsBackground[id] ?? false
+    }
+
+    // MARK: - Audio
+    var _setAudioVolumeCalls: Int = 0
+    var _setAudioVolumeLastArgs: (id: String, volume: Float)?
+    func setAudioVolume(audioId: String, volume: Float) {
+        _setAudioVolumeCalls += 1
+        _setAudioVolumeLastArgs = (audioId, volume)
     }
 
     // MARK: - Z-Order
@@ -425,6 +441,7 @@ final class MockStoryComposerViewModel: StoryComposerProviding {
         loadedImages = [:]
         loadedVideoURLs = [:]
         loadedAudioURLs = [:]
+        loadedVideoCaptions = [:]
         isTimelineVisible = false
         timelinePlaybackTime = 0
         isTimelinePlaying = false

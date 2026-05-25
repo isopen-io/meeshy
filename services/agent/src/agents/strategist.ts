@@ -21,6 +21,9 @@ CONTEXTE DE LA CONVERSATION:
 SUJET ACTUEL DE LA CONVERSATION:
 {currentTopic}
 
+THEME DETECTE: {detectedTheme}
+{topicProvocation}
+
 DONNEES D'ENGAGEMENT (interventions les plus appreciees):
 {engagementData}
 
@@ -154,7 +157,173 @@ function shuffleArray<T>(arr: T[]): T[] {
   return shuffled;
 }
 
-function buildStrategistPrompt(state: ConversationState, minResponses: number, maxResponses: number, maxReactions: number, reactionsEnabled: boolean): string {
+const TOPIC_PROVOCATION_PROBABILITY = 0.20;
+
+type ConversationTheme =
+  | 'ai_tech'
+  | 'microservices'
+  | 'web_dev'
+  | 'mobile_dev'
+  | 'cybersecurity'
+  | 'data_science'
+  | 'sports'
+  | 'culture'
+  | 'business'
+  | 'science'
+  | 'gaming'
+  | 'politics'
+  | 'general_news';
+
+const THEME_PATTERNS: Array<[ConversationTheme, RegExp]> = [
+  ['ai_tech', /\b(ia|ai|gpt|llm|claude|gemini|anthropic|openai|prompt|model|chatgpt|mistral|huggingface|machine[\s-]?learning|deep[\s-]?learning|transformer|rag|agentic|embedding|fine[\s-]?tuning)\b/i],
+  ['microservices', /\b(microservice|kubernetes|k8s|docker|kafka|grpc|service[\s-]?mesh|istio|distribu(?:e|é)|message[\s-]?broker|saga|event[\s-]?driven|api[\s-]?gateway|terraform|helm|prometheus|grafana|observability|monolith)\b/i],
+  ['web_dev', /\b(react|next\.?js|vue|svelte|angular|typescript|javascript|node\.?js|fastify|express|tailwind|frontend|backend|fullstack|webpack|vite|deno|bun)\b/i],
+  ['mobile_dev', /\b(swift|swiftui|kotlin|jetpack|android|ios|react[\s-]?native|flutter|xcode|appstore|playstore)\b/i],
+  ['cybersecurity', /\b(s(?:e|é)curit(?:e|é)|cybers(?:e|é)curit(?:e|é)|pentest|cve|vuln(?:e|é)rabilit(?:e|é)|ransomware|phishing|zero[\s-]?day|exploit|hacker|cisa|crypto[\s-]?graphy)\b/i],
+  ['data_science', /\b(data[\s-]?science|big[\s-]?data|spark|hadoop|pandas|numpy|jupyter|datalake|warehouse|etl|bi|analytics|tableau|powerbi)\b/i],
+  ['sports', /\b(football|sport|match|(?:e|é)quipe|joueur|coupe|tournoi|psg|ligue|nba|formula|tennis|olympique|f1|rugby|jo|basket)\b/i],
+  ['science', /\b(science|recherche|(?:e|é)tude|chercheur|d(?:e|é)couverte|biologie|chimie|physique|espace|nasa|spacex|astronome|quantum|fusion)\b/i],
+  ['business', /\b(business|startup|investissement|lev(?:e|é)e|crypto|bitcoin|ethereum|bourse|action|trading|(?:e|é)conomie|finance|march(?:e|é)|ipo|fonds)\b/i],
+  ['gaming', /\b(jeu[x]?\s|gaming|playstation|xbox|nintendo|steam|esport|twitch|gamer|ps5|switch)\b/i],
+  ['culture', /\b(film|musique|s(?:e|é)rie|netflix|spotify|concert|album|cin(?:e|é)ma|artiste|festival|livre|roman|disney|prime[\s-]?video)\b/i],
+  ['politics', /\b(politique|(?:e|é)lection|gouvernement|pr(?:e|é)sident|ministre|assembl(?:e|é)e|parti|d(?:e|é)putes?|s(?:e|é)nat|loi)\b/i],
+  ['general_news', /\b(actualit(?:e|é)|news|info|monde|soci(?:e|é)t(?:e|é)|(?:e|é)v(?:e|é)nement)\b/i],
+];
+
+function detectConversationTheme(state: ConversationState): ConversationTheme {
+  const haystack = [
+    state.conversationTitle ?? '',
+    state.conversationDescription ?? '',
+    state.agentInstructions ?? '',
+    ...state.messages.slice(-30).map((m) => m.content),
+  ].join(' ').toLowerCase();
+
+  const scores = new Map<ConversationTheme, number>();
+  for (const [theme, regex] of THEME_PATTERNS) {
+    const matches = haystack.match(new RegExp(regex.source, regex.flags + 'g')) ?? [];
+    if (matches.length > 0) scores.set(theme, matches.length);
+  }
+
+  if (scores.size === 0) return 'general_news';
+
+  return [...scores.entries()].sort((a, b) => b[1] - a[1])[0][0];
+}
+
+type ProvocationHint = { instruction: string; searchHint: string; topicCategory: string };
+
+function buildTopicProvocationHint(theme: ConversationTheme): ProvocationHint {
+  switch (theme) {
+    case 'ai_tech':
+      return {
+        instruction: 'Cette conversation gravite autour de l\'IA / LLM. Lance un NOUVEAU sujet AUTOUR d\'une actualite chaude IA (nouveau modele, benchmark, levee de fonds, debat ethique, agent autonome).',
+        searchHint: 'actualite IA LLM cette semaine',
+        topicCategory: 'tech-ai',
+      };
+    case 'microservices':
+      return {
+        instruction: 'Cette conversation porte sur l\'architecture distribuee / microservices. Lance un NOUVEAU sujet (release Kubernetes, retour d\'experience recent, debat distribue vs monolithe, observabilite, new pattern).',
+        searchHint: 'microservices kubernetes actualite tendance',
+        topicCategory: 'tech-architecture',
+      };
+    case 'web_dev':
+      return {
+        instruction: 'Conversation web/frontend/backend. Lance un NOUVEAU sujet (release framework, retour d\'experience, debat outillage, performance).',
+        searchHint: 'actualite developpement web framework',
+        topicCategory: 'tech-web',
+      };
+    case 'mobile_dev':
+      return {
+        instruction: 'Conversation mobile (iOS/Android). Lance un NOUVEAU sujet (release OS, framework, App Store policy, retour d\'experience).',
+        searchHint: 'actualite developpement mobile iOS Android',
+        topicCategory: 'tech-mobile',
+      };
+    case 'cybersecurity':
+      return {
+        instruction: 'Conversation cybersecurite. Lance un NOUVEAU sujet (CVE recente, breach, retour pentest, debat zero-trust).',
+        searchHint: 'actualite cybersecurite CVE breach',
+        topicCategory: 'tech-security',
+      };
+    case 'data_science':
+      return {
+        instruction: 'Conversation data science / analytics. Lance un NOUVEAU sujet (release outil, tendance pipeline, retour d\'experience datalake).',
+        searchHint: 'actualite data science analytics',
+        topicCategory: 'tech-data',
+      };
+    case 'sports':
+      return {
+        instruction: 'Conversation sport. Lance un NOUVEAU sujet (resultat recent, transfert, evenement a venir).',
+        searchHint: 'actualite sport resultats recents',
+        topicCategory: 'sport',
+      };
+    case 'science':
+      return {
+        instruction: 'Conversation science. Lance un NOUVEAU sujet (decouverte recente, mission spatiale, debat).',
+        searchHint: 'decouverte scientifique recente',
+        topicCategory: 'science',
+      };
+    case 'business':
+      return {
+        instruction: 'Conversation business/finance. Lance un NOUVEAU sujet (levee, mouvement marche, tendance crypto, IPO).',
+        searchHint: 'actualite business startup finance tendance',
+        topicCategory: 'business',
+      };
+    case 'gaming':
+      return {
+        instruction: 'Conversation gaming. Lance un NOUVEAU sujet (sortie jeu, drama studio, esport).',
+        searchHint: 'actualite gaming sortie jeu',
+        topicCategory: 'gaming',
+      };
+    case 'culture':
+      return {
+        instruction: 'Conversation culture. Lance un NOUVEAU sujet (sortie film, album, serie a debattre).',
+        searchHint: 'sortie cinema musique serie recente',
+        topicCategory: 'culture',
+      };
+    case 'politics':
+      return {
+        instruction: 'Conversation politique. Lance un NOUVEAU sujet en lien avec une actualite politique chaude. Reste factuel, evite la polemique gratuite.',
+        searchHint: 'actualite politique recente',
+        topicCategory: 'politics',
+      };
+    case 'general_news':
+    default:
+      return {
+        instruction: 'Lance un NOUVEAU sujet autour d\'une actualite chaude generale susceptible d\'interesser les participants.',
+        searchHint: 'actualite hot du moment',
+        topicCategory: 'news',
+      };
+  }
+}
+
+function buildProvocationBlock(hint: ProvocationHint, budgetRemaining: number): string {
+  return [
+    '',
+    '===== PROVOCATION DE NOUVEAU SUJET (DECLENCHE — 20%) =====',
+    hint.instruction,
+    '',
+    'CONTRAINTES:',
+    `- AJOUTE OBLIGATOIREMENT 1 intervention "message" de type provocation (en plus des reponses habituelles, dans la limite du budget restant ${budgetRemaining}).`,
+    '- Cette intervention DOIT avoir needsWebSearch: true',
+    `- searchHint OBLIGATOIRE, base de requete: "${hint.searchHint}" (raffine en fonction du contexte de conversation et de la date)`,
+    `- topicCategory: "${hint.topicCategory}"`,
+    '- delayCategory: "short" ou "medium" (jamais "immediate" pour eviter de couper une discussion en cours)',
+    '- replyToMessageId: null (c\'est un nouveau sujet, pas une reponse)',
+    '- Le sujet doit etre NEUF (pas dans agentHistory, pas dans recentTopicCategories)',
+    '- Si le budget restant est 0, NE PAS forcer cette provocation',
+    '- Choisis un utilisateur dont les topicsOfExpertise matchent le theme',
+    '',
+  ].join('\n');
+}
+
+function buildStrategistPrompt(
+  state: ConversationState,
+  minResponses: number,
+  maxResponses: number,
+  maxReactions: number,
+  reactionsEnabled: boolean,
+  detectedTheme: ConversationTheme,
+  provocationHint: ProvocationHint | null,
+): string {
   const windowSize = state.useFullHistory ? 250 : (state.contextWindowSize ?? 50);
   const recentMessages = state.messages.slice(-windowSize);
 
@@ -249,6 +418,8 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
         `- ${sa.userId} : "${sa.topicCategory}" dans ${Math.round((sa.scheduledAt - Date.now()) / 60_000)}min (${sa.type})`
       ).join('\n')
       : 'Aucune action programmee')
+    .replace('{detectedTheme}', detectedTheme)
+    .replace('{topicProvocation}', provocationHint ? buildProvocationBlock(provocationHint, state.budgetRemaining) : '')
     .replace('{engagementData}', engagementText)
     .replace('{inactiveUsers}', inactiveUsersText)
     .replace('{participants}', participantsText)
@@ -632,7 +803,26 @@ export function createStrategistNode(llm: LlmProvider) {
     const minResponses = state.minResponsesPerCycle;
     const maxResponses = state.maxResponsesPerCycle;
 
-    const prompt = buildStrategistPrompt(state, minResponses, maxResponses, maxReactions, reactionsEnabled);
+    const detectedTheme = detectConversationTheme(state);
+    const provokeNewTopic =
+      state.budgetRemaining > 0 && Math.random() < TOPIC_PROVOCATION_PROBABILITY;
+    const provocationHint = provokeNewTopic ? buildTopicProvocationHint(detectedTheme) : null;
+
+    if (provocationHint) {
+      console.log(
+        `[Strategist] Topic provocation TRIGGERED (theme=${detectedTheme}, searchHint="${provocationHint.searchHint}")`,
+      );
+    }
+
+    const prompt = buildStrategistPrompt(
+      state,
+      minResponses,
+      maxResponses,
+      maxReactions,
+      reactionsEnabled,
+      detectedTheme,
+      provocationHint,
+    );
 
     try {
       const response = await llm.chat({
@@ -719,13 +909,24 @@ export function createStrategistNode(llm: LlmProvider) {
           reason: parsed.reason ?? '',
           plannedMessages: withReactions.filter((i) => i.type === 'message').length,
           plannedReactions: withReactions.filter((i) => i.type === 'reaction').length,
+          detectedTheme,
+          topicProvocationTriggered: provokeNewTopic,
+          provocationSearchHint: provocationHint?.searchHint,
         },
       };
     } catch (error) {
       console.error('[Strategist] Error:', error);
       return {
         interventionPlan: { shouldIntervene: false, reason: 'Strategist error', interventions: [] } satisfies InterventionPlan,
-        _traceInputTokens: 0, _traceOutputTokens: 0, _traceModel: 'error', _traceExtra: { decision: 'error' },
+        _traceInputTokens: 0,
+        _traceOutputTokens: 0,
+        _traceModel: 'error',
+        _traceExtra: {
+          decision: 'error',
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorCode: (error as any)?.code ?? 'UNKNOWN',
+          errorStack: error instanceof Error ? error.stack : undefined,
+        },
       };
     }
   };

@@ -259,7 +259,7 @@ describe('Social Notification Methods', () => {
       expect(metadata.emoji).toBe('🎉');
       expect(metadata.postId).toBe(POST_ID);
       expect(metadata.postType).toBe('POST');
-      expect(metadata.action).toBe('view_message');
+      expect(metadata.action).toBe('view_post');
     });
 
     it('should include postId in notification context', async () => {
@@ -372,7 +372,7 @@ describe('Social Notification Methods', () => {
       const createArg = mockPrisma.notification.create.mock.calls[0][0];
       expect(createArg.data.metadata.commentId).toBe(COMMENT_ID);
       expect(createArg.data.metadata.postId).toBe(POST_ID);
-      expect(createArg.data.metadata.action).toBe('view_message');
+      expect(createArg.data.metadata.action).toBe('view_post');
     });
 
     it('should include commentPreview in metadata', async () => {
@@ -471,7 +471,7 @@ describe('Social Notification Methods', () => {
       const createArg = mockPrisma.notification.create.mock.calls[0][0];
       expect(createArg.data.metadata.repostId).toBe(REPOST_ID);
       expect(createArg.data.metadata.originalPostId).toBe(POST_ID);
-      expect(createArg.data.metadata.action).toBe('view_message');
+      expect(createArg.data.metadata.action).toBe('view_post');
     });
 
     it('should include originalPostId in context as postId', async () => {
@@ -673,7 +673,7 @@ describe('Social Notification Methods', () => {
       expect(createArg.data.metadata.commentId).toBe(COMMENT_ID);
       expect(createArg.data.metadata.emoji).toBe('🔥');
       expect(createArg.data.metadata.postId).toBe(POST_ID);
-      expect(createArg.data.metadata.action).toBe('view_message');
+      expect(createArg.data.metadata.action).toBe('view_post');
     });
 
     it('should set userId to commentAuthorId', async () => {

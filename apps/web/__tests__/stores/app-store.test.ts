@@ -16,7 +16,6 @@ describe('AppStore', () => {
     // Reset the store to initial state
     act(() => {
       useAppStore.setState({
-        isOnline: true,
         theme: 'auto',
         notifications: [],
         isInitialized: false,
@@ -41,44 +40,14 @@ describe('AppStore', () => {
     it('should have correct initial state', () => {
       const state = useAppStore.getState();
 
-      expect(state.isOnline).toBe(true);
       expect(state.theme).toBe('auto');
       expect(state.notifications).toEqual([]);
       expect(state.isInitialized).toBe(false);
     });
   });
 
-  describe('Online Status', () => {
-    describe('setOnline', () => {
-      it('should set online status to true', () => {
-        act(() => {
-          useAppStore.getState().setOnline(true);
-        });
-
-        expect(useAppStore.getState().isOnline).toBe(true);
-      });
-
-      it('should set online status to false', () => {
-        act(() => {
-          useAppStore.getState().setOnline(false);
-        });
-
-        expect(useAppStore.getState().isOnline).toBe(false);
-      });
-
-      it('should toggle online status', () => {
-        act(() => {
-          useAppStore.getState().setOnline(false);
-        });
-        expect(useAppStore.getState().isOnline).toBe(false);
-
-        act(() => {
-          useAppStore.getState().setOnline(true);
-        });
-        expect(useAppStore.getState().isOnline).toBe(true);
-      });
-    });
-  });
+  // Note: l'état réseau (isOnline) est désormais géré par
+  // hooks/use-connection-status.ts — voir les tests associés.
 
   describe('Theme', () => {
     describe('setTheme', () => {
@@ -339,19 +308,6 @@ describe('AppStore', () => {
         expect(useAppStore.getState().isInitialized).toBe(true);
       });
 
-      it('should set online status based on navigator.onLine', async () => {
-        Object.defineProperty(window.navigator, 'onLine', {
-          value: false,
-          writable: true,
-        });
-
-        await act(async () => {
-          await useAppStore.getState().initialize();
-        });
-
-        expect(useAppStore.getState().isOnline).toBe(false);
-      });
-
       it('should apply initial theme', async () => {
         act(() => {
           useAppStore.setState({ theme: 'dark' });
@@ -375,14 +331,6 @@ describe('AppStore', () => {
       expect(useAppStore.getState().theme).toBe('dark');
     });
 
-    it('useIsOnline should return online status', () => {
-      act(() => {
-        useAppStore.getState().setOnline(false);
-      });
-
-      expect(useAppStore.getState().isOnline).toBe(false);
-    });
-
     it('useNotifications should return notifications array', () => {
       act(() => {
         useAppStore.getState().addNotification({ type: 'info', title: 'Test', duration: 0 });
@@ -404,11 +352,10 @@ describe('AppStore', () => {
   });
 
   describe('Persistence', () => {
-    it('should only persist theme (not notifications or online status)', () => {
+    it('should only persist theme (not notifications)', () => {
       // The store partializes to only persist theme
       act(() => {
         useAppStore.getState().setTheme('dark');
-        useAppStore.getState().setOnline(false);
         useAppStore.getState().addNotification({ type: 'info', title: 'Test', duration: 0 });
       });
 
@@ -416,7 +363,6 @@ describe('AppStore', () => {
 
       // All values should be set in state
       expect(state.theme).toBe('dark');
-      expect(state.isOnline).toBe(false);
       expect(state.notifications).toHaveLength(1);
 
       // But persistence only keeps theme (verified by store config)

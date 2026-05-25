@@ -118,7 +118,7 @@ extension StoryViewerView {
             .padding(.horizontal, 24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: compositeAlignment(position: position, align: align))
             .offset(y: offsetY)
-            .accessibilityLabel("Texte de la story: \(content)")
+            .accessibilityLabel(String(localized: "story.viewer.a11y.storyText", defaultValue: "Texte de la story: \(content)", bundle: .main))
     }
 
     private func fontForStyle(_ style: String, sizeOverride: CGFloat? = nil) -> Font {
@@ -174,7 +174,8 @@ extension StoryViewerView {
                 ProgressiveCachedImage(
                     thumbHash: media.thumbHash,
                     thumbnailUrl: media.thumbnailUrl,
-                    fullUrl: media.url
+                    fullUrl: media.url,
+                    autoLoad: true
                 ) {
                     coloredMediaFallback(media: media)
                 }
@@ -511,9 +512,14 @@ extension StoryViewerView {
 
     /// State-driven pause: the timer checks ALL active UI states each tick
     /// instead of relying on paired pauseTimer/resumeTimer event calls.
-    /// `isPaused` is ONLY for direct user gestures (long press, drag).
+    ///
+    /// - `isPaused` : pauses du timer pour sheets, drag-to-dismiss, etc.
+    ///   (timer-only — le canvas continue à jouer).
+    /// - `isLongPressPaused` : toggle long-press utilisateur (timer + canvas
+    ///   gelés ensemble via `.storyPlayerPause`).
     private var shouldPauseTimer: Bool {
         isPaused
+        || isLongPressPaused
         || isComposerEngaged
         || hasComposerContent
         || showEmojiStrip
@@ -531,6 +537,7 @@ extension StoryViewerView {
         progress = 0
         isContentReady = false
         hasFiredFadeOut = false
+        hasFiredNextPrefetch = false
         showCommentsOverlay = false
         replyingToStoryComment = nil
         storyCommentRepliesMap = [:]
@@ -541,6 +548,13 @@ extension StoryViewerView {
         updateStoryDuration()
         let duration = computedStoryDuration
         let fadeOutThreshold = max(0, 1.0 - (2.0 / duration))
+        // Seuil d'amorçage du prefetch de la slide suivante : 5 secondes avant
+        // la fin de la slide en cours (clamp à 0 pour les slides ≤ 5 s, où
+        // le prefetch s'arme dès l'apparition). Ça donne ~5 s de marge réseau
+        // au décodeur pour avoir au moins quelques secondes de la prochaine
+        // vidéo prêtes en mémoire / cache disk avant la transition, ce qui
+        // élimine le loader 0% lors du switch.
+        let nextPrefetchThreshold = max(0, 1.0 - (5.0 / duration))
 
         // Drive the progress bar from a CADisplayLink instead of `Timer.publish(every: 0.03)`.
         // Two wins:
@@ -577,6 +591,17 @@ extension StoryViewerView {
                 hasFiredFadeOut = true
                 NotificationCenter.default.post(name: .storyAudioFadeOut, object: nil)
             }
+            // Prefetch de la slide suivante 5 secondes avant la fin. On laisse
+            // ainsi au décodeur le temps de mettre en cache disk au moins les
+            // premières secondes (typiquement 5 s suffisent même sur 4G) avant
+            // que l'utilisateur transitionne — la prochaine ouverture est alors
+            // instantanée. Idempotent via `hasFiredNextPrefetch` : un seul
+            // déclenchement par slide. Sécurisé en bout de groupe (prefetchStory
+            // borne l'index et `prefetchAllMedia` est un no-op si déjà en cache).
+            if raw >= nextPrefetchThreshold && !hasFiredNextPrefetch {
+                hasFiredNextPrefetch = true
+                _ = prefetchStory(at: currentStoryIndex + 1)
+            }
             if raw >= 1.0 {
                 goToNext()
             }
@@ -591,8 +616,14 @@ extension StoryViewerView {
     }
 
     /// Restart timer AND clear manual pause (e.g., after drag->transition).
+    /// Changement de slide ou sortie de transition : on repart en lecture
+    /// fraîche. On désarme **les deux** drapeaux de pause :
+    /// - `isPaused` (timer-only)
+    /// - `isLongPressPaused` (long-press latch — déclenche `.storyPlayerResume`
+    ///   au canvas si on était latched-paused au moment du changement).
     private func restartTimer() {
         isPaused = false
+        isLongPressPaused = false
         startTimer()
     }
 
@@ -648,6 +679,18 @@ extension StoryViewerView {
             let startOffset = obj.startTime ?? 0
             if let dur = obj.duration {
                 maxDuration = max(maxDuration, startOffset + dur)
+            }
+
+            // Extension dynamique basée sur la longueur du texte (Section 5 de la review)
+            // Les textes longs de plus de 30 mots devraient rajouter 1 seconde de plus à la story
+            // pour chaque 6 mots supplémentaire.
+            let words = obj.text.split(separator: " ").count
+            if words > 30 {
+                let extraWords = words - 30
+                let extraSeconds = Double(extraWords) / 6.0
+                // L'extension s'applique sur la durée de base du slide (floor)
+                let base = effects?.slideDuration.map { Double($0) } ?? 12.0
+                maxDuration = max(maxDuration, base + extraSeconds)
             }
         }
 
@@ -727,11 +770,20 @@ extension StoryViewerView {
         return effective
     }
 
-    /// Manual pause — only for direct gesture holds (long press, drag).
+    /// Manual pause — sheets, drag-to-dismiss, composer engaged, etc.
+    /// **Timer-only** : le canvas (vidéo BG, audios, effets) continue à
+    /// jouer. Cela évite un blip audible au cycle pause/resume rapide
+    /// d'un drag de transition. Le toggle long-press passe par
+    /// `isLongPressPaused` (qui, lui, freeze le canvas via notification).
     func pauseTimer() { isPaused = true }
 
-    /// Manual resume — only for ending gesture holds.
-    func resumeTimer() { isPaused = false }
+    /// Manual resume — symétrique de `pauseTimer()`. N'inverse pas le
+    /// long-press latch (`isLongPressPaused`) : si l'utilisateur a stoppé
+    /// la story via long-press puis ouvert une sheet, la fermeture de la
+    /// sheet ne doit pas relancer la story automatiquement.
+    func resumeTimer() {
+        isPaused = false
+    }
 
     // MARK: - Initial Action (Phase F — notification entry point)
 
@@ -820,19 +872,12 @@ extension StoryViewerView {
         // Send to API
         let language = composerLanguage
         Task {
-            var body: [String: AnyCodable] = [
-                "content": AnyCodable(text),
-                "originalLanguage": AnyCodable(language),
-            ]
-            if let effectFlags {
-                body["effectFlags"] = AnyCodable(effectFlags)
-            }
-            if let parentId {
-                body["parentId"] = AnyCodable(parentId)
-            }
-            let _: APIResponse<[String: AnyCodable]>? = try? await APIClient.shared.post(
-                endpoint: "/posts/\(story.id)/comments",
-                body: body
+            await StoryInteractionService().postComment(
+                storyId: story.id,
+                content: text,
+                originalLanguage: language,
+                effectFlags: effectFlags,
+                parentId: parentId
             )
         }
 
@@ -849,11 +894,7 @@ extension StoryViewerView {
 
         // Fire & forget like
         Task {
-            let body = ReactionRequest(emoji: emoji)
-            let _: APIResponse<[String: AnyCodable]>? = try? await APIClient.shared.post(
-                endpoint: "/posts/\(story.id)/like",
-                body: body
-            )
+            await StoryInteractionService().react(storyId: story.id, emoji: emoji)
         }
     }
 
@@ -1023,7 +1064,7 @@ struct StoryViewersSheet: View {
                     )
                 } else {
                     List {
-                        Section(header: Text("\(viewers.count) Vues")
+                        Section(header: Text(String(localized: "story.viewer.viewsCount", defaultValue: "\(viewers.count) Vues", bundle: .main))
                             .font(.headline)
                             .foregroundColor(.primary)
                             .textCase(nil)
@@ -1037,11 +1078,11 @@ struct StoryViewersSheet: View {
                     .scrollContentBackground(.hidden)
                 }
             }
-            .navigationTitle("Vues")
+            .navigationTitle(String(localized: "story.viewer.views.title", defaultValue: "Vues", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Fermer") {
+                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) {
                         dismiss()
                     }
                     .font(.system(size: 16, weight: .bold))
@@ -1106,31 +1147,23 @@ struct StoryViewersSheet: View {
         .listRowBackground(ThemeManager.shared.mode.isDark ? Color(UIColor.secondarySystemGroupedBackground) : Color.white)
     }
 
-    struct ViewersResponse: Decodable {
-        struct ViewerApi: Decodable {
-            let id: String
-            let username: String
-            let displayName: String?
-            let avatarUrl: String?
-            let viewedAt: Date?
-            let reaction: String?
-        }
-        let viewers: [ViewerApi]
-    }
-
     private func loadViewers() async {
-        let response: APIResponse<ViewersResponse>? = try? await APIClient.shared.request(endpoint: "/posts/\(story.id)/interactions")
-
+        // M1 follow-up: the wire-shape decoding + nullable-field
+        // defaulting now lives in StoryInteractionService.loadViewers.
+        // A nil result here means "couldn't load" (logged at fault level
+        // in the service) — we leave the previous list alone, matching
+        // the prior swallow-and-show-empty behaviour.
+        let snapshots = await StoryInteractionService().loadViewers(storyId: story.id)
         await MainActor.run {
-            if let apiViewers = response?.data.viewers {
-                self.viewers = apiViewers.map { v in
+            if let snapshots {
+                self.viewers = snapshots.map { s in
                     StoryViewerItem(
-                        id: v.id,
-                        username: v.username,
-                        displayName: v.displayName ?? v.username,
-                        avatarUrl: v.avatarUrl,
-                        viewedAt: v.viewedAt ?? Date(),
-                        reactionEmoji: v.reaction,
+                        id: s.id,
+                        username: s.username,
+                        displayName: s.displayName,
+                        avatarUrl: s.avatarUrl,
+                        viewedAt: s.viewedAt,
+                        reactionEmoji: s.reactionEmoji,
                         replyContent: nil,
                         hasReshared: false
                     )
@@ -1192,7 +1225,7 @@ struct StoryCommentsOverlayView: View {
             VStack(spacing: 0) {
                 // Header
                 HStack {
-                    Text("\(storyCommentCount) commentaire\(storyCommentCount > 1 ? "s" : "")")
+                    Text(String(localized: "story.viewer.commentsCount", defaultValue: "\(storyCommentCount) commentaire\(storyCommentCount > 1 ? "s" : "")", bundle: .main))
                         .font(.system(size: 14, weight: .bold))
                         .foregroundColor(.white)
 
@@ -1289,10 +1322,10 @@ struct StoryCommentsOverlayView: View {
                                     Image(systemName: "bubble.left.and.bubble.right")
                                         .font(.system(size: 28))
                                         .foregroundColor(.white.opacity(0.3))
-                                    Text("Pas encore de commentaires")
+                                    Text(String(localized: "story.viewer.comments.empty", defaultValue: "Pas encore de commentaires", bundle: .main))
                                         .font(.system(size: 13, weight: .semibold))
                                         .foregroundColor(.white.opacity(0.5))
-                                    Text("Soyez le premier \u{00E0} commenter !")
+                                    Text(String(localized: "story.viewer.comments.beFirst", defaultValue: "Soyez le premier \u{00E0} commenter !", bundle: .main))
                                         .font(.system(size: 11))
                                         .foregroundColor(.white.opacity(0.3))
                                 }
@@ -1304,14 +1337,14 @@ struct StoryCommentsOverlayView: View {
                         .padding(.top, 8)
                         .padding(.bottom, 12)
                     }
-                    .onChange(of: storyComments.count) { _, _ in
+                    .adaptiveOnChange(of: storyComments.count) { _, _ in
                         if let last = storyComments.last {
                             withAnimation(.easeOut(duration: 0.3)) {
                                 proxy.scrollTo(last.id, anchor: .bottom)
                             }
                         }
                     }
-                    .onChange(of: replyingToStoryComment?.id) { _, newId in
+                    .adaptiveOnChange(of: replyingToStoryComment?.id) { _, newId in
                         // Bring the target into view so the user sees what they're
                         // replying to even if it was off-screen.
                         guard let id = newId else { return }
@@ -1324,7 +1357,7 @@ struct StoryCommentsOverlayView: View {
                 // Inline composer for story comments (reply banner attached inside)
                 storyCommentComposerBar
             }
-            .frame(maxHeight: UIScreen.main.bounds.height * 0.5)
+            .frame(maxHeight: min(UIScreen.main.bounds.height * 0.5, 520))
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(.ultraThinMaterial)
@@ -1370,7 +1403,7 @@ struct StoryCommentsOverlayView: View {
                                 Image(systemName: "arrowshape.turn.up.left.fill")
                                     .font(.system(size: 9, weight: .semibold))
                                     .foregroundColor(Color(hex: reply.authorColor))
-                                Text("R\u{00E9}ponse \u{00E0} \(reply.author)")
+                                Text(String(localized: "story.viewer.replyTo", defaultValue: "R\u{00E9}ponse \u{00E0} \(reply.author)", bundle: .main))
                                     .font(.system(size: 11, weight: .semibold))
                                     .foregroundColor(Color(hex: reply.authorColor))
                             }
@@ -1821,7 +1854,7 @@ struct StoryCommentRowView: View, Equatable {
                 HStack(spacing: 3) {
                     Image(systemName: "arrowshape.turn.up.left")
                         .font(.system(size: 11, weight: .semibold))
-                    Text("R\u{00E9}pondre")
+                    Text(String(localized: "story.viewer.reply", defaultValue: "R\u{00E9}pondre", bundle: .main))
                         .font(.system(size: 10.5, weight: .semibold))
                 }
                 .foregroundColor(.white.opacity(0.6))
@@ -1945,8 +1978,8 @@ struct StoryProgressBarsView: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Story \(currentIndex + 1) sur \(group?.stories.count ?? 0)")
-        .accessibilityValue("\(Int(progress * 100)) pourcent")
+        .accessibilityLabel(String(localized: "story.viewer.a11y.position", defaultValue: "Story \(currentIndex + 1) sur \(group?.stories.count ?? 0)", bundle: .main))
+        .accessibilityValue(String(localized: "story.viewer.a11y.percent", defaultValue: "\(Int(progress * 100)) pourcent", bundle: .main))
     }
 
     private func width(for index: Int, totalWidth: CGFloat) -> CGFloat {

@@ -13,6 +13,9 @@ import type {
 import type {
   GetConversationsOptions,
   GetConversationsResponse,
+  EncryptionMode,
+  EncryptionStatus,
+  EnableEncryptionResult,
 } from './types';
 
 /**
@@ -126,6 +129,27 @@ export class ConversationsCrudService {
    */
   async deleteConversation(id: string): Promise<void> {
     await apiService.delete(`/conversations/${id}`);
+  }
+
+  async getEncryptionStatus(id: string): Promise<EncryptionStatus> {
+    const response = await apiService.get<EncryptionStatus>(
+      `/conversations/${id}/encryption-status`
+    );
+    if (!response.data) {
+      throw new Error('Erreur lors de la lecture du statut de chiffrement');
+    }
+    return response.data;
+  }
+
+  async enableEncryption(id: string, mode: EncryptionMode): Promise<EnableEncryptionResult> {
+    const response = await apiService.post<EnableEncryptionResult>(
+      `/conversations/${id}/encryption`,
+      { mode }
+    );
+    if (!response.data) {
+      throw new Error("Erreur lors de l'activation du chiffrement");
+    }
+    return response.data;
   }
 
   /**

@@ -57,16 +57,17 @@ class ConversationListViewModel: ObservableObject {
     /// « Brouillon » de la ligne et la priorité de tri. Concept client-local
     /// — jamais stocké dans le modèle SDK `Conversation`.
     @Published private(set) var draftSummaries: [String: DraftSummary] = [:]
-    /// Typing usernames indexed by conversationId. NOT @Published to avoid triggering
-    /// a full list re-render on every typing event from any conversation.
-    /// Rows read this during natural re-renders (scroll, message arrival).
-    var typingUsernames: [String: String] = [:]  // conversationId → displayName
+    /// Typing usernames indexed by conversationId. @Published — ConversationRowItem
+    /// + ThemedConversationRow are Equatable with .equatable() applied
+    /// (ConversationListView+Rows.swift:70), so only the row whose typingUsername
+    /// changed re-evaluates its body. The full list does NOT re-render.
+    @Published var typingUsernames: [String: String] = [:]  // conversationId → displayName
     var previewMessages: [String: [Message]] = [:]  // conversationId → recent messages (non-Published — only used in context menu preview)
     private var previewLoadingInFlight: Set<String> = []
     private var typingTimers: [String: Timer] = [:]
 
     var totalUnreadCount: Int {
-        conversations.reduce(0) { $0 + $1.unreadCount }
+        conversations.reduce(0) { $0 + $1.userState.unreadCount }
     }
 
     private let api: APIClientProviding
@@ -402,17 +403,17 @@ class ConversationListViewModel: ObservableObject {
         return conversations.filter { c in
             let filterMatch: Bool
             // Hide user-archived conversations from all filters except .archived
-            let userArchiveOk = filter == .archived ? c.isArchivedByUser : !c.isArchivedByUser
+            let userArchiveOk = filter == .archived ? c.userState.isArchived : !c.userState.isArchived
             switch filter {
             case .all: filterMatch = c.isActive && userArchiveOk
-            case .unread: filterMatch = c.unreadCount > 0 && userArchiveOk
+            case .unread: filterMatch = c.userState.unreadCount > 0 && userArchiveOk
             case .personnel: filterMatch = c.type == .direct && c.isActive && userArchiveOk
             case .privee: filterMatch = c.type == .group && c.isActive && userArchiveOk
             case .ouvertes: filterMatch = (c.type == .public || c.type == .community) && c.isActive && userArchiveOk
             case .globales: filterMatch = c.type == .global && c.isActive && userArchiveOk
             case .channels: filterMatch = c.isAnnouncementChannel && c.isActive && userArchiveOk
-            case .favoris: filterMatch = c.reaction != nil && c.isActive && userArchiveOk
-            case .archived: filterMatch = c.isArchivedByUser
+            case .favoris: filterMatch = c.userState.reaction != nil && c.isActive && userArchiveOk
+            case .archived: filterMatch = c.userState.isArchived
             }
             let searchMatch = searchText.isEmpty || c.name.localizedCaseInsensitiveContains(searchText)
             return filterMatch && searchMatch
@@ -427,7 +428,7 @@ class ConversationListViewModel: ObservableObject {
         draftSummaries: [String: DraftSummary]
     ) -> [(section: ConversationSection, conversations: [Conversation])] {
         // No categories → flat list, no section headers needed
-        let hasPinned = filtered.contains { $0.isPinned && $0.sectionId == nil }
+        let hasPinned = filtered.contains { $0.userState.isPinned && $0.userState.sectionId == nil }
         if categories.isEmpty && !hasPinned {
             let sorted = filtered.sorted { conversationsAreInOrder($0, $1, draftSummaries: draftSummaries) }
             return sorted.isEmpty ? [] : [(ConversationSection.other, sorted)]
@@ -440,8 +441,8 @@ class ConversationListViewModel: ObservableObject {
 
         // Groupement O(n) unique — remplace les k passes filter O(n×k)
         let bySection = Dictionary(grouping: filtered) { conv -> String in
-            if conv.isPinned && conv.sectionId == nil { return "__pinned__" }
-            return conv.sectionId ?? "__other__"
+            if conv.userState.isPinned && conv.userState.sectionId == nil { return "__pinned__" }
+            return conv.userState.sectionId ?? "__other__"
         }
 
         // Pinned section
@@ -459,7 +460,7 @@ class ConversationListViewModel: ObservableObject {
 
         // Orphaned (catégorie supprimée) + non-catégorisées → section "other"
         let otherConvs = (bySection["__other__"] ?? []) + filtered.filter { conv in
-            guard let sid = conv.sectionId else { return false }
+            guard let sid = conv.userState.sectionId else { return false }
             return !categoryIds.contains(sid)
         }
         if !otherConvs.isEmpty {
@@ -480,8 +481,8 @@ class ConversationListViewModel: ObservableObject {
         _ b: Conversation,
         draftSummaries: [String: DraftSummary]
     ) -> Bool {
-        if a.isPinned != b.isPinned { return a.isPinned }
-        if a.isPinned && b.isPinned { return a.lastMessageAt > b.lastMessageAt }
+        if a.userState.isPinned != b.userState.isPinned { return a.userState.isPinned }
+        if a.userState.isPinned && b.userState.isPinned { return a.lastMessageAt > b.lastMessageAt }
         let aHasDraft = draftSummaries[a.id] != nil
         let bHasDraft = draftSummaries[b.id] != nil
         if aHasDraft != bHasDraft { return aHasDraft }
@@ -499,6 +500,7 @@ class ConversationListViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .debounce(for: .milliseconds(200), scheduler: DispatchQueue.main)
             .sink { [weak self] in
+                Logger.messages.info("[RT-DIAG] VM(list) conversationsDidChange -> reloadFromCache")
                 Task { @MainActor [weak self] in
                     await self?.reloadFromCache()
                 }
@@ -522,15 +524,15 @@ class ConversationListViewModel: ObservableObject {
         var conv = conversations[idx]
         let prefs = event.prefs
 
-        if let isPinned = prefs.isPinned { conv.isPinned = isPinned }
-        if let isMuted = prefs.isMuted { conv.isMuted = isMuted }
-        if let isArchived = prefs.isArchived { conv.isArchivedByUser = isArchived }
-        if let mentionsOnly = prefs.mentionsOnly { conv.mentionsOnly = mentionsOnly }
+        if let isPinned = prefs.isPinned { conv.userState.isPinned = isPinned }
+        if let isMuted = prefs.isMuted { conv.userState.isMuted = isMuted }
+        if let isArchived = prefs.isArchived { conv.userState.isArchived = isArchived }
+        if let mentionsOnly = prefs.mentionsOnly { conv.userState.mentionsOnly = mentionsOnly }
         // categoryId/customName/reaction are nullable on purpose — a nil here
         // legitimately means "uncategorize / clear".
-        conv.sectionId = prefs.categoryId
-        conv.customName = prefs.customName
-        conv.reaction = prefs.reaction
+        conv.userState.sectionId = prefs.categoryId
+        conv.userState.customName = prefs.customName
+        conv.userState.reaction = prefs.reaction
         if let tagNames = prefs.tags {
             conv.tags = tagNames.enumerated().map { index, name in
                 MeeshyConversationTag(
@@ -576,7 +578,7 @@ class ConversationListViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
-                typingUsernames[event.conversationId] = event.username
+                typingUsernames[event.conversationId] = event.preferredDisplayName
                 scheduleTypingCleanup(for: event.conversationId)
             }
             .store(in: &cancellables)
@@ -594,13 +596,13 @@ class ConversationListViewModel: ObservableObject {
                 guard let self, let convId = event.conversationId else { return }
                 if let idx = conversations.firstIndex(where: { $0.id == convId }) {
                     var conv = conversations[idx]
-                    if let isPinned = event.isPinned { conv.isPinned = isPinned }
-                    if let isMuted = event.isMuted { conv.isMuted = isMuted }
-                    if let isArchived = event.isArchived { conv.isArchivedByUser = isArchived }
-                    if let mentionsOnly = event.mentionsOnly { conv.mentionsOnly = mentionsOnly }
-                    if let categoryId = event.categoryId { conv.sectionId = categoryId }
-                    if let reaction = event.reaction { conv.reaction = reaction }
-                    if let customName = event.customName { conv.customName = customName }
+                    if let isPinned = event.isPinned { conv.userState.isPinned = isPinned }
+                    if let isMuted = event.isMuted { conv.userState.isMuted = isMuted }
+                    if let isArchived = event.isArchived { conv.userState.isArchived = isArchived }
+                    if let mentionsOnly = event.mentionsOnly { conv.userState.mentionsOnly = mentionsOnly }
+                    if let categoryId = event.categoryId { conv.userState.sectionId = categoryId }
+                    if let reaction = event.reaction { conv.userState.reaction = reaction }
+                    if let customName = event.customName { conv.userState.customName = customName }
                     if let tags = event.tags {
                         conv.tags = tags.enumerated().map { index, name in
                             MeeshyConversationTag(name: name, color: MeeshyConversationTag.colors[index % MeeshyConversationTag.colors.count])
@@ -616,6 +618,7 @@ class ConversationListViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
+                Logger.messages.info("[RT-DIAG] VM(list) conversationUpdated conv=\(event.conversationId, privacy: .public) known=\(self.convIndex(for: event.conversationId) != nil, privacy: .public)")
                 guard let index = self.convIndex(for: event.conversationId) else {
                     // Conversation pas encore connue côté client : c'est le cas
                     // d'un DM tout neuf (ou d'un groupe qu'on vient d'ajouter
@@ -826,7 +829,7 @@ class ConversationListViewModel: ObservableObject {
         $conversations
             .removeDuplicates { lhs, rhs in
                 guard lhs.count == rhs.count else { return false }
-                for (a, b) in zip(lhs, rhs) where a.id != b.id || a.unreadCount != b.unreadCount || a.isPinned != b.isPinned {
+                for (a, b) in zip(lhs, rhs) where a.id != b.id || a.userState.unreadCount != b.userState.unreadCount || a.userState.isPinned != b.userState.isPinned {
                     return false
                 }
                 return true
@@ -1217,9 +1220,9 @@ class ConversationListViewModel: ObservableObject {
 
     func togglePin(for conversationId: String) async {
         guard let index = convIndex(for: conversationId) else { return }
-        let newValue = !conversations[index].isPinned
+        let newValue = !conversations[index].userState.isPinned
 
-        conversations[index].isPinned = newValue
+        conversations[index].userState.isPinned = newValue
 
         do {
             try await preferenceService.updateConversationPreferences(
@@ -1227,7 +1230,7 @@ class ConversationListViewModel: ObservableObject {
                 request: .init(isPinned: newValue)
             )
         } catch {
-            conversations[index].isPinned = !newValue
+            conversations[index].userState.isPinned = !newValue
         }
     }
 
@@ -1235,9 +1238,9 @@ class ConversationListViewModel: ObservableObject {
 
     func toggleMute(for conversationId: String) async {
         guard let index = convIndex(for: conversationId) else { return }
-        let newValue = !conversations[index].isMuted
+        let newValue = !conversations[index].userState.isMuted
 
-        conversations[index].isMuted = newValue
+        conversations[index].userState.isMuted = newValue
 
         do {
             try await preferenceService.updateConversationPreferences(
@@ -1245,7 +1248,7 @@ class ConversationListViewModel: ObservableObject {
                 request: .init(isMuted: newValue)
             )
         } catch {
-            conversations[index].isMuted = !newValue
+            conversations[index].userState.isMuted = !newValue
         }
     }
 
@@ -1253,16 +1256,16 @@ class ConversationListViewModel: ObservableObject {
 
     func markAsRead(conversationId: String) async {
         guard let index = convIndex(for: conversationId) else { return }
-        let previousCount = conversations[index].unreadCount
+        let previousCount = conversations[index].userState.unreadCount
 
-        conversations[index].unreadCount = 0
+        conversations[index].userState.unreadCount = 0
         await syncEngine.markConversationReadLocally(conversationId)
 
         guard UserPreferencesManager.shared.privacy.showReadReceipts else { return }
         do {
             try await conversationService.markRead(conversationId: conversationId)
         } catch {
-            conversations[index].unreadCount = previousCount
+            conversations[index].userState.unreadCount = previousCount
         }
     }
 
@@ -1270,17 +1273,17 @@ class ConversationListViewModel: ObservableObject {
 
     func markAsUnread(conversationId: String) async {
         guard let index = convIndex(for: conversationId) else { return }
-        let previousCount = conversations[index].unreadCount
+        let previousCount = conversations[index].userState.unreadCount
 
         // Optimistic update
-        if conversations[index].unreadCount == 0 {
-            conversations[index].unreadCount = 1
+        if conversations[index].userState.unreadCount == 0 {
+            conversations[index].userState.unreadCount = 1
         }
 
         do {
             try await conversationService.markUnread(conversationId: conversationId)
         } catch {
-            conversations[index].unreadCount = previousCount
+            conversations[index].userState.unreadCount = previousCount
         }
     }
 
@@ -1288,9 +1291,9 @@ class ConversationListViewModel: ObservableObject {
 
     func archiveConversation(conversationId: String) async {
         guard let index = convIndex(for: conversationId) else { return }
-        let wasArchived = conversations[index].isArchivedByUser
+        let wasArchived = conversations[index].userState.isArchived
 
-        conversations[index].isArchivedByUser = true
+        conversations[index].userState.isArchived = true
 
         do {
             try await preferenceService.updateConversationPreferences(
@@ -1298,7 +1301,7 @@ class ConversationListViewModel: ObservableObject {
                 request: .init(isArchived: true)
             )
         } catch {
-            conversations[index].isArchivedByUser = wasArchived
+            conversations[index].userState.isArchived = wasArchived
         }
     }
 
@@ -1306,9 +1309,9 @@ class ConversationListViewModel: ObservableObject {
 
     func unarchiveConversation(conversationId: String) async {
         guard let index = convIndex(for: conversationId) else { return }
-        let wasArchived = conversations[index].isArchivedByUser
+        let wasArchived = conversations[index].userState.isArchived
 
-        conversations[index].isArchivedByUser = false
+        conversations[index].userState.isArchived = false
 
         do {
             try await preferenceService.updateConversationPreferences(
@@ -1316,7 +1319,7 @@ class ConversationListViewModel: ObservableObject {
                 request: .init(isArchived: false)
             )
         } catch {
-            conversations[index].isArchivedByUser = wasArchived
+            conversations[index].userState.isArchived = wasArchived
         }
     }
 
@@ -1337,9 +1340,9 @@ class ConversationListViewModel: ObservableObject {
 
     func moveToSection(conversationId: String, sectionId: String) {
         guard let index = convIndex(for: conversationId) else { return }
-        let previousSectionId = conversations[index].sectionId
+        let previousSectionId = conversations[index].userState.sectionId
         let newSectionId: String? = sectionId.isEmpty ? nil : sectionId
-        conversations[index].sectionId = newSectionId
+        conversations[index].userState.sectionId = newSectionId
 
         Task {
             do {
@@ -1348,7 +1351,7 @@ class ConversationListViewModel: ObservableObject {
                     request: .init(categoryId: newSectionId)
                 )
             } catch {
-                conversations[index].sectionId = previousSectionId
+                conversations[index].userState.sectionId = previousSectionId
             }
         }
     }
@@ -1357,15 +1360,15 @@ class ConversationListViewModel: ObservableObject {
 
     func setFavoriteReaction(conversationId: String, emoji: String?) async {
         guard let index = convIndex(for: conversationId) else { return }
-        let previous = conversations[index].reaction
-        conversations[index].reaction = emoji
+        let previous = conversations[index].userState.reaction
+        conversations[index].userState.reaction = emoji
         do {
             try await preferenceService.updateConversationPreferences(
                 conversationId: conversationId,
                 request: .init(reaction: emoji)
             )
         } catch {
-            conversations[index].reaction = previous
+            conversations[index].userState.reaction = previous
         }
     }
 
@@ -1562,10 +1565,10 @@ class ConversationListViewModel: ObservableObject {
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 guard let idx = self.convIndex(for: cid) else { return }
-                self.conversations[idx].unreadCount = 0
+                self.conversations[idx].userState.unreadCount = 0
                 for i in 0..<self.groupedConversations.count {
                     if let rowIdx = self.groupedConversations[i].conversations.firstIndex(where: { $0.id == cid }) {
-                        self.groupedConversations[i].conversations[rowIdx].unreadCount = 0
+                        self.groupedConversations[i].conversations[rowIdx].userState.unreadCount = 0
                         break
                     }
                 }

@@ -16,26 +16,27 @@ extension ConversationView {
         HapticFeedback.medium()
     }
 
-    func stopAndPreviewRecording() {
+    /// Stop the recorder and drop the audio into the composer's attachment
+    /// tray — editable before sending (tap the tray chip to trim/preview).
+    /// Nothing is sent. A recording shorter than 0.5 s is discarded instead.
+    /// Returns `true` when an attachment was placed.
+    @discardableResult
+    func stopRecordingToAttachment() -> Bool {
         guard audioRecorder.duration > 0.5 else {
             audioRecorder.cancelRecording()
-            return
-        }
-        let url = audioRecorder.stopRecording()
-        scrollState.audioToEdit = url
-        HapticFeedback.light()
-    }
-
-    func stopAndSendRecording() {
-        guard audioRecorder.duration > 0.5 else {
-            audioRecorder.cancelRecording()
-            return
+            return false
         }
         let durationMs = Int(audioRecorder.duration * 1000)
         let url = audioRecorder.stopRecording()
         composerState.pendingAudioURL = url
         let audioAttachment = MessageAttachment.audio(durationMs: durationMs, color: accentColor)
         composerState.pendingAttachments.append(audioAttachment)
+        return true
+    }
+
+    /// Stop the recorder and send the voice message immediately (raw).
+    func stopAndSendRecording() {
+        guard stopRecordingToAttachment() else { return }
         sendMessageWithAttachments()
     }
 
@@ -94,18 +95,37 @@ extension ConversationView {
         var previewAttachments: [MeeshyMessageAttachment] = []
         for att in attachments where att.type != .audio {
             if let fileURL = mediaFiles[att.id] {
-                if att.mimeType.hasPrefix("image/"),
+                let isImage = att.mimeType.hasPrefix("image/")
+                if isImage,
                    let data = try? Data(contentsOf: fileURL),
                    let image = UIImage(data: data) {
                     DiskCacheStore.cacheImageForPreview(image, key: fileURL.absoluteString)
+                    // `cacheImageForPreview` only seeds the in-memory NSCache,
+                    // which is evicted as soon as the user leaves the
+                    // conversation. On return the optimistic bubble would then
+                    // fall back to its coloured placeholder square (a magenta
+                    // tile) until the server `message:new` reconciliation
+                    // lands. Persisting the bytes to the on-disk image cache
+                    // keeps the picture visible across navigation.
+                    let persistKey = fileURL.absoluteString
+                    Task { await CacheCoordinator.shared.images.save(data, for: persistKey) }
                 }
+                // A video's file:// URL points at an .mp4 — it cannot be
+                // decoded as a still image. Seed a ThumbHash from the generated
+                // thumbnail so the bubble shows a recognisable preview instantly
+                // (ProgressiveCachedImage decodes ThumbHash with zero I/O).
+                // Images render straight from the cache seeded just above.
+                let optimisticThumbHash = isImage
+                    ? nil
+                    : composerState.pendingThumbnails[att.id]?.toThumbHash()
                 previewAttachments.append(MeeshyMessageAttachment(
                     id: att.id,
                     mimeType: att.mimeType,
                     fileUrl: fileURL.absoluteString,
                     width: att.width,
                     height: att.height,
-                    thumbnailUrl: fileURL.absoluteString,
+                    thumbnailUrl: isImage ? fileURL.absoluteString : nil,
+                    thumbHash: optimisticThumbHash,
                     uploadedBy: currentUserId,
                     thumbnailColor: senderColor
                 ))
@@ -235,7 +255,18 @@ extension ConversationView {
                     )
                     uploadedIds.append(result.id)
                     if let audioData {
-                        await CacheCoordinator.shared.audio.store(audioData, for: result.fileUrl)
+                        // Seed under the exact key the renderer resolves to so
+                        // the optimistic→confirmed transition reads a hot cache
+                        // and never re-downloads our own upload. See RC3.3.
+                        let renderKey = MeeshyConfig.resolveMediaURL(result.fileUrl)?.absoluteString ?? result.fileUrl
+                        await CacheCoordinator.shared.audio.store(audioData, for: renderKey)
+                        // Also seed under the local `file://` key. Mirrors how
+                        // images cache under their `file://` URL (line 102): a
+                        // defence-in-depth so the optimistic GRDB row (which
+                        // still carries the `file://` URL until reconciliation)
+                        // resolves to a cached blob if the on-disk file is
+                        // cleaned up before the URL flips to https.
+                        await CacheCoordinator.shared.audio.store(audioData, for: audioURL.absoluteString)
                     }
                     let userId = AuthManager.shared.currentUser?.id ?? ""
                     localAttachments.append(result.toMessageAttachment(uploadedBy: userId))
@@ -251,11 +282,34 @@ extension ConversationView {
                         )
                         uploadedIds.append(result.id)
                         if let fileData {
-                            await CacheCoordinator.shared.images.store(fileData, for: result.fileUrl)
+                            // Seed under the exact key the renderer resolves to
+                            // so the optimistic→confirmed transition (file:// →
+                            // server URL) reads a hot cache and never
+                            // re-downloads our own upload. See RC3.3.
+                            let renderKey = MeeshyConfig.resolveMediaURL(result.fileUrl)?.absoluteString ?? result.fileUrl
+                            if attachment.mimeType.hasPrefix("image/") {
+                                await CacheCoordinator.shared.images.store(fileData, for: renderKey)
+                                // Pre-seed the in-memory UIImage cache under the
+                                // SAME key so ProgressiveCachedImage reads it
+                                // synchronously on the confirmed render — no
+                                // decode, no shimmer.
+                                if let image = UIImage(data: fileData) {
+                                    DiskCacheStore.cacheImageForPreview(image, key: renderKey)
+                                }
+                            } else {
+                                // Video / file: route to the video store — the
+                                // same store checkCache(.video) and the badge
+                                // downloader read — so a confirmed own video
+                                // resolves as cached and never offers a
+                                // re-download of media we just uploaded.
+                                await CacheCoordinator.shared.video.store(fileData, for: renderKey)
+                            }
                             if let thumbUrl = result.thumbnailUrl,
-                               let thumbId = composerState.pendingThumbnails[attachment.id],
-                               let thumbData = thumbId.jpegData(compressionQuality: 0.8) {
-                                await CacheCoordinator.shared.thumbnails.store(thumbData, for: thumbUrl)
+                               let thumbImage = composerState.pendingThumbnails[attachment.id],
+                               let thumbData = thumbImage.jpegData(compressionQuality: 0.8) {
+                                let thumbKey = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString ?? thumbUrl
+                                await CacheCoordinator.shared.thumbnails.store(thumbData, for: thumbKey)
+                                DiskCacheStore.cacheImageForPreview(thumbImage, key: thumbKey)
                             }
                         }
                         localAttachments.append(result.toMessageAttachment(uploadedBy: currentUserId))
@@ -288,7 +342,26 @@ extension ConversationView {
                 // Clear UI after upload+send and clean up local files
                 await MainActor.run {
                     for (_, url) in mediaFiles { try? FileManager.default.removeItem(at: url) }
-                    if let audioURL { try? FileManager.default.removeItem(at: audioURL) }
+                    // Audio: defer disk deletion.
+                    //
+                    // The optimistic GRDB record's audio attachment carries the
+                    // `file://` URL until the `message:new` socket echo flips it
+                    // to the canonical `https://` URL (~100-500ms after REST
+                    // returns). During that reconciliation window the bubble's
+                    // play tap routes to `AudioPlayerView.playLocal` which
+                    // reads from disk — deleting the file eagerly here made the
+                    // player silently fail (the "I can't listen to my own audio
+                    // immediately after sending" bug). The bytes are already
+                    // cached under the canonical https key (seeded above), so
+                    // once reconciled the play works via the cache without any
+                    // disk read. A 10s delay covers worst-case socket latency
+                    // with ample margin while keeping Documents/ small.
+                    if let audioURL {
+                        Task {
+                            try? await Task.sleep(nanoseconds: 10_000_000_000)
+                            try? FileManager.default.removeItem(at: audioURL)
+                        }
+                    }
                     composerState.pendingMediaFiles.removeAll()
                     composerState.pendingAudioURL = nil
                     composerState.uploadProgress = nil
@@ -326,56 +399,15 @@ extension ConversationView {
     // MARK: - Attachment Handlers
     func handlePhotoSelection(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
-        let itemsCopy = items
         composerState.selectedPhotoItems.removeAll()
-        composerState.isLoadingMedia = true
         HapticFeedback.light()
-
-        Task {
-            for item in itemsCopy {
-                let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
-
-                if isVideo {
-                    if let movieData = try? await item.loadTransferable(type: Data.self) {
-                        let rawName = "video_raw_\(UUID().uuidString).mp4"
-                        let rawURL = FileManager.default.temporaryDirectory.appendingPathComponent(rawName)
-                        try? movieData.write(to: rawURL)
-
-                        let compressedURL: URL
-                        do {
-                            compressedURL = try await MediaCompressor.shared.compressVideo(rawURL)
-                            try? FileManager.default.removeItem(at: rawURL)
-                        } catch {
-                            compressedURL = rawURL
-                        }
-
-                        await MainActor.run {
-                            handleCameraVideo(compressedURL)
-                        }
-                    }
-                } else {
-                    if let imageData = try? await item.loadTransferable(type: Data.self),
-                       let uiImage = UIImage(data: imageData) {
-                        await MainActor.run {
-                            handleCameraCapture(uiImage)
-                        }
-                    }
-                }
-            }
-            await MainActor.run { composerState.isLoadingMedia = false }
-        }
-    }
-
-    func generateVideoThumbnail(url: URL) async -> UIImage? {
-        let asset = AVAsset(url: url)
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 200, height: 200)
-        do {
-            let cgImage = try generator.copyCGImage(at: .zero, actualTime: nil)
-            return UIImage(cgImage: cgImage)
-        } catch {
-            return nil
+        for item in items {
+            let prep = AttachmentPreparationService.shared.preparePhotosPickerItem(
+                item,
+                context: .message,
+                accentColor: accentColor
+            )
+            trackPreparation(prep)
         }
     }
 
@@ -414,63 +446,9 @@ extension ConversationView {
     }
 
     func mimeTypeForURL(_ url: URL) -> String {
-        let ext = url.pathExtension.lowercased()
-        switch ext {
-        // Images
-        case "jpg", "jpeg": return "image/jpeg"
-        case "png": return "image/png"
-        case "gif": return "image/gif"
-        case "webp": return "image/webp"
-        case "heic", "heif": return "image/heic"
-        case "svg": return "image/svg+xml"
-        case "bmp": return "image/bmp"
-        case "tiff", "tif": return "image/tiff"
-        // Video
-        case "mp4", "m4v": return "video/mp4"
-        case "mov": return "video/quicktime"
-        case "avi": return "video/x-msvideo"
-        case "mkv": return "video/x-matroska"
-        case "webm": return "video/webm"
-        // Audio
-        case "mp3": return "audio/mpeg"
-        case "m4a", "aac": return "audio/mp4"
-        case "wav": return "audio/wav"
-        case "ogg", "oga": return "audio/ogg"
-        case "flac": return "audio/flac"
-        case "wma": return "audio/x-ms-wma"
-        // Documents
-        case "pdf": return "application/pdf"
-        case "doc": return "application/msword"
-        case "docx": return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        case "xls": return "application/vnd.ms-excel"
-        case "xlsx": return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        case "ppt": return "application/vnd.ms-powerpoint"
-        case "pptx": return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-        case "pages": return "application/x-iwork-pages-sffpages"
-        case "numbers": return "application/x-iwork-numbers-sffnumbers"
-        case "keynote": return "application/x-iwork-keynote-sffkey"
-        // Text & Code
-        case "txt": return "text/plain"
-        case "csv": return "text/csv"
-        case "json": return "application/json"
-        case "xml": return "application/xml"
-        case "html", "htm": return "text/html"
-        case "css": return "text/css"
-        case "js": return "application/javascript"
-        case "ts": return "application/typescript"
-        case "py": return "text/x-python"
-        case "swift": return "text/x-swift"
-        case "md", "markdown": return "text/markdown"
-        case "rtf": return "application/rtf"
-        case "log": return "text/plain"
-        // Archives
-        case "zip": return "application/zip"
-        case "rar": return "application/x-rar-compressed"
-        case "7z": return "application/x-7z-compressed"
-        case "tar": return "application/x-tar"
-        case "gz", "gzip": return "application/gzip"
-        default: return "application/octet-stream"
-        }
+        // Single source of truth lives in `MimeTypeResolver` (MeeshySDK).
+        // See its `forwardTable` for the full extension → mime mapping.
+        MimeTypeResolver.mimeType(forURL: url)
     }
 
     func getFileSize(_ url: URL) -> Int {
@@ -498,61 +476,50 @@ extension ConversationView {
     }
 
     func handleCameraVideo(_ url: URL) {
-        Task {
-            let compressedURL: URL
-            do {
-                compressedURL = try await MediaCompressor.shared.compressVideo(url)
-                try? FileManager.default.removeItem(at: url)
-            } catch {
-                compressedURL = url
-            }
-
-            let fileSize = getFileSize(compressedURL)
-            let attachmentId = UUID().uuidString
-            let attachment = MessageAttachment(
-                id: attachmentId,
-                fileName: compressedURL.lastPathComponent,
-                originalName: compressedURL.lastPathComponent,
-                mimeType: "video/mp4",
-                fileSize: fileSize,
-                fileUrl: compressedURL.absoluteString,
-                thumbnailColor: "FF6B6B"
-            )
-
-            let thumb = await generateVideoThumbnail(url: compressedURL)
-            await MainActor.run {
-                composerState.pendingMediaFiles[attachmentId] = compressedURL
-                if let thumb { composerState.pendingThumbnails[attachmentId] = thumb }
-                composerState.pendingAttachments.append(attachment)
-                HapticFeedback.success()
-            }
-        }
+        let prep = AttachmentPreparationService.shared.prepareVideo(
+            sourceURL: url,
+            deleteSourceAfterCompression: true,
+            context: .message,
+            accentColor: "FF6B6B"
+        )
+        trackPreparation(prep)
     }
 
     func handleCameraCapture(_ image: UIImage) {
-        Task {
-            let result = await MediaCompressor.shared.compressImage(image)
-            let fileName = "camera_\(UUID().uuidString).\(result.fileExtension)"
-            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-            try? result.data.write(to: tempURL)
-            let attachmentId = UUID().uuidString
-            let attachment = MessageAttachment(
-                id: attachmentId,
-                fileName: fileName,
-                originalName: fileName,
-                mimeType: result.mimeType,
-                fileSize: result.data.count,
-                fileUrl: tempURL.absoluteString,
-                width: Int(image.size.width),
-                height: Int(image.size.height),
-                thumbnailColor: accentColor
-            )
-            await MainActor.run {
-                composerState.pendingMediaFiles[attachmentId] = tempURL
-                composerState.pendingThumbnails[attachmentId] = image
-                composerState.pendingAttachments.append(attachment)
+        let prep = AttachmentPreparationService.shared.prepareImage(
+            image,
+            context: .message,
+            accentColor: accentColor
+        )
+        trackPreparation(prep)
+    }
+
+    /// Wire a `PreparingAttachment` into the composer:
+    /// 1. Append the in-flight handle so the tray shows a loading tile.
+    /// 2. Observe the handle and, when it reaches `.ready`, promote the
+    ///    result into the legacy pending dicts the send pipeline already
+    ///    knows how to consume. `.failed` simply drops the tile + toasts.
+    func trackPreparation(_ prep: PreparingAttachment) {
+        composerState.preparingAttachments.append(prep)
+        observePreparation(prep)
+    }
+
+    private func observePreparation(_ prep: PreparingAttachment) {
+        Task { @MainActor [prep] in
+            let result = await prep.awaitCompletion()
+            switch result {
+            case .success(let prepared):
+                composerState.pendingMediaFiles[prepared.attachment.id] = prepared.fileURL
+                if let thumb = prep.thumbnail {
+                    composerState.pendingThumbnails[prepared.attachment.id] = thumb
+                }
+                composerState.pendingAttachments.append(prepared.attachment)
                 HapticFeedback.success()
+            case .failure(.preparationFailed(let message)):
+                HapticFeedback.error()
+                ToastManager.shared.showError(message)
             }
+            composerState.preparingAttachments.removeAll { $0.id == prep.id }
         }
     }
 

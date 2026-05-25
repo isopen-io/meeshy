@@ -237,6 +237,23 @@ final class Router: ObservableObject {
                     self.push(.links)
                 }
 
+            case .post(let postId), .postDetail(let postId):
+                // `.post` is the legacy short-form (e.g. `meeshy://post/<id>`
+                // / `meeshy://p/<id>`) and `.postDetail` is the canonical
+                // long-form added with the /feeds/post/:postId rollout —
+                // both land on the same PostDetailView surface, so route
+                // them through a single arm.
+                push(.postDetail(postId))
+
+            case .storyDetail(let postId):
+                // In-app `Link` taps land here. Unlike the cold-launch path
+                // (RootView.handleDeepLink) we don't have access to the
+                // local story tray from this scope, so we route to
+                // PostDetailView — the universal fallback that renders any
+                // post including stories. The viewer-preferred path stays
+                // reserved for cold launch / push notification dispatch.
+                push(.postDetail(postId))
+
             case .external:
                 break
             }

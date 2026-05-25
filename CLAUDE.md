@@ -228,6 +228,7 @@ feat/{area}-{feature}  ex: feat/settings-legal, feat/settings-account
 - **Simplicity First**: Make every change as simple as possible. Minimal code impact.
 - **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
 - **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
+- **SDK Purity**: Le SDK (`packages/MeeshySDK/`) fournit des **building blocks** (atomes, services low-level, models, rule engines stateless). L'**orchestration UX produit** (View wrappers cascadant cache → downloader → policy, ViewModels, décisions "quand auto-DL", "quelle UI cascade") reste **app-side** (`apps/ios/Meeshy/...`, `apps/web/...`). Test du grain : si le composant appelle des shared singletons nommés Meeshy (CacheCoordinator stores nommés, MediaDownloadPreferencesStore, NetworkConditionMonitor) + encode une règle "quand faire X" → app. S'il prend des paramètres opaques et reste agnostique → SDK. Voir `packages/MeeshySDK/CLAUDE.md` pour la règle détaillée et le tableau de placement.
 
 ## Critical Rules
 
@@ -327,7 +328,15 @@ Always use `./apps/ios/meeshy.sh`:
 ```
 
 ### Test Credentials
-- Username: `atabeth` / Password: `pD5p1ir9uxLUf2X2FpNE`
+Stored out-of-tree in `apps/ios/fastlane/.env` (gitignored). The
+fastlane `release` lane reads `DEMO_USER` / `DEMO_PASSWORD` from
+there and forwards them to App Review. CI injects the same vars from
+GitHub Actions secrets (see `.github/workflows/ios-release.yml`).
+Ask the team for the values or pull from the production password
+manager — never inline them in this file again.
+
+See `apps/ios/fastlane/SECRETS.md` for the full list of ENV vars
+required by the fastlane lanes.
 
 ### Redis Rate Limit Reset
 ```bash
