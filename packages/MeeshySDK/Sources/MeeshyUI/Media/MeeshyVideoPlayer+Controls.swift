@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import AVKit
 import Combine
 
 // MARK: - Layered Overlay Controls (inline)
@@ -381,6 +382,11 @@ internal struct _FullscreenOverlayControls: View {
 
     private var bottomStack: some View {
         VStack(spacing: 8) {
+            // Mini-toolbar : contrôles vidéo persistants (mute/loop/pip/airplay)
+            // séparés des actions de fichier (share/save) qui restent en top bar.
+            miniToolbar
+                .padding(.horizontal, 16)
+
             if controls.contains(.scrubber) {
                 seekBar
                     .padding(.horizontal, 16)
@@ -402,6 +408,95 @@ internal struct _FullscreenOverlayControls: View {
                     .padding(.horizontal, 16)
             }
         }
+    }
+
+    // MARK: - Mini-toolbar (mute / loop / pip / airplay)
+
+    @ViewBuilder
+    private var miniToolbar: some View {
+        let hasAny = controls.contains(.mute) || controls.contains(.loop)
+            || controls.contains(.pip) || controls.contains(.airplay)
+        if hasAny {
+            HStack(spacing: 16) {
+                Spacer()
+                if controls.contains(.mute) { muteButton }
+                if controls.contains(.loop) { loopButton }
+                if controls.contains(.pip)  { pipButton }
+                if controls.contains(.airplay) { airplayButton }
+                Spacer()
+            }
+        }
+    }
+
+    private var muteButton: some View {
+        Button {
+            manager.isMuted.toggle()
+            HapticFeedback.light()
+        } label: {
+            miniToolbarIcon(
+                systemName: manager.isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
+                isActive: manager.isMuted
+            )
+        }
+        .accessibilityLabel(manager.isMuted ? "Reactiver le son" : "Couper le son")
+    }
+
+    private var loopButton: some View {
+        Button {
+            manager.shouldLoop.toggle()
+            HapticFeedback.light()
+        } label: {
+            miniToolbarIcon(systemName: "repeat", isActive: manager.shouldLoop)
+        }
+        .accessibilityLabel(manager.shouldLoop ? "Desactiver lecture en boucle" : "Activer lecture en boucle")
+    }
+
+    private var pipButton: some View {
+        let supported = AVPictureInPictureController.isPictureInPictureSupported()
+        return Button {
+            if manager.isPipActive {
+                manager.stopPip()
+            } else {
+                manager.startPip()
+            }
+            HapticFeedback.light()
+        } label: {
+            miniToolbarIcon(
+                systemName: manager.isPipActive ? "pip.exit" : "pip.enter",
+                isActive: manager.isPipActive
+            )
+            .opacity(supported ? 1.0 : 0.4)
+        }
+        .disabled(!supported)
+        .accessibilityLabel(manager.isPipActive ? "Sortir du picture in picture" : "Activer picture in picture")
+    }
+
+    private var airplayButton: some View {
+        // AVRoutePickerView se sized lui-même + handle le tap natif.
+        AirPlayRoutePicker(tintColor: .white)
+            .frame(width: 36, height: 36)
+            .background(
+                ZStack {
+                    Circle().fill(.ultraThinMaterial)
+                    Circle().fill(Color.white.opacity(0.10))
+                }
+            )
+            .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 0.5))
+            .accessibilityLabel("AirPlay")
+    }
+
+    private func miniToolbarIcon(systemName: String, isActive: Bool) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundColor(.white)
+            .frame(width: 36, height: 36)
+            .background(
+                ZStack {
+                    Circle().fill(.ultraThinMaterial)
+                    Circle().fill((isActive ? accent : Color.white.opacity(0.10)))
+                }
+            )
+            .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 0.5))
     }
 
     private var seekBar: some View {
