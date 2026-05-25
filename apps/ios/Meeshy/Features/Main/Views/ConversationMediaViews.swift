@@ -475,9 +475,15 @@ struct AudioMediaView: View, Equatable {
 
     /// Disponibilité effective : un téléchargement actif prime, puis un
     /// téléchargement terminé, sinon la résolution « au repos » du `.task`.
+    /// Propage `downloadedBytes` / `totalBytes` au case `.downloading` pour
+    /// que `AudioPlayerView.playButtonLabel` puisse rendre « 410 KB / 850 KB ».
     private var availability: AudioAvailability {
         if downloader.isDownloading {
-            return .downloading(progress: downloader.progress)
+            return .downloading(
+                progress: downloader.progress,
+                downloadedBytes: downloader.downloadedBytes,
+                totalBytes: downloader.totalBytes
+            )
         }
         if downloader.isCached {
             return .ready
