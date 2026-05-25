@@ -123,8 +123,17 @@ final class ConversationStateOutboxTests: XCTestCase {
     // MARK: - Flush + retry
 
     func test_flush_dispatchesAllReadyTasks_inCreatedAtOrder() async {
-        let outbox = makeOutbox(now: Date(timeIntervalSince1970: 0))
+        // Use a monotonic clock so both tasks land at distinct
+        // `createdAt` values — otherwise the FIFO sort falls through
+        // to Dictionary iteration order, which depends on the random
+        // UUIDs and renders the result order non-deterministic.
+        let clock = ConversationStateOutboxTests.MutableClock()
+        let tmpDir = FileManager.default.temporaryDirectory
+        let path = tmpDir.appendingPathComponent("outbox-\(UUID().uuidString).db").path
+        let outbox = ConversationStateOutbox(dbPath: path, clock: { clock.now })
+
         _ = await outbox.enqueue(.setPinned(true), for: "c1")
+        clock.advance(by: 1)
         _ = await outbox.enqueue(.setMuted(true), for: "c1")
 
         let dispatched = SyncArray<String>()
