@@ -58,8 +58,8 @@ enum DeepLinkParser {
     /// - `https://meeshy.me/me`              -> own profile
     /// - `https://meeshy.me/u/{username}`    -> user profile
     /// - `https://meeshy.me/c/{id}`          -> conversation
-    /// - `https://meeshy.me/feeds/post/{id}` -> post detail
-    /// - `https://meeshy.me/story/{id}`      -> story detail
+    /// - `https://meeshy.me/feeds/post/{id}` (or `feeds/p/{id}`) -> post detail
+    /// - `https://meeshy.me/story/{id}` (or `stories/{id}`)      -> story detail
     /// - `meeshy://me`                       -> own profile
     /// - `meeshy://u/{username}`             -> user profile
     /// - `meeshy://c/{id}`                   -> conversation

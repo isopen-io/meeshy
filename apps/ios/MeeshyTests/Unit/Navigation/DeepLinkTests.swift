@@ -907,6 +907,22 @@ final class DeepLinkRouterPostDetailTests: XCTestCase {
         XCTAssertEqual(sut.pendingDeepLink, .postDetail(postId: "postShort1"))
     }
 
+    func test_handle_universalLink_feedsPShort_setsPendingDeepLink() {
+        // The Universal Link branch of `handle()` mirrors the parser by
+        // accepting both `/feeds/post/<id>` and `/feeds/p/<id>` via the
+        // shared `isPostSegment` helper. AASA only claims `/feeds/post/*`
+        // today, so this path is exercised by in-app fallbacks rather than
+        // cold-launch — the test locks in the parity so the two stay in
+        // lockstep if AASA is later extended.
+        let sut = makeSUT()
+        let url = URL(string: "https://meeshy.me/feeds/p/postShortWeb")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(sut.pendingDeepLink, .postDetail(postId: "postShortWeb"))
+    }
+
     func test_handle_customScheme_feedsPShort_setsPendingDeepLink() {
         let sut = makeSUT()
         let url = URL(string: "meeshy://feeds/p/postShort2")!
