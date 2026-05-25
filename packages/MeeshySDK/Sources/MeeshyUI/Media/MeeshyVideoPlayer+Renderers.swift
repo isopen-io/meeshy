@@ -66,25 +66,31 @@ internal struct _InlineRenderer: View {
     @ObservedObject private var manager = SharedAVPlayerManager.shared
 
     /// Aspect ratio DISPLAY (post-rotation) résolu async depuis le
-    /// `preferredTransform` de l'AVAsset. iOS stocke les vidéos portrait
-    /// shootées au téléphone comme `1280×720` paysage + transform de
-    /// rotation 90° ; `attachment.width/height` reflètent le storage
-    /// (paysage), pas l'affichage (portrait). Le thumbnail PNG, lui, est
-    /// pré-tourné et reflète le display orientation — c'est pourquoi la
-    /// bulle thumbnail apparaît portrait alors que `videoAspectRatio` dit
-    /// paysage. Cette state aligne le cadre du surface sur la même
-    /// orientation que le thumbnail, supprimant le saut entre les états.
+    /// `preferredTransform` de l'AVAsset (priorité 1 une fois en cache).
     @State private var displayAspectRatio: CGFloat?
+
+    /// Aspect ratio extrait du thumbnail PNG cached (priorité 2). Synchrone à
+    /// la résolution UIImage cache. Le thumbnail est pré-tourné backend → son
+    /// ratio reflète l'orientation d'affichage attendue.
+    @State private var thumbnailAspectRatio: CGFloat?
 
     private var isThisActive: Bool {
         manager.activeURL == player.attachment.fileUrl && manager.player != nil
     }
 
-    /// Ratio source-de-vérité unique pour cette bulle. `displayAspectRatio`
-    /// async prend précédence dès qu'il est résolu ; sinon fallback sur le
-    /// `videoAspectRatio` de l'attachment (storage), puis 16:9.
+    /// Ratio source-de-vérité unique pour cette bulle. Ordre de priorité :
+    /// 1. `displayAspectRatio` — résolu via `AVAsset.preferredTransform` ou
+    ///    `VideoDisplayAspectCache` (instantané pour les vidéos déjà vues).
+    /// 2. `thumbnailAspectRatio` — natural size du PNG thumbnail (synchrone
+    ///    quand l'image est dans le cache mémoire/disque).
+    /// 3. `attachment.videoAspectRatio` — metadata storage (peut être en
+    ///    paysage rotation 90° pour les vidéos portrait shootées iPhone).
+    /// 4. Fallback final : 16:9.
     private var bubbleAspectRatio: CGFloat {
-        displayAspectRatio ?? player.attachment.videoAspectRatio ?? (16.0 / 9.0)
+        displayAspectRatio
+            ?? thumbnailAspectRatio
+            ?? player.attachment.videoAspectRatio
+            ?? (16.0 / 9.0)
     }
 
     /// True quand le surface est mountée mais l'AVPlayerItem n'a pas encore
@@ -137,7 +143,12 @@ internal struct _InlineRenderer: View {
         .aspectRatio(bubbleAspectRatio, contentMode: .fit)
         .applyVideoFrame(player.frame)
         .task(id: player.attachment.fileUrl) {
-            await resolveDisplayAspectRatio()
+            // Lance les deux résolutions en parallèle. La plus rapide (le
+            // thumbnail cache hit) sert de fallback temporaire pendant que
+            // l'AVAsset résout son `preferredTransform`.
+            async let thumb: Void = resolveThumbnailAspectRatio()
+            async let display: Void = resolveDisplayAspectRatio()
+            _ = await (thumb, display)
         }
         .adaptiveOnChange(of: isThisActive) { _, nowActive in
             if nowActive {
@@ -173,11 +184,17 @@ internal struct _InlineRenderer: View {
 
     /// Charge l'AVAsset et applique son `preferredTransform` à la `naturalSize`
     /// pour obtenir l'orientation d'affichage réelle. Couvre le cas iPhone
-    /// portrait stocké en paysage + rotation 90°.
+    /// portrait stocké en paysage + rotation 90°. Consulte d'abord le cache
+    /// session-scope avant de toucher au disque.
     @MainActor
     private func resolveDisplayAspectRatio() async {
         guard displayAspectRatio == nil else { return }
-        guard let url = MeeshyConfig.resolveMediaURL(player.attachment.fileUrl) else { return }
+        let urlKey = player.attachment.fileUrl
+        if let cached = await VideoDisplayAspectCache.shared.ratio(for: urlKey) {
+            displayAspectRatio = cached
+            return
+        }
+        guard let url = MeeshyConfig.resolveMediaURL(urlKey) else { return }
         let asset = AVURLAsset(url: url)
         do {
             let tracks = try await asset.loadTracks(withMediaType: .video)
@@ -188,10 +205,28 @@ internal struct _InlineRenderer: View {
             let w = abs(display.width)
             let h = abs(display.height)
             guard w > 0, h > 0 else { return }
-            displayAspectRatio = w / h
+            let ratio = w / h
+            displayAspectRatio = ratio
+            await VideoDisplayAspectCache.shared.store(ratio, for: urlKey)
         } catch {
-            // Le fallback `attachment.videoAspectRatio ?? 16/9` reste actif.
+            // Le fallback `thumbnailAspectRatio → attachment.videoAspectRatio
+            // → 16/9` reste actif.
         }
+    }
+
+    /// Récupère le thumbnail PNG depuis `CacheCoordinator.images` (mémoire
+    /// puis disque) et extrait son natural size comme hint synchrone pour
+    /// `bubbleAspectRatio`. Si le thumbnail n'est pas encore en cache, no-op
+    /// (ProgressiveCachedImage le téléchargera en parallèle et l'app verra
+    /// le ratio se mettre à jour quand le thumbnail finit de loader plus
+    /// tard via la résolution AVAsset).
+    @MainActor
+    private func resolveThumbnailAspectRatio() async {
+        guard thumbnailAspectRatio == nil else { return }
+        guard let thumbUrl = player.attachment.thumbnailUrl, !thumbUrl.isEmpty else { return }
+        let image = await CacheCoordinator.shared.images.image(for: thumbUrl)
+        guard let size = image?.size, size.width > 0, size.height > 0 else { return }
+        thumbnailAspectRatio = size.width / size.height
     }
 
     private var playButton: some View {
