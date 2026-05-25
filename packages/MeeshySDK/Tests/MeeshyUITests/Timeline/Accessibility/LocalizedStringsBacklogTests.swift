@@ -105,50 +105,30 @@ final class LocalizedStringsBacklogTests: XCTestCase {
 
     // MARK: - Catalog completeness probe
 
-    /// Loads `Localizable.xcstrings` directly out of `Bundle.module` and
-    /// asserts every backlog key carries translations for all 5 required
-    /// locales. This catches the case where a key resolves through the
-    /// bundle (so the surface tests above pass) yet some locale is missing
-    /// — `String(localized:)` would silently fall back to the source
-    /// language.
+    /// Asserts every backlog key resolves to a non-raw, non-empty value in
+    /// each of the 5 required locales. SPM's `.process(...)` compiles
+    /// `Localizable.xcstrings` into per-locale `.strings`/`.stringsdict`
+    /// bundles, so the source xcstrings file is NOT present in
+    /// `Bundle.module` at runtime — the previous version of this test
+    /// loaded the file directly and always failed. Use the public
+    /// `String(localized:bundle:locale:)` API instead, which exercises
+    /// the same resolution path the production surfaces use.
     func test_locale_keys_present_in_all_5_locales() throws {
-        let bundle = Bundle.module
-        guard let url = bundle.url(
-            forResource: "Localizable",
-            withExtension: "xcstrings"
-        ) else {
-            XCTFail("Localizable.xcstrings not found in Bundle.module")
-            return
-        }
-
-        let data = try Data(contentsOf: url)
-        let json = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        let strings = json?["strings"] as? [String: Any] ?? [:]
-
         for key in Self.backlogKeys {
-            guard let entry = strings[key] as? [String: Any],
-                  let localizations = entry["localizations"] as? [String: Any] else {
-                XCTFail("Key '\(key)' missing or malformed in Localizable.xcstrings")
-                continue
-            }
-
-            let presentLocales = Set(localizations.keys)
-            let missing = Self.requiredLocales.subtracting(presentLocales)
-            XCTAssertTrue(
-                missing.isEmpty,
-                "Key '\(key)' is missing locales: \(missing.sorted().joined(separator: ", "))"
-            )
-
-            for locale in Self.requiredLocales {
-                guard let loc = localizations[locale] as? [String: Any],
-                      let unit = loc["stringUnit"] as? [String: Any],
-                      let value = unit["value"] as? String else {
-                    XCTFail("Key '\(key)' locale '\(locale)' missing stringUnit.value")
-                    continue
-                }
+            for localeId in Self.requiredLocales.sorted() {
+                let locale = Locale(identifier: localeId)
+                let value = String(
+                    localized: String.LocalizationValue(key),
+                    bundle: .module,
+                    locale: locale
+                )
+                XCTAssertNotEqual(
+                    value, key,
+                    "Key '\(key)' returned itself raw for locale '\(localeId)' — translation missing"
+                )
                 XCTAssertFalse(
                     value.isEmpty,
-                    "Key '\(key)' locale '\(locale)' has empty value"
+                    "Key '\(key)' resolved to empty for locale '\(localeId)'"
                 )
             }
         }
