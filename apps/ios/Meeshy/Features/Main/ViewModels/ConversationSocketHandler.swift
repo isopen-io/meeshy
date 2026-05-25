@@ -40,6 +40,13 @@ protocol ConversationSocketDelegate: AnyObject {
     /// sender's checkmark upgrades from `.delivered` to `.read` without
     /// waiting for a navigation cycle.
     func markAsRead()
+
+    /// Apply a server-pushed attachment delta atomically : injects the
+    /// enriched transcription / audio translations into the metadata
+    /// dictionaries in a single MainActor slice, then schedules the
+    /// GRDB upsert so future opens of this conversation render the
+    /// enriched attachment from cache without a refetch.
+    func applyAttachmentUpdate(_ event: AttachmentUpdatedEvent)
 }
 
 // MARK: - ConversationSocketHandler
@@ -551,6 +558,20 @@ final class ConversationSocketHandler {
                 // Touch the record so the store observation fires and
                 // bubbles re-render with the updated attachment status.
                 Task { try? await persistence.touchUpdatedAt(localId: event.messageId) }
+            }
+            .store(in: &cancellables)
+
+        // Attachment payload enriched server-side (transcription finalized,
+        // audio translation finalized for one language). Delegate handles
+        // the metadata dictionaries injection atomically + GRDB upsert ;
+        // the same atomic rule as `loadInitialSnapshot` ensures no
+        // intermediate frame ever renders the message without its enriched
+        // transcription / translated audios.
+        socketManager.attachmentUpdated
+            .filter { $0.conversationId == convId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.delegate?.applyAttachmentUpdate(event)
             }
             .store(in: &cancellables)
 
