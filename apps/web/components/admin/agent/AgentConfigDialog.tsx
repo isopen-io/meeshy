@@ -60,7 +60,9 @@ const DEFAULTS: AgentConfigUpsert = {
   reactionsEnabled: true,
   maxReactionsPerCycle: 4,
   agentInstructions: null,
-  webSearchEnabled: false,
+  // Matches Prisma default (true). Required for the freshTopicProbability
+  // path to ever fire on freshly-created configs; admins can still toggle off.
+  webSearchEnabled: true,
   minWordsPerMessage: 3,
   maxWordsPerMessage: 400,
   generationTemperature: 0.8,

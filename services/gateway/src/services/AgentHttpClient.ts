@@ -14,17 +14,18 @@ export class AgentUnavailableError extends Error {
 export class AgentHttpClient {
   constructor(private baseUrl: string) {}
 
-  private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  private async request<T>(path: string, options: RequestInit & { timeoutMs?: number } = {}): Promise<T> {
+    const { timeoutMs = 5000, ...fetchOptions } = options;
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
-        ...options,
+        ...fetchOptions,
         signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
-          ...options.headers,
+          ...fetchOptions.headers,
         },
       });
 
@@ -72,9 +73,13 @@ export class AgentHttpClient {
   }
 
   async invalidateCache(payload: { conversationId?: string; global?: boolean }): Promise<{ invalidated: unknown }> {
+    // Tight timeout: cache invalidation is best-effort on top of Redis pub/sub.
+    // We refuse to make admin PUTs wait 5s for a backup path; if the agent is
+    // unreachable, the toast warns the operator and they can retry.
     return this.request<{ invalidated: unknown }>(`/api/agent/cache/invalidate`, {
       method: 'POST',
       body: JSON.stringify(payload),
+      timeoutMs: 1500,
     });
   }
 }

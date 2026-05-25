@@ -247,7 +247,13 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       // expected in some deployments and not worth a warning per request.
       fastify.log.warn({ err: http.reason }, '[AgentConfig] HTTP cache invalidation failed');
     }
-    status.anyChannelSucceeded = status.redisPublishOk || status.httpInvalidateOk;
+    // "Succeeded" means at least one agent instance actually received the
+    // invalidation. Redis PUBLISH returning 0 means the publish itself was
+    // accepted but no subscriber was listening (agent down / not yet
+    // connected / network partition), which is functionally a miss — the
+    // cache will stay stale until TTL or the next mutation. Counting that
+    // as success would make the toast lie to the admin.
+    status.anyChannelSucceeded = status.redisSubscribersNotified > 0 || status.httpInvalidateOk;
     return status;
   }
 
