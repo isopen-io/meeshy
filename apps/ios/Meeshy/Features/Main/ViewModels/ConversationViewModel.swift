@@ -1113,14 +1113,21 @@ class ConversationViewModel: ObservableObject {
             // Upsert authoritative server data into GRDB; the MessageStore observation
             // surfaces new/updated rows to `messages` automatically — no direct assignment.
             try? await messagePersistence.upsertFromAPIMessages(response.data)
-            // Extrait transcriptions/traductions AVANT que `loadInitial` ne
-            // fasse surface les messages : `messageTranscriptions` est prêt au
-            // premier rendu, la transcription audio ne « pop » plus en second
-            // temps. `extractAttachmentTranscriptions` lit `response.data`
+            // Extrait transcriptions/traductions AVANT que les messages ne
+            // soient surface : `messageTranscriptions` est prêt au premier
+            // rendu, la transcription audio ne « pop » plus en second temps.
+            // `extractAttachmentTranscriptions` lit `response.data`
             // directement, il n'a pas besoin du store.
             extractAttachmentTranscriptions(from: response.data)
             extractTextTranslations(from: response.data)
-            await messageStore.loadInitial()
+            // Atomic publish — same pattern as .fresh / .stale in
+            // loadMessages. upsertFromAPIMessages has persisted the API rows
+            // into GRDB, so loadInitialSnapshot picks them up; apply them in
+            // the same MainActor slice as a defensive hydrateMetadataFromGRDB
+            // call so a background revalidation never re-introduces a pop-in.
+            let refreshSnapshot = await messageStore.loadInitialSnapshot()
+            messageStore.apply(records: refreshSnapshot)
+            hydrateMetadataFromGRDB(from: refreshSnapshot)
 
             // Keep legacy CacheCoordinator in sync so other parts of the app
             // (ConversationList preview, unread badge) that still read from it remain correct.
