@@ -270,6 +270,15 @@ struct MessageOverlayMenu: View {
             let clampedDrag = min(0, max(maxExpandUp, dragOffset))
             let panelHeight = panelBaseHeight - clampedDrag
 
+            // Fade out de la cluster (action bar + bulle + emoji bar) quand
+            // l'utilisateur déplie le panneau via le drag handle. Au-delà de
+            // 80pt de drag, la cluster est masquée + non-interactive pour
+            // laisser place au panneau en plein écran. Comportement type
+            // WhatsApp / iMessage.
+            let clusterFadeThreshold: CGFloat = 80
+            let clusterFadeOpacity: CGFloat = max(0, 1 - abs(clampedDrag) / clusterFadeThreshold)
+            let clusterIsInteractive = clusterFadeOpacity > 0.5
+
             ZStack {
                 dismissBackground
 
@@ -347,11 +356,12 @@ struct MessageOverlayMenu: View {
                             x: quickActionMenuCenterX,
                             y: isVisible ? quickActionMenuCenterY : (bubbleRect.minY - 4)
                         )
-                        .opacity(isVisible ? 1 : 0)
+                        .opacity(isVisible ? clusterFadeOpacity : 0)
                         .scaleEffect(
                             isVisible ? 1.0 : 0.85,
                             anchor: message.isMe ? .bottomTrailing : .bottomLeading
                         )
+                        .allowsHitTesting(clusterIsInteractive)
                     }
 
                     // FIDÉLITÉ — vrai `ThemedMessageBubble` avec les mêmes
@@ -392,7 +402,7 @@ struct MessageOverlayMenu: View {
                         x: geometry.size.width / 2,
                         y: isVisible ? bubbleFinalMidY : bubbleRect.midY
                     )
-                    .opacity(isVisible ? 1 : 0)
+                    .opacity(isVisible ? clusterFadeOpacity : 0)
                     .allowsHitTesting(false)
 
                     // Barre d'emojis rapides — positionnée DIRECTEMENT sous
@@ -404,11 +414,12 @@ struct MessageOverlayMenu: View {
                             x: emojiBarCenterX,
                             y: isVisible ? emojiBarCenterY : (bubbleRect.maxY + emojiBarHeight / 2)
                         )
-                        .opacity(isVisible ? 1 : 0)
+                        .opacity(isVisible ? clusterFadeOpacity : 0)
                         .scaleEffect(
                             isVisible ? 1.0 : 0.7,
                             anchor: message.isMe ? .topTrailing : .topLeading
                         )
+                        .allowsHitTesting(clusterIsInteractive)
                 }
             }
         }
