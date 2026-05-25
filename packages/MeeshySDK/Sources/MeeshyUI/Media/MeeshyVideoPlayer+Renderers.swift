@@ -334,9 +334,17 @@ internal struct _InlineRenderer: View {
 
     private func teardown() {
         controlsTimer?.invalidate(); controlsTimer = nil
-        if manager.activeURL == player.attachment.fileUrl {
-            manager.pause()
-        }
+        // Release plutôt que pause : sans ça, `manager.player` + `activeURL`
+        // restent câblés sur cette URL après scroll out. Au scroll back,
+        // `isThisActive` redevient vrai et la surface remonte sur la dernière
+        // frame jouée — l'utilisateur voit une image figée au lieu du
+        // thumbnail. `release(urlString:)` est URL-gated (no-op si une autre
+        // bulle a pris la main entre temps), donc safe.
+        //
+        // Note SwiftUI : `.onDisappear` ne fire pas quand un `fullScreenCover`
+        // se présente au-dessus de la conversation — la cellule reste mountée
+        // sous le cover. Donc ouvrir le fullscreen ne déclenche pas ce release.
+        manager.release(urlString: player.attachment.fileUrl)
     }
 
     private func toggleControls() {
