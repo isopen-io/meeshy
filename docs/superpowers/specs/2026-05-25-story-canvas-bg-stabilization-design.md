@@ -1,145 +1,277 @@
-# Story Canvas Background Stabilization — Design
+# Story Canvas Background Stabilization — Design v2
 
 **Date :** 2026-05-25
 **Auteur :** Claude (Opus 4.7) avec J. Charles N. M.
-**Status :** Brainstorm validé, prêt pour implementation plan
-**Estimate :** 2–2.5 jours
-**Scope :** `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/` + `packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift`
+**Status :** Brainstorm validé + review v1 → v2 amendé pour atteindre 10/10
+**Estimate :** 3 jours (révisé après audit complet de surface d'impact)
+**Scope :** voir tableau "Fichiers impactés" — 6 fichiers principaux + 5 tests
 
 ## Contexte
 
-Trois bugs distincts du composer de stories iOS partagent une même racine architecturale : la synchronisation entre le modèle Swift et les `CALayer` GPU du `StoryBackgroundLayer` n'est pas idéale.
+Trois bugs distincts du composer de stories iOS partagent une même racine architecturale : la synchronisation entre le modèle Swift et les `CALayer` GPU du `StoryBackgroundLayer` n'est pas idéale, et la donnée "transform du background" est éclatée sur trois types Swift distincts.
 
 | # | Bug | Root cause confirmée (investigation 2026-05-25) |
 |---|-----|---|
-| 1 | Vidéo paysage en background croppée (étirée pour remplir le canvas 9:16) | `StoryBackgroundLayer.swift:395` `videoGravity = .resizeAspectFill` hardcodé |
-| 2 | Flash noir à chaque édition (frappe texte, drag/release sticker, drag bg) | `handlePan.ended` fait `slideContentRevision &+= 1` + `rebuildLayers()` → réassignation `layer.frame` + `layer.transform` sans `CATransaction.setDisableActions(true)` → animation implicite CALayer = fade noir entre deux frames |
-| 3 | Drag du background visible sur mini-preview (haut du composer) mais pas sur canvas principal | `handlePan.changed` mute `slide.mediaObject.x/y` (vu par mini-preview qui rerend tout SwiftUI), mais le canvas principal applique la position bg via `slide.effects.backgroundTransform` qui n'est **jamais** mutée pendant le geste — commit n'arrive qu'au release via `buildEffects()` |
+| 1 | Vidéo paysage en background croppée (étirée pour remplir le canvas 9:16) | `StoryBackgroundLayer.swift:395` `videoGravity = .resizeAspectFill` hardcodé, AINSI que `StoryAVCompositor.swift:308` `paintAspectFill` pour l'export |
+| 2 | Flash noir à chaque édition (frappe texte, drag/release sticker, drag bg) | À confirmer en Phase 1 (instrumentation). Hypothèse principale : les chemins asynchrones (Task @MainActor) dans `configure()` (lignes 254-278 image, 327-330 vidéo) s'exécutent **après** le `CATransaction.commit()` de `rebuildLayers()` → les `addSublayer` et `img.contents =` se font dans un contexte où les actions CA implicites sont activées. Hypothèse secondaire : `attachBackgroundPlayer` crée un nouveau `AVPlayerLayer` même quand le fast-path d'identité matche partiellement |
+| 3 | Drag du background visible sur mini-preview (haut du composer) mais pas sur canvas principal | `handlePan.changed` mute `slide.mediaObject.x/y` (vu par mini-preview qui rerend tout SwiftUI), mais le canvas principal **n'utilise jamais** `mediaObject.x/y` pour le bg — il lit uniquement `slide.effects.backgroundTransform` qui n'est jamais muté pendant le geste. Le `mediaObject.x/y` du bg est donc **donnée morte** pour le canvas |
 
-L'objectif : stabiliser `StoryBackgroundLayer` une fois pour toutes, avec un contrat clair "le layer est stable, le diff fait le tri".
+L'objectif : stabiliser `StoryBackgroundLayer` une fois pour toutes, avec un contrat clair "le layer est stable, le diff fait le tri, une seule source de vérité pour la position du bg".
 
 ## Objectifs
 
-1. Vidéo/image de fond paysage → letterbox centré, fond de story visible derrière (parité avec Instagram/TikTok)
+1. Vidéo/image de fond paysage → letterbox centré, fond de story visible derrière (parité Instagram/TikTok), parité composer + export
 2. Vidéo/image de fond portrait → aspectFill (= `.resizeAspectFill`, comportement actuel préservé)
-3. Override double-tap (.auto → .fit → .fill → .auto) persisté dans le modèle
-4. Zéro flash noir sur **toutes** les éditions du canvas (texte, sticker, drag bg)
-5. Drag du background visible live sur le canvas principal (parité avec mini-preview)
+3. Override double-tap (.auto → .fit → .fill → .auto) persisté en base, respecté par composer + reader + export
+4. Zéro flash noir sur **toutes** les éditions du canvas (texte, sticker, drag bg, drag stickers)
+5. Drag du background visible **live** sur le canvas principal (parité avec mini-preview)
+6. **Source unique de vérité** pour la position du background (`backgroundTransform` partout, `mediaObject.x/y` du bg = mort)
 
 ## Non-objectifs
 
-- Refactor de `StoryBackgroundLayer` en service séparé (over-engineering pour le besoin)
+- Refactor de `StoryBackgroundLayer` en service séparé (over-engineering)
 - Changement de l'API publique exposée par le SDK
-- Migration des stories existantes (le champ ajouté est optionnel, default = auto)
+- Migration DB destructive (le champ ajouté est optionnel, default = auto)
 - Feature flag (c'est un fix, pas une feature gated)
 
-## Architecture
+## Décisions architecturales
 
-### Stratégie fit auto (sans nouveau champ persisté quand l'utilisateur n'overide pas)
+### D1. Trois types `BackgroundTransform` → unifier le contrat, propager le nouveau champ partout
 
-Le mode initial est **calculé à la volée** depuis le `naturalSize` de l'asset au moment du `configure()` :
-
-```
-naturalSize  = AVAsset.tracks(.video).naturalSize   (vidéo)
-            OR UIImage.size                          (image)
-
-ratioMedia  = w / h
-ratioCanvas = 9 / 16  ≈ 0.5625
-
-si ratioMedia > ratioCanvas → paysage  → mode = .fit (letterbox, AVLayerVideoGravity.resizeAspect)
-sinon                       → portrait → mode = .fill (AVLayerVideoGravity.resizeAspectFill)
-```
-
-Une vidéo iPhone portrait (9:16) garde le comportement actuel (full bleed). Une vidéo desktop 16:9 affiche la vidéo entière centrée avec le `StoryBackgroundLayer.backgroundColor` visible au-dessus/dessous.
-
-### Override double-tap persisté
-
-Un `UITapGestureRecognizer(numberOfTapsRequired: 2)` est ajouté à `StoryCanvasUIView` (séparé du recognizer single-tap existant via `UIGestureRecognizer.require(toFail:)`). Le tap-target est résolu via la même fonction que `handlePan` : `resolveManipulationTarget(at:)`. Le toggle est ignoré si le target n'est pas le background media object.
-
-Le cycle est :
+L'audit révèle trois types distincts dans le code avec deux converters :
 
 ```
-.auto → .fit → .fill → .auto → ...
+StoryBackgroundTransform            (SDK Codable, persisté)            — StoryModels.swift:1041
+   ↕ buildEffects() / restoreCanvas()                                   — StoryComposerView.swift:1519, 1532
+StoryComposerViewModel.BackgroundTransform   (composer @Published)     — StoryComposerViewModel.swift:366
+   ↕ bgTransform = BackgroundTransform(...)                            — StoryCanvasUIView.swift:1027, 1278
+BackgroundTransform                 (render-space Sendable+Equatable)  — StoryBackgroundLayer.swift:10
 ```
 
-Persistance dans `StoryBackgroundTransform` (modèle déjà existant à `StoryModels.swift:1041`) :
+**Ajouter `videoFitMode: String?`** aux **trois** types, et le propager dans les **deux** converters :
 
 ```swift
+// StoryModels.swift
 public struct StoryBackgroundTransform: Codable, Sendable {
     public var scale: CGFloat?
     public var offsetX: CGFloat?
     public var offsetY: CGFloat?
     public var rotation: Double?
-    public var videoFitMode: String?  // NOUVEAU — nil = auto, "fit" | "fill"
+    public var videoFitMode: String?  // NOUVEAU : nil = auto | "fit" | "fill"
+
+    public var isIdentity: Bool {
+        (scale ?? 1.0) == 1.0 && (offsetX ?? 0) == 0 && (offsetY ?? 0) == 0
+            && (rotation ?? 0) == 0 && videoFitMode == nil
+    }
+}
+
+// StoryComposerViewModel.swift
+struct BackgroundTransform {
+    var scale: CGFloat = 1.0
+    var offsetX: CGFloat = 0
+    var offsetY: CGFloat = 0
+    var rotation: Double = 0
+    var videoFitMode: String? = nil  // NOUVEAU
+}
+
+// StoryBackgroundLayer.swift
+public struct BackgroundTransform: Sendable, Equatable {
+    public nonisolated var scale: Double
+    public nonisolated var offsetX: Double
+    public nonisolated var offsetY: Double
+    public nonisolated var rotation: Double
+    public nonisolated var videoFitMode: String?  // NOUVEAU
+    // ...
 }
 ```
 
-`nil` = comportement auto (calculé). Anciens stories continuent de fonctionner sans migration (Codable optionnel).
+L'`Equatable` synthétisé inclura `videoFitMode` automatiquement — utile pour le diff de fast-path (D3).
 
-### Architecture du flow live drag (bug 3)
+### D2. Stratégie fit auto + override persisté
 
-Avant :
-
-```
-[USER DRAG BG]
-  ├─ handlePan.changed → mute slide.mediaObject.x/y
-  │      → mini-preview re-render (OK)
-  │      → canvas principal: NO-OP (read backgroundTransform inchangé) ❌
-  └─ handlePan.ended   → buildEffects() commit dans slide.effects.backgroundTransform
-                       → rebuildLayers() → flash noir ❌
-```
-
-Après :
+Le mode initial est **calculé à la volée** depuis le `naturalSize` de l'asset au moment du `configure()` quand `videoFitMode == nil` :
 
 ```
-[USER DRAG BG]
-  ├─ handlePan.changed → IF target == backgroundMediaObject:
-  │      CATransaction.setDisableActions(true)
-  │      backgroundLayer.transform = liveCATransform    (LIVE, no animation)
-  │   ELSE: existing path for stickers/text
-  └─ handlePan.ended   → commit dans slide.effects.backgroundTransform
-                       → SKIP rebuildLayers() si seul transform a changé (diff)
-                       → backgroundLayer.transform reste déjà en place ✓
+naturalSize = AVAsset.tracks(.video).naturalSize   (vidéo)
+           OR UIImage.size                          (image)
+
+ratioMedia  = w / h
+ratioCanvas = 9 / 16  ≈ 0.5625
+
+mode auto = (ratioMedia > ratioCanvas) ? .resizeAspect : .resizeAspectFill
+mode override "fit"  → .resizeAspect
+mode override "fill" → .resizeAspectFill
 ```
 
-### Anti-flash global (bug 2)
+L'`StoryBackgroundLayer.backgroundColor` (setté par le caller, ligne ~177) reste visible dans les bandes letterbox — c'est le fond de la story.
 
-Toutes les mutations CALayer dans `StoryBackgroundLayer` sont wrappées :
+### D3. Diff complet dans `configure()` — pas de skip de `slideContentRevision`
+
+L'audit révèle que `slideContentRevision` est consommé par **deux autres systèmes** :
+
+```
+StoryCanvasUIView.swift:897-898  → audio mixer cache invalidation
+StoryCanvasUIView.swift:1204     → filter texture re-capture (Metal MPS pipeline)
+```
+
+Skipper l'increment dans `handlePan.ended` (proposition v1) **casserait les filtres et l'audio mixer** après chaque drag.
+
+**Approche corrigée :** garder l'increment, mais rendre `configure()` **idempotent quand kind+transform+geometry n'ont pas changé**.
 
 ```swift
-CATransaction.begin()
-CATransaction.setDisableActions(true)
-defer { CATransaction.commit() }
-// mutations frame, transform, contents
+// Ajout au début de configure(), AVANT le fast-path d'identité existant
+let nothingChanged = (self.kind == kind)
+    && (self.transform3D == transform)
+    && (self.frame.size == geometry.renderSize)
+    && (contentLayer != nil || avPlayerLayer != nil || backgroundColor != nil)
+if nothingChanged { return }
 ```
 
-Le fast-path d'identité (`StoryBackgroundLayer.swift:139-155`) gagne un diff sur la transform : si `currentTransform == newTransform`, skip l'assignation entièrement.
+`Kind` est déjà `Equatable` (vérifier ; sinon synthétiser). `BackgroundTransform` devient `Equatable` (D1).
 
-### Périmètre des changements
+### D4. Path canonique de drag bg = α (decision validée)
 
-Aucun nouveau service, aucune nouvelle API publique. Tout le changement reste dans 3 fichiers :
+**Drag du background mute UNIQUEMENT `slide.effects.backgroundTransform.offsetX/Y`.**
 
-- `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Layers/StoryBackgroundLayer.swift` — videoGravity dynamique, anti-flash, diff transform, double-tap toggle
-- `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView.swift` — handlePan live drag pour background, skip rebuildLayers conditionnel
-- `packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift` — champ `videoFitMode: String?` optionnel sur `StoryBackgroundTransform`
+- `slide.mediaObjects[bg].x/y` devient **donnée morte** pour le canvas et la mini-preview (qui doit aussi migrer pour lire `backgroundTransform`)
+- Mini-preview observe `slide.effects.backgroundTransform` (déjà persisté en `@Published var slides`)
+- Canvas principal applique `backgroundLayer.transform` via la conversion `bgTransform` existante (`StoryCanvasUIView.swift:1027`)
+- Source unique de vérité
 
-Plus tests + smoke checklist QA.
+**Migration zero-DB :** au prochain édit d'une story existante, `buildEffects()` re-sérialise la slide avec `backgroundTransform` correct ; les `mediaObjects[bg].x/y` non-zéro restent en base mais sont ignorés par le rendu. Aucun script de migration nécessaire — c'est le pattern α "doux".
+
+### D5. Anti-flash : combiner CATransaction synchrone + wrap des chemins async
+
+L'audit confirme que `rebuildLayers()` wrappe DÉJÀ ses mutations dans `CATransaction.setDisableActions(true)` (lignes 1018-1023). Le flash ne vient **pas** de cette couche.
+
+**Hypothèse Phase 1 :** le flash vient des `Task { @MainActor in }` au sein de `configure()` (lignes 254-278 image distante, 327-330 vidéo cache-miss). Ces tâches s'exécutent au prochain tour de runloop, **après** le `CATransaction.commit()` du rebuildLayers parent → les `addSublayer(pl)` et `img.contents = cgImage` se font hors wrap = animations CA implicites activées.
+
+**Fix Phase 3 :** chaque mutation CALayer dans les chemins async wrappée individuellement :
+
+```swift
+Task { @MainActor [weak self, weak img] in
+    // ...
+    let cgImage = uiImage.cgImage
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    img?.contents = cgImage
+    CATransaction.commit()
+    self?.hasFinalContentStamped = true
+}
+```
+
+Idem pour `attachBackgroundPlayer.addSublayer(pl)` (StoryBackgroundLayer.swift:396).
+
+Le diff D3 évite le flash sur les paths "rien n'a changé" ; le wrap async évite le flash sur les paths "contenu vraiment changé pour la première fois".
+
+### D6. Live drag du background — branche dédiée dans `handlePan`
+
+`backgroundMediaObjectId` est résolu à `slide.didSet` : `slide.effects.mediaObjects?.first(where: { $0.isBackground == true })?.id`.
+
+```swift
+case .changed:
+    guard let id = manipulatedItemId, bounds.size != .zero else { return }
+    let translation = recognizer.translation(in: self)
+    let dxNorm = Double(translation.x / bounds.width)
+    let dyNorm = Double(translation.y / renderHeightFor1920)
+
+    if id == backgroundMediaObjectId {
+        let live = BackgroundTransform(
+            scale: dragStartBgScale,
+            offsetX: dragStartBgOffsetX + dxNorm,
+            offsetY: dragStartBgOffsetY + dyNorm,
+            rotation: dragStartBgRotation,
+            videoFitMode: dragStartBgFitMode
+        )
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        backgroundLayer.transform = live.caTransform()
+        backgroundLayer.transform3D = live  // garder la source de vérité du layer alignée
+        CATransaction.commit()
+        liveBackgroundTransformDuringDrag = live
+        return
+    }
+    // chemin existant pour stickers/text
+    let rawX = clamp(dragStartSlideX + dxNorm)
+    let rawY = clamp(dragStartSlideY + dyNorm)
+    let (snappedX, didSnapX) = snap(rawX)
+    let (snappedY, didSnapY) = snap(rawY)
+    updateSnapGuides(x: didSnapX ? snappedX : nil, y: didSnapY ? snappedY : nil)
+    slide = updatePosition(slideId: id, x: snappedX, y: snappedY)
+    onItemModified?(slide)
+```
+
+Au `.ended` du background : commit dans `slide.effects.backgroundTransform` via callback parent (`onBackgroundTransformChanged?(liveBackgroundTransformDuringDrag)`), puis `rebuildLayers()` qui sera **idempotent grâce à D3** (le layer.transform est déjà à jour).
+
+**Snap guides désactivés** pendant drag bg (le bg n'a pas besoin de snap centres).
+
+### D7. Override double-tap
+
+`UITapGestureRecognizer(numberOfTapsRequired: 2)` ajouté à `StoryCanvasUIView`, requiert l'échec du single-tap existant via `require(toFail:)`. Target résolu via `resolveManipulationTarget(at:)`. Toggle ignoré si target ≠ background. Cycle : `nil → "fit" → "fill" → nil`.
+
+### D8. Interaction `videoGravity` × `transform.scale`
+
+**Décision :** le `videoGravity` (fit/fill) définit la **baseline** de comment l'asset remplit le bounding box du layer. Le `transform.scale` (pinch user) est une **multiplication** par-dessus. Cumul libre, pas de clamp.
+
+Conséquences :
+- Fit + scale=1 → letterbox visible
+- Fit + scale=2 → letterbox doublé, déborde du canvas (effet voulu : zoom in sur une vidéo paysage tout en gardant le ratio)
+- Fill + scale=1 → aspectFill (comportement actuel)
+- Fill + scale=0.5 → vidéo réduite à 50%, bandes vides révélant le fond story
+
+Le double-tap reset à "auto" remet `videoFitMode = nil` mais **conserve scale/offset/rotation** (le user ne perd pas son zoom/pan).
+
+### D9. SDK Purity
+
+Les changements sont conformes à `packages/MeeshySDK/CLAUDE.md` :
+
+| Changement | Catégorie | Verdict |
+|---|---|---|
+| `videoGravity` dynamique via ratio | Atom (calcul pur) | ✅ SDK |
+| Diff D3 + CATransaction wrap D5 | Atom (no orchestration) | ✅ SDK |
+| Champ `videoFitMode` au modèle Codable | Model | ✅ SDK |
+| Live drag handlePan branche bg | Gesture local, pas de multi-service cascade, déjà SDK-side comme stickers/text | ✅ SDK borderline acceptable |
+| Override double-tap | Gesture local | ✅ SDK |
+
+### D10. Périmètre des changements — fichiers impactés (audit complet)
+
+| Fichier | Changement | Phase |
+|---|---|---|
+| `packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift` | Ajouter `videoFitMode: String?` à `StoryBackgroundTransform` + update `isIdentity` + update init | 2 |
+| `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Layers/StoryBackgroundLayer.swift` | `videoFitMode` au struct render-space + `resolveVideoGravity()` + diff D3 + wrap CATransaction async D5 + handle double-tap | 2+3 |
+| `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView.swift` | Converter bgTransform (`:1027`) + `captureBackground` (`:1278`) propagent `videoFitMode` + handlePan branche live bg D6 + double-tap gesture D7 + `backgroundMediaObjectId` cache | 2+3+4 |
+| `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerViewModel.swift` | `videoFitMode` au struct interne (`:366`) + cache backgroundTransformCache préserve le champ | 2 |
+| `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView.swift` | `restoreCanvas()` (`:1519`) lit `videoFitMode` + `buildEffects()` (`:1532`) le sérialise | 2 |
+| `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryAVCompositor.swift` | `paintAspectFill` (`:308`) devient `paintRespectingFitMode()` qui lit `slide.effects.backgroundTransform.videoFitMode` + ratio auto si nil. Pour vidéo (substrate), s'assurer que `AVMutableVideoCompositionLayerInstruction` respecte le mode (transform) | 2 |
+| Tests existants étendus (cf. Phase 5) | Pas de nouveaux fichiers, on étend | 1+5 |
+
+Aucun nouveau service, aucune nouvelle API publique exposée.
 
 ## Phases d'implémentation
 
 ### Phase 1 — Instrumentation & repro (0.5 j)
 
-Avant tout fix, prouver les hypothèses par test.
+Avant tout fix, **prouver l'hypothèse principale D5** (flash vient des Task @MainActor async) par test.
 
-- `StoryBackgroundLayer_FlashOnRebuildTests.swift` : appel `configure()` deux fois avec **même URL/transform/geometry**, capture `CALayer.presentationLayer.opacity`, asserte qu'il reste à 1.0 (= pas d'animation implicite). Test échoue avant fix, passe après.
-- `handlePan_textKeystroke_backgroundLayerUnchangedTests.swift` : simule une frappe texte, capture les compteurs `attachBackgroundPlayer / detachBackgroundPlayer`, asserte 0 réattach.
-- Trace OSLog conditionnelle (`#if DEBUG`) dans `attachBackgroundPlayer/detachBackgroundPlayer/configure` pour confirmer en simu.
+**Tests rouges à ajouter dans les fichiers existants :**
 
-**Critère sortie :** les tests rouges confirment précisément la cause du flash (CATransaction implicite vs slideContentRevision vs reattach).
+| Fichier existant | Nouveau cas test |
+|---|---|
+| `Tests/MeeshyUITests/Story/Reader/Background/StoryBackgroundLayerTests.swift` | `test_configure_sameKindTwice_isNoOp()` : appel `configure()` 2x avec mêmes paramètres → attente : 0 mutation visible sur `CALayer.presentationLayer` (besoin de wrapper via CATransaction.flush et timing) |
+| `Tests/MeeshyUITests/Story/Reader/Background/StoryBackgroundLayerImageTests.swift` | `test_configure_imageAsyncLoad_doesNotFlash()` : asset async, asserter que l'`addSublayer` du contentLayer arrive dans un contexte `CATransaction.disableActions == true`. Test échoue avant fix, passe après |
+| `Tests/MeeshyUITests/Story/Reader/Background/StoryBackgroundLayerVideoTests.swift` | `test_configure_videoAttach_wrappedInCATransaction()` : assert `addSublayer(AVPlayerLayer)` arrive avec actions désactivées |
+| `Tests/MeeshyUITests/Story/Canvas/CanvasBackgroundIntegrationTests.swift` | `test_textKeystroke_doesNotReattachBackgroundPlayer()` : simule 10 frappes texte, capture compteur attach/detach, asserter 0 réattach |
+| `Tests/MeeshyUITests/Story/Canvas/CanvasBackgroundIntegrationTests.swift` | `test_dragBackground_canvasUpdatesLive()` : simule handlePan.changed sur backgroundMediaObjectId, asserter `backgroundLayer.transform` muté DURANT le geste |
 
-### Phase 2 — Bug 1 : orientation-aware fit (0.5 j)
+**Trace OSLog conditionnelle (`#if DEBUG`)** dans `attachBackgroundPlayer/detachBackgroundPlayer/configure` pour confirmer en simu.
 
-**Fichier :** `StoryBackgroundLayer.swift`
+**Critère sortie :** les tests rouges confirment la cause du flash. Si l'hypothèse D5 est invalidée, ré-investiguer avant Phase 3.
+
+### Phase 2 — Fit auto + propagation du `videoFitMode` (1 j)
+
+**Pourquoi 1 j et non 0.5 :** la propagation à travers les 6 fichiers, les 2 converters, et les 3 types nécessite des tests d'isolation par couche.
+
+**StoryBackgroundLayer.swift :**
 
 ```swift
 private func resolveVideoGravity(
@@ -159,156 +291,192 @@ private func resolveVideoGravity(
 }
 ```
 
-Hooked dans `attachBackgroundPlayer` après `AVAsset.tracks(.video)` load. Si la naturalSize n'est pas encore résolue, fallback `.resizeAspectFill` (= comportement actuel, pas de régression), puis update au `loaded(.naturalSize)` callback.
+Hooked dans `attachBackgroundPlayer` après load async de `AVURLAsset.tracks(.video).naturalSize`. Avant la résolution, fallback `.resizeAspectFill` (= comportement actuel, pas de régression). Au callback `loaded(.naturalSize)`, update `pl.videoGravity` si nécessaire (wrapped CATransaction).
 
-**Pour les images :** même règle appliquée via `UIImage.size`. `contentLayer.contentsGravity = .resizeAspect | .resizeAspectFill`.
+Pour les images : `contentLayer.contentsGravity = resolveImageGravity(...)` avec même logique sur `UIImage.size`.
 
-**Backdrop story visible :** `StoryBackgroundLayer.backgroundColor` est déjà setté (ligne ~177) à la couleur de fond de la story. Le letterbox révèle automatiquement cette couleur dans les bandes haut/bas.
-
-**Critère sortie :** vidéo paysage 16:9 ajoutée → letterbox immédiat, fond story visible. Tests snapshot verts.
-
-### Phase 3 — Bug 2 : éliminer le flash noir (0.5 j)
-
-**Fichier :** `StoryBackgroundLayer.swift`
-
-Wrap toutes les mutations CALayer dans le fast-path et le full rebuild :
+**StoryAVCompositor.swift :**
 
 ```swift
-CATransaction.begin()
-CATransaction.setDisableActions(true)
-defer { CATransaction.commit() }
+case .image:
+    if let bgImage = resolveBackgroundImage(for: slide) {
+        let mode = slide.effects.backgroundTransform?.videoFitMode
+        let gravity = resolveImageGravity(naturalSize: bgImage.size,
+                                          canvasSize: CGSize(width: width, height: height),
+                                          override: mode)
+        paintImage(bgImage, in: cg, size: ..., gravity: gravity)
+    }
 ```
 
-Ajouter un diff transform dans le fast-path (lignes 139-155) :
+Pour la vidéo (substrate AVMutableComposition), construire un `AVMutableVideoCompositionLayerInstruction` avec une `transform` qui applique le bon gravity (calcul `CGAffineTransform` scale + translate pour centrer).
+
+**StoryModels + StoryComposerViewModel + StoryComposerView :** propagation triviale du champ + tests Codable round-trip.
+
+**Critère sortie :** vidéo paysage 16:9 → letterbox immédiat dans composer ET reader ET export. Tests verts.
+
+### Phase 3 — Anti-flash : diff D3 + wrap async D5 (0.5 j)
+
+**StoryBackgroundLayer.swift :**
+
+1. Ajouter `Kind: Equatable` (si pas déjà ; vérifier)
+2. Ajouter le no-op check D3 au début de `configure()` :
 
 ```swift
-if canReuseContent {
-    let newCA = transform.caTransform()
-    if !CATransform3DEqualToTransform(self.transform, newCA) {
-        self.transform = newCA
-    }
-    let newFrame = CGRect(origin: .zero, size: geometry.renderSize)
-    if self.frame != newFrame {
-        self.frame = newFrame
-        contentLayer?.frame = bounds
-        avPlayerLayer?.frame = bounds
-    }
-    return
+let nothingChanged = (self.kind == kind)
+    && (self.transform3D == transform)
+    && (self.frame.size == geometry.renderSize)
+    && (contentLayer != nil || avPlayerLayer != nil)
+if nothingChanged { return }
+```
+
+3. Wrap chaque mutation CALayer dans les chemins async :
+
+```swift
+// Image async load (ligne ~268)
+img?.contents = cgImage
+// devient :
+withDisabledCAActions { img?.contents = cgImage }
+
+// Helper :
+@MainActor
+private func withDisabledCAActions(_ block: () -> Void) {
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    block()
+    CATransaction.commit()
 }
 ```
 
-**Fichier :** `StoryCanvasUIView.swift`
+Idem pour `attachBackgroundPlayer.addSublayer(pl)` (ligne 396) et le call site `Task { ... attachBackgroundPlayer(...) }` (ligne 327).
 
-`handlePan.ended` : ne plus incrémenter `slideContentRevision &+= 1` ni appeler `rebuildLayers()` si seules les positions x/y ont changé.
+**Critère sortie :** taper texte → 0 flash. Drag sticker → 0 flash. Drag bg release → 0 flash. Tests régression verts.
 
-```swift
-case .ended, .cancelled, .failed:
-    manipulatedItemId = nil
-    hideSnapGuides()
-    if didModifyBackgroundContent {
-        slideContentRevision &+= 1
-        rebuildLayers()
-    }
-    // else: layers déjà à jour live → rien à faire
-```
+### Phase 4 — Live drag du background (path α) (0.5 j)
 
-**Critère sortie :** taper du texte → 0 flash. Drag sticker → 0 flash. Drag bg → 0 flash. Tests régression verts.
+**StoryCanvasUIView.swift :**
 
-### Phase 4 — Bug 3 : live drag du background (0.5 j)
+1. Cache `backgroundMediaObjectId` mis à jour à `slide.didSet`
+2. Branche live drag dans `handlePan.changed` (cf. D6)
+3. Au `.ended`, callback `onBackgroundTransformChanged?(liveBackgroundTransformDuringDrag)` → le composer mute `viewModel.backgroundTransform` → `buildEffects()` au prochain `syncCurrentSlideEffects()` → persist
+4. Désactiver snap guides pendant drag bg
 
-**Fichier :** `StoryCanvasUIView.swift`
+**StoryComposerView.swift :**
 
-Dans `handlePan.changed`, branche dédiée background. `backgroundMediaObjectId` est résolu en lisant la slide courante à `.began` : `slide.effects.mediaObjects.first(where: { $0.isBackground })?.id`. Cette valeur est stockée dans une propriété privée `private var backgroundMediaObjectId: String?` mise à jour à chaque `slide.didSet`.
+5. Câbler le nouveau callback `onBackgroundTransformChanged`
+6. **Path α :** retirer le code qui mute `slide.mediaObjects[bg].x/y` au drag (chercher où ça se passait avant — probablement nulle part puisque le drag ne touchait que mediaObject)
 
-```swift
-case .changed:
-    guard let id = manipulatedItemId, bounds.size != .zero else { return }
-    let translation = recognizer.translation(in: self)
+**Mini-preview (SlideMiniPreview.swift) :**
 
-    if id == backgroundMediaObjectId {
-        let liveTransform = BackgroundTransform(
-            scale: dragStartScale,
-            offsetX: dragStartOffsetX + dxNorm,
-            offsetY: dragStartOffsetY + dyNorm,
-            rotation: dragStartRotation
-        )
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        backgroundLayer.transform = liveTransform.caTransform()
-        CATransaction.commit()
-        liveBackgroundTransformDuringDrag = liveTransform
-    } else {
-        // chemin existant pour stickers/text
-        slide = updatePosition(slideId: id, x: snappedX, y: snappedY)
-        onItemModified?(slide)
-    }
-```
+7. Vérifier qu'elle lit déjà `slide.effects.backgroundTransform` pour positionner le bg (devrait être le cas — c'est le rendu canvas qui doit migrer)
+8. Si elle lit `mediaObject.x/y` pour le bg : la migrer aussi
 
-Au `.ended` du background : commit dans `slide.effects.backgroundTransform` via callback parent (`onBackgroundTransformChanged?(liveBackgroundTransformDuringDrag)`). Le canvas reste tel quel (déjà à jour visuellement).
+**Critère sortie :** drag bg → canvas suit live, mini-preview suit live, pas de flash au release.
 
-**Pour la mini-preview :** elle observe déjà `viewModel.slides` qui ne change qu'au `.ended` → la mini-preview montrera donc l'état "post-release". Si la parité live mini-preview est souhaitée pendant le drag, publier `@Published var liveBackgroundTransformDuringDrag: BackgroundTransform?` optionnel sur le ViewModel et la mini-preview l'observe. À valider en smoke (R5 dans risques).
+### Phase 5 — Tests + smoke (0.5 j)
 
-**Critère sortie :** drag bg → canvas principal suit en temps réel, pas de flash au release.
+#### Tests unitaires étendus dans les fichiers existants
 
-### Phase 5 — Tests + smoke checklist (0.5 j)
-
-#### Tests unitaires nouveaux
-
-| Fichier | Cas |
+| Fichier existant | Cas ajoutés |
 |---|---|
-| `StoryBackgroundLayer_VideoGravityTests.swift` | landscape video → `.resizeAspect`, portrait → `.resizeAspectFill`, override `fit/fill` respecté |
-| `StoryBackgroundLayer_NoFlashTests.swift` | configure 2x same URL → 0 réattach AVPlayer, transform diff skip, opacity reste à 1.0 |
-| `StoryBackgroundLayer_DoubleTapToggleTests.swift` | cycle auto→fit→fill→auto via touch event |
-| `StoryCanvasUIView_LiveBackgroundDragTests.swift` | handlePan.changed sur bg → layer.transform muté live, model **non muté**, au .ended → model muté une seule fois |
-| `StoryBackgroundTransform_CodableTests.swift` | round-trip avec `videoFitMode` nil/"fit"/"fill" |
+| `BackgroundTransformTests.swift` | round-trip Codable avec `videoFitMode` nil/"fit"/"fill" ; `isIdentity` retourne false si `videoFitMode != nil` ; equality avec/sans champ |
+| `StoryBackgroundLayerTests.swift` | `resolveVideoGravity` paysage/portrait/carré/override ; diff D3 no-op ; double-tap cycle |
+| `StoryBackgroundLayerImageTests.swift` | image async load wrapped CATransaction ; image fit/fill via override |
+| `StoryBackgroundLayerVideoTests.swift` | landscape video → `.resizeAspect` ; portrait → `.resizeAspectFill` ; override respecté ; configure 2x = 0 réattach |
+| `CanvasBackgroundIntegrationTests.swift` | drag bg → layer.transform muté live ; release → model muté 1× ; mini-preview parité ; text keystroke = 0 réattach |
+| `Tests/MeeshySDKTests/Models/StoryEffectsCodableTests.swift` (créer si absent) | `StoryEffects` round-trip avec `backgroundTransform.videoFitMode` |
 
 #### Smoke checklist QA
 
 `docs/qa/2026-05-25-story-canvas-bg-fixes-smoke.md`
 
-- [ ] Vidéo paysage 16:9 → letterbox + fond story visible
+- [ ] Vidéo paysage 16:9 → letterbox + fond story visible (composer)
+- [ ] Vidéo paysage 16:9 → letterbox dans reader publié
+- [ ] Vidéo paysage 16:9 → letterbox dans MP4 exporté
 - [ ] Vidéo portrait 9:16 → full bleed (comportement actuel)
 - [ ] Vidéo carrée 1:1 → letterbox (ratio < canvas)
-- [ ] Image paysage → même letterbox
+- [ ] Image paysage → letterbox composer + reader + export
 - [ ] Double-tap → cycle .auto → .fit → .fill → .auto (visuel)
+- [ ] Override "fit" persiste après save + reload story
 - [ ] Édition texte (10+ keystrokes) → 0 flash noir
 - [ ] Drag sticker + release → 0 flash noir
-- [ ] Drag background → mouvement live sur canvas principal (parité mini-preview)
-- [ ] Pinch zoom bg → behaviour préservé
+- [ ] Drag background → mouvement live sur canvas principal
+- [ ] Drag background → mouvement live sur mini-preview (parité)
+- [ ] Drag background release → 0 flash noir
+- [ ] Pinch zoom bg → behaviour préservé (cumule avec videoGravity)
 - [ ] Stories existantes (sans `videoFitMode`) → comportement auto par orientation
+- [ ] Stories existantes avec mediaObject.x/y bg non-zéro → ignoré au rendu, prochaine édition nettoie
+- [ ] Filtre actif + drag → filtre se met à jour correctement (régression D3)
+- [ ] Audio mixer + drag → audio se reconfigure correctement (régression D3)
 
-## Risques
+## Risques (mis à jour)
 
 | # | Risque | Mitigation |
 |---|---|---|
-| R1 | `AVAsset.tracks(.video).naturalSize` async → fallback `.resizeAspectFill` au premier frame puis "snap" au letterbox quand chargé | Pré-charger via `AVURLAsset.loadValuesAsynchronously` avant l'attach. Si indisponible, fallback aspectFill (= état actuel, pas de régression) |
-| R2 | `CATransaction.setDisableActions(true)` global supprime des animations souhaitées (transition entre 2 bg différents) | Conserver des animations explicites via `UIView.animate(...)` ou `CATransaction` explicite quand on veut vraiment animer. Default "no animation" plus prévisible |
-| R3 | Live drag bg avec snap guides → snap guides codés pour stickers, pas pour bg | Désactiver snap guides pendant drag bg (le bg n'a pas besoin de snap aux centres) |
-| R4 | Override `videoFitMode` persisté → un export PNG/MP4 doit respecter le mode | `StoryExporter` lit `slide.effects.backgroundTransform.videoFitMode` et applique la même règle de gravity au composite final |
-| R5 | Mini-preview en désync avec live drag si on ne publie pas la transform live | Phase 4 prévoit `@Published var liveBackgroundTransformDuringDrag` optionnel. À valider si nécessaire en smoke |
+| R1 | `AVAsset.tracks(.video).naturalSize` async → fallback `.resizeAspectFill` au premier frame puis "snap" au letterbox quand chargé | Pré-charger via `AVURLAsset.loadValuesAsynchronously` AVANT `attachBackgroundPlayer`. Fallback aspectFill = état actuel, pas de régression |
+| R2 | `CATransaction.setDisableActions(true)` global supprime des animations souhaitées (transition entre 2 bg différents) | Préserver les animations explicites via `UIView.animate(...)` ou `CATransaction.setAnimationDuration(...)`. Default "no animation" plus prévisible |
+| R3 | Live drag bg avec snap guides codés pour stickers | Désactiver snap guides pendant drag bg |
+| R4 | Override `videoFitMode` persisté → export PNG/MP4 doit respecter le mode | Phase 2 inclut StoryAVCompositor : image gravity via `resolveImageGravity`, vidéo via `AVMutableVideoCompositionLayerInstruction.transform` |
+| R5 | Mini-preview lit `mediaObject.x/y` du bg (path β legacy) | Phase 4 audit SlideMiniPreview ; si oui, migrer vers `backgroundTransform` (path α) |
+| R6 | D3 diff `Kind == Kind` nécessite `Kind: Equatable` — peut révéler des cas où l'égalité est mal définie (ex. .video avec sameMuteFlag) | Auditer `Kind` cases ; les associated values qui ne doivent pas casser le diff (mute, etc.) sont traitées via le contentIdentity existant qui filtre déjà. Préserver ce filtrage |
+| R7 | Cache `backgroundTransformCache` du composer (`StoryComposerViewModel.swift:378`) ne sérialise pas `videoFitMode` | Update la struct interne (D1) — round-trip automatique car keying par slide.id et propagation in-memory |
+| R8 | Path α migration silencieuse : `mediaObject.x/y` non-zéro persiste en base | Au prochain édit, `buildEffects()` réécrit la slide. Bonus optionnel : script de nettoyage `mediaObject.x = 0, y = 0 WHERE isBackground = true` (PAS bloquant) |
+| R9 | `captureBackground` (StoryCanvasUIView:1278) instancie un second `StoryBackgroundLayer` pour filter texture capture → doit aussi respecter `videoFitMode` | La conversion `bgTransform` au `:1278` lit déjà `slide.effects.backgroundTransform` — propagation automatique du nouveau champ |
 
 ## Stratégie de test
 
 Pyramide :
 
-1. **Unit (XCTest)** — pure logique `resolveVideoGravity`, diff `CATransform3DEqualToTransform`, encodage `Codable` du nouveau champ
-2. **Integration (XCTest UI test)** — `StoryBackgroundLayer.configure(...)` séquences, repro des 3 bugs
-3. **Snapshot (SnapshotTesting)** — letterbox vs aspectFill rendu visuel, override toggle
-4. **Smoke (manuel)** — checklist QA exhaustive sur device réel + simu
+1. **Unit (Swift Testing + XCTest)** — `resolveVideoGravity`, diff `BackgroundTransform == BackgroundTransform`, encodage `Codable` du nouveau champ, conversions inter-types
+2. **Integration (XCTest UI test)** — `StoryBackgroundLayer.configure(...)` séquences, repro des 3 bugs, parité composer/reader/export
+3. **Snapshot (SnapshotTesting)** — letterbox vs aspectFill rendu visuel, override toggle (étendre fichiers existants)
+4. **Smoke (manuel)** — checklist QA exhaustive sur device + simu, y compris export MP4
 
-Couverture cible : 100% des branches `resolveVideoGravity`, 100% des chemins `configure()` (fast-path + full rebuild + new diff), 100% du flow `handlePan` background vs non-background.
+Couverture cible :
+- 100% branches `resolveVideoGravity` + `resolveImageGravity`
+- 100% chemins `configure()` (no-op D3 + fast-path identité existant + full rebuild + wrap async)
+- 100% flow `handlePan` background vs non-background
+- 100% round-trips Codable du nouveau champ
 
 ## Plan de rollout
 
 - Une seule PR sur la branche `fix/story-canvas-bg-stabilization-2026-05-25`
-- Pas de feature flag (c'est un fix, pas une feature)
-- Pas de migration DB (champ optionnel, default auto)
-- Self-review + Codex review avant merge sur main
-- Smoke QA manuelle obligatoire avant push prod
+- Pas de feature flag (fix, pas feature)
+- Pas de migration DB destructive (path α "doux")
+- Self-review + Codex review obligatoire avant merge sur main
+- Smoke QA manuelle (15 items) avant push prod
+- Spec checklist incluse dans le PR body
+
+## Estimation totale : 3 jours
+
+| Phase | Estimate |
+|---|---|
+| 1 — Instrumentation & repro | 0.5 j |
+| 2 — Fit auto + propagation 6 fichiers | 1 j |
+| 3 — Anti-flash diff + wrap async | 0.5 j |
+| 4 — Live drag path α | 0.5 j |
+| 5 — Tests + smoke | 0.5 j |
+| **Total** | **3 j** |
 
 ## Références
 
 - Investigation root causes : conversations Claude 2026-05-25
-- Composant impacté : `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Layers/StoryBackgroundLayer.swift`
-- Modèle impacté : `packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift:1041` (`StoryBackgroundTransform`)
-- Lien parent : `docs/superpowers/specs/2026-05-12-story-canvas-fidelity-design.md` (refonte tout-CALayer cross-device, déjà livrée)
+- Review v1 → v2 : audit cohérence/compatibilité/fonctionnalités 2026-05-25
+- Composant principal : `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Layers/StoryBackgroundLayer.swift`
+- Compositor export : `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryAVCompositor.swift`
+- Modèle persistance : `packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift:1041`
+- Lien parent : `docs/superpowers/specs/2026-05-12-story-canvas-fidelity-design.md`
+- Règle SDK Purity : `packages/MeeshySDK/CLAUDE.md`
+
+## Changelog vs v1
+
+- **Architecture D1** : explicite les 3 `BackgroundTransform` et les 2 converters à modifier (v1 mentionnait 1 type)
+- **Architecture D3** : remplace "skip `slideContentRevision`" (cassait filtres+audio) par "diff complet dans `configure()`"
+- **Architecture D4** : tranche path α (decision user) — `backgroundTransform` source unique
+- **Architecture D5** : précise que `CATransaction.setDisableActions` existe déjà au niveau `rebuildLayers()` ; le fix cible les chemins Task @MainActor async
+- **Architecture D8** : spécifie l'interaction `videoGravity` × `transform.scale` (cumul libre, pas de clamp)
+- **Architecture D9** : audit SDK Purity explicite
+- **Architecture D10** : tableau exhaustif des 6 fichiers impactés (v1 disait 3)
+- **Phase 2** : étendue à 1 j pour propagation triple-type + compositor export
+- **Phase 5** : étend les fichiers test existants au lieu de créer 5 nouveaux fichiers
+- **Risques** : ajout R6 (Kind Equatable), R7 (cache composer), R8 (migration α douce), R9 (captureBackground)
+- **Estimate** : 2-2.5 j → 3 j (révision réaliste)
