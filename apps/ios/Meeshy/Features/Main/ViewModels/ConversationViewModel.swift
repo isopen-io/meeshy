@@ -3017,18 +3017,31 @@ extension ConversationViewModel: ConversationSocketDelegate {
     }
 
     /// Applies a server-pushed attachment delta (transcription / audio
-    /// translation finalized) by injecting the enriched metadata directly
-    /// into `messageTranscriptions` / `messageTranslatedAudios` in a
-    /// single MainActor slice. No `await` between assignments — same
-    /// atomic-publish rule as `hydrateMetadataFromGRDB`.
-    ///
-    /// TODO (follow-up) : also write-through the enriched attachment to
-    /// GRDB so a future open of this conversation surfaces the enrichment
-    /// from cache without waiting on `refreshMessagesFromAPI()`. Until
-    /// then the next open will briefly show the un-enriched bubble before
-    /// the background revalidation runs.
+    /// translation finalized) by:
+    /// 1. Injecting the enriched metadata directly into
+    ///    `messageTranscriptions` / `messageTranslatedAudios` in a
+    ///    single MainActor slice (no await between assignments — same
+    ///    atomic-publish rule as `hydrateMetadataFromGRDB`).
+    /// 2. Fire-and-forget GRDB write-through via
+    ///    `MessagePersistenceActor.applyAttachmentEnrichment`, so a
+    ///    subsequent open of this conversation surfaces the enrichment
+    ///    from cache instead of pop-in-then-replace when
+    ///    `refreshMessagesFromAPI` later runs.
     func applyAttachmentUpdate(_ event: AttachmentUpdatedEvent) {
         injectAttachmentMetadata(from: event.attachment, intoMessageId: event.messageId)
+
+        let messageId = event.messageId
+        let attachmentId = event.attachment.id
+        let transcription = event.attachment.transcription
+        let translations = event.attachment.translations
+        Task { [persistence = messagePersistence] in
+            try? await persistence.applyAttachmentEnrichment(
+                messageId: messageId,
+                attachmentId: attachmentId,
+                transcription: transcription,
+                translations: translations
+            )
+        }
     }
 
     /// Injects an enriched attachment's transcription + audio translations
