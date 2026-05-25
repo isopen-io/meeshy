@@ -129,30 +129,73 @@ type AttachmentUpdatedEvent = {
 
 **Source de vérité du contrat** : `packages/shared/types/socketio-events.ts` (ajout du type + nom d'event en hyphens, cf. convention `entity:action-word`).
 
-### Fix 3 — Audio download gate
+### Fix 3 — Wiring du gate audio (réutilisation) + label taille
 
-**Création** : un sous-composant `AudioDownloadGate` dans `packages/MeeshySDK/Sources/MeeshyUI/Media/`.
+L'infrastructure existe déjà entièrement côté SDK ; il manque seulement l'orchestrateur app-side et l'affichage de la taille à côté de la flèche existante. **Pas de nouveau composant gate à créer.**
 
-**Comportement de `AudioPlayerView`** : au mount, appelle `MediaDownloadPreferences.shouldAutoDownload(attachment, network)`. Si bloqué **et** attachment pas encore en cache local → rend `AudioDownloadGate` à la place du player normal. Sinon → rend le player actuel inchangé.
+**Composants déjà en place** (recensés par audit) :
 
-**Layout du gate** :
+- `AudioAvailability` enum dans `packages/MeeshySDK/Sources/MeeshySDK/Models/AudioAvailability.swift` — états `.ready / .needsDownload / .downloading(progress)`.
+- `AudioPlayerView` accepte déjà `availability: AudioAvailability` et `onDownload: (() -> Void)?` en init.
+- `AudioPlayerView.playButtonLabel` (lines 739-785) rend déjà :
+  - `.needsDownload` → icône `arrow.down.to.line`
+  - `.downloading(progress)` → anneau circulaire progressif
+  - `.ready` → play/pause
+- `AttachmentDownloader` supporte déjà l'audio (dispatch par type).
+- `MediaDownloadPolicyEngine.shouldAutoDownload(kind: .audio, condition:, prefs:)` existe.
+- `VideoAvailabilityResolver` (`apps/ios/Meeshy/Features/Main/Views/VideoAvailabilityResolver.swift`, ~84 lignes) sert de template orchestration app-side.
 
+**Trois interventions seulement** :
+
+#### 3a. Nouveau `AudioAvailabilityResolver` (app-side, porté de `VideoAvailabilityResolver`)
+
+Fichier : `apps/ios/Meeshy/Features/Main/Views/AudioAvailabilityResolver.swift` (~80 lignes).
+
+Calque exact de `VideoAvailabilityResolver`, substitutions :
+- `VideoAvailability` → `AudioAvailability`
+- `kind: .video` → `kind: .audio`
+- `CacheCoordinator.shared.videos` → `CacheCoordinator.shared.audio`
+- Content closure : `(VideoAvailability, () -> Void) -> Content` → `(AudioAvailability, () -> Void) -> Content`
+
+Tient un `AttachmentDownloader`, applique `MediaDownloadPolicyEngine.shouldAutoDownload(kind: .audio, …)` au mount, expose `(availability, onDownload)` à la closure. Justifié app-side par la règle SDK Purity (encode une politique UX produit « quand auto-DL audio »).
+
+#### 3b. Wire dans `BubbleAttachmentView` (case `.audio`)
+
+Aujourd'hui (lines 54-67) le case audio appelle directement `AudioPlayerView(..., transcription:, translatedAudios:)` sans passer `availability:` ni `onDownload:` — le default `.ready` masque le besoin de téléchargement. Remplacer par :
+
+```swift
+case .audio:
+    AudioAvailabilityResolver(attachment: attachment) { availability, onDownload in
+        AudioPlayerView(
+            attachment: attachment,
+            context: .messageBubble,
+            accentColor: accentHex,
+            transcription: transcription,
+            translatedAudios: translatedAudios.filter { $0.attachmentId == attachment.id },
+            availability: availability,
+            onDownload: onDownload,
+            onRetranscribe: { ... }
+        )
+    }
 ```
-┌────────────────────────────────────────────┐
-│  [⬇]   850 KB · 0:42         [tap to DL]   │
-└────────────────────────────────────────────┘
-```
 
-- Icône `arrow.down.to.line` (parité visuelle avec `DownloadBadgeView.compactIdleBadge`)
-- Taille via `AttachmentDownloader.fmt(Int64(attachment.fileSize))`
-- Durée à droite via `attachment.duration` formatée
-- Tap → délègue à `AttachmentDownloader` (même API que la vidéo)
-- Pendant DL : progress bar in-place, label « 410 KB / 850 KB »
-- Au DL terminé : swap automatique vers `AudioPlayerView` normal (binding cache)
+#### 3c. Label taille dans `AudioPlayerView.playButtonLabel` (SDK, petite extension cosmétique)
 
-**Recompute** : un `onChange(of: networkMonitor.isOnline)` et `onChange(of: preferences.audioPolicy)` ré-évaluent la décision (utilisateur passe en wifi, change ses préférences → le gate disparaît au profit de l'auto-DL).
+Le composant affiche déjà la flèche `arrow.down.to.line` sur `.needsDownload` et l'anneau progress sur `.downloading`, mais **pas la taille de fichier**. Ajout :
 
-**Couleurs** : `accentColor` de la conversation, comme les autres composants media.
+- État `.needsDownload` → sous (ou à côté de) la flèche, label `AttachmentDownloader.fmt(Int64(attachment.fileSize))` (ex. « 850 KB »).
+- État `.downloading(progress)` → label `"\(downloaded) / \(total)"` (ex. « 410 KB / 850 KB ») à côté de l'anneau, parité avec `DownloadBadgeView.downloadingBadge`.
+- État `.ready` → inchangé.
+
+Le composant ne fait que rendre — il ne connaît pas `downloaded`. Donc soit :
+- option α : étendre `AudioAvailability.downloading(progress: Double)` en `downloading(progress: Double, downloadedBytes: Int64, totalBytes: Int64)` et adapter le call site dans `AudioAvailabilityResolver`.
+- option β : passer `downloader: AttachmentDownloader` en input optionnel à `AudioPlayerView` (binding direct).
+
+**Choix : option α** — garde l'`AudioPlayerView` pur (pas de dépendance app-side `AttachmentDownloader`), enrichit le contrat `AudioAvailability` de façon backward-compatible.
+
+**Couleurs** : `accentColor` de la conversation, comme aujourd'hui.
+
+**Recompute** : `AudioAvailabilityResolver` réécoute `NetworkConditionMonitor.shared.condition` et `MediaDownloadPreferencesStore.shared.preferences` via `onChange` — gate disparaît automatiquement si l'utilisateur passe en wifi / change ses prefs.
 
 ### Fix 4 — Image : vérification + harmonisation
 
@@ -169,11 +212,12 @@ type AttachmentUpdatedEvent = {
 |---|---|
 | `apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift` | Hydratation atomique (Fix 1) — 4 chemins (initial, refresh, socket new, socket attachment-updated) |
 | `apps/ios/Meeshy/Features/Main/Stores/MessageStore.swift` (ou équivalent) | Nouvelle API `loadInitialSnapshot()` retournant `(messages, transcriptions, translatedAudios)` |
-| `apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleAttachmentView.swift` | Aucune modification fonctionnelle ; injecte `MediaDownloadPreferences` si pas déjà fait |
-| `packages/MeeshySDK/Sources/MeeshyUI/Media/AudioPlayerView.swift` | Branche conditionnelle vers `AudioDownloadGate` selon politique DL |
-| `packages/MeeshySDK/Sources/MeeshyUI/Media/AudioDownloadGate.swift` | **Nouveau** — composant gate compact |
+| `apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleAttachmentView.swift` | Case `.audio` wrap `AudioPlayerView` dans `AudioAvailabilityResolver` (passe `availability:` + `onDownload:`) |
+| `apps/ios/Meeshy/Features/Main/Views/AudioAvailabilityResolver.swift` | **Nouveau** — calqué sur `VideoAvailabilityResolver`, ~80 lignes |
+| `packages/MeeshySDK/Sources/MeeshyUI/Media/AudioPlayerView.swift` | `playButtonLabel` affiche fileSize sur `.needsDownload` et `"downloaded/total"` sur `.downloading` |
+| `packages/MeeshySDK/Sources/MeeshySDK/Models/AudioAvailability.swift` | `.downloading(progress:)` enrichi en `.downloading(progress:downloadedBytes:totalBytes:)` (backward-compat via convenience initializer si besoin) |
 | `packages/MeeshySDK/Sources/MeeshySDK/Sockets/` | Handler `message:attachment-updated` |
-| `apps/ios/Meeshy/Meeshy.xcodeproj/project.pbxproj` | Entrée pour le nouveau fichier (rappel : objectVersion 63, classic pbxproj) |
+| `apps/ios/Meeshy/Meeshy.xcodeproj/project.pbxproj` | Entrée pour `AudioAvailabilityResolver.swift` (rappel : objectVersion 63, classic pbxproj — 4 entries + 2 UUIDs) |
 
 ### Gateway
 
@@ -204,16 +248,20 @@ type AttachmentUpdatedEvent = {
   Utilise un `MockMessageStore` qui retourne un snapshot avec messages + metadata. Vérifie qu'il n'existe aucun frame intermédiaire où `messages` est peuplé mais `messageTranscriptions` est vide.
 - `ConversationViewModelTests.test_socketAttachmentUpdated_appliesAtomically`
   Mock socket → `message:attachment-updated` reçu → vérifie que message + metadata sont mis à jour dans le même `MainActor.run`.
-- `BubbleAttachmentViewTests.test_audio_gateAppears_whenAutoDownloadBlocked`
-  Mock `MediaDownloadPreferences` qui retourne `shouldAutoDownload = false` → vérifie présence du gate, affichage de fileSize, absence du player.
-- `BubbleAttachmentViewTests.test_audio_playerAppears_whenAutoDownloadAllowed`
-  Inverse du précédent.
+- `AudioAvailabilityResolverTests.test_resolver_yieldsNeedsDownload_whenNotCachedAndPolicyBlocks`
+  Mock `MediaDownloadPolicyEngine` retourne `false`, cache vide → resolver expose `.needsDownload`, no auto-DL démarré.
+- `AudioAvailabilityResolverTests.test_resolver_autoStartsDownload_whenPolicyAllows`
+  Mock policy retourne `true` → resolver invoque `AttachmentDownloader.start` au mount.
+- `BubbleAttachmentViewTests.test_audio_passesAvailabilityFromResolver`
+  Vérifie que le wrapper `AudioAvailabilityResolver` est bien wrappé autour de `AudioPlayerView` et que les paramètres `availability:` / `onDownload:` sont propagés (no plus hardcodé `.ready`).
 
 ### iOS — Swift Testing (`MeeshySDKTests`)
 
-- `AudioDownloadGateTests.test_formatsFileSizeCorrectly`
-- `AudioDownloadGateTests.test_progressUpdatesDuringDownload`
-- `AudioDownloadGateTests.test_swapsToPlayerOnCompletion`
+- `AudioPlayerViewTests.test_playButtonLabel_showsFileSize_onNeedsDownload`
+  Render snapshot avec `availability = .needsDownload`, `attachment.fileSize = 870400` → label contient « 850 KB ».
+- `AudioPlayerViewTests.test_playButtonLabel_showsProgressText_onDownloading`
+  `availability = .downloading(progress: 0.48, downloadedBytes: 408000, totalBytes: 870400)` → label « 410 KB / 850 KB ».
+- `AudioAvailabilityTests.test_resolve_returnsReady_whenLocalFileExists` (déjà existant ? à vérifier au plan d'impl)
 
 ### Snapshots (Image)
 
@@ -225,7 +273,7 @@ type AttachmentUpdatedEvent = {
 1. Ouvrir une conversation contenant ≥ 1 message audio avec transcription + traductions : **aucun pop-in visible**. Les badges/textes sont là dès la première frame.
 2. Recevoir un audio en temps réel via socket dans une conv déjà ouverte : transcription + indicateurs traduction présents dès l'apparition du bubble (cas où la transcription est déjà finalisée).
 3. Recevoir un audio dont la transcription est en cours : bubble apparaît immédiatement (sans transcription, comme aujourd'hui), puis l'event `message:attachment-updated` enrichit le bubble en place — sans flash, sans saut visuel.
-4. Couper l'auto-DL audio dans les préférences → tout bubble audio nouvellement ouvert montre `[⬇] 850 KB · 0:42`. Tap → DL progress → swap vers player. Aucune action ne déclenche un téléchargement non sollicité.
+4. Couper l'auto-DL audio dans les préférences → tout bubble audio nouvellement ouvert affiche la flèche `arrow.down.to.line` + label « 850 KB » sous (ou à côté de) l'icône. Tap → label devient « 410 KB / 850 KB » et anneau progress tourne → swap vers play normal. Aucune action ne déclenche un téléchargement non sollicité.
 5. Bubble image avec auto-DL bloqué : affiche taille + flèche (parité vidéo). Documentation `apps/ios/CLAUDE.md` mise à jour.
 6. Tous les tests (iOS + gateway) passent. `./apps/ios/meeshy.sh build` vert.
 
@@ -236,7 +284,8 @@ type AttachmentUpdatedEvent = {
 | Le `MessageStore.loadInitialSnapshot()` casse des consommateurs existants de `loadInitial()` | Garder `loadInitial()` en place, ajouter `loadInitialSnapshot()` à côté. Migration progressive. |
 | Les workers async (Whisper, TTS) émettent déjà des events ad-hoc qu'on duplique avec `message:attachment-updated` | Audit avant impl. Si events existants → on les remplace, pas on les double. Spec à valider en début d'implémentation. |
 | iOS receive `message:attachment-updated` pour un message pas en cache local (conv pas chargée) | Handler no-op si message absent du store. Re-fetch déclenché à l'ouverture suivante de la conv. |
-| `AudioDownloadGate` casse l'isolation Swift 6 sous `MeeshyUI/` defaultIsolation(MainActor) | Suivre le pattern documenté (`feedback_meeshyui_default_isolation`) — split Equatable extensions, nonisolated sur la pure logic. |
+| `AudioAvailability.downloading` enrichi casse les call sites existants | Convenience initializer `.downloading(progress:)` qui suppose downloaded/total à 0 (rétrocompat). Aucun call site SDK actuel n'utilise downloadedBytes/totalBytes. |
+| `AudioAvailabilityResolver` app-side dupliquerait `VideoAvailabilityResolver` (DRY) | Factorisation `MediaAvailabilityResolver<Kind>` générique différée — risque d'over-engineering, les deux resolvers restent simples. À reconsidérer si un 3e type émerge (image gate par exemple). |
 | Snapshot baselines audio cassent en CI | Re-record local avant push (cf. `feedback_running_ios_test_suites`). |
 
 ## Hors scope
