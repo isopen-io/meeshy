@@ -767,7 +767,7 @@ public struct AudioPlayerView: View {
                 Image(systemName: "arrow.down.to.line")
                     .font(.system(size: context.isCompact ? 13 : 15, weight: .bold))
                     .foregroundColor(.white)
-            case .downloading(let progress):
+            case .downloading(let progress, _, _):
                 if progress > 0 {
                     Circle()
                         .trim(from: 0, to: progress)
