@@ -641,6 +641,55 @@ final class DeepLinkParserPostDetailTests: XCTestCase {
         }
         XCTAssertEqual(postId, "postABC")
     }
+
+    // MARK: - Short `p` aliases
+
+    func test_parse_customScheme_pShort_returnsPostDetail() {
+        let url = URL(string: "meeshy://p/postSHORT")!
+        let result = DeepLinkParser.parse(url)
+        guard case .postDetail(let postId) = result else {
+            XCTFail("Expected .postDetail, got \(result)")
+            return
+        }
+        XCTAssertEqual(postId, "postSHORT")
+    }
+
+    func test_parse_customScheme_feedsPShort_returnsPostDetail() {
+        let url = URL(string: "meeshy://feeds/p/postXYZ789")!
+        let result = DeepLinkParser.parse(url)
+        guard case .postDetail(let postId) = result else {
+            XCTFail("Expected .postDetail, got \(result)")
+            return
+        }
+        XCTAssertEqual(postId, "postXYZ789")
+    }
+
+    func test_parse_webUrl_feedsPShort_returnsPostDetail() {
+        let url = URL(string: "https://meeshy.me/feeds/p/postWEB")!
+        let result = DeepLinkParser.parse(url)
+        guard case .postDetail(let postId) = result else {
+            XCTFail("Expected .postDetail, got \(result)")
+            return
+        }
+        XCTAssertEqual(postId, "postWEB")
+    }
+
+    func test_parse_customScheme_pShort_emptyId_returnsExternal() {
+        let url = URL(string: "meeshy://p/")!
+        let result = DeepLinkParser.parse(url)
+        guard case .external = result else {
+            XCTFail("Expected .external for empty post id, got \(result)")
+            return
+        }
+    }
+
+    func test_isPostSegment_acceptsCanonicalAndShortAliases() {
+        XCTAssertTrue(DeepLinkParser.isPostSegment("post"))
+        XCTAssertTrue(DeepLinkParser.isPostSegment("p"))
+        XCTAssertFalse(DeepLinkParser.isPostSegment("posts"))
+        XCTAssertFalse(DeepLinkParser.isPostSegment("Post"))
+        XCTAssertFalse(DeepLinkParser.isPostSegment(""))
+    }
 }
 
 // MARK: - DeepLinkRouter Post Detail Tests
@@ -697,5 +746,45 @@ final class DeepLinkRouterPostDetailTests: XCTestCase {
 
         XCTAssertTrue(handled)
         XCTAssertEqual(sut.pendingDeepLink, .postDetail(postId: "postMirror"))
+    }
+
+    func test_handle_customScheme_pShort_setsPendingDeepLink() {
+        let sut = makeSUT()
+        let url = URL(string: "meeshy://p/postShort1")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(sut.pendingDeepLink, .postDetail(postId: "postShort1"))
+    }
+
+    func test_handle_customScheme_feedsPShort_setsPendingDeepLink() {
+        let sut = makeSUT()
+        let url = URL(string: "meeshy://feeds/p/postShort2")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(sut.pendingDeepLink, .postDetail(postId: "postShort2"))
+    }
+
+    func test_handle_customScheme_pShort_emptyId_returnsFalse() {
+        let sut = makeSUT()
+        let url = URL(string: "meeshy://p/")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertFalse(handled)
+        XCTAssertNil(sut.pendingDeepLink)
+    }
+
+    func test_handle_customScheme_feedsPShort_emptyId_returnsFalse() {
+        let sut = makeSUT()
+        let url = URL(string: "meeshy://feeds/p/")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertFalse(handled)
+        XCTAssertNil(sut.pendingDeepLink)
     }
 }

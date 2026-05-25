@@ -22,6 +22,21 @@ enum DeepLinkParser {
 
     private static let meeshyHosts: Set<String> = ["meeshy.me", "www.meeshy.me", "app.meeshy.me"]
 
+    /// Segments accepted as the "post" keyword in any deep link shape. The
+    /// short alias `p` mirrors the long form `post` so handwritten/dictated
+    /// `meeshy://p/<id>` or `meeshy://feeds/p/<id>` URLs resolve to the
+    /// same destination as the canonical `meeshy://post/<id>` /
+    /// `meeshy://feeds/post/<id>` (and their web Universal Link siblings).
+    private static let postSegments: Set<String> = ["post", "p"]
+
+    /// `true` when `segment` is a valid alias for the "post" keyword
+    /// (long-form `post` or short-form `p`). Single source of truth so
+    /// `DeepLinkRouter` and the parser stay in lockstep — adding a new
+    /// alias requires extending only `postSegments`.
+    static func isPostSegment(_ segment: String) -> Bool {
+        postSegments.contains(segment)
+    }
+
     /// Parse any URL into a deep link destination.
     ///
     /// Handles:
@@ -32,7 +47,8 @@ enum DeepLinkParser {
     /// - `meeshy://me`                       -> own profile
     /// - `meeshy://u/{username}`             -> user profile
     /// - `meeshy://c/{id}`                   -> conversation
-    /// - `meeshy://post/{id}`                -> post detail
+    /// - `meeshy://post/{id}` (or `meeshy://p/{id}`)               -> post detail
+    /// - `meeshy://feeds/post/{id}` (or `meeshy://feeds/p/{id}`)   -> post detail
     /// - `meeshy://share?text=...`           -> share text content
     /// - `meeshy://share?url=...`            -> share URL content
     /// - Everything else                     -> open externally
@@ -100,14 +116,16 @@ enum DeepLinkParser {
             if components.count >= 2 { return .userProfile(username: components[1]) }
         case "c":
             if components.count >= 2 { return .conversation(id: components[1]) }
-        case "post":
-            // meeshy://post/{postId} — direct shortcut to a post detail view.
+        case "post", "p":
+            // meeshy://post/{postId} (or meeshy://p/{postId}) — direct
+            // shortcut to a post detail view.
             if components.count >= 2 { return .postDetail(postId: components[1]) }
         case "feeds":
             // meeshy://feeds/post/{postId} — mirror of the web Universal Link
             // path so the custom scheme accepts the same shape as the
             // production URL recipients see in clipboards / email previews.
-            if components.count >= 3, components[1] == "post" {
+            // `feeds/p/{postId}` is accepted as a short alias.
+            if components.count >= 3, postSegments.contains(components[1]) {
                 return .postDetail(postId: components[2])
             }
         default:
@@ -145,7 +163,9 @@ enum DeepLinkParser {
         // opens this directly inside the app whenever it's installed; the
         // Next.js rewrite serves the same path on the web for non-iOS
         // recipients (or when the app rejects the link).
-        if components.count >= 3, components[0] == "feeds", components[1] == "post" {
+        // The short alias `feeds/p/{postId}` resolves to the same destination
+        // so any pasted shorthand still routes in-app.
+        if components.count >= 3, components[0] == "feeds", postSegments.contains(components[1]) {
             return .postDetail(postId: components[2])
         }
 
@@ -235,8 +255,11 @@ final class DeepLinkRouter: ObservableObject {
             // share URL minted by the gateway (`FRONTEND_URL/feeds/post/<id>`).
             // The recipient lands directly inside PostDetailView when the app
             // is installed; the same path is served by the Next.js rewrite
-            // for non-iOS recipients.
-            guard pathComponents.count >= 3, pathComponents[1] == "post" else { return false }
+            // for non-iOS recipients. `/feeds/p/{postId}` is accepted as a
+            // short alias so the handler stays in lockstep with the parser
+            // (in-app Link taps on either shape both resolve in-app).
+            guard pathComponents.count >= 3,
+                  DeepLinkParser.isPostSegment(pathComponents[1]) else { return false }
             guard let postId = nonEmptyIdentifier(at: 2, in: pathComponents) else { return false }
             pendingDeepLink = .postDetail(postId: postId)
             return true
@@ -295,8 +318,9 @@ final class DeepLinkRouter: ObservableObject {
             pendingDeepLink = .conversation(id: conversationId)
             return true
 
-        case "post":
-            // meeshy://post/{postId} — direct custom-scheme shortcut.
+        case "post", "p":
+            // meeshy://post/{postId} (or meeshy://p/{postId}) — direct
+            // custom-scheme shortcut to the post detail view.
             guard let postId = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
             pendingDeepLink = .postDetail(postId: postId)
             return true
@@ -304,7 +328,9 @@ final class DeepLinkRouter: ObservableObject {
         case "feeds":
             // meeshy://feeds/post/{postId} — mirror of the Universal Link
             // shape so any pasted form of the share URL works identically.
-            guard !pathComponents.isEmpty, pathComponents[0] == "post" else { return false }
+            // `feeds/p/{postId}` is accepted as a short alias.
+            guard !pathComponents.isEmpty,
+                  DeepLinkParser.isPostSegment(pathComponents[0]) else { return false }
             guard let postId = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
             pendingDeepLink = .postDetail(postId: postId)
             return true
