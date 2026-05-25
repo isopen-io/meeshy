@@ -14,6 +14,7 @@ final class MessageOverlayLayoutEngineTests: XCTestCase {
 
     private func makeInput(
         bubbleSourceFrame: CGRect,
+        bubbleAlignment: BubbleAlignment = .leading,
         menuSize: CGSize = standardMenuSize,
         availableViewportSize: CGSize = iPhone16ProSize,
         safeAreaInsets: EdgeInsets = iPhone16ProSafeArea,
@@ -24,6 +25,7 @@ final class MessageOverlayLayoutEngineTests: XCTestCase {
     ) -> OverlayLayoutInput {
         OverlayLayoutInput(
             bubbleSourceFrame: bubbleSourceFrame,
+            bubbleAlignment: bubbleAlignment,
             menuSize: menuSize,
             availableViewportSize: availableViewportSize,
             safeAreaInsets: safeAreaInsets,
@@ -114,6 +116,60 @@ final class MessageOverlayLayoutEngineTests: XCTestCase {
         let menuMaxY = output.menuFrame.maxY
         let safeBottom = Self.iPhone16ProSize.height - Self.iPhone16ProSafeArea.bottom - 24
         XCTAssertLessThanOrEqual(menuMaxY, safeBottom + 0.01, "Menu fits within safe bottom")
+    }
+
+    func test_compute_bubbleTallerThanViewport_trailingAlignment_pinsToRightEdge() {
+        // Bulle "moi" (right-aligned) qui touche le bord droit du viewport,
+        // trop haute pour rentrer → Cas 0 scale-down. La bulle scaled doit
+        // GARDER son `maxX` identique à la source (collée au bord droit),
+        // pas dériver vers la gauche.
+        let viewportWidth: CGFloat = Self.iPhone16ProSize.width
+        let bubbleWidth: CGFloat = 280
+        let bubbleMinX = viewportWidth - 16 - bubbleWidth // ancré à 16pt du bord droit
+        let oversizedTrailingBubble = CGRect(
+            x: bubbleMinX, y: 200, width: bubbleWidth, height: 800
+        )
+        let input = makeInput(
+            bubbleSourceFrame: oversizedTrailingBubble,
+            bubbleAlignment: .trailing
+        )
+
+        let output = MessageOverlayLayoutEngine.compute(input: input)
+
+        XCTAssertLessThan(output.bubbleScale, 1.0, "Doit scale-down")
+        XCTAssertEqual(
+            output.bubbleFinalFrame.maxX,
+            oversizedTrailingBubble.maxX,
+            accuracy: 0.01,
+            "Bulle 'moi' scaled doit rester glued au maxX d'origine"
+        )
+        XCTAssertLessThan(
+            output.bubbleFinalFrame.width,
+            oversizedTrailingBubble.width,
+            "Largeur effectivement réduite par le scale"
+        )
+    }
+
+    func test_compute_bubbleTallerThanViewport_leadingAlignment_pinsToLeftEdge() {
+        // Bulle reçue (left-aligned) qui touche le bord gauche, trop haute
+        // → Cas 0 scale-down. La bulle scaled doit GARDER son `minX`
+        // identique à la source (collée au bord gauche), pas dériver vers
+        // la droite.
+        let oversizedLeadingBubble = CGRect(x: 16, y: 200, width: 280, height: 800)
+        let input = makeInput(
+            bubbleSourceFrame: oversizedLeadingBubble,
+            bubbleAlignment: .leading
+        )
+
+        let output = MessageOverlayLayoutEngine.compute(input: input)
+
+        XCTAssertLessThan(output.bubbleScale, 1.0)
+        XCTAssertEqual(
+            output.bubbleFinalFrame.minX,
+            oversizedLeadingBubble.minX,
+            accuracy: 0.01,
+            "Bulle reçue scaled doit rester glued au minX d'origine"
+        )
     }
 
     func test_compute_bubbleTallerThanViewport_minScale06_truncatesOverflow() {

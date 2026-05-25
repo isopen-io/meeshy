@@ -216,10 +216,27 @@ struct MessageOverlayMenu: View {
             let scaledBubbleWidth = bubbleRect.width * bubblePreviewScale
             let scaledBubbleHeight = bubbleRect.height * bubblePreviewScale
 
+            // Ancrage horizontal de la bulle scaled — glué au même bord que
+            // la source : right pour `isMe` (bulles "moi" right-aligned),
+            // left pour les bulles reçues. Au scale 1 l'expression dégénère
+            // en `bubbleRect.midX` (identité, aucune régression). Au scale
+            // < 1 la bulle conserve son edge d'origine au lieu de "flotter"
+            // vers le centre — sans ça une bulle "moi" prés du bord droit
+            // se retrouve décalée vers la gauche après scale-down.
+            let bubbleAnchorX: CGFloat = message.isMe
+                ? bubbleRect.maxX - scaledBubbleWidth / 2
+                : bubbleRect.minX + scaledBubbleWidth / 2
+
             // Mesures du cluster — gaps tightement contrôlés. Heights basées
             // sur les rendus réels mesurés en simulateur.
             let quickActionsCount = quickActions.count
-            let quickActionMenuHeight: CGFloat = quickActionsCount > 0 ? 60 : 0
+            // Hauteur réelle = ContextActionMenu.estimatedSize().height
+            // (buttonHeight 40 + verticalPadding 5*2 = 50pt). Source unique
+            // de vérité : changer la valeur via les statics du menu, jamais
+            // dupliquer le calcul ici.
+            let quickActionMenuHeight: CGFloat = quickActionsCount > 0
+                ? ContextActionMenu.estimatedSize(actionCount: max(1, quickActionsCount)).height
+                : 0
             let quickActionToBubbleGap: CGFloat = quickActionsCount > 0 ? 14 : 0
             let bubbleToEmojiGap: CGFloat = 14
             let emojiBarHeight: CGFloat = 44
@@ -252,21 +269,23 @@ struct MessageOverlayMenu: View {
             let bubbleFinalMidY = bubbleTopY + scaledBubbleHeight / 2
             let emojiBarCenterY = bubbleTopY + scaledBubbleHeight + bubbleToEmojiGap + emojiBarHeight / 2
 
-            // Position X de la bulle = source frame midX (respect exact de la
-            // position dans la conversation). Action bar et emoji bar suivent
+            // Position X = bubbleAnchorX (centre de la bulle scaled, alignée
+            // au même bord que la source). Action bar et emoji bar suivent
             // ce même axe vertical avec clamp aux bords écran pour éviter le
-            // débordement quand la bulle est près d'un bord.
+            // débordement quand la bulle est près d'un bord. Au scale 1
+            // `bubbleAnchorX == bubbleRect.midX`, donc pas de régression pour
+            // les bulles courtes ; au scale < 1 le cluster reste solidaire de
+            // la bulle qui ne flotte plus vers le centre.
             let sidePadding: CGFloat = 16
             let quickActionMenuWidth = ContextActionMenu.estimatedSize(actionCount: max(1, quickActionsCount)).width
             let emojiBarApproxWidth: CGFloat = 320
-            let bubbleCenterX = bubbleRect.midX
             let quickActionMenuCenterX: CGFloat = max(
                 sidePadding + quickActionMenuWidth / 2,
-                min(geometry.size.width - sidePadding - quickActionMenuWidth / 2, bubbleCenterX)
+                min(geometry.size.width - sidePadding - quickActionMenuWidth / 2, bubbleAnchorX)
             )
             let emojiBarCenterX: CGFloat = max(
                 sidePadding + emojiBarApproxWidth / 2,
-                min(geometry.size.width - sidePadding - emojiBarApproxWidth / 2, bubbleCenterX)
+                min(geometry.size.width - sidePadding - emojiBarApproxWidth / 2, bubbleAnchorX)
             )
 
             // Panel auto-expand : si le cluster termine plus haut que le
@@ -416,7 +435,7 @@ struct MessageOverlayMenu: View {
                     .scaleEffect(bubblePreviewScale, anchor: .center)
                     .frame(width: scaledBubbleWidth, height: scaledBubbleHeight)
                     .position(
-                        x: bubbleRect.midX,
+                        x: bubbleAnchorX,
                         y: isVisible ? bubbleFinalMidY : bubbleRect.midY
                     )
                     .opacity(isVisible ? clusterFadeOpacity : 0)

@@ -1,6 +1,18 @@
 import CoreGraphics
 import SwiftUI
 
+/// Horizontal anchor for the scaled-down bubble. Mirrors the source
+/// bubble's alignment so a "me" bubble that touched the right edge stays
+/// glued to the right edge after scale-down, and a received bubble that
+/// touched the left edge stays glued to the left edge. Without this the
+/// engine would shrink the bubble around its `minX`, leaving a visual gap
+/// on the side it was originally pinned to — the bubble looks "centered"
+/// to the user. Spec §5.2.0.
+enum BubbleAlignment: Equatable {
+    case leading   // left-aligned (received messages)
+    case trailing  // right-aligned (own messages)
+}
+
 /// Inputs to `MessageOverlayLayoutEngine.compute`. All metrics are in screen
 /// coordinates. `availableViewportSize` is intentionally NOT
 /// `UIScreen.main.bounds` — it must be the size of the SwiftUI window scene
@@ -8,6 +20,7 @@ import SwiftUI
 /// iPad split-view / multi-window.
 struct OverlayLayoutInput: Equatable {
     let bubbleSourceFrame: CGRect
+    let bubbleAlignment: BubbleAlignment
     let menuSize: CGSize
     let availableViewportSize: CGSize
     let safeAreaInsets: EdgeInsets
@@ -19,6 +32,7 @@ struct OverlayLayoutInput: Equatable {
 
     init(
         bubbleSourceFrame: CGRect,
+        bubbleAlignment: BubbleAlignment = .leading,
         menuSize: CGSize,
         availableViewportSize: CGSize,
         safeAreaInsets: EdgeInsets,
@@ -29,6 +43,7 @@ struct OverlayLayoutInput: Equatable {
         minimumBubbleScale: CGFloat = 0.6
     ) {
         self.bubbleSourceFrame = bubbleSourceFrame
+        self.bubbleAlignment = bubbleAlignment
         self.menuSize = menuSize
         self.availableViewportSize = availableViewportSize
         self.safeAreaInsets = safeAreaInsets
@@ -86,8 +101,19 @@ enum MessageOverlayLayoutEngine {
             let bubbleScale = max(input.minimumBubbleScale, proposedScale)
             let scaledHeight = bubbleSourceHeight * bubbleScale
             let scaledWidth = input.bubbleSourceFrame.width * bubbleScale
+            // Pin the scaled bubble to the same edge as the source so a
+            // right-aligned "me" bubble doesn't drift left when it shrinks
+            // (and vice versa). The opposite edge becomes the "free" side
+            // where the shrink absorbs the width delta.
+            let scaledMinX: CGFloat
+            switch input.bubbleAlignment {
+            case .leading:
+                scaledMinX = input.bubbleSourceFrame.minX
+            case .trailing:
+                scaledMinX = input.bubbleSourceFrame.maxX - scaledWidth
+            }
             let bubbleFinalFrame = CGRect(
-                x: input.bubbleSourceFrame.minX,
+                x: scaledMinX,
                 y: safeTop,
                 width: scaledWidth,
                 height: scaledHeight

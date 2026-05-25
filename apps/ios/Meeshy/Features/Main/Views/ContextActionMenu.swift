@@ -103,20 +103,20 @@ struct ContextActionButton: View {
             HapticFeedback.light()
             onTap()
         } label: {
-            VStack(spacing: showLabel ? 3 : 0) {
+            VStack(spacing: showLabel ? 2 : 0) {
                 Image(systemName: action.icon)
-                    .font(.system(size: 17, weight: .medium))
+                    .font(.system(size: 15, weight: .medium))
                     .symbolRenderingMode(.hierarchical)
                 if showLabel {
                     Text(action.label)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 10, weight: .medium))
                         .lineLimit(1)
                 }
             }
             .foregroundStyle(foregroundColor)
-            .frame(minWidth: 54, minHeight: 48)
+            .frame(minWidth: 50, minHeight: 40)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: 10)
                     .fill(isPressed ? Color.primary.opacity(0.10) : Color.clear)
             )
             .scaleEffect(isPressed ? 0.92 : 1.0)
@@ -166,12 +166,12 @@ struct ContextActionMenu: View {
                 if index < actions.count - 1 {
                     Capsule()
                         .fill(accent.opacity(0.18))
-                        .frame(width: 1, height: 22)
+                        .frame(width: 1, height: 18)
                 }
             }
         }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 5)
         .background(
             Capsule()
                 .fill(.ultraThinMaterial)
@@ -208,12 +208,12 @@ struct ContextActionMenu: View {
         .accessibilityElement(children: .contain)
     }
 
-    static let buttonWidth: CGFloat = 54
-    static let buttonHeight: CGFloat = 48
+    static let buttonWidth: CGFloat = 50
+    static let buttonHeight: CGFloat = 40
     static let buttonSpacing: CGFloat = 4
     static let separatorWidth: CGFloat = 1
-    static let horizontalPadding: CGFloat = 8
-    static let verticalPadding: CGFloat = 6
+    static let horizontalPadding: CGFloat = 6
+    static let verticalPadding: CGFloat = 5
 
     /// Deterministic size given an action count. No `PreferenceKey` needed —
     /// the engine pre-computes the menu frame from this estimate so the
