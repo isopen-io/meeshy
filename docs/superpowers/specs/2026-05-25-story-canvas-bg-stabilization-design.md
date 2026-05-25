@@ -21,7 +21,7 @@ L'objectif : stabiliser `StoryBackgroundLayer` une fois pour toutes, avec un con
 ## Objectifs
 
 1. Vidéo/image de fond paysage → letterbox centré, fond de story visible derrière (parité avec Instagram/TikTok)
-2. Vidéo/image de fond portrait → aspectFill (comportement actuel préservé)
+2. Vidéo/image de fond portrait → aspectFill (= `.resizeAspectFill`, comportement actuel préservé)
 3. Override double-tap (.auto → .fit → .fill → .auto) persisté dans le modèle
 4. Zéro flash noir sur **toutes** les éditions du canvas (texte, sticker, drag bg)
 5. Drag du background visible live sur le canvas principal (parité avec mini-preview)
@@ -54,7 +54,9 @@ Une vidéo iPhone portrait (9:16) garde le comportement actuel (full bleed). Une
 
 ### Override double-tap persisté
 
-Un double-tap sur le background cycle entre trois états :
+Un `UITapGestureRecognizer(numberOfTapsRequired: 2)` est ajouté à `StoryCanvasUIView` (séparé du recognizer single-tap existant via `UIGestureRecognizer.require(toFail:)`). Le tap-target est résolu via la même fonction que `handlePan` : `resolveManipulationTarget(at:)`. Le toggle est ignoré si le target n'est pas le background media object.
+
+Le cycle est :
 
 ```
 .auto → .fit → .fill → .auto → ...
@@ -216,7 +218,7 @@ case .ended, .cancelled, .failed:
 
 **Fichier :** `StoryCanvasUIView.swift`
 
-Dans `handlePan.changed`, branche dédiée background :
+Dans `handlePan.changed`, branche dédiée background. `backgroundMediaObjectId` est résolu en lisant la slide courante à `.began` : `slide.effects.mediaObjects.first(where: { $0.isBackground })?.id`. Cette valeur est stockée dans une propriété privée `private var backgroundMediaObjectId: String?` mise à jour à chaque `slide.didSet`.
 
 ```swift
 case .changed:
