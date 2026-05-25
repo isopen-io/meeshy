@@ -27,26 +27,37 @@ public struct MeeshyVideoPlayer: View {
 
     // MARK: - ControlSet
 
-    public struct ControlSet: OptionSet, Sendable {
+    public nonisolated struct ControlSet: OptionSet, Sendable {
         public let rawValue: Int
         public init(rawValue: Int) { self.rawValue = rawValue }
 
-        public static let playPause   = ControlSet(rawValue: 1 << 0)
-        public static let scrubber    = ControlSet(rawValue: 1 << 1)
-        public static let duration    = ControlSet(rawValue: 1 << 2)
-        public static let expand      = ControlSet(rawValue: 1 << 3)
-        public static let download    = ControlSet(rawValue: 1 << 4)
-        public static let save        = ControlSet(rawValue: 1 << 5)
-        public static let share       = ControlSet(rawValue: 1 << 6)
-        public static let mute        = ControlSet(rawValue: 1 << 7)
-        public static let speed       = ControlSet(rawValue: 1 << 8)
-        public static let close       = ControlSet(rawValue: 1 << 9)
-        public static let author      = ControlSet(rawValue: 1 << 10)
+        // `nonisolated` sur tous les membres : ControlSet est une valeur pure
+        // (OptionSet + Sendable). Sous MeeshyUI defaultIsolation MainActor,
+        // sans cette annotation les statiques deviennent isolées et les tests
+        // nonisolated (cf. feedback_meeshyui_default_isolation) ne peuvent y
+        // accéder. Voir aussi feedback_meeshyui_default_isolation.
+        public nonisolated static let playPause   = ControlSet(rawValue: 1 << 0)
+        public nonisolated static let scrubber    = ControlSet(rawValue: 1 << 1)
+        public nonisolated static let duration    = ControlSet(rawValue: 1 << 2)
+        public nonisolated static let expand      = ControlSet(rawValue: 1 << 3)
+        public nonisolated static let download    = ControlSet(rawValue: 1 << 4)
+        public nonisolated static let save        = ControlSet(rawValue: 1 << 5)
+        public nonisolated static let share       = ControlSet(rawValue: 1 << 6)
+        public nonisolated static let mute        = ControlSet(rawValue: 1 << 7)
+        public nonisolated static let speed       = ControlSet(rawValue: 1 << 8)
+        public nonisolated static let close       = ControlSet(rawValue: 1 << 9)
+        public nonisolated static let author      = ControlSet(rawValue: 1 << 10)
+        public nonisolated static let airplay     = ControlSet(rawValue: 1 << 11)
+        public nonisolated static let pip         = ControlSet(rawValue: 1 << 12)
+        public nonisolated static let loop        = ControlSet(rawValue: 1 << 13)
 
-        public static let none: ControlSet              = []
-        public static let inlineDefault: ControlSet     = [.playPause, .scrubber, .duration, .expand]
-        public static let fullscreenDefault: ControlSet = [.playPause, .scrubber, .duration, .save, .share, .close, .speed, .author]
-        public static let miniDefault: ControlSet       = [.duration]
+        public nonisolated static let none: ControlSet              = []
+        public nonisolated static let inlineDefault: ControlSet     = [.playPause, .scrubber, .duration, .expand, .speed]
+        public nonisolated static let fullscreenDefault: ControlSet = [
+            .playPause, .scrubber, .duration, .save, .share, .close,
+            .speed, .author, .mute, .airplay, .pip, .loop
+        ]
+        public nonisolated static let miniDefault: ControlSet       = [.duration]
     }
 
     // MARK: - Frame
