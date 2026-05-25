@@ -23,6 +23,7 @@ import { configRoutes } from './routes/config';
 import { deliveryRoutes } from './routes/delivery';
 import { findEligibleConversations } from './scheduler/eligible-conversations';
 import { startDailySnapshotCron } from './cron/daily-snapshot';
+import { startProfileRefreshCron } from './cron/profile-refresh';
 
 const server = Fastify({ logger: true });
 const prisma = new PrismaClient();
@@ -247,6 +248,7 @@ async function start() {
   scanner.start();
 
   const snapshotInterval = startDailySnapshotCron(prisma);
+  const profileRefreshInterval = startProfileRefreshCron(prisma);
 
   // STARTUP SUMMARY LOGGING
   try {
@@ -268,6 +270,7 @@ async function start() {
     server.log.info('Shutting down agent service...');
     scanner.stop();
     clearInterval(snapshotInterval);
+    clearInterval(profileRefreshInterval);
     deliveryQueue.stopPolling();
     await configCache.stopListening();
     await zmqListener.close();

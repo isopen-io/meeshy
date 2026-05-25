@@ -157,6 +157,8 @@ export class ConversationScanner {
       maxDelayMinutes: config?.maxDelayMinutes ?? 360,
       spreadOverDayEnabled: config?.spreadOverDayEnabled ?? true,
       maxMessagesPerUserPer10Min: config?.maxMessagesPerUserPer10Min ?? 4,
+      freshTopicProbability: config?.freshTopicProbability ?? 0.2,
+      freshTopicCategoryHints: config?.freshTopicCategoryHints ?? [],
     };
     await this.processConversation(conv, 'manual');
     await this.redis.set(`agent:last-scan:${conversationId}`, String(Date.now()), 'EX', 86400);
@@ -637,6 +639,8 @@ export class ConversationScanner {
         maxDelayMinutes: conv.maxDelayMinutes,
         spreadOverDayEnabled: conv.spreadOverDayEnabled,
         maxMessagesPerUserPer10Min: conv.maxMessagesPerUserPer10Min,
+        freshTopicProbability: conv.freshTopicProbability,
+        freshTopicCategoryHints: conv.freshTopicCategoryHints,
       }, {
         callbacks: [{
           handleChainStart: async (_chain: any, _inputs: any, _runId: string, _parentRunId?: string, _tags?: string[], metadata?: Record<string, any>) => {
@@ -703,7 +707,10 @@ export class ConversationScanner {
             this.persistence.upsertUserRole(conversationId, profile).catch((err) =>
               console.error(`[Scanner] Error persisting controlled user profile ${userId}:`, err));
           }
-        } else if (profile.messagesAnalyzed >= 3) {
+        } else if (profile.messagesAnalyzed >= 1) {
+          // Lowered from >= 3 to >= 1: keep global profiles fresh even for
+          // users who only spoke once recently. The profile-refresh cron then
+          // tops them up periodically from the per-conversation roles.
           this.persistence.upsertGlobalProfile(userId, toneProfileToGlobalFields(profile)).catch((err) =>
             console.error(`[Scanner] Error persisting global profile ${userId}:`, err));
         }
