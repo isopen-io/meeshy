@@ -972,8 +972,13 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         let center = CGPoint(x: 0.5, y: 0.5)
         var targetEffects = slides[targetSlideIndex].effects
         // Auto-background uniquement si la slide n'a aucun media visuel (pre-migration
-        // inclus : resolvedBackgroundMedia retombe sur le 1er existant).
-        let shouldBeBackground = targetEffects.resolvedBackgroundMedia == nil
+        // inclus : resolvedBackgroundMedia retombe sur le 1er existant). Un fond
+        // statique stocké dans `slideImages` (slide-level bg image) compte aussi
+        // comme background — sans ce check, un media ajouté APRÈS un setImage(...)
+        // serait incorrectement marqué bg, masquerait l'image, et briserait le
+        // synthetic-clip injecté par loadCurrentSlideIntoTimeline.
+        let hasSlideLevelBgImage = slideImages[slides[targetSlideIndex].id] != nil
+        let shouldBeBackground = targetEffects.resolvedBackgroundMedia == nil && !hasSlideLevelBgImage
         let obj = StoryMediaObject(
             postMediaId: "",
             kind: kind,
