@@ -60,7 +60,9 @@ const DEFAULTS: AgentConfigUpsert = {
   reactionsEnabled: true,
   maxReactionsPerCycle: 4,
   agentInstructions: null,
-  webSearchEnabled: false,
+  // Matches Prisma default (true). Required for the freshTopicProbability
+  // path to ever fire on freshly-created configs; admins can still toggle off.
+  webSearchEnabled: true,
   minWordsPerMessage: 3,
   maxWordsPerMessage: 400,
   generationTemperature: 0.8,
@@ -77,6 +79,8 @@ const DEFAULTS: AgentConfigUpsert = {
   prioritizeTaggedUsers: true,
   prioritizeRepliedUsers: true,
   reactionBoostFactor: 1.5,
+  freshTopicProbability: 0.2,
+  freshTopicCategoryHints: [],
 };
 
 export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentConfigDialogProps) {
@@ -127,8 +131,19 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
 
     setSaving(true);
     try {
-      await agentAdminService.upsertConfig(conversationId, form);
-      toast.success(isNew ? 'Configuration créée' : 'Configuration mise à jour');
+      const res = await agentAdminService.upsertConfig(conversationId, form);
+      // The gateway returns a `cacheInvalidation` envelope tracking whether
+      // Redis pub/sub and the direct HTTP cache-bust succeeded. If both
+      // failed, the agent service may serve stale config for up to 5 min
+      // — warn the admin so they can retry instead of silently shipping a
+      // change that won't take effect.
+      const invalidation = (res as unknown as { cacheInvalidation?: { anyChannelSucceeded?: boolean } })
+        .cacheInvalidation;
+      if (invalidation && invalidation.anyChannelSucceeded === false) {
+        toast.warning('Config sauvegardée — propagation au service agent en attente (cache stale possible quelques minutes)');
+      } else {
+        toast.success(isNew ? 'Configuration créée' : 'Configuration mise à jour');
+      }
       onSave();
     } catch {
       toast.error('Erreur lors de la sauvegarde');
@@ -571,6 +586,55 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 <p className="text-xs text-gray-500 mt-1">Permet à l&apos;agent de rechercher des informations actuelles</p>
               </div>
               <Switch checked={form.webSearchEnabled ?? false} onCheckedChange={v => updateField('webSearchEnabled', v)} />
+            </div>
+          </div>
+
+          {/* Sujets neufs & actualité */}
+          <div className="space-y-4 p-4 rounded-lg bg-amber-50/40 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-900/30">
+            <div className="flex items-center">
+              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Sujets neufs &amp; actualité</h3>
+              <InfoIcon content="Probabilité par scan que l'agent introduise spontanément un sujet d'actualité lié au thème de la conversation, via une recherche web ciblée. Nécessite la recherche web activée." />
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Probabilité d&apos;un sujet neuf par scan</Label>
+                <span className="text-xs font-mono text-gray-600 dark:text-gray-300">
+                  {Math.round((form.freshTopicProbability ?? 0.2) * 100)}%
+                </span>
+              </div>
+              <Input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={Math.round((form.freshTopicProbability ?? 0.2) * 100)}
+                onChange={e => updateField('freshTopicProbability', Math.max(0, Math.min(1, (parseInt(e.target.value) || 0) / 100)))}
+              />
+              <p className="text-xs text-gray-500">
+                À 20%, environ 1 scan sur 5 surface une recherche d&apos;actualité tirée du thème (IA, microservices, news…). Désactivé à 0%.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <div className="flex items-center">
+                <Label>Catégories de sujets (optionnel)</Label>
+                <InfoIcon content="Mots-clés guidant le choix de la requête de recherche. Liste séparée par des virgules. Valeurs reconnues : ai, tech, microservices, architecture, devops, security, data, finance, crypto, sport, culture, science, politics, climate, health, news. Vide = l'agent infère depuis le titre et les messages." />
+              </div>
+              <Input
+                value={(form.freshTopicCategoryHints ?? []).join(', ')}
+                onChange={e => updateField(
+                  'freshTopicCategoryHints',
+                  e.target.value
+                    .split(',')
+                    .map(s => s.trim().toLowerCase())
+                    .filter(Boolean)
+                    .slice(0, 20),
+                )}
+                placeholder="ex: ai, microservices, news"
+                className="bg-white dark:bg-gray-800"
+              />
+              <p className="text-xs text-gray-500">
+                Laissez vide pour détection automatique depuis le titre et les derniers messages.
+              </p>
             </div>
           </div>
 

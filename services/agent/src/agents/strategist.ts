@@ -4,6 +4,7 @@ import type { LlmProvider } from '../llm/types';
 import { parseJsonLlm } from '../utils/parse-json-llm';
 import { getArchetype } from '@meeshy/shared/agent/archetypes';
 import { resolveDelaySeconds } from '../delivery/delay-resolver';
+import { buildFreshTopicBlock, pickFreshTopicSearchHint, resolveFreshTopicCategories, shouldInjectFreshTopic } from './fresh-topic';
 
 const STRATEGIST_SYSTEM_PROMPT = `Tu es l'orchestrateur d'une communaute de messagerie. Analyse cette conversation et decide quelles interventions sont naturelles.
 
@@ -154,7 +155,7 @@ function shuffleArray<T>(arr: T[]): T[] {
   return shuffled;
 }
 
-function buildStrategistPrompt(state: ConversationState, minResponses: number, maxResponses: number, maxReactions: number, reactionsEnabled: boolean): string {
+function buildStrategistPrompt(state: ConversationState, minResponses: number, maxResponses: number, maxReactions: number, reactionsEnabled: boolean, freshTopicBlock: string = ''): string {
   const windowSize = state.useFullHistory ? 250 : (state.contextWindowSize ?? 50);
   const recentMessages = state.messages.slice(-windowSize);
 
@@ -222,7 +223,9 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
 
   // Replace safe (config/numeric) placeholders FIRST, then user-content placeholders LAST
   // to prevent template injection from user messages containing {placeholder} strings.
-  return STRATEGIST_SYSTEM_PROMPT
+  // The fresh-topic block is appended LAST so it sits at the bottom of the prompt
+  // and dominates the LLM's decision when activated.
+  return (STRATEGIST_SYSTEM_PROMPT + freshTopicBlock)
     .replace('{activityScore}', String(state.activityScore))
     .replace('{minResponses}', String(minResponses))
     .replace('{maxResponses}', String(maxResponses + effectiveMaxReactions))
@@ -599,7 +602,22 @@ export function createStrategistNode(llm: LlmProvider) {
     const maxReactions = state.maxReactionsPerCycle;
     const reactionsEnabled = state.reactionsEnabled;
 
-    if (state.activityScore > 0.7) {
+    // Fresh-topic injection: probabilistic per-scan dice roll. When triggered,
+    // forces a single "news/hot research" intervention tied to the conversation's
+    // category. Bypasses the "skip when activity > 0.7" guard because surfacing
+    // fresh angles is valuable even in active threads.
+    const freshTopicActive = shouldInjectFreshTopic(state);
+    let freshTopicBlock = '';
+    let freshTopicMeta: { category: string; searchHint: string } | null = null;
+    if (freshTopicActive) {
+      const categories = resolveFreshTopicCategories(state);
+      const picked = pickFreshTopicSearchHint(categories);
+      freshTopicBlock = buildFreshTopicBlock(picked.category, picked.searchHint);
+      freshTopicMeta = { category: picked.category, searchHint: picked.searchHint };
+      console.log(`[Strategist] Fresh-topic mode ACTIVE for conv=${state.conversationId} category=${picked.category}`);
+    }
+
+    if (state.activityScore > 0.7 && !freshTopicActive) {
       // Even in active conversations, lurkers can still react
       const lurkerReactions = reactionsEnabled
         ? generateLurkerReactions(state, maxReactions)
@@ -632,7 +650,7 @@ export function createStrategistNode(llm: LlmProvider) {
     const minResponses = state.minResponsesPerCycle;
     const maxResponses = state.maxResponsesPerCycle;
 
-    const prompt = buildStrategistPrompt(state, minResponses, maxResponses, maxReactions, reactionsEnabled);
+    const prompt = buildStrategistPrompt(state, minResponses, maxResponses, maxReactions, reactionsEnabled, freshTopicBlock);
 
     try {
       const response = await llm.chat({
@@ -719,6 +737,7 @@ export function createStrategistNode(llm: LlmProvider) {
           reason: parsed.reason ?? '',
           plannedMessages: withReactions.filter((i) => i.type === 'message').length,
           plannedReactions: withReactions.filter((i) => i.type === 'reaction').length,
+          freshTopic: freshTopicMeta,
         },
       };
     } catch (error) {

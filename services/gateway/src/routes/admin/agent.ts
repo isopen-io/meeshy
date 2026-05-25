@@ -82,6 +82,8 @@ const agentConfigSchema = z.object({
   maxDelayMinutes: z.number().int().min(1).max(1440).nullable().optional(),
   spreadOverDayEnabled: z.boolean().optional(),
   maxMessagesPerUserPer10Min: z.number().int().min(1).max(20).nullable().optional(),
+  freshTopicProbability: z.number().min(0).max(1).optional(),
+  freshTopicCategoryHints: z.array(z.string().min(1).max(40)).max(20).optional(),
 }).refine((data) => {
   if (data.minResponsesPerCycle !== undefined && data.maxResponsesPerCycle !== undefined) {
     return data.minResponsesPerCycle <= data.maxResponsesPerCycle;
@@ -202,7 +204,60 @@ const stdErrorsWithNotFound = {
 
 // ── Routes ──────────────────────────────────────────────────────────────────
 
+type InvalidationStatus = {
+  redisPublishOk: boolean;
+  redisSubscribersNotified: number;
+  httpInvalidateOk: boolean;
+  anyChannelSucceeded: boolean;
+};
+
 export async function agentAdminRoutes(fastify: FastifyInstance) {
+  const agentHost = process.env.AGENT_HOST;
+  const agentHttpPort = process.env.AGENT_HTTP_PORT || '3200';
+  const agentClient = agentHost ? new AgentHttpClient(`http://${agentHost}:${agentHttpPort}`) : null;
+
+  // Belt-and-suspenders cache invalidation: publish on Redis (low-latency for
+  // healthy paths) AND POST directly to the agent service (resilient when the
+  // pub/sub channel is briefly down). Both are best-effort and never throw —
+  // the route still succeeds, but the caller gets a status object so the
+  // admin UI can surface partial failures.
+  async function broadcastInvalidation(payload: { conversationId?: string; global?: boolean }): Promise<InvalidationStatus> {
+    const status: InvalidationStatus = {
+      redisPublishOk: false,
+      redisSubscribersNotified: 0,
+      httpInvalidateOk: false,
+      anyChannelSucceeded: false,
+    };
+
+    const [pub, http] = await Promise.allSettled([
+      getCacheStore().publish('agent:config-invalidated', JSON.stringify(payload)),
+      agentClient
+        ? agentClient.invalidateCache(payload)
+        : Promise.reject(new Error('AGENT_HOST not configured')),
+    ]);
+
+    if (pub.status === 'fulfilled') {
+      status.redisPublishOk = true;
+      status.redisSubscribersNotified = typeof pub.value === 'number' ? pub.value : 0;
+    }
+    if (http.status === 'fulfilled') {
+      status.httpInvalidateOk = true;
+    } else if (agentClient) {
+      // Only warn if we tried HTTP and it failed — missing AGENT_HOST is
+      // expected in some deployments and not worth a warning per request.
+      fastify.log.warn({ err: http.reason }, '[AgentConfig] HTTP cache invalidation failed');
+    }
+    // "Succeeded" means at least one agent instance actually received the
+    // invalidation. Redis PUBLISH returning 0 means the publish itself was
+    // accepted but no subscriber was listening (agent down / not yet
+    // connected / network partition), which is functionally a miss — the
+    // cache will stay stale until TTL or the next mutation. Counting that
+    // as success would make the toast lie to the admin.
+    status.anyChannelSucceeded = status.redisSubscribersNotified > 0 || status.httpInvalidateOk;
+    return status;
+  }
+
+
   // GET /stats
   fastify.get('/stats', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
@@ -539,10 +594,15 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         }
       }
 
-      const cache = getCacheStore();
-      await cache.publish('agent:config-invalidated', JSON.stringify({ conversationId }));
+      const invalidationStatus = await broadcastInvalidation({ conversationId });
+      if (!invalidationStatus.anyChannelSucceeded) {
+        fastify.log.warn(
+          { conversationId, invalidationStatus },
+          '[AgentConfig] Cache invalidation failed on both Redis pub/sub AND direct HTTP; agent service may serve stale config for up to 5 min',
+        );
+      }
 
-      return reply.send({ success: true, data: config });
+      return reply.send({ success: true, data: config, cacheInvalidation: invalidationStatus });
     } catch (error) {
       logError(fastify.log, 'Error upserting agent config:', error);
       return reply.status(500).send({ success: false, message: 'Erreur serveur' });
@@ -565,6 +625,10 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       const { conversationId } = request.params as { conversationId: string };
       if (!validateObjectId(conversationId, 'conversationId', reply)) return;
       await fastify.prisma.agentConfig.delete({ where: { conversationId } });
+      // Bust the agent service's cached copy so it stops scheduling scans for
+      // the deleted conversation immediately (without it the agent could run
+      // up to 5 more minutes on a config that no longer exists in Mongo).
+      await broadcastInvalidation({ conversationId });
       return reply.send({ success: true, message: 'Config supprimée' });
     } catch (error) {
       logError(fastify.log, 'Error deleting agent config:', error);
@@ -779,6 +843,10 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       }
 
       const { apiKeyEncrypted, fallbackApiKeyEncrypted, ...safeConfig } = config;
+      // Provider/model/temperature/maxTokens/baseUrl changes need the agent
+      // service to rebuild its LLM router — without this the new settings
+      // sit in Mongo unused until the next agent restart.
+      const invalidationStatus = await broadcastInvalidation({ global: true });
       return reply.send({
         success: true,
         data: {
@@ -786,6 +854,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
           hasApiKey: !!apiKeyEncrypted,
           hasFallbackApiKey: !!fallbackApiKeyEncrypted,
         },
+        cacheInvalidation: invalidationStatus,
       });
     } catch (error) {
       logError(fastify.log, 'Error updating LLM config:', error);
@@ -821,6 +890,11 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         `agent:messages:${conversationId}`,
         `agent:summary:${conversationId}`,
         `agent:profiles:${conversationId}`,
+        // Explicitly drop the in-Redis config snapshot too — otherwise the
+        // agent service keeps scanning a config the admin just nuked, for up
+        // to CONFIG_TTL (5 min). The broadcastInvalidation below also clears
+        // the in-process cache copy across all agent instances.
+        `agent:config:${conversationId}`,
       ];
       const cooldownKeys = await cache.keys(`agent:cooldown:${conversationId}:*`);
       keysToDelete.push(...cooldownKeys);
@@ -830,6 +904,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         await cache.del(key);
         redisKeysDeleted++;
       }
+      const invalidationStatus = await broadcastInvalidation({ conversationId });
 
       return reply.send({
         success: true,
@@ -843,6 +918,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
             redisKeys: redisKeysDeleted,
           },
         },
+        cacheInvalidation: invalidationStatus,
         message: 'Reset conversation effectué',
       });
     } catch (error) {
@@ -897,6 +973,12 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         await cache.del(key);
       }
 
+      // A user reset wipes their global profile, which feeds auto-pickup
+      // in every conversation. Bust the global cache so the next scan
+      // anywhere sees the change instead of resurrecting the deleted
+      // profile from a stale cached config.
+      const invalidationStatus = await broadcastInvalidation({ global: true });
+
       return reply.send({
         success: true,
         data: {
@@ -908,6 +990,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
             cooldownsCleared: cooldownKeys.length,
           },
         },
+        cacheInvalidation: invalidationStatus,
         message: 'Reset utilisateur effectué',
       });
     } catch (error) {
@@ -943,6 +1026,11 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         await cache.del(key);
         redisKeysDeleted++;
       }
+      // The Redis wipe above clears the persistent cache, but the agent
+      // service holds an in-process snapshot of the global config that
+      // only refreshes on pub/sub events or TTL expiry. Notify it so
+      // the next scan rebuilds from a clean slate.
+      const invalidationStatus = await broadcastInvalidation({ global: true });
 
       return reply.send({
         success: true,
@@ -956,6 +1044,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
             redisKeys: redisKeysDeleted,
           },
         },
+        cacheInvalidation: invalidationStatus,
         message: 'Reset complet effectué',
       });
     } catch (error) {
@@ -1643,10 +1732,15 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         config = await fastify.prisma.agentGlobalConfig.create({ data: parsed.data });
       }
 
-      const cache = getCacheStore();
-      await cache.publish('agent:config-invalidated', JSON.stringify({ global: true }));
+      const invalidationStatus = await broadcastInvalidation({ global: true });
+      if (!invalidationStatus.anyChannelSucceeded) {
+        fastify.log.warn(
+          { invalidationStatus },
+          '[AgentGlobalConfig] Cache invalidation failed on both Redis pub/sub AND direct HTTP; agent service may serve stale config for up to 10 min',
+        );
+      }
 
-      return reply.send({ success: true, data: config });
+      return reply.send({ success: true, data: config, cacheInvalidation: invalidationStatus });
     } catch (error) {
       logError(fastify.log, 'Error upserting global agent config:', error);
       return reply.status(500).send({ success: false, message: 'Erreur serveur' });
@@ -1654,10 +1748,6 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   });
 
   // ── Delivery Queue Proxy (Agent HTTP) ─────────────────────────────────────
-
-  const agentHost = process.env.AGENT_HOST;
-  const agentHttpPort = process.env.AGENT_HTTP_PORT || '3200';
-  const agentClient = agentHost ? new AgentHttpClient(`http://${agentHost}:${agentHttpPort}`) : null;
 
   const ensureAgentClient = (reply: FastifyReply): AgentHttpClient | null => {
     if (!agentClient) {

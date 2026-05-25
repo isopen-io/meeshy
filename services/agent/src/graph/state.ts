@@ -314,6 +314,14 @@ export const ConversationStateAnnotation = Annotation.Root({
     reducer: (_current, update) => update,
     default: () => 4,
   }),
+  freshTopicProbability: Annotation<number>({
+    reducer: (_current, update) => update,
+    default: () => 0.2,
+  }),
+  freshTopicCategoryHints: Annotation<string[]>({
+    reducer: (_current, update) => update,
+    default: () => [],
+  }),
 });
 
 export type ConversationState = typeof ConversationStateAnnotation.State;
