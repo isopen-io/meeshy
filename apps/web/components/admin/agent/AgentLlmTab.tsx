@@ -92,7 +92,13 @@ export function AgentLlmTab() {
       if (response.success && response.data) {
         setConfig(response.data ?? null);
         setForm(prev => ({ ...prev, apiKeyEncrypted: '' }));
-        toast.success('Configuration LLM mise à jour');
+        const invalidation = (response as unknown as { cacheInvalidation?: { anyChannelSucceeded?: boolean } })
+          .cacheInvalidation;
+        if (invalidation && invalidation.anyChannelSucceeded === false) {
+          toast.warning('Config LLM sauvegardée — le service agent n\'a pas confirmé le rechargement (peut nécessiter un redémarrage)');
+        } else {
+          toast.success('Configuration LLM mise à jour');
+        }
       }
     } catch {
       toast.error('Erreur lors de la sauvegarde');
