@@ -237,7 +237,12 @@ final class Router: ObservableObject {
                     self.push(.links)
                 }
 
-            case .postDetail(let postId):
+            case .post(let postId), .postDetail(let postId):
+                // `.post` is the legacy short-form (e.g. `meeshy://post/<id>`
+                // / `meeshy://p/<id>`) and `.postDetail` is the canonical
+                // long-form added with the /feeds/post/:postId rollout —
+                // both land on the same PostDetailView surface, so route
+                // them through a single arm.
                 push(.postDetail(postId))
 
             case .storyDetail(let postId):
