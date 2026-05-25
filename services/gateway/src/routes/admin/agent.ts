@@ -835,6 +835,10 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       }
 
       const { apiKeyEncrypted, fallbackApiKeyEncrypted, ...safeConfig } = config;
+      // Provider/model/temperature/maxTokens/baseUrl changes need the agent
+      // service to rebuild its LLM router — without this the new settings
+      // sit in Mongo unused until the next agent restart.
+      const invalidationStatus = await broadcastInvalidation({ global: true });
       return reply.send({
         success: true,
         data: {
@@ -842,6 +846,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
           hasApiKey: !!apiKeyEncrypted,
           hasFallbackApiKey: !!fallbackApiKeyEncrypted,
         },
+        cacheInvalidation: invalidationStatus,
       });
     } catch (error) {
       logError(fastify.log, 'Error updating LLM config:', error);
@@ -891,7 +896,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         await cache.del(key);
         redisKeysDeleted++;
       }
-      await broadcastInvalidation({ conversationId });
+      const invalidationStatus = await broadcastInvalidation({ conversationId });
 
       return reply.send({
         success: true,
@@ -905,6 +910,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
             redisKeys: redisKeysDeleted,
           },
         },
+        cacheInvalidation: invalidationStatus,
         message: 'Reset conversation effectué',
       });
     } catch (error) {
@@ -963,7 +969,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       // in every conversation. Bust the global cache so the next scan
       // anywhere sees the change instead of resurrecting the deleted
       // profile from a stale cached config.
-      await broadcastInvalidation({ global: true });
+      const invalidationStatus = await broadcastInvalidation({ global: true });
 
       return reply.send({
         success: true,
@@ -976,6 +982,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
             cooldownsCleared: cooldownKeys.length,
           },
         },
+        cacheInvalidation: invalidationStatus,
         message: 'Reset utilisateur effectué',
       });
     } catch (error) {
@@ -1015,7 +1022,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       // service holds an in-process snapshot of the global config that
       // only refreshes on pub/sub events or TTL expiry. Notify it so
       // the next scan rebuilds from a clean slate.
-      await broadcastInvalidation({ global: true });
+      const invalidationStatus = await broadcastInvalidation({ global: true });
 
       return reply.send({
         success: true,
@@ -1029,6 +1036,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
             redisKeys: redisKeysDeleted,
           },
         },
+        cacheInvalidation: invalidationStatus,
         message: 'Reset complet effectué',
       });
     } catch (error) {
