@@ -240,6 +240,15 @@ final class Router: ObservableObject {
             case .postDetail(let postId):
                 push(.postDetail(postId))
 
+            case .storyDetail(let postId):
+                // In-app `Link` taps land here. Unlike the cold-launch path
+                // (RootView.handleDeepLink) we don't have access to the
+                // local story tray from this scope, so we route to
+                // PostDetailView — the universal fallback that renders any
+                // post including stories. The viewer-preferred path stays
+                // reserved for cold launch / push notification dispatch.
+                push(.postDetail(postId))
+
             case .external:
                 break
             }

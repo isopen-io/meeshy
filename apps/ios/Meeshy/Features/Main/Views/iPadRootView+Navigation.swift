@@ -51,6 +51,17 @@ extension iPadRootView {
             // iPad surfaces the post detail in the right column, matching
             // the existing post-notification handling above.
             rightPanelRoute = .postDetail(postId)
+        case .storyDetail(let postId):
+            // Mirror of the existing `storyDetail:` push-notification
+            // handler below (handlePushNavigateToRoute). Try to surface
+            // the dedicated story viewer when the group is in the local
+            // tray, otherwise fall back to the post detail right pane.
+            if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
+                selectedStoryUserIdFromConv = storyViewModel.storyGroups[groupIdx].id
+                showStoryViewerFromConv = true
+            } else {
+                rightPanelRoute = .postDetail(postId)
+            }
         case .magicLink:
             break
         }

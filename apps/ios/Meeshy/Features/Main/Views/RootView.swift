@@ -592,6 +592,19 @@ struct RootView: View {
             // exists for in-app feed taps; the deep link just reuses it.
             router.push(.postDetail(postId))
 
+        case .storyDetail(let postId):
+            // Stories share the post identifier namespace. Prefer the
+            // dedicated viewer when the story is in the local tray, fall
+            // back to PostDetailView otherwise — matches the existing
+            // `storyDetail:` push-notification dispatch (line ~472 above)
+            // so cold-launch deep links and warm-launch push taps land on
+            // the same screen for the same id.
+            if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
+                storyViewerCoordinator.present(StoryViewerRequest(id: storyViewModel.storyGroups[groupIdx].id))
+            } else {
+                router.push(.postDetail(postId))
+            }
+
         case .magicLink:
             break
         }

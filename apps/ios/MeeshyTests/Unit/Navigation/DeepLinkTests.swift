@@ -577,6 +577,15 @@ final class DeepLinkEquatableTests: XCTestCase {
         XCTAssertNotEqual(DeepLink.postDetail(postId: "p1"), DeepLink.postDetail(postId: "p2"))
         XCTAssertNotEqual(DeepLink.postDetail(postId: "x"), DeepLink.conversation(id: "x"))
     }
+
+    func test_storyDetail_equality() {
+        XCTAssertEqual(DeepLink.storyDetail(postId: "s1"), DeepLink.storyDetail(postId: "s1"))
+        XCTAssertNotEqual(DeepLink.storyDetail(postId: "s1"), DeepLink.storyDetail(postId: "s2"))
+        // Story and post deep links carry the same identifier shape but are
+        // distinct cases — they dispatch to different surfaces (viewer vs
+        // detail). Equality must respect that.
+        XCTAssertNotEqual(DeepLink.storyDetail(postId: "x"), DeepLink.postDetail(postId: "x"))
+    }
 }
 
 // MARK: - DeepLinkParser Post Detail Tests
@@ -689,6 +698,146 @@ final class DeepLinkParserPostDetailTests: XCTestCase {
         XCTAssertFalse(DeepLinkParser.isPostSegment("posts"))
         XCTAssertFalse(DeepLinkParser.isPostSegment("Post"))
         XCTAssertFalse(DeepLinkParser.isPostSegment(""))
+    }
+}
+
+// MARK: - DeepLinkParser Story Detail Tests
+
+final class DeepLinkParserStoryDetailTests: XCTestCase {
+
+    func test_parse_webUrl_story_returnsStoryDetail() {
+        let url = URL(string: "https://meeshy.me/story/storyABC123")!
+        let result = DeepLinkParser.parse(url)
+        guard case .storyDetail(let postId) = result else {
+            XCTFail("Expected .storyDetail, got \(result)")
+            return
+        }
+        XCTAssertEqual(postId, "storyABC123")
+    }
+
+    func test_parse_webUrl_storiesPlural_returnsStoryDetail() {
+        let url = URL(string: "https://meeshy.me/stories/storyPlural")!
+        let result = DeepLinkParser.parse(url)
+        guard case .storyDetail(let postId) = result else {
+            XCTFail("Expected .storyDetail, got \(result)")
+            return
+        }
+        XCTAssertEqual(postId, "storyPlural")
+    }
+
+    func test_parse_webUrl_story_wwwSubdomain() {
+        let url = URL(string: "https://www.meeshy.me/story/storyWWW")!
+        let result = DeepLinkParser.parse(url)
+        guard case .storyDetail(let postId) = result else {
+            XCTFail("Expected .storyDetail, got \(result)")
+            return
+        }
+        XCTAssertEqual(postId, "storyWWW")
+    }
+
+    func test_parse_customScheme_story_returnsStoryDetail() {
+        let url = URL(string: "meeshy://story/storyCustom")!
+        let result = DeepLinkParser.parse(url)
+        guard case .storyDetail(let postId) = result else {
+            XCTFail("Expected .storyDetail, got \(result)")
+            return
+        }
+        XCTAssertEqual(postId, "storyCustom")
+    }
+
+    func test_parse_customScheme_storiesPlural_returnsStoryDetail() {
+        let url = URL(string: "meeshy://stories/storyCustomPlural")!
+        let result = DeepLinkParser.parse(url)
+        guard case .storyDetail(let postId) = result else {
+            XCTFail("Expected .storyDetail, got \(result)")
+            return
+        }
+        XCTAssertEqual(postId, "storyCustomPlural")
+    }
+
+    func test_parse_customScheme_story_emptyId_returnsExternal() {
+        let url = URL(string: "meeshy://story/")!
+        let result = DeepLinkParser.parse(url)
+        guard case .external = result else {
+            XCTFail("Expected .external for empty story id, got \(result)")
+            return
+        }
+    }
+
+    func test_isStorySegment_acceptsCanonicalAndPlural() {
+        XCTAssertTrue(DeepLinkParser.isStorySegment("story"))
+        XCTAssertTrue(DeepLinkParser.isStorySegment("stories"))
+        XCTAssertFalse(DeepLinkParser.isStorySegment("Story"))
+        XCTAssertFalse(DeepLinkParser.isStorySegment("storie"))
+        XCTAssertFalse(DeepLinkParser.isStorySegment(""))
+    }
+}
+
+// MARK: - DeepLinkRouter Story Detail Tests
+
+@MainActor
+final class DeepLinkRouterStoryDetailTests: XCTestCase {
+
+    private func makeSUT() -> DeepLinkRouter { DeepLinkRouter() }
+
+    func test_handle_story_setsPendingDeepLink() {
+        let sut = makeSUT()
+        let url = URL(string: "https://meeshy.me/story/storyUniversal")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(sut.pendingDeepLink, .storyDetail(postId: "storyUniversal"))
+    }
+
+    func test_handle_storiesPlural_setsPendingDeepLink() {
+        let sut = makeSUT()
+        let url = URL(string: "https://meeshy.me/stories/storyUniversalPlural")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(sut.pendingDeepLink, .storyDetail(postId: "storyUniversalPlural"))
+    }
+
+    func test_handle_story_emptyId_returnsFalse() {
+        let sut = makeSUT()
+        let url = URL(string: "https://meeshy.me/story/")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertFalse(handled)
+        XCTAssertNil(sut.pendingDeepLink)
+    }
+
+    func test_handle_customScheme_story_setsPendingDeepLink() {
+        let sut = makeSUT()
+        let url = URL(string: "meeshy://story/storyCS")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(sut.pendingDeepLink, .storyDetail(postId: "storyCS"))
+    }
+
+    func test_handle_customScheme_storiesPlural_setsPendingDeepLink() {
+        let sut = makeSUT()
+        let url = URL(string: "meeshy://stories/storyCSPlural")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(sut.pendingDeepLink, .storyDetail(postId: "storyCSPlural"))
+    }
+
+    func test_handle_customScheme_story_emptyId_returnsFalse() {
+        let sut = makeSUT()
+        let url = URL(string: "meeshy://story/")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertFalse(handled)
+        XCTAssertNil(sut.pendingDeepLink)
     }
 }
 

@@ -13,6 +13,7 @@ enum DeepLinkDestination {
     case share(text: String?, url: String?)
     case userLinks
     case postDetail(postId: String)
+    case storyDetail(postId: String)
     case external(URL)
 }
 
@@ -37,6 +38,20 @@ enum DeepLinkParser {
         postSegments.contains(segment)
     }
 
+    /// Segments accepted as the "story" keyword. Stories share the post
+    /// identifier namespace (a story is a `Post` with `type: STORY` in the
+    /// schema), so the deep link only needs to carry the postId — the
+    /// dispatch side decides whether to surface the story viewer or fall
+    /// back to PostDetailView when the story has expired / isn't in the
+    /// local tray. Plural `stories` accepted defensively for typo / SEO
+    /// variants.
+    private static let storySegments: Set<String> = ["story", "stories"]
+
+    /// `true` when `segment` is a valid alias for the "story" keyword.
+    static func isStorySegment(_ segment: String) -> Bool {
+        storySegments.contains(segment)
+    }
+
     /// Parse any URL into a deep link destination.
     ///
     /// Handles:
@@ -44,11 +59,13 @@ enum DeepLinkParser {
     /// - `https://meeshy.me/u/{username}`    -> user profile
     /// - `https://meeshy.me/c/{id}`          -> conversation
     /// - `https://meeshy.me/feeds/post/{id}` -> post detail
+    /// - `https://meeshy.me/story/{id}`      -> story detail
     /// - `meeshy://me`                       -> own profile
     /// - `meeshy://u/{username}`             -> user profile
     /// - `meeshy://c/{id}`                   -> conversation
     /// - `meeshy://post/{id}` (or `meeshy://p/{id}`)               -> post detail
     /// - `meeshy://feeds/post/{id}` (or `meeshy://feeds/p/{id}`)   -> post detail
+    /// - `meeshy://story/{id}` (or `meeshy://stories/{id}`)        -> story detail
     /// - `meeshy://share?text=...`           -> share text content
     /// - `meeshy://share?url=...`            -> share URL content
     /// - Everything else                     -> open externally
@@ -128,6 +145,12 @@ enum DeepLinkParser {
             if components.count >= 3, postSegments.contains(components[1]) {
                 return .postDetail(postId: components[2])
             }
+        case "story", "stories":
+            // meeshy://story/{postId} (or meeshy://stories/{postId}) —
+            // matches the canonical share URL the iOS app already mints
+            // (`https://meeshy.me/story/<postId>`). Stories carry a `postId`
+            // because they live in the `Post` table with `type: STORY`.
+            if components.count >= 2 { return .storyDetail(postId: components[1]) }
         default:
             break
         }
@@ -173,6 +196,12 @@ enum DeepLinkParser {
             switch components[0] {
             case "u": return .userProfile(username: components[1])
             case "c": return .conversation(id: components[1])
+            // https://meeshy.me/story/{postId} — canonical share URL the
+            // iOS app already generates (StoryViewerView, SharePickerView).
+            // The dispatch side picks StoryViewer when the story is in the
+            // local tray, else falls back to PostDetailView. `stories/<id>`
+            // is accepted as a defensive plural alias.
+            case "story", "stories": return .storyDetail(postId: components[1])
             default: break
             }
         }
@@ -199,6 +228,7 @@ enum DeepLink: Equatable {
     case magicLink(token: String)
     case conversation(id: String)
     case postDetail(postId: String)
+    case storyDetail(postId: String)
 }
 
 // MARK: - Deep Link Router (ObservableObject for join/conversation deep links)
@@ -262,6 +292,17 @@ final class DeepLinkRouter: ObservableObject {
                   DeepLinkParser.isPostSegment(pathComponents[1]) else { return false }
             guard let postId = nonEmptyIdentifier(at: 2, in: pathComponents) else { return false }
             pendingDeepLink = .postDetail(postId: postId)
+            return true
+
+        case "story", "stories":
+            // `/story/{postId}` — Universal Link surface for the canonical
+            // story share URL the iOS app already generates (and that the
+            // Next.js rewrite serves on the web for non-iOS recipients).
+            // Dispatch prefers StoryViewer when the story is in the local
+            // tray, with a PostDetailView fallback for expired / unknown
+            // stories.
+            guard let postId = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
+            pendingDeepLink = .storyDetail(postId: postId)
             return true
 
         default:
@@ -333,6 +374,14 @@ final class DeepLinkRouter: ObservableObject {
                   DeepLinkParser.isPostSegment(pathComponents[0]) else { return false }
             guard let postId = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
             pendingDeepLink = .postDetail(postId: postId)
+            return true
+
+        case "story", "stories":
+            // meeshy://story/{postId} — direct custom-scheme shortcut to
+            // the story viewer (or PostDetailView fallback). Plural alias
+            // `meeshy://stories/{postId}` accepted defensively.
+            guard let postId = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
+            pendingDeepLink = .storyDetail(postId: postId)
             return true
 
         default:
