@@ -4,6 +4,8 @@ import Redis from 'ioredis';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { env } from './env';
 import { createLlmProvider } from './llm/llm-factory';
+import { LlmRouter } from './llm/llm-router';
+import type { LlmProvider } from './llm/types';
 import { buildAgentGraph, type TracerRef } from './graph/graph';
 import { ZmqAgentListener } from './zmq/zmq-listener';
 import { ZmqAgentPublisher } from './zmq/zmq-publisher';
@@ -18,8 +20,6 @@ import type { MessageEntry } from './graph/state';
 import { ReactiveHandler } from './reactive/reactive-handler';
 import { detectInterpellation } from './reactive/interpellation-detector';
 import { configRoutes } from './routes/config';
-import { rolesRoutes } from './routes/roles';
-import { analyticsRoutes } from './routes/analytics';
 import { deliveryRoutes } from './routes/delivery';
 import { findEligibleConversations } from './scheduler/eligible-conversations';
 import { startDailySnapshotCron } from './cron/daily-snapshot';
@@ -42,13 +42,21 @@ server.get('/debug/zmq-status', async () => ({
   timestamp: Date.now(),
 }));
 
-server.register((instance) => rolesRoutes(instance, prisma));
+async function buildLlmFromConfig(): Promise<LlmProvider> {
+  // Precedence: AgentLlmConfig (admin LLM tab) > AgentGlobalConfig.defaultProvider/Model
+  // (Global tab) > env vars. API keys always come from env — the encrypted
+  // column in AgentLlmConfig is a TODO and storing keys in plaintext Mongo
+  // would be a regression.
+  const [llmConfig, globalConfig] = await Promise.all([
+    prisma.agentLlmConfig.findFirst({ orderBy: { updatedAt: 'desc' } }).catch(() => null),
+    prisma.agentGlobalConfig.findFirst({ orderBy: { updatedAt: 'desc' } }).catch(() => null),
+  ]);
 
-async function start() {
-  const globalConfig = await prisma.agentGlobalConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
-
-  const primaryProvider = (globalConfig?.defaultProvider as 'openai' | 'anthropic' | null) ?? env.LLM_PROVIDER;
-  const primaryModel = (globalConfig?.defaultModel as string | null)
+  const primaryProvider = (llmConfig?.provider as 'openai' | 'anthropic' | null)
+    ?? (globalConfig?.defaultProvider as 'openai' | 'anthropic' | null)
+    ?? env.LLM_PROVIDER;
+  const primaryModel = llmConfig?.model
+    ?? globalConfig?.defaultModel
     ?? (primaryProvider === 'openai' ? env.OPENAI_MODEL : env.ANTHROPIC_MODEL);
   const primaryKey = primaryProvider === 'openai' ? env.OPENAI_API_KEY : env.ANTHROPIC_API_KEY;
 
@@ -56,24 +64,40 @@ async function start() {
     throw new Error(`Missing API key for LLM provider "${primaryProvider}". Set ${primaryProvider === 'openai' ? 'OPENAI_API_KEY' : 'ANTHROPIC_API_KEY'} env var.`);
   }
 
-  const primary = createLlmProvider({ provider: primaryProvider, apiKey: primaryKey, model: primaryModel });
+  const primary = createLlmProvider({
+    provider: primaryProvider,
+    apiKey: primaryKey,
+    model: primaryModel,
+    baseUrl: llmConfig?.baseUrl ?? undefined,
+    temperature: llmConfig?.temperature ?? undefined,
+    maxTokens: llmConfig?.maxTokens ?? undefined,
+  });
 
-  const fallbackProviderName = (globalConfig?.fallbackProvider as 'openai' | 'anthropic' | null)
+  const fallbackProviderName = (llmConfig?.fallbackProvider as 'openai' | 'anthropic' | null)
+    ?? (globalConfig?.fallbackProvider as 'openai' | 'anthropic' | null)
     ?? (primaryProvider === 'openai' ? 'anthropic' : 'openai');
   const fallbackKey = fallbackProviderName === 'openai' ? env.OPENAI_API_KEY : env.ANTHROPIC_API_KEY;
-  const fallbackModel = (globalConfig?.fallbackModel as string | null)
+  const fallbackModel = llmConfig?.fallbackModel
+    ?? globalConfig?.fallbackModel
     ?? (fallbackProviderName === 'openai' ? env.OPENAI_MODEL : env.ANTHROPIC_MODEL);
 
-  let llm: ReturnType<typeof createLlmProvider>;
   if (fallbackKey && fallbackProviderName !== primaryProvider) {
     const { withFallback } = await import('./llm/llm-fallback');
     const fallback = createLlmProvider({ provider: fallbackProviderName, apiKey: fallbackKey, model: fallbackModel });
-    llm = withFallback(primary, fallback);
     server.log.info(`[LLM] Primary: ${primaryProvider}/${primaryModel} | Fallback: ${fallbackProviderName}/${fallbackModel}`);
-  } else {
-    llm = primary;
-    server.log.info(`[LLM] Provider: ${primaryProvider}/${primaryModel} (no fallback configured)`);
+    return withFallback(primary, fallback);
   }
+  server.log.info(`[LLM] Provider: ${primaryProvider}/${primaryModel} (no fallback configured)`);
+  return primary;
+}
+
+async function start() {
+  // LlmRouter wraps the active provider so the graph (which captures `llm`
+  // at construction) survives an admin-triggered provider swap without a
+  // restart. The router itself is registered as a listener on the config
+  // cache global-invalidation hook below.
+  const llmRouter = new LlmRouter(await buildLlmFromConfig());
+  const llm = llmRouter;
 
   const tracerRef: TracerRef = { current: null };
   const graph = buildAgentGraph(llm, tracerRef);
@@ -90,10 +114,22 @@ async function start() {
   const budgetManager = new DailyBudgetManager(redis);
   await configCache.startListening();
 
+  // Rebuild the LLM provider in-place whenever the global config or the
+  // dedicated LLM config changes. Closes the loop on /admin/agent/llm and
+  // /admin/agent/global-config so provider swaps take effect immediately.
+  configCache.onGlobalInvalidated(async () => {
+    try {
+      const next = await buildLlmFromConfig();
+      llmRouter.swap(next);
+      server.log.info('[LLM] Provider rebuilt from updated config');
+    } catch (err) {
+      server.log.error({ err }, '[LLM] Failed to rebuild provider on config change — keeping previous instance');
+    }
+  });
+
   // Registered AFTER configCache is constructed so the cache-invalidation
   // endpoint can mutate the live cache instance.
   server.register((instance) => configRoutes(instance, prisma, redis, configCache));
-  server.register((instance) => analyticsRoutes(instance, { stateManager, persistence }));
 
   const deliveryQueue = new RedisDeliveryQueue(redis, zmqPublisher, persistence, {
     maxMessagesPerUserPer10Min: 4,

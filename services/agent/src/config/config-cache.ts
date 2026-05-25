@@ -7,13 +7,25 @@ const CONFIG_TTL = 300;
 const GLOBAL_CONFIG_TTL = 600;
 const INVALIDATION_CHANNEL = 'agent:config-invalidated';
 
+type Listener = () => void | Promise<void>;
+
 export class ConfigCache {
   private subscriber: Redis | null = null;
+  private globalInvalidationListeners: Listener[] = [];
 
   constructor(
     private redis: Redis,
     private persistence: MongoPersistence,
   ) {}
+
+  /**
+   * Register a hook that fires whenever the global config cache is busted
+   * (either via `invalidateGlobal()` or a pub/sub event). Used by the LLM
+   * provider router to rebuild itself when the admin changes provider/model.
+   */
+  onGlobalInvalidated(listener: Listener): void {
+    this.globalInvalidationListeners.push(listener);
+  }
 
   async getConfig(conversationId: string) {
     const key = `${CONFIG_PREFIX}${conversationId}`;
@@ -58,6 +70,16 @@ export class ConfigCache {
 
   async invalidateGlobal() {
     await this.redis.del(GLOBAL_CONFIG_KEY);
+    // Notify in-process consumers (LLM router, future caches…). Listeners are
+    // best-effort: one failing must not block the others. Run sequentially to
+    // keep ordering predictable (rebuild count metrics, etc.).
+    for (const listener of this.globalInvalidationListeners) {
+      try {
+        await listener();
+      } catch (err) {
+        console.error('[ConfigCache] Global invalidation listener failed:', err);
+      }
+    }
   }
 
   async startListening() {

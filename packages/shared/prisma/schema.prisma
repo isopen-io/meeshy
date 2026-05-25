@@ -3060,6 +3060,8 @@ model AgentGlobalProfile {
 
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+
+  @@index([updatedAt])
 }
 
 model AgentConfig {
