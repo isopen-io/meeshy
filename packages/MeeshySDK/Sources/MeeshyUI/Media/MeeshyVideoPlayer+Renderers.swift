@@ -87,6 +87,14 @@ internal struct _InlineRenderer: View {
         displayAspectRatio ?? player.attachment.videoAspectRatio ?? (16.0 / 9.0)
     }
 
+    /// True quand le surface est mountée mais l'AVPlayerItem n'a pas encore
+    /// chargé la durée — proxy pour "buffering / asset loading". Une fois
+    /// `manager.duration > 0`, AVPlayer connait la duration de l'asset et
+    /// rend ses premières frames.
+    private var isLoadingAsset: Bool {
+        isThisActive && manager.duration <= 0
+    }
+
     var body: some View {
         // `.aspectRatio(.fit)` est posé au niveau du ZStack OUTER : c'est la
         // seule contrainte qui drive la taille de la bulle, identique entre
@@ -104,6 +112,9 @@ internal struct _InlineRenderer: View {
             if isThisActive, let p = manager.player {
                 MeeshyVideoSurface(player: p, gravity: .resizeAspect, isMuted: false)
                     .onTapGesture { toggleControls() }
+                if isLoadingAsset {
+                    loadingIndicator
+                }
                 if showControls {
                     _InlineOverlayControls(
                         manager: manager,
@@ -128,9 +139,36 @@ internal struct _InlineRenderer: View {
         .task(id: player.attachment.fileUrl) {
             await resolveDisplayAspectRatio()
         }
+        .adaptiveOnChange(of: isThisActive) { _, nowActive in
+            if nowActive {
+                // Auto-hide les contrôles 3s après que la lecture démarre, sinon
+                // ils restent superposés et masquent la vidéo.
+                showControls = true
+                scheduleControlsHide()
+            } else {
+                showControls = true
+                controlsTimer?.invalidate()
+                controlsTimer = nil
+            }
+        }
         .onDisappear { teardown() }
         .animation(.easeInOut(duration: 0.2), value: showControls)
         .animation(.easeInOut(duration: 0.15), value: isThisActive)
+        .animation(.easeInOut(duration: 0.2), value: isLoadingAsset)
+    }
+
+    /// Spinner subtle teinté accent — visible uniquement pendant le chargement
+    /// initial de l'asset (avant que la première frame ne soit rendue).
+    /// `ultraThinMaterial` derrière pour ne pas masquer le contenu vidéo si
+    /// jamais une preview frame s'affiche en arrière-plan.
+    private var loadingIndicator: some View {
+        ZStack {
+            Circle().fill(.ultraThinMaterial).frame(width: 48, height: 48)
+            ProgressView()
+                .tint(Color(hex: player.accentColor))
+                .scaleEffect(1.2)
+        }
+        .transition(.opacity)
     }
 
     /// Charge l'AVAsset et applique son `preferredTransform` à la `naturalSize`
@@ -159,12 +197,14 @@ internal struct _InlineRenderer: View {
     private var playButton: some View {
         Button(action: handlePlayTap) {
             ZStack {
-                Circle().fill(.ultraThinMaterial).frame(width: 64, height: 64)
-                Circle().fill(Color(hex: player.accentColor).opacity(0.55)).frame(width: 56, height: 56)
+                Circle().fill(.ultraThinMaterial)
+                Circle().fill(Color(hex: player.accentColor).opacity(0.55))
                 playButtonContent
                 downloadProgressRing
             }
-            .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
+            .frame(width: 64, height: 64)
+            .overlay(Circle().stroke(Color.white.opacity(0.22), lineWidth: 0.8))
+            .shadow(color: Color(hex: player.accentColor).opacity(0.45), radius: 12, y: 4)
         }
         .accessibilityLabel(playButtonAccessibilityLabel)
         .disabled(isDownloading)

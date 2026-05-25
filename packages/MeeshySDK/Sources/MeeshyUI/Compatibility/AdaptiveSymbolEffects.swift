@@ -31,4 +31,26 @@ public extension View {
             self
         }
     }
+
+    /// Cross-fade animé entre deux états d'un SF Symbol (typiquement
+    /// `play.fill` ↔ `pause.fill`, `heart` ↔ `heart.fill`).
+    ///
+    /// - iOS 17+ : `.contentTransition(.symbolEffect(.replace))` natif.
+    /// - iOS 16 : transition `opacity + scale` couplée à un `.id(...)` qui
+    ///   force le remount du symbol à chaque changement d'`id`. L'`id` doit
+    ///   être stable et ne changer qu'au switch du symbol (pas par frame).
+    ///
+    /// ```swift
+    /// Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+    ///     .adaptiveSymbolReplace(id: isPlaying)
+    /// ```
+    @ViewBuilder
+    func adaptiveSymbolReplace<ID: Equatable & Hashable>(id: ID) -> some View {
+        if #available(iOS 17.0, *) {
+            contentTransition(.symbolEffect(.replace))
+        } else {
+            transition(.opacity.combined(with: .scale(scale: 0.85)))
+                .id(id)
+        }
+    }
 }

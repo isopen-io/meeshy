@@ -2,6 +2,19 @@ import XCTest
 @testable import Meeshy
 import MeeshySDK
 
+/// Local network monitor stub used to drive `CacheFirstLoader`'s
+/// online/offline branching deterministically. The shared
+/// `NetworkMonitor.shared` reports the simulator host's path status
+/// asynchronously, which races with synchronous tests and makes the
+/// error/offline mapping non-deterministic.
+private final class TestNetworkMonitor: NetworkMonitorProviding, @unchecked Sendable {
+    var isOnline: Bool
+
+    init(isOnline: Bool = true) {
+        self.isOnline = isOnline
+    }
+}
+
 @MainActor
 final class BlockedViewModelTests: XCTestCase {
 
@@ -23,9 +36,10 @@ final class BlockedViewModelTests: XCTestCase {
     // MARK: - Factory
 
     private func makeSUT(
-        blockService: MockBlockService = MockBlockService()
+        blockService: MockBlockService = MockBlockService(),
+        networkMonitor: TestNetworkMonitor = TestNetworkMonitor(isOnline: true)
     ) -> (sut: BlockedViewModel, blockService: MockBlockService) {
-        let sut = BlockedViewModel(blockService: blockService)
+        let sut = BlockedViewModel(blockService: blockService, networkMonitor: networkMonitor)
         return (sut, blockService)
     }
 

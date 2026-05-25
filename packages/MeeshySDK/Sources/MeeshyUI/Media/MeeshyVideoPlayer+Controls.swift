@@ -96,51 +96,64 @@ internal struct _InlineOverlayControls: View {
     }
 
     // MARK: - Center Controls (skip + play/pause)
+    //
+    // Hierarchy visuelle : skip 36 ←→ play 54 (ratio 0.67) — le play domine
+    // clairement. Glass UI + accent tinté homogène à 0.3 sur tous les
+    // boutons. Le play porte une teinte d'accent plus marquée (0.55) pour
+    // tirer l'œil dessus.
 
     private var centerControls: some View {
-        HStack(spacing: 28) {
-            Button {
-                manager.skip(seconds: -10)
-                HapticFeedback.light()
-            } label: {
-                Image(systemName: "gobackward.10")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(width: 32, height: 32)
-                    .background(
-                        Circle().fill(.ultraThinMaterial)
-                            .overlay(Circle().fill(accent.opacity(0.18)))
-                    )
-            }
-
-            Button {
-                manager.togglePlayPause()
-                HapticFeedback.light()
-            } label: {
-                ZStack {
-                    Circle().fill(.ultraThinMaterial).frame(width: 42, height: 42)
-                    Circle().fill(accent.opacity(0.45)).frame(width: 42, height: 42)
-                    Image(systemName: manager.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.white)
-                        .offset(x: manager.isPlaying ? 0 : 2)
-                }
-            }
-
-            Button {
-                manager.skip(seconds: 10)
-                HapticFeedback.light()
-            } label: {
-                Image(systemName: "goforward.10")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(width: 32, height: 32)
-                    .background(
-                        Circle().fill(.ultraThinMaterial)
-                            .overlay(Circle().fill(accent.opacity(0.18)))
-                    )
-            }
+        HStack(spacing: 24) {
+            skipButton(systemName: "gobackward.10", seconds: -10)
+            playPauseButton
+            skipButton(systemName: "goforward.10", seconds: 10)
         }
+    }
+
+    private func skipButton(systemName: String, seconds: Double) -> some View {
+        Button {
+            manager.skip(seconds: seconds)
+            HapticFeedback.light()
+        } label: {
+            Image(systemName: systemName)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 36, height: 36)
+                .background(
+                    ZStack {
+                        Circle().fill(.ultraThinMaterial)
+                        Circle().fill(accent.opacity(0.30))
+                    }
+                )
+                .overlay(Circle().stroke(Color.white.opacity(0.10), lineWidth: 0.5))
+        }
+    }
+
+    private var playPauseButton: some View {
+        Button {
+            manager.togglePlayPause()
+            HapticFeedback.light()
+        } label: {
+            ZStack {
+                Circle().fill(.ultraThinMaterial)
+                Circle().fill(accent.opacity(0.55))
+                playPauseIcon
+            }
+            .frame(width: 54, height: 54)
+            .overlay(Circle().stroke(Color.white.opacity(0.18), lineWidth: 0.5))
+            .shadow(color: accent.opacity(0.35), radius: 10, y: 3)
+        }
+        .accessibilityLabel(manager.isPlaying ? "Pause" : "Play")
+    }
+
+    /// Cross-fade entre `play.fill` et `pause.fill`. Gestion versionnée
+    /// déléguée à `adaptiveSymbolReplace` (cf. `Compatibility/AdaptiveSymbolEffects`).
+    private var playPauseIcon: some View {
+        Image(systemName: manager.isPlaying ? "pause.fill" : "play.fill")
+            .font(.system(size: 22, weight: .bold))
+            .foregroundColor(.white)
+            .offset(x: manager.isPlaying ? 0 : 2)
+            .adaptiveSymbolReplace(id: manager.isPlaying)
     }
 
     // MARK: - Bottom Bar (seek + time)
@@ -313,36 +326,57 @@ internal struct _FullscreenOverlayControls: View {
     }
 
     private var centerControls: some View {
-        HStack(spacing: 48) {
-            Button {
-                manager.skip(seconds: -10)
-                HapticFeedback.light()
-            } label: {
-                Image(systemName: "gobackward.10")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundColor(.white)
-            }
-            Button {
-                manager.togglePlayPause()
-                HapticFeedback.light()
-            } label: {
-                ZStack {
-                    Circle().fill(Color.white.opacity(0.2)).frame(width: 64, height: 64)
-                    Image(systemName: manager.isPlaying ? "pause.fill" : "play.fill")
-                        .font(.system(size: 32, weight: .bold))
-                        .foregroundColor(.white)
-                        .offset(x: manager.isPlaying ? 0 : 3)
-                }
-            }
-            Button {
-                manager.skip(seconds: 10)
-                HapticFeedback.light()
-            } label: {
-                Image(systemName: "goforward.10")
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundColor(.white)
-            }
+        HStack(spacing: 40) {
+            fullscreenSkipButton(systemName: "gobackward.10", seconds: -10)
+            fullscreenPlayPauseButton
+            fullscreenSkipButton(systemName: "goforward.10", seconds: 10)
         }
+    }
+
+    private func fullscreenSkipButton(systemName: String, seconds: Double) -> some View {
+        Button {
+            manager.skip(seconds: seconds)
+            HapticFeedback.light()
+        } label: {
+            Image(systemName: systemName)
+                .font(.system(size: 26, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 56, height: 56)
+                .background(
+                    ZStack {
+                        Circle().fill(.ultraThinMaterial)
+                        Circle().fill(Color.white.opacity(0.10))
+                    }
+                )
+                .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 0.5))
+        }
+    }
+
+    private var fullscreenPlayPauseButton: some View {
+        Button {
+            manager.togglePlayPause()
+            HapticFeedback.light()
+        } label: {
+            ZStack {
+                Circle().fill(.ultraThinMaterial)
+                Circle().fill(accent.opacity(0.55))
+                fullscreenPlayPauseIcon
+            }
+            .frame(width: 72, height: 72)
+            .overlay(Circle().stroke(Color.white.opacity(0.25), lineWidth: 0.8))
+            .shadow(color: accent.opacity(0.4), radius: 14, y: 4)
+        }
+        .accessibilityLabel(manager.isPlaying ? "Pause" : "Play")
+    }
+
+    /// Cross-fade play↔pause icon — version fullscreen.
+    /// Gestion versionnée déléguée à `adaptiveSymbolReplace`.
+    private var fullscreenPlayPauseIcon: some View {
+        Image(systemName: manager.isPlaying ? "pause.fill" : "play.fill")
+            .font(.system(size: 32, weight: .bold))
+            .foregroundColor(.white)
+            .offset(x: manager.isPlaying ? 0 : 3)
+            .adaptiveSymbolReplace(id: manager.isPlaying)
     }
 
     private var bottomStack: some View {
@@ -405,22 +439,34 @@ internal struct _FullscreenOverlayControls: View {
     private var speedRow: some View {
         HStack(spacing: 8) {
             ForEach(fullscreenSpeeds, id: \.rawValue) { speed in
-                Button {
-                    manager.setSpeed(speed)
-                    HapticFeedback.light()
-                } label: {
-                    Text(speed.label)
-                        .font(.system(size: 12, weight: .bold, design: .monospaced))
-                        .foregroundColor(manager.playbackSpeed == speed ? .black : .white.opacity(0.7))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule().fill(
-                                manager.playbackSpeed == speed ? accent : Color.white.opacity(0.15)
-                            )
-                        )
-                }
+                speedChip(speed)
             }
+        }
+        .animation(.spring(response: 0.32, dampingFraction: 0.7), value: manager.playbackSpeed)
+    }
+
+    private func speedChip(_ speed: PlaybackSpeed) -> some View {
+        let isActive = manager.playbackSpeed == speed
+        return Button {
+            manager.setSpeed(speed)
+            HapticFeedback.light()
+        } label: {
+            Text(speed.label)
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .foregroundColor(isActive ? .white : .white.opacity(0.7))
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(
+                    Capsule().fill(isActive ? accent : Color.white.opacity(0.15))
+                )
+                .overlay(
+                    Capsule().stroke(
+                        isActive ? Color.white.opacity(0.35) : Color.clear,
+                        lineWidth: 0.8
+                    )
+                )
+                .shadow(color: isActive ? accent.opacity(0.5) : .clear, radius: 8, y: 2)
+                .scaleEffect(isActive ? 1.08 : 1.0)
         }
     }
 }
