@@ -1021,13 +1021,13 @@ class ConversationViewModel: ObservableObject {
             // Pré-hydrate les traductions AVANT loadInitial : les bulles
             // s'affichent dès le premier rendu avec le Prisme Linguistique.
             await hydratePersistedTranslations()
-            await messageStore.loadInitial()
-            // `hydrateMetadataFromGRDB` AVANT tout `await` suivant : peuple
-            // `messageTranscriptions` de façon atomique avec la pose des
-            // messages. Sinon le MainActor cède pendant l'await et SwiftUI
-            // rend les bulles audio SANS transcription, puis re-rend — la
-            // transcription « pop » en second temps.
-            hydrateMetadataFromGRDB()
+            // Atomic publish — read off-MainActor, then apply messages +
+            // dependent metadata in a single MainActor slice so no
+            // intermediate frame ever renders audio bubbles without their
+            // transcription / translated audios dictionaries.
+            let freshSnapshot = await messageStore.loadInitialSnapshot()
+            messageStore.apply(records: freshSnapshot)
+            hydrateMetadataFromGRDB(from: freshSnapshot)
             await hydrateTranslationsFromCache()
             // Always revalidate from API in background — the GRDB local store may only
             // contain messages WE sent (optimistic inserts) while messages received from
@@ -1047,15 +1047,14 @@ class ConversationViewModel: ObservableObject {
             // Surface GRDB data immediately, then revalidate in background.
             // Pré-hydrate les traductions AVANT loadInitial (cf. .fresh).
             await hydratePersistedTranslations()
-            await messageStore.loadInitial()
+            let staleSnapshot = await messageStore.loadInitialSnapshot()
+            messageStore.apply(records: staleSnapshot)
+            hydrateMetadataFromGRDB(from: staleSnapshot)
             if messageStore.messages.isEmpty {
                 // GRDB cold for this conversation — fetch synchronously to render now.
                 await refreshMessagesFromAPI()
                 await hydrateTranslationsFromCache()
             } else {
-                // `hydrateMetadataFromGRDB` AVANT l'`await` : transcriptions
-                // atomiques avec les messages, pas de flash (cf. cas .fresh).
-                hydrateMetadataFromGRDB()
                 await hydrateTranslationsFromCache()
                 isRevalidating = true
                 Task { [weak self] in
@@ -2875,9 +2874,16 @@ class ConversationViewModel: ObservableObject {
     /// `messageTranslatedAudios` dictionaries **before** any REST call.
     /// This ensures that audio bubbles show transcriptions and language
     /// buttons on the very first render frame.
-    private func hydrateMetadataFromGRDB() {
+    ///
+    /// - Parameter records: explicit record list to read from. When nil,
+    ///   falls back to `messageStore.messages` (legacy path). Pass an
+    ///   explicit list to ensure atomicity with a same-runloop `apply` —
+    ///   used by `loadMessages` / `refreshMessagesFromAPI` to publish
+    ///   messages and dependent metadata in a single MainActor slice.
+    private func hydrateMetadataFromGRDB(from records: [MessageRecord]? = nil) {
         let decoder = JSONDecoder()
-        for record in messageStore.messages {
+        let source = records ?? messageStore.messages
+        for record in source {
             let msgId = record.serverId ?? record.localId
             guard let data = record.attachmentsJson,
                   let attachments = try? decoder.decode([MeeshyMessageAttachment].self, from: data)
