@@ -47,6 +47,33 @@ extension iPadRootView {
             // recreating the same empty view — perceived as an infinite
             // loop.
             navigateToConversationById(id)
+        case .postDetail(let postId):
+            // iPad surfaces the post detail in the right column, matching
+            // the existing post-notification handling above.
+            rightPanelRoute = .postDetail(postId)
+        case .storyDetail(let postId):
+            // Mirror of the existing `storyDetail:` push-notification
+            // handler below (handlePushNavigateToRoute). Try to surface
+            // the dedicated story viewer when the group is in the local
+            // tray, otherwise fall back to the post detail right pane.
+            if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
+                selectedStoryUserIdFromConv = storyViewModel.storyGroups[groupIdx].id
+                showStoryViewerFromConv = true
+            } else {
+                rightPanelRoute = .postDetail(postId)
+            }
+        case .userProfile(let username):
+            // Opens the profile sheet over the two-pane layout. Same
+            // surface as friend-request notification taps above
+            // (handleNotificationTap → router.deepLinkProfileUser).
+            router.deepLinkProfileUser = ProfileSheetUser(username: username)
+        case .ownProfile:
+            // iPad surfaces own profile + user links in the right column,
+            // matching the existing achievement / affiliate notification
+            // routing in the same file.
+            rightPanelRoute = .profile
+        case .userLinks:
+            rightPanelRoute = .links
         case .magicLink:
             break
         }
