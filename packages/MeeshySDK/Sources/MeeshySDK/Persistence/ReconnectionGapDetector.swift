@@ -51,7 +51,8 @@ public actor ReconnectionGapDetector {
                 conversationId: conversationId,
                 offset: totalFetched,
                 limit: Self.pageSize,
-                includeReplies: false
+                includeReplies: false,
+                includeTranslations: true
             ) else { break }
 
             let messages = response.data

@@ -694,6 +694,13 @@ struct AudioMediaView: View, Equatable {
                 transcription: transcription,
                 translatedAudios: translatedAudios,
                 onFullscreen: { showAudioFullscreen = true },
+                onRequestTranscription: {
+                    Task {
+                        try? await AttachmentService.shared.requestTranscription(
+                            attachmentId: attachment.id, force: false
+                        )
+                    }
+                },
                 onRetranscribe: {
                     Task {
                         try? await AttachmentService.shared.requestTranscription(
@@ -726,6 +733,13 @@ struct AudioMediaView: View, Equatable {
                 transcription: transcription,
                 translatedAudios: translatedAudios,
                 onFullscreen: { showAudioFullscreen = true },
+                onRequestTranscription: {
+                    Task {
+                        try? await AttachmentService.shared.requestTranscription(
+                            attachmentId: attachment.id, force: false
+                        )
+                    }
+                },
                 onRetranscribe: {
                     Task {
                         try? await AttachmentService.shared.requestTranscription(
@@ -749,6 +763,13 @@ struct AudioMediaView: View, Equatable {
                 transcription: transcription,
                 translatedAudios: translatedAudios,
                 onFullscreen: { showAudioFullscreen = true },
+                onRequestTranscription: {
+                    Task {
+                        try? await AttachmentService.shared.requestTranscription(
+                            attachmentId: attachment.id, force: false
+                        )
+                    }
+                },
                 onRetranscribe: {
                     Task {
                         try? await AttachmentService.shared.requestTranscription(

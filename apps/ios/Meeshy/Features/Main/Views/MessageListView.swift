@@ -87,8 +87,16 @@ struct BubbleSwipeContainer<Content: View>: View {
                 // and a compact action menu — that's what `onLongPress`
                 // is wired to. Duration tightened from 0.45 → 0.35 to
                 // match iMessage/WhatsApp reactivity.
+                //
+                // `maximumDistance: 6` (default 10) : on rétrécit la
+                // fenêtre de tolérance du long press pour que dès que le
+                // doigt bouge de 6pt — ce qui suffit largement à
+                // déclencher un scroll vertical sur UICollectionView —
+                // le LongPressGesture s'annule et laisse le pan parent
+                // s'approprier le geste sans aucune contention. Le
+                // scroll est ainsi prioritaire sur le long press.
                 .simultaneousGesture(
-                    LongPressGesture(minimumDuration: 0.35)
+                    LongPressGesture(minimumDuration: 0.35, maximumDistance: 6)
                         .onEnded { _ in
                             HapticFeedback.medium()
                             onLongPress()
@@ -136,7 +144,15 @@ struct BubbleSwipeContainer<Content: View>: View {
     }
 
     private var dragGesture: some Gesture {
-        DragGesture(minimumDistance: 15)
+        // `minimumDistance: 22` (avant 15) : on élargit la fenêtre
+        // pendant laquelle le pan UICollectionView a priorité exclusive
+        // sur le swipe horizontal de la bulle. Tant que le doigt n'a
+        // pas parcouru 22pt, AUCUN événement n'arrive à ce gesture —
+        // le scroll vertical peut donc démarrer instantanément sans
+        // contention. 22pt reste largement en-dessous d'un swipe
+        // horizontal réel (~60-100pt), donc reply/forward continuent
+        // de répondre normalement.
+        DragGesture(minimumDistance: 22)
             .onChanged { value in
                 let h = value.translation.width
                 let v = abs(value.translation.height)

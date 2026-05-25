@@ -943,7 +943,11 @@ struct BubbleStandardLayout: View {
         // `AudioMediaView` folds the audio-language flags into this model.
         // When `replyReference` is non-nil, the citation is also hosted inside
         // the audio widget (topSlot) — no chat bubble around the player.
-        let footer = injectFooter ? resolvedFooter(includesTranslationControls: false) : nil
+        // `includesTranslationControls: true` because audio IS translatable
+        // (Whisper transcription + NLLB+TTS audio translation) — without it
+        // an audio-only inbound bubble would render without the translate
+        // globe and language flags, breaking the Prisme Linguistique UX.
+        let footer = injectFooter ? resolvedFooter(includesTranslationControls: true) : nil
         switch attachment.type {
         case .audio:
             AudioMediaView(

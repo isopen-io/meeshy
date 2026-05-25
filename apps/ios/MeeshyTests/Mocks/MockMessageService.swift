@@ -57,6 +57,7 @@ final class MockMessageService: MessageServiceProviding {
     var lastListOffset: Int?
     var lastListLimit: Int?
     var lastListIncludeReplies: Bool?
+    var lastListIncludeTranslations: Bool?
 
     var listBeforeCallCount = 0
     var lastListBeforeConversationId: String?
@@ -102,18 +103,19 @@ final class MockMessageService: MessageServiceProviding {
 
     // MARK: - Protocol Conformance
 
-    nonisolated func list(conversationId: String, offset: Int, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse {
+    nonisolated func list(conversationId: String, offset: Int, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse {
         await MainActor.run {
             listCallCount += 1
             lastListConversationId = conversationId
             lastListOffset = offset
             lastListLimit = limit
             lastListIncludeReplies = includeReplies
+            lastListIncludeTranslations = includeTranslations
         }
         return try await MainActor.run { try listResult.get() }
     }
 
-    nonisolated func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse {
+    nonisolated func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse {
         await MainActor.run {
             listBeforeCallCount += 1
             lastListBeforeConversationId = conversationId
@@ -122,7 +124,7 @@ final class MockMessageService: MessageServiceProviding {
         return try await MainActor.run { try listBeforeResult.get() }
     }
 
-    nonisolated func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse {
+    nonisolated func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse {
         await MainActor.run {
             listAroundCallCount += 1
             lastListAroundConversationId = conversationId
@@ -213,6 +215,7 @@ final class MockMessageService: MessageServiceProviding {
         lastListOffset = nil
         lastListLimit = nil
         lastListIncludeReplies = nil
+        lastListIncludeTranslations = nil
         listBeforeCallCount = 0
         lastListBeforeConversationId = nil
         lastListBeforeCursor = nil
