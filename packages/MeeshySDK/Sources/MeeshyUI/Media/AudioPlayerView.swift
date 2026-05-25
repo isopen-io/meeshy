@@ -270,6 +270,42 @@ extension AudioPlaybackManager: AVAudioPlayerDelegate {
 
 // MARK: - Audio Player View
 
+extension AudioPlayerView {
+    /// Pure helper testable : retourne la taille formatée (« 850 KB ») ou ""
+    /// quand `fileSize` est 0 (inconnu).
+    nonisolated public static func formattedNeedsDownloadLabel(fileSize: Int) -> String {
+        guard fileSize > 0 else { return "" }
+        return AudioPlayerView.formatBytes(Int64(fileSize))
+    }
+
+    /// Pure helper testable : retourne « 398 KB / 850 KB » ou un fallback
+    /// quand un des deux côtés est inconnu.
+    nonisolated public static func formattedDownloadingLabel(
+        downloadedBytes: Int64,
+        totalBytes: Int64,
+        fallbackFileSize: Int
+    ) -> String {
+        let total: Int64 = totalBytes > 0 ? totalBytes : Int64(fallbackFileSize)
+        if total <= 0 && downloadedBytes <= 0 { return "" }
+        let left = AudioPlayerView.formatBytes(downloadedBytes)
+        let right = total > 0 ? AudioPlayerView.formatBytes(total) : "?"
+        return "\(left) / \(right)"
+    }
+
+    /// ByteCountFormatter binaire avec arrondi entier. Reproduit le même
+    /// format que `AttachmentDownloader.fmt` côté app pour cohérence
+    /// visuelle entre les badges DownloadBadgeView et les labels audio.
+    nonisolated public static func formatBytes(_ bytes: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .binary
+        formatter.allowedUnits = [.useKB, .useMB, .useGB]
+        formatter.includesUnit = true
+        formatter.includesCount = true
+        formatter.zeroPadsFractionDigits = false
+        return formatter.string(fromByteCount: bytes)
+    }
+}
+
 public struct AudioPlayerView: View {
     public let attachment: MeeshyMessageAttachment
     public let context: MediaPlayerContext
@@ -739,46 +775,79 @@ public struct AudioPlayerView: View {
     @ViewBuilder
     private var playButtonLabel: some View {
         let size: CGFloat = context.isCompact ? 34 : 40
-        ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [accent, accent.opacity(0.7)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+        VStack(spacing: 3) {
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [accent, accent.opacity(0.7)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
                     )
-                )
-                .frame(width: size, height: size)
-                .shadow(color: accent.opacity(0.3), radius: 6, y: 2)
+                    .frame(width: size, height: size)
+                    .shadow(color: accent.opacity(0.3), radius: 6, y: 2)
 
-            switch availability {
-            case .ready:
-                if player.isLoading {
-                    ProgressView()
-                        .tint(.white)
-                        .scaleEffect(0.6)
-                } else {
-                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                switch availability {
+                case .ready:
+                    if player.isLoading {
+                        ProgressView()
+                            .tint(.white)
+                            .scaleEffect(0.6)
+                    } else {
+                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: context.isCompact ? 13 : 15, weight: .bold))
+                            .foregroundColor(.white)
+                            .offset(x: player.isPlaying ? 0 : 1)
+                    }
+                case .needsDownload:
+                    Image(systemName: "arrow.down.to.line")
                         .font(.system(size: context.isCompact ? 13 : 15, weight: .bold))
                         .foregroundColor(.white)
-                        .offset(x: player.isPlaying ? 0 : 1)
+                case .downloading(let progress, _, _):
+                    if progress > 0 {
+                        Circle()
+                            .trim(from: 0, to: progress)
+                            .stroke(Color.white, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                            .frame(width: size * 0.5, height: size * 0.5)
+                            .animation(.linear(duration: 0.2), value: progress)
+                    } else {
+                        ProgressView()
+                            .tint(.white)
+                            .scaleEffect(0.6)
+                    }
                 }
+            }
+
+            // Label de taille — affiché uniquement dans les états transfert.
+            // .ready ne montre rien (le bubble a déjà sa durée à droite du
+            // scrubber). Parité visuelle avec DownloadBadgeView pour les
+            // bubbles vidéo/image.
+            switch availability {
+            case .ready:
+                EmptyView()
             case .needsDownload:
-                Image(systemName: "arrow.down.to.line")
-                    .font(.system(size: context.isCompact ? 13 : 15, weight: .bold))
-                    .foregroundColor(.white)
-            case .downloading(let progress, _, _):
-                if progress > 0 {
-                    Circle()
-                        .trim(from: 0, to: progress)
-                        .stroke(Color.white, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                        .frame(width: size * 0.5, height: size * 0.5)
-                        .animation(.linear(duration: 0.2), value: progress)
-                } else {
-                    ProgressView()
-                        .tint(.white)
-                        .scaleEffect(0.6)
+                let label = AudioPlayerView.formattedNeedsDownloadLabel(fileSize: attachment.fileSize)
+                if !label.isEmpty {
+                    Text(label)
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundColor(isDark ? .white.opacity(0.65) : .black.opacity(0.55))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                }
+            case .downloading(_, let downloaded, let total):
+                let label = AudioPlayerView.formattedDownloadingLabel(
+                    downloadedBytes: downloaded,
+                    totalBytes: total,
+                    fallbackFileSize: attachment.fileSize
+                )
+                if !label.isEmpty {
+                    Text(label)
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundColor(isDark ? .white.opacity(0.65) : .black.opacity(0.55))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                 }
             }
         }
