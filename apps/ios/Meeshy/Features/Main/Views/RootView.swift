@@ -605,6 +605,29 @@ struct RootView: View {
                 router.push(.postDetail(postId))
             }
 
+        case .userProfile(let username):
+            // Opens the profile sheet over the conversation list (same
+            // surface as in-app `Link` taps via Router.handleDeepLink and
+            // as notification-driven profile navigation). `ProfileSheetUser`
+            // resolves the username server-side, so a typo just shows the
+            // empty state instead of crashing.
+            router.deepLinkProfileUser = ProfileSheetUser(username: username)
+
+        case .ownProfile:
+            // Pop to the conversation list root first so back-swipe from
+            // the profile screen lands on the home surface — not whatever
+            // happened to be on top of the nav stack at cold launch.
+            router.popToRoot()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                router.push(.profile)
+            }
+
+        case .userLinks:
+            router.popToRoot()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                router.push(.links)
+            }
+
         case .magicLink:
             break
         }

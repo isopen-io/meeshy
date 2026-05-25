@@ -841,6 +841,215 @@ final class DeepLinkRouterStoryDetailTests: XCTestCase {
     }
 }
 
+// MARK: - DeepLinkRouter Profile / Self Route Tests (cold launch)
+//
+// The `handle()` branch (Universal Link cold launch) used to silently
+// drop `/me`, `/links`, `/u/<id>`, `/users/<id>` even though AASA claimed
+// them — `isMeeshyDeepLink` returned `true`, AppDelegate claimed the URL,
+// and the router then no-op'd because the switch had no matching case.
+// These tests pin the wiring so a future refactor can't regress.
+
+@MainActor
+final class DeepLinkRouterProfileTests: XCTestCase {
+
+    private func makeSUT() -> DeepLinkRouter { DeepLinkRouter() }
+
+    // MARK: /me
+
+    func test_handle_universalLink_me_setsOwnProfile() {
+        let sut = makeSUT()
+        let url = URL(string: "https://meeshy.me/me")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(sut.pendingDeepLink, .ownProfile)
+    }
+
+    func test_handle_customScheme_me_setsOwnProfile() {
+        let sut = makeSUT()
+        let url = URL(string: "meeshy://me")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(sut.pendingDeepLink, .ownProfile)
+    }
+
+    // MARK: /links
+
+    func test_handle_universalLink_links_setsUserLinks() {
+        let sut = makeSUT()
+        let url = URL(string: "https://meeshy.me/links")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(sut.pendingDeepLink, .userLinks)
+    }
+
+    func test_handle_customScheme_links_setsUserLinks() {
+        let sut = makeSUT()
+        let url = URL(string: "meeshy://links")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(sut.pendingDeepLink, .userLinks)
+    }
+
+    // MARK: /u/<username>, /users/<username>
+
+    func test_handle_universalLink_uShort_setsUserProfile() {
+        let sut = makeSUT()
+        let url = URL(string: "https://meeshy.me/u/jcharlesnm")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(sut.pendingDeepLink, .userProfile(username: "jcharlesnm"))
+    }
+
+    func test_handle_universalLink_usersPlural_setsUserProfile() {
+        let sut = makeSUT()
+        let url = URL(string: "https://meeshy.me/users/atabeth")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(sut.pendingDeepLink, .userProfile(username: "atabeth"))
+    }
+
+    func test_handle_universalLink_users_emptyId_returnsFalse() {
+        let sut = makeSUT()
+        let url = URL(string: "https://meeshy.me/users/")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertFalse(handled)
+        XCTAssertNil(sut.pendingDeepLink)
+    }
+
+    func test_handle_customScheme_u_setsUserProfile() {
+        let sut = makeSUT()
+        let url = URL(string: "meeshy://u/ada")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(sut.pendingDeepLink, .userProfile(username: "ada"))
+    }
+
+    func test_handle_customScheme_usersPlural_setsUserProfile() {
+        let sut = makeSUT()
+        let url = URL(string: "meeshy://users/turing")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(sut.pendingDeepLink, .userProfile(username: "turing"))
+    }
+}
+
+// MARK: - DeepLinkRouter Short Post / Story Aliases (cold launch)
+
+@MainActor
+final class DeepLinkRouterShortAliasTests: XCTestCase {
+
+    private func makeSUT() -> DeepLinkRouter { DeepLinkRouter() }
+
+    // Short post URLs at root (no /feeds prefix)
+
+    func test_handle_universalLink_postShortRoot_setsPostDetail() {
+        let sut = makeSUT()
+        let url = URL(string: "https://meeshy.me/post/postRootLong")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(sut.pendingDeepLink, .postDetail(postId: "postRootLong"))
+    }
+
+    func test_handle_universalLink_pShortRoot_setsPostDetail() {
+        let sut = makeSUT()
+        let url = URL(string: "https://meeshy.me/p/postRootShort")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(sut.pendingDeepLink, .postDetail(postId: "postRootShort"))
+    }
+
+    func test_handle_customScheme_postShort_setsPostDetail() {
+        let sut = makeSUT()
+        let url = URL(string: "meeshy://post/postCSRoot")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(sut.pendingDeepLink, .postDetail(postId: "postCSRoot"))
+    }
+
+    // Short story URL
+
+    func test_handle_universalLink_sShort_setsStoryDetail() {
+        let sut = makeSUT()
+        let url = URL(string: "https://meeshy.me/s/storyShortWeb")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(sut.pendingDeepLink, .storyDetail(postId: "storyShortWeb"))
+    }
+
+    func test_handle_customScheme_sShort_setsStoryDetail() {
+        let sut = makeSUT()
+        let url = URL(string: "meeshy://s/storyShortCS")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(sut.pendingDeepLink, .storyDetail(postId: "storyShortCS"))
+    }
+
+    func test_isUserSegment_acceptsCanonicalAndPlural() {
+        XCTAssertTrue(DeepLinkParser.isUserSegment("u"))
+        XCTAssertTrue(DeepLinkParser.isUserSegment("users"))
+        XCTAssertFalse(DeepLinkParser.isUserSegment("user"))
+        XCTAssertFalse(DeepLinkParser.isUserSegment("U"))
+        XCTAssertFalse(DeepLinkParser.isUserSegment(""))
+    }
+
+    func test_isStorySegment_acceptsCanonicalPluralAndShort() {
+        XCTAssertTrue(DeepLinkParser.isStorySegment("story"))
+        XCTAssertTrue(DeepLinkParser.isStorySegment("stories"))
+        XCTAssertTrue(DeepLinkParser.isStorySegment("s"))
+        XCTAssertFalse(DeepLinkParser.isStorySegment("Story"))
+        XCTAssertFalse(DeepLinkParser.isStorySegment("storie"))
+    }
+}
+
+// MARK: - DeepLink Equatable — Profile / Self cases
+
+final class DeepLinkProfileEquatableTests: XCTestCase {
+
+    func test_userProfile_equality() {
+        XCTAssertEqual(DeepLink.userProfile(username: "ada"), DeepLink.userProfile(username: "ada"))
+        XCTAssertNotEqual(DeepLink.userProfile(username: "ada"), DeepLink.userProfile(username: "bob"))
+    }
+
+    func test_ownProfile_equality() {
+        XCTAssertEqual(DeepLink.ownProfile, DeepLink.ownProfile)
+        XCTAssertNotEqual(DeepLink.ownProfile, DeepLink.userLinks)
+        XCTAssertNotEqual(DeepLink.ownProfile, DeepLink.userProfile(username: "x"))
+    }
+
+    func test_userLinks_equality() {
+        XCTAssertEqual(DeepLink.userLinks, DeepLink.userLinks)
+        XCTAssertNotEqual(DeepLink.userLinks, DeepLink.ownProfile)
+    }
+}
+
 // MARK: - DeepLinkRouter Post Detail Tests
 
 @MainActor

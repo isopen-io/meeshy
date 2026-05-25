@@ -62,6 +62,18 @@ extension iPadRootView {
             } else {
                 rightPanelRoute = .postDetail(postId)
             }
+        case .userProfile(let username):
+            // Opens the profile sheet over the two-pane layout. Same
+            // surface as friend-request notification taps above
+            // (handleNotificationTap → router.deepLinkProfileUser).
+            router.deepLinkProfileUser = ProfileSheetUser(username: username)
+        case .ownProfile:
+            // iPad surfaces own profile + user links in the right column,
+            // matching the existing achievement / affiliate notification
+            // routing in the same file.
+            rightPanelRoute = .profile
+        case .userLinks:
+            rightPanelRoute = .links
         case .magicLink:
             break
         }
