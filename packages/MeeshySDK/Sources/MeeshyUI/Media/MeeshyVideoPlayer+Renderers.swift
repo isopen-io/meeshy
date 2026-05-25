@@ -409,18 +409,24 @@ internal struct _FullscreenRenderer: View {
 
             switch player.availability {
             case .ready:
-                if isActive {
-                    playerContent
-                } else {
-                    loadingState
-                }
+                // L'overlay est toujours rendu pour .ready, même si
+                // `manager.player` n'est pas encore chargé. Sans ça, le user
+                // voit un écran noir + ProgressView sans aucun contrôle
+                // pendant la phase load (1–2 s sur cold cache), et croit que
+                // les contrôles ont disparu. Les boutons centre + speed +
+                // seekbar sont rendus disabled tant que `duration == 0`.
+                playerContent
             case .needsDownload, .downloading:
                 downloadOverlay
             }
         }
         .offset(y: dismissOffset)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: dismissOffset)
-        .onAppear { watchStartTime = Date() }
+        .onAppear {
+            watchStartTime = Date()
+            // Defensive : reset l'auto-hide state à l'entrée du fullscreen.
+            showControls = true
+        }
         .onDisappear { onDisappearTeardown() }
         .statusBarHidden(true)
     }
@@ -434,11 +440,22 @@ internal struct _FullscreenRenderer: View {
     private var playerContent: some View {
         ZStack {
             if let p = manager.player {
-                MeeshyVideoSurface(player: p, gravity: videoGravity, isMuted: false)
+                MeeshyVideoSurface(player: p, gravity: videoGravity, isMuted: manager.isMuted)
                     .ignoresSafeArea()
                     .onTapGesture { toggleControls() }
                     .gesture(swipeDownGesture)
                     .gesture(pinchGesture)
+            } else {
+                // Player en cours de chargement. Spinner central derrière les
+                // contrôles overlay (qui restent visibles + boutons disabled).
+                ProgressView()
+                    .tint(.white)
+                    .scaleEffect(1.4)
+                    .onAppear {
+                        manager.attachmentId = player.attachment.id
+                        manager.load(urlString: player.attachment.fileUrl)
+                        manager.play()
+                    }
             }
             if showControls {
                 _FullscreenOverlayControls(
@@ -512,18 +529,6 @@ internal struct _FullscreenRenderer: View {
             .padding(.vertical, 4)
             .background(Capsule().fill(.ultraThinMaterial.opacity(0.7)))
         }
-    }
-
-    // MARK: Loading state (ready but manager not loaded yet)
-
-    private var loadingState: some View {
-        ProgressView()
-            .tint(.white)
-            .onAppear {
-                manager.attachmentId = player.attachment.id
-                manager.load(urlString: player.attachment.fileUrl)
-                manager.play()
-            }
     }
 
     // MARK: Download overlay (availability != ready)
@@ -668,6 +673,9 @@ internal struct _FullscreenRenderer: View {
     }
 
     private func closePlayer() {
+        // Reset loop défensif : sans ça, le flag persisterait jusqu'au prochain
+        // load() et pourrait faire boucler une vidéo inline ouverte ensuite.
+        manager.shouldLoop = false
         player.onClose?()
     }
 
