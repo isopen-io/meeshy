@@ -98,67 +98,50 @@ BubbleStandardLayout.fullScreenCover(item: fullscreenAttachment)
 
 **Follow-up backend (backlog, hors scope)** : faire calculer `videoAspectRatio` côté gateway au post-upload (ffprobe + rotation metadata). Quand ce fix arrive, le cache iOS devient redondant mais inoffensif → garder comme défensif.
 
-### Section 2 — Retour thumbnail (fin lecture + scroll out)
+### Section 2 — Retour thumbnail (scroll out)
 
-**Comportement** :
-- Fin de lecture inline → snap thumbnail + play button replay.
+**Découverte en relisant `SharedAVPlayerManager.setupObservers`** : la fin de lecture est **déjà** gérée par le manager (notification handler ligne 211–227 → `stop()` → `activeURL = ""` → bubble re-render → thumbnail). Le commentaire ligne 219–224 documente cette intention. Donc le bug "thumbnail après fin" est en réalité **déjà résolu** ; le user voyait probablement le bug scroll exclusivement.
+
+**Bug restant — scroll out** : `_InlineRenderer.teardown()` (appelé sur `.onDisappear`) ne fait que `manager.pause()`. Player + activeURL conservés → au scroll back, `isThisActive` reste `true` → surface remontée sur la frame figée.
+
+**Comportement attendu** :
+- Fin de lecture inline → snap thumbnail + play button replay. ✓ déjà OK (manager.stop chain)
 - Scroll hors écran → release du player ; au scroll back, thumbnail.
 - Pause manuelle (tap pause button) → reste sur surface avec contrôles (distinct du release).
 
 **Changements `SharedAVPlayerManager`** :
 
 ```swift
-/// Libère le player pour cette URL. No-op si une autre URL est active.
-/// Utilisé par les bubbles inline sur fin de lecture ou .onDisappear pour
-/// permettre le retour au thumbnail au scroll back.
+/// Libère le player POUR cette URL si elle est active. No-op sinon (safe
+/// race protection : une autre bulle peut avoir pris la main entre temps).
+/// Réutilise `stop()` qui tear-down player + audio session + activeURL.
 @MainActor
-func release(urlString: String) {
+public func release(urlString: String) {
     guard activeURL == urlString else { return }
-    player?.pause()
-    removeKVOObservers()
-    player = nil
-    activeURL = ""
-    duration = 0
-    currentTime = 0
-    isPlaying = false
-    // Note : `playbackSpeed` et `isMuted` sont conservés (préférences globales session)
+    stop()
 }
 ```
 
 **Changements `_InlineRenderer`** :
 
 ```swift
-@State private var endObserver: NSObjectProtocol?
-
-private func observeEndIfActive() {
-    guard endObserver == nil, isThisActive, let item = manager.player?.currentItem else { return }
-    endObserver = NotificationCenter.default.addObserver(
-        forName: .AVPlayerItemDidPlayToEndTime,
-        object: item, queue: .main
-    ) { [url = player.attachment.fileUrl] _ in
-        Task { @MainActor in
-            SharedAVPlayerManager.shared.release(urlString: url)
-        }
-    }
-}
-
 private func teardown() {
     controlsTimer?.invalidate(); controlsTimer = nil
-    if let obs = endObserver {
-        NotificationCenter.default.removeObserver(obs)
-        endObserver = nil
-    }
+    // Release au lieu de pause : sans ça, manager.activeURL + player restent
+    // câblés sur cette URL, et au scroll back `isThisActive` est encore vrai →
+    // la surface remonte sur la frame figée au lieu du thumbnail.
     manager.release(urlString: player.attachment.fileUrl)
 }
 ```
 
-Câblage : observer mounté dans `.adaptiveOnChange(of: isThisActive)` quand `nowActive == true`, retiré quand `nowActive == false` ou dans `.onDisappear`. `teardown()` (déjà appelé sur `.onDisappear`) passe de `manager.pause()` à `manager.release(urlString:)`.
+**Note SwiftUI** : `.onDisappear` se déclenche uniquement quand la cellule sort réellement de la LazyVStack (scroll), pas quand un `fullScreenCover` couvre la conversation. Donc l'ouverture du fullscreen ne release pas le player inline — la conversation reste sous le cover, jamais désallouée.
 
 **Animation** : la transition surface ↔ thumbnail bénéficie déjà du `.animation(.easeInOut(duration: 0.15), value: isThisActive)` existant.
 
 **Distinction pause vs release** :
 - `manager.togglePlayPause()` → pause sans clear → surface reste mountée → contrôles visibles → user peut reprendre.
-- `_InlineRenderer.teardown()` (sur disappear ou fin) → release → activeURL vidée → `isThisActive == false` → thumbnail.
+- `_InlineRenderer.teardown()` (sur disappear) → release → activeURL vidée → `isThisActive == false` → thumbnail.
+- Fin de lecture (déjà en place) → manager observer notif → `stop()` → même résultat.
 
 ### Section 3 — Bouton vitesse inline
 
@@ -247,17 +230,41 @@ Mini-toolbar : centré, icônes 28pt dans capsules `.ultraThinMaterial` + accent
 
 **Nouveaux properties `SharedAVPlayerManager`** :
 ```swift
-@Published var isMuted: Bool = false {
+@Published public var isMuted: Bool = false {
     didSet { player?.isMuted = isMuted }
 }
-@Published var shouldLoop: Bool = false
-@Published private(set) var isPipActive: Bool = false
+@Published public var shouldLoop: Bool = false
+// isPipActive existe déjà ligne 19.
 ```
 
-**Loop interaction avec release-on-end de la Section 2** :
-- Inline : pas de loop → release-on-end → thumbnail. (Inline n'expose pas `.loop`.)
-- Fullscreen : si `manager.shouldLoop == true` → callback `AVPlayerItemDidPlayToEndTime` côté fullscreen restart la lecture au lieu de release.
-- Pour éviter race : le `_InlineRenderer.observeEndIfActive` callback vérifie `!manager.shouldLoop` AVANT de release (defensive — l'utilisateur ne devrait pas pouvoir activer loop en inline mais on garde le check).
+**Interaction loop avec le notification handler existant** :
+
+Le handler dans `setupObservers` (ligne 211) appelle `stop()` à la fin. On modifie pour brancher sur `shouldLoop` :
+```swift
+NotificationCenter.default.publisher(for: AVPlayerItem.didPlayToEndTimeNotification, object: player.currentItem)
+    .receive(on: DispatchQueue.main)
+    .sink { [weak self] _ in
+        guard let self else { return }
+        self.reportWatchProgress(complete: true)
+        if self.shouldLoop {
+            self.seek(to: 0)
+            self.play()
+            self.watchStartTime = Date()
+        } else {
+            self.watchStartTime = nil
+            self.isPlaying = false
+            self.seek(to: 0)
+            self.stop()
+        }
+    }
+    .store(in: &cancellables)
+```
+
+**Safeguards anti-fuite** :
+- `cleanup()` reset `shouldLoop = false` (loop ne traverse pas un changement d'attachment).
+- `_FullscreenRenderer.closePlayer()` reset `manager.shouldLoop = false` défensif (au cas où l'utilisateur fermerait fullscreen sans toucher au bouton loop).
+- Inline n'expose pas `.loop` → `shouldLoop` ne peut être activé que via UI fullscreen.
+- `isMuted` est conservé entre vidéos dans la même session (préférence utilisateur globale).
 
 **Wrapper AirPlay** :
 ```swift
