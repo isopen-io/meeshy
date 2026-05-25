@@ -14,6 +14,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let presenceSnapshotReceived = PassthroughSubject<PresenceSnapshotEvent, Never>()
     let readStatusUpdated = PassthroughSubject<ReadStatusUpdateEvent, Never>()
     let attachmentStatusUpdated = PassthroughSubject<AttachmentStatusUpdatedEvent, Never>()
+    let attachmentUpdated = PassthroughSubject<AttachmentUpdatedEvent, Never>()
     let conversationJoined = PassthroughSubject<ConversationParticipationEvent, Never>()
     let conversationJoinError = PassthroughSubject<ConversationJoinErrorEvent, Never>()
     let conversationLeft = PassthroughSubject<ConversationParticipationEvent, Never>()

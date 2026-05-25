@@ -23,6 +23,8 @@ import { PostReactionHandler } from './handlers/PostReactionHandler';
 import { ConversationHandler } from './handlers/ConversationHandler';
 import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
+import { attachmentMediaSelect } from '../services/attachments/attachmentIncludes';
+import { emitAttachmentUpdated } from './emitAttachmentUpdated';
 import { ReactionService } from '../services/ReactionService.js';
 import { CommentReactionService } from '../services/CommentReactionService';
 import { PostReactionService } from '../services/PostReactionService';
@@ -940,12 +942,51 @@ export class MeeshySocketIOManager {
       logger.info(`📡 [SocketIOManager] Émission événement '${SERVER_EVENTS.TRANSCRIPTION_READY}' vers room '${roomName}' (${clientCount} clients)`);
       this.io.to(roomName).emit(SERVER_EVENTS.TRANSCRIPTION_READY, transcriptionData);
 
+      // Generic attachment-updated delta : clients atomically replace the
+      // attachment in their store and refresh derived metadata
+      // (transcription dictionaries, audio language listings) without a
+      // round-trip. See spec 2026-05-25-audio-instant-render-and-attachment-size-design.md.
+      await this._broadcastAttachmentUpdated(data.attachmentId, data.messageId, normalizedId);
+
       logger.info(`✅ [SocketIOManager] ======== ÉVÉNEMENT TRANSCRIPTION DIFFUSÉ ========`);
       logger.info(`✅ [SocketIOManager] Transcription diffusée vers ${clientCount} client(s)`);
 
     } catch (error) {
       logger.error(`❌ [SocketIOManager] Erreur envoi transcription:`, error);
       this.stats.errors++;
+    }
+  }
+
+  /**
+   * Re-fetch a freshly-enriched attachment from the DB and broadcast a
+   * `message:attachment-updated` delta to the conversation room. Used by
+   * the transcription and translation handlers so iOS / web can refresh
+   * their attachment state atomically without a manual REST round-trip.
+   *
+   * No-op (logged) if the attachment cannot be re-fetched.
+   */
+  private async _broadcastAttachmentUpdated(
+    attachmentId: string,
+    messageId: string,
+    normalizedConversationId: string
+  ): Promise<void> {
+    try {
+      const fresh = await this.prisma.messageAttachment.findUnique({
+        where: { id: attachmentId },
+        select: attachmentMediaSelect,
+      });
+      if (!fresh) {
+        logger.warn(`⚠️ [SocketIOManager] Cannot broadcast attachment-updated: attachment ${attachmentId} not found`);
+        return;
+      }
+      emitAttachmentUpdated(
+        this.io,
+        normalizedConversationId,
+        messageId,
+        fresh as Record<string, unknown>
+      );
+    } catch (err) {
+      logger.error(`❌ [SocketIOManager] Failed to broadcast attachment-updated for ${attachmentId}:`, err);
     }
   }
 
@@ -1048,6 +1089,12 @@ export class MeeshySocketIOManager {
       // Diffuser dans la room de conversation
       logger.info(`📡 [SocketIOManager] Émission événement '${eventConstant}' vers room '${roomName}' (${clientCount} clients)`);
       this.io.to(roomName).emit(eventConstant, translationData);
+
+      // Generic attachment-updated delta : same rationale as the
+      // transcription-ready branch. Clients receive the FULL re-serialized
+      // attachment (with the freshly-added translation language merged into
+      // `translations`) and refresh their derived state atomically.
+      await this._broadcastAttachmentUpdated(data.attachmentId, data.messageId, normalizedId);
 
       logger.info(`✅ [SocketIOManager] ======== ÉVÉNEMENT TRADUCTION DIFFUSÉ ========`);
       logger.info(`✅ [SocketIOManager] Traduction ${data.language} diffusée vers ${clientCount} client(s)`);

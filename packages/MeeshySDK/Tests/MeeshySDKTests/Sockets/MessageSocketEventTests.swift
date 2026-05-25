@@ -659,6 +659,39 @@ final class MessageSocketEventTests: XCTestCase {
         XCTAssertEqual(event.notificationType, .system)
     }
 
+    // MARK: - AttachmentUpdatedEvent (message:attachment-updated)
+
+    func testAttachmentUpdatedEventDecoding() throws {
+        let json = """
+        {
+          "conversationId": "conv-1",
+          "messageId": "msg-1",
+          "attachment": {
+            "id": "att-1",
+            "messageId": "msg-1",
+            "type": "audio",
+            "fileUrl": "https://cdn/voice.m4a",
+            "originalName": "voice.m4a",
+            "mimeType": "audio/m4a",
+            "fileSize": 870400,
+            "duration": 42000,
+            "transcription": { "text": "Bonjour", "language": "fr", "confidence": 0.95 },
+            "translations": {
+              "en": { "url": "https://cdn/en.mp3", "transcription": "Hello", "format": "mp3" }
+            },
+            "createdAt": "2026-05-25T10:00:00Z"
+          }
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(AttachmentUpdatedEvent.self, from: json)
+        XCTAssertEqual(event.conversationId, "conv-1")
+        XCTAssertEqual(event.messageId, "msg-1")
+        XCTAssertEqual(event.attachment.id, "att-1")
+        XCTAssertEqual(event.attachment.transcription?.text, "Bonjour")
+        XCTAssertEqual(event.attachment.translations?["en"]?.url, "https://cdn/en.mp3")
+    }
+
     // MARK: - ConnectionState
 
     func testConnectionStateEquality() {

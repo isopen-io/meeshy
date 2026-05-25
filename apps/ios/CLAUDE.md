@@ -236,6 +236,34 @@ MessageDetailSheet (onglet Language)
 - La resolution automatique de langue doit etre instantanee (pas de loading pour les traductions deja cachees)
 - L'onglet Language du MessageDetailSheet est le SEUL point d'entree pour explorer les traductions (pas de sheet separee)
 
+## Attachment Size Display Before Download
+
+Conventions pour l'affichage de la taille de fichier sur un attachment non telecharge (quand `MediaDownloadPolicyEngine.shouldAutoDownload` bloque l'auto-DL) :
+
+| Type | Composant | Layout |
+|---|---|---|
+| Video | `DownloadBadgeView(compact: true)` | Pill coin bas-droit avec icone + taille |
+| Image | `DownloadBadgeView(compact: false)` | Cercle 56pt centre + pill taille sous |
+| Audio | `AudioPlayerView.playButtonLabel` | Cercle play-button + label taille sous (parite visuelle) |
+
+Source de verite : `attachment.fileSize` (Int, bytes) hydrate par le payload REST `/messages` et le payload socket `message:new` (ce dernier via `serializeAttachmentForSocket` cote gateway). Si la taille est 0, le label n'apparait pas (no-op).
+
+Le label audio est rendu par les helpers purs `AudioPlayerView.formattedNeedsDownloadLabel` / `formattedDownloadingLabel` / `formatBytes` (tests dans `MeeshyUITests/Media/AudioPlayerViewLabelTests.swift`).
+
+Pendant le telechargement, le label passe a `"410 KB / 850 KB"` via le payload `.downloading(progress:downloadedBytes:totalBytes:)` enrichi de `AudioAvailability`. `AudioMediaView` et `AudioAvailabilityResolver` propagent les bytes depuis `AttachmentDownloader.downloadedBytes` / `totalBytes`.
+
+## Attachment Enrichment Atomicity
+
+Quand un audio est recu (REST ou socket) et que sa transcription / ses traductions audio arrivent, l'app doit poser le tout dans un seul slice MainActor pour eviter le pop-in :
+
+1. **Ouverture de conversation** : `ConversationViewModel.loadMessages` appelle `messageStore.loadInitialSnapshot()` (off-MainActor, ne mutate pas `@Published messages`), puis dans un meme bloc synchrone : `messageStore.apply(records:)` + `hydrateMetadataFromGRDB(from: snapshot)`. Aucun `await` entre la pose des messages et celle des metadonnees audio.
+2. **Refresh REST background** (`refreshMessagesFromAPI`) : meme triplet snapshot/apply/hydrate apres `upsertFromAPIMessages`.
+3. **Socket temps reel** (`message:attachment-updated`) : `ConversationViewModel.applyAttachmentUpdate` injecte directement `messageTranscriptions[id]` et `messageTranslatedAudios[id]` depuis le payload (`injectAttachmentMetadata`). Le client gateway emet ce delta apres tout enrichissement async (Whisper, NLLB+TTS).
+
+Regle stricte : ne JAMAIS introduire d'`await` entre `messages = …` et `messageTranscriptions = …` / `messageTranslatedAudios = …` — sinon SwiftUI rend les bulles audio sans leur transcription puis re-rend, et l'utilisateur voit un flash a ~1s.
+
+Source : `docs/superpowers/specs/2026-05-25-audio-instant-render-and-attachment-size-design.md`.
+
 ## Story Architecture — RAW publish + author-only export
 
 Stories Meeshy se publient **RAW** au backend :

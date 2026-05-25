@@ -51,20 +51,30 @@ struct BubbleAttachmentView: View {
             }
 
         case .audio:
-            AudioPlayerView(
-                attachment: attachment,
-                context: .messageBubble,
-                accentColor: accentHex,
-                transcription: transcription,
-                translatedAudios: translatedAudios.filter { $0.attachmentId == attachment.id },
-                onRetranscribe: {
-                    Task {
-                        try? await AttachmentService.shared.requestTranscription(
-                            attachmentId: attachment.id, force: true
-                        )
-                    }
-                }
-            )
+            // Cohérence avec case .video : on wrap dans un resolver qui
+            // résout cache → policy → downloader. AudioMediaView (utilisé
+            // par BubbleStandardLayout.mediaStandaloneView) garde sa propre
+            // orchestration multi-langue ; ce chemin de fallback ne supporte
+            // que le cas mono-langue (attachment.fileUrl), suffisant pour
+            // les attachments audio mixés à un autre contenu de la bulle.
+            AudioAvailabilityResolver(attachment: attachment) { availability, onDownload in
+                AudioPlayerView(
+                    attachment: attachment,
+                    context: .messageBubble,
+                    accentColor: accentHex,
+                    transcription: transcription,
+                    translatedAudios: translatedAudios.filter { $0.attachmentId == attachment.id },
+                    onRetranscribe: {
+                        Task {
+                            try? await AttachmentService.shared.requestTranscription(
+                                attachmentId: attachment.id, force: true
+                            )
+                        }
+                    },
+                    availability: availability,
+                    onDownload: onDownload
+                )
+            }
 
         case .file:
             if let lang = CodeLanguage.detect(fileName: attachment.originalName, mimeType: attachment.mimeType) {

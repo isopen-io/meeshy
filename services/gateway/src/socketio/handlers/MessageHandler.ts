@@ -15,6 +15,7 @@ import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
+import { serializeAttachmentForSocket } from '../serializeAttachmentForSocket';
 import { validateMessageLength } from '../../config/message-limits';
 import {
   getConnectedUser,
@@ -880,7 +881,7 @@ export class MessageHandler {
         firstName: senderUser?.firstName,
         lastName: senderUser?.lastName,
       } : undefined,
-      attachments: (message as never)['attachments'] || [],
+      attachments: this._serializeAttachmentsField(message),
       replyToId: message.replyToId,
       replyTo: (message as never)['replyTo'],
       forwardedFromId: message.forwardedFromId || undefined,
@@ -894,6 +895,22 @@ export class MessageHandler {
         ...(typeof message.encryptionMetadata === 'object' && message.encryptionMetadata ? message.encryptionMetadata : {})
       } : undefined,
     };
+  }
+
+  /**
+   * Normalize the attachments field on a broadcast message via the
+   * centralized `serializeAttachmentForSocket` helper. Tolerates the
+   * legacy `as any` access pattern and guarantees `transcription` +
+   * `translations` always travel through the socket payload (parity with
+   * the REST `attachmentMediaSelect` shape). Replaces the previous
+   * `(message as never)['attachments'] || []` cast that silently dropped
+   * both Prisme Linguistique JSON fields when the upstream query did not
+   * explicitly select them.
+   */
+  private _serializeAttachmentsField(message: Message): unknown[] {
+    const raw = (message as unknown as Record<string, unknown>).attachments;
+    if (!Array.isArray(raw)) return [];
+    return raw.map((att) => serializeAttachmentForSocket(att as Record<string, unknown>));
   }
 
   /**

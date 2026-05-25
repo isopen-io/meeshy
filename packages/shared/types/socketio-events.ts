@@ -172,6 +172,22 @@ export const SERVER_EVENTS = {
   CONVERSATION_PARTICIPANT_UNBANNED: 'conversation:participant-unbanned',
   ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
   /**
+   * Emitted whenever an attachment on an existing message has been
+   * enriched server-side : Whisper transcription finalized, NLLB+TTS
+   * translation finalized for one language, etc.
+   *
+   * Payload : { conversationId, messageId, attachment } — the FULL
+   * attachment object as serialized by `serializeAttachmentForSocket`
+   * (parity with the `message:new` shape). Clients replace the matching
+   * attachment in their store atomically and refresh derived metadata
+   * (transcription dictionaries, translated audio listings).
+   *
+   * Replaces the need for separate `audio-transcribed` / `audio-translated`
+   * events — one generic delta event is enough for any attachment field
+   * update post-creation.
+   */
+  MESSAGE_ATTACHMENT_UPDATED: 'message:attachment-updated',
+  /**
    * UNE seule traduction quand une seule langue est demandée
    */
   AUDIO_TRANSLATION_READY: 'audio:translation-ready',
@@ -446,6 +462,22 @@ export interface AttachmentStatusUpdatedEventData {
   readonly userId: string;
   readonly action: string;
   readonly updatedAt: Date;
+}
+
+/**
+ * Payload de `SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED`.
+ *
+ * Reçu quand un worker gateway a enrichi un attachment d'un message
+ * existant (transcription Whisper finalisée, traduction audio NLLB+TTS
+ * finalisée pour une langue, etc.). `attachment` est la forme complète
+ * sérialisée par `serializeAttachmentForSocket` côté gateway — incluant
+ * `transcription` et `translations` enrichis. Le client remplace
+ * l'attachment correspondant dans son store atomiquement.
+ */
+export interface AttachmentUpdatedEventData {
+  readonly conversationId: string;
+  readonly messageId: string;
+  readonly attachment: unknown;
 }
 
 /**
@@ -869,6 +901,7 @@ export interface MentionCreatedEventData {
 // Événements du serveur vers le client
 export interface ServerToClientEvents {
   [SERVER_EVENTS.MESSAGE_NEW]: (message: SocketIOMessage) => void;
+  [SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED]: (data: AttachmentUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_EDITED]: (message: SocketIOMessage) => void;
   [SERVER_EVENTS.MESSAGE_DELETED]: (data: MessageDeletedEventData) => void;
   [SERVER_EVENTS.MESSAGE_TRANSLATION]: (data: TranslationEvent) => void;

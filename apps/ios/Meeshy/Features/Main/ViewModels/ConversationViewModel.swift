@@ -1021,13 +1021,13 @@ class ConversationViewModel: ObservableObject {
             // Pré-hydrate les traductions AVANT loadInitial : les bulles
             // s'affichent dès le premier rendu avec le Prisme Linguistique.
             await hydratePersistedTranslations()
-            await messageStore.loadInitial()
-            // `hydrateMetadataFromGRDB` AVANT tout `await` suivant : peuple
-            // `messageTranscriptions` de façon atomique avec la pose des
-            // messages. Sinon le MainActor cède pendant l'await et SwiftUI
-            // rend les bulles audio SANS transcription, puis re-rend — la
-            // transcription « pop » en second temps.
-            hydrateMetadataFromGRDB()
+            // Atomic publish — read off-MainActor, then apply messages +
+            // dependent metadata in a single MainActor slice so no
+            // intermediate frame ever renders audio bubbles without their
+            // transcription / translated audios dictionaries.
+            let freshSnapshot = await messageStore.loadInitialSnapshot()
+            messageStore.apply(records: freshSnapshot)
+            hydrateMetadataFromGRDB(from: freshSnapshot)
             await hydrateTranslationsFromCache()
             // Always revalidate from API in background — the GRDB local store may only
             // contain messages WE sent (optimistic inserts) while messages received from
@@ -1047,15 +1047,14 @@ class ConversationViewModel: ObservableObject {
             // Surface GRDB data immediately, then revalidate in background.
             // Pré-hydrate les traductions AVANT loadInitial (cf. .fresh).
             await hydratePersistedTranslations()
-            await messageStore.loadInitial()
+            let staleSnapshot = await messageStore.loadInitialSnapshot()
+            messageStore.apply(records: staleSnapshot)
+            hydrateMetadataFromGRDB(from: staleSnapshot)
             if messageStore.messages.isEmpty {
                 // GRDB cold for this conversation — fetch synchronously to render now.
                 await refreshMessagesFromAPI()
                 await hydrateTranslationsFromCache()
             } else {
-                // `hydrateMetadataFromGRDB` AVANT l'`await` : transcriptions
-                // atomiques avec les messages, pas de flash (cf. cas .fresh).
-                hydrateMetadataFromGRDB()
                 await hydrateTranslationsFromCache()
                 isRevalidating = true
                 Task { [weak self] in
@@ -1114,14 +1113,21 @@ class ConversationViewModel: ObservableObject {
             // Upsert authoritative server data into GRDB; the MessageStore observation
             // surfaces new/updated rows to `messages` automatically — no direct assignment.
             try? await messagePersistence.upsertFromAPIMessages(response.data)
-            // Extrait transcriptions/traductions AVANT que `loadInitial` ne
-            // fasse surface les messages : `messageTranscriptions` est prêt au
-            // premier rendu, la transcription audio ne « pop » plus en second
-            // temps. `extractAttachmentTranscriptions` lit `response.data`
+            // Extrait transcriptions/traductions AVANT que les messages ne
+            // soient surface : `messageTranscriptions` est prêt au premier
+            // rendu, la transcription audio ne « pop » plus en second temps.
+            // `extractAttachmentTranscriptions` lit `response.data`
             // directement, il n'a pas besoin du store.
             extractAttachmentTranscriptions(from: response.data)
             extractTextTranslations(from: response.data)
-            await messageStore.loadInitial()
+            // Atomic publish — same pattern as .fresh / .stale in
+            // loadMessages. upsertFromAPIMessages has persisted the API rows
+            // into GRDB, so loadInitialSnapshot picks them up; apply them in
+            // the same MainActor slice as a defensive hydrateMetadataFromGRDB
+            // call so a background revalidation never re-introduces a pop-in.
+            let refreshSnapshot = await messageStore.loadInitialSnapshot()
+            messageStore.apply(records: refreshSnapshot)
+            hydrateMetadataFromGRDB(from: refreshSnapshot)
 
             // Keep legacy CacheCoordinator in sync so other parts of the app
             // (ConversationList preview, unread badge) that still read from it remain correct.
@@ -2875,9 +2881,16 @@ class ConversationViewModel: ObservableObject {
     /// `messageTranslatedAudios` dictionaries **before** any REST call.
     /// This ensures that audio bubbles show transcriptions and language
     /// buttons on the very first render frame.
-    private func hydrateMetadataFromGRDB() {
+    ///
+    /// - Parameter records: explicit record list to read from. When nil,
+    ///   falls back to `messageStore.messages` (legacy path). Pass an
+    ///   explicit list to ensure atomicity with a same-runloop `apply` —
+    ///   used by `loadMessages` / `refreshMessagesFromAPI` to publish
+    ///   messages and dependent metadata in a single MainActor slice.
+    private func hydrateMetadataFromGRDB(from records: [MessageRecord]? = nil) {
         let decoder = JSONDecoder()
-        for record in messageStore.messages {
+        let source = records ?? messageStore.messages
+        for record in source {
             let msgId = record.serverId ?? record.localId
             guard let data = record.attachmentsJson,
                   let attachments = try? decoder.decode([MeeshyMessageAttachment].self, from: data)
@@ -2987,6 +3000,80 @@ extension ConversationViewModel: ConversationSocketDelegate {
     func handleSocketAccessRevoked(reason: String?) {
         Task { [weak self] in
             await self?.handleAccessRevoked(reason: reason)
+        }
+    }
+
+    /// Applies a server-pushed attachment delta (transcription / audio
+    /// translation finalized) by injecting the enriched metadata directly
+    /// into `messageTranscriptions` / `messageTranslatedAudios` in a
+    /// single MainActor slice. No `await` between assignments — same
+    /// atomic-publish rule as `hydrateMetadataFromGRDB`.
+    ///
+    /// TODO (follow-up) : also write-through the enriched attachment to
+    /// GRDB so a future open of this conversation surfaces the enrichment
+    /// from cache without waiting on `refreshMessagesFromAPI()`. Until
+    /// then the next open will briefly show the un-enriched bubble before
+    /// the background revalidation runs.
+    func applyAttachmentUpdate(_ event: AttachmentUpdatedEvent) {
+        injectAttachmentMetadata(from: event.attachment, intoMessageId: event.messageId)
+    }
+
+    /// Injects an enriched attachment's transcription + audio translations
+    /// directly into the metadata dictionaries (same shape as
+    /// `hydrateMetadataFromGRDB` but sourced from a socket payload).
+    private func injectAttachmentMetadata(
+        from attachment: APIMessageAttachment,
+        intoMessageId msgId: String
+    ) {
+        if let t = attachment.transcription {
+            let segments = (t.segments ?? []).map {
+                MessageTranscriptionSegment(
+                    text: $0.text,
+                    startTime: $0.startTime,
+                    endTime: $0.endTime,
+                    speakerId: $0.speakerId
+                )
+            }
+            messageTranscriptions[msgId] = MessageTranscription(
+                attachmentId: attachment.id,
+                text: t.transcribedText ?? t.text ?? "",
+                language: t.language ?? "?",
+                confidence: t.confidence,
+                durationMs: t.durationMs,
+                segments: segments,
+                speakerCount: t.speakerCount
+            )
+        }
+        if let translations = attachment.translations, !translations.isEmpty {
+            var audios: [MessageTranslatedAudio] = []
+            for (lang, trans) in translations {
+                guard let url = trans.url, !url.isEmpty else { continue }
+                let segments = (trans.segments ?? []).map {
+                    MessageTranscriptionSegment(
+                        text: $0.text,
+                        startTime: $0.startTime,
+                        endTime: $0.endTime,
+                        speakerId: $0.speakerId
+                    )
+                }
+                audios.append(MessageTranslatedAudio(
+                    id: "\(attachment.id)_\(lang)",
+                    attachmentId: attachment.id,
+                    targetLanguage: lang,
+                    url: url,
+                    transcription: trans.transcription ?? "",
+                    durationMs: trans.durationMs ?? 0,
+                    format: trans.format ?? "mp3",
+                    cloned: trans.cloned ?? false,
+                    quality: trans.quality ?? 0,
+                    voiceModelId: trans.voiceModelId,
+                    ttsModel: trans.ttsModel ?? "xtts",
+                    segments: segments
+                ))
+            }
+            if !audios.isEmpty {
+                messageTranslatedAudios[msgId] = audios
+            }
         }
     }
 }
