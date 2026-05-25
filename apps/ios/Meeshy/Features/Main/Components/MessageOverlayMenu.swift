@@ -148,33 +148,35 @@ struct MessageOverlayMenu: View {
             let panelHeight = panelBaseHeight - clampedDrag
 
             // Si une frame source nous est passée (frameTracker côté
-            // ConversationView), le preview sort du flux du VStack et se
-            // place au-dessus du `dismissBackground` à la position exacte
-            // de la bulle dans la conversation. Sinon, on reste sur le
-            // comportement legacy "preview centré dans le VStack".
+            // ConversationView), bulle + barre d'emojis sortent du VStack et
+            // se positionnent en cluster au-dessus du `dismissBackground` :
+            //   - bulle à sa position source (lift si pas de room avant le panel)
+            //   - barre d'emojis directement sous la bulle (gap 12pt pour
+            //     réactions rapides "à portée de pouce")
+            //   - le panneau reste ancré au bas (handle pour resize)
+            // Sinon, on reste sur le comportement legacy "preview centré".
             let useSourceFrame = messageBubbleFrame != .zero
             let panelTopY = screenH - panelHeight
-            let emojiBarReservedHeight: CGFloat = 80
             let bubbleRect = messageBubbleFrame
 
-            // 1) Décide si la bulle doit lifter vers le haut (cas "bulle basse").
-            //    previewBottomLimit = ligne sous laquelle la bulle serait
-            //    masquée par la barre d'emojis OU le panneau.
-            let previewBottomLimit = panelTopY - emojiBarReservedHeight - 16
-            let needsBubbleLift = useSourceFrame && bubbleRect.maxY > previewBottomLimit
-            let bubbleLift: CGFloat = needsBubbleLift ? (bubbleRect.maxY - previewBottomLimit) : 0
-            let previewMidY = bubbleRect.midY - bubbleLift
-            let bubbleFinalMaxY = bubbleRect.maxY - bubbleLift
+            // Mesures du cluster bulle+emoji
+            let bubbleEmojiGap: CGFloat = 12
+            let emojiBarHeight: CGFloat = 56
+            let clusterClearance: CGFloat = 16  // gap entre cluster.bottom et panel.top
+            let clusterTotalHeight = bubbleRect.height + bubbleEmojiGap + emojiBarHeight
 
-            // 2) Décide si le cluster (emoji bar + panel) doit REMONTER vers
-            //    la bulle (cas "bulle haute" — message court / position élevée).
-            //    Objectif : visuellement rapprocher le menu de la bulle au lieu
-            //    de laisser un grand vide. Ne lifte que si la bulle elle-même
-            //    n'a pas été liftée (sinon double mouvement).
-            let clusterDesiredPanelTopY = bubbleFinalMaxY + emojiBarReservedHeight + 24
-            let clusterLift: CGFloat = (useSourceFrame && !needsBubbleLift)
-                ? max(0, panelTopY - clusterDesiredPanelTopY)
-                : 0
+            // Position cible du cluster : par défaut la bulle reste à sa
+            // source ; si le cluster (bulle + emoji) dépasse en bas dans la
+            // zone du panel, on lifte juste ce qu'il faut. Minimum : safeTop
+            // + 24pt de marge pour ne pas coller au viewport (status bar /
+            // dynamic island).
+            let minClusterTopY = safeTop + 24
+            let maxClusterTopY = panelTopY - clusterClearance - clusterTotalHeight
+            let desiredClusterTopY = bubbleRect.minY
+            let clampedClusterTopY = max(minClusterTopY, min(desiredClusterTopY, maxClusterTopY))
+            let bubbleClusterLift = bubbleRect.minY - clampedClusterTopY  // positif si on lifte
+            let bubbleFinalMidY = bubbleRect.midY - bubbleClusterLift
+            let emojiBarCenterY = clampedClusterTopY + bubbleRect.height + bubbleEmojiGap + emojiBarHeight / 2
 
             ZStack {
                 dismissBackground
@@ -212,44 +214,40 @@ struct MessageOverlayMenu: View {
                         )
                     }
 
-                    // Barre d'emojis rapides — meme alignement horizontal
-                    // que la bulle. Le composant partage `EmojiReactionPicker`
-                    // embarque sa propre cascade gauche→droite via
-                    // `WaveTileModifier` (cf. `emojiQuickBar`).
-                    // `-clusterLift` rapproche la barre de la bulle quand le
-                    // message est haut sur l'écran (bulle courte).
-                    HStack(spacing: 0) {
-                        if message.isMe { Spacer(minLength: 0) }
-                        emojiQuickBar
-                        if !message.isMe { Spacer(minLength: 0) }
+                    if !useSourceFrame {
+                        // Legacy : la barre d'emojis vit dans le VStack juste
+                        // au-dessus du panneau (path conservé pour call sites
+                        // sans frame source).
+                        HStack(spacing: 0) {
+                            if message.isMe { Spacer(minLength: 0) }
+                            emojiQuickBar
+                            if !message.isMe { Spacer(minLength: 0) }
+                        }
+                        .padding(.horizontal, 14)
+                        .opacity(isVisible ? 1 : 0)
+                        .scaleEffect(isVisible ? 1.0 : 0.7, anchor: .center)
+                        .offset(y: isVisible ? 0 : 18)
                     }
-                    .padding(.horizontal, 14)
-                    .opacity(isVisible ? 1 : 0)
-                    .scaleEffect(isVisible ? 1.0 : 0.7, anchor: .center)
-                    .offset(y: isVisible ? -clusterLift : 18)
 
-                    // Le panneau de detail monte depuis le bas — meme spring
-                    // que les autres elements pour qu'ils convergent en un
-                    // bloc visuellement lie au repos. Idem `-clusterLift` ici
-                    // pour que panneau et emoji bar restent solidaires lors
-                    // du rapprochement vers la bulle.
+                    // Le panneau de détail reste ANCRÉ au bas — le drag
+                    // handle laisse l'utilisateur l'agrandir ou le réduire à
+                    // volonté. Pas de lift artificiel : le panel s'ouvre à
+                    // la hauteur permise (`panelBaseHeight`) et le drag fait
+                    // varier `panelHeight` autour de cette base.
                     detailPanel(safeBottom: safeBottom)
                         .frame(height: panelHeight)
-                        .offset(y: isVisible ? -clusterLift : panelBaseHeight + 40)
+                        .offset(y: isVisible ? 0 : panelBaseHeight + 40)
                 }
 
                 if useSourceFrame {
-                    // Preview positionné à la frame source — la bulle reste
-                    // exactement à sa position dans la conversation. Si elle
-                    // serait masquée par la barre d'emojis ou le panneau, on
-                    // la lifte juste assez pour la rendre visible.
-                    //
-                    // FIDÉLITÉ : on rend un VRAI `ThemedMessageBubble` avec
-                    // les mêmes paramètres que la cellule live de la liste,
-                    // donc le rendu (texte, traductions, drapeaux, médias,
-                    // réactions, footer) est rigoureusement identique. Le
-                    // wrapping HStack + Spacer reproduit l'alignement isMe
-                    // (right) / received (left) de la cellule.
+                    // FIDÉLITÉ — vrai `ThemedMessageBubble` avec les mêmes
+                    // paramètres que la cellule live de la liste : rendu
+                    // (texte, traductions, drapeaux, médias, réactions,
+                    // footer) rigoureusement identique. Wrapping HStack +
+                    // Spacer reproduit l'alignement isMe (right) / received
+                    // (left) de la cellule. Positionnement par .position()
+                    // au centre Y final calculé plus haut (clamp safeTop ↔
+                    // panel.top).
                     HStack(spacing: 0) {
                         if message.isMe { Spacer(minLength: 44) }
                         ThemedMessageBubble(
@@ -277,10 +275,28 @@ struct MessageOverlayMenu: View {
                     .frame(width: geometry.size.width)
                     .position(
                         x: geometry.size.width / 2,
-                        y: isVisible ? previewMidY : bubbleRect.midY
+                        y: isVisible ? bubbleFinalMidY : bubbleRect.midY
                     )
                     .opacity(isVisible ? 1 : 0)
                     .allowsHitTesting(false)
+
+                    // Barre d'emojis rapides — positionnée DIRECTEMENT sous
+                    // la bulle (gap 12pt) pour rester "à portée de pouce".
+                    // Animation : démarre depuis le bord inférieur de la
+                    // bulle (gap 0) et glisse vers sa position finale.
+                    HStack(spacing: 0) {
+                        if message.isMe { Spacer(minLength: 0) }
+                        emojiQuickBar
+                        if !message.isMe { Spacer(minLength: 0) }
+                    }
+                    .padding(.horizontal, 14)
+                    .frame(width: geometry.size.width)
+                    .position(
+                        x: geometry.size.width / 2,
+                        y: isVisible ? emojiBarCenterY : (bubbleRect.maxY + emojiBarHeight / 2)
+                    )
+                    .opacity(isVisible ? 1 : 0)
+                    .scaleEffect(isVisible ? 1.0 : 0.7, anchor: .center)
                 }
             }
         }
