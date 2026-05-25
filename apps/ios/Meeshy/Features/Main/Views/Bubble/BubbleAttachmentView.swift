@@ -64,6 +64,13 @@ struct BubbleAttachmentView: View {
                     accentColor: accentHex,
                     transcription: transcription,
                     translatedAudios: translatedAudios.filter { $0.attachmentId == attachment.id },
+                    onRequestTranscription: {
+                        Task {
+                            try? await AttachmentService.shared.requestTranscription(
+                                attachmentId: attachment.id, force: false
+                            )
+                        }
+                    },
                     onRetranscribe: {
                         Task {
                             try? await AttachmentService.shared.requestTranscription(

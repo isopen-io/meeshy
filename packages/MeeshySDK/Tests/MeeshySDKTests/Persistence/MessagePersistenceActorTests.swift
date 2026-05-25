@@ -902,4 +902,101 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertTrue(ref.isStoryReply)
         XCTAssertEqual(ref.storyReactionCount, 7)
     }
+
+    // MARK: - applyAttachmentEnrichment (write-through of async attachment metadata)
+
+    /// Regression for "audio bubble loses its transcription after a
+    /// background refresh": `applyAttachmentUpdate` used to inject
+    /// enrichment ONLY into in-memory ViewModel dictionaries, never
+    /// writing through to GRDB. A later `hydrateMetadataFromGRDB()`
+    /// would then re-read the un-enriched attachment and wipe the
+    /// transcription.
+    ///
+    /// Contract: `applyAttachmentEnrichment(messageId:attachmentId:transcription:translations:)`
+    /// patches ONLY the targeted attachment's `transcription` and
+    /// `audioTranslations` fields in `attachmentsJson` (other attachments
+    /// and every other field of the targeted attachment preserved verbatim).
+    func test_applyAttachmentEnrichment_patchesOnlyTargetAttachmentBlobs() async throws {
+        var record = MessageRecordFactory.make(localId: "msg_audio", conversationId: "conv_audio")
+        // Two attachments — only "att_1" should be patched.
+        let initialAttachments: [MeeshyMessageAttachment] = [
+            MeeshyMessageAttachment(
+                id: "att_1",
+                fileName: "a1.m4a",
+                originalName: "a1.m4a",
+                mimeType: "audio/mp4",
+                fileSize: 12_345,
+                fileUrl: "https://cdn/a1.m4a",
+                uploadedBy: "user-x"
+            ),
+            MeeshyMessageAttachment(
+                id: "att_2",
+                fileName: "i2.jpg",
+                originalName: "i2.jpg",
+                mimeType: "image/jpeg",
+                fileSize: 99_999,
+                fileUrl: "https://cdn/i2.jpg",
+                uploadedBy: "user-x"
+            )
+        ]
+        record.attachmentsJson = try JSONEncoder().encode(initialAttachments)
+        try await actor.insertOptimistic(record)
+
+        let transcription = APIAttachmentTranscription(
+            text: "Bonjour le monde",
+            transcribedText: "Bonjour le monde",
+            language: "fr",
+            confidence: 0.92,
+            durationMs: 4_200,
+            segments: nil,
+            speakerCount: 1
+        )
+        let translations: [String: APIAttachmentTranslation] = [
+            "en": APIAttachmentTranslation(
+                type: "audio",
+                transcription: "Hello world",
+                url: "https://cdn/a1_en.m4a",
+                durationMs: 4_500,
+                format: "mp3",
+                cloned: false,
+                quality: 0.9,
+                voiceModelId: nil,
+                ttsModel: "xtts",
+                segments: nil
+            )
+        ]
+
+        try await actor.applyAttachmentEnrichment(
+            messageId: "msg_audio",
+            attachmentId: "att_1",
+            transcription: transcription,
+            translations: translations
+        )
+
+        let rows = try actor.messages(for: "conv_audio", limit: 10)
+        XCTAssertEqual(rows.count, 1)
+        let updatedJson = try XCTUnwrap(rows[0].attachmentsJson)
+        let updated = try JSONDecoder().decode([MeeshyMessageAttachment].self, from: updatedJson)
+        XCTAssertEqual(updated.count, 2, "attachment list size preserved")
+
+        // att_1 patched: transcription + audioTranslations populated, other fields verbatim.
+        let att1 = try XCTUnwrap(updated.first { $0.id == "att_1" })
+        XCTAssertEqual(att1.fileSize, 12_345, "other att_1 fields untouched")
+        XCTAssertEqual(att1.fileUrl, "https://cdn/a1.m4a")
+        let embedded = try XCTUnwrap(att1.transcription,
+                                     "transcription must be populated after enrichment")
+        XCTAssertEqual(embedded.language, "fr")
+        XCTAssertEqual(embedded.text, "Bonjour le monde")
+        let audioTr = try XCTUnwrap(att1.audioTranslations,
+                                    "audioTranslations must be populated after enrichment")
+        let en = try XCTUnwrap(audioTr["en"])
+        XCTAssertEqual(en.url, "https://cdn/a1_en.m4a")
+
+        // att_2 untouched — never had a transcription, must still not.
+        let att2 = try XCTUnwrap(updated.first { $0.id == "att_2" })
+        XCTAssertEqual(att2.fileSize, 99_999)
+        XCTAssertNil(att2.transcription,
+                     "att_2 transcription must remain nil — enrichment targets att_1 only")
+        XCTAssertNil(att2.audioTranslations)
+    }
 }

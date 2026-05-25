@@ -683,6 +683,7 @@ public actor MessagePersistenceActor {
         }
     }
 
+
     /// Append a reaction to a persisted message, deduplicating by emoji+participantId.
     /// The GRDB change triggers store observation so the view re-renders.
     public func appendReaction(localId: String, reactionId: String,

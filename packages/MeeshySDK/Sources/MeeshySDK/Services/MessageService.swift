@@ -3,9 +3,9 @@ import Foundation
 // MARK: - Protocol
 
 public protocol MessageServiceProviding: Sendable {
-    func list(conversationId: String, offset: Int, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse
-    func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse
-    func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse
+    func list(conversationId: String, offset: Int, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse
+    func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse
+    func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse
     func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData
     func edit(messageId: String, content: String) async throws -> APIMessage
     func delete(conversationId: String, messageId: String) async throws
@@ -24,35 +24,43 @@ public final class MessageService: MessageServiceProviding, @unchecked Sendable 
         self.api = api
     }
 
-    public func list(conversationId: String, offset: Int = 0, limit: Int = 30, includeReplies: Bool = true) async throws -> MessagesAPIResponse {
+    /// - Parameter includeTranslations: when `false`, the gateway omits the
+    ///   `translations` Json field from each message in the response — used by
+    ///   warm-cache refreshes (GRDB already holds them, the socket pushes
+    ///   future updates). Defaults to `true` so first-open / cold-start
+    ///   call sites keep their existing behaviour.
+    public func list(conversationId: String, offset: Int = 0, limit: Int = 30, includeReplies: Bool = true, includeTranslations: Bool = true) async throws -> MessagesAPIResponse {
         try await api.request(
             endpoint: "/conversations/\(conversationId)/messages",
             queryItems: [
                 URLQueryItem(name: "limit", value: "\(limit)"),
                 URLQueryItem(name: "offset", value: "\(offset)"),
                 URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
+                URLQueryItem(name: "include_translations", value: "\(includeTranslations)"),
             ]
         )
     }
 
-    public func listBefore(conversationId: String, before: String, limit: Int = 30, includeReplies: Bool = true) async throws -> MessagesAPIResponse {
+    public func listBefore(conversationId: String, before: String, limit: Int = 30, includeReplies: Bool = true, includeTranslations: Bool = true) async throws -> MessagesAPIResponse {
         try await api.request(
             endpoint: "/conversations/\(conversationId)/messages",
             queryItems: [
                 URLQueryItem(name: "before", value: before),
                 URLQueryItem(name: "limit", value: "\(limit)"),
                 URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
+                URLQueryItem(name: "include_translations", value: "\(includeTranslations)"),
             ]
         )
     }
 
-    public func listAround(conversationId: String, around: String, limit: Int = 30, includeReplies: Bool = true) async throws -> MessagesAPIResponse {
+    public func listAround(conversationId: String, around: String, limit: Int = 30, includeReplies: Bool = true, includeTranslations: Bool = true) async throws -> MessagesAPIResponse {
         try await api.request(
             endpoint: "/conversations/\(conversationId)/messages",
             queryItems: [
                 URLQueryItem(name: "around", value: around),
                 URLQueryItem(name: "limit", value: "\(limit)"),
                 URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
+                URLQueryItem(name: "include_translations", value: "\(includeTranslations)"),
             ]
         )
     }
@@ -108,6 +116,38 @@ public final class MessageService: MessageServiceProviding, @unchecked Sendable 
                 URLQueryItem(name: "q", value: query),
                 URLQueryItem(name: "cursor", value: cursor),
             ]
+        )
+    }
+}
+
+// MARK: - Backward-compat overloads
+
+/// Legacy 4-arg call sites (every site predating the bandwidth-aware
+/// `includeTranslations` flag) keep working without modification : these
+/// forwarding overloads default `includeTranslations` to `true`, preserving
+/// the historical "always include translations" behaviour. New call sites
+/// that are warm-cache aware should call the 5-arg canonical method
+/// explicitly with `includeTranslations: false` (e.g. the iOS app's
+/// `ConversationViewModel.refreshMessagesFromAPI` after first fetch).
+public extension MessageServiceProviding {
+    func list(conversationId: String, offset: Int, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse {
+        try await list(
+            conversationId: conversationId, offset: offset, limit: limit,
+            includeReplies: includeReplies, includeTranslations: true
+        )
+    }
+
+    func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse {
+        try await listBefore(
+            conversationId: conversationId, before: before, limit: limit,
+            includeReplies: includeReplies, includeTranslations: true
+        )
+    }
+
+    func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse {
+        try await listAround(
+            conversationId: conversationId, around: around, limit: limit,
+            includeReplies: includeReplies, includeTranslations: true
         )
     }
 }

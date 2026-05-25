@@ -101,6 +101,108 @@ final class MessageStoreTests: XCTestCase {
                        "apply preserves snapshot order")
     }
 
+    // MARK: - Protective merge on apply (regression — message disappearance)
+
+    /// Regression for "the whole bubble disappears after delivery": a socket
+    /// `message:new` (audio attachment) makes the bubble appear, then a
+    /// later `refreshMessagesFromAPI()` runs `loadInitialSnapshot()` +
+    /// `apply()`. If the REST snapshot doesn't contain that socket-recent
+    /// message yet (buffered persistence, window cutoff, race), the previous
+    /// REPLACE behaviour erased it from `messages`. Contract: `apply()` must
+    /// preserve in-memory messages whose `localId` is absent from the
+    /// snapshot, then sort the merged set by `createdAt` for a stable view.
+    /// Regression guard for jump-to-message: once the store has been switched
+    /// to a `.around(date:)` window, a subsequent `apply()` MUST replace
+    /// entirely, NOT merge. Merging would re-inject messages from the
+    /// previous `.latest` window into the jumped view, producing a mixed
+    /// timeline (messages from two distinct time slices interleaved) that
+    /// breaks the jump-to-message UX. The protective merge applies ONLY in
+    /// `.latest` mode where preserving socket-recent messages is the goal.
+    func test_apply_inAroundMode_replacesEntirelyEvenWhenMemoryHasExtraMessages() async throws {
+        let db = try makeInMemoryDatabase()
+        let persistence = MessagePersistenceActor(dbWriter: db)
+        let store = MessageStore(conversationId: "conv-jump", persistence: persistence)
+
+        let baseDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let r0 = MessageStoreObservationHelper.makeRecord(
+            localId: "msg-old-a", conversationId: "conv-jump",
+            content: "from previous latest window", createdAt: baseDate
+        )
+        let r1 = MessageStoreObservationHelper.makeRecord(
+            localId: "msg-old-b", conversationId: "conv-jump",
+            content: "from previous latest window", createdAt: baseDate.addingTimeInterval(10)
+        )
+        // Seed the in-memory store as if we were previously in .latest mode.
+        store.apply(records: [r0, r1])
+        XCTAssertEqual(store.windowMode, .latest)
+        XCTAssertEqual(store.messages.count, 2)
+
+        // Now jump to a different window — set windowMode out of band so we
+        // don't depend on the `refreshFromDB` path (which would clear messages
+        // via its own apply call before our assertion).
+        let jumpRecord = MessageStoreObservationHelper.makeRecord(
+            localId: "msg-jump-target", conversationId: "conv-jump",
+            content: "jumped here", createdAt: baseDate.addingTimeInterval(1_000)
+        )
+        await store.loadWindow(around: jumpRecord.createdAt)
+        XCTAssertEqual(store.windowMode, .around(date: jumpRecord.createdAt))
+
+        // After loadWindow, messages was replaced with whatever GRDB held for
+        // that window — empty here since we only inserted r0/r1 in memory.
+        // Manually re-seed memory to simulate the "previous window still
+        // visible in messages" state, which is the exact precondition the
+        // bug needed to reproduce.
+        store.apply(records: [r0, r1])
+
+        // Now apply an empty snapshot (e.g. the jumped window contains no
+        // messages at this anchor — pre-fix the merge would preserve r0/r1
+        // from memory, polluting the jumped view).
+        store.apply(records: [])
+
+        XCTAssertTrue(
+            store.messages.isEmpty,
+            "In .around windowMode, apply([]) must replace entirely — no merge from memory. Got: \(store.messages.map(\.localId))"
+        )
+    }
+
+    func test_apply_preservesMemoryMessagesAbsentFromSnapshot() async throws {
+        let db = try makeInMemoryDatabase()
+        let persistence = MessagePersistenceActor(dbWriter: db)
+        let store = MessageStore(conversationId: "conv-merge", persistence: persistence)
+
+        let baseDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let r0 = MessageStoreObservationHelper.makeRecord(
+            localId: "msg-a", conversationId: "conv-merge",
+            content: "first", createdAt: baseDate
+        )
+        let r1 = MessageStoreObservationHelper.makeRecord(
+            localId: "msg-b", conversationId: "conv-merge",
+            content: "second", createdAt: baseDate.addingTimeInterval(10)
+        )
+        let socketRecent = MessageStoreObservationHelper.makeRecord(
+            localId: "msg-socket", conversationId: "conv-merge",
+            content: "audio just received via socket",
+            createdAt: baseDate.addingTimeInterval(20)
+        )
+
+        // Seed messages = [a, b, socketRecent] — simulates state where
+        // a socket `message:new` has placed `msg-socket` in the published
+        // store but `refreshMessagesFromAPI()` hasn't picked it up yet.
+        store.apply(records: [r0, r1, socketRecent])
+        XCTAssertEqual(store.messages.map(\.localId), ["msg-a", "msg-b", "msg-socket"])
+
+        // Now a REST snapshot returns ONLY the older messages — the socket
+        // message is absent (e.g. REST window cut it off, or async buffer
+        // hasn't flushed). Pre-fix this REPLACE would erase msg-socket.
+        store.apply(records: [r0, r1])
+
+        XCTAssertEqual(
+            store.messages.map(\.localId),
+            ["msg-a", "msg-b", "msg-socket"],
+            "apply must merge: messages present in memory but absent from the snapshot are preserved, sorted by createdAt"
+        )
+    }
+
     // MARK: - Helpers
 
     private func makeInMemoryDatabase() throws -> DatabaseQueue {

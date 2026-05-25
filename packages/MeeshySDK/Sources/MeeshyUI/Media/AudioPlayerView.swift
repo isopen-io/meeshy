@@ -332,6 +332,12 @@ public struct AudioPlayerView: View {
     @State private var isTranscriptionExpanded = false
     @State private var selectedAudioLanguage: String = "orig"
     @State private var isRetranscribing = false
+    /// `true` between the moment the user taps "Transcrire" / "Re-transcrire"
+    /// and the moment the server-pushed transcription lands in `transcription`.
+    /// Drives the shimmer skeleton in `transcriptionBlock`.
+    @State private var isTranscribing = false
+    /// Toggled in `onAppear` of the skeleton view to drive the pulse.
+    @State private var transcriptionPulsePhase = false
 
     private var isDark: Bool { theme.mode.isDark || context.isImmersive }
     private var accent: Color { Color(hex: accentColor) }
@@ -469,6 +475,20 @@ public struct AudioPlayerView: View {
             guard code != selectedAudioLanguage else { return }
             switchToLanguage(code)
         }
+        // Reset the in-flight flags as soon as a fresh transcription lands.
+        // Drives the fluid skeleton → text transition: the shimmer fades out
+        // and the transcribed segments fade in within the same animation
+        // window thanks to the `.transition(.opacity)` on each branch of
+        // `transcriptionBlock`. Uses the SDK-wide `adaptiveOnChange` compat
+        // shim so the iOS 17 two-param closure shape works back to iOS 16.
+        .adaptiveOnChange(of: transcription) { _, newValue in
+            if newValue != nil {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                    isTranscribing = false
+                    isRetranscribing = false
+                }
+            }
+        }
     }
 
     private func switchToLanguage(_ code: String) {
@@ -537,12 +557,27 @@ public struct AudioPlayerView: View {
             .background(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
     }
 
-    /// Bloc de transcription : texte développable ou bouton "Transcrire" si
-    /// aucune transcription n'est encore disponible. **Ne rend jamais le
-    /// `bottomSlot`** — il est ancré par `mainPlayer` directement.
+    /// Bloc de transcription : trois états mutuellement exclusifs (transition
+    /// animée par `withAnimation` sur les state changes) :
+    /// 1. `isTranscribing && displaySegments.isEmpty` → shimmer skeleton
+    ///    (3 lignes qui pulsent) — montre que la requête est en vol.
+    /// 2. `!displaySegments.isEmpty` → texte transcrit + bouton "Re-transcrire".
+    /// 3. `onRequestTranscription != nil` → bouton "Transcrire" initial.
+    ///
+    /// `isTranscribing` est reset automatiquement par `.onChange(of: transcription)`
+    /// quand la transcription arrive du serveur, ce qui déclenche la transition
+    /// fluide skeleton → texte sans flash intermédiaire.
+    /// **Ne rend jamais le `bottomSlot`** — il est ancré par `mainPlayer`.
     @ViewBuilder
     private var transcriptionBlock: some View {
-        if !displaySegments.isEmpty {
+        if isTranscribing && displaySegments.isEmpty {
+            VStack(spacing: 0) {
+                slotDivider
+                transcriptionShimmer
+            }
+            .padding(.bottom, 6)
+            .transition(.opacity)
+        } else if !displaySegments.isEmpty {
             VStack(spacing: 0) {
                 slotDivider
 
@@ -560,11 +595,21 @@ public struct AudioPlayerView: View {
                 retranscribeButton
             }
             .padding(.bottom, 6)
+            .transition(.opacity)
         } else if let onRequest = onRequestTranscription {
+            // No transcription yet AND none in flight: ONLY the initial
+            // "Transcribe" affordance is shown. Re-transcribe is hidden
+            // here — there is nothing to re-transcribe yet, and stacking
+            // both buttons would be confusing. The "Re-transcribe" CTA
+            // reappears in the transcription-present branch above once a
+            // transcription lands.
             VStack(spacing: 0) {
                 slotDivider
 
                 Button {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        isTranscribing = true
+                    }
                     onRequest()
                     HapticFeedback.light()
                 } label: {
@@ -578,10 +623,44 @@ public struct AudioPlayerView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
                 }
-
-                retranscribeButton
             }
+            .transition(.opacity)
         }
+    }
+
+    /// Shimmer placeholder displayed while a transcription request is in flight.
+    /// Three rounded lines (the third truncated to ~120pt) pulse opacity in
+    /// sync. Pure SwiftUI, iOS 16+ compatible. The pulse is driven by a
+    /// `@State` flipped in `onAppear` so it starts immediately on mount.
+    @ViewBuilder
+    private var transcriptionShimmer: some View {
+        let lineColor: Color = isDark ? Color.white.opacity(0.10) : Color.black.opacity(0.08)
+        VStack(alignment: .leading, spacing: 6) {
+            shimmerLine(color: lineColor, width: nil)
+            shimmerLine(color: lineColor, width: nil)
+            shimmerLine(color: lineColor, width: 120)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .opacity(transcriptionPulsePhase ? 0.55 : 1.0)
+        .animation(
+            .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+            value: transcriptionPulsePhase
+        )
+        .onAppear { transcriptionPulsePhase = true }
+        .onDisappear { transcriptionPulsePhase = false }
+        .accessibilityLabel(Text(String(
+            localized: "media.audio.transcribing",
+            defaultValue: "Transcription en cours",
+            bundle: .module
+        )))
+    }
+
+    private func shimmerLine(color: Color, width: CGFloat?) -> some View {
+        RoundedRectangle(cornerRadius: 4)
+            .fill(color)
+            .frame(width: width, height: 9)
+            .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
     }
 
     // MARK: - Long-transcription chevron toggle

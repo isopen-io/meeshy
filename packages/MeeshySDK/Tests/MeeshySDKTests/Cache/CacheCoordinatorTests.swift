@@ -527,13 +527,13 @@ private final class BareConversationService: ConversationServiceProviding, @unch
 }
 
 private final class BareMessageService: MessageServiceProviding, @unchecked Sendable {
-    func list(conversationId: String, offset: Int, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse {
+    func list(conversationId: String, offset: Int, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse {
         MessagesAPIResponse(success: true, data: [], pagination: nil, cursorPagination: nil, hasNewer: nil, meta: nil)
     }
-    func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse {
+    func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse {
         MessagesAPIResponse(success: true, data: [], pagination: nil, cursorPagination: nil, hasNewer: nil, meta: nil)
     }
-    func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse { throw MeeshyError.network(.timeout) }
+    func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse { throw MeeshyError.network(.timeout) }
     func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData { throw MeeshyError.network(.timeout) }
     func edit(messageId: String, content: String) async throws -> APIMessage { throw MeeshyError.network(.timeout) }
     func delete(conversationId: String, messageId: String) async throws {}

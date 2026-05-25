@@ -1104,15 +1104,34 @@ class ConversationViewModel: ObservableObject {
         isLoadingInitial = false
     }
 
+    /// Bandwidth optimization (Niveau 1 — Bug F) : flip to `true` once the
+    /// first REST refresh has succeeded so subsequent refreshes can opt out
+    /// of having the gateway return `translations` (text + audio metadata is
+    /// already persisted in GRDB and the socket pushes future deltas live).
+    /// First fetch (cold-start, GRDB empty) still requests them in full.
+    private var hasCompletedInitialFetch = false
+
     private func refreshMessagesFromAPI() async {
         do {
+            // Warm cache means: we already have at least one message hydrated
+            // from GRDB AND a previous fetch has succeeded. In that case we
+            // ask the gateway to omit `translations` from the payload — they
+            // are already in `translation_cache` GRDB and the live socket
+            // (`translationReceived`) catches up any deltas. Cold-start keeps
+            // the default `true` so the first paint has every translation.
+            let warmCache = hasCompletedInitialFetch && !messageStore.messages.isEmpty
             let response = try await messageService.list(
-                conversationId: conversationId, offset: 0, limit: 30, includeReplies: true
+                conversationId: conversationId,
+                offset: 0,
+                limit: 30,
+                includeReplies: true,
+                includeTranslations: !warmCache
             )
 
             // Upsert authoritative server data into GRDB; the MessageStore observation
             // surfaces new/updated rows to `messages` automatically — no direct assignment.
             try? await messagePersistence.upsertFromAPIMessages(response.data)
+            hasCompletedInitialFetch = true
             // Extrait transcriptions/traductions AVANT que les messages ne
             // soient surface : `messageTranscriptions` est prêt au premier
             // rendu, la transcription audio ne « pop » plus en second temps.

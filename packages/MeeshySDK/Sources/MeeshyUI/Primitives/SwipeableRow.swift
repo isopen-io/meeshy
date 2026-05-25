@@ -172,7 +172,15 @@ public struct SwipeableRow<Content: View>: View {
     // MARK: - Geste
 
     private var swipeGesture: some Gesture {
-        DragGesture(minimumDistance: 15)
+        // `minimumDistance: 22` (avant 15) : le scroll vertical du
+        // ScrollView parent garde la priorité exclusive tant que le
+        // doigt n'a pas parcouru 22pt. Aucun événement n'arrive à ce
+        // gesture pendant ce délai, donc le scroll de la liste de
+        // conversations démarre immédiatement sans contention. 22pt
+        // reste bien en-dessous d'un swipe d'ouverture des actions
+        // (~50-80pt), la révélation des leadingActions / trailingActions
+        // continue de répondre normalement.
+        DragGesture(minimumDistance: 22)
             .updating($dragOffset) { value, state, _ in
                 let h = value.translation.width
                 let v = abs(value.translation.height)
