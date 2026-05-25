@@ -372,34 +372,29 @@ struct MessageOverlayMenu: View {
                     // (left) de la cellule. Positionnement par .position()
                     // au centre Y final calculé plus haut (clamp safeTop ↔
                     // panel.top).
-                    HStack(spacing: 0) {
-                        if message.isMe { Spacer(minLength: 44) }
-                        ThemedMessageBubble(
-                            message: message,
-                            contactColor: contactColor,
-                            isDirect: isDirect,
-                            isDark: isDark,
-                            transcription: transcription,
-                            translatedAudios: translatedAudios,
-                            textTranslations: textTranslations,
-                            preferredTranslation: preferredTranslation,
-                            showAvatar: !isDirect,
-                            isLastInGroup: true,
-                            isLastReceivedMessage: true,
-                            isLastSentMessage: true,
-                            mentionDisplayNames: mentionDisplayNames,
-                            currentUserId: currentUserId,
-                            userLanguages: (
-                                regional: userRegionalLanguage,
-                                custom: userCustomDestinationLanguage
-                            )
+                    ThemedMessageBubble(
+                        message: message,
+                        contactColor: contactColor,
+                        isDirect: isDirect,
+                        isDark: isDark,
+                        transcription: transcription,
+                        translatedAudios: translatedAudios,
+                        textTranslations: textTranslations,
+                        preferredTranslation: preferredTranslation,
+                        showAvatar: !isDirect,
+                        isLastInGroup: true,
+                        isLastReceivedMessage: true,
+                        isLastSentMessage: true,
+                        mentionDisplayNames: mentionDisplayNames,
+                        currentUserId: currentUserId,
+                        userLanguages: (
+                            regional: userRegionalLanguage,
+                            custom: userCustomDestinationLanguage
                         )
-                        if !message.isMe { Spacer(minLength: 44) }
-                    }
-                    .padding(.horizontal, 16)
-                    .frame(width: geometry.size.width)
+                    )
+                    .frame(width: bubbleRect.width, alignment: .leading)
                     .position(
-                        x: geometry.size.width / 2,
+                        x: bubbleRect.midX,
                         y: isVisible ? bubbleFinalMidY : bubbleRect.midY
                     )
                     .opacity(isVisible ? clusterFadeOpacity : 0)
