@@ -43,7 +43,11 @@ public struct APIPostMedia: Codable, Sendable {
     public var mediaType: FeedMediaType {
         // Single source of truth for the mime → family dispatch.
         // See `AttachmentKind` in MeeshySDK/Models.
-        switch AttachmentKind(mimeType: mimeType ?? "") {
+        // Missing/empty mime falls back to `.image` — feed posts are
+        // image-by-default and the gallery renderer needs SOMETHING to
+        // present rather than refusing to display the row.
+        guard let mime = mimeType, !mime.isEmpty else { return .image }
+        switch AttachmentKind(mimeType: mime) {
         case .video:        return .video
         case .audio:        return .audio
         case .image:        return .image

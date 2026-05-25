@@ -974,13 +974,14 @@ extension StorySlide {
 
         let L = loopVideoDuration ?? Double(loopAudioDuration ?? 0)
         if L > 0 {
-            if bound <= baseDuration {
-                let repetitions = max(1, floor(baseDuration / L))
-                bound = repetitions * L
-            } else {
-                let repetitions = ceil(bound / L)
-                bound = repetitions * L
-            }
+            // Spec §3.6: "the loop never freezes on a partial cycle". When
+            // the loop period doesn't divide the slide duration evenly we
+            // round UP to the next full repetition, even if that extends
+            // past the user-authored slide.duration. Rounding DOWN would
+            // truncate the slide below the duration the author chose.
+            let target = max(bound, baseDuration)
+            let repetitions = max(1, ceil(target / L))
+            bound = repetitions * L
         }
 
         return bound

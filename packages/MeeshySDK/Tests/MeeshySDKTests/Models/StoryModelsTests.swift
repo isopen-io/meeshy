@@ -264,7 +264,11 @@ final class StoryModelsTests: XCTestCase {
         XCTAssertEqual(text.rotation, 0)
         XCTAssertEqual(text.textStyle, "bold")
         XCTAssertEqual(text.textColor, "FFFFFF")
-        XCTAssertEqual(text.fontSize, 64.0)
+        // New texts default to 96 design pixels (~35pt rendu) for legibility.
+        // The legacy 64.0 default only applies to the Codable fallback path
+        // for stories written before fontSize was promoted — see
+        // testStoryTextObjectInit_legacyFallback for that case.
+        XCTAssertEqual(text.fontSize, 96.0)
         XCTAssertEqual(text.textAlign, "center")
         XCTAssertNil(text.textBg)
     }
@@ -296,7 +300,8 @@ final class StoryModelsTests: XCTestCase {
         XCTAssertEqual(withSize.resolvedSize, 42)
 
         let withoutSize = StoryTextObject(text: "B")
-        XCTAssertEqual(withoutSize.resolvedSize, 64.0)
+        // Default fontSize bumped to 96 (see testStoryTextObjectInit).
+        XCTAssertEqual(withoutSize.resolvedSize, 96.0)
     }
 
     // MARK: - StoryTextObject isLocked (Patch B.3)
