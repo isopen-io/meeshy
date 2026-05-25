@@ -157,7 +157,10 @@ function shuffleArray<T>(arr: T[]): T[] {
   return shuffled;
 }
 
-const TOPIC_PROVOCATION_PROBABILITY = 0.20;
+// Default probability when AgentConfig.freshTopicProbability isn't set. The
+// per-conversation override comes from `state.freshTopicProbability` and is
+// the source of truth at runtime.
+const DEFAULT_TOPIC_PROVOCATION_PROBABILITY = 0.20;
 
 type ConversationTheme =
   | 'ai_tech'
@@ -190,7 +193,35 @@ const THEME_PATTERNS: Array<[ConversationTheme, RegExp]> = [
   ['general_news', /\b(actualit(?:e|é)|news|info|monde|soci(?:e|é)t(?:e|é)|(?:e|é)v(?:e|é)nement)\b/i],
 ];
 
+// Admin-facing category hints (configured via AgentConfig.freshTopicCategoryHints)
+// use short keys ('ai', 'tech', 'crypto', …). Map them to our richer internal
+// theme enum so the per-theme provocation hint table below still applies.
+const HINT_TO_THEME: Record<string, ConversationTheme> = {
+  ai: 'ai_tech', tech: 'ai_tech',
+  microservices: 'microservices', architecture: 'microservices', devops: 'microservices',
+  web: 'web_dev', frontend: 'web_dev', backend: 'web_dev',
+  mobile: 'mobile_dev', ios: 'mobile_dev', android: 'mobile_dev',
+  security: 'cybersecurity', cybersecurity: 'cybersecurity',
+  data: 'data_science',
+  sport: 'sports', sports: 'sports',
+  culture: 'culture',
+  science: 'science', climate: 'science', health: 'science',
+  finance: 'business', business: 'business', crypto: 'business',
+  gaming: 'gaming',
+  politics: 'politics',
+  news: 'general_news',
+};
+
 function detectConversationTheme(state: ConversationState): ConversationTheme {
+  // Admin override: if `freshTopicCategoryHints` is set on AgentConfig, prefer
+  // those over auto-detection. We map each hint to our internal theme enum
+  // and pick the first recognized one so the operator's choice wins.
+  const hints = state.freshTopicCategoryHints ?? [];
+  for (const raw of hints) {
+    const mapped = HINT_TO_THEME[raw.trim().toLowerCase()];
+    if (mapped) return mapped;
+  }
+
   const haystack = [
     state.conversationTitle ?? '',
     state.conversationDescription ?? '',
@@ -804,8 +835,9 @@ export function createStrategistNode(llm: LlmProvider) {
     const maxResponses = state.maxResponsesPerCycle;
 
     const detectedTheme = detectConversationTheme(state);
+    const provocationProbability = state.freshTopicProbability ?? DEFAULT_TOPIC_PROVOCATION_PROBABILITY;
     const provokeNewTopic =
-      state.budgetRemaining > 0 && Math.random() < TOPIC_PROVOCATION_PROBABILITY;
+      state.budgetRemaining > 0 && provocationProbability > 0 && Math.random() < provocationProbability;
     const provocationHint = provokeNewTopic ? buildTopicProvocationHint(detectedTheme) : null;
 
     if (provocationHint) {

@@ -143,6 +143,8 @@ export type AgentConfigUpsert = {
   maxDelayMinutes?: number;
   spreadOverDayEnabled?: boolean;
   maxMessagesPerUserPer10Min?: number;
+  freshTopicProbability?: number;
+  freshTopicCategoryHints?: string[];
 };
 
 export type DeliveryItemAction =

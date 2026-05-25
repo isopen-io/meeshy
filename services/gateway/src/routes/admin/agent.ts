@@ -82,6 +82,8 @@ const agentConfigSchema = z.object({
   maxDelayMinutes: z.number().int().min(1).max(1440).nullable().optional(),
   spreadOverDayEnabled: z.boolean().optional(),
   maxMessagesPerUserPer10Min: z.number().int().min(1).max(20).nullable().optional(),
+  freshTopicProbability: z.number().min(0).max(1).optional(),
+  freshTopicCategoryHints: z.array(z.string().min(1).max(40)).max(20).optional(),
 }).refine((data) => {
   if (data.minResponsesPerCycle !== undefined && data.maxResponsesPerCycle !== undefined) {
     return data.minResponsesPerCycle <= data.maxResponsesPerCycle;

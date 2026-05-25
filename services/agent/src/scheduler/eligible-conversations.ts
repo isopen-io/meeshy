@@ -41,6 +41,8 @@ export type EligibleConversation = {
   maxDelayMinutes: number;
   spreadOverDayEnabled: boolean;
   maxMessagesPerUserPer10Min: number;
+  freshTopicProbability: number;
+  freshTopicCategoryHints: string[];
 };
 
 export async function findEligibleConversations(
@@ -95,6 +97,8 @@ export async function findEligibleConversations(
       maxDelayMinutes: Math.max(1, config?.maxDelayMinutes ?? 360),
       spreadOverDayEnabled: config?.spreadOverDayEnabled ?? true,
       maxMessagesPerUserPer10Min: Math.max(1, config?.maxMessagesPerUserPer10Min ?? 4),
+      freshTopicProbability: Math.max(0, Math.min(config?.freshTopicProbability ?? 0.2, 1.0)),
+      freshTopicCategoryHints: config?.freshTopicCategoryHints ?? [],
     };
   });
 }
