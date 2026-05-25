@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { ConfigCache } from '../config/config-cache';
 
 const agentConfigSchema = z.object({
   conversationId: z.string(),
@@ -71,7 +72,47 @@ const globalConfigSchema = z.object({
   weekendMaxConversations: z.number().optional(),
 });
 
-export async function configRoutes(fastify: FastifyInstance, prisma: PrismaClient, redis: any) {
+const cacheInvalidateSchema = z.object({
+  conversationId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional(),
+  global: z.boolean().optional(),
+}).refine((d) => d.conversationId || d.global, {
+  message: 'Either conversationId or global=true is required',
+});
+
+export async function configRoutes(
+  fastify: FastifyInstance,
+  prisma: PrismaClient,
+  redis: any,
+  configCache?: ConfigCache,
+) {
+  // Direct cache-busting endpoint called by the gateway after a config write.
+  // Provides a reliable backup path when Redis pub/sub fails silently
+  // (circuit breaker open, subscriber not connected, partition).
+  fastify.post('/api/agent/cache/invalidate', async (req, reply) => {
+    const parsed = cacheInvalidateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ success: false, message: 'Invalid payload', errors: parsed.error.flatten() });
+    }
+    if (!configCache) {
+      // Agent service started without a cache reference (unusual). Fall back to
+      // deleting Redis keys directly so the next read forces a Mongo reload.
+      const targets: string[] = [];
+      if (parsed.data.conversationId) targets.push(`agent:config:${parsed.data.conversationId}`);
+      if (parsed.data.global) targets.push('agent:global-config');
+      if (targets.length > 0) await redis.del(...targets);
+      fastify.log.info({ targets }, '[Agent] Cache invalidated via direct HTTP (no ConfigCache instance)');
+      return { success: true, data: { invalidated: targets } };
+    }
+    if (parsed.data.conversationId) {
+      await configCache.invalidate(parsed.data.conversationId);
+    }
+    if (parsed.data.global) {
+      await configCache.invalidateGlobal();
+    }
+    fastify.log.info({ body: parsed.data }, '[Agent] Cache invalidated via direct HTTP');
+    return { success: true, data: { invalidated: parsed.data } };
+  });
+
   fastify.get('/api/agent/config/:conversationId', async (req) => {
     const { conversationId } = req.params as { conversationId: string };
     const config = await prisma.agentConfig.findUnique({ where: { conversationId } });

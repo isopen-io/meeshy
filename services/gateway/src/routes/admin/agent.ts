@@ -82,6 +82,8 @@ const agentConfigSchema = z.object({
   maxDelayMinutes: z.number().int().min(1).max(1440).nullable().optional(),
   spreadOverDayEnabled: z.boolean().optional(),
   maxMessagesPerUserPer10Min: z.number().int().min(1).max(20).nullable().optional(),
+  freshTopicProbability: z.number().min(0).max(1).optional(),
+  freshTopicCategoryHints: z.array(z.string().min(1).max(40)).max(20).optional(),
 }).refine((data) => {
   if (data.minResponsesPerCycle !== undefined && data.maxResponsesPerCycle !== undefined) {
     return data.minResponsesPerCycle <= data.maxResponsesPerCycle;
@@ -202,7 +204,54 @@ const stdErrorsWithNotFound = {
 
 // ── Routes ──────────────────────────────────────────────────────────────────
 
+type InvalidationStatus = {
+  redisPublishOk: boolean;
+  redisSubscribersNotified: number;
+  httpInvalidateOk: boolean;
+  anyChannelSucceeded: boolean;
+};
+
 export async function agentAdminRoutes(fastify: FastifyInstance) {
+  const agentHost = process.env.AGENT_HOST;
+  const agentHttpPort = process.env.AGENT_HTTP_PORT || '3200';
+  const agentClient = agentHost ? new AgentHttpClient(`http://${agentHost}:${agentHttpPort}`) : null;
+
+  // Belt-and-suspenders cache invalidation: publish on Redis (low-latency for
+  // healthy paths) AND POST directly to the agent service (resilient when the
+  // pub/sub channel is briefly down). Both are best-effort and never throw —
+  // the route still succeeds, but the caller gets a status object so the
+  // admin UI can surface partial failures.
+  async function broadcastInvalidation(payload: { conversationId?: string; global?: boolean }): Promise<InvalidationStatus> {
+    const status: InvalidationStatus = {
+      redisPublishOk: false,
+      redisSubscribersNotified: 0,
+      httpInvalidateOk: false,
+      anyChannelSucceeded: false,
+    };
+
+    const [pub, http] = await Promise.allSettled([
+      getCacheStore().publish('agent:config-invalidated', JSON.stringify(payload)),
+      agentClient
+        ? agentClient.invalidateCache(payload)
+        : Promise.reject(new Error('AGENT_HOST not configured')),
+    ]);
+
+    if (pub.status === 'fulfilled') {
+      status.redisPublishOk = true;
+      status.redisSubscribersNotified = typeof pub.value === 'number' ? pub.value : 0;
+    }
+    if (http.status === 'fulfilled') {
+      status.httpInvalidateOk = true;
+    } else if (agentClient) {
+      // Only warn if we tried HTTP and it failed — missing AGENT_HOST is
+      // expected in some deployments and not worth a warning per request.
+      fastify.log.warn({ err: http.reason }, '[AgentConfig] HTTP cache invalidation failed');
+    }
+    status.anyChannelSucceeded = status.redisPublishOk || status.httpInvalidateOk;
+    return status;
+  }
+
+
   // GET /stats
   fastify.get('/stats', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
@@ -539,10 +588,15 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         }
       }
 
-      const cache = getCacheStore();
-      await cache.publish('agent:config-invalidated', JSON.stringify({ conversationId }));
+      const invalidationStatus = await broadcastInvalidation({ conversationId });
+      if (!invalidationStatus.anyChannelSucceeded) {
+        fastify.log.warn(
+          { conversationId, invalidationStatus },
+          '[AgentConfig] Cache invalidation failed on both Redis pub/sub AND direct HTTP; agent service may serve stale config for up to 5 min',
+        );
+      }
 
-      return reply.send({ success: true, data: config });
+      return reply.send({ success: true, data: config, cacheInvalidation: invalidationStatus });
     } catch (error) {
       logError(fastify.log, 'Error upserting agent config:', error);
       return reply.status(500).send({ success: false, message: 'Erreur serveur' });
@@ -1643,10 +1697,15 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         config = await fastify.prisma.agentGlobalConfig.create({ data: parsed.data });
       }
 
-      const cache = getCacheStore();
-      await cache.publish('agent:config-invalidated', JSON.stringify({ global: true }));
+      const invalidationStatus = await broadcastInvalidation({ global: true });
+      if (!invalidationStatus.anyChannelSucceeded) {
+        fastify.log.warn(
+          { invalidationStatus },
+          '[AgentGlobalConfig] Cache invalidation failed on both Redis pub/sub AND direct HTTP; agent service may serve stale config for up to 10 min',
+        );
+      }
 
-      return reply.send({ success: true, data: config });
+      return reply.send({ success: true, data: config, cacheInvalidation: invalidationStatus });
     } catch (error) {
       logError(fastify.log, 'Error upserting global agent config:', error);
       return reply.status(500).send({ success: false, message: 'Erreur serveur' });
@@ -1654,10 +1713,6 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   });
 
   // ── Delivery Queue Proxy (Agent HTTP) ─────────────────────────────────────
-
-  const agentHost = process.env.AGENT_HOST;
-  const agentHttpPort = process.env.AGENT_HTTP_PORT || '3200';
-  const agentClient = agentHost ? new AgentHttpClient(`http://${agentHost}:${agentHttpPort}`) : null;
 
   const ensureAgentClient = (reply: FastifyReply): AgentHttpClient | null => {
     if (!agentClient) {

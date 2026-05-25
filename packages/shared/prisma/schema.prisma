@@ -3153,6 +3153,14 @@ model AgentConfig {
   /// Max messages per user per 10-minute window
   maxMessagesPerUserPer10Min Int?
 
+  /// Probability per scan that the agent injects a fresh topic via web search
+  /// (0.0-1.0). At 0.2, ~1 out of 5 scans surfaces hot news/research tied to
+  /// the conversation theme. Requires webSearchEnabled = true.
+  freshTopicProbability    Float    @default(0.2)
+  /// Topic seeds for fresh-topic mode (e.g. ["ai", "microservices", "news"]).
+  /// When empty, the agent infers categories from the title/description.
+  freshTopicCategoryHints  String[] @default([])
+
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
 

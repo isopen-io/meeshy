@@ -23,6 +23,7 @@ import { analyticsRoutes } from './routes/analytics';
 import { deliveryRoutes } from './routes/delivery';
 import { findEligibleConversations } from './scheduler/eligible-conversations';
 import { startDailySnapshotCron } from './cron/daily-snapshot';
+import { startProfileRefreshCron } from './cron/profile-refresh';
 
 const server = Fastify({ logger: true });
 const prisma = new PrismaClient();
@@ -41,7 +42,6 @@ server.get('/debug/zmq-status', async () => ({
   timestamp: Date.now(),
 }));
 
-server.register((instance) => configRoutes(instance, prisma, redis));
 server.register((instance) => rolesRoutes(instance, prisma));
 
 async function start() {
@@ -90,6 +90,9 @@ async function start() {
   const budgetManager = new DailyBudgetManager(redis);
   await configCache.startListening();
 
+  // Registered AFTER configCache is constructed so the cache-invalidation
+  // endpoint can mutate the live cache instance.
+  server.register((instance) => configRoutes(instance, prisma, redis, configCache));
   server.register((instance) => analyticsRoutes(instance, { stateManager, persistence }));
 
   const deliveryQueue = new RedisDeliveryQueue(redis, zmqPublisher, persistence, {
@@ -209,6 +212,7 @@ async function start() {
   scanner.start();
 
   const snapshotInterval = startDailySnapshotCron(prisma);
+  const profileRefreshInterval = startProfileRefreshCron(prisma);
 
   // STARTUP SUMMARY LOGGING
   try {
@@ -230,6 +234,7 @@ async function start() {
     server.log.info('Shutting down agent service...');
     scanner.stop();
     clearInterval(snapshotInterval);
+    clearInterval(profileRefreshInterval);
     deliveryQueue.stopPolling();
     await configCache.stopListening();
     await zmqListener.close();

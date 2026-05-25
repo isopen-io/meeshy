@@ -70,4 +70,11 @@ export class AgentHttpClient {
       method: 'POST',
     });
   }
+
+  async invalidateCache(payload: { conversationId?: string; global?: boolean }): Promise<{ invalidated: unknown }> {
+    return this.request<{ invalidated: unknown }>(`/api/agent/cache/invalidate`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
 }
