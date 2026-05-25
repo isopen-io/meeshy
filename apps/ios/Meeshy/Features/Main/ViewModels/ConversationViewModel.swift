@@ -1125,9 +1125,12 @@ class ConversationViewModel: ObservableObject {
             // into GRDB, so loadInitialSnapshot picks them up; apply them in
             // the same MainActor slice as a defensive hydrateMetadataFromGRDB
             // call so a background revalidation never re-introduces a pop-in.
+            // `forceOverwrite: true` because this is the AUTHORITATIVE refresh:
+            // a server-side re-transcription must propagate to the UI even if
+            // the message already had a (stale) cached transcription.
             let refreshSnapshot = await messageStore.loadInitialSnapshot()
             messageStore.apply(records: refreshSnapshot)
-            hydrateMetadataFromGRDB(from: refreshSnapshot)
+            hydrateMetadataFromGRDB(from: refreshSnapshot, forceOverwrite: true)
 
             // Keep legacy CacheCoordinator in sync so other parts of the app
             // (ConversationList preview, unread badge) that still read from it remain correct.
@@ -2882,12 +2885,21 @@ class ConversationViewModel: ObservableObject {
     /// This ensures that audio bubbles show transcriptions and language
     /// buttons on the very first render frame.
     ///
-    /// - Parameter records: explicit record list to read from. When nil,
-    ///   falls back to `messageStore.messages` (legacy path). Pass an
-    ///   explicit list to ensure atomicity with a same-runloop `apply` —
-    ///   used by `loadMessages` / `refreshMessagesFromAPI` to publish
-    ///   messages and dependent metadata in a single MainActor slice.
-    private func hydrateMetadataFromGRDB(from records: [MessageRecord]? = nil) {
+    /// - Parameters:
+    ///   - records: explicit record list to read from. When nil, falls
+    ///     back to `messageStore.messages` (legacy path). Pass an
+    ///     explicit list to ensure atomicity with a same-runloop `apply`.
+    ///   - forceOverwrite: when `true`, replaces existing entries in
+    ///     `messageTranscriptions` / `messageTranslatedAudios`. Default
+    ///     `false` preserves any in-memory state already written by a
+    ///     concurrent socket delta (`applyAttachmentUpdate`). Pass
+    ///     `true` from `refreshMessagesFromAPI` so a server-side
+    ///     re-transcription propagates to the UI even when the message
+    ///     already had a (stale) transcription cached.
+    private func hydrateMetadataFromGRDB(
+        from records: [MessageRecord]? = nil,
+        forceOverwrite: Bool = false
+    ) {
         let decoder = JSONDecoder()
         let source = records ?? messageStore.messages
         for record in source {
@@ -2898,7 +2910,8 @@ class ConversationViewModel: ObservableObject {
 
             for att in attachments {
                 // Hydrate transcription
-                if let t = att.transcription, messageTranscriptions[msgId] == nil {
+                if let t = att.transcription,
+                   forceOverwrite || messageTranscriptions[msgId] == nil {
                     let segments = (t.segments ?? []).map {
                         MessageTranscriptionSegment(
                             text: $0.text,
@@ -2920,7 +2933,7 @@ class ConversationViewModel: ObservableObject {
 
                 // Hydrate audio translations
                 if let translations = att.audioTranslations, !translations.isEmpty,
-                   messageTranslatedAudios[msgId] == nil {
+                   forceOverwrite || messageTranslatedAudios[msgId] == nil {
                     var audios: [MessageTranslatedAudio] = []
                     for (lang, trans) in translations {
                         let segments = (trans.segments ?? []).map {
