@@ -205,14 +205,14 @@ struct MessageOverlayMenu: View {
             let useSourceFrame = messageBubbleFrame != .zero
             let bubbleRect = messageBubbleFrame
 
-            // Mesures du cluster — gaps resserrés pour donner un sentiment de
-            // continuité visuelle entre quick action bar, bulle et emoji bar.
+            // Mesures du cluster — gaps tightement contrôlés. Heights basées
+            // sur les rendus réels mesurés en simulateur.
             let quickActionsCount = quickActions.count
             let quickActionMenuHeight: CGFloat = quickActionsCount > 0 ? 60 : 0
-            let quickActionToBubbleGap: CGFloat = quickActionsCount > 0 ? 8 : 0
-            let bubbleToEmojiGap: CGFloat = 10
-            let emojiBarHeight: CGFloat = 52
-            let clusterClearance: CGFloat = 20
+            let quickActionToBubbleGap: CGFloat = quickActionsCount > 0 ? 14 : 0
+            let bubbleToEmojiGap: CGFloat = 14
+            let emojiBarHeight: CGFloat = 44
+            let clusterClearance: CGFloat = 12
             let clusterTotalHeight = quickActionMenuHeight + quickActionToBubbleGap
                                    + bubbleRect.height
                                    + bubbleToEmojiGap + emojiBarHeight
@@ -239,23 +239,22 @@ struct MessageOverlayMenu: View {
             let bubbleFinalMidY = bubbleTopY + bubbleRect.height / 2
             let emojiBarCenterY = bubbleTopY + bubbleRect.height + bubbleToEmojiGap + emojiBarHeight / 2
 
-            // Position X alignée AU CÔTÉ de la bulle (right pour isMe, left
-            // pour received) — la quick action bar et l'emoji bar suivent
-            // l'alignement natif de la bulle au lieu d'être centrées sur
-            // l'écran. Crée une continuité visuelle nette.
-            let quickActionMenuWidth = ContextActionMenu.estimatedSize(actionCount: max(1, quickActionsCount)).width
-            let emojiBarApproxWidth: CGFloat = 320  // estimation pour l'alignement
+            // Position X de la bulle = source frame midX (respect exact de la
+            // position dans la conversation). Action bar et emoji bar suivent
+            // ce même axe vertical avec clamp aux bords écran pour éviter le
+            // débordement quand la bulle est près d'un bord.
             let sidePadding: CGFloat = 16
-            let quickActionMenuCenterX: CGFloat = message.isMe
-                ? min(geometry.size.width - sidePadding - quickActionMenuWidth / 2,
-                      bubbleRect.maxX - quickActionMenuWidth / 2)
-                : max(sidePadding + quickActionMenuWidth / 2,
-                      bubbleRect.minX + quickActionMenuWidth / 2)
-            let emojiBarCenterX: CGFloat = message.isMe
-                ? min(geometry.size.width - sidePadding - emojiBarApproxWidth / 2,
-                      bubbleRect.maxX - emojiBarApproxWidth / 2)
-                : max(sidePadding + emojiBarApproxWidth / 2,
-                      bubbleRect.minX + emojiBarApproxWidth / 2)
+            let quickActionMenuWidth = ContextActionMenu.estimatedSize(actionCount: max(1, quickActionsCount)).width
+            let emojiBarApproxWidth: CGFloat = 320
+            let bubbleCenterX = bubbleRect.midX
+            let quickActionMenuCenterX: CGFloat = max(
+                sidePadding + quickActionMenuWidth / 2,
+                min(geometry.size.width - sidePadding - quickActionMenuWidth / 2, bubbleCenterX)
+            )
+            let emojiBarCenterX: CGFloat = max(
+                sidePadding + emojiBarApproxWidth / 2,
+                min(geometry.size.width - sidePadding - emojiBarApproxWidth / 2, bubbleCenterX)
+            )
 
             // Panel auto-expand : si le cluster termine plus haut que le
             // panel naturel, le panel s'agrandit pour combler le gap (le
@@ -387,6 +386,7 @@ struct MessageOverlayMenu: View {
                         )
                         if !message.isMe { Spacer(minLength: 44) }
                     }
+                    .padding(.horizontal, 16)
                     .frame(width: geometry.size.width)
                     .position(
                         x: geometry.size.width / 2,
