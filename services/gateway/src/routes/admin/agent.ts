@@ -565,6 +565,10 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       const { conversationId } = request.params as { conversationId: string };
       if (!validateObjectId(conversationId, 'conversationId', reply)) return;
       await fastify.prisma.agentConfig.delete({ where: { conversationId } });
+      // Bust the agent service's cached copy so it stops scheduling scans for
+      // the deleted conversation immediately (without it the agent could run
+      // up to 5 more minutes on a config that no longer exists in Mongo).
+      await broadcastInvalidation({ conversationId });
       return reply.send({ success: true, message: 'Config supprimée' });
     } catch (error) {
       logError(fastify.log, 'Error deleting agent config:', error);
@@ -821,6 +825,11 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         `agent:messages:${conversationId}`,
         `agent:summary:${conversationId}`,
         `agent:profiles:${conversationId}`,
+        // Explicitly drop the in-Redis config snapshot too — otherwise the
+        // agent service keeps scanning a config the admin just nuked, for up
+        // to CONFIG_TTL (5 min). The broadcastInvalidation below also clears
+        // the in-process cache copy across all agent instances.
+        `agent:config:${conversationId}`,
       ];
       const cooldownKeys = await cache.keys(`agent:cooldown:${conversationId}:*`);
       keysToDelete.push(...cooldownKeys);
@@ -830,6 +839,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         await cache.del(key);
         redisKeysDeleted++;
       }
+      await broadcastInvalidation({ conversationId });
 
       return reply.send({
         success: true,
@@ -897,6 +907,12 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         await cache.del(key);
       }
 
+      // A user reset wipes their global profile, which feeds auto-pickup
+      // in every conversation. Bust the global cache so the next scan
+      // anywhere sees the change instead of resurrecting the deleted
+      // profile from a stale cached config.
+      await broadcastInvalidation({ global: true });
+
       return reply.send({
         success: true,
         data: {
@@ -943,6 +959,11 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         await cache.del(key);
         redisKeysDeleted++;
       }
+      // The Redis wipe above clears the persistent cache, but the agent
+      // service holds an in-process snapshot of the global config that
+      // only refreshes on pub/sub events or TTL expiry. Notify it so
+      // the next scan rebuilds from a clean slate.
+      await broadcastInvalidation({ global: true });
 
       return reply.send({
         success: true,
