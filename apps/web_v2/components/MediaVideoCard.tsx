@@ -64,8 +64,10 @@ const FLAG_MAP: Record<string, string> = {
   no: '\u{1F1F3}\u{1F1F4}',
 };
 
-const PLAYBACK_SPEEDS = [1, 1.5, 2] as const;
+const PLAYBACK_SPEEDS = [1, 1.25, 1.5, 1.75, 2, 2.5, 3] as const;
 type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number];
+
+const CONTROLS_HIDE_DELAY_MS = 2500;
 
 const TRANSCRIPTION_MAX_LENGTH = 100;
 
@@ -313,27 +315,30 @@ const LanguageSelector = memo(function LanguageSelector({
 
 interface SpeedControlProps {
   currentSpeed: PlaybackSpeed;
-  onSpeedChange: (speed: PlaybackSpeed) => void;
+  onCycle: () => void;
 }
 
-const SpeedControl = memo(function SpeedControl({ currentSpeed, onSpeedChange }: SpeedControlProps) {
+const SpeedControl = memo(function SpeedControl({ currentSpeed, onCycle }: SpeedControlProps) {
   return (
-    <div className="flex items-center gap-1 bg-black/50 backdrop-blur-sm rounded-lg p-1">
-      {PLAYBACK_SPEEDS.map((speed) => (
-        <button
-          key={speed}
-          onClick={() => onSpeedChange(speed)}
-          className={cn(
-            'px-2 py-1 rounded-md text-xs font-medium transition-all duration-300',
-            currentSpeed === speed
-              ? 'bg-[var(--gp-surface-elevated)] text-[var(--gp-text-primary)]'
-              : 'text-white/80 hover:text-white hover:bg-white/10'
-          )}
-        >
-          {speed}x
-        </button>
-      ))}
-    </div>
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        onCycle();
+      }}
+      className={cn(
+        'min-w-[44px] h-9 px-3 rounded-full',
+        'flex items-center justify-center',
+        'bg-white/15 backdrop-blur-xl backdrop-saturate-150',
+        'border border-white/25',
+        'shadow-[0_4px_16px_rgba(0,0,0,0.3)]',
+        'text-white text-xs font-bold tabular-nums',
+        'transition-all duration-200',
+        'hover:bg-white/25 hover:scale-105 active:scale-95'
+      )}
+      aria-label={`Vitesse de lecture ${currentSpeed}x`}
+    >
+      {currentSpeed}x
+    </button>
   );
 });
 
@@ -413,6 +418,8 @@ export const MediaVideoCard = memo(function MediaVideoCard({
   // -------------------------------------------------------------------------
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const progressRef = useRef<HTMLDivElement>(null);
+  const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Find initial translation
   const initialTranslation = defaultLanguage
@@ -421,15 +428,36 @@ export const MediaVideoCard = memo(function MediaVideoCard({
 
   const [selectedTranslation, setSelectedTranslation] = useState<VideoTranslation>(initialTranslation);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [showControls, setShowControls] = useState(false);
+  const [hasStarted, setHasStarted] = useState(false);
+  const [overlayVisible, setOverlayVisible] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<PlaybackSpeed>(1);
   const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
   const [isSeeking, setIsSeeking] = useState(false);
+  const [seekHover, setSeekHover] = useState(false);
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const progressPct = Math.round(progress);
+
+  const scheduleHideControls = useCallback(() => {
+    if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
+    hideControlsTimer.current = setTimeout(() => {
+      setOverlayVisible(false);
+    }, CONTROLS_HIDE_DELAY_MS);
+  }, []);
+
+  const revealControls = useCallback(() => {
+    setOverlayVisible(true);
+    if (isPlaying) scheduleHideControls();
+  }, [isPlaying, scheduleHideControls]);
+
+  useEffect(() => {
+    return () => {
+      if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
+    };
+  }, []);
 
   // -------------------------------------------------------------------------
   // Video Event Handlers
@@ -448,56 +476,106 @@ export const MediaVideoCard = memo(function MediaVideoCard({
 
   const handlePlay = useCallback(() => {
     setIsPlaying(true);
-    setShowControls(true);
-  }, []);
+    setHasStarted(true);
+    setOverlayVisible(true);
+    scheduleHideControls();
+  }, [scheduleHideControls]);
 
   const handlePause = useCallback(() => {
     setIsPlaying(false);
+    setOverlayVisible(true);
+    if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
   }, []);
 
   const handleEnded = useCallback(() => {
     setIsPlaying(false);
+    setHasStarted(false);
+    setOverlayVisible(true);
+    setCurrentTime(0);
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0;
+    }
+    if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
   }, []);
 
   // -------------------------------------------------------------------------
   // Control Handlers
   // -------------------------------------------------------------------------
   const togglePlay = useCallback(() => {
-    if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause();
-      } else {
-        videoRef.current.play();
-      }
+    if (!videoRef.current) return;
+    if (isPlaying) {
+      videoRef.current.pause();
+    } else {
+      videoRef.current.play().catch(() => {});
     }
   }, [isPlaying]);
 
   const startPlayback = useCallback(() => {
-    if (videoRef.current) {
-      setShowControls(true);
-      videoRef.current.play();
-    }
+    if (!videoRef.current) return;
+    videoRef.current.play().catch(() => {});
   }, []);
 
-  const handleProgressClick = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      if (videoRef.current) {
-        const rect = e.currentTarget.getBoundingClientRect();
-        const percent = (e.clientX - rect.left) / rect.width;
-        const newTime = percent * duration;
-        videoRef.current.currentTime = newTime;
-        setCurrentTime(newTime);
-      }
+  const seekFromClientX = useCallback(
+    (clientX: number) => {
+      if (!videoRef.current || !progressRef.current || duration <= 0) return;
+      const rect = progressRef.current.getBoundingClientRect();
+      const percent = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      const newTime = percent * duration;
+      videoRef.current.currentTime = newTime;
+      setCurrentTime(newTime);
     },
-    [duration]
+    [duration],
   );
 
-  const handleSpeedChange = useCallback((speed: PlaybackSpeed) => {
-    setPlaybackSpeed(speed);
-    if (videoRef.current) {
-      videoRef.current.playbackRate = speed;
-    }
+  const handleProgressMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      setIsSeeking(true);
+      seekFromClientX(e.clientX);
+    },
+    [seekFromClientX],
+  );
+
+  useEffect(() => {
+    if (!isSeeking) return;
+    const onMove = (e: MouseEvent) => seekFromClientX(e.clientX);
+    const onUp = () => setIsSeeking(false);
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    return () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+  }, [isSeeking, seekFromClientX]);
+
+  const handleTouchStart = useCallback(
+    (e: React.TouchEvent<HTMLDivElement>) => {
+      setIsSeeking(true);
+      seekFromClientX(e.touches[0].clientX);
+    },
+    [seekFromClientX],
+  );
+
+  const handleTouchMove = useCallback(
+    (e: React.TouchEvent<HTMLDivElement>) => {
+      if (isSeeking) seekFromClientX(e.touches[0].clientX);
+    },
+    [isSeeking, seekFromClientX],
+  );
+
+  const handleTouchEnd = useCallback(() => {
+    setIsSeeking(false);
   }, []);
+
+  const cycleSpeed = useCallback(() => {
+    const idx = PLAYBACK_SPEEDS.indexOf(playbackSpeed);
+    const next = PLAYBACK_SPEEDS[(idx + 1) % PLAYBACK_SPEEDS.length];
+    setPlaybackSpeed(next);
+    if (videoRef.current) {
+      videoRef.current.playbackRate = next;
+    }
+    revealControls();
+  }, [playbackSpeed, revealControls]);
 
   const toggleFullscreen = useCallback(() => {
     if (!containerRef.current) return;
@@ -615,10 +693,14 @@ export const MediaVideoCard = memo(function MediaVideoCard({
         <div
           ref={containerRef}
           className={cn(
-            'relative bg-[var(--gp-background)]',
+            'relative bg-[var(--gp-background)] group/player',
             isFullscreen ? 'w-full h-full' : 'aspect-video',
             'transition-colors duration-300'
           )}
+          onMouseMove={revealControls}
+          onClick={() => {
+            if (hasStarted) revealControls();
+          }}
         >
           {/* Video Element */}
           <video
@@ -634,13 +716,12 @@ export const MediaVideoCard = memo(function MediaVideoCard({
             playsInline
           />
 
-          {/* Thumbnail Overlay (when not playing) */}
-          {!showControls && (
+          {/* IDLE / END STATE: thumbnail + center play + speed FAB */}
+          {!hasStarted && (
             <div
               className="absolute inset-0 flex items-center justify-center cursor-pointer group"
               onClick={startPlayback}
             >
-              {/* Poster fallback */}
               {poster && (
                 <img
                   src={poster}
@@ -652,139 +733,171 @@ export const MediaVideoCard = memo(function MediaVideoCard({
                 />
               )}
 
-              {/* Gradient overlay */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
-              {/* Play Button */}
               <div
                 className={cn(
                   'relative z-10 w-16 h-16 rounded-full flex items-center justify-center',
-                  'bg-[var(--gp-surface-elevated)]/90 backdrop-blur-sm',
-                  'shadow-[0_4px_14px_rgba(231,111,81,0.4)]',
+                  'bg-white/15 backdrop-blur-xl backdrop-saturate-150',
+                  'border border-white/25',
+                  'shadow-[0_8px_32px_rgba(0,0,0,0.35)]',
                   'transition-all duration-300 ease-out',
-                  'group-hover:scale-110 group-hover:bg-[var(--gp-surface-elevated)]'
+                  'group-hover:scale-110 group-hover:bg-white/25'
                 )}
               >
-                <PlayIcon className="w-7 h-7 ml-1 text-[var(--gp-terracotta)]" />
+                <PlayIcon className="w-7 h-7 ml-1 text-white drop-shadow-md" />
               </div>
 
-              {/* Duration Badge */}
               {duration > 0 && (
                 <div
                   className={cn(
                     'absolute bottom-3 left-3 z-10',
-                    'px-2 py-1 rounded-md',
-                    'bg-black/70 backdrop-blur-sm',
-                    'text-white text-sm font-medium'
+                    'px-2.5 py-1 rounded-full',
+                    'bg-black/40 backdrop-blur-md border border-white/10',
+                    'text-white text-xs font-semibold tabular-nums'
                   )}
                 >
                   {formatDuration(duration)}
                 </div>
               )}
 
-              {/* Speed Control (top right) */}
               <div className="absolute top-3 right-3 z-10">
-                <SpeedControl currentSpeed={playbackSpeed} onSpeedChange={handleSpeedChange} />
+                <SpeedControl currentSpeed={playbackSpeed} onCycle={cycleSpeed} />
               </div>
             </div>
           )}
 
-          {/* Video Controls (when playing) */}
-          {showControls && (
+          {/* PLAYING/PAUSED STATE: FAB-style controls */}
+          {hasStarted && (
             <div
               className={cn(
-                'absolute inset-0 flex flex-col justify-between',
-                'bg-gradient-to-t from-black/70 via-transparent to-black/30',
+                'absolute inset-0 flex flex-col justify-between pointer-events-none',
+                'bg-gradient-to-t from-black/55 via-transparent to-black/25',
                 'transition-opacity duration-300',
-                isPlaying ? 'opacity-0 hover:opacity-100' : 'opacity-100'
+                overlayVisible || !isPlaying || isSeeking ? 'opacity-100' : 'opacity-0'
               )}
             >
-              {/* Top Controls */}
-              <div className="p-3 flex items-center justify-end">
-                <SpeedControl currentSpeed={playbackSpeed} onSpeedChange={handleSpeedChange} />
+              {/* Top-right: Speed FAB */}
+              <div className="flex justify-end p-3 pointer-events-auto">
+                <SpeedControl currentSpeed={playbackSpeed} onCycle={cycleSpeed} />
               </div>
 
-              {/* Center Play/Pause */}
+              {/* Center play/pause FAB (visible only when paused) */}
               <div
-                className="absolute inset-0 flex items-center justify-center cursor-pointer"
-                onClick={togglePlay}
+                className="absolute inset-0 flex items-center justify-center pointer-events-auto"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  togglePlay();
+                }}
               >
                 {!isPlaying && (
                   <div
                     className={cn(
-                      'w-16 h-16 rounded-full flex items-center justify-center',
-                      'bg-[var(--gp-surface-elevated)]/90 backdrop-blur-sm',
-                      'shadow-[var(--gp-shadow-lg)]',
+                      'w-16 h-16 rounded-full flex items-center justify-center cursor-pointer',
+                      'bg-white/15 backdrop-blur-xl backdrop-saturate-150',
+                      'border border-white/25',
+                      'shadow-[0_8px_32px_rgba(0,0,0,0.4)]',
                       'transition-all duration-300 ease-out',
-                      'hover:scale-110 hover:bg-[var(--gp-surface-elevated)]'
+                      'hover:scale-110 hover:bg-white/25'
                     )}
                   >
-                    <PlayIcon className="w-7 h-7 ml-1 text-[var(--gp-terracotta)]" />
+                    <PlayIcon className="w-7 h-7 ml-1 text-white drop-shadow-md" />
                   </div>
                 )}
               </div>
 
               {/* Bottom Controls Bar */}
-              <div className="relative z-10 p-3 space-y-2">
-                {/* Progress Bar */}
+              <div
+                className="relative z-10 p-3 space-y-2 pointer-events-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Progress Bar with chunky thumb + % */}
                 <div
-                  className="relative h-1.5 bg-[var(--gp-surface)]/30 rounded-full cursor-pointer group/progress"
-                  onClick={handleProgressClick}
-                  onMouseDown={() => setIsSeeking(true)}
-                  onMouseUp={() => setIsSeeking(false)}
-                  onMouseLeave={() => setIsSeeking(false)}
+                  ref={progressRef}
+                  className="relative h-7 flex items-center cursor-pointer group/progress select-none"
+                  onMouseDown={handleProgressMouseDown}
+                  onMouseEnter={() => setSeekHover(true)}
+                  onMouseLeave={() => setSeekHover(false)}
+                  onTouchStart={handleTouchStart}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
+                  role="slider"
+                  aria-label="Video progress"
+                  aria-valuemin={0}
+                  aria-valuemax={duration}
+                  aria-valuenow={currentTime}
                 >
-                  {/* Progress Fill */}
-                  <div
-                    className="absolute inset-y-0 left-0 rounded-full transition-all bg-[var(--gp-terracotta)]"
-                    style={{ width: `${progress}%` }}
-                  />
-                  {/* Progress Handle */}
-                  <div
-                    className={cn(
-                      'absolute top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full',
-                      'bg-[var(--gp-surface-elevated)] shadow-[var(--gp-shadow-md)]',
-                      'transition-transform duration-150',
-                      'opacity-0 group-hover/progress:opacity-100',
-                      'scale-0 group-hover/progress:scale-100'
-                    )}
-                    style={{ left: `calc(${progress}% - 7px)` }}
-                  />
+                  <div className="relative w-full h-1.5 bg-white/25 rounded-full overflow-visible">
+                    <div
+                      className="absolute inset-y-0 left-0 rounded-full bg-white"
+                      style={{ width: `${progress}%` }}
+                    />
+                    <div
+                      className={cn(
+                        'absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full',
+                        'flex items-center justify-center',
+                        'bg-white/95 backdrop-blur-md border border-white/40',
+                        'shadow-[0_4px_14px_rgba(0,0,0,0.45)]',
+                        'transition-[width,height,opacity] duration-150 ease-out',
+                        isSeeking || seekHover
+                          ? 'scale-100 opacity-100'
+                          : 'scale-0 opacity-0 group-hover/progress:scale-100 group-hover/progress:opacity-100'
+                      )}
+                      style={{
+                        left: `${progress}%`,
+                        width: `${isSeeking ? 28 : 25}px`,
+                        height: `${isSeeking ? 28 : 25}px`,
+                      }}
+                    >
+                      {(isSeeking || seekHover) && (
+                        <span className="text-[9px] font-bold tabular-nums leading-none text-black">
+                          {progressPct}%
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
-                {/* Control Buttons */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    {/* Play/Pause Button */}
+                {/* Bottom row: play/pause + time + fullscreen */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
                     <button
                       onClick={togglePlay}
                       className={cn(
-                        'w-8 h-8 flex items-center justify-center rounded-full',
-                        'text-white hover:bg-white/20',
-                        'transition-colors duration-200'
+                        'w-9 h-9 flex items-center justify-center rounded-full',
+                        'bg-white/15 backdrop-blur-xl backdrop-saturate-150',
+                        'border border-white/25',
+                        'shadow-[0_4px_12px_rgba(0,0,0,0.3)]',
+                        'text-white hover:bg-white/25 hover:scale-105 active:scale-95',
+                        'transition-all duration-200'
                       )}
                       aria-label={isPlaying ? 'Pause' : 'Play'}
                     >
-                      {isPlaying ? <PauseIcon className="w-5 h-5" /> : <PlayIcon className="w-5 h-5 ml-0.5" />}
+                      {isPlaying ? (
+                        <PauseIcon className="w-4 h-4" />
+                      ) : (
+                        <PlayIcon className="w-4 h-4 ml-0.5" />
+                      )}
                     </button>
 
-                    {/* Time Display */}
-                    <span className="text-white text-sm font-medium tabular-nums">
+                    <span className="text-white text-xs font-semibold tabular-nums drop-shadow-md">
                       {formatDuration(currentTime)} / {formatDuration(duration)}
                     </span>
                   </div>
 
-                  {/* Fullscreen Button */}
                   <button
                     onClick={toggleFullscreen}
                     className={cn(
-                      'w-8 h-8 flex items-center justify-center rounded-full',
-                      'text-white hover:bg-white/20',
-                      'transition-colors duration-200'
+                      'w-9 h-9 flex items-center justify-center rounded-full',
+                      'bg-white/15 backdrop-blur-xl backdrop-saturate-150',
+                      'border border-white/25',
+                      'shadow-[0_4px_12px_rgba(0,0,0,0.3)]',
+                      'text-white hover:bg-white/25 hover:scale-105 active:scale-95',
+                      'transition-all duration-200'
                     )}
                     aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
                   >
-                    <FullscreenIcon className="w-5 h-5" isFullscreen={isFullscreen} />
+                    <FullscreenIcon className="w-4 h-4" isFullscreen={isFullscreen} />
                   </button>
                 </div>
               </div>
