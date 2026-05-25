@@ -586,12 +586,47 @@ struct RootView: View {
             // infinite loop to the user.
             navigateToConversationById(id)
 
-        case .post(let id):
-            // Open the post detail directly. The screen owns its own
-            // cache-first fetch, so we don't need to pre-validate here —
-            // an unknown id will surface the "post not found" empty state
-            // instead of an opaque blank screen.
-            router.push(.postDetail(id))
+        case .postDetail(let postId):
+            // PostDetailView lazy-loads the post itself, so we can push
+            // immediately with `initialPost: nil`. The route case already
+            // exists for in-app feed taps; the deep link just reuses it.
+            router.push(.postDetail(postId))
+
+        case .storyDetail(let postId):
+            // Stories share the post identifier namespace. Prefer the
+            // dedicated viewer when the story is in the local tray, fall
+            // back to PostDetailView otherwise — matches the existing
+            // `storyDetail:` push-notification dispatch (line ~472 above)
+            // so cold-launch deep links and warm-launch push taps land on
+            // the same screen for the same id.
+            if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
+                storyViewerCoordinator.present(StoryViewerRequest(id: storyViewModel.storyGroups[groupIdx].id))
+            } else {
+                router.push(.postDetail(postId))
+            }
+
+        case .userProfile(let username):
+            // Opens the profile sheet over the conversation list (same
+            // surface as in-app `Link` taps via Router.handleDeepLink and
+            // as notification-driven profile navigation). `ProfileSheetUser`
+            // resolves the username server-side, so a typo just shows the
+            // empty state instead of crashing.
+            router.deepLinkProfileUser = ProfileSheetUser(username: username)
+
+        case .ownProfile:
+            // Pop to the conversation list root first so back-swipe from
+            // the profile screen lands on the home surface — not whatever
+            // happened to be on top of the nav stack at cold launch.
+            router.popToRoot()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                router.push(.profile)
+            }
+
+        case .userLinks:
+            router.popToRoot()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                router.push(.links)
+            }
 
         case .magicLink:
             break

@@ -356,6 +356,9 @@ export function registerInteractionRoutes(
   //     external share sheet. The link points at the post detail route on the
   //     web frontend (`FRONTEND_URL`/feeds/post/<postId>`); subsequent
   //     redirects are counted into the existing `trackingLinkClick` analytics.
+  //     The same `/feeds/post/<postId>` path is also claimed by the iOS app via
+  //     Universal Links, so the recipient lands directly inside the native
+  //     PostDetailView when the app is installed.
   //
   // Response always carries `{ shared, shareCount }`; if `generateLink` was
   // requested the same payload also exposes `shortUrl` (absolute, ready for

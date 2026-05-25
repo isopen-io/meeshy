@@ -279,7 +279,7 @@ export default function V2FeedsPage() {
   }, [likeMutation, unlikeMutation]);
 
   const handleComment = useCallback((postId: string) => {
-    router.push(`/v2/feeds/post/${postId}`);
+    router.push(`/feeds/post/${postId}`);
   }, [router]);
 
   const handleShare = useCallback(async (postId: string) => {
@@ -545,7 +545,7 @@ export default function V2FeedsPage() {
                       onEdit={() => handleEditPost(post.id)}
                       onDelete={() => handleDeletePost(post.id)}
                       onPin={() => handlePinPost(post.id, post.isPinned)}
-                      onClick={() => router.push(`/v2/feeds/post/${post.id}`)}
+                      onClick={() => router.push(`/feeds/post/${post.id}`)}
                     />
                   );
                 })()}
