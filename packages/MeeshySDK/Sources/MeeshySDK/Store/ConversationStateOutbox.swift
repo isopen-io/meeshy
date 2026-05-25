@@ -99,16 +99,22 @@ public actor ConversationStateOutbox {
     private init() {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let path = dir.appendingPathComponent("meeshy_conversation_outbox.db").path
-        self.db = Self.makeQueue(path: path)
+        let queue = Self.makeQueue(path: path)
+        self.db = queue
         self.now = { Date() }
-        Task { await self.hydrateOnInit() }
+        let snapshot = Self.hydrateFromDisk(db: queue)
+        self.pending = snapshot.pending
+        self.indexByCoalescingKey = snapshot.index
     }
 
     /// Test-only init that allows injecting a path and a clock.
     public init(dbPath: String, clock: @escaping @Sendable () -> Date = { Date() }) {
-        self.db = Self.makeQueue(path: dbPath)
+        let queue = Self.makeQueue(path: dbPath)
+        self.db = queue
         self.now = clock
-        Task { await self.hydrateOnInit() }
+        let snapshot = Self.hydrateFromDisk(db: queue)
+        self.pending = snapshot.pending
+        self.indexByCoalescingKey = snapshot.index
     }
 
     private static func makeQueue(path: String) -> DatabaseQueue {
@@ -149,10 +155,20 @@ public actor ConversationStateOutbox {
         }
     }
 
-    private func hydrateOnInit() async {
-        let rows = (try? await db.read { db -> [Row] in
+    /// Synchronous hydration called from `init`. Loading inline (rather
+    /// than from a detached `Task`) avoids a race where the hydrator's
+    /// suspension on `await db.read` released the actor, let subsequent
+    /// `enqueue` calls mutate `pending` + DB, then the hydrator resumed
+    /// with the stale snapshot and stomped over the live state.
+    private static func hydrateFromDisk(
+        db: DatabaseQueue
+    ) -> (pending: [UUID: OutboxTask], index: [CoalescingKey: UUID]) {
+        let rows: [Row] = (try? db.read { db in
             try Row.fetchAll(db, sql: "SELECT * FROM conversation_outbox_tasks")
         }) ?? []
+
+        var pending: [UUID: OutboxTask] = [:]
+        var index: [CoalescingKey: UUID] = [:]
 
         for row in rows {
             guard let task = decodeRow(row) else {
@@ -160,13 +176,20 @@ public actor ConversationStateOutbox {
                 // JSON — drop it; the upstream optimistic UI will need to
                 // be reconciled on the next list refresh.
                 if let idStr: String = row["id"], let uuid = UUID(uuidString: idStr) {
-                    deleteRow(id: uuid)
+                    _ = try? db.write { db in
+                        try db.execute(
+                            sql: "DELETE FROM conversation_outbox_tasks WHERE id = ?",
+                            arguments: [uuid.uuidString]
+                        )
+                    }
                 }
                 continue
             }
             pending[task.id] = task
-            indexByCoalescingKey[CoalescingKey(convId: task.convId, key: task.coalescingKey)] = task.id
+            index[CoalescingKey(convId: task.convId, key: task.coalescingKey)] = task.id
         }
+
+        return (pending, index)
     }
 
     // MARK: - Public API
@@ -327,7 +350,7 @@ public actor ConversationStateOutbox {
         return str
     }
 
-    private func decodeRow(_ row: Row) -> OutboxTask? {
+    private static func decodeRow(_ row: Row) -> OutboxTask? {
         guard let idStr: String = row["id"], let id = UUID(uuidString: idStr),
               let convId: String = row["conv_id"],
               let mutationJSON: String = row["mutation_json"],
