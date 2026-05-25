@@ -102,10 +102,28 @@ Quand tous les scénarios sont validés, marquer ici :
 
 Si ❌ sur un scénario, créer un commit `fix(ios/...)` ou `fix(gateway/...)` sur la branche `worktree-feat-audio-instant-render` avant de PR.
 
-## Follow-ups identifiés (post-merge)
+## Self-review post-merge — issues fixées + restantes en backlog
 
-1. **GRDB write-through pour `applyAttachmentUpdate`** : actuellement le delta socket n'écrit qu'en mémoire (`messageTranscriptions` / `messageTranslatedAudios`). Si l'utilisateur ferme la conv juste après l'enrichissement, la réouverture re-déclenche un pop-in jusqu'au prochain `refreshMessagesFromAPI`. Fix : ajouter `MessagePersistenceActor.applyAttachmentDelta(messageId:attachment:)` et l'appeler depuis `applyAttachmentUpdate`.
+Suite à une self-review du sprint (cf. agent code-reviewer), 6 issues ont été identifiées. Les 3 critiques sont fixées dans des commits post-merge.
 
-2. **Tests d'intégration gateway `message:attachment-updated`** : actuellement seuls les tests unitaires couvrent le serializer et `emitAttachmentUpdated`. Un test e2e qui mock le translator → vérifie que le gateway emit le delta serait précieux.
+### ✅ Fixées (commits 7d84ee258, 375fd0608, c20a22cb1)
 
-3. **AudioMediaView ↔ AudioAvailabilityResolver consolidation** : `AudioMediaView` (utilisé par `BubbleStandardLayout`) garde sa propre orchestration multi-langue, distincte du `AudioAvailabilityResolver` (utilisé par `BubbleAttachmentView`). Une factorisation propre demanderait que le resolver accepte un `url` overridable + `kind: MediaKind` — pas fait dans ce sprint pour limiter le scope.
+| # | Fix | Symptôme évité |
+|---|---|---|
+| 1 | `APIMessageAttachment` init custom avec `try?` sur Prisme blobs | Plus d'event socket silencieusement avalé quand une seule entry `translations` est malformée |
+| 2 | `hydrateMetadataFromGRDB(forceOverwrite:)`, `refreshMessagesFromAPI` passe `true` | Re-transcription serveur propage maintenant à l'UI (bouton arrow.clockwise) |
+| 5 | `MessagePersistenceActor.applyAttachmentEnrichment` + appel dans `applyAttachmentUpdate` | Plus de pop-in à la réouverture de conv après réception live d'enrichissement |
+
+### ⏳ Backlog (non bloquantes mais à traiter)
+
+| # | Issue | Localisation | Priorité |
+|---|---|---|---|
+| 3 | `_broadcastAttachmentUpdated` race avec write translator — le re-query Prisma peut retourner le row pre-enrichi si le translator n'a pas await son write avant emit ZMQ | `services/gateway/src/socketio/MeeshySocketIOManager.ts:943-949` | Important — investigate si on observe des transcriptions "null" en logs ; sinon fix en passant data du caller au helper |
+| 4 | `MessageStore.apply()` publie sans equality guard — un extra re-render à chaque background refresh | `apps/ios/Meeshy/Features/Main/Stores/MessageStore.swift:317` | Cosmétique perf, fix 1-ligne |
+| 6 | `_serializeAttachmentsField` retourne `[]` silencieusement si `attachments` undefined — même pattern silent-drop que ce qu'on a corrigé | `services/gateway/src/socketio/handlers/MessageHandler.ts:910-913` | Ajouter `logger.error` pour visibilité |
+| 7 | Asymétrie texte transcription socket vs GRDB — `t.transcribedText ?? t.text` vs `t.text` seul | `ConversationViewModel.swift:3039 vs 2908` | Helper partagé `MessageTranscription.fromAPI(_:)` |
+
+### Follow-ups architecturaux (out-of-scope du sprint)
+
+- **AudioMediaView ↔ AudioAvailabilityResolver consolidation** : `AudioMediaView` (utilisé par `BubbleStandardLayout`) garde sa propre orchestration multi-langue, distincte du `AudioAvailabilityResolver` (utilisé par `BubbleAttachmentView`). Une factorisation propre demanderait que le resolver accepte un `url` overridable + `kind: MediaKind` — pas fait dans ce sprint pour limiter le scope.
+- **Tests d'intégration gateway `message:attachment-updated`** : actuellement seuls les tests unitaires couvrent le serializer et `emitAttachmentUpdated`. Un test e2e qui mock le translator → vérifie que le gateway emit le delta serait précieux.
