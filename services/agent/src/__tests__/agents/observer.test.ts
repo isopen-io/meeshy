@@ -80,6 +80,7 @@ const baseState = {
   maxMessagesPerUserPer10Min: 4,
   freshTopicProbability: 0.2,
   freshTopicCategoryHints: [],
+  freshTopicBlockedSlugs: [],
 };
 
 describe('Observer Agent', () => {

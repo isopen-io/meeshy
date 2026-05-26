@@ -49,6 +49,7 @@ function makeState(partial: Partial<ConversationState>): ConversationState {
     maxMessagesPerUserPer10Min: 4,
     freshTopicProbability: 0.2,
     freshTopicCategoryHints: [],
+    freshTopicBlockedSlugs: [],
     ...partial,
   };
 }
