@@ -284,6 +284,47 @@ final class BubbleContentMatrixTests: XCTestCase {
         XCTAssertFalse(content.visualHostsReply)
     }
 
+    // MARK: - Timestamp fallback (createdAt when cachedTimeString is nil)
+
+    /// Quand `cachedTimeString` est `nil` (cache GRDB legacy, race fresh-socket,
+    /// optimistic outgoing), le builder doit formater `message.createdAt` pour
+    /// que la bulle affiche toujours son heure.
+    func test_timeString_fallsBackToCreatedAt_whenCachedTimeStringIsNil() {
+        let msg = makeMessage(content: "Salut", cachedTimeString: nil)
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertFalse(content.meta.timeString.isEmpty,
+                       "timeString should not be empty when cachedTimeString is nil — must fall back to formatted createdAt")
+        XCTAssertEqual(content.meta.timeString.count, 5,
+                       "Format expected: HH:mm (5 characters)")
+        XCTAssertTrue(content.meta.timeString.contains(":"),
+                      "Format expected: HH:mm with colon separator")
+    }
+
+    /// Quand `cachedTimeString` est présent, le builder l'utilise tel quel —
+    /// pas de re-formatage de `createdAt`.
+    func test_timeString_prefersCachedTimeString_overFallback() {
+        let msg = makeMessage(content: "Salut", cachedTimeString: "09:15")
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertEqual(content.meta.timeString, "09:15")
+    }
+
+    /// Quand un `timeString` explicite est passé en paramètre (ex: tests ou
+    /// rendu groupé futur), il l'emporte sur tout le reste.
+    func test_timeString_prefersExplicitParameter_overCachedAndFallback() {
+        let msg = makeMessage(content: "Salut", cachedTimeString: "09:15")
+        let content = BubbleContent(
+            message: msg,
+            translations: [],
+            preferredTranslation: nil,
+            currentUserId: "u1",
+            timeString: "EXPLICIT"
+        )
+
+        XCTAssertEqual(content.meta.timeString, "EXPLICIT")
+    }
+
     // MARK: - Helpers
 
     private func makeMessage(
@@ -300,7 +341,9 @@ final class BubbleContentMatrixTests: XCTestCase {
         pinnedAt: Date? = nil,
         forwardedFromId: String? = nil,
         isEdited: Bool = false,
-        reactions: [MeeshyReaction] = []
+        reactions: [MeeshyReaction] = [],
+        createdAt: Date = Date(timeIntervalSince1970: 0),
+        cachedTimeString: String? = "12:34"
     ) -> MeeshyMessage {
         var effects = MessageEffects(flags: [])
         if isViewOnce {
@@ -329,7 +372,7 @@ final class BubbleContentMatrixTests: XCTestCase {
             pinnedBy: nil,
             isEncrypted: false,
             encryptionMode: nil,
-            createdAt: Date(timeIntervalSince1970: 0),
+            createdAt: createdAt,
             updatedAt: Date(timeIntervalSince1970: 0),
             attachments: attachments,
             reactions: reactions,
@@ -346,7 +389,7 @@ final class BubbleContentMatrixTests: XCTestCase {
             readByAllAt: nil,
             deliveredCount: 0,
             readCount: 0,
-            cachedTimeString: "12:34"
+            cachedTimeString: cachedTimeString
         )
     }
 
