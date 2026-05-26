@@ -47,6 +47,8 @@ function makeState(partial: Partial<ConversationState>): ConversationState {
     maxDelayMinutes: 360,
     spreadOverDayEnabled: true,
     maxMessagesPerUserPer10Min: 4,
+    freshTopicProbability: 0.2,
+    freshTopicCategoryHints: [],
     ...partial,
   };
 }
