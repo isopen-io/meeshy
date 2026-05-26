@@ -64,7 +64,7 @@ async function broadcastTopicsInvalidation(fastify: FastifyInstance): Promise<vo
   const agentClient = agentHost ? new AgentHttpClient(`http://${agentHost}:${agentHttpPort}`) : null;
 
   const payload = JSON.stringify({ scope: 'topics' });
-  const tasks = [
+  const tasks: Array<Promise<unknown>> = [
     getCacheStore().publish('agent:config-invalidated', payload).catch((err) =>
       fastify.log.warn({ err }, '[TopicCatalog] Redis publish failed'),
     ),
@@ -130,7 +130,11 @@ export async function agentTopicsRoutes(fastify: FastifyInstance) {
       return;
     }
     try {
-      const created = await fastify.prisma.agentTopicCatalog.create({ data: parsed.data });
+      // parsed.data has all required fields filled (Zod .default() applies at
+      // parse-time) ; cast to satisfy Prisma's strict input typing.
+      const created = await fastify.prisma.agentTopicCatalog.create({
+        data: parsed.data as Required<typeof parsed.data>,
+      });
       await broadcastTopicsInvalidation(fastify);
       sendSuccess(reply, created);
     } catch (err: unknown) {
