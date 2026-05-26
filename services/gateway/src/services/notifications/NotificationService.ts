@@ -464,9 +464,34 @@ export class NotificationService {
 
       const formatted = this.formatNotification(notification);
 
+      // Build the APN/FCM push header ONCE and reuse it for both the Socket.IO
+      // payload and the push payload. The in-app toast (driven by
+      // `notification:new` when socket is foreground-connected) needs the same
+      // `title`/`subtitle` framing as the native iOS banner so the user sees
+      // "<sender> · <conversation>" + body details consistently on both paths.
+      const { title: pushTitle, subtitle: pushSubtitle } = buildPushHeader({
+        type: params.type,
+        customTitle: params.title,
+        actor: params.actor,
+        context: {
+          conversationType: params.context.conversationType,
+          conversationTitle: params.context.conversationTitle,
+        },
+      });
+
+      // Socket.IO payload carries `title`/`subtitle` so the iOS in-app toast
+      // can render sender + conversation context without having to re-derive
+      // them client-side. `formatted` already contains the raw `actor`/`context`
+      // so this is purely additive.
+      const socketPayload = {
+        ...formatted,
+        title: pushTitle,
+        ...(pushSubtitle ? { subtitle: pushSubtitle } : {}),
+      };
+
       // Émettre via Socket.IO
       if (this.io) {
-        this.io.to(params.userId).emit(SERVER_EVENTS.NOTIFICATION_NEW, formatted);
+        this.io.to(params.userId).emit(SERVER_EVENTS.NOTIFICATION_NEW, socketPayload);
         console.log(`[RT-DIAG] notification:new emitted (socket) user=${params.userId} type=${params.type} conv=${params.context.conversationId ?? 'none'}`);
         // Update badge counters on client (fire-and-forget, non-blocking)
         this.emitCountsUpdate(params.userId).catch(() => {});
@@ -480,16 +505,6 @@ export class NotificationService {
               `/conversations/${params.context.conversationId}?messageId=${params.context.messageId}` :
               `/conversations/${params.context.conversationId}`) :
             undefined;
-
-          const { title: pushTitle, subtitle: pushSubtitle } = buildPushHeader({
-            type: params.type,
-            customTitle: params.title,
-            actor: params.actor,
-            context: {
-              conversationType: params.context.conversationType,
-              conversationTitle: params.context.conversationTitle,
-            },
-          });
           const pushBody = params.content.substring(0, 200);
 
           console.log(`[RT-DIAG] push (APNs/FCM) sending user=${params.userId} type=${params.type} conv=${params.context.conversationId ?? 'none'}`);
