@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Voice Profile Consent
 
-public struct VoiceConsentStatus: Decodable {
+public struct VoiceConsentStatus: Decodable, Sendable {
     public let hasConsent: Bool
     public let consentedAt: Date?
     public let ageVerified: Bool
@@ -23,14 +23,14 @@ public struct VoiceConsentRequest: Encodable {
     }
 }
 
-public struct VoiceConsentResponse: Decodable {
+public struct VoiceConsentResponse: Decodable, Sendable {
     public let success: Bool
     public let consentedAt: Date?
 }
 
 // MARK: - Voice Profile
 
-public struct VoiceProfile: Identifiable, Decodable {
+public struct VoiceProfile: Identifiable, Decodable, Sendable {
     public let id: String
     public let userId: String
     public let status: VoiceProfileStatus
@@ -50,7 +50,7 @@ public struct VoiceProfile: Identifiable, Decodable {
     }
 }
 
-public enum VoiceProfileStatus: String, Decodable, CaseIterable {
+public enum VoiceProfileStatus: String, Decodable, CaseIterable, Sendable {
     case pending
     case processing
     case ready
@@ -60,7 +60,7 @@ public enum VoiceProfileStatus: String, Decodable, CaseIterable {
 
 // MARK: - Voice Sample
 
-public struct VoiceSample: Identifiable, Decodable {
+public struct VoiceSample: Identifiable, Decodable, Sendable {
     public let id: String
     public let profileId: String
     public let durationMs: Int
@@ -75,7 +75,7 @@ public struct VoiceSample: Identifiable, Decodable {
 
 // MARK: - Voice Profile Upload
 
-public struct VoiceSampleUploadResponse: Decodable {
+public struct VoiceSampleUploadResponse: Decodable, Sendable {
     public let sampleId: String
     public let profileId: String
     public let durationMs: Int
