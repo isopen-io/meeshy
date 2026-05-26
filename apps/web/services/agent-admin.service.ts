@@ -610,4 +610,63 @@ export const agentAdminService = {
     const response = await apiService.patch(`/admin/agent/delivery-queue/${id}`, { content });
     return unwrapResponse<DeliveryQueueItem>(response);
   },
+
+  // ---------------------------------------------------------------------------
+  // Topic catalog (dynamic CRUD) — backs AgentTopicsTab + AgentConfigDialog
+  // blacklist multi-select. Source de vérité runtime utilisée par le strategist
+  // agent (cf. services/agent/src/agents/strategist.ts).
+  // ---------------------------------------------------------------------------
+
+  async listTopics(opts?: { activeOnly?: boolean }): Promise<ApiResponse<TopicCatalogItem[]>> {
+    const params = opts?.activeOnly ? { active: 'true' } : {};
+    const response = await apiService.get('/admin/agent/topics', params);
+    return unwrapResponse<TopicCatalogItem[]>(response);
+  },
+
+  async getTopic(id: string): Promise<ApiResponse<TopicCatalogItem>> {
+    const response = await apiService.get(`/admin/agent/topics/${id}`);
+    return unwrapResponse<TopicCatalogItem>(response);
+  },
+
+  async createTopic(input: TopicInput): Promise<ApiResponse<TopicCatalogItem>> {
+    const response = await apiService.post('/admin/agent/topics', input);
+    return unwrapResponse<TopicCatalogItem>(response);
+  },
+
+  async updateTopic(id: string, patch: Partial<TopicInput>): Promise<ApiResponse<TopicCatalogItem>> {
+    const response = await apiService.patch(`/admin/agent/topics/${id}`, patch);
+    return unwrapResponse<TopicCatalogItem>(response);
+  },
+
+  async deleteTopic(id: string, opts?: { hard?: boolean }): Promise<ApiResponse<{ id: string; deleted: 'soft' | 'hard' }>> {
+    const params = opts?.hard ? '?hard=true' : '';
+    const response = await apiService.delete(`/admin/agent/topics/${id}${params}`);
+    return unwrapResponse<{ id: string; deleted: 'soft' | 'hard' }>(response);
+  },
+
+  async testTopicRegex(id: string, sampleText: string): Promise<ApiResponse<{ matches: Record<string, number> }>> {
+    const response = await apiService.post(`/admin/agent/topics/${id}/test`, { sampleText });
+    return unwrapResponse<{ matches: Record<string, number> }>(response);
+  },
 };
+
+// ---------------------------------------------------------------------------
+// Topic catalog types
+// ---------------------------------------------------------------------------
+
+export type TopicCatalogItem = {
+  id: string;
+  slug: string;
+  label: string;
+  description?: string | null;
+  keywordPatterns: string[];
+  instructionTemplate: string;
+  searchHintTemplate: string;
+  examples: string[];
+  cooldownMinutes: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TopicInput = Omit<TopicCatalogItem, 'id' | 'createdAt' | 'updatedAt'>;
