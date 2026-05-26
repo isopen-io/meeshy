@@ -106,6 +106,18 @@ struct MeeshyApp: App {
                     }
                 }
                 .animation(MeeshyAnimation.springDefault, value: toastManager.currentToast)
+                .onReceive(SocialSocketManager.shared.inAppNotification) { payload in
+                    // In-app toast for `notification:new`. The tap action
+                    // builds a custom-scheme Meeshy URL (`meeshy://c/<id>`,
+                    // mapped by DeepLinkRouter) so the toast lands on the
+                    // right conversation regardless of stack depth.
+                    let conversationId = payload.context?.conversationId
+                    let tap: (() -> Void)? = conversationId.flatMap { id in
+                        guard let url = URL(string: "meeshy://c/\(id)") else { return nil }
+                        return { _ = deepLinkRouter.handle(url: url) }
+                    }
+                    _ = toastManager.showInAppNotification(payload, tapAction: tap)
+                }
                 .sheet(isPresented: $showCrashSheet) {
                     CrashReportSheet(reports: crashReportsToShow)
                 }

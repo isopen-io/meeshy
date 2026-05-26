@@ -1,4 +1,5 @@
 import XCTest
+import MeeshySDK
 import MeeshyUI
 @testable import Meeshy
 
@@ -100,6 +101,193 @@ final class ToastManagerTests: XCTestCase {
         XCTAssertEqual(
             ToastManager.showToastNotification,
             Notification.Name("meeshy.showToast")
+        )
+    }
+
+    // MARK: - In-App Notification Formatting (pure)
+
+    func test_formatInAppNotificationMessage_groupMessage_returnsTitleSubtitleAndBody() {
+        let payload = makeNotificationPayload(
+            title: "Alice Martin",
+            subtitle: "Équipe Dev",
+            content: "🎵 Audio · 0:34"
+        )
+        XCTAssertEqual(
+            ToastManager.formatInAppNotificationMessage(payload),
+            "Alice Martin · Équipe Dev\n🎵 Audio · 0:34"
+        )
+    }
+
+    func test_formatInAppNotificationMessage_directMessage_returnsTitleAndBodyOnly() {
+        let payload = makeNotificationPayload(
+            title: "Bob Smith",
+            subtitle: nil,
+            content: "Salut!"
+        )
+        XCTAssertEqual(
+            ToastManager.formatInAppNotificationMessage(payload),
+            "Bob Smith\nSalut!"
+        )
+    }
+
+    func test_formatInAppNotificationMessage_emptyContent_returnsHeaderOnly() {
+        let payload = makeNotificationPayload(
+            title: "Alice Martin",
+            subtitle: "Équipe Dev",
+            content: ""
+        )
+        XCTAssertEqual(
+            ToastManager.formatInAppNotificationMessage(payload),
+            "Alice Martin · Équipe Dev"
+        )
+    }
+
+    func test_formatInAppNotificationMessage_noTitleNoSubtitle_returnsContentOnly() {
+        let payload = makeNotificationPayload(
+            title: nil,
+            subtitle: nil,
+            content: "System message"
+        )
+        XCTAssertEqual(
+            ToastManager.formatInAppNotificationMessage(payload),
+            "System message"
+        )
+    }
+
+    func test_formatInAppNotificationMessage_emptyEverywhere_returnsNil() {
+        let payload = makeNotificationPayload(title: "", subtitle: "", content: "")
+        XCTAssertNil(ToastManager.formatInAppNotificationMessage(payload))
+    }
+
+    func test_formatInAppNotificationMessage_whitespaceOnly_returnsNil() {
+        let payload = makeNotificationPayload(title: "   ", subtitle: "\n", content: "\t ")
+        XCTAssertNil(ToastManager.formatInAppNotificationMessage(payload))
+    }
+
+    func test_formatInAppNotificationMessage_audioBody_preservesEmojiAndDurationSeparator() {
+        let payload = makeNotificationPayload(
+            title: "Alice",
+            subtitle: nil,
+            content: "🎵 Audio · 1:23"
+        )
+        XCTAssertEqual(
+            ToastManager.formatInAppNotificationMessage(payload),
+            "Alice\n🎵 Audio · 1:23"
+        )
+    }
+
+    // MARK: - showInAppNotification — Side Effects
+
+    func test_showInAppNotification_groupMessage_setsInfoToastWithFullHeader() {
+        let sut = ToastManager.shared
+        let payload = makeNotificationPayload(
+            title: "Alice Martin",
+            subtitle: "Équipe Dev",
+            content: "🎵 Audio · 0:34"
+        )
+
+        let shown = sut.showInAppNotification(payload)
+
+        XCTAssertTrue(shown)
+        XCTAssertNotNil(sut.currentToast)
+        XCTAssertEqual(sut.currentToast?.type, .info)
+        XCTAssertEqual(
+            sut.currentToast?.message,
+            "Alice Martin · Équipe Dev\n🎵 Audio · 0:34"
+        )
+    }
+
+    func test_showInAppNotification_currentConversationMatchesTarget_isSuppressed() {
+        let sut = ToastManager.shared
+        let payload = makeNotificationPayload(
+            title: "Alice",
+            subtitle: "Équipe Dev",
+            content: "Hello",
+            conversationId: "conv_123"
+        )
+
+        let shown = sut.showInAppNotification(payload, currentConversationId: "conv_123")
+
+        XCTAssertFalse(shown)
+        XCTAssertNil(sut.currentToast)
+    }
+
+    func test_showInAppNotification_currentConversationDifferent_isShown() {
+        let sut = ToastManager.shared
+        let payload = makeNotificationPayload(
+            title: "Alice",
+            subtitle: "Équipe Dev",
+            content: "Hello",
+            conversationId: "conv_123"
+        )
+
+        let shown = sut.showInAppNotification(payload, currentConversationId: "conv_999")
+
+        XCTAssertTrue(shown)
+        XCTAssertNotNil(sut.currentToast)
+    }
+
+    func test_showInAppNotification_withTapAction_marksTappable() {
+        let sut = ToastManager.shared
+        let payload = makeNotificationPayload(
+            title: "Alice",
+            subtitle: nil,
+            content: "Salut!"
+        )
+        var tapped = false
+
+        _ = sut.showInAppNotification(payload, tapAction: { tapped = true })
+
+        XCTAssertEqual(sut.currentToast?.isTappable, true)
+        sut.onTapAction?()
+        XCTAssertTrue(tapped)
+    }
+
+    func test_showInAppNotification_emptyPayload_returnsFalseAndShowsNothing() {
+        let sut = ToastManager.shared
+        let payload = makeNotificationPayload(title: nil, subtitle: nil, content: nil)
+
+        let shown = sut.showInAppNotification(payload)
+
+        XCTAssertFalse(shown)
+        XCTAssertNil(sut.currentToast)
+    }
+
+    // MARK: - Test fixture
+
+    private func makeNotificationPayload(
+        title: String?,
+        subtitle: String?,
+        content: String?,
+        conversationId: String? = nil
+    ) -> APINotification {
+        let context: NotificationContext? = conversationId.map { id in
+            NotificationContext(
+                conversationId: id,
+                conversationTitle: subtitle,
+                conversationType: subtitle == nil ? "direct" : "group",
+                messageId: nil,
+                originalMessageId: nil,
+                callSessionId: nil,
+                friendRequestId: nil,
+                reactionId: nil,
+                postId: nil,
+                commentId: nil
+            )
+        }
+        return APINotification(
+            id: "notif_test",
+            userId: "user_test",
+            type: "new_message",
+            priority: nil,
+            title: title,
+            subtitle: subtitle,
+            content: content,
+            actor: nil,
+            context: context,
+            metadata: nil,
+            state: NotificationState(isRead: false, readAt: nil, createdAt: "2026-05-26T09:00:00Z", expiresAt: nil),
+            delivery: nil
         )
     }
 }
