@@ -30,6 +30,20 @@ public final class ConversationAudioCoordinator: ObservableObject {
     @Published public private(set) var duration: TimeInterval = 0
     @Published public private(set) var speed: PlaybackSpeed = .x1_0
 
+    // MARK: - Public callbacks
+
+    /// Fired with the attachment id of the audio that just finished or
+    /// failed to load — BEFORE the queue advances to the next head. The
+    /// `ConversationViewModel` uses this to enrich its
+    /// `listenedAttachmentIds` set so auto-built queues don't loop on the
+    /// same audios indefinitely.
+    ///
+    /// Lifecycle: each view model that wants to observe the global
+    /// coordinator should set this when it starts driving playback (e.g.
+    /// in `playAudio(attachmentId:)`) — the coordinator is a process-wide
+    /// singleton, so the most-recent setter wins.
+    public var onAttachmentFinished: ((String) -> Void)?
+
     // MARK: - Private
 
     private let engine: AudioPlaybackEngineDriving
@@ -119,8 +133,17 @@ public final class ConversationAudioCoordinator: ObservableObject {
     }
 
     private func advanceQueue() {
+        // B1 — capture the id of the audio leaving the head BEFORE we
+        // mutate the queue so the VM-side `onAttachmentFinished` observer
+        // can record exactly the attachment that just finished/failed in
+        // its `listenedAttachmentIds` set. Without this enrichment the
+        // auto-built queues would loop on the same audios indefinitely.
+        let finishedId = queue.first?.attachmentId
         if !queue.isEmpty { queue.removeFirst() }
         queueCount = queue.count
+        if let finishedId {
+            onAttachmentFinished?(finishedId)
+        }
         if queue.isEmpty {
             // B2 fix — when the queue empties, the engine was still alive
             // and would play the just-loaded audio to natural end while the
