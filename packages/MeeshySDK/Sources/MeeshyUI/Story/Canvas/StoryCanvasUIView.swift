@@ -2069,6 +2069,20 @@ public final class StoryCanvasUIView: UIView {
             manipulatedItemId = id
             dragStartSlideX = sx
             dragStartSlideY = sy
+
+            // Background drag (path α): snapshot the current bg transform so
+            // `.changed` can interpolate against it without rebuilding the
+            // slide model on every tick. Commit happens in `.ended`.
+            if id == backgroundMediaObjectId {
+                let current = slide.effects.backgroundTransform
+                dragStartBgScale = Double(current?.scale ?? 1)
+                dragStartBgOffsetX = Double(current?.offsetX ?? 0)
+                dragStartBgOffsetY = Double(current?.offsetY ?? 0)
+                dragStartBgRotation = current?.rotation ?? 0
+                dragStartBgFitMode = current?.videoFitMode
+                liveBackgroundTransformDuringDrag = nil
+            }
+
             // Bring-to-front au touch : l'élément touché passe immédiatement
             // devant les autres. Couvre tap simple ET début de drag (le pan
             // recognizer émet .began sur le touch initial même sans translation).
@@ -2088,6 +2102,29 @@ public final class StoryCanvasUIView: UIView {
             let renderHeightFor1920 = geo.render(CanvasGeometry.designHeight)
             let dxNorm = Double(translation.x / bounds.width)
             let dyNorm = Double(translation.y / renderHeightFor1920)
+
+            // Branche dédiée background (path α): live update du layer.transform
+            // SANS muter le modèle. Le commit dans le modèle + le callback
+            // viennent dans `.ended`. Évite l'aller-retour
+            // `updatePosition` → `slide.didSet` → `rebuildLayers` → `configure()`
+            // qui passait par `mediaObjects.x/y` au lieu de
+            // `backgroundTransform` et causait le bug "drag bg invisible".
+            if id == backgroundMediaObjectId {
+                let live = BackgroundTransform(
+                    scale: dragStartBgScale,
+                    offsetX: dragStartBgOffsetX + dxNorm * Double(bounds.width),
+                    offsetY: dragStartBgOffsetY + dyNorm * Double(bounds.height),
+                    rotation: dragStartBgRotation,
+                    videoFitMode: dragStartBgFitMode
+                )
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                backgroundLayer.transform = live.caTransform()
+                CATransaction.commit()
+                liveBackgroundTransformDuringDrag = live
+                return
+            }
+
             let rawX = clamp(dragStartSlideX + dxNorm)
             let rawY = clamp(dragStartSlideY + dyNorm)
             let (snappedX, didSnapX) = snap(rawX)
@@ -2097,10 +2134,31 @@ public final class StoryCanvasUIView: UIView {
             slide = updatePosition(slideId: id, x: snappedX, y: snappedY)
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
+            let wasBackgroundDrag = (manipulatedItemId == backgroundMediaObjectId)
             manipulatedItemId = nil
             hideSnapGuides()
-            slideContentRevision &+= 1
-            rebuildLayers()
+
+            if wasBackgroundDrag, let live = liveBackgroundTransformDuringDrag {
+                // Commit live transform into the slide model + notify parent
+                // via callback. `slide = updated` triggers didSet, but the
+                // idempotent `configure()` (Task 12) detects the same kind
+                // and skips the rebuild flash.
+                var updated = slide
+                let persisted = StoryBackgroundTransform(
+                    scale: live.scale != 1.0 ? CGFloat(live.scale) : nil,
+                    offsetX: live.offsetX != 0 ? CGFloat(live.offsetX) : nil,
+                    offsetY: live.offsetY != 0 ? CGFloat(live.offsetY) : nil,
+                    rotation: live.rotation != 0 ? live.rotation : nil,
+                    videoFitMode: live.videoFitMode
+                )
+                updated.effects.backgroundTransform = persisted.isIdentity ? nil : persisted
+                slide = updated
+                onBackgroundTransformChanged?(persisted)
+                liveBackgroundTransformDuringDrag = nil
+            } else {
+                slideContentRevision &+= 1
+                rebuildLayers()
+            }
         default:
             break
         }
