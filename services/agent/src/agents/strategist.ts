@@ -1,9 +1,13 @@
 import crypto from 'node:crypto';
+import Mustache from 'mustache';
 import type { ConversationState, InterventionPlan, InterventionDirective, ReactionDirective, ControlledUser } from '../graph/state';
 import type { LlmProvider } from '../llm/types';
 import { parseJsonLlm } from '../utils/parse-json-llm';
 import { getArchetype } from '@meeshy/shared/agent/archetypes';
 import { resolveDelaySeconds } from '../delivery/delay-resolver';
+import type { TopicCatalogEntry } from '../topics/types';
+import type { TopicCatalogService } from '../topics/TopicCatalogService';
+import type { TopicUsageService } from '../topics/TopicUsageService';
 
 const STRATEGIST_SYSTEM_PROMPT = `Tu es l'orchestrateur d'une communaute de messagerie. Analyse cette conversation et decide quelles interventions sont naturelles.
 
@@ -162,168 +166,65 @@ function shuffleArray<T>(arr: T[]): T[] {
 // the source of truth at runtime.
 const DEFAULT_TOPIC_PROVOCATION_PROBABILITY = 0.20;
 
-type ConversationTheme =
-  | 'ai_tech'
-  | 'microservices'
-  | 'web_dev'
-  | 'mobile_dev'
-  | 'cybersecurity'
-  | 'data_science'
-  | 'sports'
-  | 'culture'
-  | 'business'
-  | 'science'
-  | 'gaming'
-  | 'politics'
-  | 'general_news';
+export type ProvocationHint = { instruction: string; searchHint: string; topicCategory: string };
 
-const THEME_PATTERNS: Array<[ConversationTheme, RegExp]> = [
-  ['ai_tech', /\b(ia|ai|gpt|llm|claude|gemini|anthropic|openai|prompt|model|chatgpt|mistral|huggingface|machine[\s-]?learning|deep[\s-]?learning|transformer|rag|agentic|embedding|fine[\s-]?tuning)\b/i],
-  ['microservices', /\b(microservice|kubernetes|k8s|docker|kafka|grpc|service[\s-]?mesh|istio|distribu(?:e|é)|message[\s-]?broker|saga|event[\s-]?driven|api[\s-]?gateway|terraform|helm|prometheus|grafana|observability|monolith)\b/i],
-  ['web_dev', /\b(react|next\.?js|vue|svelte|angular|typescript|javascript|node\.?js|fastify|express|tailwind|frontend|backend|fullstack|webpack|vite|deno|bun)\b/i],
-  ['mobile_dev', /\b(swift|swiftui|kotlin|jetpack|android|ios|react[\s-]?native|flutter|xcode|appstore|playstore)\b/i],
-  ['cybersecurity', /\b(s(?:e|é)curit(?:e|é)|cybers(?:e|é)curit(?:e|é)|pentest|cve|vuln(?:e|é)rabilit(?:e|é)|ransomware|phishing|zero[\s-]?day|exploit|hacker|cisa|crypto[\s-]?graphy)\b/i],
-  ['data_science', /\b(data[\s-]?science|big[\s-]?data|spark|hadoop|pandas|numpy|jupyter|datalake|warehouse|etl|bi|analytics|tableau|powerbi)\b/i],
-  ['sports', /\b(football|sport|match|(?:e|é)quipe|joueur|coupe|tournoi|psg|ligue|nba|formula|tennis|olympique|f1|rugby|jo|basket)\b/i],
-  ['science', /\b(science|recherche|(?:e|é)tude|chercheur|d(?:e|é)couverte|biologie|chimie|physique|espace|nasa|spacex|astronome|quantum|fusion)\b/i],
-  ['business', /\b(business|startup|investissement|lev(?:e|é)e|crypto|bitcoin|ethereum|bourse|action|trading|(?:e|é)conomie|finance|march(?:e|é)|ipo|fonds)\b/i],
-  ['gaming', /\b(jeu[x]?\s|gaming|playstation|xbox|nintendo|steam|esport|twitch|gamer|ps5|switch)\b/i],
-  ['culture', /\b(film|musique|s(?:e|é)rie|netflix|spotify|concert|album|cin(?:e|é)ma|artiste|festival|livre|roman|disney|prime[\s-]?video)\b/i],
-  ['politics', /\b(politique|(?:e|é)lection|gouvernement|pr(?:e|é)sident|ministre|assembl(?:e|é)e|parti|d(?:e|é)putes?|s(?:e|é)nat|loi)\b/i],
-  ['general_news', /\b(actualit(?:e|é)|news|info|monde|soci(?:e|é)t(?:e|é)|(?:e|é)v(?:e|é)nement)\b/i],
-];
-
-// Admin-facing category hints (configured via AgentConfig.freshTopicCategoryHints)
-// use short keys ('ai', 'tech', 'crypto', …). Map them to our richer internal
-// theme enum so the per-theme provocation hint table below still applies.
-const HINT_TO_THEME: Record<string, ConversationTheme> = {
-  ai: 'ai_tech', tech: 'ai_tech',
-  microservices: 'microservices', architecture: 'microservices', devops: 'microservices',
-  web: 'web_dev', frontend: 'web_dev', backend: 'web_dev',
-  mobile: 'mobile_dev', ios: 'mobile_dev', android: 'mobile_dev',
-  security: 'cybersecurity', cybersecurity: 'cybersecurity',
-  data: 'data_science',
-  sport: 'sports', sports: 'sports',
-  culture: 'culture',
-  science: 'science', climate: 'science', health: 'science',
-  finance: 'business', business: 'business', crypto: 'business',
-  gaming: 'gaming',
-  politics: 'politics',
-  news: 'general_news',
-};
-
-function detectConversationTheme(state: ConversationState): ConversationTheme {
-  // Admin override: if `freshTopicCategoryHints` is set on AgentConfig, prefer
-  // those over auto-detection. We map each hint to our internal theme enum
-  // and pick the first recognized one so the operator's choice wins.
-  const hints = state.freshTopicCategoryHints ?? [];
-  for (const raw of hints) {
-    const mapped = HINT_TO_THEME[raw.trim().toLowerCase()];
-    if (mapped) return mapped;
-  }
-
-  const haystack = [
+/**
+ * Construit le haystack utilisé pour le scoring regex. Concatène titre +
+ * description + agent instructions + 30 derniers messages.
+ */
+function buildHaystack(state: ConversationState): string {
+  return [
     state.conversationTitle ?? '',
     state.conversationDescription ?? '',
     state.agentInstructions ?? '',
     ...state.messages.slice(-30).map((m) => m.content),
   ].join(' ').toLowerCase();
-
-  const scores = new Map<ConversationTheme, number>();
-  for (const [theme, regex] of THEME_PATTERNS) {
-    const matches = haystack.match(new RegExp(regex.source, regex.flags + 'g')) ?? [];
-    if (matches.length > 0) scores.set(theme, matches.length);
-  }
-
-  if (scores.size === 0) return 'general_news';
-
-  return [...scores.entries()].sort((a, b) => b[1] - a[1])[0][0];
 }
 
-type ProvocationHint = { instruction: string; searchHint: string; topicCategory: string };
-
-function buildTopicProvocationHint(theme: ConversationTheme): ProvocationHint {
-  switch (theme) {
-    case 'ai_tech':
-      return {
-        instruction: 'Cette conversation gravite autour de l\'IA / LLM. Lance un NOUVEAU sujet AUTOUR d\'une actualite chaude IA (nouveau modele, benchmark, levee de fonds, debat ethique, agent autonome).',
-        searchHint: 'actualite IA LLM cette semaine',
-        topicCategory: 'tech-ai',
-      };
-    case 'microservices':
-      return {
-        instruction: 'Cette conversation porte sur l\'architecture distribuee / microservices. Lance un NOUVEAU sujet (release Kubernetes, retour d\'experience recent, debat distribue vs monolithe, observabilite, new pattern).',
-        searchHint: 'microservices kubernetes actualite tendance',
-        topicCategory: 'tech-architecture',
-      };
-    case 'web_dev':
-      return {
-        instruction: 'Conversation web/frontend/backend. Lance un NOUVEAU sujet (release framework, retour d\'experience, debat outillage, performance).',
-        searchHint: 'actualite developpement web framework',
-        topicCategory: 'tech-web',
-      };
-    case 'mobile_dev':
-      return {
-        instruction: 'Conversation mobile (iOS/Android). Lance un NOUVEAU sujet (release OS, framework, App Store policy, retour d\'experience).',
-        searchHint: 'actualite developpement mobile iOS Android',
-        topicCategory: 'tech-mobile',
-      };
-    case 'cybersecurity':
-      return {
-        instruction: 'Conversation cybersecurite. Lance un NOUVEAU sujet (CVE recente, breach, retour pentest, debat zero-trust).',
-        searchHint: 'actualite cybersecurite CVE breach',
-        topicCategory: 'tech-security',
-      };
-    case 'data_science':
-      return {
-        instruction: 'Conversation data science / analytics. Lance un NOUVEAU sujet (release outil, tendance pipeline, retour d\'experience datalake).',
-        searchHint: 'actualite data science analytics',
-        topicCategory: 'tech-data',
-      };
-    case 'sports':
-      return {
-        instruction: 'Conversation sport. Lance un NOUVEAU sujet (resultat recent, transfert, evenement a venir).',
-        searchHint: 'actualite sport resultats recents',
-        topicCategory: 'sport',
-      };
-    case 'science':
-      return {
-        instruction: 'Conversation science. Lance un NOUVEAU sujet (decouverte recente, mission spatiale, debat).',
-        searchHint: 'decouverte scientifique recente',
-        topicCategory: 'science',
-      };
-    case 'business':
-      return {
-        instruction: 'Conversation business/finance. Lance un NOUVEAU sujet (levee, mouvement marche, tendance crypto, IPO).',
-        searchHint: 'actualite business startup finance tendance',
-        topicCategory: 'business',
-      };
-    case 'gaming':
-      return {
-        instruction: 'Conversation gaming. Lance un NOUVEAU sujet (sortie jeu, drama studio, esport).',
-        searchHint: 'actualite gaming sortie jeu',
-        topicCategory: 'gaming',
-      };
-    case 'culture':
-      return {
-        instruction: 'Conversation culture. Lance un NOUVEAU sujet (sortie film, album, serie a debattre).',
-        searchHint: 'sortie cinema musique serie recente',
-        topicCategory: 'culture',
-      };
-    case 'politics':
-      return {
-        instruction: 'Conversation politique. Lance un NOUVEAU sujet en lien avec une actualite politique chaude. Reste factuel, evite la polemique gratuite.',
-        searchHint: 'actualite politique recente',
-        topicCategory: 'politics',
-      };
-    case 'general_news':
-    default:
-      return {
-        instruction: 'Lance un NOUVEAU sujet autour d\'une actualite chaude generale susceptible d\'interesser les participants.',
-        searchHint: 'actualite hot du moment',
-        topicCategory: 'news',
-      };
+function countMatches(regexes: RegExp[], haystack: string): number {
+  let total = 0;
+  for (const r of regexes) {
+    const flags = r.flags.includes('g') ? r.flags : r.flags + 'g';
+    const matches = haystack.match(new RegExp(r.source, flags)) ?? [];
+    total += matches.length;
   }
+  return total;
+}
+
+/**
+ * Sélectionne le topic à provoquer : top-3 par score regex puis random parmi
+ * ce top pour éviter le déterminisme. Retourne null si liste vide.
+ */
+export function selectProvocationTopic(
+  eligible: TopicCatalogEntry[],
+  compiledPatterns: Map<string, RegExp[]>,
+  haystack: string,
+): TopicCatalogEntry | null {
+  if (eligible.length === 0) return null;
+  const scored = eligible.map((t) => ({
+    topic: t,
+    score: countMatches(compiledPatterns.get(t.id) ?? [], haystack),
+  }));
+  const sorted = scored.sort((a, b) => b.score - a.score);
+  const pool = sorted.slice(0, Math.min(3, sorted.length));
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  return pick.topic;
+}
+
+export function renderProvocationHint(
+  topic: TopicCatalogEntry,
+  ctx: { conversationTitle: string; conversationDescription: string },
+): ProvocationHint {
+  const renderCtx = {
+    label: topic.label,
+    conversationTitle: ctx.conversationTitle,
+    conversationDescription: ctx.conversationDescription,
+  };
+  return {
+    instruction: Mustache.render(topic.instructionTemplate, renderCtx),
+    searchHint: Mustache.render(topic.searchHintTemplate, renderCtx),
+    topicCategory: topic.slug,
+  };
 }
 
 function buildProvocationBlock(hint: ProvocationHint, budgetRemaining: number): string {
@@ -352,7 +253,7 @@ function buildStrategistPrompt(
   maxResponses: number,
   maxReactions: number,
   reactionsEnabled: boolean,
-  detectedTheme: ConversationTheme,
+  detectedTheme: string,
   provocationHint: ProvocationHint | null,
 ): string {
   const windowSize = state.useFullHistory ? 250 : (state.contextWindowSize ?? 50);
@@ -789,7 +690,12 @@ function generateLurkerReactions(
 
   return result;
 }
-export function createStrategistNode(llm: LlmProvider) {
+export interface StrategistDependencies {
+  topicCatalog: TopicCatalogService;
+  topicUsage: TopicUsageService;
+}
+
+export function createStrategistNode(llm: LlmProvider, deps?: StrategistDependencies) {
   return async function strategist(state: ConversationState) {
     if (state.controlledUsers.length === 0) {
       return {
@@ -834,17 +740,44 @@ export function createStrategistNode(llm: LlmProvider) {
     const minResponses = state.minResponsesPerCycle;
     const maxResponses = state.maxResponsesPerCycle;
 
-    const detectedTheme = detectConversationTheme(state);
     const provocationProbability = state.freshTopicProbability ?? DEFAULT_TOPIC_PROVOCATION_PROBABILITY;
-    const provokeNewTopic =
+    const shouldProvoke =
       state.budgetRemaining > 0 && provocationProbability > 0 && Math.random() < provocationProbability;
-    const provocationHint = provokeNewTopic ? buildTopicProvocationHint(detectedTheme) : null;
 
-    if (provocationHint) {
-      console.log(
-        `[Strategist] Topic provocation TRIGGERED (theme=${detectedTheme}, searchHint="${provocationHint.searchHint}")`,
-      );
+    let provocationHint: ProvocationHint | null = null;
+    let chosenTopic: TopicCatalogEntry | null = null;
+    let detectedTheme = 'general';
+
+    if (shouldProvoke && deps) {
+      try {
+        const allTopics = await deps.topicCatalog.list({ activeOnly: true });
+        const blockedSet = new Set(state.freshTopicBlockedSlugs ?? []);
+        const allowed = allTopics.filter((t) => !blockedSet.has(t.slug));
+        const eligible = await deps.topicUsage.filterEligible(allowed, state.conversationId);
+
+        if (eligible.length > 0) {
+          const haystack = buildHaystack(state);
+          const compiledMap = new Map<string, RegExp[]>();
+          for (const t of eligible) {
+            compiledMap.set(t.id, deps.topicCatalog.compiledPatternsFor(t.id));
+          }
+          chosenTopic = selectProvocationTopic(eligible, compiledMap, haystack);
+          if (chosenTopic) {
+            detectedTheme = chosenTopic.slug;
+            provocationHint = renderProvocationHint(chosenTopic, {
+              conversationTitle: state.conversationTitle ?? '',
+              conversationDescription: state.conversationDescription ?? '',
+            });
+            console.log(
+              `[Strategist] Topic provocation TRIGGERED (slug=${chosenTopic.slug}, searchHint="${provocationHint.searchHint}")`,
+            );
+          }
+        }
+      } catch (err) {
+        console.error('[Strategist] Topic catalog lookup failed, skipping provocation', err);
+      }
     }
+    const provokeNewTopic = provocationHint !== null;
 
     const prompt = buildStrategistPrompt(
       state,
@@ -855,6 +788,15 @@ export function createStrategistNode(llm: LlmProvider) {
       detectedTheme,
       provocationHint,
     );
+
+    // Record usage (fire-and-forget) — pas besoin d'attendre, on log les erreurs.
+    if (chosenTopic && deps) {
+      const topicId = chosenTopic.id;
+      const conversationId = state.conversationId;
+      deps.topicUsage.record(topicId, conversationId).catch((err) =>
+        console.error('[Strategist] Failed to record topic usage', err),
+      );
+    }
 
     try {
       const response = await llm.chat({

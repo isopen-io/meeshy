@@ -322,6 +322,10 @@ export const ConversationStateAnnotation = Annotation.Root({
     reducer: (_current, update) => update,
     default: () => [],
   }),
+  freshTopicBlockedSlugs: Annotation<string[]>({
+    reducer: (_current, update) => update,
+    default: () => [],
+  }),
 });
 
 export type ConversationState = typeof ConversationStateAnnotation.State;

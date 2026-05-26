@@ -159,6 +159,7 @@ export class ConversationScanner {
       maxMessagesPerUserPer10Min: config?.maxMessagesPerUserPer10Min ?? 4,
       freshTopicProbability: config?.freshTopicProbability ?? 0.2,
       freshTopicCategoryHints: config?.freshTopicCategoryHints ?? [],
+      freshTopicBlockedSlugs: config?.freshTopicBlockedSlugs ?? [],
     };
     await this.processConversation(conv, 'manual');
     await this.redis.set(`agent:last-scan:${conversationId}`, String(Date.now()), 'EX', 86400);
@@ -641,6 +642,7 @@ export class ConversationScanner {
         maxMessagesPerUserPer10Min: conv.maxMessagesPerUserPer10Min,
         freshTopicProbability: conv.freshTopicProbability,
         freshTopicCategoryHints: conv.freshTopicCategoryHints,
+        freshTopicBlockedSlugs: conv.freshTopicBlockedSlugs,
       }, {
         callbacks: [{
           handleChainStart: async (_chain: any, _inputs: any, _runId: string, _parentRunId?: string, _tags?: string[], metadata?: Record<string, any>) => {
