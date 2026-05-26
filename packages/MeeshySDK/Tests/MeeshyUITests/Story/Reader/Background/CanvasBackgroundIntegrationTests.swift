@@ -44,6 +44,31 @@ final class CanvasBackgroundIntegrationTests: XCTestCase {
         XCTAssertTrue(firstPlayer === secondPlayer, "AVPlayer must be reused, not recreated")
     }
 
+    func test_doubleTap_onBg_cyclesVideoFitMode() throws {
+        let bgMedia = StoryMediaObject(
+            id: "bg-1",
+            postMediaId: "bg-1",
+            mediaURL: "file:///tmp/test.jpg",
+            mediaType: "image",
+            aspectRatio: 1.0,
+            isBackground: true
+        )
+        var effects = StoryEffects()
+        effects.mediaObjects = [bgMedia]
+        let slide = StorySlide(id: "s1", effects: effects)
+        let canvas = StoryCanvasUIView(slide: slide, mode: .edit)
+        canvas.frame = CGRect(x: 0, y: 0, width: 412, height: 732)
+        canvas.layoutIfNeeded()
+
+        XCTAssertNil(canvas.slide.effects.backgroundTransform?.videoFitMode)
+        canvas.performDoubleTapForTesting(targetId: "bg-1")
+        XCTAssertEqual(canvas.slide.effects.backgroundTransform?.videoFitMode, "fit")
+        canvas.performDoubleTapForTesting(targetId: "bg-1")
+        XCTAssertEqual(canvas.slide.effects.backgroundTransform?.videoFitMode, "fill")
+        canvas.performDoubleTapForTesting(targetId: "bg-1")
+        XCTAssertNil(canvas.slide.effects.backgroundTransform?.videoFitMode)
+    }
+
     func test_handlePan_bgDrag_updatesLayerTransformLiveBeforeCommit() throws {
         let bgMedia = StoryMediaObject(
             id: "bg-1",
