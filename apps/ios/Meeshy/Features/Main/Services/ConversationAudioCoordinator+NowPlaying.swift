@@ -128,22 +128,22 @@ extension ConversationAudioCoordinator {
         // System remote command handlers may be invoked from system-owned
         // queues (not guaranteed main). The coordinator is `@MainActor`, so
         // we hop via `Task { @MainActor in }` before calling into it.
-        cc.playCommand.addTarget { [weak self] _ in
+        let playToken = cc.playCommand.addTarget { [weak self] _ in
             guard let self else { return .commandFailed }
             Task { @MainActor in self.togglePlayPause() }
             return .success
         }
-        cc.pauseCommand.addTarget { [weak self] _ in
+        let pauseToken = cc.pauseCommand.addTarget { [weak self] _ in
             guard let self else { return .commandFailed }
             Task { @MainActor in self.togglePlayPause() }
             return .success
         }
-        cc.nextTrackCommand.addTarget { [weak self] _ in
+        let nextToken = cc.nextTrackCommand.addTarget { [weak self] _ in
             guard let self else { return .commandFailed }
             Task { @MainActor in self.playNext() }
             return .success
         }
-        cc.changePlaybackPositionCommand.addTarget { [weak self] event in
+        let seekToken = cc.changePlaybackPositionCommand.addTarget { [weak self] event in
             guard let positionEvent = event as? MPChangePlaybackPositionCommandEvent,
                   let self else { return .commandFailed }
             let position = positionEvent.positionTime
@@ -155,6 +155,10 @@ extension ConversationAudioCoordinator {
             }
             return .success
         }
+
+        // Tokens stored for future `deactivateNowPlayingBridge()` symmetry —
+        // currently unused since the bridge is process-long.
+        _remoteCommandTokens = [playToken, pauseToken, nextToken, seekToken]
 
         cc.playCommand.isEnabled = true
         cc.pauseCommand.isEnabled = true

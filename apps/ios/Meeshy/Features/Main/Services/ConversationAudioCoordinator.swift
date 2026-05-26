@@ -89,6 +89,13 @@ public final class ConversationAudioCoordinator: ObservableObject {
     // read/write these. The `_` prefix signals extension-only usage.
     var _isNowPlayingActivated = false
     var _nowPlayingCancellables = Set<AnyCancellable>()
+    /// Opaque tokens returned by `MPRemoteCommand.addTarget`. Stored for
+    /// future `deactivateNowPlayingBridge()` symmetry — currently unused
+    /// since the bridge is process-long (`activateNowPlayingBridge` is
+    /// called once at root mount and never torn down). The storage locks
+    /// the contract so a future deactivation path can call `removeTarget(_:)`
+    /// without first re-discovering the handlers.
+    var _remoteCommandTokens: [Any] = []
 
     private static let log = Logger(subsystem: "me.meeshy.app", category: "audio-coordinator")
 
