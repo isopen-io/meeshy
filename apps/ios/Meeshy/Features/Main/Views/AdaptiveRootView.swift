@@ -25,15 +25,12 @@ struct AdaptiveRootView: View {
             let coord = ConversationAudioCoordinator.shared
             coord.activateNowPlayingBridge()
         }
-        // Phase 7 — Mini-player flottant au-dessus du tab bar. Visible quand
-        // un audio est en cours. La navigation vers la conversation source
-        // est volontairement no-op ici : `Router` est instancié dans
-        // `RootView`/`iPadRootView` (au-dessous), donc inaccessible depuis ce
-        // niveau via `@EnvironmentObject`. Sera complété en Phase 9 si le QA
-        // l'exige (option : exposer un Router via singleton ou injection app).
-        .overlay(alignment: .bottom) {
-            MiniAudioPlayerBar(onTapBody: {})
-                .padding(.bottom, 60)
-        }
+        // B4 — The mini-player overlay used to live HERE but the tap-body
+        // handler had no access to the `Router` (instantiated inside
+        // `RootView` / `iPadRootView`, scopes below this one). The overlay
+        // is now mounted in those views directly so the tap routes to the
+        // active conversation. Keeping this comment as the canonical
+        // landing pad for the next dev wondering "why isn't the mini-player
+        // here too?".
     }
 }
