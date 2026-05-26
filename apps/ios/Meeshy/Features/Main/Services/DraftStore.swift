@@ -1,16 +1,19 @@
 import Foundation
 import Combine
+import MeeshySDK
 
 /// Per-conversation draft state preserved across kills and navigation so the
 /// user never loses an in-progress message. Mirrors the WhatsApp/iMessage
 /// behaviour where the compose bar restores exactly as left: text, the
 /// message being replied to, the selected language, and any pending effects.
 ///
-/// The payload is JSON-encoded into `UserDefaults` under
-/// `meeshy_draft_<conversationId>`; `saveText(_:for:)` / `loadText(for:)`
-/// remain for compatibility with legacy call sites that only care about the
-/// text portion, and drain into / read from the same `Draft` blob so both
-/// code paths stay in sync.
+/// Q4 (2026-05-26) — les clés sont désormais préfixées par userId :
+/// `meeshy_draft_<userId>_<conversationId>`. Avant ce fix, l'absence de
+/// préfixage userId créait une fuite privacy active : sur un device avec
+/// 2+ users, un user B ouvrant une conversation voyait le brouillon du
+/// user A dans le compose box. Migration ascendante des clés legacy
+/// (`meeshy_draft_<convId>`) au premier `load()` du user courant.
+/// Voir `docs/superpowers/specs/2026-05-26-user-session-migration-design.md`.
 public struct MessageDraft: Codable, Equatable, Sendable {
     public var text: String
     public var replyToId: String?
@@ -82,6 +85,11 @@ final class DraftStore: @unchecked Sendable {
 
     private let defaults: UserDefaults
     private let prefix = "meeshy_draft_"
+    /// Q4 — résolveur du userId courant. Injecté pour testabilité ; en
+    /// production, lit `AuthManager.shared.currentUser?.id`. Retourne `nil`
+    /// quand aucun user n'est connecté → fallback sur les anciennes clés
+    /// (la migration n'a pas de user-cible).
+    private let userIdProvider: () -> String?
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
         e.dateEncodingStrategy = .iso8601
@@ -93,8 +101,12 @@ final class DraftStore: @unchecked Sendable {
         return d
     }()
 
-    init(userDefaults: UserDefaults = .standard) {
+    init(
+        userDefaults: UserDefaults = .standard,
+        userIdProvider: @escaping () -> String? = { AuthManager.shared.currentUser?.id }
+    ) {
         self.defaults = userDefaults
+        self.userIdProvider = userIdProvider
     }
 
     // MARK: - Full Draft API
@@ -113,16 +125,41 @@ final class DraftStore: @unchecked Sendable {
     }
 
     func load(for conversationId: String) -> MessageDraft? {
-        let key = key(for: conversationId)
-        if let data = defaults.data(forKey: key),
+        let userKey = key(for: conversationId)
+        // 1) Per-user encoded blob (current format)
+        if let data = defaults.data(forKey: userKey),
            let draft = try? decoder.decode(MessageDraft.self, from: data) {
             return draft
         }
-        // Legacy fallback: older builds stored the raw text under the same
-        // key. Decode it so the user doesn't lose their in-progress message
-        // on upgrade, and migrate to the new encoded blob on next save.
-        if let legacy = defaults.string(forKey: key), !legacy.isEmpty {
-            return MessageDraft(text: legacy)
+        // 2) Q4 migration : legacy key without userId prefix.
+        // Attribué au user courant + supprimé de l'ancien emplacement
+        // pour que les autres users du device ne le voient pas. Si
+        // userId est nil (cas dégradé : pas de session), `userKey ==
+        // legacy` et on saute le bloc — l'ancien chemin legacy plus bas
+        // gère le cas.
+        let legacy = legacyKey(for: conversationId)
+        if legacy != userKey {
+            if let data = defaults.data(forKey: legacy),
+               let draft = try? decoder.decode(MessageDraft.self, from: data) {
+                defaults.set(data, forKey: userKey)
+                defaults.removeObject(forKey: legacy)
+                return draft
+            }
+            // Very old legacy : raw string (pré-MessageDraft)
+            if let str = defaults.string(forKey: legacy), !str.isEmpty {
+                let migrated = MessageDraft(text: str)
+                if let encoded = try? encoder.encode(migrated) {
+                    defaults.set(encoded, forKey: userKey)
+                }
+                defaults.removeObject(forKey: legacy)
+                return migrated
+            }
+        } else {
+            // userId nil — pas de migration possible. Lire la legacy raw
+            // string si présente (compat ascendante).
+            if let str = defaults.string(forKey: userKey), !str.isEmpty {
+                return MessageDraft(text: str)
+            }
         }
         return nil
     }
@@ -136,14 +173,33 @@ final class DraftStore: @unchecked Sendable {
         load(for: conversationId) != nil
     }
 
-    /// Tous les brouillons persistés qui ont encore du contenu, indexés par
-    /// conversationId. Parcourt l'espace de clés `meeshy_draft_` — utilisé par
-    /// la liste de conversations pour afficher le badge « Brouillon » et
-    /// remonter la ligne en tête.
+    /// Tous les brouillons persistés du **user courant** qui ont encore du
+    /// contenu, indexés par conversationId. Utilisé par la liste de
+    /// conversations pour afficher le badge « Brouillon ». Q4 — filtre
+    /// strict par userId pour ne JAMAIS exposer les drafts des autres
+    /// users du device.
     func allNonEmptyDrafts() -> [String: MessageDraft] {
         var result: [String: MessageDraft] = [:]
-        for k in defaults.dictionaryRepresentation().keys where k.hasPrefix(prefix) {
-            let conversationId = String(k.dropFirst(prefix.count))
+        guard let userId = userIdProvider() else {
+            // Pas de user logged in — cas dégradé. On retourne les clés
+            // legacy uniquement (pré-Q4) pour compat ascendante, mais
+            // pas les clés per-user (on ne sait pas à qui elles
+            // appartiennent).
+            for k in defaults.dictionaryRepresentation().keys where k.hasPrefix(prefix) {
+                let rest = String(k.dropFirst(prefix.count))
+                // Une clé per-user contient au moins un `_` séparant
+                // userId du conversationId. On l'exclut ici.
+                guard !rest.contains("_") else { continue }
+                guard !rest.isEmpty,
+                      let draft = load(for: rest),
+                      !draft.isEffectivelyEmpty else { continue }
+                result[rest] = draft
+            }
+            return result
+        }
+        let userPrefix = "\(prefix)\(userId)_"
+        for k in defaults.dictionaryRepresentation().keys where k.hasPrefix(userPrefix) {
+            let conversationId = String(k.dropFirst(userPrefix.count))
             guard !conversationId.isEmpty,
                   let draft = load(for: conversationId),
                   !draft.isEffectivelyEmpty else { continue }
@@ -212,7 +268,19 @@ final class DraftStore: @unchecked Sendable {
         changed.send()
     }
 
+    /// Clé per-user actuelle : `meeshy_draft_<userId>_<convId>`. Si aucun
+    /// user n'est connecté, retombe sur la clé legacy (pour les call sites
+    /// qui pourraient survenir avant le login — défensif).
     private func key(for conversationId: String) -> String {
+        if let userId = userIdProvider() {
+            return "\(prefix)\(userId)_\(conversationId)"
+        }
+        return legacyKey(for: conversationId)
+    }
+
+    /// Format legacy pré-Q4 : `meeshy_draft_<convId>`. Référencé uniquement
+    /// par la migration ascendante dans `load()` et par `purgeExpired`.
+    private func legacyKey(for conversationId: String) -> String {
         "\(prefix)\(conversationId)"
     }
 }

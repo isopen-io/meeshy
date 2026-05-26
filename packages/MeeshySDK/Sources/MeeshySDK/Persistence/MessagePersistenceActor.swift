@@ -90,6 +90,22 @@ public actor MessagePersistenceActor {
         self.processorTask = nil
     }
 
+    // MARK: - Session quiesce (P1 Q3 — logout)
+
+    /// Purge atomique de toute la table outbox au logout. La table outbox
+    /// **n'a pas de colonne userId** (cf. `MessageDatabaseMigrations.swift`
+    /// migration "outbox") — il est donc impossible de filtrer par user.
+    /// Approche safe-by-construction : drop tous les rows. Décision Q3
+    /// actée dans le design doc UserSession (2026-05-26). Sans ça, un
+    /// message enqueued offline par user A serait envoyé sous l'identité
+    /// du user B après un logout+login rapide sur le même device.
+    /// Câblée depuis `DependencyContainer.wireOutboxLogoutHook`.
+    public func clearOutbox() async throws {
+        try await dbWriter.write { db in
+            try db.execute(sql: "DELETE FROM outbox")
+        }
+    }
+
     /// Call after init to start the background write processor.
     public func start() {
         guard processorTask == nil else { return }

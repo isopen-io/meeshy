@@ -242,18 +242,18 @@ final class AuthServiceTests: XCTestCase {
 
     // MARK: - SDK AuthManager (Singleton) -- State Tests
 
-    func test_authManager_logout_clearsPublishedState() {
+    func test_authManager_logout_clearsPublishedState() async {
         let appAuth = AuthManager.shared
 
-        appAuth.logout()
+        await appAuth.logout()
 
         XCTAssertFalse(appAuth.isAuthenticated)
         XCTAssertNil(appAuth.currentUser)
     }
 
-    func test_authManager_handleUnauthorized_clearsState() {
+    func test_authManager_handleUnauthorized_clearsState() async {
         let appAuth = AuthManager.shared
-        appAuth.logout()
+        await appAuth.logout()
 
         appAuth.handleUnauthorized()
 
@@ -261,10 +261,10 @@ final class AuthServiceTests: XCTestCase {
         XCTAssertNil(appAuth.currentUser)
     }
 
-    func test_authManager_initialState_notAuthenticated() {
+    func test_authManager_initialState_notAuthenticated() async {
         let appAuth = AuthManager.shared
 
-        appAuth.logout()
+        await appAuth.logout()
 
         XCTAssertFalse(appAuth.isAuthenticated)
         XCTAssertFalse(appAuth.isLoading)
