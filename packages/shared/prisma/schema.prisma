@@ -3166,8 +3166,12 @@ model AgentConfig {
   /// the conversation theme. Requires webSearchEnabled = true.
   freshTopicProbability    Float    @default(0.2)
   /// Topic seeds for fresh-topic mode (e.g. ["ai", "microservices", "news"]).
-  /// When empty, the agent infers categories from the title/description.
+  /// @deprecated Remplacé par freshTopicBlockedSlugs (sémantique inverse).
+  /// Retiré dans une PR cleanup post-migration UI. Ne plus lire dans le strategist.
   freshTopicCategoryHints  String[] @default([])
+  /// Slugs de topics bloqués sur cette conv (blacklist). Vide = tous topics
+  /// actifs du catalogue éligibles. Nouveau topic créé après config = auto-actif.
+  freshTopicBlockedSlugs   String[] @default([])
 
   createdAt                DateTime @default(now())
   updatedAt                DateTime @updatedAt
@@ -3484,6 +3488,49 @@ model AgentScanLog {
 ///   4. On crash / failure between (2) and (3), the row stays. The worker
 ///      reaps it once `cleanupAfter` is reached.
 ///
+/// Dynamic topic catalogue for the agent strategist. Replaces the hardcoded
+/// THEME_PATTERNS / HINT_TO_THEME / buildTopicProvocationHint in strategist.ts.
+/// CRUD via admin UI. Auto-seeded at agent boot if empty (13 initial topics).
+model AgentTopicCatalog {
+  id                  String   @id @default(auto()) @map("_id") @db.ObjectId
+  /// Identifiant stable utilisé par le strategist + admin UI (kebab-case, ex: 'ai_tech', 'astronomy')
+  slug                String   @unique
+  /// Label affichage admin/UI
+  label               String
+  description         String?
+  /// Sources regex (string[]) compilées au runtime — caching agressif côté service
+  keywordPatterns     String[]
+  /// Template Mustache (variables : {{conversationTitle}}, {{conversationDescription}}, {{label}})
+  instructionTemplate String
+  /// Template Mustache pour la requête web search
+  searchHintTemplate  String
+  /// Exemples de provocations historiquement réussies (libre, affiché en preview admin)
+  examples            String[] @default([])
+  /// Anti-spam : un topic ne peut être re-pioché pour une même conv pendant N min
+  cooldownMinutes     Int      @default(60)
+  /// Kill switch admin sans suppression hard
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  usageLogs           AgentTopicUsageLog[]
+
+  @@index([isActive])
+}
+
+/// Tracks topic provocations per conversation for cooldown enforcement.
+/// Cleaned up by topic-usage-cleanup cron (30j retention).
+model AgentTopicUsageLog {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  topicId        String   @db.ObjectId
+  topic          AgentTopicCatalog @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  conversationId String   @db.ObjectId
+  usedAt         DateTime @default(now())
+
+  @@index([conversationId, topicId, usedAt(sort: Desc)])
+  @@index([usedAt])
+}
+
 /// Reference: SOTA audit Pilier 4 — outbox-based ghost file cleanup.
 model OrphanMediaCleanup {
   id            String   @id @default(auto()) @map("_id") @db.ObjectId
