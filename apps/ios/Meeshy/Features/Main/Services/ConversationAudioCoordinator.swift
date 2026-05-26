@@ -1,0 +1,169 @@
+import Foundation
+import Combine
+import MeeshyUI
+import MeeshySDK
+import os
+
+/// Orchestrates sequential playback of audio attachments across a conversation.
+///
+/// Owns a single underlying `AudioPlaybackEngineDriving` engine and a queue of
+/// `QueuedAudio`. Honors three lifecycle hooks that close playback automatically:
+///  1. CallKit guard: refuses to start playback while a call is active.
+///  2. Auth logout: closes when `AuthManager.isAuthenticated` flips to false.
+///  3. Socket events: closes when the active conversation is deleted server-side
+///     or when the currently playing message is deleted (drops queued items for
+///     deleted messages).
+///
+/// Pure UX orchestration — kept app-side per SDK purity rule.
+/// Reference: Phase 3 of `docs/superpowers/plans/2026-05-26-audio-playback-persistence-plan.md`.
+@MainActor
+public final class ConversationAudioCoordinator: ObservableObject {
+    public static let shared = ConversationAudioCoordinator()
+
+    // MARK: - Published State
+
+    @Published public private(set) var activeContext: ActiveAudioContext?
+    @Published public private(set) var queueCount: Int = 0
+    @Published public private(set) var isPlaying: Bool = false
+    @Published public private(set) var progress: Double = 0
+    @Published public private(set) var currentTime: TimeInterval = 0
+    @Published public private(set) var duration: TimeInterval = 0
+    @Published public private(set) var speed: PlaybackSpeed = .x1_0
+
+    // MARK: - Private
+
+    private let engine: AudioPlaybackEngineDriving
+    /// Exposes the underlying concrete `AudioPlaybackManager` (when present) so
+    /// that `AudioPlayerView` instances in the bubble can attach to the same
+    /// engine via `externalPlayer:` and reflect coordinator-driven state.
+    public var engineForBubble: AudioPlaybackManager? {
+        engine as? AudioPlaybackManager
+    }
+
+    private var queue: [QueuedAudio] = []
+    private var currentName: String = ""
+    private var currentArtwork: String?
+    private var cancellables = Set<AnyCancellable>()
+
+    private static let log = Logger(subsystem: "me.meeshy.app", category: "audio-coordinator")
+
+    // MARK: - Init
+
+    public init(engine: AudioPlaybackEngineDriving = AudioPlaybackManager()) {
+        self.engine = engine
+        wireEngineForwarding()
+        wireAuthLogoutHook()
+        wireSocketLifecycleHooks()
+    }
+
+    // MARK: - Public API
+
+    public func play(
+        current: QueuedAudio, tail: [QueuedAudio],
+        conversationName: String, conversationArtworkURL: String?
+    ) {
+        guard !CallManager.shared.isCallActiveForAudioGuard else {
+            Self.log.info("play() ignored: a CallKit call is active")
+            return
+        }
+        queue = [current] + tail
+        queueCount = queue.count
+        currentName = conversationName
+        currentArtwork = conversationArtworkURL
+        startCurrentHead()
+    }
+
+    public func togglePlayPause() { engine.togglePlayPause() }
+    public func playNext() { advanceQueue() }
+
+    public func close() {
+        engine.stop()
+        queue = []
+        queueCount = 0
+        activeContext = nil
+    }
+
+    public func seek(toFraction fraction: Double) { engine.seek(to: fraction) }
+    public func setSpeed(_ s: PlaybackSpeed) { engine.setSpeed(s) }
+    public func cycleSpeed() { engine.cycleSpeed() }
+
+    public func appendUpcoming(_ audio: QueuedAudio) {
+        guard !queue.contains(where: { $0.attachmentId == audio.attachmentId }) else { return }
+        queue.append(audio)
+        queueCount = queue.count
+    }
+
+    public func isActive(attachmentId: String) -> Bool {
+        activeContext?.attachmentId == attachmentId
+    }
+
+    // MARK: - Internals
+
+    private func startCurrentHead() {
+        guard let head = queue.first else {
+            activeContext = nil
+            return
+        }
+        activeContext = ActiveAudioContext(
+            from: head, conversationName: currentName, conversationArtworkURL: currentArtwork
+        )
+        engine.attachmentId = head.attachmentId
+        engine.play(urlString: head.fileUrl)
+    }
+
+    private func advanceQueue() {
+        if !queue.isEmpty { queue.removeFirst() }
+        queueCount = queue.count
+        if queue.isEmpty {
+            activeContext = nil
+        } else {
+            startCurrentHead()
+        }
+    }
+
+    private func wireEngineForwarding() {
+        engine.isPlayingPublisher.assign(to: &$isPlaying)
+        engine.currentTimePublisher.assign(to: &$currentTime)
+        engine.durationPublisher.assign(to: &$duration)
+        engine.progressPublisher.assign(to: &$progress)
+        engine.speedPublisher.assign(to: &$speed)
+        engine.onPlaybackFinished = { [weak self] in
+            guard let self else { return }
+            Task { @MainActor in self.advanceQueue() }
+        }
+    }
+
+    private func wireAuthLogoutHook() {
+        AuthManager.shared.$isAuthenticated
+            .removeDuplicates()
+            .dropFirst()
+            .filter { !$0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.close() }
+            .store(in: &cancellables)
+    }
+
+    private func wireSocketLifecycleHooks() {
+        SocialSocketManager.shared.conversationDeleted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] convId in
+                guard let self else { return }
+                if self.activeContext?.conversationId == convId { self.close() }
+            }
+            .store(in: &cancellables)
+
+        MessageSocketManager.shared.messageDeleted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                let messageId = event.messageId
+                if self.activeContext?.messageId == messageId {
+                    self.close()
+                } else if let idx = self.queue.firstIndex(where: { $0.messageId == messageId }) {
+                    self.queue.remove(at: idx)
+                    self.queueCount = self.queue.count
+                }
+            }
+            .store(in: &cancellables)
+    }
+}
