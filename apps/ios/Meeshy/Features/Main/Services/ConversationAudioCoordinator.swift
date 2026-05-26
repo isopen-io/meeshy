@@ -75,6 +75,13 @@ public final class ConversationAudioCoordinator: ObservableObject {
     private var currentName: String = ""
     private var currentArtwork: String?
     private var cancellables = Set<AnyCancellable>()
+    /// Defensive guard: `assign(to: &$)` does NOT auto-cancel a previous
+    /// subscription. If a future refactor accidentally calls
+    /// `wireEngineForwarding()` twice (e.g. after swapping engines), two
+    /// publishers would race to write the same `@Published` properties and
+    /// trigger value loops. The init is the single legitimate caller — any
+    /// subsequent call is a programmer error and must crash in DEBUG.
+    private var isEngineWired = false
 
     // MARK: - NowPlaying bridge state (Phase 8)
     // Accessed from `ConversationAudioCoordinator+NowPlaying.swift` (same
@@ -177,6 +184,11 @@ public final class ConversationAudioCoordinator: ObservableObject {
     }
 
     private func wireEngineForwarding() {
+        precondition(
+            !isEngineWired,
+            "wireEngineForwarding called more than once — engine forwarding subscriptions are non-cancellable, double-wiring would cause value loops"
+        )
+        isEngineWired = true
         engine.isPlayingPublisher.assign(to: &$isPlaying)
         engine.currentTimePublisher.assign(to: &$currentTime)
         engine.durationPublisher.assign(to: &$duration)
