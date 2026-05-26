@@ -30,4 +30,18 @@ final class StoryBackgroundLayerTests: XCTestCase {
                         geometry: geom, resolver: nil, imageCache: nil)
         XCTAssertEqual(layer.transform.m11, 2.0, accuracy: 1e-9)
     }
+
+    func test_configure_sameSolidColorTwice_isNoOp() throws {
+        let layer = StoryBackgroundLayer()
+        let geom = CanvasGeometry(renderSize: CGSize(width: 412, height: 732))
+        layer.configure(kind: .solidColor(.red), transform: .identity,
+                        geometry: geom, resolver: nil, imageCache: nil)
+        let firstBgColor = layer.backgroundColor
+        let sublayerCountBefore = layer.sublayers?.count ?? 0
+        layer.configure(kind: .solidColor(.red), transform: .identity,
+                        geometry: geom, resolver: nil, imageCache: nil)
+        let sublayerCountAfter = layer.sublayers?.count ?? 0
+        XCTAssertEqual(sublayerCountBefore, sublayerCountAfter)
+        XCTAssertEqual(layer.backgroundColor, firstBgColor)
+    }
 }
