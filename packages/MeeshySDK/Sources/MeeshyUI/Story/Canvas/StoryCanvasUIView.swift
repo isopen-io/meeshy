@@ -1977,6 +1977,33 @@ public final class StoryCanvasUIView: UIView {
     @objc private func handleDoubleTap(_ recognizer: UITapGestureRecognizer) {
         guard mode == .edit, recognizer.state == .ended else { return }
         let location = recognizer.location(in: self)
+
+        // Background double-tap → cycle videoFitMode (auto → fit → fill → auto).
+        // Use `resolveManipulationTarget` to honour the active manipulation
+        // layer (so a tap on the bg in `.background` layer triggers the cycle
+        // even when no foreground item is hit). Foreground items still get
+        // their dedicated double-tap handling below via `hitTestItem`.
+        if let bgId = backgroundMediaObjectId,
+           resolveManipulationTarget(at: location) == bgId,
+           hitTestItem(at: location) == nil {
+            let current = slide.effects.backgroundTransform?.videoFitMode
+            let next: String?
+            switch current {
+            case nil:    next = "fit"
+            case "fit":  next = "fill"
+            case "fill": next = nil
+            default:     next = nil
+            }
+            var updated = slide
+            var bg = updated.effects.backgroundTransform ?? StoryBackgroundTransform()
+            bg.videoFitMode = next
+            updated.effects.backgroundTransform = bg.isIdentity ? nil : bg
+            slide = updated
+            onItemModified?(slide)
+            onBackgroundTransformChanged?(bg)
+            return
+        }
+
         guard let id = hitTestItem(at: location), let kind = itemKind(forId: id) else { return }
         onItemDoubleTapped?(id, kind)
     }
