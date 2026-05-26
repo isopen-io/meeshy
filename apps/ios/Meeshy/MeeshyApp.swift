@@ -295,28 +295,32 @@ struct MeeshyApp: App {
                     async let sessionCheck: () = authManager.checkExistingSession()
                     _ = await (friendshipHydration, sessionCheck)
                     hasCheckedSession = true
-                    if authManager.isAuthenticated {
-                        // Splash : preload the conversations list cache so
-                        // ConversationListView lands on hydrated data when the
-                        // splash dismisses. `.load(...)` is a SQLite read —
-                        // instantaneous on hot disk, returns `.empty` on a
-                        // first install. Either way it never blocks the
-                        // network, so the splash duration stays bounded.
-                        _ = await CacheCoordinator.shared.conversations.load(for: "list")
+                    // Splash gating : trois bornes temporelles concurrentes
+                    //   floor   1.2s — l'animation logo/title/subtitle joue
+                    //                    intégralement (sinon flash pénible).
+                    //   socket  3.0s — fenêtre pour que MessageSocket ET
+                    //                    SocialSocket aient échangé leur 1er
+                    //                    handshake auth + reçu leur snapshot.
+                    //   ceiling 5.0s — hard cap : si le réseau est down,
+                    //                    on dismiss quand même pour ne JAMAIS
+                    //                    bloquer l'utilisateur derrière un
+                    //                    splash infini.
+                    let minSplashDuration: Duration = .milliseconds(1200)
+                    let socketTimeout: Duration = .seconds(3)
+                    let maxSplashDuration: Duration = .seconds(5)
 
-                        // Le splash NE DOIT PAS attendre les appels réseau
-                        // (push permission, VoIP register, unread count,
-                        // notif sync). Sur un réseau dégradé, chacun de ces
-                        // appels HTTP peut timeout 60s — un cold start
-                        // observé a déjà tenu le splash 86s parce que
-                        // `refreshUnreadCount` + `syncNow` ont chacun
-                        // timeouté avant retry. Détacher tout ce post-cache
-                        // work garantit que le splash dismiss dès que la
-                        // liste de conversations en cache est hydratée.
-                        // ConversationListView et ses dépendances font
-                        // leurs propres `.onAppear` sync — ce qu'on
-                        // détache ici n'est que le bootstrap (push token,
-                        // badge initial) qui peut tomber en background.
+                    if authManager.isAuthenticated {
+                        // Précharge le cache liste — SQLite read instantané,
+                        // retourne `.empty` au tout premier install.
+                        let cacheResult = await CacheCoordinator.shared.conversations.load(for: "list")
+                        let hasCachedContent = cacheResult.snapshot() != nil
+
+                        // Détacher TOUS les bootstraps réseau (push, VoIP,
+                        // unread, sync). Sur un réseau dégradé, chacun peut
+                        // timeout 60s — un cold start observé a déjà tenu
+                        // le splash 86s. Ces tâches tournent en parallèle
+                        // du reste du splash et finalisent imperceptiblement
+                        // après que la vue principale soit affichée.
                         Task { [authManager] in
                             _ = authManager  // capture explicite (lint)
                             await requestPushPermissionIfNeeded()
@@ -324,16 +328,30 @@ struct MeeshyApp: App {
                             await NotificationManager.shared.refreshUnreadCount()
                             await NotificationCoordinator.shared.syncNow()
                         }
+
+                        // Si on a déjà du contenu en cache, attendre que LES
+                        // DEUX sockets (Message + Social) aient confirmé leur
+                        // connexion avant de dismiss → la liste s'affiche
+                        // avec présences + unreads "frais" sans flash post-
+                        // splash. Bounded par maxSplashDuration depuis
+                        // splashStart pour ne jamais bloquer.
+                        //
+                        // Si cache vide (premier lancement, cold-start total),
+                        // on NE bloque PAS : ConversationListView a son
+                        // skeleton (`loadState == .loading`) qui prend le
+                        // relais et anime le chargement initial.
+                        if hasCachedContent {
+                            let remaining = maxSplashDuration - splashStart.duration(to: .now)
+                            let bounded = min(socketTimeout, remaining)
+                            if bounded > .zero {
+                                await Self.awaitBothSocketsConnected(timeout: bounded)
+                            }
+                        }
                     } else {
                         handleGuestDeepLink(deepLinkRouter.pendingDeepLink)
                     }
 
-                    // Splash : enforce a 1.2s minimum elapsed time so the
-                    // logo/title/subtitle animation runs through, then
-                    // dismiss. Any work that lands *after* the splash hides
-                    // (push permission grant flow, retention purge, etc.) is
-                    // already scheduled below or in detached tasks.
-                    let minSplashDuration: Duration = .milliseconds(1200)
+                    // Floor 1.2s : enforce que l'animation joue intégralement.
                     let elapsed = splashStart.duration(to: .now)
                     if elapsed < minSplashDuration {
                         try? await Task.sleep(for: minSplashDuration - elapsed)
@@ -491,6 +509,34 @@ struct MeeshyApp: App {
     /// when the conversation audio coordinator is actively playing we do NOT
     /// tear down the shared `AVAudioSession`, so iOS keeps streaming the
     /// engine in background under the `UIBackgroundModes: audio` declaration.
+    // MARK: - Splash gating
+
+    /// Bloque jusqu'à ce que `MessageSocketManager.isConnected` ET
+    /// `SocialSocketManager.isConnected` soient simultanément `true`, ou
+    /// jusqu'à expiration de `timeout` — celui des deux qui arrive en
+    /// premier. Aucune erreur ni Throwable : en cas de timeout réseau, on
+    /// retourne silencieusement pour laisser le splash dismiss.
+    ///
+    /// Polling 100ms : empreinte mémoire négligeable, < 50 cycles sur le
+    /// timeout 3-5s typique, et évite la complexité d'un `withCheckedContinuation`
+    /// qui leak si annulé pendant l'attente Combine.
+    @MainActor
+    fileprivate static func awaitBothSocketsConnected(timeout: Duration) async {
+        // Already connected: pas d'attente nécessaire
+        if MessageSocketManager.shared.isConnected && SocialSocketManager.shared.isConnected {
+            return
+        }
+        let pollInterval: Duration = .milliseconds(100)
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        while ContinuousClock.now < deadline {
+            if MessageSocketManager.shared.isConnected && SocialSocketManager.shared.isConnected {
+                return
+            }
+            try? await Task.sleep(for: pollInterval)
+            if Task.isCancelled { return }
+        }
+    }
+
     static func handleScenePhaseForTesting(_ newPhase: ScenePhase) async {
         switch newPhase {
         case .background:
