@@ -168,4 +168,41 @@ final class ConversationAudioCoordinatorTests: XCTestCase {
         XCTAssertEqual(engine.setSpeedCalls, [.x1_5])
         XCTAssertEqual(engine.speed, .x1_5)
     }
+
+    // MARK: - B5 — Engine load failure advances the queue
+
+    /// When `AudioPlaybackManager.play(urlString:)` cannot fetch the audio
+    /// (404 CDN, offline, malformed URL), the engine MUST fire
+    /// `onPlaybackFinished` so the coordinator advances past the broken
+    /// head. Without that, the queue stalls indefinitely on the failed
+    /// audio and the mini-player stays frozen on its loading spinner.
+    func test_engineLoadFailure_advancesQueue() async {
+        let (sut, engine) = makeSUT()
+        let head = makeQueuedAudio(attachmentId: "a1", fileUrl: "https://cdn/a1.m4a")
+        let next = makeQueuedAudio(attachmentId: "a2", fileUrl: "https://cdn/a2.m4a")
+        sut.play(current: head, tail: [next], conversationName: "T", conversationArtworkURL: nil)
+        XCTAssertEqual(engine.playCallCount, 1)
+
+        engine.simulateLoadFailure()
+        await Task.yield()
+
+        XCTAssertEqual(sut.activeContext?.attachmentId, "a2",
+                       "queue must advance to the next audio when the head fails to load")
+        XCTAssertEqual(engine.playCallCount, 2)
+    }
+
+    /// Same as above but with an empty tail — the failure on the last audio
+    /// must clear `activeContext` so the mini-player disappears rather than
+    /// spinning forever on a stuck head.
+    func test_engineLoadFailure_emptyQueue_clearsActiveContext() async {
+        let (sut, engine) = makeSUT()
+        let head = makeQueuedAudio(attachmentId: "a1", fileUrl: "https://cdn/a1.m4a")
+        sut.play(current: head, tail: [], conversationName: "T", conversationArtworkURL: nil)
+        XCTAssertNotNil(sut.activeContext)
+
+        engine.simulateLoadFailure()
+        await Task.yield()
+
+        XCTAssertNil(sut.activeContext)
+    }
 }

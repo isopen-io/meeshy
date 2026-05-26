@@ -71,6 +71,15 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             } catch {
                 Self.log.error("play(urlString) cache fetch echec (\(resolved, privacy: .public)): \(error.localizedDescription, privacy: .public)")
                 isLoading = false
+                // B5 fix — notify the parent (coordinator / autoplay registry)
+                // that this audio is done so the queue can advance past the
+                // broken head. Without this the queue stalled silently on
+                // 404 / offline / malformed-URL failures. Safe to call
+                // unconditionally from the catch branch: AVAudioPlayer was
+                // never instantiated, so `handlePlaybackFinished` will not
+                // fire later from `audioPlayerDidFinishPlaying`, ruling out
+                // double advance.
+                onPlaybackFinished?()
             }
         }
     }

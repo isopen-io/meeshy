@@ -70,4 +70,16 @@ final class MockAudioPlaybackEngine: AudioPlaybackEngineDriving {
         currentUrl = nil
         onPlaybackFinished?()
     }
+
+    /// Models the production failure path of `AudioPlaybackManager.play(urlString:)`
+    /// when the cache fetch throws (404 CDN, network down, malformed URL).
+    /// The fix in B5 forwards `onPlaybackFinished?()` from the catch branch
+    /// so the coordinator can advance past the broken audio instead of
+    /// stalling silently. This mock surface lets us assert the contract at
+    /// the coordinator boundary.
+    func simulateLoadFailure() {
+        isPlaying = false
+        currentUrl = nil
+        onPlaybackFinished?()
+    }
 }
