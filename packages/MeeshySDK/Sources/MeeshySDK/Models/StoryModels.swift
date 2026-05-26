@@ -1043,15 +1043,22 @@ public struct StoryBackgroundTransform: Codable, Sendable {
     public var offsetX: CGFloat?
     public var offsetY: CGFloat?
     public var rotation: Double?
+    /// User override for video background gravity. `nil` = auto by orientation
+    /// (landscape → letterbox, portrait → aspectFill). `"fit"` = forced letterbox.
+    /// `"fill"` = forced aspectFill. Same semantics applied to image backgrounds.
+    public var videoFitMode: String?
 
     public init(scale: CGFloat? = nil, offsetX: CGFloat? = nil,
-                offsetY: CGFloat? = nil, rotation: Double? = nil) {
+                offsetY: CGFloat? = nil, rotation: Double? = nil,
+                videoFitMode: String? = nil) {
         self.scale = scale; self.offsetX = offsetX
         self.offsetY = offsetY; self.rotation = rotation
+        self.videoFitMode = videoFitMode
     }
 
     public var isIdentity: Bool {
-        (scale ?? 1.0) == 1.0 && (offsetX ?? 0) == 0 && (offsetY ?? 0) == 0 && (rotation ?? 0) == 0
+        (scale ?? 1.0) == 1.0 && (offsetX ?? 0) == 0 && (offsetY ?? 0) == 0
+            && (rotation ?? 0) == 0 && videoFitMode == nil
     }
 }
 
