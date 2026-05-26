@@ -23,6 +23,12 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// composer. Le composer applique son propre clamp + commit à `.ended`.
     public var onCanvasZoomScaleChanged: ((CGFloat, UIGestureRecognizer.State) -> Void)?
     public var onBackgroundTapped: (() -> Void)?
+    /// Notifié quand le drag du background se termine (.ended). Le composer
+    /// l'utilise pour resynchroniser son cache `viewModel.backgroundTransform`
+    /// avec la nouvelle valeur typée. Le `slide` lui-même est déjà mis à jour
+    /// via `onItemModified` → `@Binding`, ce callback est complémentaire et
+    /// fournit la valeur structurée sans avoir à re-parser le slide.
+    public var onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)?
 
     public init(slide: Binding<StorySlide>,
                 onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
@@ -33,7 +39,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 onInlineTextEditEnded: ((String) -> Void)? = nil,
                 onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)? = nil,
                 onCanvasZoomScaleChanged: ((CGFloat, UIGestureRecognizer.State) -> Void)? = nil,
-                onBackgroundTapped: (() -> Void)? = nil) {
+                onBackgroundTapped: (() -> Void)? = nil,
+                onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)? = nil) {
         self._slide = slide
         self.onItemTapped = onItemTapped
         self.onItemDoubleTapped = onItemDoubleTapped
@@ -44,6 +51,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         self.onManipulationLayerChanged = onManipulationLayerChanged
         self.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         self.onBackgroundTapped = onBackgroundTapped
+        self.onBackgroundTransformChanged = onBackgroundTransformChanged
     }
 
     public func makeUIView(context: Context) -> StoryCanvasUIView {
@@ -59,6 +67,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         view.onManipulationLayerChanged = onManipulationLayerChanged
         view.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         view.onBackgroundTapped = onBackgroundTapped
+        view.onBackgroundTransformChanged = onBackgroundTransformChanged
         // Bootstrap : la couche initiale calculée par `init` n'a pas pu être
         // poussée au callback (nil à ce moment). On force l'émission après
         // une frame pour que le chip indicator reflète bien la couche
@@ -79,6 +88,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         uiView.onManipulationLayerChanged = onManipulationLayerChanged
         uiView.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         uiView.onBackgroundTapped = onBackgroundTapped
+        uiView.onBackgroundTransformChanged = onBackgroundTransformChanged
         // Re-emit la couche courante après chaque body eval (deferred via
         // async pour ne pas muter le @State pendant la phase d'update
         // SwiftUI). SwiftUI dédupe les writes égaux côté @State, donc le

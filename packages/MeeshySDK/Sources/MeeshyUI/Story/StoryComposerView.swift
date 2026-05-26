@@ -1266,6 +1266,16 @@ public struct StoryComposerView: View {
                 withAnimation(.spring(response: 0.3)) {
                     areFabsVisible.toggle()
                 }
+            },
+            onBackgroundTransformChanged: { transform in
+                viewModel.backgroundTransform = StoryComposerViewModel.BackgroundTransform(
+                    scale: transform.scale ?? 1.0,
+                    offsetX: transform.offsetX ?? 0,
+                    offsetY: transform.offsetY ?? 0,
+                    rotation: transform.rotation ?? 0,
+                    videoFitMode: transform.videoFitMode
+                )
+                viewModel.saveBackgroundTransform()
             }
         )
         .allowsHitTesting(!viewModel.isDrawingActive)

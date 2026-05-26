@@ -2139,10 +2139,14 @@ public final class StoryCanvasUIView: UIView {
             hideSnapGuides()
 
             if wasBackgroundDrag, let live = liveBackgroundTransformDuringDrag {
-                // Commit live transform into the slide model + notify parent
-                // via callback. `slide = updated` triggers didSet, but the
-                // idempotent `configure()` (Task 12) detects the same kind
-                // and skips the rebuild flash.
+                // Commit live transform into the slide model + notify parents:
+                // - `onItemModified` syncs the SwiftUI @Binding (parity with
+                //   other gesture branches).
+                // - `onBackgroundTransformChanged` provides the typed value
+                //   so the composer viewModel can update its bg cache.
+                // `slide = updated` triggers didSet, but the idempotent
+                // `configure()` (Task 12) detects the same kind and skips
+                // the rebuild flash.
                 var updated = slide
                 let persisted = StoryBackgroundTransform(
                     scale: live.scale != 1.0 ? CGFloat(live.scale) : nil,
@@ -2153,6 +2157,7 @@ public final class StoryCanvasUIView: UIView {
                 )
                 updated.effects.backgroundTransform = persisted.isIdentity ? nil : persisted
                 slide = updated
+                onItemModified?(slide)
                 onBackgroundTransformChanged?(persisted)
                 liveBackgroundTransformDuringDrag = nil
             } else {
