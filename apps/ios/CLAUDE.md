@@ -232,7 +232,7 @@ Toute évolution de la logique de normalisation doit toucher les **trois** sites
 ### UX Translation Flow
 - **Affichage par defaut** : `effectiveContent` retourne toujours `preferredTranslation.translatedContent` si disponible, sinon `message.content`
 - **Indicateur discret** : Icone `translate` dans le meta row quand des traductions existent
-- **Drapeaux** : Bande de drapeaux en bas du texte (original + systeme + regional/custom, max 3, dedupliques)
+- **Drapeaux** : Bande de drapeaux en bas du texte (original + systeme + regional/custom + deviceLocale, max 4, dedupliques)
 - **Tap drapeau** : Affiche le contenu secondaire inline (fond pastel couleur langue, separateur colore)
 - **Tap meme drapeau** : Masque le contenu secondaire avec animation
 - **Long press** : Ouvre le MessageDetailSheet sur l'onglet Language (previews, langues, retraduction)
