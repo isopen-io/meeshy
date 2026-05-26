@@ -138,7 +138,7 @@ final class StoryRepostFlowTests: XCTestCase {
                           "Cloned slide has a fresh UUID, never reuses the source id")
 
         // 1.c — Locked attribution badge is injected at bottom-center (y = 0.92).
-        let texts = vm.currentEffects.textObjects ?? []
+        let texts = vm.currentEffects.textObjects
         let lockedBadges = texts.filter { $0.isLocked == true }
         XCTAssertEqual(lockedBadges.count, 1,
                        "Exactly one locked badge is added — repost attribution cannot be stripped")

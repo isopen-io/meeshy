@@ -79,6 +79,10 @@ public struct SocketStatusReactedData: Decodable, Sendable {
     public let emoji: String
 }
 
+public struct SocketConversationDeletedData: Decodable, Sendable {
+    public let conversationId: String
+}
+
 public struct SocketCommentAddedData: Decodable, Sendable {
     public let postId: String
     public let comment: APIPostComment
@@ -194,6 +198,7 @@ public protocol SocialSocketProviding: Sendable {
     var statusDeleted: PassthroughSubject<String, Never> { get }
     var statusUpdated: PassthroughSubject<APIPost, Never> { get }
     var statusReacted: PassthroughSubject<SocketStatusReactedData, Never> { get }
+    var conversationDeleted: PassthroughSubject<String, Never> { get }
     var commentAdded: PassthroughSubject<SocketCommentAddedData, Never> { get }
     var commentDeleted: PassthroughSubject<SocketCommentDeletedData, Never> { get }
     var commentLiked: PassthroughSubject<SocketCommentLikedData, Never> { get }
@@ -206,6 +211,12 @@ public protocol SocialSocketProviding: Sendable {
     var storyTranslationUpdated: PassthroughSubject<SocketStoryTranslationUpdatedData, Never> { get }
     var postTranslationUpdated: PassthroughSubject<SocketPostTranslationUpdatedData, Never> { get }
     var commentTranslationUpdated: PassthroughSubject<SocketCommentTranslationUpdatedData, Never> { get }
+    /// In-app notification fired by the gateway over `notification:new`.
+    /// Carries the same `title`/`subtitle`/`content` framing as the APN push
+    /// payload so the iOS app can render a toast with sender + conversation
+    /// context + audio body label without re-deriving anything client-side.
+    /// UX decision (whether/when to show the toast) is app-side.
+    var inAppNotification: PassthroughSubject<APINotification, Never> { get }
     var isConnected: Bool { get }
     var connectionState: ConnectionState { get }
     func connect()
@@ -244,6 +255,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     public let statusDeleted = PassthroughSubject<String, Never>()
     public let statusUpdated = PassthroughSubject<APIPost, Never>()
     public let statusReacted = PassthroughSubject<SocketStatusReactedData, Never>()
+    public let conversationDeleted = PassthroughSubject<String, Never>()
     public let commentAdded = PassthroughSubject<SocketCommentAddedData, Never>()
     public let commentDeleted = PassthroughSubject<SocketCommentDeletedData, Never>()
     public let commentLiked = PassthroughSubject<SocketCommentLikedData, Never>()
@@ -256,6 +268,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     public let storyTranslationUpdated = PassthroughSubject<SocketStoryTranslationUpdatedData, Never>()
     public let postTranslationUpdated = PassthroughSubject<SocketPostTranslationUpdatedData, Never>()
     public let commentTranslationUpdated = PassthroughSubject<SocketCommentTranslationUpdatedData, Never>()
+    public let inAppNotification = PassthroughSubject<APINotification, Never>()
 
     @Published public var isConnected = false
     @Published public var connectionState: ConnectionState = .disconnected
@@ -815,6 +828,30 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             }
         }
 
+        // --- Conversation events ---
+        // Surfaced on the social manager (in addition to MessageSocketManager)
+        // so feature-level coordinators that don't own a message socket can
+        // still react to a conversation being deleted server-side.
+        //
+        // B6 — The gateway emits the **`conversation:closed`** event when a
+        // conversation is "deleted" (soft-delete via `isActive=false +
+        // closedAt`; cf. `services/gateway/src/routes/conversations/core.ts`).
+        // The historical `conversation:deleted` listener stayed wired in
+        // case a future hard-delete code path emits it, but the actual
+        // server traffic is `conversation:closed` — both fan into the
+        // same `conversationDeleted` publisher so downstream consumers
+        // (audio coordinator, list view models) don't need to care which
+        // event the backend emitted.
+
+        let conversationLifecycleHandler: ([Any]) -> Void = { [weak self] data in
+            guard let self else { return }
+            self.decode(SocketConversationDeletedData.self, from: data) { [weak self] payload in
+                self?.conversationDeleted.send(payload.conversationId)
+            }
+        }
+        socket.on("conversation:deleted") { data, _ in conversationLifecycleHandler(data) }
+        socket.on("conversation:closed") { data, _ in conversationLifecycleHandler(data) }
+
         // --- Comment events ---
 
         socket.on("comment:added") { [weak self] data, _ in
@@ -904,9 +941,37 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
                 self?.commentTranslationUpdated.send(payload)
             }
         }
+
+        // --- In-app notification toast ---
+        // Gateway emits `notification:new` whenever a server-side notification
+        // is created. The payload is shaped identically to the REST
+        // `APINotification` model plus the optional `title`/`subtitle` push
+        // header fields. The app subscribes to `inAppNotification` and
+        // decides whether to surface a toast (e.g. suppressed when already in
+        // the target conversation).
+        socket.on("notification:new") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(APINotification.self, from: data) { [weak self] payload in
+                self?.inAppNotification.send(payload)
+            }
+        }
     }
 
     // MARK: - Decode Helper
+
+    #if DEBUG
+    /// Test seam (DEBUG only): drives the same decode + publisher fan-out
+    /// that the production `conversation:closed` / `conversation:deleted`
+    /// listeners use, without requiring a live Socket.IO connection. Tests
+    /// pass the raw payload (e.g. `[["conversationId": "c1"]]`) to assert
+    /// that `conversationDeleted` publishes — covering B6's hook from the
+    /// gateway-side event name.
+    nonisolated func _test_handleConversationLifecyclePayload(_ data: [Any]) {
+        self.decode(SocketConversationDeletedData.self, from: data) { [weak self] payload in
+            self?.conversationDeleted.send(payload.conversationId)
+        }
+    }
+    #endif
 
     private nonisolated func decode<T: Decodable & Sendable>(_ type: T.Type, from data: [Any], handler: @escaping @Sendable (T) -> Void) {
         guard let first = data.first else { return }

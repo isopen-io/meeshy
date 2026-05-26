@@ -16,7 +16,12 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     @Published public var isLoading = false
 
     public var onPlaybackFinished: (() -> Void)?
-    public var attachmentId: String?
+    /// B3 fix — `@Published` so that observers (notably `AudioPlayerView` in
+    /// the external-engine path) re-evaluate `handlePlayTap` gating logic
+    /// the moment the coordinator swaps the loaded attachment. Without this,
+    /// mutations stayed invisible to SwiftUI's dependency tracking and a
+    /// rapid double-tap on the play button could resolve to a stale id.
+    @Published public var attachmentId: String?
 
     private var player: AVAudioPlayer?
     private var timer: Timer?
@@ -27,6 +32,20 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     public override init() {
         super.init()
         PlaybackCoordinator.shared.register(self)
+    }
+
+    /// Designated init that lets callers opt out of `PlaybackCoordinator`
+    /// registration. The default `init()` keeps the historical
+    /// auto-registration behavior (every call site that doesn't pass this
+    /// new param stays unchanged). The opt-out is used by
+    /// `AudioPlayerView` when a real external engine is provided, to avoid
+    /// polluting the coordinator registry with an unused owned dummy whose
+    /// only purpose is to satisfy SwiftUI's `@StateObject` lifetime.
+    public init(registerWithCoordinator: Bool) {
+        super.init()
+        if registerWithCoordinator {
+            PlaybackCoordinator.shared.register(self)
+        }
     }
 
     // MARK: - Play from remote URL (through cache)
@@ -52,6 +71,15 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             } catch {
                 Self.log.error("play(urlString) cache fetch echec (\(resolved, privacy: .public)): \(error.localizedDescription, privacy: .public)")
                 isLoading = false
+                // B5 fix — notify the parent (coordinator / autoplay registry)
+                // that this audio is done so the queue can advance past the
+                // broken head. Without this the queue stalled silently on
+                // 404 / offline / malformed-URL failures. Safe to call
+                // unconditionally from the catch branch: AVAudioPlayer was
+                // never instantiated, so `handlePlaybackFinished` will not
+                // fire later from `audioPlayerDidFinishPlaying`, ruling out
+                // double advance.
+                onPlaybackFinished?()
             }
         }
     }
@@ -320,14 +348,57 @@ public struct AudioPlayerView: View {
     public var onDelete: (() -> Void)? = nil
     public var onEdit: (() -> Void)? = nil
     public var onPlayingChange: ((Bool) -> Void)? = nil
+    /// Optional play-tap router for callers that own the playback engine and
+    /// the audio queue (e.g. a `ConversationAudioCoordinator`). When provided,
+    /// taps on the play button delegate to this closure as long as the
+    /// underlying engine isn't already loaded with THIS attachment — i.e. as
+    /// long as starting playback for this bubble requires the parent to set
+    /// up the queue / active-context first. Once the engine is loaded
+    /// (`player.attachmentId == attachment.id`), play/pause routes through
+    /// the engine directly so subsequent toggles are instantaneous and don't
+    /// rebuild the queue. Backward-compat: when nil, behavior is unchanged.
+    private var onPlayRequest: (() -> Void)? = nil
     private var externalLanguage: Binding<String?>?
     private var topSlot: AnyView?
     private var bottomSlot: AnyView?
     private var availability: AudioAvailability
     private var onDownload: (() -> Void)?
 
-    @StateObject private var player = AudioPlaybackManager()
+    // Owned-by-default engine. Created once per view lifetime via
+    // `@StateObject`. When the caller injects an `externalPlayer`, this
+    // owned instance stays inert (no audio session, never asked to play).
+    // We opt it out of `PlaybackCoordinator` registration in that case
+    // to keep the registry clean — see `AudioPlaybackManager.init(registerWithCoordinator:)`.
+    @StateObject private var ownedPlayer: AudioPlaybackManager
     @StateObject private var waveformAnalyzer = AudioWaveformAnalyzer()
+    // External engine, when provided by a parent coordinator. Wrapping it
+    // in `@ObservedObject` is required so SwiftUI re-renders the body on
+    // `@Published` changes coming from the externally-owned engine.
+    // When `externalPlayer == nil`, this wraps a shared no-op singleton
+    // (`AudioPlayerView.sharedNoopExternal`) — its mutations are never
+    // observed because the computed `player` falls back to `ownedPlayer`,
+    // and the static identity avoids per-init churn.
+    @ObservedObject private var observedExternalPlayer: AudioPlaybackManager
+    // Internal (not `private`) so `@testable import` can observe the
+    // resolution decision from MeeshyUITests without exposing it publicly.
+    internal let usesExternalPlayer: Bool
+
+    /// Engine actually driving playback / observed by the body. Resolves to
+    /// `observedExternalPlayer` when an external engine was injected, else
+    /// to `ownedPlayer`. Both are observed via property wrappers, so any
+    /// `@Published` mutation on the resolved engine re-renders the view.
+    private var player: AudioPlaybackManager {
+        usesExternalPlayer ? observedExternalPlayer : ownedPlayer
+    }
+
+    /// Shared no-op engine used as the `observedExternalPlayer` placeholder
+    /// whenever the caller did not inject an external engine. It is never
+    /// asked to play and is intentionally NOT registered with
+    /// `PlaybackCoordinator`. Using a single shared identity avoids
+    /// allocating one throwaway `AudioPlaybackManager` per view init.
+    @MainActor
+    private static let sharedNoopExternal = AudioPlaybackManager(registerWithCoordinator: false)
+
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isTranscriptionExpanded = false
     @State private var selectedAudioLanguage: String = "orig"
@@ -409,6 +480,8 @@ public struct AudioPlayerView: View {
         externalLanguage: Binding<String?>? = nil,
         availability: AudioAvailability = .ready,
         onDownload: (() -> Void)? = nil,
+        externalPlayer: AudioPlaybackManager? = nil,
+        onPlayRequest: (() -> Void)? = nil,
         @ViewBuilder topContent: () -> TopContent = { EmptyView() },
         @ViewBuilder bottomContent: () -> BottomContent = { EmptyView() }
     ) {
@@ -418,9 +491,25 @@ public struct AudioPlayerView: View {
         self.onRetranscribe = onRetranscribe
         self.onDelete = onDelete; self.onEdit = onEdit
         self.onPlayingChange = onPlayingChange
+        self.onPlayRequest = onPlayRequest
         self.externalLanguage = externalLanguage
         self.availability = availability
         self.onDownload = onDownload
+        // External engine wiring. When the caller passes an externally-owned
+        // `AudioPlaybackManager` (e.g. a ConversationAudioCoordinator that
+        // survives view hierarchy churn), the view observes THAT engine
+        // and never touches its owned dummy. The dummy `ownedPlayer` is
+        // still created (SwiftUI demands a non-optional `@StateObject`
+        // initial value) but we opt it out of `PlaybackCoordinator` to
+        // avoid polluting the registry with an unused weak reference.
+        let usesExternal = externalPlayer != nil
+        self.usesExternalPlayer = usesExternal
+        self._ownedPlayer = StateObject(
+            wrappedValue: AudioPlaybackManager(registerWithCoordinator: !usesExternal)
+        )
+        self._observedExternalPlayer = ObservedObject(
+            wrappedValue: externalPlayer ?? AudioPlayerView.sharedNoopExternal
+        )
         let top = topContent()
         self.topSlot = top is EmptyView ? nil : AnyView(top)
         let bottom = bottomContent()
@@ -448,7 +537,16 @@ public struct AudioPlayerView: View {
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTranscriptionExpanded)
         .onAppear {
-            player.attachmentId = attachment.id
+            // CRITICAL: when an external engine is injected, the parent owns
+            // `attachmentId` (it tracks which audio the shared engine is
+            // currently loaded with). Overwriting it here would clobber that
+            // tracking the moment a second audio bubble appears on-screen
+            // while another is playing — breaking the `handlePlayTap`
+            // gate that relies on `player.attachmentId == attachment.id` to
+            // decide between "route to parent" vs "toggle play/pause".
+            if !usesExternalPlayer {
+                player.attachmentId = attachment.id
+            }
             let autoplayUrl = attachment.fileUrl
             AudioPlaybackManager.registerAutoplay(url: autoplayUrl) { [player] in
                 // Optimistic local audio can never load through the cache
@@ -464,7 +562,14 @@ public struct AudioPlayerView: View {
         }
         .onDisappear {
             AudioPlaybackManager.unregisterAutoplay(url: attachment.fileUrl)
-            player.unregisterFromCoordinator()
+            // Symmetrical to onAppear: when an external engine is injected
+            // it is owned by the parent (e.g. ConversationAudioCoordinator)
+            // and survives view hierarchy churn. Unregistering it from
+            // PlaybackCoordinator on every scroll-off would break sibling
+            // bubbles + the coordinator itself.
+            if !usesExternalPlayer {
+                player.unregisterFromCoordinator()
+            }
         }
         .onChange(of: player.isPlaying) { playing in
             onPlayingChange?(playing)
@@ -837,6 +942,22 @@ public struct AudioPlayerView: View {
     }
 
     private func handlePlayTap() {
+        // External-engine interception: when the parent injected an
+        // `onPlayRequest` handler AND the shared engine is not currently
+        // loaded with THIS attachment, defer to the parent so it can set up
+        // the queue / active-context BEFORE asking the engine to play.
+        // Without this gate, tapping play on a bubble while the coordinator
+        // is mid-playback of a different audio would call
+        // `engine.togglePlayPause()` and either pause that other audio
+        // (busy engine) or be a no-op (idle engine) — neither of which is
+        // what the user asked for. Once the engine IS loaded with this
+        // attachment, fall through to `togglePlayPause()` so subsequent
+        // play/pause taps are instantaneous and never rebuild the queue.
+        if let onPlayRequest, player.attachmentId != attachment.id {
+            onPlayRequest()
+            HapticFeedback.light()
+            return
+        }
         if player.isPlaying || player.progress > 0 {
             player.togglePlayPause()
         } else if attachment.fileUrl.hasPrefix("file://"),

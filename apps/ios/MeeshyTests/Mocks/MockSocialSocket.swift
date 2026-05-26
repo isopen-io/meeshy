@@ -28,6 +28,7 @@ final class MockSocialSocket: SocialSocketProviding, @unchecked Sendable {
     let statusDeleted = PassthroughSubject<String, Never>()
     let statusUpdated = PassthroughSubject<APIPost, Never>()
     let statusReacted = PassthroughSubject<SocketStatusReactedData, Never>()
+    let conversationDeleted = PassthroughSubject<String, Never>()
     let commentAdded = PassthroughSubject<SocketCommentAddedData, Never>()
     let commentDeleted = PassthroughSubject<SocketCommentDeletedData, Never>()
     let commentLiked = PassthroughSubject<SocketCommentLikedData, Never>()
@@ -42,6 +43,7 @@ final class MockSocialSocket: SocialSocketProviding, @unchecked Sendable {
     let postReactionAdded = PassthroughSubject<SocketPostReactionUpdateEvent, Never>()
     let postReactionRemoved = PassthroughSubject<SocketPostReactionUpdateEvent, Never>()
     let postReactionSync = PassthroughSubject<SocketPostReactionSyncEvent, Never>()
+    let inAppNotification = PassthroughSubject<APINotification, Never>()
 
     // MARK: - Call Tracking
 

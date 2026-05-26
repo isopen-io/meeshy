@@ -4,10 +4,33 @@ struct AdaptiveRootView: View {
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
-        if sizeClass == .regular {
-            iPadRootView()
-        } else {
-            RootView()
+        Group {
+            if sizeClass == .regular {
+                iPadRootView()
+            } else {
+                RootView()
+            }
         }
+        // Force-init the shared `ConversationAudioCoordinator` on root mount.
+        // Without this, the engine is built lazily on the first audio tap,
+        // which means the `@Published var isPlaying` published edge that
+        // gates the background lifecycle never reaches its subscriber until
+        // a message audio actually starts. Pre-mounting keeps the rest of
+        // the app — including the background lifecycle bridge — in sync.
+        //
+        // Phase 8: also activate the MPNowPlayingInfoCenter +
+        // MPRemoteCommandCenter bridge so lock screen, control center,
+        // AirPods and CarPlay can surface metadata + controls.
+        .task {
+            let coord = ConversationAudioCoordinator.shared
+            coord.activateNowPlayingBridge()
+        }
+        // B4 — The mini-player overlay used to live HERE but the tap-body
+        // handler had no access to the `Router` (instantiated inside
+        // `RootView` / `iPadRootView`, scopes below this one). The overlay
+        // is now mounted in those views directly so the tap routes to the
+        // active conversation. Keeping this comment as the canonical
+        // landing pad for the next dev wondering "why isn't the mini-player
+        // here too?".
     }
 }

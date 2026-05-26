@@ -383,13 +383,31 @@ export interface ErrorEventData {
 
 /**
  * Données de notification générique
- * Aligned with NotificationFormatter.formatNotification() output
+ * Aligned with NotificationFormatter.formatNotification() output.
+ *
+ * `title` / `subtitle` mirror the APN/FCM push payload header so the iOS
+ * in-app toast (driven by Socket.IO when the app is foreground + socket
+ * connected) can render the same "sender + conversation" framing as the
+ * native iOS banner. They are derived from `buildPushHeader()` server-side
+ * and propagated identically over the push channel and the socket channel
+ * to keep both surfaces in sync.
+ *  - `title`      : sender display name (or `customTitle` for system events,
+ *                   `"Meeshy"` fallback when no actor)
+ *  - `subtitle`   : conversation title for `new_message` notifications in
+ *                   group/global/public/community conversations.
+ *                   `undefined` for 1-on-1 direct messages and for non-message
+ *                   notification types (reactions / mentions / system events).
  */
 export interface NotificationEventData {
   readonly id: string;
   readonly userId: string;
   readonly type: string;
   readonly priority?: string;
+  /** Sender display name (or custom override / "Meeshy" fallback). */
+  readonly title?: string;
+  /** Conversation title for group messages — undefined for direct messages
+   *  and non-message notification types. */
+  readonly subtitle?: string;
   readonly content: string;
   readonly actor?: {
     readonly id?: string;

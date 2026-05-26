@@ -18,6 +18,15 @@ public final class PlaybackCoordinator {
 
     private init() {}
 
+    #if DEBUG
+    /// Test seam: increments `stopAllCount` from callers that want to assert
+    /// whether `stopAll()` was invoked via the background transition path
+    /// without having to install a stub of the coordinator itself. Production
+    /// code reads/writes the probe through `#if DEBUG` guards so the symbol
+    /// never ships in Release.
+    public var testStopAllProbe: PlaybackCoordinatorStopAllProbe?
+    #endif
+
     // MARK: - SDK AudioPlaybackManager Registration
 
     public func register(_ player: AudioPlaybackManager) {
@@ -108,3 +117,15 @@ private struct WeakAudioPlayer {
 private struct WeakStoppablePlayer {
     weak var player: StoppablePlayer?
 }
+
+#if DEBUG
+/// Probe lazily attached to `PlaybackCoordinator.shared.testStopAllProbe` so
+/// background-transition tests can verify whether the lifecycle bridge took
+/// the "stop everything" path. Reference type so the +1 mutation done by the
+/// production code is visible to the test that owns the probe.
+@MainActor
+public final class PlaybackCoordinatorStopAllProbe {
+    public var stopAllCount: Int = 0
+    public init() {}
+}
+#endif

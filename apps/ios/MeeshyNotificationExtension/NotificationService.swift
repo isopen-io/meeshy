@@ -54,21 +54,44 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             }
         }
 
-        // Localize protected message placeholders. The gateway sends a
-        // notificationLocKey (e.g. "notification.encrypted_message") AND a
-        // plain placeholder body for EVERY E2EE message. Without the
-        // `didDecrypt` guard the localized "Message chiffré" string would
-        // unconditionally clobber the just-decrypted plaintext from the
-        // E2EE block above, defeating the entire E2EE rich-push feature
-        // for every user on a localized device. Only fall back to the
-        // localized placeholder when decryption did NOT succeed (or was
-        // not applicable because the push wasn't encrypted at all).
-        if !didDecrypt,
+        // Localize protected message placeholders.
+        //
+        // The gateway now sends icon-only bodies for protected messages
+        // ("👁️ 🎵", "🔥 💬 5min", "🌫️ 🖼️", "🔒 🎬") that already convey
+        // protection + content type without leaking content. Those bodies
+        // are emoji and don't need locale-side localisation, so we MUST
+        // NOT clobber them with NSLocalizedString here.
+        //
+        // The locKey override is still useful for ONE case : E2EE pushes
+        // where decryption failed locally (key missing, sender device key
+        // not paired, etc.). In that case the gateway has no way to know
+        // it couldn't be decrypted client-side, so its iconified body
+        // ("🔒 🎵") is fine — but historically the NSE swapped it for the
+        // user's localised "Message chiffré" string, which is friendlier.
+        // We keep that behaviour gated strictly to the E2EE-failure path :
+        // any non-E2EE protected message (view-once / blurred / ephemeral)
+        // keeps the iconified body from the gateway.
+        let isEncryptedPush = userInfo["isEncrypted"] as? Bool == true
+            || (userInfo["encryptedContent"] as? String).map { !$0.isEmpty } == true
+        if isEncryptedPush, !didDecrypt,
            let locKey = userInfo["notificationLocKey"] as? String, !locKey.isEmpty {
             let localized = NSLocalizedString(locKey, comment: "")
             if localized != locKey {
                 bestAttemptContent.body = localized
             }
+        }
+
+        // Bug B — audio-only E2EE messages reach the device with an empty
+        // plaintext body (the gateway encrypts only the optional caption,
+        // which is empty for a voice memo). Without a fallback the user
+        // sees just the sender name with no hint that a voice message is
+        // waiting. We apply this AFTER the decryption and locKey steps so
+        // we only catch the truly-empty case, never a decrypted caption.
+        if let fallback = NotificationPayloadHelpers.audioBodyFallback(
+            currentBody: bestAttemptContent.body,
+            userInfo: userInfo
+        ) {
+            bestAttemptContent.body = fallback
         }
 
         // Phase B — for `message_reaction`, the gateway sends body = "❤️" (emoji alone).
@@ -518,6 +541,24 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
 
         do {
             let updatedContent = try content.updating(from: intent)
+
+            // Bug A — `content.updating(from: intent)` wipes the APN-native
+            // `subtitle` field. For group / global conversations the gateway
+            // sends the conversation name via `subtitle` (see
+            // services/gateway/.../NotificationService.ts → buildPushHeader),
+            // so without this repair the banner loses the conversation name
+            // entirely and the user sees only the sender. The helper returns
+            // `nil` for direct conversations or when iOS happened to keep
+            // the subtitle, so we never clobber a value iOS preserved.
+            if let restored = NotificationPayloadHelpers.preservedSubtitle(
+                currentSubtitle: updatedContent.subtitle,
+                userInfo: userInfo
+            ),
+               let mutable = updatedContent.mutableCopy() as? UNMutableNotificationContent {
+                mutable.subtitle = restored
+                return mutable
+            }
+
             return updatedContent
         } catch {
             return content

@@ -45,6 +45,16 @@ public actor MediaSessionCoordinator {
     /// thread-safe.
     public nonisolated(unsafe) let events = PassthroughSubject<Event, Never>()
 
+    #if DEBUG
+    /// Test seam: increments `deactivateCount` from callers that want to
+    /// assert whether `deactivateForBackground()` was reached via the
+    /// background transition path. `nonisolated(unsafe)` so a synchronous
+    /// `MediaSessionCoordinator.shared.testProbe = probe` assignment from a
+    /// test running on `@MainActor` does not require an `await` hop. The
+    /// probe is only read/written from `@MainActor` callers in this codebase.
+    public nonisolated(unsafe) var testProbe: MediaSessionCoordinatorTestProbe?
+    #endif
+
     private init() {}
 
     deinit {
@@ -176,4 +186,16 @@ public actor MediaSessionCoordinator {
         }
     }
 }
+
+#if DEBUG
+/// Probe attached to `MediaSessionCoordinator.shared.testProbe` so
+/// background-transition tests can assert whether the session was
+/// actually torn down via `deactivateForBackground()`. Reference type
+/// so the +1 mutation done by the production code is visible to the
+/// test that owns the probe.
+public final class MediaSessionCoordinatorTestProbe: @unchecked Sendable {
+    public var deactivateCount: Int = 0
+    public init() {}
+}
+#endif
 #endif
