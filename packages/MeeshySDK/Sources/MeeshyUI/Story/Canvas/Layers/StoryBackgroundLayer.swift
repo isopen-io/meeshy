@@ -122,6 +122,18 @@ public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
 // MARK: - Configure
 
 extension StoryBackgroundLayer {
+    /// Disables implicit CoreAnimation actions for the duration of `block`, so
+    /// programmatic `contents`/`videoGravity`/`addSublayer` mutations don't
+    /// trigger the default `kCAFadeIn` / opacity animations that cause
+    /// 1-frame flashes when the renderer rebuilds layers.
+    @MainActor
+    static func withDisabledCAActions(_ block: () -> Void) {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        block()
+        CATransaction.commit()
+    }
+
     @MainActor
     public func configure(kind: Kind,
                           transform: BackgroundTransform,
@@ -230,11 +242,13 @@ extension StoryBackgroundLayer {
             var hasVisual = false
             if let warm = warmURL,
                let cached = CacheCoordinator.warmedImage(for: warm.absoluteString)?.cgImage {
-                img.contents = cached
-                let naturalSize = CGSize(width: cached.width, height: cached.height)
-                img.contentsGravity = StoryBackgroundLayer.resolveImageGravity(
-                    naturalSize: naturalSize, canvasSize: self.bounds.size,
-                    override: self.transform3D.videoFitMode)
+                Self.withDisabledCAActions {
+                    img.contents = cached
+                    let naturalSize = CGSize(width: cached.width, height: cached.height)
+                    img.contentsGravity = StoryBackgroundLayer.resolveImageGravity(
+                        naturalSize: naturalSize, canvasSize: self.bounds.size,
+                        override: self.transform3D.videoFitMode)
+                }
                 hasVisual = true
                 hasFinalContentStamped = true
             }
@@ -243,7 +257,9 @@ extension StoryBackgroundLayer {
             if !hasVisual,
                let hash = thumbHash,
                let placeholderImage = ThumbHashDecoder.decodeIfAvailable(hash) {
-                img.contents = placeholderImage.cgImage
+                Self.withDisabledCAActions {
+                    img.contents = placeholderImage.cgImage
+                }
                 hasVisual = true
             }
 
@@ -283,12 +299,14 @@ extension StoryBackgroundLayer {
                     // (1) Fast-path cache (preview / disque).
                     if let imageCacheReader,
                        let cached = await imageCacheReader.cachedImage(for: postMediaId) {
-                        img?.contents = cached.cgImage
-                        if let layer = img, let cg = cached.cgImage, let canvas = self?.bounds.size {
-                            layer.contentsGravity = StoryBackgroundLayer.resolveImageGravity(
-                                naturalSize: CGSize(width: cg.width, height: cg.height),
-                                canvasSize: canvas,
-                                override: self?.transform3D.videoFitMode)
+                        Self.withDisabledCAActions {
+                            img?.contents = cached.cgImage
+                            if let layer = img, let cg = cached.cgImage, let canvas = self?.bounds.size {
+                                layer.contentsGravity = StoryBackgroundLayer.resolveImageGravity(
+                                    naturalSize: CGSize(width: cg.width, height: cg.height),
+                                    canvasSize: canvas,
+                                    override: self?.transform3D.videoFitMode)
+                            }
                         }
                         self?.hasFinalContentStamped = true
                         return
@@ -298,6 +316,20 @@ extension StoryBackgroundLayer {
                     if url.isFileURL {
                         if let data = try? Data(contentsOf: url),
                            let uiImage = UIImage(data: data) {
+                            Self.withDisabledCAActions {
+                                img?.contents = uiImage.cgImage
+                                if let layer = img, let cg = uiImage.cgImage, let canvas = self?.bounds.size {
+                                    layer.contentsGravity = StoryBackgroundLayer.resolveImageGravity(
+                                        naturalSize: CGSize(width: cg.width, height: cg.height),
+                                        canvasSize: canvas,
+                                        override: self?.transform3D.videoFitMode)
+                                }
+                            }
+                            self?.hasFinalContentStamped = true
+                        }
+                    } else if let data = try? await CacheCoordinator.shared.images.data(for: url.absoluteString),
+                              let uiImage = UIImage(data: data) {
+                        Self.withDisabledCAActions {
                             img?.contents = uiImage.cgImage
                             if let layer = img, let cg = uiImage.cgImage, let canvas = self?.bounds.size {
                                 layer.contentsGravity = StoryBackgroundLayer.resolveImageGravity(
@@ -305,16 +337,6 @@ extension StoryBackgroundLayer {
                                     canvasSize: canvas,
                                     override: self?.transform3D.videoFitMode)
                             }
-                            self?.hasFinalContentStamped = true
-                        }
-                    } else if let data = try? await CacheCoordinator.shared.images.data(for: url.absoluteString),
-                              let uiImage = UIImage(data: data) {
-                        img?.contents = uiImage.cgImage
-                        if let layer = img, let cg = uiImage.cgImage, let canvas = self?.bounds.size {
-                            layer.contentsGravity = StoryBackgroundLayer.resolveImageGravity(
-                                naturalSize: CGSize(width: cg.width, height: cg.height),
-                                canvasSize: canvas,
-                                override: self?.transform3D.videoFitMode)
                         }
                         self?.hasFinalContentStamped = true
                     }
@@ -449,7 +471,9 @@ extension StoryBackgroundLayer {
             }
             return .resizeAspectFill
         }()
-        addSublayer(pl)
+        Self.withDisabledCAActions {
+            addSublayer(pl)
+        }
         self.avPlayerLayer = pl
 
         // Async resolve naturalSize to refine gravity once available
