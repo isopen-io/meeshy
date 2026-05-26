@@ -22,6 +22,7 @@ import {
   NOTIFICATION_PREFERENCE_DEFAULTS,
   type NotificationPreference as NotifPrefs,
 } from '@meeshy/shared/types/preferences';
+import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import type { Server as SocketIOServer } from 'socket.io';
@@ -87,6 +88,127 @@ export function buildPushHeader(input: {
     : undefined;
 
   return { title, subtitle };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Protected-message preview (view-once / blurred / ephemeral / encrypted)
+// ──────────────────────────────────────────────────────────────────────────
+//
+// Replaces the previous plain-English placeholders ("View-once message",
+// "Hidden message", "Encrypted message") with a compact icon-only body that
+// conveys the protection type + content type without leaking content :
+//   * Ephemeral (TTL):   🔥 + content-type icon + duration   (e.g. "🔥 🎵 5min")
+//   * View-once:         👁️ + content-type icon              (e.g. "👁️ 🖼️")
+//   * Blurred:           🌫️ + content-type icon              (e.g. "🌫️ 💬")
+//   * Encrypted:         🔒 + content-type icon              (e.g. "🔒 🎬")
+//
+// Emojis are platform-universal so no client-side localisation is needed for
+// the body itself. The `locKey` is still emitted for compatibility with the
+// iOS NSE locKey path (used only as a fallback when E2EE decryption fails).
+
+const PROTECTION_ICON = Object.freeze({
+  ephemeral: '🔥',
+  viewOnce:  '👁️',
+  blurred:   '🌫️',
+  encrypted: '🔒',
+} as const);
+
+const CONTENT_TYPE_ICON = Object.freeze({
+  text:     '💬',
+  audio:    '🎵',
+  image:    '🖼️',
+  video:    '🎬',
+  file:     '📎',
+  location: '📍',
+  system:   '⚙️',
+} as const);
+
+type ProtectedMessageType = keyof typeof CONTENT_TYPE_ICON;
+
+/**
+ * Maps a Prisma `Message.messageType` to its visual icon. Falls back to the
+ * speech-balloon (text) when the value is unknown so the body always renders.
+ */
+export function contentTypeIcon(messageType: string | null | undefined): string {
+  if (!messageType) return CONTENT_TYPE_ICON.text;
+  const key = messageType.toLowerCase() as ProtectedMessageType;
+  return CONTENT_TYPE_ICON[key] ?? CONTENT_TYPE_ICON.text;
+}
+
+/**
+ * Compact human-readable duration for an ephemeral message TTL. Returns
+ * undefined when the duration is non-positive or unknown so the caller can
+ * omit the suffix entirely.
+ *
+ * Outputs (rounded, FR-style abbreviations to stay locale-neutral) :
+ *   < 60s   → "Ns"      ("30s")
+ *   < 60min → "Nmin"    ("5min")
+ *   < 24h   → "Nh"      ("2h")
+ *   else    → "Nj"      ("3j" — for "jours/days")
+ */
+export function formatEphemeralDuration(
+  expiresAt: Date | null | undefined,
+  createdAt: Date | null | undefined,
+): string | undefined {
+  if (!expiresAt || !createdAt) return undefined;
+  const ms = expiresAt.getTime() - createdAt.getTime();
+  if (!Number.isFinite(ms) || ms <= 0) return undefined;
+  const sec = Math.round(ms / 1000);
+  if (sec < 60)     return `${sec}s`;
+  const min = Math.round(sec / 60);
+  if (min < 60)     return `${min}min`;
+  const h = Math.round(min / 60);
+  if (h < 24)       return `${h}h`;
+  const d = Math.round(h / 24);
+  return `${d}j`;
+}
+
+/**
+ * Builds the sanitised body for a protected message. Returns `null` when the
+ * message is NOT protected (caller should keep the original text).
+ *
+ * Precedence : ephemeral > view-once > blurred > encrypted. Only one
+ * protection icon is shown to keep the body compact, but the most restrictive
+ * protection always wins.
+ *
+ * The `locKey` is returned alongside for the iOS NSE locKey path. It is
+ * preserved as a semantic key (not a localised string) so client apps can
+ * resolve it through their own `Localizable.xcstrings` when needed (mostly
+ * for E2EE-undecryptable messages where the gateway body cannot be trusted).
+ */
+export function protectedPreview(input: {
+  messageType: string | null | undefined;
+  isEncrypted?: boolean | null;
+  isViewOnce?: boolean | null;
+  isBlurred?: boolean | null;
+  effectFlags?: number | null;
+  expiresAt?: Date | null;
+  createdAt?: Date | null;
+}): { preview: string; locKey: string } | null {
+  const flags = input.effectFlags ?? 0;
+  const isEphemeral = (input.expiresAt instanceof Date) || (flags & MESSAGE_EFFECT_FLAGS.EPHEMERAL) !== 0;
+  const isViewOnce  = (input.isViewOnce === true) || (flags & MESSAGE_EFFECT_FLAGS.VIEW_ONCE) !== 0;
+  const isBlurred   = (input.isBlurred  === true) || (flags & MESSAGE_EFFECT_FLAGS.BLURRED)   !== 0;
+  const isEncrypted = input.isEncrypted === true;
+  if (!isEphemeral && !isViewOnce && !isBlurred && !isEncrypted) return null;
+
+  const icon = contentTypeIcon(input.messageType);
+
+  if (isEphemeral) {
+    const duration = formatEphemeralDuration(input.expiresAt ?? null, input.createdAt ?? null);
+    const preview = duration
+      ? `${PROTECTION_ICON.ephemeral} ${icon} ${duration}`
+      : `${PROTECTION_ICON.ephemeral} ${icon}`;
+    return { preview, locKey: 'notification.ephemeral_message' };
+  }
+  if (isViewOnce) {
+    return { preview: `${PROTECTION_ICON.viewOnce} ${icon}`, locKey: 'notification.view_once_message' };
+  }
+  if (isBlurred) {
+    return { preview: `${PROTECTION_ICON.blurred} ${icon}`, locKey: 'notification.hidden_message' };
+  }
+  // isEncrypted (last branch — least restrictive flag)
+  return { preview: `${PROTECTION_ICON.encrypted} ${icon}`, locKey: 'notification.encrypted_message' };
 }
 
 function extractExtension(filename: string | null | undefined): string | null {

@@ -54,16 +54,26 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             }
         }
 
-        // Localize protected message placeholders. The gateway sends a
-        // notificationLocKey (e.g. "notification.encrypted_message") AND a
-        // plain placeholder body for EVERY E2EE message. Without the
-        // `didDecrypt` guard the localized "Message chiffré" string would
-        // unconditionally clobber the just-decrypted plaintext from the
-        // E2EE block above, defeating the entire E2EE rich-push feature
-        // for every user on a localized device. Only fall back to the
-        // localized placeholder when decryption did NOT succeed (or was
-        // not applicable because the push wasn't encrypted at all).
-        if !didDecrypt,
+        // Localize protected message placeholders.
+        //
+        // The gateway now sends icon-only bodies for protected messages
+        // ("👁️ 🎵", "🔥 💬 5min", "🌫️ 🖼️", "🔒 🎬") that already convey
+        // protection + content type without leaking content. Those bodies
+        // are emoji and don't need locale-side localisation, so we MUST
+        // NOT clobber them with NSLocalizedString here.
+        //
+        // The locKey override is still useful for ONE case : E2EE pushes
+        // where decryption failed locally (key missing, sender device key
+        // not paired, etc.). In that case the gateway has no way to know
+        // it couldn't be decrypted client-side, so its iconified body
+        // ("🔒 🎵") is fine — but historically the NSE swapped it for the
+        // user's localised "Message chiffré" string, which is friendlier.
+        // We keep that behaviour gated strictly to the E2EE-failure path :
+        // any non-E2EE protected message (view-once / blurred / ephemeral)
+        // keeps the iconified body from the gateway.
+        let isEncryptedPush = userInfo["isEncrypted"] as? Bool == true
+            || (userInfo["encryptedContent"] as? String).map { !$0.isEmpty } == true
+        if isEncryptedPush, !didDecrypt,
            let locKey = userInfo["notificationLocKey"] as? String, !locKey.isEmpty {
             let localized = NSLocalizedString(locKey, comment: "")
             if localized != locKey {
