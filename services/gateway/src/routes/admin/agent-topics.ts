@@ -21,8 +21,7 @@ import { AgentHttpClient } from '../../services/AgentHttpClient';
 const OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
 
 const requireAgentAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
-  // @ts-expect-error — JWT decoration ajoutée par fastify-jwt plugin
-  const user = request.user as { role?: string } | undefined;
+  const user = (request as FastifyRequest & { user?: { role?: string } }).user;
   if (!user) {
     sendError(reply, 401, 'Authentification requise');
     return;
