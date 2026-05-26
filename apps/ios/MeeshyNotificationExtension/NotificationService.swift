@@ -71,6 +71,19 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             }
         }
 
+        // Bug B — audio-only E2EE messages reach the device with an empty
+        // plaintext body (the gateway encrypts only the optional caption,
+        // which is empty for a voice memo). Without a fallback the user
+        // sees just the sender name with no hint that a voice message is
+        // waiting. We apply this AFTER the decryption and locKey steps so
+        // we only catch the truly-empty case, never a decrypted caption.
+        if let fallback = NotificationPayloadHelpers.audioBodyFallback(
+            currentBody: bestAttemptContent.body,
+            userInfo: userInfo
+        ) {
+            bestAttemptContent.body = fallback
+        }
+
         // Phase B — for `message_reaction`, the gateway sends body = "❤️" (emoji alone).
         // Reformat it to "<sender> a réagi <emoji> à votre message" so the banner is
         // self-explanatory. Done BEFORE applyCommunicationIntent so INSendMessageIntent
@@ -518,6 +531,24 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
 
         do {
             let updatedContent = try content.updating(from: intent)
+
+            // Bug A — `content.updating(from: intent)` wipes the APN-native
+            // `subtitle` field. For group / global conversations the gateway
+            // sends the conversation name via `subtitle` (see
+            // services/gateway/.../NotificationService.ts → buildPushHeader),
+            // so without this repair the banner loses the conversation name
+            // entirely and the user sees only the sender. The helper returns
+            // `nil` for direct conversations or when iOS happened to keep
+            // the subtitle, so we never clobber a value iOS preserved.
+            if let restored = NotificationPayloadHelpers.preservedSubtitle(
+                currentSubtitle: updatedContent.subtitle,
+                userInfo: userInfo
+            ),
+               let mutable = updatedContent.mutableCopy() as? UNMutableNotificationContent {
+                mutable.subtitle = restored
+                return mutable
+            }
+
             return updatedContent
         } catch {
             return content
