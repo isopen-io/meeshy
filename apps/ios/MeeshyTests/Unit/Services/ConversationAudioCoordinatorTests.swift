@@ -205,4 +205,22 @@ final class ConversationAudioCoordinatorTests: XCTestCase {
 
         XCTAssertNil(sut.activeContext)
     }
+
+    // MARK: - B2 — Empty-queue advance stops the engine
+
+    /// When the user taps "next" on the last queued audio, the coordinator
+    /// MUST call `engine.stop()`. Before the fix, only `activeContext`
+    /// was cleared — the underlying engine kept playing until natural end,
+    /// so the mini-player disappeared while audio continued in the
+    /// background. Asserted via `MockAudioPlaybackEngine.stopCallCount`.
+    func test_playNext_lastAudio_stopsEngine() {
+        let (sut, engine) = makeSUT()
+        sut.play(current: makeQueuedAudio(attachmentId: "a1"), tail: [],
+                 conversationName: "T", conversationArtworkURL: nil)
+        let baseline = engine.stopCallCount
+        sut.playNext()
+        XCTAssertNil(sut.activeContext)
+        XCTAssertEqual(engine.stopCallCount, baseline + 1,
+                       "advancing past the last queued audio must stop the engine")
+    }
 }
