@@ -79,6 +79,10 @@ public struct SocketStatusReactedData: Decodable, Sendable {
     public let emoji: String
 }
 
+public struct SocketConversationDeletedData: Decodable, Sendable {
+    public let conversationId: String
+}
+
 public struct SocketCommentAddedData: Decodable, Sendable {
     public let postId: String
     public let comment: APIPostComment
@@ -194,6 +198,7 @@ public protocol SocialSocketProviding: Sendable {
     var statusDeleted: PassthroughSubject<String, Never> { get }
     var statusUpdated: PassthroughSubject<APIPost, Never> { get }
     var statusReacted: PassthroughSubject<SocketStatusReactedData, Never> { get }
+    var conversationDeleted: PassthroughSubject<String, Never> { get }
     var commentAdded: PassthroughSubject<SocketCommentAddedData, Never> { get }
     var commentDeleted: PassthroughSubject<SocketCommentDeletedData, Never> { get }
     var commentLiked: PassthroughSubject<SocketCommentLikedData, Never> { get }
@@ -244,6 +249,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     public let statusDeleted = PassthroughSubject<String, Never>()
     public let statusUpdated = PassthroughSubject<APIPost, Never>()
     public let statusReacted = PassthroughSubject<SocketStatusReactedData, Never>()
+    public let conversationDeleted = PassthroughSubject<String, Never>()
     public let commentAdded = PassthroughSubject<SocketCommentAddedData, Never>()
     public let commentDeleted = PassthroughSubject<SocketCommentDeletedData, Never>()
     public let commentLiked = PassthroughSubject<SocketCommentLikedData, Never>()
@@ -812,6 +818,18 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             guard let self else { return }
             self.decode(SocketStatusReactedData.self, from: data) { [weak self] payload in
                 self?.statusReacted.send(payload)
+            }
+        }
+
+        // --- Conversation events ---
+        // Surfaced on the social manager (in addition to MessageSocketManager)
+        // so feature-level coordinators that don't own a message socket can
+        // still react to a conversation being deleted server-side.
+
+        socket.on("conversation:deleted") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(SocketConversationDeletedData.self, from: data) { [weak self] payload in
+                self?.conversationDeleted.send(payload.conversationId)
             }
         }
 

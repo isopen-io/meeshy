@@ -29,6 +29,20 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         PlaybackCoordinator.shared.register(self)
     }
 
+    /// Designated init that lets callers opt out of `PlaybackCoordinator`
+    /// registration. The default `init()` keeps the historical
+    /// auto-registration behavior (every call site that doesn't pass this
+    /// new param stays unchanged). The opt-out is used by
+    /// `AudioPlayerView` when a real external engine is provided, to avoid
+    /// polluting the coordinator registry with an unused owned dummy whose
+    /// only purpose is to satisfy SwiftUI's `@StateObject` lifetime.
+    public init(registerWithCoordinator: Bool) {
+        super.init()
+        if registerWithCoordinator {
+            PlaybackCoordinator.shared.register(self)
+        }
+    }
+
     // MARK: - Play from remote URL (through cache)
     public func play(urlString: String) {
         PlaybackCoordinator.shared.willStartPlaying(audio: self)
@@ -326,8 +340,41 @@ public struct AudioPlayerView: View {
     private var availability: AudioAvailability
     private var onDownload: (() -> Void)?
 
-    @StateObject private var player = AudioPlaybackManager()
+    // Owned-by-default engine. Created once per view lifetime via
+    // `@StateObject`. When the caller injects an `externalPlayer`, this
+    // owned instance stays inert (no audio session, never asked to play).
+    // We opt it out of `PlaybackCoordinator` registration in that case
+    // to keep the registry clean — see `AudioPlaybackManager.init(registerWithCoordinator:)`.
+    @StateObject private var ownedPlayer: AudioPlaybackManager
     @StateObject private var waveformAnalyzer = AudioWaveformAnalyzer()
+    // External engine, when provided by a parent coordinator. Wrapping it
+    // in `@ObservedObject` is required so SwiftUI re-renders the body on
+    // `@Published` changes coming from the externally-owned engine.
+    // When `externalPlayer == nil`, this wraps a shared no-op singleton
+    // (`AudioPlayerView.sharedNoopExternal`) — its mutations are never
+    // observed because the computed `player` falls back to `ownedPlayer`,
+    // and the static identity avoids per-init churn.
+    @ObservedObject private var observedExternalPlayer: AudioPlaybackManager
+    // Internal (not `private`) so `@testable import` can observe the
+    // resolution decision from MeeshyUITests without exposing it publicly.
+    internal let usesExternalPlayer: Bool
+
+    /// Engine actually driving playback / observed by the body. Resolves to
+    /// `observedExternalPlayer` when an external engine was injected, else
+    /// to `ownedPlayer`. Both are observed via property wrappers, so any
+    /// `@Published` mutation on the resolved engine re-renders the view.
+    private var player: AudioPlaybackManager {
+        usesExternalPlayer ? observedExternalPlayer : ownedPlayer
+    }
+
+    /// Shared no-op engine used as the `observedExternalPlayer` placeholder
+    /// whenever the caller did not inject an external engine. It is never
+    /// asked to play and is intentionally NOT registered with
+    /// `PlaybackCoordinator`. Using a single shared identity avoids
+    /// allocating one throwaway `AudioPlaybackManager` per view init.
+    @MainActor
+    private static let sharedNoopExternal = AudioPlaybackManager(registerWithCoordinator: false)
+
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isTranscriptionExpanded = false
     @State private var selectedAudioLanguage: String = "orig"
@@ -409,6 +456,7 @@ public struct AudioPlayerView: View {
         externalLanguage: Binding<String?>? = nil,
         availability: AudioAvailability = .ready,
         onDownload: (() -> Void)? = nil,
+        externalPlayer: AudioPlaybackManager? = nil,
         @ViewBuilder topContent: () -> TopContent = { EmptyView() },
         @ViewBuilder bottomContent: () -> BottomContent = { EmptyView() }
     ) {
@@ -421,6 +469,21 @@ public struct AudioPlayerView: View {
         self.externalLanguage = externalLanguage
         self.availability = availability
         self.onDownload = onDownload
+        // External engine wiring. When the caller passes an externally-owned
+        // `AudioPlaybackManager` (e.g. a ConversationAudioCoordinator that
+        // survives view hierarchy churn), the view observes THAT engine
+        // and never touches its owned dummy. The dummy `ownedPlayer` is
+        // still created (SwiftUI demands a non-optional `@StateObject`
+        // initial value) but we opt it out of `PlaybackCoordinator` to
+        // avoid polluting the registry with an unused weak reference.
+        let usesExternal = externalPlayer != nil
+        self.usesExternalPlayer = usesExternal
+        self._ownedPlayer = StateObject(
+            wrappedValue: AudioPlaybackManager(registerWithCoordinator: !usesExternal)
+        )
+        self._observedExternalPlayer = ObservedObject(
+            wrappedValue: externalPlayer ?? AudioPlayerView.sharedNoopExternal
+        )
         let top = topContent()
         self.topSlot = top is EmptyView ? nil : AnyView(top)
         let bottom = bottomContent()
