@@ -11,6 +11,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify';
 import {
   deviceLocaleMiddleware,
   _resetDeviceLocaleCache,
+  _seedDeviceLocaleCache,
 } from '../../../middleware/deviceLocale';
 
 type MockUser = {
@@ -122,6 +123,30 @@ describe('deviceLocaleMiddleware', () => {
       prisma
     );
     expect(update).toHaveBeenCalledTimes(1);
+  });
+
+  it('fires the write again once the 5-minute debounce window has expired', async () => {
+    const { prisma, update } = makePrismaMock();
+
+    // Seed the cache as if a write happened just over 5 minutes ago.
+    // We use Date.now() as the reference to avoid coupling to wall-clock
+    // assumptions inside the middleware.
+    const sixMinutesAgo = Date.now() - (6 * 60 * 1000);
+    _seedDeviceLocaleCache('u1', sixMinutesAgo);
+
+    // Production-shaped req.user (no deviceLocale field) so the no-op
+    // fast-path is skipped and we rely solely on the debounce timing.
+    await deviceLocaleMiddleware(
+      makeRequest({ 'x-device-locale': 'fr-FR' }, { userId: 'u1', isAnonymous: false }),
+      makeReply(),
+      prisma
+    );
+
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledWith({
+      where: { id: 'u1' },
+      data: { deviceLocale: 'fr' },
+    });
   });
 
   it('ignores malformed header payloads (e.g. "@@@") without writing or throwing', async () => {

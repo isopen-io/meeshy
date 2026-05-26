@@ -45,6 +45,15 @@ export function _resetDeviceLocaleCache(): void {
 }
 
 /**
+ * Test-only seam: pre-populate the debounce cache as if a write had
+ * occurred at `timestamp` for `userId`. Lets tests exercise the
+ * debounce-expired path without relying on real wall-clock time.
+ */
+export function _seedDeviceLocaleCache(userId: string, timestamp: number): void {
+  lastUpdateByUserId.set(userId, timestamp);
+}
+
+/**
  * Shape we read from `request.user`. The auth layer attaches either
  *   { userId, username, isAnonymous }  (production legacy compat)
  * or unit tests inject
