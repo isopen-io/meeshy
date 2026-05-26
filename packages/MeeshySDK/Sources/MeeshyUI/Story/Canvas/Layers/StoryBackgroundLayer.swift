@@ -301,12 +301,14 @@ extension StoryBackgroundLayer {
             // de la vidéo est rendue très vite).
             if remoteURL.isFileURL {
                 backgroundColor = UIColor.clear.cgColor
-                attachBackgroundPlayer(url: remoteURL, looping: looping, mute: mute)
+                attachBackgroundPlayer(url: remoteURL, looping: looping, mute: mute,
+                                       fitOverride: self.transform3D.videoFitMode)
                 break
             }
             if let local = CacheCoordinator.videoLocalFileURL(for: remoteURL.absoluteString) {
                 backgroundColor = UIColor.clear.cgColor
-                attachBackgroundPlayer(url: local, looping: looping, mute: mute)
+                attachBackgroundPlayer(url: local, looping: looping, mute: mute,
+                                       fitOverride: self.transform3D.videoFitMode)
                 break
             }
 
@@ -328,9 +330,11 @@ extension StoryBackgroundLayer {
 
             // Précache async puis play. AVPlayerLayer s'ajoute par-dessus
             // le placeholder, qui disparaît visuellement quand la vidéo joue.
+            let fitOverride = self.transform3D.videoFitMode
             Task { @MainActor [weak self] in
                 let url = await CacheCoordinator.videoLocalFileURLAwait(for: remoteURL) ?? remoteURL
-                self?.attachBackgroundPlayer(url: url, looping: looping, mute: mute)
+                self?.attachBackgroundPlayer(url: url, looping: looping, mute: mute,
+                                              fitOverride: fitOverride)
             }
         }
 
@@ -364,7 +368,7 @@ extension StoryBackgroundLayer {
     /// Garantit que l'URL passée est un fichier local — les URLs HTTPS doivent
     /// être pré-cachées en amont via `videoLocalFileURLAwait`.
     @MainActor
-    func attachBackgroundPlayer(url: URL, looping: Bool, mute: Bool) {
+    func attachBackgroundPlayer(url: URL, looping: Bool, mute: Bool, fitOverride: String? = nil) {
         let item = AVPlayerItem(url: url)
         item.preferredForwardBufferDuration = 2.0
         if looping {
@@ -396,9 +400,44 @@ extension StoryBackgroundLayer {
         }
         let pl = AVPlayerLayer(player: avPlayer)
         pl.frame = bounds
-        pl.videoGravity = .resizeAspectFill
+        // Initial gravity: aspectFill as fallback until naturalSize loads.
+        // If override is set, apply immediately.
+        pl.videoGravity = {
+            if let o = fitOverride {
+                return o == "fit" ? .resizeAspect : .resizeAspectFill
+            }
+            return .resizeAspectFill
+        }()
         addSublayer(pl)
         self.avPlayerLayer = pl
+
+        // Async resolve naturalSize to refine gravity once available
+        let canvasSize = self.bounds.size
+        let asset = AVURLAsset(url: url)
+        let weakLayer = pl
+        Task { @MainActor [weak self] in
+            guard let _ = self else { return }
+            let tracks: [AVAssetTrack]
+            if #available(iOS 16.0, *) {
+                tracks = (try? await asset.loadTracks(withMediaType: .video)) ?? []
+            } else {
+                tracks = asset.tracks(withMediaType: .video)
+            }
+            guard let videoTrack = tracks.first else { return }
+            let naturalSize: CGSize
+            if #available(iOS 16.0, *) {
+                naturalSize = (try? await videoTrack.load(.naturalSize)) ?? .zero
+            } else {
+                naturalSize = videoTrack.naturalSize
+            }
+            guard naturalSize.width > 0, naturalSize.height > 0 else { return }
+            let resolved = StoryBackgroundLayer.resolveVideoGravity(
+                naturalSize: naturalSize, canvasSize: canvasSize, override: fitOverride)
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            weakLayer.videoGravity = resolved
+            CATransaction.commit()
+        }
         // IMPORTANT — on n'appelle PLUS `play()` ici inconditionnellement.
         // `attachBackgroundPlayer` peut être invoqué depuis un canvas en
         // `.edit` mode (prefetcher, composer preview), auquel cas démarrer
