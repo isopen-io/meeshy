@@ -12,6 +12,14 @@ final class ToastManagerTests: XCTestCase {
     override func setUp() async throws {
         await MainActor.run {
             ToastManager.shared.dismiss()
+            // Defensive: drain any crash diagnostics another test wrote to
+            // disk via `CrashDiagnosticsManager.writeSync`. Without this, a
+            // sibling test that boots `MeeshyApp.surfaceCrashReports` would
+            // pop a toast mid-`Task.sleep` in
+            // `test_show_autoDismissesAfterDelay`, and the assertion that
+            // expects `currentToast == nil` after the dismiss delay would
+            // see the polluting "Exception precedent" toast instead.
+            _ = CrashDiagnosticsManager.shared.consumePending()
         }
     }
 
