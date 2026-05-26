@@ -43,6 +43,22 @@ extension iPadRootView {
             }
             .animation(MeeshyAnimation.springDefault, value: notificationManager.currentToast?.id)
             .zIndex(201)
+
+            // B4 — Mini audio player on iPad. The tap routes to the
+            // conversation via `navigateToConversationById` (mirrors the
+            // iPhone path in RootView), which in two-column mode honors
+            // `router.onRouteRequested` and opens the conversation in the
+            // right column instead of pushing onto a NavigationStack.
+            VStack {
+                Spacer()
+                MiniAudioPlayerBar(onTapBody: {
+                    guard let convId = ConversationAudioCoordinator.shared
+                        .activeContext?.conversationId else { return }
+                    navigateToConversationById(convId)
+                })
+                .padding(.bottom, 12)
+            }
+            .zIndex(202)
         }
     }
 }
