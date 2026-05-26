@@ -59,6 +59,14 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     conversation: {
       findUnique: jest.fn(),
     },
+    // Required by the race-condition guard in createMessageNotification
+    // (refetches `deletedAt` / `expiresAt` right before fan-out). Default
+    // returns a live row so the existing push tests keep passing; the
+    // dedicated `createMessageNotificationRaceGuard.test.ts` overrides
+    // this to exercise the bail-out branches.
+    message: {
+      findUnique: jest.fn(),
+    },
   };
 
   return {
@@ -149,6 +157,14 @@ describe('NotificationService — message push title/body', () => {
     (prisma.userPreferences.findUnique as jest.Mock).mockResolvedValue(null);
     (prisma.notification.count as jest.Mock).mockResolvedValue(0);
     (prisma.notification.create as jest.Mock).mockResolvedValue(makeNotif());
+    // Default: message is live (race-guard happy path). Race-guard
+    // bail-out branches are covered in createMessageNotificationRaceGuard.test.ts.
+    (prisma.message.findUnique as jest.Mock).mockResolvedValue({
+      deletedAt: null,
+      expiresAt: null,
+      isViewOnce: false,
+      viewOnceCount: 0,
+    });
   });
 
   describe('direct conversation', () => {
