@@ -80,6 +80,40 @@ final class ConversationViewModelAudioTests: XCTestCase {
         return (vm, engine, coordinator)
     }
 
+    /// Builds a `ConversationViewModel` bound to an existing shared
+    /// coordinator. Used by the cross-VM pollution test to drive two VMs
+    /// (different conversation ids) through the same singleton-like
+    /// coordinator instance.
+    private func makeSUT(
+        conversationId: String,
+        sharedCoordinator: ConversationAudioCoordinator
+    ) -> ConversationViewModel {
+        let currentUser = MeeshyUser(id: testUserId, username: "bob", displayName: "Bob")
+        mockAuthManager.simulateLoggedIn(user: currentUser)
+
+        let pool = try! Self.makeInMemoryPool()
+        let deps = ConversationDependencies(
+            dbPool: pool,
+            persistence: MessagePersistenceActor(dbWriter: pool)
+        )
+        let vm = ConversationViewModel(
+            conversationId: conversationId,
+            unreadCount: 0,
+            isDirect: false,
+            participantUserId: nil,
+            anonymousSession: nil,
+            authManager: mockAuthManager,
+            messageService: mockMessageService,
+            conversationService: mockConversationService,
+            reactionService: mockReactionService,
+            reportService: mockReportService,
+            messageSocket: mockMessageSocket,
+            dependencies: deps
+        )
+        vm._testSetAudioCoordinator(sharedCoordinator)
+        return vm
+    }
+
     private func makeAudioAttachment(
         id: String,
         durationMs: Int = 3_000,
@@ -310,5 +344,66 @@ final class ConversationViewModelAudioTests: XCTestCase {
         await Task.yield()
 
         XCTAssertEqual(coordinator.queueCount, 1, "foreign conv message must NOT enter the active queue")
+    }
+
+    // MARK: - 6. Cross-VM isolation — finished events filtered by conversationId
+
+    /// When two `ConversationViewModel` instances (different conversations)
+    /// share the same `ConversationAudioCoordinator` (the production
+    /// singleton case), a finished-event for an audio that belongs to
+    /// VM_A's conversation MUST only enrich VM_A's `listenedAttachmentIds`.
+    /// VM_B's set MUST NEVER receive a foreign attachment id.
+    ///
+    /// Before the fix, the coordinator exposed a single mutable
+    /// `onAttachmentFinished` closure that the most-recent VM stomped on,
+    /// so the wrong VM received the event silently. The
+    /// `attachmentFinishedPublisher` + per-VM filter eliminates that race.
+    func test_engineFinish_onlyEnrichesListenedIdsOfMatchingConversation() async {
+        // Shared coordinator (production singleton case).
+        let engine = MockAudioPlaybackEngine()
+        let sharedCoord = ConversationAudioCoordinator(engine: engine)
+
+        let convA = "000000000000000000000aA1"
+        let convB = "000000000000000000000aB1"
+        let vmA = makeSUT(conversationId: convA, sharedCoordinator: sharedCoord)
+        let vmB = makeSUT(conversationId: convB, sharedCoordinator: sharedCoord)
+
+        // Seed VM_A with an audio it owns in conv A and start playback.
+        let mA = makeAudioMessage(
+            id: "mA1",
+            senderId: otherUserId,
+            conversationId: convA,
+            attachments: [makeAudioAttachment(id: "aA", fileUrl: "https://cdn/aA.m4a")],
+            createdAt: date(1_000)
+        )
+        vmA.messages = [mA]
+        // Seed VM_B with an unrelated message — purely so its `messages`
+        // is non-empty; the audio finishing here belongs to conv A.
+        let mB = makeAudioMessage(
+            id: "mB1",
+            senderId: otherUserId,
+            conversationId: convB,
+            attachments: [makeAudioAttachment(id: "aB", fileUrl: "https://cdn/aB.m4a")],
+            createdAt: date(1_500)
+        )
+        vmB.messages = [mB]
+        await Task.yield()
+
+        vmA.playAudio(attachmentId: "aA")
+        await Task.yield()
+        XCTAssertEqual(sharedCoord.activeContext?.conversationId, convA)
+
+        // Engine finishes the audio currently playing (conv A).
+        engine.simulateFinishPlayback()
+        // advanceQueue is routed through Task { @MainActor in ... }, then
+        // the publisher emits, then the sink runs on DispatchQueue.main.
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertTrue(vmA.listenedAttachmentIds.contains("aA"),
+                      "VM_A must mark its own finished audio as listened")
+        XCTAssertFalse(vmB.listenedAttachmentIds.contains("aA"),
+                       "VM_B must NOT receive a finished-event for an audio that doesn't belong to its conversation")
+        XCTAssertTrue(vmB.listenedAttachmentIds.isEmpty,
+                      "VM_B's listened set must stay empty — no foreign pollution")
     }
 }

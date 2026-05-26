@@ -266,8 +266,14 @@ class ConversationViewModel: ObservableObject {
     /// test class can assert side-effects without colliding with the global
     /// singleton's state. Must be called BEFORE `playAudio(attachmentId:)` /
     /// any other coordinator-routed call to take effect for that operation.
+    ///
+    /// Re-subscribes the listened-id observer to the new coordinator so the
+    /// PassthroughSubject route works in tests too — without this the
+    /// subscription wired in `init` still targets the default singleton
+    /// while playback flows through the injected instance.
     func _testSetAudioCoordinator(_ coordinator: ConversationAudioCoordinator) {
         _testAudioCoordinator = coordinator
+        subscribeToAudioCoordinatorFinishedEvents()
     }
     #endif
 
@@ -819,6 +825,7 @@ class ConversationViewModel: ObservableObject {
         subscribeToQueueReconciliation()
         subscribeToLanguagePreferenceChanges()
         subscribeToMessagesForAudioQueue()
+        subscribeToAudioCoordinatorFinishedEvents()
         mirrorMessagesIntoStateStore()
         hydrateCurrentConversationFromCache()
         // Cross-conversation unread aggregator powers the back-button pill.
@@ -1492,16 +1499,6 @@ class ConversationViewModel: ObservableObject {
             listenedAttachmentIds: listenedAttachmentIds
         )
 
-        // B1 — install the listened-tracking callback before starting
-        // playback. The coordinator is a process-wide singleton (or, in
-        // tests, an injected instance); whichever VM most recently kicked
-        // off playback owns the callback. Re-installing on every `play`
-        // keeps the hook bound to the currently-driving VM even if a
-        // different conversation took over in between.
-        audioCoordinator.onAttachmentFinished = { [weak self] finishedId in
-            self?.listenedAttachmentIds.insert(finishedId)
-        }
-
         audioCoordinator.play(
             current: current,
             tail: tail,
@@ -1536,6 +1533,24 @@ class ConversationViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] snapshot in
                 self?.processMessagesForAudioQueueAppend(snapshot)
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Subscribes to the shared `ConversationAudioCoordinator`'s
+    /// `attachmentFinishedPublisher` so this VM records each natural-end /
+    /// failed-load event in `listenedAttachmentIds`. Filters by
+    /// `event.conversationId == self.conversationId` so a coordinator owned
+    /// by another conversation (the singleton is process-wide) NEVER
+    /// pollutes this VM's listened set with foreign attachment ids.
+    /// The subscription auto-cleans on `deinit` via `cancellables`.
+    private func subscribeToAudioCoordinatorFinishedEvents() {
+        let ownConversationId = conversationId
+        audioCoordinator.attachmentFinishedPublisher
+            .filter { event in event.conversationId == ownConversationId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.listenedAttachmentIds.insert(event.attachmentId)
             }
             .store(in: &cancellables)
     }

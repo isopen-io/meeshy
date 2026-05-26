@@ -30,19 +30,36 @@ public final class ConversationAudioCoordinator: ObservableObject {
     @Published public private(set) var duration: TimeInterval = 0
     @Published public private(set) var speed: PlaybackSpeed = .x1_0
 
-    // MARK: - Public callbacks
+    // MARK: - Public publishers
 
-    /// Fired with the attachment id of the audio that just finished or
-    /// failed to load — BEFORE the queue advances to the next head. The
-    /// `ConversationViewModel` uses this to enrich its
-    /// `listenedAttachmentIds` set so auto-built queues don't loop on the
-    /// same audios indefinitely.
-    ///
-    /// Lifecycle: each view model that wants to observe the global
-    /// coordinator should set this when it starts driving playback (e.g.
-    /// in `playAudio(attachmentId:)`) — the coordinator is a process-wide
-    /// singleton, so the most-recent setter wins.
-    public var onAttachmentFinished: ((String) -> Void)?
+    /// Event payload emitted on `attachmentFinishedPublisher` when an audio
+    /// finishes natural playback or fails to load. Carries the
+    /// `conversationId` so subscribers (typically `ConversationViewModel`s
+    /// hooked on a process-wide singleton coordinator) can filter events
+    /// that don't belong to their conversation — avoiding the cross-VM
+    /// callback pollution that the previous mutable closure-based slot
+    /// caused (most-recent setter wins, callback fires into the wrong VM).
+    public struct AttachmentFinishedEvent: Sendable, Equatable {
+        public let attachmentId: String
+        public let conversationId: String
+
+        public init(attachmentId: String, conversationId: String) {
+            self.attachmentId = attachmentId
+            self.conversationId = conversationId
+        }
+    }
+
+    private let attachmentFinishedSubject = PassthroughSubject<AttachmentFinishedEvent, Never>()
+
+    /// Fires with the `AttachmentFinishedEvent` of the audio that just
+    /// finished or failed to load — BEFORE the queue advances to the next
+    /// head. Each `ConversationViewModel` subscribes once in its `init`
+    /// and filters by `event.conversationId == self.conversationId`. The
+    /// `PassthroughSubject` is multi-subscriber safe and each VM's
+    /// subscription auto-cleans on deinit via `cancellables`.
+    public var attachmentFinishedPublisher: AnyPublisher<AttachmentFinishedEvent, Never> {
+        attachmentFinishedSubject.eraseToAnyPublisher()
+    }
 
     // MARK: - Private
 
@@ -133,16 +150,19 @@ public final class ConversationAudioCoordinator: ObservableObject {
     }
 
     private func advanceQueue() {
-        // B1 — capture the id of the audio leaving the head BEFORE we
-        // mutate the queue so the VM-side `onAttachmentFinished` observer
-        // can record exactly the attachment that just finished/failed in
-        // its `listenedAttachmentIds` set. Without this enrichment the
+        // B1 — capture the id + conversationId of the audio leaving the
+        // head BEFORE we mutate the queue so the VM-side subscribers can
+        // record exactly the attachment that just finished/failed in
+        // their `listenedAttachmentIds` set. Without this enrichment the
         // auto-built queues would loop on the same audios indefinitely.
-        let finishedId = queue.first?.attachmentId
+        let finishedHead = queue.first
         if !queue.isEmpty { queue.removeFirst() }
         queueCount = queue.count
-        if let finishedId {
-            onAttachmentFinished?(finishedId)
+        if let finishedHead {
+            attachmentFinishedSubject.send(AttachmentFinishedEvent(
+                attachmentId: finishedHead.attachmentId,
+                conversationId: finishedHead.conversationId
+            ))
         }
         if queue.isEmpty {
             // B2 fix — when the queue empties, the engine was still alive
