@@ -24,6 +24,10 @@ import { deliveryRoutes } from './routes/delivery';
 import { findEligibleConversations } from './scheduler/eligible-conversations';
 import { startDailySnapshotCron } from './cron/daily-snapshot';
 import { startProfileRefreshCron } from './cron/profile-refresh';
+import { startTopicUsageCleanupCron } from './cron/topic-usage-cleanup';
+import { TopicCatalogService } from './topics/TopicCatalogService';
+import { TopicSeedService } from './topics/TopicSeedService';
+import { TopicUsageService } from './topics/TopicUsageService';
 
 const server = Fastify({ logger: true });
 const prisma = new PrismaClient();
@@ -250,6 +254,14 @@ async function start() {
   const snapshotInterval = startDailySnapshotCron(prisma);
   const profileRefreshInterval = startProfileRefreshCron(prisma);
 
+  // Topic catalog : seed initial (idempotent) + instanciation services partagés.
+  await new TopicSeedService(prisma).run();
+  const topicCatalogService = new TopicCatalogService(prisma, redis);
+  const topicUsageService = new TopicUsageService(prisma);
+  // Warm le cache + compiled regex au boot pour éviter le first-hit latency.
+  await topicCatalogService.list({ activeOnly: true });
+  const topicUsageCleanupInterval = startTopicUsageCleanupCron(prisma);
+
   // STARTUP SUMMARY LOGGING
   try {
     const globalConfig = await configCache.getGlobalConfig();
@@ -271,6 +283,7 @@ async function start() {
     scanner.stop();
     clearInterval(snapshotInterval);
     clearInterval(profileRefreshInterval);
+    clearInterval(topicUsageCleanupInterval);
     deliveryQueue.stopPolling();
     await configCache.stopListening();
     await zmqListener.close();
