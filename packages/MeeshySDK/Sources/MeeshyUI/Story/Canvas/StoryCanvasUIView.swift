@@ -73,6 +73,11 @@ public final class StoryCanvasUIView: UIView {
 
     public var slide: StorySlide {
         didSet {
+            // Refresh the cached background media id BEFORE early return paths
+            // so handlePan can branch correctly even mid-gesture.
+            backgroundMediaObjectId = slide.effects.mediaObjects?
+                .first(where: { $0.isBackground })?.id
+
             // Skip expensive full-layer rebuild while a gesture is actively
             // manipulating an item (pan/pinch/rotate). The gesture handlers
             // update the specific CALayer transform directly. A full rebuild
@@ -175,7 +180,8 @@ public final class StoryCanvasUIView: UIView {
     private let editOverlayLayer = CALayer()
 
     /// Background layer (color/gradient/image/video). Inserted at z=0 beneath itemsContainer.
-    private let backgroundLayer = StoryBackgroundLayer()
+    /// `internal` (not private) so test seams can introspect transform during live drag tests.
+    internal let backgroundLayer = StoryBackgroundLayer()
 
     /// Optional Metal filter overlay (Task 19). Non-nil iff `slide.effects.filter` maps to a
     /// known `StoryFilteredLayer.Kind`. Owned and removed by `updateFilterLayer()`.
@@ -284,6 +290,27 @@ public final class StoryCanvasUIView: UIView {
     private var baseScale: Double = 1.0
     private var baseRotation: Double = 0.0
 
+    /// Cache the id of the background media (resolved in `slide.didSet`). Used
+    /// by `handlePan` to branch into the live-drag path for the bg without
+    /// going through `updatePosition` (which would clamp + commit immediately).
+    private var backgroundMediaObjectId: String?
+    /// Drag-start snapshot of the background transform (path α — model
+    /// untouched during gesture, committed at `.ended`).
+    private var dragStartBgScale: Double = 1.0
+    private var dragStartBgOffsetX: Double = 0
+    private var dragStartBgOffsetY: Double = 0
+    private var dragStartBgRotation: Double = 0
+    private var dragStartBgFitMode: String?
+    /// Live transform applied during the current bg drag, committed to the
+    /// slide model on `.ended` (along with `onBackgroundTransformChanged`).
+    private var liveBackgroundTransformDuringDrag: BackgroundTransform?
+
+    /// Fires when the background transform is committed at gesture end (path
+    /// α). Parent composer uses this to mirror the value into its viewModel
+    /// cache so the persisted `slide.effects.backgroundTransform` round-trips
+    /// through save/restore.
+    public var onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)?
+
     /// `true` quand un gesture pan/pinch/rotate est en cours sur un item.
     /// Indique au parent SwiftUI (`StoryCanvasRepresentable.updateUIView`) que
     /// la vérité de `slide` est temporairement dans UIKit ; les mutations
@@ -380,6 +407,8 @@ public final class StoryCanvasUIView: UIView {
     public init(slide: StorySlide, mode: RenderMode = .edit) {
         self.slide = slide
         self.mode = mode
+        self.backgroundMediaObjectId = slide.effects.mediaObjects?
+            .first(where: { $0.isBackground })?.id
         super.init(frame: .zero)
         layer.addSublayer(rootLayer)
         rootLayer.insertSublayer(backgroundLayer, at: 0)
@@ -2744,6 +2773,55 @@ extension StoryCanvasUIView: UIPointerInteractionDelegate {
         let preview = UITargetedPreview(view: view)
         return UIPointerStyle(effect: .lift(preview))
     }
+
+    #if DEBUG
+    /// Test seam: drives `handlePan`-equivalent live drag of the background as
+    /// if the user dragged with normalized delta `(dxNorm, dyNorm)`. Mirrors
+    /// the real `handlePan.changed` code path for `id == backgroundMediaObjectId`
+    /// so canvas observable state matches a real gesture. Does NOT commit to
+    /// the model — the real `.ended` branch handles that.
+    internal func simulatePanForTesting(targetId: String, dxNorm: Double, dyNorm: Double) {
+        guard targetId == backgroundMediaObjectId else { return }
+        let currentTransform = slide.effects.backgroundTransform
+        dragStartBgScale = Double(currentTransform?.scale ?? 1)
+        dragStartBgOffsetX = Double(currentTransform?.offsetX ?? 0)
+        dragStartBgOffsetY = Double(currentTransform?.offsetY ?? 0)
+        dragStartBgRotation = currentTransform?.rotation ?? 0
+        dragStartBgFitMode = currentTransform?.videoFitMode
+        let live = BackgroundTransform(
+            scale: dragStartBgScale,
+            offsetX: dragStartBgOffsetX + dxNorm * Double(bounds.width),
+            offsetY: dragStartBgOffsetY + dyNorm * Double(bounds.height),
+            rotation: dragStartBgRotation,
+            videoFitMode: dragStartBgFitMode
+        )
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        backgroundLayer.transform = live.caTransform()
+        CATransaction.commit()
+        liveBackgroundTransformDuringDrag = live
+    }
+
+    /// Test seam mirroring `handleDoubleTap` cycle (auto → fit → fill → auto)
+    /// for the background. Commits to the model + fires the callback.
+    internal func performDoubleTapForTesting(targetId: String) {
+        guard targetId == backgroundMediaObjectId else { return }
+        let current = slide.effects.backgroundTransform?.videoFitMode
+        let next: String?
+        switch current {
+        case nil:    next = "fit"
+        case "fit":  next = "fill"
+        case "fill": next = nil
+        default:     next = nil
+        }
+        var updated = slide
+        var bg = updated.effects.backgroundTransform ?? StoryBackgroundTransform()
+        bg.videoFitMode = next
+        updated.effects.backgroundTransform = bg.isIdentity ? nil : bg
+        slide = updated
+        onBackgroundTransformChanged?(bg)
+    }
+    #endif
 }
 
 // MARK: - UIGestureRecognizerDelegate
