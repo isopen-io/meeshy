@@ -23,6 +23,8 @@ import { PostReactionHandler } from './handlers/PostReactionHandler';
 import { ConversationHandler } from './handlers/ConversationHandler';
 import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
+import { attachmentMediaSelect } from '../services/attachments/attachmentIncludes';
+import { emitAttachmentUpdated } from './emitAttachmentUpdated';
 import { ReactionService } from '../services/ReactionService.js';
 import { CommentReactionService } from '../services/CommentReactionService';
 import { PostReactionService } from '../services/PostReactionService';
@@ -188,7 +190,16 @@ export class MeeshySocketIOManager {
       pingInterval: 25000, // 25s - Intervalle entre les pings (par défaut)
       connectTimeout: 45000, // 45s - Timeout pour la connexion initiale
       // Autoriser reconnexion rapide
-      allowEIO3: true
+      allowEIO3: true,
+      perMessageDeflate: {
+        threshold: 1024,
+        zlibDeflateOptions: { level: 6, memLevel: 7 },
+        clientNoContextTakeover: true,
+        serverNoContextTakeover: true,
+      },
+      httpCompression: {
+        threshold: 1024,
+      },
     });
 
     // Initialiser le SocialEventsHandler pour les broadcasts feed
@@ -931,12 +942,51 @@ export class MeeshySocketIOManager {
       logger.info(`📡 [SocketIOManager] Émission événement '${SERVER_EVENTS.TRANSCRIPTION_READY}' vers room '${roomName}' (${clientCount} clients)`);
       this.io.to(roomName).emit(SERVER_EVENTS.TRANSCRIPTION_READY, transcriptionData);
 
+      // Generic attachment-updated delta : clients atomically replace the
+      // attachment in their store and refresh derived metadata
+      // (transcription dictionaries, audio language listings) without a
+      // round-trip. See spec 2026-05-25-audio-instant-render-and-attachment-size-design.md.
+      await this._broadcastAttachmentUpdated(data.attachmentId, data.messageId, normalizedId);
+
       logger.info(`✅ [SocketIOManager] ======== ÉVÉNEMENT TRANSCRIPTION DIFFUSÉ ========`);
       logger.info(`✅ [SocketIOManager] Transcription diffusée vers ${clientCount} client(s)`);
 
     } catch (error) {
       logger.error(`❌ [SocketIOManager] Erreur envoi transcription:`, error);
       this.stats.errors++;
+    }
+  }
+
+  /**
+   * Re-fetch a freshly-enriched attachment from the DB and broadcast a
+   * `message:attachment-updated` delta to the conversation room. Used by
+   * the transcription and translation handlers so iOS / web can refresh
+   * their attachment state atomically without a manual REST round-trip.
+   *
+   * No-op (logged) if the attachment cannot be re-fetched.
+   */
+  private async _broadcastAttachmentUpdated(
+    attachmentId: string,
+    messageId: string,
+    normalizedConversationId: string
+  ): Promise<void> {
+    try {
+      const fresh = await this.prisma.messageAttachment.findUnique({
+        where: { id: attachmentId },
+        select: attachmentMediaSelect,
+      });
+      if (!fresh) {
+        logger.warn(`⚠️ [SocketIOManager] Cannot broadcast attachment-updated: attachment ${attachmentId} not found`);
+        return;
+      }
+      emitAttachmentUpdated(
+        this.io,
+        normalizedConversationId,
+        messageId,
+        fresh as Record<string, unknown>
+      );
+    } catch (err) {
+      logger.error(`❌ [SocketIOManager] Failed to broadcast attachment-updated for ${attachmentId}:`, err);
     }
   }
 
@@ -1015,7 +1065,6 @@ export class MeeshySocketIOManager {
           id: data.translatedAudio.id || `${data.attachmentId}_${data.language}`,
           targetLanguage: data.translatedAudio.targetLanguage || data.language,
           url: data.translatedAudio.url,
-          path: data.translatedAudio.path,
           transcription: data.translatedAudio.translatedText || data.translatedAudio.transcription || '',
           durationMs: data.translatedAudio.durationMs || data.translatedAudio.duration || 0,
           format: data.translatedAudio.format || 'mp3',
@@ -1040,6 +1089,12 @@ export class MeeshySocketIOManager {
       // Diffuser dans la room de conversation
       logger.info(`📡 [SocketIOManager] Émission événement '${eventConstant}' vers room '${roomName}' (${clientCount} clients)`);
       this.io.to(roomName).emit(eventConstant, translationData);
+
+      // Generic attachment-updated delta : same rationale as the
+      // transcription-ready branch. Clients receive the FULL re-serialized
+      // attachment (with the freshly-added translation language merged into
+      // `translations`) and refresh their derived state atomically.
+      await this._broadcastAttachmentUpdated(data.attachmentId, data.messageId, normalizedId);
 
       logger.info(`✅ [SocketIOManager] ======== ÉVÉNEMENT TRADUCTION DIFFUSÉ ========`);
       logger.info(`✅ [SocketIOManager] Traduction ${data.language} diffusée vers ${clientCount} client(s)`);
@@ -1221,11 +1276,12 @@ export class MeeshySocketIOManager {
       // car le message en base peut contenir l'identifier au lieu de l'ObjectId
       (message as any).conversationId = normalizedId;
       
-      // OPTIMISATION: Récupérer les traductions et les stats en parallèle (non-bloquant)
-      // Les stats seront envoyées séparément si elles prennent du temps
+      // OPTIMISATION: Récupérer les traductions et déclencher le calcul des stats
+      // en parallèle. Les stats ne sont plus embarquées dans le payload
+      // message:new — elles sont diffusées via l'event dédié `conversation:stats`.
+      // L'appel reste pour son side-effect (update du cache stats).
       let messageTranslations: any[] = [];
-      let updatedStats: any = null;
-      
+
       // Lancer les 2 requêtes en parallèle
       const [translationsResult, statsResult] = await Promise.allSettled([
         // Récupérer les traductions existantes du message (format JSON)
@@ -1266,10 +1322,8 @@ export class MeeshySocketIOManager {
         messageTranslations = translationsResult.value;
       }
 
-      if (statsResult.status === 'fulfilled') {
-        updatedStats = statsResult.value;
-      } else {
-        logger.warn(`⚠️ [PERF] Stats non disponibles, broadcast sans stats`);
+      if (statsResult.status !== 'fulfilled') {
+        logger.warn(`⚠️ [PERF] Calcul stats échoué (non-bloquant), cache non rafraîchi`);
       }
 
       // Construire le payload de message pour broadcast - compatible avec les types existants
@@ -1336,9 +1390,6 @@ export class MeeshySocketIOManager {
             lastName: (message as any).replyTo.sender.user?.lastName || '',
           } : undefined
         } : undefined,
-        meta: {
-          conversationStats: updatedStats
-        }
       };
 
       // DEBUG: Log pour vérifier les attachments et metadata

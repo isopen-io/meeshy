@@ -45,15 +45,33 @@ public final class PushNotificationManager: NSObject, ObservableObject {
     /// iOS Simulator). The production shared instance still uses
     /// `.standard` via the convenience init.
     private let userDefaults: UserDefaults
+    private let keychainStore: any KeychainStoring
 
     override private convenience init() {
-        self.init(userDefaults: .standard)
+        self.init(userDefaults: .standard, keychainStore: KeychainManager.shared)
     }
 
-    init(userDefaults: UserDefaults) {
+    public init(userDefaults: UserDefaults, keychainStore: any KeychainStoring) {
         self.userDefaults = userDefaults
+        self.keychainStore = keychainStore
         super.init()
-        deviceToken = userDefaults.string(forKey: Self.persistedTokenKey)
+        migrateDeviceTokenFromUserDefaultsIfNeeded()
+        deviceToken = keychainStore.load(forKey: Self.persistedTokenKey, account: nil)
+    }
+
+    private func migrateDeviceTokenFromUserDefaultsIfNeeded() {
+        if let legacyToken = userDefaults.string(forKey: Self.persistedTokenKey) {
+            if keychainStore.load(forKey: Self.persistedTokenKey, account: nil) == nil {
+                try? keychainStore.save(legacyToken, forKey: Self.persistedTokenKey, account: nil)
+            }
+            userDefaults.removeObject(forKey: Self.persistedTokenKey)
+        }
+        if let legacyLastRegistered = userDefaults.string(forKey: Self.lastRegisteredTokenKey) {
+            if keychainStore.load(forKey: Self.lastRegisteredTokenKey, account: nil) == nil {
+                try? keychainStore.save(legacyLastRegistered, forKey: Self.lastRegisteredTokenKey, account: nil)
+            }
+            userDefaults.removeObject(forKey: Self.lastRegisteredTokenKey)
+        }
     }
 
     // MARK: - APNs Environment
@@ -107,7 +125,7 @@ public final class PushNotificationManager: NSObject, ObservableObject {
     public func registerDeviceToken(_ tokenData: Data) {
         let token = tokenData.map { String(format: "%02.2hhx", $0) }.joined()
         self.deviceToken = token
-        userDefaults.set(token, forKey: Self.persistedTokenKey)
+        try? keychainStore.save(token, forKey: Self.persistedTokenKey, account: nil)
         logger.info("APNs device token received (\(token.prefix(8))...)")
 
         Task {
@@ -150,7 +168,8 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         }
 
         deviceToken = nil
-        userDefaults.removeObject(forKey: Self.persistedTokenKey)
+        keychainStore.delete(forKey: Self.persistedTokenKey, account: nil)
+        keychainStore.delete(forKey: Self.lastRegisteredTokenKey, account: nil)
     }
 
     // MARK: - Notification Handling
@@ -166,6 +185,23 @@ public final class PushNotificationManager: NSObject, ObservableObject {
     /// Clear the pending notification after the app has navigated.
     public func clearPendingNotification() {
         pendingNotificationPayload = nil
+    }
+
+    // MARK: - Session quiesce (P1 — logout)
+
+    /// Purge l'état session-bound : payload de navigation pending et
+    /// deviceToken (en mémoire + Keychain). NE touche PAS `isAuthorized` —
+    /// c'est la permission système iOS, device-level, persistante. La toucher
+    /// au logout provoquerait un re-prompt utilisateur qu'iOS rate-limit.
+    /// Le binding user↔token côté gateway est désinscrit via
+    /// `unregisterDeviceToken()` (POST /auth/logout). Câblée depuis
+    /// `AuthManager.logout()`.
+    public func resetSession() {
+        pendingNotificationPayload = nil
+        deviceToken = nil
+        keychainStore.delete(forKey: Self.persistedTokenKey, account: nil)
+        keychainStore.delete(forKey: Self.lastRegisteredTokenKey, account: nil)
+        userDefaults.removeObject(forKey: Self.lastRegisteredAtKey)
     }
 
     /// Émet le conversationId sur `messageNotificationReceived` quand une
@@ -222,7 +258,7 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         // (native callback firing right after) — both posted the same token
         // back-to-back, generating duplicate 10s+ POSTs in the slow-request log.
         let now = Date()
-        let lastToken = userDefaults.string(forKey: Self.lastRegisteredTokenKey)
+        let lastToken = keychainStore.load(forKey: Self.lastRegisteredTokenKey, account: nil)
         let lastAt = userDefaults.object(forKey: Self.lastRegisteredAtKey) as? Date
         if lastToken == token,
            let lastAt,
@@ -243,7 +279,7 @@ public final class PushNotificationManager: NSObject, ObservableObject {
                 endpoint: "/users/register-device-token",
                 body: request
             )
-            userDefaults.set(token, forKey: Self.lastRegisteredTokenKey)
+            try? keychainStore.save(token, forKey: Self.lastRegisteredTokenKey, account: nil)
             userDefaults.set(now, forKey: Self.lastRegisteredAtKey)
             logger.info("Device token registered with backend (env=\(Self.apnsEnvironment))")
         } catch {

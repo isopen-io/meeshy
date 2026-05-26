@@ -51,7 +51,7 @@ struct PostTranslationSheet: View {
                     .padding(16)
                 }
             }
-            .navigationTitle("Langues")
+            .navigationTitle(String(localized: "feed.post.translation.title", defaultValue: "Langues", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -83,7 +83,7 @@ struct PostTranslationSheet: View {
                 HStack(spacing: 6) {
                     let display = LanguageDisplay.from(code: post.originalLanguage)
                     Text(display?.flag ?? languageFlag(post.originalLanguage ?? "?"))
-                    Text("Original (\(display?.name ?? post.originalLanguage ?? "?"))")
+                    Text("\(String(localized: "feed.post.translation.original", defaultValue: "Original", bundle: .main)) (\(display?.name ?? post.originalLanguage ?? "?"))")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
 
@@ -118,7 +118,7 @@ struct PostTranslationSheet: View {
 
     private var translationsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Traductions disponibles")
+            Text(String(localized: "feed.post.translation.available", defaultValue: "Traductions disponibles", bundle: .main))
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
@@ -177,7 +177,7 @@ struct PostTranslationSheet: View {
 
     private var requestTranslationSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Autres langues")
+            Text(String(localized: "feed.post.translation.other_languages", defaultValue: "Autres langues", bundle: .main))
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
@@ -197,7 +197,7 @@ struct PostTranslationSheet: View {
                         HStack(spacing: 4) {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 10, weight: .bold))
-                            Text("Demandee")
+                            Text(String(localized: "feed.post.translation.requested", defaultValue: "Demandee", bundle: .main))
                                 .font(.system(size: 11, weight: .medium))
                         }
                         .foregroundColor(MeeshyColors.success)
@@ -216,14 +216,14 @@ struct PostTranslationSheet: View {
                                     onRequestTranslation?(post.id, lang)
                                 } catch {
                                     requestingLanguages.remove(lang)
-                                    ToastManager.shared.showError("Erreur de traduction")
+                                    ToastManager.shared.showError(String(localized: "feed.post.translation.error", defaultValue: "Erreur de traduction", bundle: .main))
                                 }
                             }
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: "translate")
                                     .font(.system(size: 12, weight: .medium))
-                                Text("Traduire")
+                                Text(String(localized: "feed.post.translation.translate", defaultValue: "Traduire", bundle: .main))
                                     .font(.system(size: 12, weight: .semibold))
                             }
                             .foregroundColor(.white)

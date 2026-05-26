@@ -68,6 +68,38 @@ final class MessageServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "GET")
     }
 
+    /// Bandwidth optimization (Niveau 1): when GRDB already holds the text
+    /// translations for the messages we are about to fetch (warm-cache refresh),
+    /// the caller passes `includeTranslations: false` to opt out of having the
+    /// gateway return them. Verifies that the SDK forwards this to the URL as
+    /// `?include_translations=false`. Default `true` preserves existing call
+    /// sites that haven't been migrated yet.
+    func testListForwardsIncludeTranslationsQueryParam() async throws {
+        let expected = makeMessagesResponse()
+        mock.stub("/conversations/\(convId)/messages", result: expected)
+
+        _ = try await service.list(conversationId: convId, includeTranslations: false)
+
+        let queryItems = try XCTUnwrap(mock.lastRequest?.queryItems)
+        XCTAssertTrue(
+            queryItems.contains(URLQueryItem(name: "include_translations", value: "false")),
+            "list(includeTranslations: false) must pass include_translations=false; got \(queryItems)"
+        )
+    }
+
+    func testListDefaultsIncludeTranslationsToTrue() async throws {
+        let expected = makeMessagesResponse()
+        mock.stub("/conversations/\(convId)/messages", result: expected)
+
+        _ = try await service.list(conversationId: convId)
+
+        let queryItems = try XCTUnwrap(mock.lastRequest?.queryItems)
+        XCTAssertTrue(
+            queryItems.contains(URLQueryItem(name: "include_translations", value: "true")),
+            "list() default must include translations for cold-start callers; got \(queryItems)"
+        )
+    }
+
     // MARK: - listBefore
 
     func testListBeforeCallsWithCorrectEndpoint() async throws {

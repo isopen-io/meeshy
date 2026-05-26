@@ -246,7 +246,7 @@ final class StoryExporter_BackgroundVideoTests: XCTestCase {
 
 // MARK: - Fixture
 
-private enum BackgroundVideoFixture {
+internal enum BackgroundVideoFixture {
 
     /// Generates a deterministic black H.264 MP4 of the given duration & size
     /// at `url`. Mirrors `ExportFixture.makeBlackBackgroundVideo` from the

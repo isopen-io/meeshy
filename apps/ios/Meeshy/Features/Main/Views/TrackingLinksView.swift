@@ -57,7 +57,7 @@ struct TrackingLinksView: View {
 
             Spacer()
 
-            Text("Liens de tracking")
+            Text(String(localized: "tracking.links.title", defaultValue: "Liens de tracking", bundle: .main))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
@@ -78,10 +78,10 @@ struct TrackingLinksView: View {
 
     private func trackingStatsOverview(_ stats: TrackingLinkStats) -> some View {
         HStack(spacing: 10) {
-            trackingStatCard("\(stats.totalLinks)", label: "Liens", icon: "link")
-            trackingStatCard("\(stats.totalClicks)", label: "Clics", icon: "cursorarrow.click")
-            trackingStatCard("\(stats.uniqueClicks)", label: "Uniques", icon: "person.fill")
-            trackingStatCard("\(stats.activeLinks)", label: "Actifs", icon: "checkmark.circle")
+            trackingStatCard("\(stats.totalLinks)", label: String(localized: "tracking.links.stats.links", defaultValue: "Liens", bundle: .main), icon: "link")
+            trackingStatCard("\(stats.totalClicks)", label: String(localized: "tracking.links.stats.clicks", defaultValue: "Clics", bundle: .main), icon: "cursorarrow.click")
+            trackingStatCard("\(stats.uniqueClicks)", label: String(localized: "tracking.links.stats.uniques", defaultValue: "Uniques", bundle: .main), icon: "person.fill")
+            trackingStatCard("\(stats.activeLinks)", label: String(localized: "tracking.links.stats.active", defaultValue: "Actifs", bundle: .main), icon: "checkmark.circle")
         }
     }
 
@@ -109,7 +109,7 @@ struct TrackingLinksView: View {
 
     private var linksSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("MES LIENS").font(.system(size: 12, weight: .semibold))
+            Text(String(localized: "tracking.links.section.myLinks", defaultValue: "MES LIENS", bundle: .main)).font(.system(size: 12, weight: .semibold))
                 .foregroundColor(theme.textSecondary).kerning(0.8)
 
             if viewModel.isLoading {
@@ -132,9 +132,9 @@ struct TrackingLinksView: View {
         VStack(spacing: 12) {
             Image(systemName: "chart.bar.fill")
                 .font(.system(size: 40)).foregroundColor(Color(hex: "A855F7").opacity(0.6))
-            Text("Aucun lien de tracking").font(.system(size: 15, weight: .semibold))
+            Text(String(localized: "tracking.links.empty.title", defaultValue: "Aucun lien de tracking", bundle: .main)).font(.system(size: 15, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
-            Text("Créez un lien pour suivre vos clics et campagnes")
+            Text(String(localized: "tracking.links.empty.subtitle", defaultValue: "Créez un lien pour suivre vos clics et campagnes", bundle: .main))
                 .font(.system(size: 13)).foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
         }
@@ -155,9 +155,9 @@ struct TrackingLinksView: View {
                 Text(link.displayName).font(.system(size: 15, weight: .semibold))
                     .foregroundColor(theme.textPrimary).lineLimit(1)
                 HStack(spacing: 6) {
-                    Text("\(link.totalClicks) clics")
+                    Text(String(localized: "tracking.links.row.clicks", defaultValue: "\(link.totalClicks) clics", bundle: .main))
                         .font(.system(size: 12)).foregroundColor(Color(hex: "A855F7"))
-                    Text("· \(link.uniqueClicks) uniques")
+                    Text(String(localized: "tracking.links.row.uniques", defaultValue: "· \(link.uniqueClicks) uniques", bundle: .main))
                         .font(.system(size: 12)).foregroundColor(theme.textMuted)
                     if let c = link.campaign {
                         Text("· \(c)").font(.system(size: 12)).foregroundColor(theme.textMuted).lineLimit(1)

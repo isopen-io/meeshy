@@ -54,6 +54,13 @@ struct BubbleExpandableText: View, Equatable {
                     .fixedSize(horizontal: false, vertical: true)
                     .tint(linkTint)
 
+                // Hit-area élargie via `.frame(minHeight: 28).contentShape(Rectangle())`
+                // pour rester au-dessus du minimum thumb-friendly (24pt) sans grossir
+                // visuellement l'icône. `.buttonStyle(.plain)` est OBLIGATOIRE pour
+                // que le tap survive au `.simultaneousGesture(LongPressGesture(0.35))`
+                // que `BubbleSwipeContainer` pose sur la bulle — sans lui le default
+                // style entre en arbitrage avec le long-press parent et le tap est
+                // souvent avalé.
                 Button {
                     withAnimation(.easeInOut(duration: 0.25)) {
                         isExpanded = true
@@ -62,9 +69,12 @@ struct BubbleExpandableText: View, Equatable {
                     Image(systemName: "chevron.down")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(textColor.opacity(0.6))
-                        .frame(maxWidth: .infinity, alignment: .center)
+                        .frame(maxWidth: .infinity, minHeight: 28, alignment: .center)
                         .padding(.top, 2)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Afficher tout le message")
             }
         } else {
             VStack(alignment: .leading, spacing: 4) {
@@ -81,9 +91,12 @@ struct BubbleExpandableText: View, Equatable {
                         Image(systemName: "chevron.up")
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundColor(textColor.opacity(0.6))
-                            .frame(maxWidth: .infinity, alignment: .center)
+                            .frame(maxWidth: .infinity, minHeight: 28, alignment: .center)
                             .padding(.top, 2)
+                            .contentShape(Rectangle())
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Réduire le message")
                 }
             }
         }

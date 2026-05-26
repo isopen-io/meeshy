@@ -272,6 +272,23 @@ public struct AttachmentStatusUpdatedEvent: Decodable, Sendable {
     public let updatedAt: Date?
 }
 
+// MARK: - Attachment Updated Event Data (`message:attachment-updated`)
+
+/// Payload de `SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED`.
+///
+/// Reçu quand un worker gateway a enrichi un attachment d'un message
+/// existant (transcription Whisper finalisée, traduction audio NLLB+TTS
+/// finalisée pour une langue, etc.). `attachment` est la forme complète
+/// sérialisée par `serializeAttachmentForSocket` côté gateway — incluant
+/// `transcription` et `translations` enrichis. Le client remplace
+/// l'attachment correspondant dans son store atomiquement et rehydrate
+/// les dictionnaires de métadonnées dérivées.
+public struct AttachmentUpdatedEvent: Decodable, Sendable {
+    public let conversationId: String
+    public let messageId: String
+    public let attachment: APIMessageAttachment
+}
+
 // MARK: - Participant Role Updated Event Data
 
 public struct ParticipantRoleUpdatedParticipantInfo: Decodable, Sendable {
@@ -740,6 +757,10 @@ public protocol MessageSocketProviding: Sendable {
     var presenceSnapshotReceived: PassthroughSubject<PresenceSnapshotEvent, Never> { get }
     var readStatusUpdated: PassthroughSubject<ReadStatusUpdateEvent, Never> { get }
     var attachmentStatusUpdated: PassthroughSubject<AttachmentStatusUpdatedEvent, Never> { get }
+    /// `message:attachment-updated` — delta émis par le gateway après un
+    /// enrichissement async (transcription Whisper, traduction audio NLLB+TTS).
+    /// Le subscriber remplace l'attachment dans son store atomiquement.
+    var attachmentUpdated: PassthroughSubject<AttachmentUpdatedEvent, Never> { get }
     var conversationJoined: PassthroughSubject<ConversationParticipationEvent, Never> { get }
     var conversationJoinError: PassthroughSubject<ConversationJoinErrorEvent, Never> { get }
     var conversationLeft: PassthroughSubject<ConversationParticipationEvent, Never> { get }
@@ -882,6 +903,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Combine publishers — attachment status
     public let attachmentStatusUpdated = PassthroughSubject<AttachmentStatusUpdatedEvent, Never>()
+    public let attachmentUpdated = PassthroughSubject<AttachmentUpdatedEvent, Never>()
 
     // Combine publishers — conversation participation
     public let conversationJoined = PassthroughSubject<ConversationParticipationEvent, Never>()
@@ -1965,6 +1987,14 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(AttachmentStatusUpdatedEvent.self, from: data) { [weak self] event in
                 self?.attachmentStatusUpdated.send(event)
+            }
+        }
+
+        socket.on("message:attachment-updated") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(AttachmentUpdatedEvent.self, from: data) { [weak self] event in
+                Logger.socket.info("[RT-DIAG] decoded message:attachment-updated msg=\(event.messageId, privacy: .public) att=\(event.attachment.id, privacy: .public)")
+                self?.attachmentUpdated.send(event)
             }
         }
 

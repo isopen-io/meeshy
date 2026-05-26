@@ -73,9 +73,6 @@ export class AgentHttpClient {
   }
 
   async invalidateCache(payload: { conversationId?: string; global?: boolean }): Promise<{ invalidated: unknown }> {
-    // Tight timeout: cache invalidation is best-effort on top of Redis pub/sub.
-    // We refuse to make admin PUTs wait 5s for a backup path; if the agent is
-    // unreachable, the toast warns the operator and they can retry.
     return this.request<{ invalidated: unknown }>(`/api/agent/cache/invalidate`, {
       method: 'POST',
       body: JSON.stringify(payload),

@@ -59,11 +59,48 @@ final class MediaSessionCoordinatorTests: XCTestCase {
             .sink { _ in expectation.fulfill() }
             .store(in: &cancellables)
 
+        class MockPort: AVAudioSessionPortDescription, @unchecked Sendable {}
+        class MockRoute: AVAudioSessionRouteDescription, @unchecked Sendable {
+            override var outputs: [AVAudioSessionPortDescription] {
+                return [MockPort()]
+            }
+        }
+
         NotificationCenter.default.post(
             name: AVAudioSession.routeChangeNotification,
             object: AVAudioSession.sharedInstance(),
             userInfo: [
-                AVAudioSessionRouteChangeReasonKey: AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue
+                AVAudioSessionRouteChangeReasonKey: AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue,
+                AVAudioSessionRouteChangePreviousRouteKey: MockRoute()
+            ]
+        )
+
+        await fulfillment(of: [expectation], timeout: 1.0)
+    }
+
+    func test_routeChangeOldDeviceUnavailable_withEmptyOutputs_isIgnored() async {
+        let coordinator = MediaSessionCoordinator.shared
+        _ = try? await coordinator.request(role: .playback)
+        await coordinator.release()
+
+        let expectation = expectation(description: "route other received")
+        coordinator.events
+            .filter { $0 == .routeChangedOther }
+            .sink { _ in expectation.fulfill() }
+            .store(in: &cancellables)
+
+        class MockRouteEmpty: AVAudioSessionRouteDescription, @unchecked Sendable {
+            override var outputs: [AVAudioSessionPortDescription] {
+                return []
+            }
+        }
+
+        NotificationCenter.default.post(
+            name: AVAudioSession.routeChangeNotification,
+            object: AVAudioSession.sharedInstance(),
+            userInfo: [
+                AVAudioSessionRouteChangeReasonKey: AVAudioSession.RouteChangeReason.oldDeviceUnavailable.rawValue,
+                AVAudioSessionRouteChangePreviousRouteKey: MockRouteEmpty()
             ]
         )
 

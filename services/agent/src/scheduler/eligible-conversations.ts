@@ -43,6 +43,7 @@ export type EligibleConversation = {
   maxMessagesPerUserPer10Min: number;
   freshTopicProbability: number;
   freshTopicCategoryHints: string[];
+  freshTopicBlockedSlugs: string[];
 };
 
 export async function findEligibleConversations(
@@ -99,6 +100,7 @@ export async function findEligibleConversations(
       maxMessagesPerUserPer10Min: Math.max(1, config?.maxMessagesPerUserPer10Min ?? 4),
       freshTopicProbability: Math.max(0, Math.min(config?.freshTopicProbability ?? 0.2, 1.0)),
       freshTopicCategoryHints: config?.freshTopicCategoryHints ?? [],
+      freshTopicBlockedSlugs: config?.freshTopicBlockedSlugs ?? [],
     };
   });
 }

@@ -103,6 +103,7 @@ const ShareLinksSection = lazy(() =>
 
 // Dialog upload image
 import { ConversationImageUploadDialog } from './conversation-image-upload-dialog';
+import { ConversationEncryptionSection } from './ConversationEncryptionSection';
 
 interface ConversationSettingsModalProps {
   open: boolean;
@@ -1297,6 +1298,14 @@ export function ConversationSettingsModal({
                       </span>
                     </p>
                   </motion.div>
+                )}
+
+                {/* Section Sécurité — réservée aux conversations directes */}
+                {isDirect && (
+                  <ConversationEncryptionSection
+                    conversationId={conversation.id}
+                    canEnable={true}
+                  />
                 )}
 
                 {/* Liens partagés - Groupes uniquement */}

@@ -49,7 +49,7 @@ struct CommunityLinksView: View {
 
             Spacer()
 
-            Text("Liens communauté")
+            Text(String(localized: "community.links.title", defaultValue: "Liens communauté", bundle: .main))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
@@ -70,9 +70,9 @@ struct CommunityLinksView: View {
 
     private var communityStatsOverview: some View {
         HStack(spacing: 12) {
-            communityStatCard("\(viewModel.stats.totalCommunities)", label: "Groupes", icon: "person.3.fill")
-            communityStatCard("\(viewModel.stats.activeCommunities)", label: "Actifs", icon: "checkmark.circle.fill")
-            communityStatCard("\(viewModel.stats.totalMembers)", label: "Membres", icon: "person.fill")
+            communityStatCard("\(viewModel.stats.totalCommunities)", label: String(localized: "community.links.stat.groups", defaultValue: "Groupes", bundle: .main), icon: "person.3.fill")
+            communityStatCard("\(viewModel.stats.activeCommunities)", label: String(localized: "community.links.stat.active", defaultValue: "Actifs", bundle: .main), icon: "checkmark.circle.fill")
+            communityStatCard("\(viewModel.stats.totalMembers)", label: String(localized: "community.links.stat.members", defaultValue: "Membres", bundle: .main), icon: "person.fill")
         }
     }
 
@@ -94,7 +94,7 @@ struct CommunityLinksView: View {
 
     private var communityLinksSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("MES COMMUNAUTÉS").font(.system(size: 12, weight: .semibold))
+            Text(String(localized: "community.links.section.mine", defaultValue: "MES COMMUNAUTÉS", bundle: .main)).font(.system(size: 12, weight: .semibold))
                 .foregroundColor(theme.textSecondary).kerning(0.8)
 
             if viewModel.isLoading {
@@ -103,9 +103,9 @@ struct CommunityLinksView: View {
                 VStack(spacing: 12) {
                     Image(systemName: "person.3.fill").font(.system(size: 40))
                         .foregroundColor(Color(hex: "F8B500").opacity(0.6))
-                    Text("Aucune communauté administrée")
+                    Text(String(localized: "community.links.empty.title", defaultValue: "Aucune communauté administrée", bundle: .main))
                         .font(.system(size: 15, weight: .semibold)).foregroundColor(theme.textPrimary)
-                    Text("Les communautés que vous gérez apparaîtront ici avec leur lien de partage")
+                    Text(String(localized: "community.links.empty.subtitle", defaultValue: "Les communautés que vous gérez apparaîtront ici avec leur lien de partage", bundle: .main))
                         .font(.system(size: 13)).foregroundColor(theme.textSecondary)
                         .multilineTextAlignment(.center)
                 }.padding(40).frame(maxWidth: .infinity)
@@ -131,7 +131,7 @@ struct CommunityLinksView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(link.name).font(.system(size: 15, weight: .semibold))
                     .foregroundColor(theme.textPrimary).lineLimit(1)
-                Text("\(link.memberCount) membres · \(link.identifier)")
+                Text(String(localized: "community.links.row.subtitle", defaultValue: "\(link.memberCount) membres · \(link.identifier)", bundle: .main))
                     .font(.system(size: 12)).foregroundColor(theme.textMuted).lineLimit(1)
             }
             Spacer()

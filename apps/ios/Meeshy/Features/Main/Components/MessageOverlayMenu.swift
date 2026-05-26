@@ -30,6 +30,22 @@ struct MessageOverlayMenu: View {
     var onReport: ((String, String?) -> Void)?
     var onDelete: (() -> Void)?
     var onDeleteAttachment: ((String) -> Void)?
+    var onShowThread: (() -> Void)?
+
+    // Full bubble-rendering context — when `messageBubbleFrame != .zero`, the
+    // overlay renders a REAL `ThemedMessageBubble` at the source position
+    // instead of the custom `messagePreview` (which had drifted from the
+    // in-conversation rendering). Defaults stay safe for legacy call sites.
+    var isDirect: Bool = false
+    var preferredTranslation: MessageTranslation? = nil
+    var mentionDisplayNames: [String: String] = [:]
+    var currentUserId: String = ""
+    var userRegionalLanguage: String? = nil
+    var userCustomDestinationLanguage: String? = nil
+    /// Callback invoqué quand l'utilisateur tape "Traduire" dans la quick
+    /// action bar — ouvre l'écran de détail sur l'onglet Langue côté
+    /// ConversationView.
+    var onShowTranslate: (() -> Void)? = nil
 
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
@@ -122,18 +138,178 @@ struct MessageOverlayMenu: View {
         )
     }
 
+    // MARK: - Quick Action Bar (au-dessus de la bulle)
+
+    /// Capsule horizontale d'actions rapides affichée AU-DESSUS de la
+    /// bulle quand le long-press surfaces le menu. Réutilise les facteurs
+    /// `ContextAction.copy/edit/translate/delete`. Filtre les actions
+    /// selon le contexte (canEdit, canDelete, contenu non vide).
+    private var quickActions: [ContextAction] {
+        var actions: [ContextAction] = []
+        if !message.content.isEmpty {
+            actions.append(.copy())
+        }
+        if canEdit && message.isMe {
+            actions.append(.edit())
+        }
+        actions.append(.translate())
+        if canDelete {
+            actions.append(.delete())
+        }
+        return actions
+    }
+
+    /// Palette utilisée par la quick action bar — dérivée de `contactColor`
+    /// (couleur d'accent de la conversation, règle CLAUDE.md).
+    private var quickActionPalette: ConversationColorPalette {
+        ConversationColorPalette(
+            primary: contactColor,
+            secondary: contactColor,
+            accent: contactColor,
+            saturationBoost: 0
+        )
+    }
+
+    private func handleQuickAction(_ kind: ContextAction.Kind) {
+        switch kind {
+        case .copy:
+            onCopy?()
+        case .edit:
+            onEdit?()
+        case .translate:
+            onShowTranslate?()
+        case .delete:
+            onDelete?()
+        case .reply, .forward, .react, .pin, .info:
+            break
+        }
+        dismiss()
+    }
+
 
     var body: some View {
         GeometryReader { geometry in
             let safeTop = geometry.safeAreaInsets.top
             let safeBottom = geometry.safeAreaInsets.bottom
             let screenH = geometry.size.height
-            let panelBaseHeight = gridVisibleHeight + safeBottom + 60
 
-            // Drag range: 0 = collapsed (normal), negative = expanded (pull up)
+            // Cluster vertical au-dessus du `dismissBackground` :
+            //   - quick action bar (capsule horizontale d'actions rapides)
+            //   - gap 12pt
+            //   - bulle (à sa position source, lift si nécessaire)
+            //   - gap 12pt
+            //   - barre d'emojis rapides
+            // Le panneau reste ANCRÉ au bas mais sa hauteur s'auto-étend
+            // pour combler l'espace entre le cluster et le bas — pas de
+            // grand vide quand le message est court / haut sur l'écran.
+            let useSourceFrame = messageBubbleFrame != .zero
+            let bubbleRect = messageBubbleFrame
+
+            // Bubble preview scale — proportionnel pour les bulles trop hautes
+            // (reply + grid attachement, vidéo, etc.). On cap visuellement à
+            // ~320pt de hauteur tout en préservant exactement l'aspect ratio
+            // (.scaleEffect uniforme). Scale floor à 0.55 pour rester lisible.
+            let maxPreviewHeight: CGFloat = 320
+            let bubblePreviewScale: CGFloat = bubbleRect.height > maxPreviewHeight
+                ? max(0.55, maxPreviewHeight / bubbleRect.height)
+                : 1.0
+            let scaledBubbleWidth = bubbleRect.width * bubblePreviewScale
+            let scaledBubbleHeight = bubbleRect.height * bubblePreviewScale
+
+            // Ancrage horizontal de la bulle scaled — glué au même bord que
+            // la source : right pour `isMe` (bulles "moi" right-aligned),
+            // left pour les bulles reçues. Au scale 1 l'expression dégénère
+            // en `bubbleRect.midX` (identité, aucune régression). Au scale
+            // < 1 la bulle conserve son edge d'origine au lieu de "flotter"
+            // vers le centre — sans ça une bulle "moi" prés du bord droit
+            // se retrouve décalée vers la gauche après scale-down.
+            let bubbleAnchorX: CGFloat = message.isMe
+                ? bubbleRect.maxX - scaledBubbleWidth / 2
+                : bubbleRect.minX + scaledBubbleWidth / 2
+
+            // Mesures du cluster — gaps tightement contrôlés. Heights basées
+            // sur les rendus réels mesurés en simulateur.
+            let quickActionsCount = quickActions.count
+            // Hauteur réelle = ContextActionMenu.estimatedSize().height
+            // (buttonHeight 40 + verticalPadding 5*2 = 50pt). Source unique
+            // de vérité : changer la valeur via les statics du menu, jamais
+            // dupliquer le calcul ici.
+            let quickActionMenuHeight: CGFloat = quickActionsCount > 0
+                ? ContextActionMenu.estimatedSize(actionCount: max(1, quickActionsCount)).height
+                : 0
+            let quickActionToBubbleGap: CGFloat = quickActionsCount > 0 ? 14 : 0
+            let bubbleToEmojiGap: CGFloat = 14
+            let emojiBarHeight: CGFloat = 44
+            let clusterClearance: CGFloat = 12
+            let clusterTotalHeight = quickActionMenuHeight + quickActionToBubbleGap
+                                   + scaledBubbleHeight
+                                   + bubbleToEmojiGap + emojiBarHeight
+
+            // Hauteur naturelle du panel (base avant resize manuel)
+            let naturalPanelBaseHeight = gridVisibleHeight + safeBottom + 60
+            let naturalPanelTopY = screenH - naturalPanelBaseHeight
+
+            // Position cible du cluster : la bulle reste à sa source. Le
+            // cluster top = bubble.minY - (quick action menu + gap). Si la
+            // bulle est trop haute pour laisser de la place à la quick
+            // action bar au-dessus de safeTop, on pousse le cluster vers le
+            // bas (la bulle décale légèrement). Si le cluster dépasse en
+            // bas dans la zone du panel, on lifte.
+            let minClusterTopY = safeTop + 24
+            let maxClusterTopY = naturalPanelTopY - clusterClearance - clusterTotalHeight
+            let desiredClusterTopY = bubbleRect.minY - (quickActionMenuHeight + quickActionToBubbleGap)
+            let clampedClusterTopY = max(minClusterTopY, min(desiredClusterTopY, maxClusterTopY))
+            let clusterBottomY = clampedClusterTopY + clusterTotalHeight
+
+            // Positions Y centrales de chaque élément du cluster (pour .position).
+            // Utilise scaledBubbleHeight pour respecter le scale-down visuel
+            // du preview (vidéos / grilles d'images / reply + grid → cap 320pt).
+            let quickActionMenuCenterY = clampedClusterTopY + quickActionMenuHeight / 2
+            let bubbleTopY = clampedClusterTopY + quickActionMenuHeight + quickActionToBubbleGap
+            let bubbleFinalMidY = bubbleTopY + scaledBubbleHeight / 2
+            let emojiBarCenterY = bubbleTopY + scaledBubbleHeight + bubbleToEmojiGap + emojiBarHeight / 2
+
+            // Position X = bubbleAnchorX (centre de la bulle scaled, alignée
+            // au même bord que la source). Action bar et emoji bar suivent
+            // ce même axe vertical avec clamp aux bords écran pour éviter le
+            // débordement quand la bulle est près d'un bord. Au scale 1
+            // `bubbleAnchorX == bubbleRect.midX`, donc pas de régression pour
+            // les bulles courtes ; au scale < 1 le cluster reste solidaire de
+            // la bulle qui ne flotte plus vers le centre.
+            let sidePadding: CGFloat = 16
+            let quickActionMenuWidth = ContextActionMenu.estimatedSize(actionCount: max(1, quickActionsCount)).width
+            let emojiBarApproxWidth: CGFloat = 320
+            let quickActionMenuCenterX: CGFloat = max(
+                sidePadding + quickActionMenuWidth / 2,
+                min(geometry.size.width - sidePadding - quickActionMenuWidth / 2, bubbleAnchorX)
+            )
+            let emojiBarCenterX: CGFloat = max(
+                sidePadding + emojiBarApproxWidth / 2,
+                min(geometry.size.width - sidePadding - emojiBarApproxWidth / 2, bubbleAnchorX)
+            )
+
+            // Panel auto-expand : si le cluster termine plus haut que le
+            // panel naturel, le panel s'agrandit pour combler le gap (le
+            // top du panel monte jusqu'à clusterBottom + clearance).
+            let expandedPanelTopY = useSourceFrame ? (clusterBottomY + clusterClearance) : naturalPanelTopY
+            let panelBaseHeight = max(naturalPanelBaseHeight, screenH - expandedPanelTopY)
+
+            // Drag range : 0 = base, négatif = expansion vers le haut.
+            // L'utilisateur peut tirer le drag handle pour agrandir (jusqu'à
+            // safeTop + 20pt) ou laisser au repos (panel à sa base auto-
+            // étendue).
             let maxExpandUp = -(screenH - panelBaseHeight - safeTop - 20)
             let clampedDrag = min(0, max(maxExpandUp, dragOffset))
             let panelHeight = panelBaseHeight - clampedDrag
+
+            // Fade out de la cluster (action bar + bulle + emoji bar) quand
+            // l'utilisateur déplie le panneau via le drag handle. Au-delà de
+            // 80pt de drag, la cluster est masquée + non-interactive pour
+            // laisser place au panneau en plein écran. Comportement type
+            // WhatsApp / iMessage.
+            let clusterFadeThreshold: CGFloat = 80
+            let clusterFadeOpacity: CGFloat = max(0, 1 - abs(clampedDrag) / clusterFadeThreshold)
+            let clusterIsInteractive = clusterFadeOpacity > 0.5
 
             ZStack {
                 dismissBackground
@@ -150,47 +326,136 @@ struct MessageOverlayMenu: View {
                         .contentShape(Rectangle())
                         .onTapGesture { dismiss() }
 
-                    // Apercu du message — animation composite : zoom-spring
-                    // depuis le coin natif de la bulle (haut-droite pour les
-                    // messages envoyes, haut-gauche pour les recus) + leger
-                    // glissement vertical. La bulle se detache visuellement
-                    // de sa rangee, flotte vers l'avant puis se pose. Le
-                    // `Spacer(minLength: 44)` du cote oppose colle la bulle
-                    // a son bord natif (cf. cap 0.70 dans `messagePreview`).
-                    HStack(spacing: 0) {
-                        if message.isMe { Spacer(minLength: 44) }
-                        messagePreview
-                        if !message.isMe { Spacer(minLength: 44) }
+                    if !useSourceFrame {
+                        // Legacy : Apercu centré dans le VStack — animation
+                        // composite (zoom-spring depuis le coin natif de la
+                        // bulle + leger glissement vertical). Conservé pour
+                        // les call sites qui ne fournissent pas encore la
+                        // source frame.
+                        HStack(spacing: 0) {
+                            if message.isMe { Spacer(minLength: 44) }
+                            messagePreview
+                            if !message.isMe { Spacer(minLength: 44) }
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 4)
+                        .opacity(isVisible ? 1 : 0)
+                        .offset(y: isVisible ? 0 : -28)
+                        .scaleEffect(
+                            isVisible ? 1.0 : 0.86,
+                            anchor: message.isMe ? .topTrailing : .topLeading
+                        )
                     }
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 4)
-                    .opacity(isVisible ? 1 : 0)
-                    .offset(y: isVisible ? 0 : -28)
-                    .scaleEffect(
-                        isVisible ? 1.0 : 0.86,
-                        anchor: message.isMe ? .topTrailing : .topLeading
-                    )
 
-                    // Barre d'emojis rapides — meme alignement horizontal
-                    // que la bulle. Le composant partage `EmojiReactionPicker`
-                    // embarque sa propre cascade gauche→droite via
-                    // `WaveTileModifier` (cf. `emojiQuickBar`).
-                    HStack(spacing: 0) {
-                        if message.isMe { Spacer(minLength: 0) }
-                        emojiQuickBar
-                        if !message.isMe { Spacer(minLength: 0) }
+                    if !useSourceFrame {
+                        // Legacy : la barre d'emojis vit dans le VStack juste
+                        // au-dessus du panneau (path conservé pour call sites
+                        // sans frame source).
+                        HStack(spacing: 0) {
+                            if message.isMe { Spacer(minLength: 0) }
+                            emojiQuickBar
+                            if !message.isMe { Spacer(minLength: 0) }
+                        }
+                        .padding(.horizontal, 14)
+                        .opacity(isVisible ? 1 : 0)
+                        .scaleEffect(isVisible ? 1.0 : 0.7, anchor: .center)
+                        .offset(y: isVisible ? 0 : 18)
                     }
-                    .padding(.horizontal, 14)
-                    .opacity(isVisible ? 1 : 0)
-                    .scaleEffect(isVisible ? 1.0 : 0.7, anchor: .center)
-                    .offset(y: isVisible ? 0 : 18)
 
-                    // Le panneau de detail monte depuis le bas — meme spring
-                    // que les autres elements pour qu'ils convergent en un
-                    // bloc visuellement lie au repos.
+                    // Le panneau de détail reste ANCRÉ au bas — le drag
+                    // handle laisse l'utilisateur l'agrandir ou le réduire à
+                    // volonté. Pas de lift artificiel : le panel s'ouvre à
+                    // la hauteur permise (`panelBaseHeight`) et le drag fait
+                    // varier `panelHeight` autour de cette base.
                     detailPanel(safeBottom: safeBottom)
                         .frame(height: panelHeight)
                         .offset(y: isVisible ? 0 : panelBaseHeight + 40)
+                }
+
+                if useSourceFrame {
+                    // Quick action bar au-dessus de la bulle (iMessage-style)
+                    // — actions rapides Copier/Éditer/Traduire/Supprimer
+                    // filtrées selon le contexte. Tap fire le callback +
+                    // dismiss l'overlay. Visible uniquement si au moins une
+                    // action passe le filtre.
+                    if !quickActions.isEmpty {
+                        ContextActionMenu(
+                            actions: quickActions,
+                            palette: quickActionPalette,
+                            onAction: { kind in handleQuickAction(kind) }
+                        )
+                        .position(
+                            x: quickActionMenuCenterX,
+                            y: isVisible ? quickActionMenuCenterY : (bubbleRect.minY - 4)
+                        )
+                        .opacity(isVisible ? clusterFadeOpacity : 0)
+                        .scaleEffect(
+                            isVisible ? 1.0 : 0.85,
+                            anchor: message.isMe ? .bottomTrailing : .bottomLeading
+                        )
+                        .allowsHitTesting(clusterIsInteractive)
+                    }
+
+                    // FIDÉLITÉ — vrai `ThemedMessageBubble` avec les mêmes
+                    // paramètres que la cellule live de la liste : rendu
+                    // (texte, traductions, drapeaux, médias, réactions,
+                    // footer) rigoureusement identique. Wrapping HStack +
+                    // Spacer reproduit l'alignement isMe (right) / received
+                    // (left) de la cellule. Positionnement par .position()
+                    // au centre Y final calculé plus haut (clamp safeTop ↔
+                    // panel.top).
+                    // Bubble preview rendu à la largeur source (proportions
+                    // intactes du contenu) PUIS .scaleEffect uniforme pour
+                    // réduire visuellement les bulles trop grosses (vidéo,
+                    // grilles d'images, reply + grid). L'outer frame avec les
+                    // dimensions scaled informe le layout SwiftUI de la taille
+                    // visible — la position du cluster (action bar / emoji
+                    // bar) reste cohérente.
+                    ThemedMessageBubble(
+                        message: message,
+                        contactColor: contactColor,
+                        isDirect: isDirect,
+                        isDark: isDark,
+                        transcription: transcription,
+                        translatedAudios: translatedAudios,
+                        textTranslations: textTranslations,
+                        preferredTranslation: preferredTranslation,
+                        showAvatar: !isDirect,
+                        isLastInGroup: true,
+                        isLastReceivedMessage: true,
+                        isLastSentMessage: true,
+                        mentionDisplayNames: mentionDisplayNames,
+                        currentUserId: currentUserId,
+                        userLanguages: (
+                            regional: userRegionalLanguage,
+                            custom: userCustomDestinationLanguage
+                        )
+                    )
+                    .frame(width: bubbleRect.width, height: bubbleRect.height, alignment: .leading)
+                    .scaleEffect(bubblePreviewScale, anchor: .center)
+                    .frame(width: scaledBubbleWidth, height: scaledBubbleHeight)
+                    .position(
+                        x: bubbleAnchorX,
+                        y: isVisible ? bubbleFinalMidY : bubbleRect.midY
+                    )
+                    .opacity(isVisible ? clusterFadeOpacity : 0)
+                    .allowsHitTesting(false)
+
+                    // Barre d'emojis rapides — positionnée DIRECTEMENT sous
+                    // la bulle (gap ~10pt) ET ALIGNÉE au même côté que la
+                    // bulle pour rester "à portée de pouce" et créer une
+                    // continuité visuelle bubble ↔ emoji bar ↔ action bar.
+                    emojiQuickBar
+                        .position(
+                            x: emojiBarCenterX,
+                            y: isVisible ? emojiBarCenterY : (bubbleRect.maxY + emojiBarHeight / 2)
+                        )
+                        .opacity(isVisible ? clusterFadeOpacity : 0)
+                        .scaleEffect(
+                            isVisible ? 1.0 : 0.7,
+                            anchor: message.isMe ? .topTrailing : .topLeading
+                        )
+                        .allowsHitTesting(clusterIsInteractive)
                 }
             }
         }
@@ -695,6 +960,12 @@ struct MessageOverlayMenu: View {
             id: "reply", icon: "arrowshape.turn.up.left.fill",
             label: "Repondre", color: "4ECDC4",
             handler: { dismissThen { onReply?() } }
+        ))
+
+        actions.append(MessageAction(
+            id: "thread", icon: "bubble.left.and.bubble.right.fill",
+            label: "Discussion", color: "F39C12",
+            handler: { dismissThen { onShowThread?() } }
         ))
 
         if hasText {

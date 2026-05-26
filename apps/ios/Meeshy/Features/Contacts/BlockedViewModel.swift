@@ -9,11 +9,16 @@ final class BlockedViewModel: ObservableObject {
     @Published var loadState: LoadState = .idle
 
     private let blockService: BlockServiceProviding
+    private let networkMonitor: any NetworkMonitorProviding
     private var revalidationTask: Task<Void, Never>?
     private let cacheKey = "blocked:list"
 
-    init(blockService: BlockServiceProviding = BlockService.shared) {
+    init(
+        blockService: BlockServiceProviding = BlockService.shared,
+        networkMonitor: any NetworkMonitorProviding = NetworkMonitor.shared
+    ) {
         self.blockService = blockService
+        self.networkMonitor = networkMonitor
     }
 
     deinit {
@@ -23,7 +28,7 @@ final class BlockedViewModel: ObservableObject {
     func loadBlocked() async {
         let blockService = self.blockService
         let store = await CacheCoordinator.shared.blockedUsers
-        let loader = CacheFirstLoader(store: store, key: cacheKey)
+        let loader = CacheFirstLoader(store: store, key: cacheKey, networkMonitor: networkMonitor)
         revalidationTask?.cancel()
         revalidationTask = await loader.load(
             fetch: { try await blockService.listBlockedUsers() },

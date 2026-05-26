@@ -236,6 +236,34 @@ MessageDetailSheet (onglet Language)
 - La resolution automatique de langue doit etre instantanee (pas de loading pour les traductions deja cachees)
 - L'onglet Language du MessageDetailSheet est le SEUL point d'entree pour explorer les traductions (pas de sheet separee)
 
+## Attachment Size Display Before Download
+
+Conventions pour l'affichage de la taille de fichier sur un attachment non telecharge (quand `MediaDownloadPolicyEngine.shouldAutoDownload` bloque l'auto-DL) :
+
+| Type | Composant | Layout |
+|---|---|---|
+| Video | `DownloadBadgeView(compact: true)` | Pill coin bas-droit avec icone + taille |
+| Image | `DownloadBadgeView(compact: false)` | Cercle 56pt centre + pill taille sous |
+| Audio | `AudioPlayerView.playButtonLabel` | Cercle play-button + label taille sous (parite visuelle) |
+
+Source de verite : `attachment.fileSize` (Int, bytes) hydrate par le payload REST `/messages` et le payload socket `message:new` (ce dernier via `serializeAttachmentForSocket` cote gateway). Si la taille est 0, le label n'apparait pas (no-op).
+
+Le label audio est rendu par les helpers purs `AudioPlayerView.formattedNeedsDownloadLabel` / `formattedDownloadingLabel` / `formatBytes` (tests dans `MeeshyUITests/Media/AudioPlayerViewLabelTests.swift`).
+
+Pendant le telechargement, le label passe a `"410 KB / 850 KB"` via le payload `.downloading(progress:downloadedBytes:totalBytes:)` enrichi de `AudioAvailability`. `AudioMediaView` et `AudioAvailabilityResolver` propagent les bytes depuis `AttachmentDownloader.downloadedBytes` / `totalBytes`.
+
+## Attachment Enrichment Atomicity
+
+Quand un audio est recu (REST ou socket) et que sa transcription / ses traductions audio arrivent, l'app doit poser le tout dans un seul slice MainActor pour eviter le pop-in :
+
+1. **Ouverture de conversation** : `ConversationViewModel.loadMessages` appelle `messageStore.loadInitialSnapshot()` (off-MainActor, ne mutate pas `@Published messages`), puis dans un meme bloc synchrone : `messageStore.apply(records:)` + `hydrateMetadataFromGRDB(from: snapshot)`. Aucun `await` entre la pose des messages et celle des metadonnees audio.
+2. **Refresh REST background** (`refreshMessagesFromAPI`) : meme triplet snapshot/apply/hydrate apres `upsertFromAPIMessages`.
+3. **Socket temps reel** (`message:attachment-updated`) : `ConversationViewModel.applyAttachmentUpdate` injecte directement `messageTranscriptions[id]` et `messageTranslatedAudios[id]` depuis le payload (`injectAttachmentMetadata`). Le client gateway emet ce delta apres tout enrichissement async (Whisper, NLLB+TTS).
+
+Regle stricte : ne JAMAIS introduire d'`await` entre `messages = …` et `messageTranscriptions = …` / `messageTranslatedAudios = …` — sinon SwiftUI rend les bulles audio sans leur transcription puis re-rend, et l'utilisateur voit un flash a ~1s.
+
+Source : `docs/superpowers/specs/2026-05-25-audio-instant-render-and-attachment-size-design.md`.
+
 ## Story Architecture — RAW publish + author-only export
 
 Stories Meeshy se publient **RAW** au backend :
@@ -931,6 +959,14 @@ L'app iOS (`apps/ios/`) ne contient que :
 - Les Views/ecrans de l'app
 - Les models purement locaux a l'app (ex: `SearchResultItem`, etats UI)
 - La navigation, le theming, et la configuration app
+- **L'orchestration UX produit** : View wrappers qui cascadent cache → downloader → policy, Views qui encodent des décisions Meeshy ("quand auto-DL", "comment cascader fallbacks"). Exemples : `VideoAvailabilityResolver`, `AttachmentDownloader`, `VideoMediaView`. Ces composants APPELLENT les services SDK mais ENCODENT des règles produit — donc app, pas SDK.
+
+### Corollaire : ne PAS mettre dans le SDK
+Avant de migrer un composant vers le SDK, appliquer le **test du grain** (cf. `packages/MeeshySDK/CLAUDE.md` § REGLE CRITIQUE — SDK Purity) :
+- Composant atomique aux paramètres opaques → SDK
+- Composant qui orchestre + décide → APP
+
+Précédent : 2026-05-24 j'ai migré `AttachmentDownloader` au SDK sous prétexte de réutilisabilité. Rollback (commit `83e55297c`) — c'est de l'orchestration UX produit, pas un atome. "Réutilisable" n'est PAS un critère suffisant ; l'**atomicité** l'est.
 
 ## Quality Gate
 Codex will review your output once you are done. Self-evaluate and ensure consistent, coherent code before marking any task as complete.

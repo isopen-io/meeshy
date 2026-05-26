@@ -39,8 +39,18 @@ final class CallAudioEffectsServiceTests: XCTestCase {
         // 0 Hz sample rate (no real audio I/O hardware). Attempting to start
         // the engine in this state raises "Input HW format is invalid" (-10851).
         // Detect this upfront so affected tests can skip gracefully.
+        //
+        // iOS 18.x simulators occasionally report a non-zero sample rate but
+        // still SIGABRT when the engine actually starts a back-sound mixer
+        // graph (no real input route). Force-skip in any simulator: real
+        // backsound coverage runs on device and CI smoke uses voice-effect
+        // DSP tests (which don't start the input node).
+        #if targetEnvironment(simulator)
+        return false
+        #else
         let engine = AVAudioEngine()
         return engine.inputNode.outputFormat(forBus: 0).sampleRate > 0
+        #endif
     }()
 
     // MARK: - Factory

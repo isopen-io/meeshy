@@ -59,6 +59,12 @@ final class MessageListViewController: UIViewController {
     /// server id (which is what `ReplyReference.messageId` carries —
     /// gateway sends `replyTo.id`, not the local UUID).
     private var serverIdToLocalId: [String: String] = [:]
+    private var lastMessageTranslations: [String: [MessageTranslation]] = [:]
+    private var lastMessageTranscriptions: [String: MessageTranscription] = [:]
+    private var lastMessageTranslatedAudios: [String: [MessageTranslatedAudio]] = [:]
+    private var lastActiveTranslationOverrides: [String: MessageTranslation?] = [:]
+    private var pendingReconfigureMessageIds = Set<String>()
+    private var reconfigureDebounceTimer: Timer?
 
     var onNewMessagesBadge: ((Int) -> Void)?
     var onScrollToMessage: ((String) -> Void)?
@@ -441,6 +447,7 @@ final class MessageListViewController: UIViewController {
             cell.contentConfiguration = UIHostingConfiguration {
                 BubbleSwipeContainer(
                     isMine: isMine,
+                    messageId: messageId,
                     messageCreatedAt: message.createdAt,
                     onSwipeReply: { swipeReplyHandler?(messageId) },
                     onSwipeForward: { swipeForwardHandler?(messageId) },
@@ -468,6 +475,9 @@ final class MessageListViewController: UIViewController {
                         onConsumeViewOnce: consumeViewOnceHandler,
                         onRequestTranslation: requestTranslationHandler,
                         onShowTranslationDetail: showTranslationHandler,
+                        onPlayAudio: { [weak self] attachmentId in
+                            self?.conversationViewModel?.playAudio(attachmentId: attachmentId)
+                        },
                         allAudioItems: allAudioItems,
                         onScrollToMessage: scrollHandler,
                         isLastInGroup: true,
@@ -617,22 +627,105 @@ final class MessageListViewController: UIViewController {
         // already collects translation events on that interval, so two
         // collapsed re-snapshots is the worst case).
         guard let vm = conversationViewModel else { return }
-        Publishers.MergeMany(
-            vm.$messageTranslations.map { _ in () }.eraseToAnyPublisher(),
-            vm.$messageTranscriptions.map { _ in () }.eraseToAnyPublisher(),
-            vm.$messageTranslatedAudios.map { _ in () }.eraseToAnyPublisher(),
-            vm.$activeTranslationOverrides.map { _ in () }.eraseToAnyPublisher(),
-            // B2 — preferred-language change triggers a full bubble
-            // re-resolution so the previously selected translation is
-            // swapped for the one matching the new language preferences.
-            vm.$preferredLanguageRevision.map { _ in () }.eraseToAnyPublisher()
-        )
-        .dropFirst() // skip the @Published initial emission
-        .debounce(for: .milliseconds(80), scheduler: DispatchQueue.main)
-        .sink { [weak self] in
-            self?.applySnapshot(animated: false)
-        }
-        .store(in: &cancellables)
+
+        // Initialize cache values to avoid stale diffing on subscription
+        lastMessageTranslations = vm.messageTranslations
+        lastMessageTranscriptions = vm.messageTranscriptions
+        lastMessageTranslatedAudios = vm.messageTranslatedAudios
+        lastActiveTranslationOverrides = vm.activeTranslationOverrides
+
+        vm.$messageTranslations
+            .receive(on: DispatchQueue.main)
+            .dropFirst()
+            .sink { [weak self] newTranslations in
+                guard let self = self else { return }
+                var changed: Set<String> = []
+                for (msgId, val) in newTranslations {
+                    if self.lastMessageTranslations[msgId] != val {
+                        changed.insert(msgId)
+                    }
+                }
+                for msgId in self.lastMessageTranslations.keys {
+                    if newTranslations[msgId] == nil {
+                        changed.insert(msgId)
+                    }
+                }
+                self.lastMessageTranslations = newTranslations
+                self.queueReconfigure(for: changed)
+            }
+            .store(in: &cancellables)
+
+        vm.$messageTranscriptions
+            .receive(on: DispatchQueue.main)
+            .dropFirst()
+            .sink { [weak self] newTranscriptions in
+                guard let self = self else { return }
+                var changed: Set<String> = []
+                for (msgId, val) in newTranscriptions {
+                    if self.lastMessageTranscriptions[msgId] != val {
+                        changed.insert(msgId)
+                    }
+                }
+                for msgId in self.lastMessageTranscriptions.keys {
+                    if newTranscriptions[msgId] == nil {
+                        changed.insert(msgId)
+                    }
+                }
+                self.lastMessageTranscriptions = newTranscriptions
+                self.queueReconfigure(for: changed)
+            }
+            .store(in: &cancellables)
+
+        vm.$messageTranslatedAudios
+            .receive(on: DispatchQueue.main)
+            .dropFirst()
+            .sink { [weak self] newAudios in
+                guard let self = self else { return }
+                var changed: Set<String> = []
+                for (msgId, val) in newAudios {
+                    if self.lastMessageTranslatedAudios[msgId] != val {
+                        changed.insert(msgId)
+                    }
+                }
+                for msgId in self.lastMessageTranslatedAudios.keys {
+                    if newAudios[msgId] == nil {
+                        changed.insert(msgId)
+                    }
+                }
+                self.lastMessageTranslatedAudios = newAudios
+                self.queueReconfigure(for: changed)
+            }
+            .store(in: &cancellables)
+
+        vm.$activeTranslationOverrides
+            .receive(on: DispatchQueue.main)
+            .dropFirst()
+            .sink { [weak self] newOverrides in
+                guard let self = self else { return }
+                var changed: Set<String> = []
+                for (msgId, val) in newOverrides {
+                    if self.lastActiveTranslationOverrides[msgId] != val {
+                        changed.insert(msgId)
+                    }
+                }
+                for msgId in self.lastActiveTranslationOverrides.keys {
+                    if newOverrides[msgId] == nil {
+                        changed.insert(msgId)
+                    }
+                }
+                self.lastActiveTranslationOverrides = newOverrides
+                self.queueReconfigure(for: changed)
+            }
+            .store(in: &cancellables)
+
+        vm.$preferredLanguageRevision
+            .receive(on: DispatchQueue.main)
+            .dropFirst()
+            .sink { [weak self] _ in
+                // Preferred language revision change requires full reconfigure of all items
+                self?.applySnapshot(animated: false)
+            }
+            .store(in: &cancellables)
 
         // Typing roster — re-snapshot (animated) so the in-flow typing cell
         // inserts / updates / removes fluidly. Low-frequency signal, no debounce.
@@ -643,6 +736,38 @@ final class MessageListViewController: UIViewController {
                 self?.applySnapshot(animated: true)
             }
             .store(in: &cancellables)
+    }
+
+    private func queueReconfigure(for messageIds: Set<String>) {
+        guard !messageIds.isEmpty else { return }
+        pendingReconfigureMessageIds.formUnion(messageIds)
+
+        reconfigureDebounceTimer?.invalidate()
+        reconfigureDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                let ids = self.pendingReconfigureMessageIds
+                self.pendingReconfigureMessageIds.removeAll()
+                self.reconfigureMessages(serverIds: ids)
+            }
+        }
+    }
+
+    private func reconfigureMessages(serverIds: Set<String>) {
+        guard let dataSource = dataSource, !serverIds.isEmpty else { return }
+
+        let localIds = serverIds.compactMap { self.serverIdToLocalId[$0] }
+        guard !localIds.isEmpty else { return }
+
+        var snapshot = dataSource.snapshot()
+        let itemsToReconfigure = localIds.map { MessageListItem.message(localId: $0) }
+
+        // Only reconfigure items that actually exist in the current snapshot
+        let existingItems = itemsToReconfigure.filter { snapshot.indexOfItem($0) != nil }
+        guard !existingItems.isEmpty else { return }
+
+        snapshot.reconfigureItems(existingItems)
+        dataSource.apply(snapshot, animatingDifferences: false)
     }
 
     // MARK: - Scroll to Bottom

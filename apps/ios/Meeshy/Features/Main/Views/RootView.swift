@@ -22,6 +22,13 @@ struct StoryViewerRequest: Identifiable, Equatable {
     var initialAction: StoryViewerInitialAction? = nil
 }
 
+/// Named magic numbers for the iPhone root-view audio overlay layout.
+private enum AudioOverlayConstants {
+    /// Padding above the bottom edge for the floating mini-player, sized so
+    /// the bar clears the standard iOS tab bar (~49pt + safe area).
+    static let iPhoneBottomPadding: CGFloat = 60
+}
+
 struct RootView: View {
     @StateObject private var theme = ThemeManager.shared
     @StateObject private var toastManager = ToastManager.shared
@@ -414,6 +421,22 @@ struct RootView: View {
             FloatingCallPillView()
                 .padding(.top, 8)
         }
+        // B4 — Mini audio player floats above the tab bar. Mounted HERE
+        // (not in `AdaptiveRootView`) so the tap-body handler can reach
+        // the `router` via the local `@StateObject` — `AdaptiveRootView`
+        // sits above the router scope, which was why the original
+        // `onTapBody: {}` no-op shipped with Phase 7. The handler routes
+        // through `navigateToConversationById` (same path used by deep
+        // links and push notifications), so the cache-first resolution +
+        // navigation retry logic is shared.
+        .overlay(alignment: .bottom) {
+            MiniAudioPlayerBar(onTapBody: {
+                guard let convId = ConversationAudioCoordinator.shared
+                    .activeContext?.conversationId else { return }
+                navigateToConversationById(convId)
+            })
+            .padding(.bottom, AudioOverlayConstants.iPhoneBottomPadding)
+        }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showFeed)
         .animation(.spring(), value: showMenu)
         .onReceive(NotificationCenter.default.publisher(for: .navigateToConversation)) { notification in
@@ -445,7 +468,7 @@ struct RootView: View {
                     let conv = apiConv.toConversation(currentUserId: currentUserId)
                     router.navigateToConversation(conv)
                 } catch {
-                    ToastManager.shared.showError("Impossible de creer la conversation")
+                    ToastManager.shared.showError(String(localized: "root.create_conversation.error", defaultValue: "Impossible de creer la conversation", bundle: .main))
                 }
             }
         }
@@ -585,6 +608,48 @@ struct RootView: View {
             // the deep link and recreates the empty view, looking like an
             // infinite loop to the user.
             navigateToConversationById(id)
+
+        case .postDetail(let postId):
+            // PostDetailView lazy-loads the post itself, so we can push
+            // immediately with `initialPost: nil`. The route case already
+            // exists for in-app feed taps; the deep link just reuses it.
+            router.push(.postDetail(postId))
+
+        case .storyDetail(let postId):
+            // Stories share the post identifier namespace. Prefer the
+            // dedicated viewer when the story is in the local tray, fall
+            // back to PostDetailView otherwise — matches the existing
+            // `storyDetail:` push-notification dispatch (line ~472 above)
+            // so cold-launch deep links and warm-launch push taps land on
+            // the same screen for the same id.
+            if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
+                storyViewerCoordinator.present(StoryViewerRequest(id: storyViewModel.storyGroups[groupIdx].id))
+            } else {
+                router.push(.postDetail(postId))
+            }
+
+        case .userProfile(let username):
+            // Opens the profile sheet over the conversation list (same
+            // surface as in-app `Link` taps via Router.handleDeepLink and
+            // as notification-driven profile navigation). `ProfileSheetUser`
+            // resolves the username server-side, so a typo just shows the
+            // empty state instead of crashing.
+            router.deepLinkProfileUser = ProfileSheetUser(username: username)
+
+        case .ownProfile:
+            // Pop to the conversation list root first so back-swipe from
+            // the profile screen lands on the home surface — not whatever
+            // happened to be on top of the nav stack at cold launch.
+            router.popToRoot()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                router.push(.profile)
+            }
+
+        case .userLinks:
+            router.popToRoot()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                router.push(.links)
+            }
 
         case .magicLink:
             break
@@ -743,9 +808,21 @@ struct RootView: View {
     // either matches because the dedicated screen still degrades gracefully
     // (`expired` empty state) for posts that no longer exist.
     private func isStoryNotification(_ ctx: NotificationNavContext, postId: String) -> Bool {
+        // High confidence: explicit type from notification metadata
         if ctx.postType?.uppercased() == "STORY" { return true }
-        if let cached = StoryService.shared.cachedPost(id: postId), cached.expiresAt != nil {
+        if ctx.postType?.uppercased() == "POST" || ctx.postType?.uppercased() == "STATUS" { return false }
+
+        // Medium confidence: explicit notification types that are story-only
+        switch ctx.type {
+        case .storyReaction, .storyNewComment, .friendStoryComment, .storyThreadReply, .friendNewStory:
             return true
+        default:
+            break
+        }
+
+        // Low confidence fallback: check cache if it has an expiry date
+        if let cached = StoryService.shared.cachedPost(id: postId) {
+            return cached.expiresAt != nil
         }
         return false
     }
@@ -863,8 +940,8 @@ struct RootView: View {
         // 1. Fast path: in-memory list (post-load happy path)
         if let existing = conversationViewModel.conversations.first(where: { $0.id == conversationId }) {
             var conv = existing
-            if ensureUnread && conv.unreadCount == 0 {
-                conv.unreadCount = 1
+            if ensureUnread && conv.userState.unreadCount == 0 {
+                conv.userState.unreadCount = 1
             }
             router.navigateToConversation(conv, highlightMessageId: highlightMessageId)
             return
@@ -884,7 +961,7 @@ struct RootView: View {
             }()
             if let cached = cachedConversations?.first(where: { $0.id == conversationId }) {
                 var c = cached
-                if ensureUnread && c.unreadCount == 0 { c.unreadCount = 1 }
+                if ensureUnread && c.userState.unreadCount == 0 { c.userState.unreadCount = 1 }
                 router.navigateToConversation(c, highlightMessageId: highlightMessageId)
                 // Background refresh — keeps the displayed conversation in sync
                 // without blocking navigation. Failures are silent: the user
@@ -921,8 +998,8 @@ struct RootView: View {
                 do {
                     let apiConv = try await ConversationService.shared.getById(conversationId)
                     var conv = apiConv.toConversation(currentUserId: currentUserId)
-                    if ensureUnread && conv.unreadCount == 0 {
-                        conv.unreadCount = 1
+                    if ensureUnread && conv.userState.unreadCount == 0 {
+                        conv.userState.unreadCount = 1
                     }
                     router.navigateToConversation(conv, highlightMessageId: highlightMessageId)
                     return
@@ -1148,13 +1225,13 @@ private struct PendingSettingsBannerInline: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
 
-                    Text("Modifications en attente (\(pendingCount))")
+                    Text("\(String(localized: "root.pending_changes", defaultValue: "Modifications en attente", bundle: .main)) (\(pendingCount))")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
 
                     Spacer()
 
-                    Text("Synchronisation au retour en ligne")
+                    Text(String(localized: "root.sync_on_reconnect", defaultValue: "Synchronisation au retour en ligne", bundle: .main))
                         .font(.system(size: 10, weight: .regular))
                         .foregroundColor(.white.opacity(0.85))
                         .lineLimit(1)
@@ -1209,13 +1286,13 @@ private struct PendingStoryBannerInline: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
 
-                    Text("Stories en attente (\(publishService.pendingCount))")
+                    Text("\(String(localized: "root.pending_stories", defaultValue: "Stories en attente", bundle: .main)) (\(publishService.pendingCount))")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
 
                     Spacer()
 
-                    Text("Publication au retour en ligne")
+                    Text(String(localized: "root.publish_on_reconnect", defaultValue: "Publication au retour en ligne", bundle: .main))
                         .font(.system(size: 10, weight: .regular))
                         .foregroundColor(.white.opacity(0.85))
                         .lineLimit(1)

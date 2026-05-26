@@ -106,6 +106,18 @@ struct MeeshyApp: App {
                     }
                 }
                 .animation(MeeshyAnimation.springDefault, value: toastManager.currentToast)
+                .onReceive(SocialSocketManager.shared.inAppNotification) { payload in
+                    // In-app toast for `notification:new`. The tap action
+                    // builds a custom-scheme Meeshy URL (`meeshy://c/<id>`,
+                    // mapped by DeepLinkRouter) so the toast lands on the
+                    // right conversation regardless of stack depth.
+                    let conversationId = payload.context?.conversationId
+                    let tap: (() -> Void)? = conversationId.flatMap { id in
+                        guard let url = URL(string: "meeshy://c/\(id)") else { return nil }
+                        return { _ = deepLinkRouter.handle(url: url) }
+                    }
+                    _ = toastManager.showInAppNotification(payload, tapAction: tap)
+                }
                 .sheet(isPresented: $showCrashSheet) {
                     CrashReportSheet(reports: crashReportsToShow)
                 }
@@ -472,6 +484,27 @@ struct MeeshyApp: App {
         }
     }
 
+    // MARK: - Test seam (DEBUG)
+
+    /// Reproduces the `.background` branch of `adaptiveOnChange(of: scenePhase)`
+    /// in a testable, static form. Kept aligned with the production handler:
+    /// when the conversation audio coordinator is actively playing we do NOT
+    /// tear down the shared `AVAudioSession`, so iOS keeps streaming the
+    /// engine in background under the `UIBackgroundModes: audio` declaration.
+    static func handleScenePhaseForTesting(_ newPhase: ScenePhase) async {
+        switch newPhase {
+        case .background:
+            if !ConversationAudioCoordinator.sharedForTesting.isPlaying {
+                #if DEBUG
+                MediaSessionCoordinator.shared.testProbe?.deactivateCount += 1
+                #endif
+                await MediaSessionCoordinator.shared.deactivateForBackground()
+            }
+        default:
+            break
+        }
+    }
+
     // MARK: - Push Notifications
 
     private func requestPushPermissionIfNeeded() async {
@@ -638,6 +671,14 @@ struct SplashScreen: View {
 
     private var isDark: Bool { theme.mode.isDark }
 
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+    }
+
+    private var buildNumber: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+    }
+
     var body: some View {
         ZStack {
             // Animated gradient background
@@ -715,6 +756,33 @@ struct SplashScreen: View {
                     .offset(y: showSubtitle ? 0 : -20)
 
                 Spacer()
+
+                // Footer : version + signature + brand logo
+                VStack(spacing: 6) {
+                    Text("Meeshy \(appVersion) · \(buildNumber)")
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundColor(theme.textMuted.opacity(0.7))
+
+                    Text(String(localized: "splash.madeWith", defaultValue: "Made with ❤️", bundle: .main))
+                        .font(.system(size: 11, weight: .regular, design: .rounded))
+                        .foregroundColor(theme.textMuted.opacity(0.6))
+
+                    Text(String(localized: "splash.byServicesCEO", defaultValue: "by Services CEO", bundle: .main))
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundColor(theme.textMuted.opacity(0.8))
+
+                    Image("AppIconFooter")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 28, height: 28)
+                        .opacity(0.85)
+                        .padding(.top, 2)
+                        .accessibilityHidden(true)
+                }
+                .opacity(showSubtitle ? 1 : 0)
+                .padding(.bottom, 24)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(Text("Meeshy version \(appVersion), build \(buildNumber). Made with love by Services CEO"))
             }
         }
         .onAppear {

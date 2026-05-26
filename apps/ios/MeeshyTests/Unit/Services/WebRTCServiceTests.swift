@@ -183,6 +183,7 @@ private final class TestableWebRTCClient: WebRTCClientProviding {
     var lastSentData: Data?
 
     var audioEffectsService: CallAudioEffectsServiceProviding? = nil
+    let videoFilterPipeline = VideoFilterPipeline()
 
     func configure(iceServers: [IceServer]) throws { configureCallCount += 1 }
     func updateIceServers(_ iceServers: [IceServer]) {}

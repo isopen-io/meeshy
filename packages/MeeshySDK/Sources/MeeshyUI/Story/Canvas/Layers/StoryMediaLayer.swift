@@ -278,19 +278,26 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
 
         let loader = imageLoader
         let postMediaId = media.postMediaId
-        currentLoadTask = Task { @MainActor [weak self] in
+        // Strong capture de `self` dans la Task. `[weak self]` faisait que la
+        // layer se désallouait entre le `await` et le stamp `contents` —
+        // `rebuildLayers()` à 60 Hz détache la layer du parent et, à chaque
+        // cache miss du `StoryRendererCache`, ARC libère l'ancien layer avant
+        // que la Task n'arrive au stamp. Le `guard let self` retournait sans
+        // jamais stamper le bitmap → l'image foreground restait invisible.
+        // Le cycle Task→self→Task se ferme dès le `return` de la Task :
+        // pas de leak persistant.
+        currentLoadTask = Task { @MainActor in
             // (1) Fast-path image cache (composer preview / disk-backed reader).
             if let imageCache,
                let cached = await imageCache.cachedImage(for: postMediaId)?.cgImage {
-                guard let self, !Task.isCancelled else { return }
+                guard !Task.isCancelled else { return }
                 self.contents = cached
                 return
             }
             // (2) Network URL through the disk-cache-backed loader.
             guard let url = resolvedURL else { return }
             let loaded = await loader.image(for: url.absoluteString)
-            guard let self,
-                  !Task.isCancelled,
+            guard !Task.isCancelled,
                   let cgImage = loaded?.cgImage else { return }
             self.contents = cgImage
         }
@@ -325,6 +332,15 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         videoLoadGeneration &+= 1
         let generation = videoLoadGeneration
 
+        // Attache l'AVPlayer DÈS MAINTENANT avec l'URL distante. Sans ça,
+        // toute lecture immédiate (tests, indicateurs UI, accessibilité)
+        // verrait `avPlayer == nil` jusqu'à ce que la tâche async ait
+        // résolu le cache local. La task de cache continue tourner en
+        // arrière-plan et swap vers un fichier local s'il devient
+        // disponible — c'est une optimisation, pas une condition
+        // préalable à l'existence du player.
+        attachPlayer(url: remoteURL, mode: mode, loop: media.loop)
+
         currentVideoLoadTask = Task { @MainActor [weak self] in
             // Garantit une URL file:// avant de toucher AVURLAsset — sinon
             // certaines surfaces (export, AVAudioFile) rejettent le HTTPS
@@ -336,7 +352,12 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
             // autre `configureVideo` peuvent avoir incrémenté la génération.
             // Touch la layer SEULEMENT si le token correspond toujours.
             guard self.videoLoadGeneration == generation else { return }
-            self.attachPlayer(url: localURL, mode: mode, loop: media.loop)
+            // Swap UNIQUEMENT si le cache a fourni une vraie URL locale
+            // différente — sinon le player déjà attaché continue de jouer
+            // l'URL distante sans re-trigger un cold start.
+            if localURL != remoteURL {
+                self.attachPlayer(url: localURL, mode: mode, loop: media.loop)
+            }
         }
     }
 

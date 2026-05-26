@@ -18,6 +18,19 @@ public final class SharedAVPlayerManager: ObservableObject {
     @Published public var activeURL: String = ""
     @Published public var isPipActive = false
 
+    /// Mute global du player (préservé entre vidéos dans la session).
+    /// Toggle via le bouton mute du fullscreen overlay. Propagé à
+    /// `AVPlayer.isMuted` automatiquement via `didSet`.
+    @Published public var isMuted: Bool = false {
+        didSet { player?.isMuted = isMuted }
+    }
+
+    /// Si vrai, le notification handler de fin de lecture seek(0) + play()
+    /// au lieu de stop(). Reset à `false` par `cleanup()` → ne traverse pas
+    /// un changement de vidéo. Toggle exclusif via le fullscreen overlay
+    /// (inline n'expose pas `.loop` dans son ControlSet).
+    @Published public var shouldLoop: Bool = false
+
     public var attachmentId: String?
 
     private var timeObserver: Any?
@@ -121,6 +134,20 @@ public final class SharedAVPlayerManager: ObservableObject {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
+    /// Libère le player POUR cette URL si elle est encore active. No-op si
+    /// une autre URL a pris la main entre temps (safe race protection : par
+    /// ex. l'utilisateur scrolle vite et une nouvelle bulle a déjà appelé
+    /// `load`).
+    ///
+    /// Utilisé par `_InlineRenderer.teardown()` sur `.onDisappear` pour
+    /// libérer le surface au scroll out → la bulle retombe sur le thumbnail
+    /// au scroll back. Distinct de `pause()` : ce dernier conserve le
+    /// player + activeURL, donc surface remounté sur frame figée.
+    public func release(urlString: String) {
+        guard activeURL == urlString else { return }
+        stop()
+    }
+
     // MARK: - Picture-in-Picture
 
     /// Attach PIP to a given AVPlayerLayer. Call this from the UIViewRepresentable that hosts the player.
@@ -182,6 +209,11 @@ public final class SharedAVPlayerManager: ObservableObject {
     // MARK: - Observers
 
     private func setupObservers(for player: AVPlayer) {
+        // Sync immédiat de la pref mute globale sur le nouveau player. Sans
+        // ça, un user qui mute en fullscreen puis ouvre une nouvelle vidéo
+        // entend le son revenir alors que l'icône mute reste activée.
+        player.isMuted = isMuted
+
         let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             Task { @MainActor [weak self] in
@@ -213,9 +245,21 @@ public final class SharedAVPlayerManager: ObservableObject {
             .sink { [weak self] _ in
                 guard let self else { return }
                 self.reportWatchProgress(complete: true)
-                self.watchStartTime = nil
-                self.isPlaying = false
-                self.seek(to: 0)
+                if self.shouldLoop {
+                    // Loop fullscreen : seek + replay, on garde le player +
+                    // activeURL + audio session. Reset watchStartTime pour que
+                    // la prochaine fin de cycle puisse encore report progress.
+                    self.seek(to: 0)
+                    self.play()
+                    self.watchStartTime = Date()
+                } else {
+                    // Comportement par défaut : tear-down complet → bubble
+                    // re-render sur thumbnail (cf. commentaire historique).
+                    self.watchStartTime = nil
+                    self.isPlaying = false
+                    self.seek(to: 0)
+                    self.stop()
+                }
             }
             .store(in: &cancellables)
     }
@@ -238,6 +282,9 @@ public final class SharedAVPlayerManager: ObservableObject {
         attachmentId = nil
         pipController = nil
         pipDelegate = nil
+        // shouldLoop reset : ne traverse pas un changement d'attachment.
+        // isMuted NON reset : préférence globale session.
+        shouldLoop = false
     }
 }
 

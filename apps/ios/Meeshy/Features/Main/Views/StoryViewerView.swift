@@ -399,6 +399,7 @@ struct StoryViewerView: View {
             )
         }
         .adaptiveOnChange(of: currentStoryIndex) { oldValue, _ in
+            skipExpiredStoriesIfNeeded()
             isContentReady = false
             refreshPrefetchWindowAndTimer()
             let previousStory = currentGroup.flatMap { group in
@@ -407,6 +408,7 @@ struct StoryViewerView: View {
             transitionPostRoom(from: previousStory, to: currentStory)
         }
         .adaptiveOnChange(of: currentGroupIndex) { oldValue, _ in
+            skipExpiredStoriesIfNeeded()
             isContentReady = false
             refreshPrefetchWindowAndTimer()
             let previousStory: StoryItem? = (oldValue >= 0 && oldValue < groups.count &&

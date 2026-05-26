@@ -76,6 +76,11 @@ final class MockConversationSocketDelegate: ConversationSocketDelegate {
     func markAsRead() {
         markAsReadCallCount += 1
     }
+
+    var applyAttachmentUpdateEvents: [AttachmentUpdatedEvent] = []
+    func applyAttachmentUpdate(_ event: AttachmentUpdatedEvent) {
+        applyAttachmentUpdateEvents.append(event)
+    }
 }
 
 // MARK: - Tests

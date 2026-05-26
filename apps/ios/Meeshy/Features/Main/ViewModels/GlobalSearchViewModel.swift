@@ -274,7 +274,7 @@ final class GlobalSearchViewModel: ObservableObject {
                 memberCount: conv.memberCount,
                 lastMessagePreview: conv.lastMessagePreview,
                 lastMessageAt: conv.lastMessageAt,
-                unreadCount: conv.unreadCount,
+                unreadCount: conv.userState.unreadCount,
                 conversation: conv
             )
         }
@@ -297,7 +297,7 @@ final class GlobalSearchViewModel: ObservableObject {
                     memberCount: conv.memberCount,
                     lastMessagePreview: conv.lastMessagePreview,
                     lastMessageAt: conv.lastMessageAt,
-                    unreadCount: conv.unreadCount,
+                    unreadCount: conv.userState.unreadCount,
                     conversation: conv
                 )
             }

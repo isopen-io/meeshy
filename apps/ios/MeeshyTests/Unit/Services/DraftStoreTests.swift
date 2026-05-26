@@ -171,4 +171,94 @@ final class DraftStoreTests: XCTestCase {
             DraftSummary(previewText: "b", updatedAt: date)
         )
     }
+
+    // MARK: - Q4 — Per-user isolation (privacy)
+
+    /// Prouve que les brouillons d'un user A ne sont PAS visibles par un
+    /// user B sur le même device. Avant ce fix, `UserDefaults` utilisait
+    /// la clé `meeshy_draft_<convId>` sans préfixage userId — fuite
+    /// privacy ACTIVE en prod.
+    func test_drafts_isolatedByUserId_noCrossUserLeak() {
+        let suite = "DraftStoreTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        // User A drafts a sensitive message
+        let userAStore = DraftStore(userDefaults: defaults, userIdProvider: { "userA" })
+        userAStore.save("Je veux divorcer", for: "convXYZ")
+
+        // User B opens the same conversation on the same device
+        let userBStore = DraftStore(userDefaults: defaults, userIdProvider: { "userB" })
+        let leakedDraft = userBStore.loadText(for: "convXYZ")
+
+        XCTAssertEqual(
+            leakedDraft, "",
+            "user B doit voir un compose vide, PAS le brouillon de user A"
+        )
+
+        // Sanity check: user A peut toujours lire son propre brouillon
+        XCTAssertEqual(userAStore.loadText(for: "convXYZ"), "Je veux divorcer")
+    }
+
+    /// Prouve que `allNonEmptyDrafts()` ne retourne que les brouillons du
+    /// user courant — pas ceux des autres users persistés dans le même
+    /// `UserDefaults`. La liste de conversations utilise cette méthode
+    /// pour afficher le badge "Brouillon", donc fuite UI directe sinon.
+    func test_allNonEmptyDrafts_filtersByCurrentUserOnly() {
+        let suite = "DraftStoreTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        // Two users populate drafts on the same device
+        let userAStore = DraftStore(userDefaults: defaults, userIdProvider: { "userA" })
+        userAStore.save("A1", for: "conv1")
+        userAStore.save("A2", for: "conv2")
+
+        let userBStore = DraftStore(userDefaults: defaults, userIdProvider: { "userB" })
+        userBStore.save("B1", for: "conv1")  // different content for same conv
+
+        // User B's view of "all drafts"
+        let userBDrafts = userBStore.allNonEmptyDrafts()
+
+        XCTAssertEqual(userBDrafts.count, 1, "user B doit voir SES propres brouillons uniquement")
+        XCTAssertEqual(userBDrafts["conv1"]?.text, "B1")
+        XCTAssertNil(userBDrafts["conv2"], "conv2 brouillon de user A NE doit PAS apparaître chez user B")
+    }
+
+    /// Migration ascendante : un brouillon écrit par une version legacy
+    /// (sans userId préfixé dans la clé) doit être attribué au user
+    /// courant au premier `load()`, puis supprimé de l'ancien emplacement.
+    /// Sinon, les drafts existants en prod seraient perdus à la sortie
+    /// de cette migration.
+    func test_load_migratesLegacyKeyToCurrentUser() throws {
+        let suite = "DraftStoreTests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        // Simulate a legacy draft persisted by an older build (no userId)
+        let legacyDraft = MessageDraft(text: "Legacy draft", updatedAt: Date())
+        let legacyKey = "meeshy_draft_convLegacy"
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let data = try encoder.encode(legacyDraft)
+        defaults.set(data, forKey: legacyKey)
+
+        // First load under user A should pick up the legacy draft and migrate it
+        let userAStore = DraftStore(userDefaults: defaults, userIdProvider: { "userA" })
+        let loaded = userAStore.loadText(for: "convLegacy")
+
+        XCTAssertEqual(loaded, "Legacy draft", "the legacy draft must be readable")
+        XCTAssertNil(
+            defaults.data(forKey: legacyKey),
+            "after migration, the legacy unprefixed key must be removed"
+        )
+        XCTAssertNotNil(
+            defaults.data(forKey: "meeshy_draft_userA_convLegacy"),
+            "after migration, the per-user key must hold the draft"
+        )
+
+        // User B on same device must NOT inherit the migrated draft
+        let userBStore = DraftStore(userDefaults: defaults, userIdProvider: { "userB" })
+        XCTAssertEqual(userBStore.loadText(for: "convLegacy"), "")
+    }
 }

@@ -98,7 +98,7 @@ struct BubbleQuotedReply: View, Equatable {
 
             HStack(spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(reply.isMe ? "Vous" : reply.authorName)
+                    Text(reply.isMe ? String(localized: "bubble.reply.you", defaultValue: "Vous", bundle: .main) : reply.authorName)
                         .font(.system(size: 12, weight: .bold))
                         .foregroundColor(nameColor)
                         .lineLimit(1)
@@ -118,7 +118,7 @@ struct BubbleQuotedReply: View, Equatable {
                             // localized short label ("Photo", "Vidéo", ...)
                             // instead of the hardcoded "Media" fallback that
                             // surfaced before the AttachmentKind plumbing fix.
-                            let fallback = attachmentKind?.shortLabel ?? "Media"
+                            let fallback = attachmentKind?.shortLabel ?? String(localized: "bubble.reply.media", defaultValue: "Media", bundle: .main)
                             MessageTextRenderer.render(
                                 reply.previewText.isEmpty ? fallback : reply.previewText,
                                 fontSize: 12, color: previewColor,
@@ -222,7 +222,7 @@ struct BubbleStoryReplyPreview: View, Equatable {
             Image(systemName: "camera.fill")
                 .font(.system(size: 9, weight: .medium))
                 .foregroundColor(previewColor)
-            Text("Story")
+            Text(String(localized: "bubble.reply.story", defaultValue: "Story", bundle: .main))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(previewColor)
 

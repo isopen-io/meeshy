@@ -16,7 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2 } from 'lucide-react';
 import { InfoIcon } from './InfoIcon';
-import { agentAdminService, type AgentConfigData, type AgentConfigUpsert } from '@/services/agent-admin.service';
+import { agentAdminService, type AgentConfigData, type AgentConfigUpsert, type TopicCatalogItem } from '@/services/agent-admin.service';
 import { AgentRolesSection } from './AgentRolesSection';
 import dynamic from 'next/dynamic';
 
@@ -81,6 +81,7 @@ const DEFAULTS: AgentConfigUpsert = {
   reactionBoostFactor: 1.5,
   freshTopicProbability: 0.2,
   freshTopicCategoryHints: [],
+  freshTopicBlockedSlugs: [],
 };
 
 export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentConfigDialogProps) {
@@ -90,6 +91,19 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
 
   const [form, setForm] = useState<AgentConfigUpsert>({ ...DEFAULTS });
   const [convMeta, setConvMeta] = useState<Conversation | null>(null);
+  const [availableTopics, setAvailableTopics] = useState<TopicCatalogItem[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    agentAdminService.listTopics({ activeOnly: true })
+      .then((res) => {
+        if (!cancelled && res.success && res.data) {
+          setAvailableTopics(res.data);
+        }
+      })
+      .catch((err) => console.error('[AgentConfigDialog] Failed to load topics:', err));
+    return () => { cancelled = true; };
+  }, []);
 
   useEffect(() => {
     if (config) {
@@ -132,11 +146,6 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
     setSaving(true);
     try {
       const res = await agentAdminService.upsertConfig(conversationId, form);
-      // The gateway returns a `cacheInvalidation` envelope tracking whether
-      // Redis pub/sub and the direct HTTP cache-bust succeeded. If both
-      // failed, the agent service may serve stale config for up to 5 min
-      // — warn the admin so they can retry instead of silently shipping a
-      // change that won't take effect.
       const invalidation = (res as unknown as { cacheInvalidation?: { anyChannelSucceeded?: boolean } })
         .cacheInvalidation;
       if (invalidation && invalidation.anyChannelSucceeded === false) {
@@ -633,7 +642,47 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 className="bg-white dark:bg-gray-800"
               />
               <p className="text-xs text-gray-500">
-                Laissez vide pour détection automatique depuis le titre et les derniers messages.
+                <strong className="text-amber-600 dark:text-amber-400">@deprecated</strong> — Remplacé par la blacklist multi-select ci-dessous. Conservé pour compat.
+              </p>
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <div className="flex items-center">
+                <Label>Topics éligibles sur cette conversation</Label>
+                <InfoIcon content="Décocher un topic pour l'exclure du tirage sur cette conversation. Par défaut tous les topics actifs du catalogue sont éligibles. Modifier via /admin/agent/topics." />
+              </div>
+              {availableTopics.length === 0 ? (
+                <p className="text-xs text-gray-500 italic">Chargement du catalogue de topics…</p>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800">
+                  {availableTopics.map((topic) => {
+                    const blockedSlugs = form.freshTopicBlockedSlugs ?? [];
+                    const isChecked = !blockedSlugs.includes(topic.slug);
+                    return (
+                      <label
+                        key={topic.slug}
+                        className="flex items-center gap-2 text-sm cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50 rounded p-1"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            const next = e.target.checked
+                              ? blockedSlugs.filter((s) => s !== topic.slug)
+                              : [...blockedSlugs, topic.slug];
+                            updateField('freshTopicBlockedSlugs', next);
+                          }}
+                          className="h-4 w-4"
+                        />
+                        <span title={topic.description ?? undefined}>{topic.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+              <p className="text-xs text-gray-500">
+                {(form.freshTopicBlockedSlugs ?? []).length === 0
+                  ? `Tous les ${availableTopics.length} topics actifs sont éligibles.`
+                  : `${availableTopics.length - (form.freshTopicBlockedSlugs ?? []).length} topic(s) actif(s) sur ${availableTopics.length} (${(form.freshTopicBlockedSlugs ?? []).length} exclu(s)).`}
               </p>
             </div>
           </div>

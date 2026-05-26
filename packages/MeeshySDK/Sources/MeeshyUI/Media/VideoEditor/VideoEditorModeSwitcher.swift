@@ -28,6 +28,7 @@ public struct VideoEditorModeSwitcher: View, Equatable {
             segment(for: .pro, label: "Pro", systemImage: "slider.horizontal.below.rectangle")
         }
         .padding(4)
+        .fixedSize(horizontal: true, vertical: false)
         .background(
             Capsule().fill(
                 isDark
@@ -38,6 +39,7 @@ public struct VideoEditorModeSwitcher: View, Equatable {
         .overlay(
             Capsule().strokeBorder(MeeshyColors.indigo400.opacity(0.25), lineWidth: 0.5)
         )
+        .animation(.spring(response: 0.32, dampingFraction: 0.72), value: mode)
         .accessibilityElement(children: .contain)
     }
 

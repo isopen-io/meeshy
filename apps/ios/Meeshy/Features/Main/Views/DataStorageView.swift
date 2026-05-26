@@ -23,13 +23,13 @@ struct DataStorageView: View {
                 scrollContent
             }
         }
-        .alert("Vider le cache", isPresented: $showClearConfirm) {
-            Button("Annuler", role: .cancel) { }
-            Button("Vider", role: .destructive) {
+        .alert(String(localized: "settings.data.storage.clear.title", defaultValue: "Vider le cache", bundle: .main), isPresented: $showClearConfirm) {
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { }
+            Button(String(localized: "settings.data.storage.clear.confirm", defaultValue: "Vider", bundle: .main), role: .destructive) {
                 clearCache()
             }
         } message: {
-            Text("Cela supprimera tous les medias mis en cache localement. Ils seront retelecharges si necessaire.")
+            Text(String(localized: "settings.data.storage.clear.message", defaultValue: "Cela supprimera tous les medias mis en cache localement. Ils seront retelecharges si necessaire.", bundle: .main))
         }
     }
 
@@ -44,16 +44,16 @@ struct DataStorageView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14, weight: .semibold))
-                    Text("Retour")
+                    Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(.system(size: 15, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
-            .accessibilityLabel("Retour")
+            .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
 
             Spacer()
 
-            Text("Stockage")
+            Text(String(localized: "settings.data.storage.title", defaultValue: "Stockage", bundle: .main))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
@@ -85,18 +85,18 @@ struct DataStorageView: View {
 
     private var cacheSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Cache media", icon: "externaldrive.fill", color: accentColor)
+            sectionHeader(title: String(localized: "settings.data.storage.section.cache", defaultValue: "Cache media", bundle: .main), icon: "externaldrive.fill", color: accentColor)
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 12) {
                     fieldIcon("folder.fill", color: accentColor)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Cache media")
+                        Text(String(localized: "settings.data.storage.cache.title", defaultValue: "Cache media", bundle: .main))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(theme.textPrimary)
 
-                        Text("Images, audio et videos mis en cache")
+                        Text(String(localized: "settings.data.storage.cache.subtitle", defaultValue: "Images, audio et videos mis en cache", bundle: .main))
                             .font(.system(size: 12, weight: .regular))
                             .foregroundColor(theme.textMuted)
                     }
@@ -104,7 +104,7 @@ struct DataStorageView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
 
-                Text("Le cache permet de charger les medias plus rapidement et reduit la consommation de donnees. Les fichiers mis en cache sont automatiquement supprimes apres 7 jours.")
+                Text(String(localized: "settings.data.storage.cache.description", defaultValue: "Le cache permet de charger les medias plus rapidement et reduit la consommation de donnees. Les fichiers mis en cache sont automatiquement supprimes apres 7 jours.", bundle: .main))
                     .font(.system(size: 13, weight: .regular))
                     .foregroundColor(theme.textMuted)
                     .lineSpacing(3)
@@ -119,7 +119,7 @@ struct DataStorageView: View {
 
     private var actionsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Actions", icon: "gear", color: "6B7280")
+            sectionHeader(title: String(localized: "settings.data.storage.section.actions", defaultValue: "Actions", bundle: .main), icon: "gear", color: "6B7280")
 
             Button {
                 HapticFeedback.medium()
@@ -128,7 +128,7 @@ struct DataStorageView: View {
                 HStack(spacing: 12) {
                     fieldIcon("trash.fill", color: "EF4444")
 
-                    Text("Vider le cache")
+                    Text(String(localized: "settings.data.storage.action.clear", defaultValue: "Vider le cache", bundle: .main))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(Color(hex: "EF4444"))
 
@@ -144,8 +144,8 @@ struct DataStorageView: View {
             }
             .disabled(isClearing)
             .background(sectionBackground(tint: "6B7280"))
-            .accessibilityLabel("Vider le cache media")
-            .accessibilityHint("Supprime tous les medias mis en cache localement")
+            .accessibilityLabel(String(localized: "settings.data.storage.action.clear.label", defaultValue: "Vider le cache media", bundle: .main))
+            .accessibilityHint(String(localized: "settings.data.storage.action.clear.hint", defaultValue: "Supprime tous les medias mis en cache localement", bundle: .main))
         }
     }
 
@@ -159,7 +159,7 @@ struct DataStorageView: View {
             await CacheCoordinator.shared.video.clearAll()
             await CacheCoordinator.shared.thumbnails.clearAll()
             HapticFeedback.success()
-            ToastManager.shared.showSuccess("Cache vide")
+            ToastManager.shared.showSuccess(String(localized: "settings.data.storage.toast.cleared", defaultValue: "Cache vide", bundle: .main))
             isClearing = false
         }
     }

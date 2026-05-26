@@ -16,7 +16,12 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     @Published public var isLoading = false
 
     public var onPlaybackFinished: (() -> Void)?
-    public var attachmentId: String?
+    /// B3 fix — `@Published` so that observers (notably `AudioPlayerView` in
+    /// the external-engine path) re-evaluate `handlePlayTap` gating logic
+    /// the moment the coordinator swaps the loaded attachment. Without this,
+    /// mutations stayed invisible to SwiftUI's dependency tracking and a
+    /// rapid double-tap on the play button could resolve to a stale id.
+    @Published public var attachmentId: String?
 
     private var player: AVAudioPlayer?
     private var timer: Timer?
@@ -27,6 +32,20 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     public override init() {
         super.init()
         PlaybackCoordinator.shared.register(self)
+    }
+
+    /// Designated init that lets callers opt out of `PlaybackCoordinator`
+    /// registration. The default `init()` keeps the historical
+    /// auto-registration behavior (every call site that doesn't pass this
+    /// new param stays unchanged). The opt-out is used by
+    /// `AudioPlayerView` when a real external engine is provided, to avoid
+    /// polluting the coordinator registry with an unused owned dummy whose
+    /// only purpose is to satisfy SwiftUI's `@StateObject` lifetime.
+    public init(registerWithCoordinator: Bool) {
+        super.init()
+        if registerWithCoordinator {
+            PlaybackCoordinator.shared.register(self)
+        }
     }
 
     // MARK: - Play from remote URL (through cache)
@@ -52,6 +71,15 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             } catch {
                 Self.log.error("play(urlString) cache fetch echec (\(resolved, privacy: .public)): \(error.localizedDescription, privacy: .public)")
                 isLoading = false
+                // B5 fix — notify the parent (coordinator / autoplay registry)
+                // that this audio is done so the queue can advance past the
+                // broken head. Without this the queue stalled silently on
+                // 404 / offline / malformed-URL failures. Safe to call
+                // unconditionally from the catch branch: AVAudioPlayer was
+                // never instantiated, so `handlePlaybackFinished` will not
+                // fire later from `audioPlayerDidFinishPlaying`, ruling out
+                // double advance.
+                onPlaybackFinished?()
             }
         }
     }
@@ -270,6 +298,42 @@ extension AudioPlaybackManager: AVAudioPlayerDelegate {
 
 // MARK: - Audio Player View
 
+extension AudioPlayerView {
+    /// Pure helper testable : retourne la taille formatée (« 850 KB ») ou ""
+    /// quand `fileSize` est 0 (inconnu).
+    nonisolated public static func formattedNeedsDownloadLabel(fileSize: Int) -> String {
+        guard fileSize > 0 else { return "" }
+        return AudioPlayerView.formatBytes(Int64(fileSize))
+    }
+
+    /// Pure helper testable : retourne « 398 KB / 850 KB » ou un fallback
+    /// quand un des deux côtés est inconnu.
+    nonisolated public static func formattedDownloadingLabel(
+        downloadedBytes: Int64,
+        totalBytes: Int64,
+        fallbackFileSize: Int
+    ) -> String {
+        let total: Int64 = totalBytes > 0 ? totalBytes : Int64(fallbackFileSize)
+        if total <= 0 && downloadedBytes <= 0 { return "" }
+        let left = AudioPlayerView.formatBytes(downloadedBytes)
+        let right = total > 0 ? AudioPlayerView.formatBytes(total) : "?"
+        return "\(left) / \(right)"
+    }
+
+    /// ByteCountFormatter binaire avec arrondi entier. Reproduit le même
+    /// format que `AttachmentDownloader.fmt` côté app pour cohérence
+    /// visuelle entre les badges DownloadBadgeView et les labels audio.
+    nonisolated public static func formatBytes(_ bytes: Int64) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .binary
+        formatter.allowedUnits = [.useKB, .useMB, .useGB]
+        formatter.includesUnit = true
+        formatter.includesCount = true
+        formatter.zeroPadsFractionDigits = false
+        return formatter.string(fromByteCount: bytes)
+    }
+}
+
 public struct AudioPlayerView: View {
     public let attachment: MeeshyMessageAttachment
     public let context: MediaPlayerContext
@@ -284,18 +348,67 @@ public struct AudioPlayerView: View {
     public var onDelete: (() -> Void)? = nil
     public var onEdit: (() -> Void)? = nil
     public var onPlayingChange: ((Bool) -> Void)? = nil
+    /// Optional play-tap router for callers that own the playback engine and
+    /// the audio queue (e.g. a `ConversationAudioCoordinator`). When provided,
+    /// taps on the play button delegate to this closure as long as the
+    /// underlying engine isn't already loaded with THIS attachment — i.e. as
+    /// long as starting playback for this bubble requires the parent to set
+    /// up the queue / active-context first. Once the engine is loaded
+    /// (`player.attachmentId == attachment.id`), play/pause routes through
+    /// the engine directly so subsequent toggles are instantaneous and don't
+    /// rebuild the queue. Backward-compat: when nil, behavior is unchanged.
+    private var onPlayRequest: (() -> Void)? = nil
     private var externalLanguage: Binding<String?>?
     private var topSlot: AnyView?
     private var bottomSlot: AnyView?
     private var availability: AudioAvailability
     private var onDownload: (() -> Void)?
 
-    @StateObject private var player = AudioPlaybackManager()
+    // Owned-by-default engine. Created once per view lifetime via
+    // `@StateObject`. When the caller injects an `externalPlayer`, this
+    // owned instance stays inert (no audio session, never asked to play).
+    // We opt it out of `PlaybackCoordinator` registration in that case
+    // to keep the registry clean — see `AudioPlaybackManager.init(registerWithCoordinator:)`.
+    @StateObject private var ownedPlayer: AudioPlaybackManager
     @StateObject private var waveformAnalyzer = AudioWaveformAnalyzer()
+    // External engine, when provided by a parent coordinator. Wrapping it
+    // in `@ObservedObject` is required so SwiftUI re-renders the body on
+    // `@Published` changes coming from the externally-owned engine.
+    // When `externalPlayer == nil`, this wraps a shared no-op singleton
+    // (`AudioPlayerView.sharedNoopExternal`) — its mutations are never
+    // observed because the computed `player` falls back to `ownedPlayer`,
+    // and the static identity avoids per-init churn.
+    @ObservedObject private var observedExternalPlayer: AudioPlaybackManager
+    // Internal (not `private`) so `@testable import` can observe the
+    // resolution decision from MeeshyUITests without exposing it publicly.
+    internal let usesExternalPlayer: Bool
+
+    /// Engine actually driving playback / observed by the body. Resolves to
+    /// `observedExternalPlayer` when an external engine was injected, else
+    /// to `ownedPlayer`. Both are observed via property wrappers, so any
+    /// `@Published` mutation on the resolved engine re-renders the view.
+    private var player: AudioPlaybackManager {
+        usesExternalPlayer ? observedExternalPlayer : ownedPlayer
+    }
+
+    /// Shared no-op engine used as the `observedExternalPlayer` placeholder
+    /// whenever the caller did not inject an external engine. It is never
+    /// asked to play and is intentionally NOT registered with
+    /// `PlaybackCoordinator`. Using a single shared identity avoids
+    /// allocating one throwaway `AudioPlaybackManager` per view init.
+    @MainActor
+    private static let sharedNoopExternal = AudioPlaybackManager(registerWithCoordinator: false)
+
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isTranscriptionExpanded = false
     @State private var selectedAudioLanguage: String = "orig"
     @State private var isRetranscribing = false
+    /// `true` between the moment the user taps "Transcrire" / "Re-transcrire"
+    /// and the moment the server-pushed transcription lands in `transcription`.
+    /// Drives the shimmer skeleton in `transcriptionBlock`.
+    @State private var isTranscribing = false
+    /// Toggled in `onAppear` of the skeleton view to drive the pulse.
+    @State private var transcriptionPulsePhase = false
 
     private var isDark: Bool { theme.mode.isDark || context.isImmersive }
     private var accent: Color { Color(hex: accentColor) }
@@ -367,6 +480,8 @@ public struct AudioPlayerView: View {
         externalLanguage: Binding<String?>? = nil,
         availability: AudioAvailability = .ready,
         onDownload: (() -> Void)? = nil,
+        externalPlayer: AudioPlaybackManager? = nil,
+        onPlayRequest: (() -> Void)? = nil,
         @ViewBuilder topContent: () -> TopContent = { EmptyView() },
         @ViewBuilder bottomContent: () -> BottomContent = { EmptyView() }
     ) {
@@ -376,9 +491,25 @@ public struct AudioPlayerView: View {
         self.onRetranscribe = onRetranscribe
         self.onDelete = onDelete; self.onEdit = onEdit
         self.onPlayingChange = onPlayingChange
+        self.onPlayRequest = onPlayRequest
         self.externalLanguage = externalLanguage
         self.availability = availability
         self.onDownload = onDownload
+        // External engine wiring. When the caller passes an externally-owned
+        // `AudioPlaybackManager` (e.g. a ConversationAudioCoordinator that
+        // survives view hierarchy churn), the view observes THAT engine
+        // and never touches its owned dummy. The dummy `ownedPlayer` is
+        // still created (SwiftUI demands a non-optional `@StateObject`
+        // initial value) but we opt it out of `PlaybackCoordinator` to
+        // avoid polluting the registry with an unused weak reference.
+        let usesExternal = externalPlayer != nil
+        self.usesExternalPlayer = usesExternal
+        self._ownedPlayer = StateObject(
+            wrappedValue: AudioPlaybackManager(registerWithCoordinator: !usesExternal)
+        )
+        self._observedExternalPlayer = ObservedObject(
+            wrappedValue: externalPlayer ?? AudioPlayerView.sharedNoopExternal
+        )
         let top = topContent()
         self.topSlot = top is EmptyView ? nil : AnyView(top)
         let bottom = bottomContent()
@@ -406,7 +537,16 @@ public struct AudioPlayerView: View {
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTranscriptionExpanded)
         .onAppear {
-            player.attachmentId = attachment.id
+            // CRITICAL: when an external engine is injected, the parent owns
+            // `attachmentId` (it tracks which audio the shared engine is
+            // currently loaded with). Overwriting it here would clobber that
+            // tracking the moment a second audio bubble appears on-screen
+            // while another is playing — breaking the `handlePlayTap`
+            // gate that relies on `player.attachmentId == attachment.id` to
+            // decide between "route to parent" vs "toggle play/pause".
+            if !usesExternalPlayer {
+                player.attachmentId = attachment.id
+            }
             let autoplayUrl = attachment.fileUrl
             AudioPlaybackManager.registerAutoplay(url: autoplayUrl) { [player] in
                 // Optimistic local audio can never load through the cache
@@ -422,7 +562,14 @@ public struct AudioPlayerView: View {
         }
         .onDisappear {
             AudioPlaybackManager.unregisterAutoplay(url: attachment.fileUrl)
-            player.unregisterFromCoordinator()
+            // Symmetrical to onAppear: when an external engine is injected
+            // it is owned by the parent (e.g. ConversationAudioCoordinator)
+            // and survives view hierarchy churn. Unregistering it from
+            // PlaybackCoordinator on every scroll-off would break sibling
+            // bubbles + the coordinator itself.
+            if !usesExternalPlayer {
+                player.unregisterFromCoordinator()
+            }
         }
         .onChange(of: player.isPlaying) { playing in
             onPlayingChange?(playing)
@@ -432,6 +579,20 @@ public struct AudioPlayerView: View {
             let code = newLang ?? "orig"
             guard code != selectedAudioLanguage else { return }
             switchToLanguage(code)
+        }
+        // Reset the in-flight flags as soon as a fresh transcription lands.
+        // Drives the fluid skeleton → text transition: the shimmer fades out
+        // and the transcribed segments fade in within the same animation
+        // window thanks to the `.transition(.opacity)` on each branch of
+        // `transcriptionBlock`. Uses the SDK-wide `adaptiveOnChange` compat
+        // shim so the iOS 17 two-param closure shape works back to iOS 16.
+        .adaptiveOnChange(of: transcription) { _, newValue in
+            if newValue != nil {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                    isTranscribing = false
+                    isRetranscribing = false
+                }
+            }
         }
     }
 
@@ -501,12 +662,27 @@ public struct AudioPlayerView: View {
             .background(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
     }
 
-    /// Bloc de transcription : texte développable ou bouton "Transcrire" si
-    /// aucune transcription n'est encore disponible. **Ne rend jamais le
-    /// `bottomSlot`** — il est ancré par `mainPlayer` directement.
+    /// Bloc de transcription : trois états mutuellement exclusifs (transition
+    /// animée par `withAnimation` sur les state changes) :
+    /// 1. `isTranscribing && displaySegments.isEmpty` → shimmer skeleton
+    ///    (3 lignes qui pulsent) — montre que la requête est en vol.
+    /// 2. `!displaySegments.isEmpty` → texte transcrit + bouton "Re-transcrire".
+    /// 3. `onRequestTranscription != nil` → bouton "Transcrire" initial.
+    ///
+    /// `isTranscribing` est reset automatiquement par `.onChange(of: transcription)`
+    /// quand la transcription arrive du serveur, ce qui déclenche la transition
+    /// fluide skeleton → texte sans flash intermédiaire.
+    /// **Ne rend jamais le `bottomSlot`** — il est ancré par `mainPlayer`.
     @ViewBuilder
     private var transcriptionBlock: some View {
-        if !displaySegments.isEmpty {
+        if isTranscribing && displaySegments.isEmpty {
+            VStack(spacing: 0) {
+                slotDivider
+                transcriptionShimmer
+            }
+            .padding(.bottom, 6)
+            .transition(.opacity)
+        } else if !displaySegments.isEmpty {
             VStack(spacing: 0) {
                 slotDivider
 
@@ -524,11 +700,21 @@ public struct AudioPlayerView: View {
                 retranscribeButton
             }
             .padding(.bottom, 6)
+            .transition(.opacity)
         } else if let onRequest = onRequestTranscription {
+            // No transcription yet AND none in flight: ONLY the initial
+            // "Transcribe" affordance is shown. Re-transcribe is hidden
+            // here — there is nothing to re-transcribe yet, and stacking
+            // both buttons would be confusing. The "Re-transcribe" CTA
+            // reappears in the transcription-present branch above once a
+            // transcription lands.
             VStack(spacing: 0) {
                 slotDivider
 
                 Button {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        isTranscribing = true
+                    }
                     onRequest()
                     HapticFeedback.light()
                 } label: {
@@ -542,10 +728,44 @@ public struct AudioPlayerView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
                 }
-
-                retranscribeButton
             }
+            .transition(.opacity)
         }
+    }
+
+    /// Shimmer placeholder displayed while a transcription request is in flight.
+    /// Three rounded lines (the third truncated to ~120pt) pulse opacity in
+    /// sync. Pure SwiftUI, iOS 16+ compatible. The pulse is driven by a
+    /// `@State` flipped in `onAppear` so it starts immediately on mount.
+    @ViewBuilder
+    private var transcriptionShimmer: some View {
+        let lineColor: Color = isDark ? Color.white.opacity(0.10) : Color.black.opacity(0.08)
+        VStack(alignment: .leading, spacing: 6) {
+            shimmerLine(color: lineColor, width: nil)
+            shimmerLine(color: lineColor, width: nil)
+            shimmerLine(color: lineColor, width: 120)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .opacity(transcriptionPulsePhase ? 0.55 : 1.0)
+        .animation(
+            .easeInOut(duration: 0.9).repeatForever(autoreverses: true),
+            value: transcriptionPulsePhase
+        )
+        .onAppear { transcriptionPulsePhase = true }
+        .onDisappear { transcriptionPulsePhase = false }
+        .accessibilityLabel(Text(String(
+            localized: "media.audio.transcribing",
+            defaultValue: "Transcription en cours",
+            bundle: .module
+        )))
+    }
+
+    private func shimmerLine(color: Color, width: CGFloat?) -> some View {
+        RoundedRectangle(cornerRadius: 4)
+            .fill(color)
+            .frame(width: width, height: 9)
+            .frame(maxWidth: width == nil ? .infinity : nil, alignment: .leading)
     }
 
     // MARK: - Long-transcription chevron toggle
@@ -722,6 +942,22 @@ public struct AudioPlayerView: View {
     }
 
     private func handlePlayTap() {
+        // External-engine interception: when the parent injected an
+        // `onPlayRequest` handler AND the shared engine is not currently
+        // loaded with THIS attachment, defer to the parent so it can set up
+        // the queue / active-context BEFORE asking the engine to play.
+        // Without this gate, tapping play on a bubble while the coordinator
+        // is mid-playback of a different audio would call
+        // `engine.togglePlayPause()` and either pause that other audio
+        // (busy engine) or be a no-op (idle engine) — neither of which is
+        // what the user asked for. Once the engine IS loaded with this
+        // attachment, fall through to `togglePlayPause()` so subsequent
+        // play/pause taps are instantaneous and never rebuild the queue.
+        if let onPlayRequest, player.attachmentId != attachment.id {
+            onPlayRequest()
+            HapticFeedback.light()
+            return
+        }
         if player.isPlaying || player.progress > 0 {
             player.togglePlayPause()
         } else if attachment.fileUrl.hasPrefix("file://"),
@@ -739,46 +975,79 @@ public struct AudioPlayerView: View {
     @ViewBuilder
     private var playButtonLabel: some View {
         let size: CGFloat = context.isCompact ? 34 : 40
-        ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [accent, accent.opacity(0.7)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
+        VStack(spacing: 3) {
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [accent, accent.opacity(0.7)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
                     )
-                )
-                .frame(width: size, height: size)
-                .shadow(color: accent.opacity(0.3), radius: 6, y: 2)
+                    .frame(width: size, height: size)
+                    .shadow(color: accent.opacity(0.3), radius: 6, y: 2)
 
-            switch availability {
-            case .ready:
-                if player.isLoading {
-                    ProgressView()
-                        .tint(.white)
-                        .scaleEffect(0.6)
-                } else {
-                    Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                switch availability {
+                case .ready:
+                    if player.isLoading {
+                        ProgressView()
+                            .tint(.white)
+                            .scaleEffect(0.6)
+                    } else {
+                        Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
+                            .font(.system(size: context.isCompact ? 13 : 15, weight: .bold))
+                            .foregroundColor(.white)
+                            .offset(x: player.isPlaying ? 0 : 1)
+                    }
+                case .needsDownload:
+                    Image(systemName: "arrow.down.to.line")
                         .font(.system(size: context.isCompact ? 13 : 15, weight: .bold))
                         .foregroundColor(.white)
-                        .offset(x: player.isPlaying ? 0 : 1)
+                case .downloading(let progress, _, _):
+                    if progress > 0 {
+                        Circle()
+                            .trim(from: 0, to: progress)
+                            .stroke(Color.white, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                            .frame(width: size * 0.5, height: size * 0.5)
+                            .animation(.linear(duration: 0.2), value: progress)
+                    } else {
+                        ProgressView()
+                            .tint(.white)
+                            .scaleEffect(0.6)
+                    }
                 }
+            }
+
+            // Label de taille — affiché uniquement dans les états transfert.
+            // .ready ne montre rien (le bubble a déjà sa durée à droite du
+            // scrubber). Parité visuelle avec DownloadBadgeView pour les
+            // bubbles vidéo/image.
+            switch availability {
+            case .ready:
+                EmptyView()
             case .needsDownload:
-                Image(systemName: "arrow.down.to.line")
-                    .font(.system(size: context.isCompact ? 13 : 15, weight: .bold))
-                    .foregroundColor(.white)
-            case .downloading(let progress):
-                if progress > 0 {
-                    Circle()
-                        .trim(from: 0, to: progress)
-                        .stroke(Color.white, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                        .rotationEffect(.degrees(-90))
-                        .frame(width: size * 0.5, height: size * 0.5)
-                        .animation(.linear(duration: 0.2), value: progress)
-                } else {
-                    ProgressView()
-                        .tint(.white)
-                        .scaleEffect(0.6)
+                let label = AudioPlayerView.formattedNeedsDownloadLabel(fileSize: attachment.fileSize)
+                if !label.isEmpty {
+                    Text(label)
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundColor(isDark ? .white.opacity(0.65) : .black.opacity(0.55))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                }
+            case .downloading(_, let downloaded, let total):
+                let label = AudioPlayerView.formattedDownloadingLabel(
+                    downloadedBytes: downloaded,
+                    totalBytes: total,
+                    fallbackFileSize: attachment.fileSize
+                )
+                if !label.isEmpty {
+                    Text(label)
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundColor(isDark ? .white.opacity(0.65) : .black.opacity(0.55))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
                 }
             }
         }

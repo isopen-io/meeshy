@@ -8,7 +8,7 @@ import os
 
 // MARK: - Real-time Translation Type (text translations, not in SDK)
 
-struct MessageTranslation: Identifiable {
+struct MessageTranslation: Identifiable, Equatable {
     let id: String
     let messageId: String
     let sourceLanguage: String
@@ -229,6 +229,74 @@ class ConversationViewModel: ObservableObject {
 
     /// When true, the effects picker sheet is presented
     @Published var showEffectsPicker: Bool = false
+
+    // MARK: - Audio Continuous Playback (Phase 4)
+
+    /// Attachments already played to completion. Excluded from the auto-built
+    /// queue so a tap on the second audio doesn't replay everything before it.
+    ///
+    /// Currently runtime-only: enriched when an audio finishes via the
+    /// coordinator's `onPlaybackFinished` hook (Phase 5 wiring). Persistence
+    /// across cold starts comes when `MeeshyMessageAttachment.listenedAt` is
+    /// added to the SDK model (tracked as dette).
+    @Published var listenedAttachmentIds: Set<String> = []
+
+    /// Cached metadata for the active conversation, hydrated lazily from the
+    /// cache when `loadMessages` runs. Used to feed `playAudio` with the
+    /// right `conversationName` / `conversationArtworkURL`.
+    @Published private(set) var currentConversation: MeeshyConversation?
+
+    #if DEBUG
+    private var _testAudioCoordinator: ConversationAudioCoordinator?
+    #endif
+
+    /// Resolves to the test-injected coordinator under DEBUG when present,
+    /// otherwise the shared singleton. Pure UX orchestration lives in the
+    /// coordinator — the VM only feeds it.
+    private var audioCoordinator: ConversationAudioCoordinator {
+        #if DEBUG
+        return _testAudioCoordinator ?? .shared
+        #else
+        return .shared
+        #endif
+    }
+
+    #if DEBUG
+    /// Test-only setter to inject a fresh `ConversationAudioCoordinator` so a
+    /// test class can assert side-effects without colliding with the global
+    /// singleton's state. Must be called BEFORE `playAudio(attachmentId:)` /
+    /// any other coordinator-routed call to take effect for that operation.
+    ///
+    /// Re-subscribes the listened-id observer to the new coordinator so the
+    /// PassthroughSubject route works in tests too — without this the
+    /// subscription wired in `init` still targets the default singleton
+    /// while playback flows through the injected instance.
+    func _testSetAudioCoordinator(_ coordinator: ConversationAudioCoordinator) {
+        _testAudioCoordinator = coordinator
+        subscribeToAudioCoordinatorFinishedEvents()
+    }
+    #endif
+
+    /// Display name shown in the audio mini-player while playing audios from
+    /// this conversation. Falls back to empty string when the conversation
+    /// hasn't been hydrated yet (very narrow race; coordinator handles "").
+    var currentConversationName: String {
+        currentConversation?.name ?? ""
+    }
+
+    /// Artwork URL shown in the audio mini-player. `nil` when the conversation
+    /// has no avatar or hasn't been hydrated yet — the coordinator falls back
+    /// to a placeholder.
+    var currentConversationArtworkURL: String? {
+        currentConversation?.avatar
+    }
+
+    /// Brand accent for the audio mini-player. Defaults to the Meeshy
+    /// indigo500 brand hex when the conversation isn't hydrated yet so the
+    /// player never paints with a flash of an unrelated color.
+    var currentAccentColorHex: String {
+        currentConversation?.accentColor ?? "6366F1"
+    }
 
     // MARK: - Mention Autocomplete State
 
@@ -512,6 +580,20 @@ class ConversationViewModel: ObservableObject {
     private var storeObservation: AnyCancellable?
     private var socketHandler: ConversationSocketHandler?
 
+    // MARK: - Split Orchestrators (incremental migration scaffold)
+    //
+    // The 3000-line legacy here is being progressively split into focused
+    // handlers under `ViewModels/Conversation/`. For now the legacy keeps
+    // owning `@Published var messages` and friends; the handlers mirror that
+    // state into `stateStore.messages` so that the delegated methods
+    // (currently `searchMessages`, `prefetchRecentMedia`, …) work against
+    // the same source of truth. See `[[project_conversation_vm_split_staged]]`.
+    private let stateStore: ConversationStateStore
+    private let commandHandler: ConversationCommandHandler
+    private let mediaHandler: ConversationMediaHandler
+    private let searchHandler: ConversationSearchHandler
+    private let translationResolver: TranslationResolver
+
     // MARK: - GRDB Persistence (additive — parallel data source alongside @Published messages)
 
     /// GRDB-backed observable store for UICollectionView bridge.
@@ -675,6 +757,31 @@ class ConversationViewModel: ObservableObject {
         self.messageSocket = messageSocket
         // Eagerly create GRDB persistence so messageStore is available at first paint.
         self.messagePersistence = dependencies.persistence
+
+        // Split-handler scaffolding — see ConversationStateStore et al.
+        // Built before MessageStore/socket so subsequent delegations always
+        // have a non-nil handler to call. The handlers don't drive any state
+        // yet; they mirror the legacy @Published values via the messages
+        // sink below so `searchHandler` / `mediaHandler` / `translationResolver`
+        // can read off `stateStore.messages` without forking the source of truth.
+        let stateStore = ConversationStateStore()
+        self.stateStore = stateStore
+        self.commandHandler = ConversationCommandHandler(
+            state: stateStore,
+            conversationId: conversationId,
+            messageService: messageService,
+            persistence: dependencies.persistence,
+            authManager: authManager,
+            messageSocket: messageSocket,
+            reportService: reportService
+        )
+        self.mediaHandler = ConversationMediaHandler(state: stateStore)
+        self.searchHandler = ConversationSearchHandler(
+            state: stateStore,
+            conversationId: conversationId,
+            messageService: messageService
+        )
+        self.translationResolver = TranslationResolver(state: stateStore, authManager: authManager)
         let store = MessageStore(
             conversationId: conversationId,
             persistence: dependencies.persistence
@@ -717,6 +824,10 @@ class ConversationViewModel: ObservableObject {
         subscribeToMessageStore()
         subscribeToQueueReconciliation()
         subscribeToLanguagePreferenceChanges()
+        subscribeToMessagesForAudioQueue()
+        subscribeToAudioCoordinatorFinishedEvents()
+        mirrorMessagesIntoStateStore()
+        hydrateCurrentConversationFromCache()
         // Cross-conversation unread aggregator powers the back-button pill.
         // Seed `currentConversationUnreadCount` BEFORE wiring the CombineLatest
         // so the initial `totalConversationsUnread` value (delivered as soon
@@ -878,6 +989,23 @@ class ConversationViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 
+    /// Mirror the legacy `@Published var messages` into the new
+    /// `ConversationStateStore.messages` so the split handlers
+    /// (`searchHandler`, `mediaHandler`, `translationResolver`) can read
+    /// off the shared store while the legacy ViewModel still owns the
+    /// canonical source. Removed once the migration of the message
+    /// pipeline (init/load/send/edit/delete) into `commandHandler` is
+    /// complete and the legacy `@Published messages` retired.
+    private func mirrorMessagesIntoStateStore() {
+        stateStore.messages = messages
+        $messages
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] snapshot in
+                self?.stateStore.messages = snapshot
+            }
+            .store(in: &cancellables)
+    }
+
     private func subscribeToLanguagePreferenceChanges() {
         authManager.currentUserPublisher
             .removeDuplicates { old, new in
@@ -964,13 +1092,13 @@ class ConversationViewModel: ObservableObject {
             // Pré-hydrate les traductions AVANT loadInitial : les bulles
             // s'affichent dès le premier rendu avec le Prisme Linguistique.
             await hydratePersistedTranslations()
-            await messageStore.loadInitial()
-            // `hydrateMetadataFromGRDB` AVANT tout `await` suivant : peuple
-            // `messageTranscriptions` de façon atomique avec la pose des
-            // messages. Sinon le MainActor cède pendant l'await et SwiftUI
-            // rend les bulles audio SANS transcription, puis re-rend — la
-            // transcription « pop » en second temps.
-            hydrateMetadataFromGRDB()
+            // Atomic publish — read off-MainActor, then apply messages +
+            // dependent metadata in a single MainActor slice so no
+            // intermediate frame ever renders audio bubbles without their
+            // transcription / translated audios dictionaries.
+            let freshSnapshot = await messageStore.loadInitialSnapshot()
+            messageStore.apply(records: freshSnapshot)
+            hydrateMetadataFromGRDB(from: freshSnapshot)
             await hydrateTranslationsFromCache()
             // Always revalidate from API in background — the GRDB local store may only
             // contain messages WE sent (optimistic inserts) while messages received from
@@ -990,15 +1118,14 @@ class ConversationViewModel: ObservableObject {
             // Surface GRDB data immediately, then revalidate in background.
             // Pré-hydrate les traductions AVANT loadInitial (cf. .fresh).
             await hydratePersistedTranslations()
-            await messageStore.loadInitial()
+            let staleSnapshot = await messageStore.loadInitialSnapshot()
+            messageStore.apply(records: staleSnapshot)
+            hydrateMetadataFromGRDB(from: staleSnapshot)
             if messageStore.messages.isEmpty {
                 // GRDB cold for this conversation — fetch synchronously to render now.
                 await refreshMessagesFromAPI()
                 await hydrateTranslationsFromCache()
             } else {
-                // `hydrateMetadataFromGRDB` AVANT l'`await` : transcriptions
-                // atomiques avec les messages, pas de flash (cf. cas .fresh).
-                hydrateMetadataFromGRDB()
                 await hydrateTranslationsFromCache()
                 isRevalidating = true
                 Task { [weak self] in
@@ -1048,23 +1175,52 @@ class ConversationViewModel: ObservableObject {
         isLoadingInitial = false
     }
 
+    /// Bandwidth optimization (Niveau 1 — Bug F) : flip to `true` once the
+    /// first REST refresh has succeeded so subsequent refreshes can opt out
+    /// of having the gateway return `translations` (text + audio metadata is
+    /// already persisted in GRDB and the socket pushes future deltas live).
+    /// First fetch (cold-start, GRDB empty) still requests them in full.
+    private var hasCompletedInitialFetch = false
+
     private func refreshMessagesFromAPI() async {
         do {
+            // Warm cache means: we already have at least one message hydrated
+            // from GRDB AND a previous fetch has succeeded. In that case we
+            // ask the gateway to omit `translations` from the payload — they
+            // are already in `translation_cache` GRDB and the live socket
+            // (`translationReceived`) catches up any deltas. Cold-start keeps
+            // the default `true` so the first paint has every translation.
+            let warmCache = hasCompletedInitialFetch && !messageStore.messages.isEmpty
             let response = try await messageService.list(
-                conversationId: conversationId, offset: 0, limit: 30, includeReplies: true
+                conversationId: conversationId,
+                offset: 0,
+                limit: 30,
+                includeReplies: true,
+                includeTranslations: !warmCache
             )
 
             // Upsert authoritative server data into GRDB; the MessageStore observation
             // surfaces new/updated rows to `messages` automatically — no direct assignment.
             try? await messagePersistence.upsertFromAPIMessages(response.data)
-            // Extrait transcriptions/traductions AVANT que `loadInitial` ne
-            // fasse surface les messages : `messageTranscriptions` est prêt au
-            // premier rendu, la transcription audio ne « pop » plus en second
-            // temps. `extractAttachmentTranscriptions` lit `response.data`
+            hasCompletedInitialFetch = true
+            // Extrait transcriptions/traductions AVANT que les messages ne
+            // soient surface : `messageTranscriptions` est prêt au premier
+            // rendu, la transcription audio ne « pop » plus en second temps.
+            // `extractAttachmentTranscriptions` lit `response.data`
             // directement, il n'a pas besoin du store.
             extractAttachmentTranscriptions(from: response.data)
             extractTextTranslations(from: response.data)
-            await messageStore.loadInitial()
+            // Atomic publish — same pattern as .fresh / .stale in
+            // loadMessages. upsertFromAPIMessages has persisted the API rows
+            // into GRDB, so loadInitialSnapshot picks them up; apply them in
+            // the same MainActor slice as a defensive hydrateMetadataFromGRDB
+            // call so a background revalidation never re-introduces a pop-in.
+            // `forceOverwrite: true` because this is the AUTHORITATIVE refresh:
+            // a server-side re-transcription must propagate to the UI even if
+            // the message already had a (stale) cached transcription.
+            let refreshSnapshot = await messageStore.loadInitialSnapshot()
+            messageStore.apply(records: refreshSnapshot)
+            hydrateMetadataFromGRDB(from: refreshSnapshot, forceOverwrite: true)
 
             // Keep legacy CacheCoordinator in sync so other parts of the app
             // (ConversationList preview, unread badge) that still read from it remain correct.
@@ -1124,77 +1280,20 @@ class ConversationViewModel: ObservableObject {
         accessRevoked = true
     }
 
-    // MARK: - Media Prefetch
+    // MARK: - Media Prefetch (delegated to ConversationMediaHandler)
 
-    private var mediaPrefetchTask: Task<Void, Never>?
     private var mediaPrefetchDebounce: Task<Void, Never>?
 
-    /// Prefetch media for the most recent messages with attachments.
-    /// Debounced to avoid thrashing from rapid socket updates.
+    /// Prefetch media for the most recent messages with attachments. The
+    /// debounce stays here (300 ms collapses bursts of socket updates) and
+    /// the actual cache warming is delegated to `mediaHandler`, which owns
+    /// the in-flight task / cancellation contract.
     func prefetchRecentMedia() {
         mediaPrefetchDebounce?.cancel()
-        mediaPrefetchDebounce = Task {
+        mediaPrefetchDebounce = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(300))
-            guard !Task.isCancelled else { return }
-            executePrefetchRecentMedia()
-        }
-    }
-
-    private func executePrefetchRecentMedia() {
-        mediaPrefetchTask?.cancel()
-        let snapshot = Array(messages.suffix(30).filter { !$0.attachments.isEmpty })
-        mediaPrefetchTask = Task(priority: .utility) {
-            guard !snapshot.isEmpty else { return }
-
-            let imageStore = await CacheCoordinator.shared.images
-
-            // Parallel prefetch: images/thumbnails/audio in TaskGroup
-            await withTaskGroup(of: Void.self) { group in
-                for message in snapshot {
-                    for attachment in message.attachments {
-                        guard !Task.isCancelled else { return }
-
-                        switch attachment.type {
-                        case .image:
-                            if let thumbUrl = attachment.thumbnailUrl, !thumbUrl.isEmpty,
-                               let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
-                                group.addTask { _ = await imageStore.image(for: resolved) }
-                            }
-                            if !attachment.fileUrl.isEmpty,
-                               let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString {
-                                group.addTask { _ = await imageStore.image(for: resolved) }
-                            }
-
-                        case .video:
-                            if let thumbUrl = attachment.thumbnailUrl, !thumbUrl.isEmpty,
-                               let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
-                                group.addTask { _ = await imageStore.image(for: resolved) }
-                            } else if !attachment.fileUrl.isEmpty,
-                                      let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl) {
-                                group.addTask { _ = await StoryMediaLoader.shared.videoThumbnail(url: resolved) }
-                            }
-
-                        case .audio:
-                            if !attachment.fileUrl.isEmpty,
-                               let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString {
-                                group.addTask { _ = try? await CacheCoordinator.shared.audio.data(for: resolved) }
-                            }
-
-                        default:
-                            break
-                        }
-                    }
-                }
-            }
-
-            // Video preroll: fire-and-forget, non-blocking
-            if let firstVideoAtt = snapshot.flatMap(\.attachments).first(where: { $0.type == .video }),
-               !firstVideoAtt.fileUrl.isEmpty,
-               let resolved = MeeshyConfig.resolveMediaURL(firstVideoAtt.fileUrl) {
-                Task(priority: .utility) {
-                    await StoryMediaLoader.shared.preloadAndCachePlayer(url: resolved)
-                }
-            }
+            guard let self, !Task.isCancelled else { return }
+            self.mediaHandler.prefetchRecentMedia()
         }
     }
 
@@ -1364,6 +1463,164 @@ class ConversationViewModel: ObservableObject {
         for i in msgs.indices {
             if let plaintext = resultsByMessageId[msgs[i].id]?.plaintext {
                 msgs[i].content = plaintext
+            }
+        }
+    }
+
+    // MARK: - Audio Continuous Playback (Phase 4)
+
+    /// Kicks off conversation-wide audio playback starting at `attachmentId`.
+    ///
+    /// Resolves the message/attachment in the current `messages` snapshot,
+    /// asks `AudioQueueBuilder` for the unlistened, non-self tail of audios
+    /// strictly after this one, then routes the whole queue through the app
+    /// coordinator (which gates on CallKit + auth and exposes the mini-player
+    /// state to the rest of the app).
+    func playAudio(attachmentId: String) {
+        guard let (message, attachment) = findAudioAttachment(id: attachmentId),
+              attachment.type == .audio,
+              let currentUserId = authManager.currentUser?.id else { return }
+
+        let current = QueuedAudio(
+            attachmentId: attachment.id,
+            messageId: message.id,
+            conversationId: message.conversationId,
+            fileUrl: attachment.fileUrl,
+            durationMs: attachment.duration ?? 0,
+            senderName: message.senderName ?? "",
+            senderAvatarURL: message.senderAvatarURL,
+            receivedAt: message.createdAt
+        )
+
+        let tail = AudioQueueBuilder.build(
+            from: messages,
+            startingAfterAttachmentId: attachment.id,
+            currentUserId: currentUserId,
+            listenedAttachmentIds: listenedAttachmentIds
+        )
+
+        audioCoordinator.play(
+            current: current,
+            tail: tail,
+            conversationName: currentConversationName,
+            conversationArtworkURL: currentConversationArtworkURL
+        )
+    }
+
+    /// O(n) scan over `messages` for the message that owns `attachmentId`.
+    /// `messages` rarely exceeds a few hundred rows in memory; an index would
+    /// have to invalidate on every attachment update for negligible gain.
+    private func findAudioAttachment(id: String) -> (Message, MessageAttachment)? {
+        for message in messages {
+            if let att = message.attachments.first(where: { $0.id == id && $0.type == .audio }) {
+                return (message, att)
+            }
+        }
+        return nil
+    }
+
+    /// Subscribes to `$messages` and forwards any newly-inserted audio messages
+    /// — from someone else, in the conversation currently being played by the
+    /// coordinator — into the active playback queue via `appendUpcoming`.
+    ///
+    /// Uses a snapshot of seen message ids to detect genuinely new inserts and
+    /// ignore re-orderings or in-place mutations (edits, reactions, etc.).
+    private var seenMessageIdsForAudioQueue: Set<String> = []
+    private var didSeedAudioQueueSnapshot = false
+
+    private func subscribeToMessagesForAudioQueue() {
+        // Hot-path filter: `$messages` fires on EVERY mutation (insert,
+        // delete, edit, reaction, translation update, …). On a busy
+        // conversation with reactions in burst, that can be 20-50 emissions
+        // per second. The handler only cares about inserts/deletes (those
+        // are the only mutations that change the message-id set), so we
+        // dedupe on the id sequence to skip in-place mutations cheaply.
+        //
+        // Trade-off: an edit that REPLACES a message in place with a new
+        // audio attachment would not refire here. That case is rare in
+        // practice — audio attachments are not typically added to an
+        // existing message — and the seenMessageIdsForAudioQueue set below
+        // would still skip it correctly if the id is preserved.
+        $messages
+            .map { $0.map(\.id) }
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.processMessagesForAudioQueueAppend(self.messages)
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Subscribes to the shared `ConversationAudioCoordinator`'s
+    /// `attachmentFinishedPublisher` so this VM records each natural-end /
+    /// failed-load event in `listenedAttachmentIds`. Filters by
+    /// `event.conversationId == self.conversationId` so a coordinator owned
+    /// by another conversation (the singleton is process-wide) NEVER
+    /// pollutes this VM's listened set with foreign attachment ids.
+    /// The subscription auto-cleans on `deinit` via `cancellables`.
+    private func subscribeToAudioCoordinatorFinishedEvents() {
+        let ownConversationId = conversationId
+        audioCoordinator.attachmentFinishedPublisher
+            .filter { event in event.conversationId == ownConversationId }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.listenedAttachmentIds.insert(event.attachmentId)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func processMessagesForAudioQueueAppend(_ snapshot: [Message]) {
+        // First emission (and any emission while no coordinator session is
+        // active for THIS conversation) just refreshes the baseline so the
+        // backlog never replays as "new" once playback starts.
+        guard didSeedAudioQueueSnapshot,
+              let activeConvId = audioCoordinator.activeContext?.conversationId,
+              activeConvId == conversationId,
+              let currentUserId = authManager.currentUser?.id else {
+            seenMessageIdsForAudioQueue = Set(snapshot.map(\.id))
+            didSeedAudioQueueSnapshot = true
+            return
+        }
+
+        for message in snapshot where !seenMessageIdsForAudioQueue.contains(message.id) {
+            seenMessageIdsForAudioQueue.insert(message.id)
+            guard message.senderId != currentUserId,
+                  message.conversationId == activeConvId else { continue }
+            for attachment in message.attachments
+                where attachment.type == .audio
+                && !listenedAttachmentIds.contains(attachment.id) {
+                audioCoordinator.appendUpcoming(QueuedAudio(
+                    attachmentId: attachment.id,
+                    messageId: message.id,
+                    conversationId: message.conversationId,
+                    fileUrl: attachment.fileUrl,
+                    durationMs: attachment.duration ?? 0,
+                    senderName: message.senderName ?? "",
+                    senderAvatarURL: message.senderAvatarURL,
+                    receivedAt: message.createdAt
+                ))
+            }
+        }
+    }
+
+    /// Pulls the conversation row out of the cache so the mini-player can
+    /// display its name + artwork + accent color. Best-effort — if the row
+    /// isn't cached yet, the fallback constants kick in.
+    private func hydrateCurrentConversationFromCache() {
+        let convId = conversationId
+        Task { [weak self] in
+            let cached = await CacheCoordinator.shared.conversations.load(for: "list")
+            guard let self else { return }
+            let list: [MeeshyConversation]
+            switch cached {
+            case .fresh(let data, _), .stale(let data, _):
+                list = data
+            case .expired, .empty:
+                return
+            }
+            if let match = list.first(where: { $0.id == convId }) {
+                self.currentConversation = match
             }
         }
     }
@@ -2118,10 +2375,10 @@ class ConversationViewModel: ObservableObject {
         case everyone
     }
 
+    /// Pure predicate — delegated to `commandHandler` so the policy
+    /// (own message + within the 2h window) lives in one place.
     func canDeleteForEveryone(_ message: Message, window: TimeInterval = 2 * 3600) -> Bool {
-        guard message.isMe else { return false }
-        guard let sentAt = message.createdAt as Date? else { return false }
-        return Date().timeIntervalSince(sentAt) <= window
+        commandHandler.canDeleteForEveryone(message, window: window)
     }
 
     func deleteMessage(messageId: String, mode: DeleteMode = .everyone) async {
@@ -2215,17 +2472,13 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Consume View-Once Message
 
+    /// View-once consumption. Delegates to `commandHandler` with the
+    /// resolved server id — the handler runs the network call and the
+    /// persistence write under one optimistic transaction. Returns `true`
+    /// on success so the view can advance its UI (reveal + auto-dismiss
+    /// timer); `false` keeps the bubble blurred.
     func consumeViewOnce(messageId: String) async -> Bool {
-        do {
-            let result = try await messageService.consumeViewOnce(
-                conversationId: conversationId, messageId: serverId(for: messageId)
-            )
-            try? await messagePersistence.updateViewOnceCount(localId: messageId, count: result.viewOnceCount)
-            return true
-        } catch {
-            self.error = error.localizedDescription
-            return false
-        }
+        await commandHandler.consumeViewOnce(messageId: messageId, serverId: serverId(for: messageId))
     }
 
     func evictViewOnceMedia(message: Message) {
@@ -2352,15 +2605,11 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
+    /// Server-side delivery confirmation. Fully delegated to the command
+    /// handler — the legacy variant did the exact same call with an
+    /// equally permissive error path.
     func markAsReceived() {
-        let convId = conversationId
-        Task {
-            do {
-                try await conversationService.markAsReceived(conversationId: convId)
-            } catch {
-                // Non-critical — server will still count as received on next sync
-            }
-        }
+        commandHandler.markAsReceived()
     }
 
 
@@ -2401,87 +2650,28 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Search Messages
+    // MARK: - Search Messages (delegated to ConversationSearchHandler)
 
+    /// First-page search. Delegates to `searchHandler`, then mirrors the
+    /// store-side state back onto the legacy `@Published` so the views
+    /// keep observing the ViewModel directly during the incremental
+    /// split. The local `searchNextCursor` legacy field becomes dead
+    /// weight (cursor lives in the handler) but is left assigned to
+    /// `nil` for any reader that still peeks at it.
     func searchMessages(query: String) async {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count >= 2 else {
-            searchResults = []
-            currentSearchQuery = nil
-            isSearching = false
-            return
-        }
-
-        isSearching = true
-        currentSearchQuery = trimmed
+        await searchHandler.searchMessages(query: query)
+        searchResults = stateStore.searchResults
+        currentSearchQuery = stateStore.currentSearchQuery
+        searchHasMore = stateStore.searchHasMore
+        isSearching = stateStore.isSearching
         searchNextCursor = nil
-
-        do {
-            let response = try await messageService.search(
-                conversationId: conversationId, query: trimmed, limit: 20
-            )
-
-            searchResults = response.data.map { buildSearchResult($0, query: trimmed) }
-            searchNextCursor = response.cursorPagination?.nextCursor
-            searchHasMore = response.cursorPagination?.hasMore ?? false
-        } catch {
-            searchResults = []
-        }
-
-        isSearching = false
     }
 
     func loadMoreSearchResults(query: String) async {
-        guard searchHasMore, let cursor = searchNextCursor, !isSearching else { return }
-        isSearching = true
-
-        do {
-            let response = try await messageService.searchWithCursor(
-                conversationId: conversationId, query: query, cursor: cursor
-            )
-
-            let newResults = response.data.map { buildSearchResult($0, query: query) }
-            searchResults.append(contentsOf: newResults)
-            searchNextCursor = response.cursorPagination?.nextCursor
-            searchHasMore = response.cursorPagination?.hasMore ?? false
-        } catch {
-            // Ignore pagination errors
-        }
-
-        isSearching = false
-    }
-
-    private func buildSearchResult(_ apiMsg: APIMessage, query: String) -> SearchResultItem {
-        let senderName = apiMsg.sender?.displayName ?? apiMsg.sender?.username ?? "?"
-        let content = apiMsg.content ?? ""
-        let queryLower = query.lowercased()
-
-        // Check if the match is in original content
-        if content.lowercased().contains(queryLower) {
-            return SearchResultItem(
-                id: apiMsg.id, conversationId: apiMsg.conversationId,
-                content: content, matchedText: content, matchType: "content",
-                senderName: senderName, senderAvatar: apiMsg.sender?.avatar, createdAt: apiMsg.createdAt
-            )
-        }
-
-        // Match is in a translation — find which one
-        if let translations = apiMsg.translations {
-            for t in translations where t.translatedContent.lowercased().contains(queryLower) {
-                return SearchResultItem(
-                    id: apiMsg.id, conversationId: apiMsg.conversationId,
-                    content: content, matchedText: t.translatedContent, matchType: "translation",
-                    senderName: senderName, senderAvatar: apiMsg.sender?.avatar, createdAt: apiMsg.createdAt
-                )
-            }
-        }
-
-        // Fallback (shouldn't happen but safe)
-        return SearchResultItem(
-            id: apiMsg.id, conversationId: apiMsg.conversationId,
-            content: content, matchedText: content, matchType: "content",
-            senderName: senderName, senderAvatar: apiMsg.sender?.avatar, createdAt: apiMsg.createdAt
-        )
+        await searchHandler.loadMoreSearchResults(query: query)
+        searchResults = stateStore.searchResults
+        searchHasMore = stateStore.searchHasMore
+        isSearching = stateStore.isSearching
     }
 
     // MARK: - Jump to Message (load messages around a specific message)
@@ -2942,9 +3132,25 @@ class ConversationViewModel: ObservableObject {
     /// `messageTranslatedAudios` dictionaries **before** any REST call.
     /// This ensures that audio bubbles show transcriptions and language
     /// buttons on the very first render frame.
-    private func hydrateMetadataFromGRDB() {
+    ///
+    /// - Parameters:
+    ///   - records: explicit record list to read from. When nil, falls
+    ///     back to `messageStore.messages` (legacy path). Pass an
+    ///     explicit list to ensure atomicity with a same-runloop `apply`.
+    ///   - forceOverwrite: when `true`, replaces existing entries in
+    ///     `messageTranscriptions` / `messageTranslatedAudios`. Default
+    ///     `false` preserves any in-memory state already written by a
+    ///     concurrent socket delta (`applyAttachmentUpdate`). Pass
+    ///     `true` from `refreshMessagesFromAPI` so a server-side
+    ///     re-transcription propagates to the UI even when the message
+    ///     already had a (stale) transcription cached.
+    private func hydrateMetadataFromGRDB(
+        from records: [MessageRecord]? = nil,
+        forceOverwrite: Bool = false
+    ) {
         let decoder = JSONDecoder()
-        for record in messageStore.messages {
+        let source = records ?? messageStore.messages
+        for record in source {
             let msgId = record.serverId ?? record.localId
             guard let data = record.attachmentsJson,
                   let attachments = try? decoder.decode([MeeshyMessageAttachment].self, from: data)
@@ -2952,7 +3158,8 @@ class ConversationViewModel: ObservableObject {
 
             for att in attachments {
                 // Hydrate transcription
-                if let t = att.transcription, messageTranscriptions[msgId] == nil {
+                if let t = att.transcription,
+                   forceOverwrite || messageTranscriptions[msgId] == nil {
                     let segments = (t.segments ?? []).map {
                         MessageTranscriptionSegment(
                             text: $0.text,
@@ -2974,7 +3181,7 @@ class ConversationViewModel: ObservableObject {
 
                 // Hydrate audio translations
                 if let translations = att.audioTranslations, !translations.isEmpty,
-                   messageTranslatedAudios[msgId] == nil {
+                   forceOverwrite || messageTranslatedAudios[msgId] == nil {
                     var audios: [MessageTranslatedAudio] = []
                     for (lang, trans) in translations {
                         let segments = (trans.segments ?? []).map {
@@ -3054,6 +3261,93 @@ extension ConversationViewModel: ConversationSocketDelegate {
     func handleSocketAccessRevoked(reason: String?) {
         Task { [weak self] in
             await self?.handleAccessRevoked(reason: reason)
+        }
+    }
+
+    /// Applies a server-pushed attachment delta (transcription / audio
+    /// translation finalized) by:
+    /// 1. Injecting the enriched metadata directly into
+    ///    `messageTranscriptions` / `messageTranslatedAudios` in a
+    ///    single MainActor slice (no await between assignments — same
+    ///    atomic-publish rule as `hydrateMetadataFromGRDB`).
+    /// 2. Fire-and-forget GRDB write-through via
+    ///    `MessagePersistenceActor.applyAttachmentEnrichment`, so a
+    ///    subsequent open of this conversation surfaces the enrichment
+    ///    from cache instead of pop-in-then-replace when
+    ///    `refreshMessagesFromAPI` later runs.
+    func applyAttachmentUpdate(_ event: AttachmentUpdatedEvent) {
+        injectAttachmentMetadata(from: event.attachment, intoMessageId: event.messageId)
+
+        let messageId = event.messageId
+        let attachmentId = event.attachment.id
+        let transcription = event.attachment.transcription
+        let translations = event.attachment.translations
+        Task { [persistence = messagePersistence] in
+            try? await persistence.applyAttachmentEnrichment(
+                messageId: messageId,
+                attachmentId: attachmentId,
+                transcription: transcription,
+                translations: translations
+            )
+        }
+    }
+
+    /// Injects an enriched attachment's transcription + audio translations
+    /// directly into the metadata dictionaries (same shape as
+    /// `hydrateMetadataFromGRDB` but sourced from a socket payload).
+    private func injectAttachmentMetadata(
+        from attachment: APIMessageAttachment,
+        intoMessageId msgId: String
+    ) {
+        if let t = attachment.transcription {
+            let segments = (t.segments ?? []).map {
+                MessageTranscriptionSegment(
+                    text: $0.text,
+                    startTime: $0.startTime,
+                    endTime: $0.endTime,
+                    speakerId: $0.speakerId
+                )
+            }
+            messageTranscriptions[msgId] = MessageTranscription(
+                attachmentId: attachment.id,
+                text: t.transcribedText ?? t.text ?? "",
+                language: t.language ?? "?",
+                confidence: t.confidence,
+                durationMs: t.durationMs,
+                segments: segments,
+                speakerCount: t.speakerCount
+            )
+        }
+        if let translations = attachment.translations, !translations.isEmpty {
+            var audios: [MessageTranslatedAudio] = []
+            for (lang, trans) in translations {
+                guard let url = trans.url, !url.isEmpty else { continue }
+                let segments = (trans.segments ?? []).map {
+                    MessageTranscriptionSegment(
+                        text: $0.text,
+                        startTime: $0.startTime,
+                        endTime: $0.endTime,
+                        speakerId: $0.speakerId
+                    )
+                }
+                audios.append(MessageTranslatedAudio(
+                    id: "\(attachment.id)_\(lang)",
+                    attachmentId: attachment.id,
+                    targetLanguage: lang,
+                    url: url,
+                    transcription: trans.transcription ?? "",
+                    durationMs: trans.durationMs ?? 0,
+                    format: trans.format ?? "mp3",
+                    cloned: trans.cloned ?? false,
+                    quality: trans.quality ?? 0,
+                    voiceModelId: trans.voiceModelId,
+                    ttsModel: trans.ttsModel ?? "xtts",
+                    segments: segments
+                ))
+            }
+            if !audios.isEmpty {
+                messageTranslatedAudios[msgId] = audios
+            }
         }
     }
 }

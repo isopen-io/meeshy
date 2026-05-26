@@ -53,7 +53,7 @@ struct RequestsTab: View {
                         Capsule().stroke(activeFilter == filter ? Color.clear : MeeshyColors.indigo900.opacity(0.3), lineWidth: 1)
                     )
                 }
-                .accessibilityLabel("\(filter.rawValue), \(count) demandes")
+                .accessibilityLabel(String(format: String(localized: "contacts.requests.filter-a11y", defaultValue: "%@, %d demandes", bundle: .main), filter.rawValue, count))
             }
             Spacer()
         }
@@ -68,13 +68,13 @@ struct RequestsTab: View {
         switch activeFilter {
         case .received:
             if viewModel.receivedRequests.isEmpty {
-                emptyState(icon: "person.2.slash", text: "Aucune demande recue")
+                emptyState(icon: "person.2.slash", text: String(localized: "contacts.requests.empty.received", defaultValue: "Aucune demande recue", bundle: .main))
             } else {
                 receivedList
             }
         case .sent:
             if viewModel.sentRequests.isEmpty {
-                emptyState(icon: "paperplane", text: "Aucune demande envoyee")
+                emptyState(icon: "paperplane", text: String(localized: "contacts.requests.empty.sent", defaultValue: "Aucune demande envoyee", bundle: .main))
             } else {
                 sentList
             }
@@ -96,7 +96,7 @@ struct RequestsTab: View {
 
     private func receivedRow(_ request: FriendRequest, index: Int) -> some View {
         let sender = request.sender
-        let name = sender?.name ?? "Inconnu"
+        let name = sender?.name ?? String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main)
         let color = DynamicColorGenerator.colorForName(name)
 
         return HStack(spacing: 14) {
@@ -145,7 +145,7 @@ struct RequestsTab: View {
                         .frame(width: 36, height: 36)
                         .background(Circle().fill(theme.textMuted.opacity(0.12)))
                 }
-                .accessibilityLabel("Refuser la demande de \(name)")
+                .accessibilityLabel(String(format: String(localized: "contacts.requests.reject-a11y", defaultValue: "Refuser la demande de %@", bundle: .main), name))
 
                 Button {
                     Task { await viewModel.accept(requestId: request.id) }
@@ -164,14 +164,14 @@ struct RequestsTab: View {
                             )
                         )
                 }
-                .accessibilityLabel("Accepter la demande de \(name)")
+                .accessibilityLabel(String(format: String(localized: "contacts.requests.accept-a11y", defaultValue: "Accepter la demande de %@", bundle: .main), name))
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .accessibilityElement(children: .combine)
         .transition(.opacity.combined(with: .move(edge: .trailing)))
-        .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(Double(index) * 0.04), value: viewModel.receivedRequests.count)
+        .animation(.easeOut(duration: 0.2).delay(Double(index) * 0.02), value: viewModel.receivedRequests.count)
     }
 
     // MARK: - Sent List
@@ -189,7 +189,7 @@ struct RequestsTab: View {
 
     private func sentRow(_ request: FriendRequest, index: Int) -> some View {
         let receiver = request.receiver
-        let name = receiver?.name ?? "Inconnu"
+        let name = receiver?.name ?? String(localized: "common.unknown", defaultValue: "Inconnu", bundle: .main)
         let color = DynamicColorGenerator.colorForName(name)
 
         return HStack(spacing: 14) {
@@ -219,7 +219,7 @@ struct RequestsTab: View {
 
             Spacer()
 
-            Text("En attente")
+            Text(String(localized: "contacts.requests.pending", defaultValue: "En attente", bundle: .main))
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(MeeshyColors.warning)
                 .padding(.horizontal, 8)
@@ -231,7 +231,7 @@ struct RequestsTab: View {
             Button {
                 Task { await viewModel.cancel(requestId: request.id) }
             } label: {
-                Text("Annuler")
+                Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(MeeshyColors.error)
                     .padding(.horizontal, 12)
@@ -240,12 +240,12 @@ struct RequestsTab: View {
                         Capsule().stroke(MeeshyColors.error.opacity(0.3), lineWidth: 1)
                     )
             }
-            .accessibilityLabel("Annuler la demande envoyee a \(name)")
+            .accessibilityLabel(String(format: String(localized: "contacts.requests.cancel-a11y", defaultValue: "Annuler la demande envoyee a %@", bundle: .main), name))
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .accessibilityElement(children: .combine)
-        .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(Double(index) * 0.04), value: viewModel.sentRequests.count)
+        .animation(.easeOut(duration: 0.2).delay(Double(index) * 0.02), value: viewModel.sentRequests.count)
     }
 
     // MARK: - Empty State

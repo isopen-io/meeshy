@@ -35,7 +35,7 @@ struct FriendRequestListView: View {
 
             Spacer()
 
-            Text("Demandes d'amis")
+            Text(String(localized: "friends.requests.title", defaultValue: "Demandes d'amis", bundle: .main))
                 .font(.system(size: 17, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
@@ -82,11 +82,11 @@ struct FriendRequestListView: View {
                 .font(.system(size: 48, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
 
-            Text("Aucune demande")
+            Text(String(localized: "friends.requests.empty.title", defaultValue: "Aucune demande", bundle: .main))
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(theme.textMuted)
 
-            Text("Les demandes d'amis apparaitront ici")
+            Text(String(localized: "friends.requests.empty.subtitle", defaultValue: "Les demandes d'amis apparaitront ici", bundle: .main))
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(theme.textMuted.opacity(0.7))
 
@@ -176,10 +176,10 @@ struct FriendRequestListView: View {
 
     private func relativeTime(from date: Date) -> String {
         let interval = Date().timeIntervalSince(date)
-        if interval < 60 { return "A l'instant" }
-        if interval < 3600 { return "Il y a \(Int(interval / 60))min" }
-        if interval < 86400 { return "Il y a \(Int(interval / 3600))h" }
-        if interval < 604800 { return "Il y a \(Int(interval / 86400))j" }
+        if interval < 60 { return String(localized: "friends.requests.time.just_now", defaultValue: "A l'instant", bundle: .main) }
+        if interval < 3600 { return String(localized: "friends.requests.time.minutes_ago", defaultValue: "Il y a \(Int(interval / 60))min", bundle: .main) }
+        if interval < 86400 { return String(localized: "friends.requests.time.hours_ago", defaultValue: "Il y a \(Int(interval / 3600))h", bundle: .main) }
+        if interval < 604800 { return String(localized: "friends.requests.time.days_ago", defaultValue: "Il y a \(Int(interval / 86400))j", bundle: .main) }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "fr_FR")
         formatter.dateFormat = "dd MMM"
@@ -205,7 +205,7 @@ final class FriendRequestListViewModel: ObservableObject {
             let response = try await friendService.receivedRequests()
             requests = response.data
         } catch {
-            errorMessage = "Erreur lors du chargement"
+            errorMessage = String(localized: "friends.requests.load_error", defaultValue: "Erreur lors du chargement", bundle: .main)
         }
     }
 

@@ -52,7 +52,7 @@ struct ThemedConversationRow: View {
 
     // MARK: - Activity Heat (0 = cold/pastel, 1 = hot/vibrant)
     private var conversationHeat: CGFloat {
-        guard !conversation.isMuted else { return 0.05 }
+        guard !conversation.userState.isMuted else { return 0.05 }
 
         let seconds = Date().timeIntervalSince(conversation.lastMessageAt)
         let recency: CGFloat
@@ -62,9 +62,9 @@ struct ThemedConversationRow: View {
         else if seconds < 604_800 { recency = 0.2 }
         else { recency = 0.0 }
 
-        let unread  = min(CGFloat(conversation.unreadCount) / 10.0, 1.0)
+        let unread  = min(CGFloat(conversation.userState.unreadCount) / 10.0, 1.0)
         let members = min(CGFloat(conversation.memberCount) / 50.0, 1.0)
-        let pinned: CGFloat = conversation.isPinned ? 1.0 : 0.0
+        let pinned: CGFloat = conversation.userState.isPinned ? 1.0 : 0.0
 
         return 0.40 * recency + 0.35 * unread + 0.15 * members + 0.10 * pinned
     }
@@ -140,13 +140,13 @@ struct ThemedConversationRow: View {
                     // Name with type indicator
                     HStack(spacing: 6) {
                         Text(conversation.displayName)
-                            .font(.system(size: 15, weight: conversation.unreadCount > 0 ? .bold : .semibold))
+                            .font(.system(size: 15, weight: conversation.userState.unreadCount > 0 ? .bold : .semibold))
                             .foregroundColor(textPrimary)
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
 
                         // Reaction emoji (favorites classification)
-                        if let r = conversation.reaction, !r.isEmpty {
+                        if let r = conversation.userState.reaction, !r.isEmpty {
                             Text(r)
                                 .font(.system(size: 12))
                                 .accessibilityLabel(Text("réaction \(r)"))
@@ -164,7 +164,7 @@ struct ThemedConversationRow: View {
                     // Timestamp — layoutPriority(1) pour ne jamais être écrasé
                     Text(timeAgo(conversation.lastMessageAt))
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(Self.timestampColor(unreadCount: conversation.unreadCount, accent: accent))
+                        .foregroundColor(Self.timestampColor(unreadCount: conversation.userState.unreadCount, accent: accent))
                         .layoutPriority(1)
                         .padding(.top, 2)
                 }
@@ -175,7 +175,7 @@ struct ThemedConversationRow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
 
             // Unread badge
-            if conversation.unreadCount > 0 {
+            if conversation.userState.unreadCount > 0 {
                 unreadBadge
                     .accessibilityHidden(true)
             }
@@ -218,11 +218,11 @@ struct ThemedConversationRow: View {
         )
         .scaleEffect(isDragging ? 1.02 : 1.0)
         .opacity(isDragging ? 0.8 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isDragging)
-        .animation(.spring(response: 0.35, dampingFraction: 0.82), value: isSelected)
+        .animation(.easeOut(duration: 0.15), value: isDragging)
+        .animation(.easeOut(duration: 0.2), value: isSelected)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(conversationAccessibilityLabel)
-        .accessibilityValue(conversation.unreadCount > 0 ? "\(conversation.unreadCount) messages non lus" : "")
+        .accessibilityValue(conversation.userState.unreadCount > 0 ? "\(conversation.userState.unreadCount) messages non lus" : "")
         .accessibilityHint("Ouvre la conversation")
         .accessibilityAddTraits(.isButton)
     }
@@ -247,11 +247,11 @@ struct ThemedConversationRow: View {
             }
         }
         parts.append(timeAgo(conversation.lastMessageAt))
-        if conversation.unreadCount > 0 {
-            parts.append("\(conversation.unreadCount) non lus")
+        if conversation.userState.unreadCount > 0 {
+            parts.append("\(conversation.userState.unreadCount) non lus")
         }
-        if conversation.isMuted { parts.append("en silence") }
-        if conversation.isPinned { parts.append("epingle") }
+        if conversation.userState.isMuted { parts.append("en silence") }
+        if conversation.userState.isPinned { parts.append("epingle") }
         return parts.joined(separator: ", ")
     }
 
@@ -334,7 +334,7 @@ struct ThemedConversationRow: View {
                 .frame(width: 24, height: 24)
                 .shadow(color: badgeColor.opacity(0.25), radius: 3)
 
-            Text("\(min(conversation.unreadCount, 99))")
+            Text("\(min(conversation.userState.unreadCount, 99))")
                 .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.white)
         }
@@ -579,7 +579,8 @@ extension ThemedConversationRow: @MainActor Equatable {
         lhs.moodStatus?.id == rhs.moodStatus?.id &&
         lhs.presenceState == rhs.presenceState &&
         lhs.isSelected == rhs.isSelected &&
-        lhs.draftSummary == rhs.draftSummary
+        lhs.draftSummary == rhs.draftSummary &&
+        lhs.preferredContentLanguages == rhs.preferredContentLanguages
     }
 }
 

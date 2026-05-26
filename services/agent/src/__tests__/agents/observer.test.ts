@@ -78,6 +78,9 @@ const baseState = {
   maxDelayMinutes: 360,
   spreadOverDayEnabled: true,
   maxMessagesPerUserPer10Min: 4,
+  freshTopicProbability: 0.2,
+  freshTopicCategoryHints: [],
+  freshTopicBlockedSlugs: [],
 };
 
 describe('Observer Agent', () => {

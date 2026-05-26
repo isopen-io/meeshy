@@ -3,6 +3,8 @@ import { z } from 'zod';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ConfigCache } from '../config/config-cache';
 
+import type { ConfigCache } from '../config/config-cache';
+
 const cacheInvalidateSchema = z.object({
   conversationId: z.string().regex(/^[0-9a-fA-F]{24}$/).optional(),
   global: z.boolean().optional(),
@@ -37,8 +39,6 @@ export async function configRoutes(
       return reply.status(400).send({ success: false, message: 'Invalid payload', errors: parsed.error.flatten() });
     }
     if (!configCache) {
-      // Agent service started without a cache reference (unusual). Fall back to
-      // deleting Redis keys directly so the next read forces a Mongo reload.
       const targets: string[] = [];
       if (parsed.data.conversationId) targets.push(`agent:config:${parsed.data.conversationId}`);
       if (parsed.data.global) targets.push('agent:global-config');

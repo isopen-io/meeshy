@@ -27,7 +27,7 @@ final class ProTimelineViewTests: XCTestCase {
     func test_groupedTracks_returnsThreeSections() {
         let project = TimelineProjectFactory.projectWithVideoClip()
         let groups = ProTimelineView.resolveTrackGroups(project: project)
-        XCTAssertEqual(groups.map { $0.section }, [.contenu, .audio, .effets])
+        XCTAssertEqual(groups.map { $0.section }, [.media, .son, .filters])
     }
 
     func test_inspectorVisible_onlyWhenSelectionExists() {

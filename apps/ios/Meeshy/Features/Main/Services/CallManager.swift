@@ -60,6 +60,26 @@ final class CallManager: ObservableObject {
     @Published private(set) var hasRemoteVideoTrack = false
     @Published var pendingIncomingCall: (callId: String, fromUserId: String, fromUsername: String, isVideo: Bool)?
 
+    // MARK: - Audio Guard (DEBUG override for tests)
+
+    #if DEBUG
+    private var _testOverrideCallActive: Bool = false
+    var testOverrideCallActive: Bool {
+        get { _testOverrideCallActive }
+        set { _testOverrideCallActive = newValue }
+    }
+    #endif
+
+    /// True iff a CallKit call is currently active (ringing/offering/connecting/connected/reconnecting).
+    /// Consumed by `ConversationAudioCoordinator` to short-circuit message-audio playback while
+    /// a voice/video call is in progress. DEBUG-only override exists for unit tests.
+    var isCallActiveForAudioGuard: Bool {
+        #if DEBUG
+        if _testOverrideCallActive { return true }
+        #endif
+        return callState.isActive
+    }
+
     // MARK: - Internal
 
     /// Phase 0 scaffold — owned but not yet wired into transitions.
@@ -1797,7 +1817,7 @@ extension CallManager: ThermalStateMonitorDelegate {
         Task { @MainActor [weak self] in
             guard let self, self.callState == .connected else { return }
             if state == .critical {
-                self.webRTCService.videoFilterPipeline.reset()
+                self.webRTCService.videoFilters.reset()
                 self.activeAudioEffect = nil
                 self.webRTCService.setAudioEffect(nil)
                 Logger.calls.warning("Thermal critical — disabled all filters (video + audio)")
@@ -1807,8 +1827,8 @@ extension CallManager: ThermalStateMonitorDelegate {
                     Logger.calls.warning("Thermal critical — disabled video")
                 }
             } else if state == .serious {
-                self.webRTCService.videoFilterPipeline.config.backgroundBlurEnabled = false
-                self.webRTCService.videoFilterPipeline.config.skinSmoothingEnabled = false
+                self.webRTCService.videoFilters.config.backgroundBlurEnabled = false
+                self.webRTCService.videoFilters.config.skinSmoothingEnabled = false
                 Logger.calls.warning("Thermal serious — disabled advanced filters")
             }
         }

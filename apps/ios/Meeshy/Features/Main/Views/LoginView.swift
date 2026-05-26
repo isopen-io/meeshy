@@ -23,6 +23,7 @@ struct LoginView: View {
     @State private var showRegister = false
     @State private var showForgotPassword = false
     @State private var showMagicLink = false
+    @State private var twoFactorCode = ""
 
     // Environment selector
     @State private var selectedEnv: MeeshyConfig.ServerEnvironment = MeeshyConfig.shared.selectedEnvironment
@@ -31,7 +32,7 @@ struct LoginView: View {
 
     @FocusState private var focusedField: Field?
 
-    private enum Field { case username, password, accountPassword, customHost }
+    private enum Field { case username, password, accountPassword, customHost, twoFactorCode }
 
     private var isDark: Bool { theme.mode.isDark }
     private var showPicker: Bool { !authManager.savedAccounts.isEmpty && !showNormalLogin }
@@ -108,7 +109,9 @@ struct LoginView: View {
                     .padding(.bottom, 48)
                     .accessibilityAddTraits(.isHeader)
 
-                if showPicker {
+                if authManager.requires2FA {
+                    twoFactorSection
+                } else if showPicker {
                     accountPickerSection
                 } else {
                     normalLoginSection
@@ -118,9 +121,9 @@ struct LoginView: View {
 
                 Button { showRegister = true } label: {
                     HStack(spacing: 4) {
-                        Text("Pas de compte ?")
+                        Text(String(localized: "auth.login.no_account", defaultValue: "Pas de compte ?", bundle: .main))
                             .foregroundColor(theme.textMuted)
-                        Text("Creer un compte")
+                        Text(String(localized: "auth.login.create_account", defaultValue: "Creer un compte", bundle: .main))
                             .foregroundStyle(
                                 LinearGradient(
                                     colors: [Color(hex: "B24BF3"), Color(hex: "8B5CF6")],
@@ -132,8 +135,8 @@ struct LoginView: View {
                     .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
                 }
                 .bounceOnTap(scale: 0.94)
-                .accessibilityLabel("Creer un compte")
-                .accessibilityHint("Ouvre le formulaire d'inscription")
+                .accessibilityLabel(String(localized: "auth.login.create_account", defaultValue: "Creer un compte", bundle: .main))
+                .accessibilityHint(String(localized: "auth.login.create_account.hint", defaultValue: "Ouvre le formulaire d'inscription", bundle: .main))
                 .padding(.bottom, MeeshySpacing.md)
                 .opacity(showFields ? 1 : 0)
 
@@ -201,7 +204,7 @@ struct LoginView: View {
                                 authManager.removeSavedAccount(userId: account.id)
                             }
                         } label: {
-                            Label("Supprimer ce compte", systemImage: "trash")
+                            Label(String(localized: "auth.login.remove_account", defaultValue: "Supprimer ce compte", bundle: .main), systemImage: "trash")
                         }
                     }
             }
@@ -213,7 +216,7 @@ struct LoginView: View {
                     showNormalLogin = true
                 }
             } label: {
-                Text("Autre compte")
+                Text(String(localized: "auth.login.other_account", defaultValue: "Autre compte", bundle: .main))
                     .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
                     .foregroundColor(theme.textMuted)
                     .frame(maxWidth: .infinity)
@@ -310,13 +313,13 @@ struct LoginView: View {
                     .foregroundColor(Color(hex: "8B5CF6").opacity(0.7))
                     .frame(width: 20)
                     .accessibilityHidden(true)
-                SecureField("Mot de passe", text: $accountPassword)
+                SecureField(String(localized: "auth.password.placeholder", defaultValue: "Mot de passe", bundle: .main), text: $accountPassword)
                     .textContentType(.password)
                     .focused($focusedField, equals: .accountPassword)
                     .foregroundColor(theme.textPrimary)
                     .submitLabel(.go)
                     .onSubmit { attemptAccountLogin() }
-                    .accessibilityLabel("Mot de passe")
+                    .accessibilityLabel(String(localized: "auth.password.placeholder", defaultValue: "Mot de passe", bundle: .main))
             }
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.vertical, MeeshySpacing.md + 2)
@@ -358,7 +361,7 @@ struct LoginView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "chevron.left")
                                 .font(.system(size: 13, weight: .semibold))
-                            Text("Comptes sauvegardés")
+                            Text(String(localized: "auth.login.saved_accounts", defaultValue: "Comptes sauvegardés", bundle: .main))
                                 .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
                         }
                         .foregroundColor(theme.textMuted)
@@ -374,7 +377,7 @@ struct LoginView: View {
                     .foregroundColor(Color(hex: "8B5CF6").opacity(0.7))
                     .frame(width: 20)
                     .accessibilityHidden(true)
-                TextField("Nom d'utilisateur", text: $username)
+                TextField(String(localized: "auth.username.placeholder", defaultValue: "Nom d'utilisateur", bundle: .main), text: $username)
                     .textContentType(.username)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
@@ -382,7 +385,7 @@ struct LoginView: View {
                     .foregroundColor(theme.textPrimary)
                     .submitLabel(.next)
                     .onSubmit { focusedField = .password }
-                    .accessibilityLabel("Nom d'utilisateur")
+                    .accessibilityLabel(String(localized: "auth.username.placeholder", defaultValue: "Nom d'utilisateur", bundle: .main))
             }
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.vertical, MeeshySpacing.md + 2)
@@ -407,13 +410,13 @@ struct LoginView: View {
                     .foregroundColor(Color(hex: "8B5CF6").opacity(0.7))
                     .frame(width: 20)
                     .accessibilityHidden(true)
-                SecureField("Mot de passe", text: $password)
+                SecureField(String(localized: "auth.password.placeholder", defaultValue: "Mot de passe", bundle: .main), text: $password)
                     .textContentType(.password)
                     .focused($focusedField, equals: .password)
                     .foregroundColor(theme.textPrimary)
                     .submitLabel(.go)
                     .onSubmit { attemptLogin() }
-                    .accessibilityLabel("Mot de passe")
+                    .accessibilityLabel(String(localized: "auth.password.placeholder", defaultValue: "Mot de passe", bundle: .main))
             }
             .padding(.horizontal, MeeshySpacing.lg)
             .padding(.vertical, MeeshySpacing.md + 2)
@@ -438,19 +441,19 @@ struct LoginView: View {
 
             HStack(spacing: MeeshySpacing.lg) {
                 Button { showForgotPassword = true } label: {
-                    Text("Mot de passe oublie ?")
+                    Text(String(localized: "auth.login.forgot_password", defaultValue: "Mot de passe oublie ?", bundle: .main))
                         .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
                 .bounceOnTap(scale: 0.94)
-                .accessibilityLabel("Mot de passe oublie")
+                .accessibilityLabel(String(localized: "auth.login.forgot_password.label", defaultValue: "Mot de passe oublie", bundle: .main))
 
                 Text("·")
                     .foregroundColor(theme.textMuted.opacity(0.5))
                     .accessibilityHidden(true)
 
                 Button { showMagicLink = true } label: {
-                    Text("Connexion sans mot de passe")
+                    Text(String(localized: "auth.login.passwordless", defaultValue: "Connexion sans mot de passe", bundle: .main))
                         .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
                         .foregroundStyle(
                             LinearGradient(
@@ -461,7 +464,7 @@ struct LoginView: View {
                         )
                 }
                 .bounceOnTap(scale: 0.94)
-                .accessibilityLabel("Connexion sans mot de passe")
+                .accessibilityLabel(String(localized: "auth.login.passwordless", defaultValue: "Connexion sans mot de passe", bundle: .main))
             }
             .padding(.top, MeeshySpacing.xs)
         }
@@ -501,7 +504,7 @@ struct LoginView: View {
                 if authManager.isLoading {
                     ProgressView().tint(.white)
                 } else {
-                    Text("Se connecter")
+                    Text(String(localized: "auth.login.submit", defaultValue: "Se connecter", bundle: .main))
                         .font(.system(size: MeeshyFont.headlineSize, weight: .bold))
                         .foregroundColor(.white)
                 }
@@ -511,7 +514,7 @@ struct LoginView: View {
         .opacity(disabled ? 0.6 : 1)
         .bounceOnTap()
         .padding(.top, MeeshySpacing.sm)
-        .accessibilityLabel("Se connecter")
+        .accessibilityLabel(String(localized: "auth.login.submit", defaultValue: "Se connecter", bundle: .main))
     }
 
     private func accountAvatar(_ account: SavedAccount, size: CGFloat) -> some View {
@@ -621,6 +624,91 @@ struct LoginView: View {
         guard let account = selectedAccount else { return }
         Task {
             await authManager.login(username: account.username, password: accountPassword)
+        }
+    }
+
+    private var twoFactorSection: some View {
+        VStack(spacing: MeeshySpacing.lg) {
+            Text(String(localized: "auth.login.two_factor.title", defaultValue: "Double Facteur", bundle: .main))
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundColor(theme.textPrimary)
+                .padding(.bottom, MeeshySpacing.xs)
+
+            Text(String(localized: "auth.login.two_factor.description", defaultValue: "Entrez le code de vérification à 6 chiffres généré par votre application d'authentification.", bundle: .main))
+                .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                .foregroundColor(theme.textMuted)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.bottom, MeeshySpacing.md)
+
+            // Code Input
+            HStack(spacing: MeeshySpacing.md) {
+                Image(systemName: "key.fill")
+                    .foregroundColor(Color(hex: "8B5CF6").opacity(0.7))
+                    .frame(width: 20)
+                    .accessibilityHidden(true)
+                TextField(String(localized: "auth.login.two_factor.placeholder", defaultValue: "Code de vérification", bundle: .main), text: $twoFactorCode)
+                    .keyboardType(.numberPad)
+                    .focused($focusedField, equals: .twoFactorCode)
+                    .foregroundColor(theme.textPrimary)
+                    .submitLabel(.go)
+                    .onSubmit { attempt2FALogin() }
+                    .accessibilityLabel(String(localized: "auth.login.two_factor.label", defaultValue: "Code de vérification double facteur", bundle: .main))
+            }
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.md + 2)
+            .background(
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .fill(theme.inputBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                            .stroke(
+                                focusedField == .twoFactorCode
+                                    ? Color(hex: "8B5CF6").opacity(0.6)
+                                    : theme.inputBorder.opacity(0.3),
+                                lineWidth: 1
+                            )
+                    )
+            )
+            .bounceOnFocus(focusedField == .twoFactorCode)
+
+            errorRow
+
+            // Action Buttons
+            VStack(spacing: MeeshySpacing.sm) {
+                loginButton(action: attempt2FALogin, disabled: twoFactorCode.count < 6)
+                
+                Button {
+                    HapticFeedback.light()
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        authManager.requires2FA = false
+                        authManager.twoFactorToken = nil
+                        twoFactorCode = ""
+                    }
+                } label: {
+                    Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
+                        .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, MeeshySpacing.md)
+                }
+                .bounceOnTap(scale: 0.94)
+            }
+        }
+        .padding(.horizontal, MeeshySpacing.xxxl)
+        .opacity(showFields ? 1 : 0)
+        .offset(y: showFields ? 0 : 30)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                focusedField = .twoFactorCode
+            }
+        }
+    }
+
+    private func attempt2FALogin() {
+        focusedField = nil
+        Task {
+            await authManager.completeLoginWith2FA(code: twoFactorCode)
         }
     }
 }

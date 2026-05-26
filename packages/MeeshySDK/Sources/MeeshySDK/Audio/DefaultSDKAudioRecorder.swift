@@ -16,8 +16,13 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
     private var recorder: AVAudioRecorder?
     private var timer: Timer?
     private var levelHistory: [CGFloat] = []
+    internal var settings: AudioRecordingSettings = .standard
 
     public init() {}
+
+    public func configure(with settings: AudioRecordingSettings) {
+        self.settings = settings
+    }
 
     public func startRecording() {
         let session = AVAudioSession.sharedInstance()
@@ -31,16 +36,16 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
         let fileName = "voice_\(Int(Date().timeIntervalSince1970)).m4a"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
 
-        let settings: [String: Any] = [
+        let settingsDictionary: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: AudioRecordingSettings.standard.sampleRate,
-            AVNumberOfChannelsKey: AudioRecordingSettings.standard.numberOfChannels,
-            AVEncoderBitRateKey: AudioRecordingSettings.standard.bitRate,
+            AVSampleRateKey: settings.sampleRate,
+            AVNumberOfChannelsKey: settings.numberOfChannels,
+            AVEncoderBitRateKey: settings.bitRate,
             AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue
         ]
 
         do {
-            recorder = try AVAudioRecorder(url: url, settings: settings)
+            recorder = try AVAudioRecorder(url: url, settings: settingsDictionary)
             recorder?.isMeteringEnabled = true
             recorder?.record()
             recordedFileURL = url
@@ -90,7 +95,14 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
     private func updateMetering() {
         guard let recorder, recorder.isRecording else { return }
 
-        duration = recorder.currentTime
+        let current = recorder.currentTime
+        duration = current
+
+        if let maxDuration = settings.maxDuration, current >= maxDuration {
+            stopRecording()
+            return
+        }
+
         recorder.updateMeters()
 
         let power = recorder.averagePower(forChannel: 0)

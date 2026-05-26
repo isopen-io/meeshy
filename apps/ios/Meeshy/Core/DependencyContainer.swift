@@ -1,6 +1,7 @@
 // apps/ios/Meeshy/Core/DependencyContainer.swift
 
 import Foundation
+import Combine
 import GRDB
 import MeeshySDK
 import os
@@ -33,6 +34,11 @@ final class DependencyContainer {
     let retryEngine: RetryEngine
     let thumbnailPrefetcher: ThumbnailPrefetcher
     let mediaSnapshotStore: MediaSnapshotStore
+
+    /// Q3 (P1 hotfix) — Combine subscriptions tenues par le container.
+    /// Aujourd'hui : un seul abonnement sur `AuthManager.isAuthenticated` pour
+    /// le hook outbox logout (cf. `wireOutboxLogoutHook`).
+    private var cancellables = Set<AnyCancellable>()
 
     /// Snapshot of how the database came up. Surfaced to ``AppDelegate``
     /// (which forwards the non-empty case to Crashlytics) and to the
@@ -80,6 +86,13 @@ final class DependencyContainer {
             await retryEngine.start()
         }
 
+        // Q3 (P1 hotfix) — au logout, quiesce le RetryEngine PUIS purge la
+        // table outbox. Sans ça, des messages enqueued par user A pourraient
+        // être envoyés sous l'identité du user B après un logout+login rapide
+        // sur le même device. Hook côté app car le SDK AuthManager ne connaît
+        // pas DependencyContainer (qui est app-side).
+        wireOutboxLogoutHook()
+
         // Skip the auto-vacuum tune when we're on the in-memory fallback —
         // there's no on-disk file to vacuum and the next launch will retry
         // against the real path anyway.
@@ -94,6 +107,34 @@ final class DependencyContainer {
                 }
             }
         }
+    }
+
+    // MARK: - Q3 — Outbox session quiesce hook
+
+    /// Pattern calqué sur `ConversationAudioCoordinator.wireAuthLogoutHook` :
+    /// observe la transition `isAuthenticated true→false`, stop le retry
+    /// engine PUIS purge la table outbox. Ordre strict (D-13 du design doc) :
+    /// stopper le RetryEngine empêche un flush concurrent avec le delete
+    /// (sinon race entre `outbox SELECT` et `outbox DELETE`).
+    private func wireOutboxLogoutHook() {
+        let engine = retryEngine
+        let persistence = messagePersistence
+        AuthManager.shared.$isAuthenticated
+            .removeDuplicates()
+            .dropFirst()
+            .filter { !$0 }
+            .receive(on: DispatchQueue.main)
+            .sink { _ in
+                Task {
+                    await engine.stop()
+                    do {
+                        try await persistence.clearOutbox()
+                    } catch {
+                        containerLogger.error("Q3 outbox purge failed at logout: \(error.localizedDescription, privacy: .public)")
+                    }
+                }
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Recovery (P1.5 — no more fatalError on DB init)

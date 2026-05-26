@@ -113,7 +113,8 @@ extension FeedPostCard {
                 ProgressiveCachedImage(
                     thumbHash: media.thumbHash,
                     thumbnailUrl: media.thumbnailUrl,
-                    fullUrl: media.url
+                    fullUrl: media.url,
+                    autoLoad: true
                 ) {
                     Color(hex: media.thumbnailColor).shimmer()
                 }
@@ -212,7 +213,8 @@ extension FeedPostCard {
         return ProgressiveCachedImage(
             thumbHash: media.thumbHash,
             thumbnailUrl: media.thumbnailUrl,
-            fullUrl: media.url
+            fullUrl: media.url,
+            autoLoad: true
         ) {
             Color(hex: media.thumbnailColor).shimmer()
         }
@@ -225,18 +227,20 @@ extension FeedPostCard {
 
     func videoMediaView(_ media: FeedMedia) -> some View {
         let attachment = media.toMessageAttachment()
-        // Route through VideoMediaView so feed videos respect the download
-        // policy too. SharedAVPlayerManager.load() no longer has a streaming
-        // fallback — an unwrapped InlineVideoPlayerView with default
-        // availability would silently fail on a cache miss.
-        // `theme` du main FeedPostCard est `private`, inaccessible depuis cette
-        // extension. Lire directement le singleton (équivalent à `theme`).
-        return VideoMediaView(
-            attachment: attachment,
-            accentColor: accentColor,
-            isDark: ThemeManager.shared.mode.isDark
-        )
-        .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 280)
+        return VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
+            MeeshyVideoPlayer(
+                attachment: attachment,
+                style: .inline,
+                controls: .inlineDefault,
+                accentColor: accentColor,
+                frame: .card,
+                availability: availability,
+                performance: .inline,
+                onDownload: onDownload,
+                onExpand: { openFullscreen(media) }
+            )
+        }
+        .frame(maxWidth: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 

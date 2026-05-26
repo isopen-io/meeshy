@@ -271,6 +271,82 @@ public final class MessageStore: ObservableObject {
         await refreshFromDB()
     }
 
+    // MARK: - Atomic Snapshot Hydration
+    //
+    // Splits the legacy `loadInitial()` flow into two phases so the caller
+    // (ConversationViewModel) can apply messages + dependent metadata
+    // (transcriptions / audio translations) in a single MainActor.run with
+    // no `await` in between. Closes the audio-bubble pop-in race documented
+    // in `docs/superpowers/specs/2026-05-25-audio-instant-render-and-attachment-size-design.md`.
+
+    /// Reads the current window from GRDB and returns the records without
+    /// touching `@Published var messages`. The async hop yields the current
+    /// runloop tick (matching `refreshFromDB`'s safety hop) so callers can
+    /// then invoke `apply(records:)` synchronously without tripping the
+    /// "Publishing changes from within view updates is not allowed" warning.
+    public func loadInitialSnapshot() async -> [MessageRecord] {
+        let convId = conversationId
+        let mode = windowMode
+        let anchor = windowAnchor
+        let initialWindow = Self.initialWindowSize
+        let reader = persistence.reader
+
+        let records: [MessageRecord]
+        do {
+            records = try fetchMessageWindow(
+                reader: reader, convId: convId, mode: mode,
+                anchor: anchor, initialWindowSize: initialWindow
+            )
+        } catch {
+            print("[MessageStore] loadInitialSnapshot failed: \(error.localizedDescription)")
+            return []
+        }
+
+        // Yield off the current SwiftUI view update cycle so the caller's
+        // subsequent `apply` (which mutates @Published) lands on a fresh
+        // tick. Mirrors `refreshFromDB`'s yieldToRunLoop guard.
+        await yieldToRunLoop()
+        return records
+    }
+
+    /// Synchronously publishes previously-fetched records into the store.
+    /// Recomputes sections, clears the id index, fires `messagesDidChange` —
+    /// the same side-effects as `refreshFromDB`'s publish phase. Safe to
+    /// call inside a single `Task { @MainActor }` block after `await`-ing
+    /// `loadInitialSnapshot()`, with no other `await` in between.
+    ///
+    /// Protective merge (`.latest` window only): any in-memory record whose
+    /// `localId` is absent from the incoming snapshot is preserved. This
+    /// guards the bubble against the "vanish after delivery" race — a
+    /// socket `message:new` (especially audio with async enrichment) lands
+    /// in `messages` before its row is reflected in a subsequent REST
+    /// snapshot. A straight REPLACE would erase it. The merged set is
+    /// sorted by `createdAt` for a stable, monotonic display order.
+    ///
+    /// In `.around(date:)` window mode (jump-to-message UX), the merge is
+    /// disabled : preserving messages from a previous `.latest` view would
+    /// pollute the jumped window with messages from a different time slice,
+    /// breaking the search-result navigation. Replace strictly instead.
+    public func apply(records: [MessageRecord]) {
+        guard windowMode == .latest else {
+            messages = records
+            _idIndex = nil
+            recomputeSections()
+            messagesDidChange.send()
+            return
+        }
+        let snapshotIds = Set(records.map(\.localId))
+        let preserved = messages.filter { !snapshotIds.contains($0.localId) }
+        if preserved.isEmpty {
+            messages = records
+        } else {
+            messages = (records + preserved).sorted { $0.createdAt < $1.createdAt }
+        }
+        _idIndex = nil
+        recomputeSections()
+        messagesDidChange.send()
+    }
+
     // MARK: - Pagination
 
     func loadOlder(before: Date) async -> Bool {

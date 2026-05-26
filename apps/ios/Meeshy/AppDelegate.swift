@@ -441,47 +441,64 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
 
     /// Called when a notification arrives while the app is in the foreground.
     ///
-    /// Policy:
-    /// - If the user is currently viewing the referenced conversation, suppress the
-    ///   system banner entirely — the conversation view already shows the message.
-    /// - Otherwise, show the native banner AND list entry, mirroring iOS behaviour
-    ///   elsewhere. The in-app toast still plays for cross-cutting events.
+    /// Policy (2026-05-24, simplified): the Socket.IO connection is the
+    /// authoritative signal.
+    /// - **Socket connected** → the in-app toast (driven by Socket.IO
+    ///   `notification:new`) will fire. Suppress the iOS banner, list entry
+    ///   and sound to avoid double-display. We keep `.badge` so the unread
+    ///   counter on the app icon stays correct.
+    /// - **Socket disconnected** → no in-app toast will fire. Show the full
+    ///   system banner so the user is notified by *something*. This covers
+    ///   both the foreground-but-offline case and the background case (iOS
+    ///   tears the socket down ~30s after the app leaves the foreground, so
+    ///   "socket connected" is effectively a proxy for "app is reading").
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         let userInfo = notification.request.content.userInfo
+        let convId = userInfo["conversationId"] as? String
+        let messageId = userInfo["messageId"] as? String
+
         Task { @MainActor in
             PushNotificationManager.shared.noteMessageActivity(userInfo: userInfo)
+
+            // Trigger real-time sync for foreground notifications so the DB
+            // and cache stay fresh even when the socket is lagging or the
+            // push arrived via a different path.
+            if let convId {
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        await ConversationSyncEngine.shared.ensureMessages(for: convId)
+                    }
+                    group.addTask {
+                        await PushDeliveryReceiptService.shared.ack(
+                            conversationId: convId,
+                            messageId: messageId
+                        )
+                    }
+                }
+            }
         }
         let type = userInfo["type"] as? String ?? "unknown"
         let conversationId = userInfo["conversationId"] as? String
-        let activeConversationId = NotificationManager.shared.activeConversationId
+        let postId = userInfo["postId"] as? String
 
-        logger.info("Foreground notification: type=\(type) conversation=\(conversationId ?? "-")")
+        let socketConnected = MessageSocketManager.shared.isConnected
+        logger.info("Foreground notification: type=\(type) conversation=\(conversationId ?? "-") postId=\(postId ?? "-") socketConnected=\(socketConnected)")
 
-        if let conversationId, conversationId == activeConversationId {
-            completionHandler([.sound])
+        if socketConnected {
+            // Socket is alive → the in-app toast will fire from the matching
+            // `notification:new` socket event. Suppress the native banner to
+            // avoid double-display. Keep .badge so the app icon counter stays
+            // correct.
+            completionHandler([.badge])
             return
         }
 
-        // Friend events fly through TWO parallel channels by design on the
-        // gateway: a Socket.IO `notification:new` event (drives the in-app
-        // toast via NotificationManager) AND an APNs push (drives the
-        // native banner + list entry). In foreground that doubles the
-        // visual surface — the user sees the Meeshy toast AND the system
-        // banner for the same event. Suppress the system banner here when
-        // the socket is connected; the in-app toast already covers the
-        // user. Sound + badge stay so the event still feels notified.
-        // When the socket is disconnected, fall through to the default so
-        // the user still sees the banner — that's the only signal left.
-        let isFriendEvent = type == "friend_request" || type == "friend_accepted"
-        if isFriendEvent && MessageSocketManager.shared.isConnected {
-            completionHandler([.sound, .badge])
-            return
-        }
-
+        // Socket is down → no in-app toast will fire. Surface the full system
+        // banner so the user is notified by *something*.
         completionHandler([.banner, .list, .sound, .badge])
     }
 

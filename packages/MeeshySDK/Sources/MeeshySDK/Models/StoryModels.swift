@@ -920,20 +920,37 @@ extension StorySlide {
     /// progress bar, audio mixer fade envelope, AVPlayer composition.
     /// `effectiveSlideDuration()` is now a thin alias kept for binary compat.
     public func computedTotalDuration() -> TimeInterval {
-        var bound = duration
+        let baseDuration = duration
+        var bound = baseDuration
+
+        // Extension dynamique basée sur la longueur du texte (Section 5 de la review)
+        // Les textes longs de plus de 30 mots devraient rajouter 1 seconde de plus à la story
+        // pour chaque 6 mots supplémentaire.
+        for text in effects.textObjects {
+            let words = text.text.split(separator: " ").count
+            if words > 30 {
+                let extraWords = words - 30
+                let extraSeconds = Double(extraWords) / 6.0
+                bound = max(bound, baseDuration + extraSeconds)
+            }
+        }
 
         for media in effects.mediaObjects ?? [] {
-            // Looped background video is handled in the rounding step below —
-            // it intentionally doesn't extend the bound here (the user-set
-            // slide.duration is the authoritative target for looped content).
-            if media.isBackground && media.loop { continue }
+            // Backgrounds NEVER extend the slide. Looped backgrounds are
+            // handled in the rounding step below; non-looped backgrounds
+            // are clipped (longer → exporter truncates to slide.duration)
+            // or padded (shorter → exporter pads tail frames) by the
+            // render pipeline. The user-authored slide.duration is the
+            // single authoritative length for everything behind the
+            // foreground layer.
+            if media.isBackground { continue }
             let start = media.startTime ?? 0
             let dur = media.duration ?? media.intrinsicDuration ?? 0
             if dur > 0 { bound = max(bound, start + dur) }
         }
 
         for audio in effects.audioPlayerObjects ?? [] {
-            if audio.loop == true { continue }
+            if audio.isBackground == true && audio.loop == true { continue }
             let start = Double(audio.startTime ?? 0)
             guard let dur = audio.duration, dur > 0 else { continue }
             bound = max(bound, start + Double(dur))
@@ -953,10 +970,22 @@ extension StorySlide {
             bound = max(bound, Double(transition.duration))
         }
 
-        if let loopMedia = effects.mediaObjects?.first(where: { $0.isBackground && $0.loop }),
-           let videoDuration = loopMedia.duration, videoDuration > 0 {
-            let repetitions = ceil(bound / videoDuration)
-            bound = max(bound, repetitions * videoDuration)
+        // Background Looping: ensure duration is a multiple of the video/voice duration.
+        // If content didn't force us over baseDuration, we pick the largest multiple <= baseDuration.
+        // If it did, we pick the smallest multiple >= bound to avoid cutting content.
+        let loopVideoDuration = effects.mediaObjects?.first(where: { $0.isBackground && $0.loop })?.duration
+        let loopAudioDuration = effects.audioPlayerObjects?.first(where: { $0.isBackground == true && $0.loop == true })?.duration
+
+        let L = loopVideoDuration ?? Double(loopAudioDuration ?? 0)
+        if L > 0 {
+            // Spec §3.6: "the loop never freezes on a partial cycle". When
+            // the loop period doesn't divide the slide duration evenly we
+            // round UP to the next full repetition, even if that extends
+            // past the user-authored slide.duration. Rounding DOWN would
+            // truncate the slide below the duration the author chose.
+            let target = max(bound, baseDuration)
+            let repetitions = max(1, ceil(target / L))
+            bound = repetitions * L
         }
 
         return bound
@@ -1014,15 +1043,22 @@ public struct StoryBackgroundTransform: Codable, Sendable {
     public var offsetX: CGFloat?
     public var offsetY: CGFloat?
     public var rotation: Double?
+    /// User override for video background gravity. `nil` = auto by orientation
+    /// (landscape → letterbox, portrait → aspectFill). `"fit"` = forced letterbox.
+    /// `"fill"` = forced aspectFill. Same semantics applied to image backgrounds.
+    public var videoFitMode: String?
 
     public init(scale: CGFloat? = nil, offsetX: CGFloat? = nil,
-                offsetY: CGFloat? = nil, rotation: Double? = nil) {
+                offsetY: CGFloat? = nil, rotation: Double? = nil,
+                videoFitMode: String? = nil) {
         self.scale = scale; self.offsetX = offsetX
         self.offsetY = offsetY; self.rotation = rotation
+        self.videoFitMode = videoFitMode
     }
 
     public var isIdentity: Bool {
-        (scale ?? 1.0) == 1.0 && (offsetX ?? 0) == 0 && (offsetY ?? 0) == 0 && (rotation ?? 0) == 0
+        (scale ?? 1.0) == 1.0 && (offsetX ?? 0) == 0 && (offsetY ?? 0) == 0
+            && (rotation ?? 0) == 0 && videoFitMode == nil
     }
 }
 
@@ -1724,13 +1760,28 @@ extension StoryItem {
     /// Reconstructs a renderable `StorySlide` from a published `StoryItem`.
     /// Resolves `content` via the Prisme Linguistique chain when available.
     /// Used by `StoryReaderRepresentable` to feed the canvas.
+    ///
+    /// `slide.mediaURL` est un champ LEGACY pour les stories antérieures à
+    /// `effects.mediaObjects` (où l'asset bg était directement dans
+    /// `StoryItem.media[0]`). Quand `effects.mediaObjects` existe — i.e. la
+    /// story moderne où chaque asset porte sa position / scale / isBackground
+    /// — il faut LAISSER `slide.mediaURL = nil` ; sinon `StoryRenderer
+    /// .renderBackground` tombe dans son chemin legacy
+    /// `if let urlString = slide.mediaURL` qui passe `slide.id` (= post id)
+    /// comme `postMediaId` au `StoryBackgroundLayer`. Le resolver ne sait
+    /// pas mapper un post id à une URL CDN (il indexe sur PostMedia.id),
+    /// donc le BG layer reste vide et le loader infini masque tout — y
+    /// compris le foreground correctement stampé par `StoryMediaLayer`.
     public func toRenderableSlide(preferredLanguages: [String]) -> StorySlide {
         let resolvedContent = self.resolvedContent(preferredLanguage: preferredLanguages.first)
                               ?? self.content
         let effects = self.storyEffects ?? StoryEffects()
+        let legacyMediaURL: String? = effects.mediaObjects?.isEmpty == false
+            ? nil
+            : self.media.first?.url
         return StorySlide(
             id: self.id,
-            mediaURL: self.media.first?.url,
+            mediaURL: legacyMediaURL,
             content: resolvedContent,
             effects: effects
         )
@@ -1783,18 +1834,11 @@ public struct TimelineProject: Codable, Sendable {
         // `[]`, so `TimelineProject(from: slide).apply(to: &slide)` is a true
         // no-op when the slide had `nil` collections to begin with.
         //
-        // `slide.duration` is treated as the user-authored MINIMUM length
-        // (the floor). The editor's working `slideDuration` reflects the
-        // computed total (covering every element), and we only push it back
-        // when it EXCEEDS the current `slide.duration` — i.e. when the user
-        // dragged an element past the original end. We never SHRINK the
-        // authored floor here; deletions/trims that reduce the computed
-        // total naturally show up via `computedTotalDuration()` without
-        // wiping the floor the user set.
-        let projectDuration = TimeInterval(slideDuration)
-        if projectDuration > slide.duration {
-            slide.duration = projectDuration
-        }
+        // Update the slide's floor duration to match the project's duration.
+        // This allows shrinking the duration (e.g., from 12s to 5s) via the
+        // timeline tool, fulfilling the "redefine story running time" requirement.
+        slide.duration = TimeInterval(slideDuration)
+
         slide.effects.mediaObjects = mediaObjects.isEmpty ? nil : mediaObjects
         slide.effects.audioPlayerObjects = audioPlayerObjects.isEmpty ? nil : audioPlayerObjects
         slide.effects.textObjects = textObjects

@@ -204,6 +204,7 @@ public struct VoiceRecordingView<Recorder: AudioRecordingProviding>: View {
     // MARK: - Helpers
 
     private func startRecording() {
+        recorder.configure(with: .voiceSample)
         recorder.startRecording()
     }
 

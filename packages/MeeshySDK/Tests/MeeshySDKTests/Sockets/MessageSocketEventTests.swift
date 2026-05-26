@@ -659,6 +659,81 @@ final class MessageSocketEventTests: XCTestCase {
         XCTAssertEqual(event.notificationType, .system)
     }
 
+    // MARK: - AttachmentUpdatedEvent (message:attachment-updated)
+
+    /// Regression test for the Prisme Linguistique fault-isolation guard
+    /// in `APIMessageAttachment.init(from:)`. Before this guard, a single
+    /// malformed `translations` entry (e.g., a language partially written
+    /// by an in-flight translator worker) caused the entire attachment
+    /// decode to throw — and `MessageSocketManager.decode(_:from:)`
+    /// silently swallowed the event. The attachment must now decode even
+    /// when the translations map contains a junk entry.
+    func testAttachmentUpdated_recoversFromMalformedTranslationEntry() throws {
+        let json = """
+        {
+          "conversationId": "conv-1",
+          "messageId": "msg-1",
+          "attachment": {
+            "id": "att-1",
+            "messageId": "msg-1",
+            "type": "audio",
+            "fileUrl": "https://cdn/voice.m4a",
+            "originalName": "voice.m4a",
+            "mimeType": "audio/m4a",
+            "fileSize": 870400,
+            "duration": 42000,
+            "transcription": { "text": "Bonjour", "language": "fr" },
+            "translations": {
+              "en": { "url": "https://cdn/en.mp3", "transcription": "Hello", "format": "mp3" },
+              "de": "not-an-object-just-a-broken-string"
+            },
+            "createdAt": "2026-05-25T10:00:00Z"
+          }
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(AttachmentUpdatedEvent.self, from: json)
+        // The attachment surfaces despite the malformed `de` entry.
+        XCTAssertEqual(event.attachment.id, "att-1")
+        XCTAssertEqual(event.attachment.transcription?.text, "Bonjour")
+        // The translations dictionary itself decoded to nil (the whole map
+        // was malformed because of the broken `de` value), but critically
+        // the rest of the attachment is preserved instead of the whole
+        // event being silently swallowed.
+        XCTAssertEqual(event.attachment.fileSize, 870400)
+    }
+
+    func testAttachmentUpdatedEventDecoding() throws {
+        let json = """
+        {
+          "conversationId": "conv-1",
+          "messageId": "msg-1",
+          "attachment": {
+            "id": "att-1",
+            "messageId": "msg-1",
+            "type": "audio",
+            "fileUrl": "https://cdn/voice.m4a",
+            "originalName": "voice.m4a",
+            "mimeType": "audio/m4a",
+            "fileSize": 870400,
+            "duration": 42000,
+            "transcription": { "text": "Bonjour", "language": "fr", "confidence": 0.95 },
+            "translations": {
+              "en": { "url": "https://cdn/en.mp3", "transcription": "Hello", "format": "mp3" }
+            },
+            "createdAt": "2026-05-25T10:00:00Z"
+          }
+        }
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(AttachmentUpdatedEvent.self, from: json)
+        XCTAssertEqual(event.conversationId, "conv-1")
+        XCTAssertEqual(event.messageId, "msg-1")
+        XCTAssertEqual(event.attachment.id, "att-1")
+        XCTAssertEqual(event.attachment.transcription?.text, "Bonjour")
+        XCTAssertEqual(event.attachment.translations?["en"]?.url, "https://cdn/en.mp3")
+    }
+
     // MARK: - ConnectionState
 
     func testConnectionStateEquality() {

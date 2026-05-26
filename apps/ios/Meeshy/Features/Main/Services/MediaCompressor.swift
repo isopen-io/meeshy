@@ -160,23 +160,62 @@ actor MediaCompressor {
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("compressed_\(UUID().uuidString).mp4")
 
+        // **Fast-path SOTA** : si la source est déjà au format cible
+        // (codec HEVC/H.264 + résolution ≤ budget + bitrate ≤ budget × 2),
+        // on **remux** au lieu de transcoder. Sur iPhone Camera (HEVC
+        // 1080p ~15 Mbps) qui dépasse à peine le budget story (4 Mbps),
+        // on accepte la surface ratio bitrate × 2 — l'économie de
+        // décodage + re-encodage vaut bien quelques MB de plus.
+        //
+        // Coût : un remux d'un .mp4 de 14 s = ~1 s (juste copie des
+        // sample buffers entre 2 containers MP4, pas de Video Toolbox
+        // appelé). Sans ça, on payait ~10–60 s de re-encodage HEVC
+        // selon la charge thermique du device.
+        if let fastPath = try? await passthroughIfPossible(
+            asset: asset,
+            sourceURL: url,
+            outputURL: outputURL,
+            context: context
+        ) {
+            return fastPath
+        }
+
         guard let videoTrack = try await asset.loadTracks(withMediaType: .video).first else {
             throw CompressionError.noVideoTrack
         }
 
-        let sourceSize = try await videoTrack.naturalDisplaySize()
-        let targetSize = fitSize(sourceSize, within: context.maxVideoResolution)
+        // **Le writer encode les pixel buffers RAW** (orientation sensor),
+        // pas l'image displayée — la rotation est appliquée en metadata via
+        // `videoInput.transform`. Donc les dims du writer doivent matcher
+        // les dims des sample buffers source, sinon l'encoder force-rescale
+        // entre deux ratios incompatibles (ex. 1920×1080 raw → 1080×1920
+        // demandé = stretch 16:9 → 9:16). C'était la régression du
+        // 2026-04-30 quand `naturalDisplaySize()` a remplacé `naturalSize`.
+        //
+        // Le budget `maxVideoResolution` reste exprimé côté display (1080×
+        // 1920 pour story portrait), donc on fait le fit en coordonnées
+        // display puis on swap back en raw pour le writer.
+        let rawSourceSize = try await videoTrack.load(.naturalSize)
+        let transform = try await videoTrack.load(.preferredTransform)
+        let isPortraitDisplay = abs(transform.b) == 1 && abs(transform.c) == 1
+        let displaySourceSize = isPortraitDisplay
+            ? CGSize(width: rawSourceSize.height, height: rawSourceSize.width)
+            : rawSourceSize
+        let targetDisplaySize = fitSize(displaySourceSize, within: context.maxVideoResolution)
+        let targetRawSize = isPortraitDisplay
+            ? CGSize(width: targetDisplaySize.height, height: targetDisplaySize.width)
+            : targetDisplaySize
+
         let nominalFrameRate = try await videoTrack.load(.nominalFrameRate)
         let targetFPS = min(nominalFrameRate, 30)
-        let transform = try await videoTrack.load(.preferredTransform)
 
         let useHEVC = VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)
         let codecType: AVVideoCodecType = useHEVC ? .hevc : .h264
 
         let videoSettings: [String: Any] = [
             AVVideoCodecKey: codecType,
-            AVVideoWidthKey: Int(targetSize.width),
-            AVVideoHeightKey: Int(targetSize.height),
+            AVVideoWidthKey: Int(targetRawSize.width),
+            AVVideoHeightKey: Int(targetRawSize.height),
             AVVideoCompressionPropertiesKey: [
                 AVVideoAverageBitRateKey: context.videoBitRate,
                 AVVideoExpectedSourceFrameRateKey: targetFPS,
@@ -238,10 +277,20 @@ actor MediaCompressor {
         let vIn = SendableWriterInput(value: videoInput)
         let aOut = audioOutput.map { SendableTrackOutput(value: $0) }
         let aIn = audioInput.map { SendableWriterInput(value: $0) }
-        await Self.transferSamples(from: vOut.value, to: vIn.value)
-        if let aOut, let aIn {
+
+        // **Parallélisation video + audio**. Avant on transferait
+        // séquentiellement (video puis audio) : sur un clip 30 s avec
+        // audio non trivial, l'audio attendait ~ durée du clip avant
+        // de commencer son pass. AVAssetReader et AVAssetWriter
+        // supportent des reads/writes concurrents sur des tracks
+        // distinctes (chaque track output a sa propre queue interne).
+        // `async let` les lance en parallèle, on attend la jointure.
+        async let videoTask: Void = Self.transferSamples(from: vOut.value, to: vIn.value)
+        async let audioTask: Void = {
+            guard let aOut, let aIn else { return }
             await Self.transferSamples(from: aOut.value, to: aIn.value)
-        }
+        }()
+        _ = await (videoTask, audioTask)
 
         await writer.finishWriting()
 
@@ -249,7 +298,7 @@ actor MediaCompressor {
             throw writer.error ?? CompressionError.exportSessionFailed
         }
 
-        Self.logger.info("Video compressed: \(codecType == .hevc ? "HEVC" : "H.264", privacy: .public) \(Int(targetSize.width))x\(Int(targetSize.height)) @ \(context.videoBitRate / 1000)kbps")
+        Self.logger.info("Video compressed: \(codecType == .hevc ? "HEVC" : "H.264", privacy: .public) \(Int(targetDisplaySize.width))x\(Int(targetDisplaySize.height)) display (\(Int(targetRawSize.width))x\(Int(targetRawSize.height)) raw) @ \(context.videoBitRate / 1000)kbps")
 
         return outputURL
     }
@@ -370,6 +419,95 @@ actor MediaCompressor {
                 }
             }
         }
+    }
+
+    // MARK: - Passthrough fast-path
+
+    /// Si la source est déjà compatible avec le budget cible (codec moderne,
+    /// résolution & bitrate dans les clous), remuxe vers `outputURL` via
+    /// `AVAssetExportPresetPassthrough`. Aucun décodage / ré-encodage —
+    /// l'opération est limitée par la vitesse I/O disque (sub-seconde pour
+    /// un clip mobile classique). Retourne `nil` si la passthrough n'est
+    /// pas applicable, ce qui force le caller à fallback sur la pipeline
+    /// AVAssetReader / Writer.
+    ///
+    /// Critères d'éligibilité :
+    /// - Track vidéo en `kCMVideoCodecType_HEVC` ou `kCMVideoCodecType_H264`
+    ///   (les codecs déjà efficaces, supportés universellement par les
+    ///   players cibles : iOS, macOS, WhatsApp, Photos).
+    /// - `naturalSize ≤ context.maxVideoResolution` (largeur ET hauteur).
+    ///   Si l'asset est plus grand, il faut le rescaler → forcer le
+    ///   re-encodage.
+    /// - `estimatedDataRate ≤ context.videoBitRate × 2`. Tolérance 2× au
+    ///   budget pour éviter de transcoder un clip à peine au-dessus — la
+    ///   différence de taille (quelques MB) ne justifie pas 30 s+ de
+    ///   compute thermal.
+    ///
+    /// Le caller utilise `try? await` car cette méthode peut throw sur
+    /// asset corrompu — dans ce cas on retombe sur le path lent, qui
+    /// fera la même check de track et throwra une erreur typée.
+    private func passthroughIfPossible(
+        asset: AVURLAsset,
+        sourceURL: URL,
+        outputURL: URL,
+        context: MediaContext
+    ) async throws -> URL? {
+        guard let videoTrack = try await asset.loadTracks(withMediaType: .video).first else {
+            return nil
+        }
+
+        // Codec check via les format descriptions de la track.
+        // Sous iOS 16+, le typed getter `.formatDescriptions` retourne
+        // directement `[CMFormatDescription]` — pas besoin de downcast.
+        let formats = try await videoTrack.load(.formatDescriptions)
+        guard let firstFormat = formats.first else { return nil }
+        let codec = CMFormatDescriptionGetMediaSubType(firstFormat)
+        let isModernCodec = (codec == kCMVideoCodecType_HEVC) || (codec == kCMVideoCodecType_H264)
+        guard isModernCodec else { return nil }
+
+        // Résolution check — on compare la natural display size (après
+        // rotation préférée) au budget. Si le source dépasse, on a besoin
+        // de rescaler → on ne peut pas remux.
+        let displaySize = try await videoTrack.naturalDisplaySize()
+        let target = context.maxVideoResolution
+        let fitsInBudget = displaySize.width <= target.width + 1 &&
+                           displaySize.height <= target.height + 1
+        guard fitsInBudget else { return nil }
+
+        // Bitrate check — `estimatedDataRate` en bits/s. On tolère 2× le
+        // budget : 4 Mbps story × 2 = 8 Mbps, ce qui couvre la majorité
+        // des captures iPhone qui sortent autour de 10–15 Mbps mais
+        // qu'on accepte au prix d'un fichier marginalement plus gros
+        // plutôt qu'un re-encode de 30+ s.
+        let estimatedBitrate = try await videoTrack.load(.estimatedDataRate)
+        let bitrateBudget = Float(context.videoBitRate * 2)
+        guard estimatedBitrate <= bitrateBudget else { return nil }
+
+        // Tous les checks passent → remux via passthrough.
+        guard let session = AVAssetExportSession(
+            asset: asset,
+            presetName: AVAssetExportPresetPassthrough
+        ) else {
+            return nil
+        }
+        session.outputURL = outputURL
+        session.outputFileType = .mp4
+        session.shouldOptimizeForNetworkUse = true
+
+        await session.export()
+        guard session.status == .completed else {
+            // L'export passthrough a échoué pour une raison non-prévue
+            // par les checks (asset corrompu, container exotique).
+            // On signale au caller en throwant — il fera fallback sur
+            // le path transcode lent (qui re-tentera le même asset).
+            if let error = session.error {
+                throw error
+            }
+            return nil
+        }
+
+        Self.logger.info("Video passthrough (no transcode): \(Int(displaySize.width))x\(Int(displaySize.height)) codec=\(codec == kCMVideoCodecType_HEVC ? "HEVC" : "H264", privacy: .public) @ ~\(Int(estimatedBitrate / 1000))kbps")
+        return outputURL
     }
 
     // MARK: - MIME detection

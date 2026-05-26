@@ -274,6 +274,30 @@ public struct NotificationContext: Codable, Sendable {
     public let reactionId: String?
     public let postId: String?
     public let commentId: String?
+
+    public init(
+        conversationId: String? = nil,
+        conversationTitle: String? = nil,
+        conversationType: String? = nil,
+        messageId: String? = nil,
+        originalMessageId: String? = nil,
+        callSessionId: String? = nil,
+        friendRequestId: String? = nil,
+        reactionId: String? = nil,
+        postId: String? = nil,
+        commentId: String? = nil
+    ) {
+        self.conversationId = conversationId
+        self.conversationTitle = conversationTitle
+        self.conversationType = conversationType
+        self.messageId = messageId
+        self.originalMessageId = originalMessageId
+        self.callSessionId = callSessionId
+        self.friendRequestId = friendRequestId
+        self.reactionId = reactionId
+        self.postId = postId
+        self.commentId = commentId
+    }
 }
 
 // MARK: - Notification State
@@ -362,6 +386,13 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
     public let userId: String
     public let type: String
     public let priority: String?
+    // Mirror the APN/FCM push header so the iOS in-app toast (driven by
+    // `notification:new` over Socket.IO) can render the same "sender +
+    // conversation" framing as the native banner. Both fields are
+    // populated by `buildPushHeader()` on the gateway and are absent on
+    // REST-fetched notifications (kept optional for backwards compat).
+    public let title: String?
+    public let subtitle: String?
     public let content: String?
     public let actor: NotificationActor?
     public let context: NotificationContext?
@@ -371,10 +402,12 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
 
     public init(
         id: String, userId: String, type: String, priority: String?,
+        title: String? = nil, subtitle: String? = nil,
         content: String?, actor: NotificationActor?, context: NotificationContext?,
         metadata: NotificationMetadata?, state: NotificationState, delivery: NotificationDelivery?
     ) {
         self.id = id; self.userId = userId; self.type = type; self.priority = priority
+        self.title = title; self.subtitle = subtitle
         self.content = content; self.actor = actor; self.context = context
         self.metadata = metadata; self.state = state; self.delivery = delivery
     }

@@ -15,10 +15,12 @@ public struct LoginRequest: Encodable {
 }
 
 public struct LoginResponseData: Decodable, Sendable {
-    public let user: MeeshyUser
-    public let token: String
+    public let user: MeeshyUser?
+    public let token: String?
     public let sessionToken: String?
     public let expiresIn: Int?
+    public let requires2FA: Bool?
+    public let twoFactorToken: String?
 }
 
 // MARK: - Register

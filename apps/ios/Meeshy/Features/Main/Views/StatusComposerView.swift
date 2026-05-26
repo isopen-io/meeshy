@@ -10,10 +10,10 @@ enum StatusVisibility: String, CaseIterable {
 
     var label: String {
         switch self {
-        case .public: return "Public"
-        case .friends: return "Amis"
-        case .except: return "Sauf..."
-        case .only: return "Seulement..."
+        case .public: return String(localized: "status.composer.visibility.public", defaultValue: "Public", bundle: .main)
+        case .friends: return String(localized: "status.composer.visibility.friends", defaultValue: "Amis", bundle: .main)
+        case .except: return String(localized: "status.composer.visibility.except", defaultValue: "Sauf...", bundle: .main)
+        case .only: return String(localized: "status.composer.visibility.only", defaultValue: "Seulement...", bundle: .main)
         }
     }
 
@@ -60,7 +60,7 @@ struct StatusComposerView: View {
                             Image(systemName: "arrow.2.squarepath")
                                 .font(.system(size: 12))
                                 .foregroundColor(MeeshyColors.indigo400)
-                            Text("Status de @\(via)")
+                            Text(String(localized: "status.composer.repost.via", defaultValue: "Status de @\(via)", bundle: .main))
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundColor(theme.textSecondary)
                         }
@@ -93,11 +93,11 @@ struct StatusComposerView: View {
                 }
                 .padding(20)
             }
-            .navigationTitle(viaUsername != nil ? "Republier un status" : "Status")
+            .navigationTitle(viaUsername != nil ? String(localized: "status.composer.title.repost", defaultValue: "Republier un status", bundle: .main) : String(localized: "status.composer.title", defaultValue: "Status", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Fermer") {
+                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) {
                         dismiss()
                     }
                     .foregroundColor(theme.textSecondary)
@@ -116,7 +116,7 @@ struct StatusComposerView: View {
 
     private var emojiGrid: some View {
         VStack(spacing: 12) {
-            Text("Comment tu te sens ?")
+            Text(String(localized: "status.composer.mood.question", defaultValue: "Comment tu te sens ?", bundle: .main))
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
@@ -166,7 +166,7 @@ struct StatusComposerView: View {
     // MARK: - Text Input
 
     private var textInput: some View {
-        TextField("Comment tu vas ?", text: $statusText)
+        TextField(String(localized: "status.composer.placeholder", defaultValue: "Comment tu vas ?", bundle: .main), text: $statusText)
             .font(.system(size: 15))
             .foregroundColor(theme.textPrimary)
             .padding(14)
@@ -200,7 +200,7 @@ struct StatusComposerView: View {
 
     private func previewPill(emoji: String) -> some View {
         VStack(spacing: 8) {
-            Text("Aperçu")
+            Text(String(localized: "status.composer.preview", defaultValue: "Aperçu", bundle: .main))
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(theme.textMuted)
 
@@ -276,7 +276,7 @@ struct StatusComposerView: View {
                         .tint(.white)
                         .scaleEffect(0.8)
                 } else {
-                    Text("Publier")
+                    Text(String(localized: "status.composer.publish", defaultValue: "Publier", bundle: .main))
                         .font(.system(size: 16, weight: .bold))
                 }
             }

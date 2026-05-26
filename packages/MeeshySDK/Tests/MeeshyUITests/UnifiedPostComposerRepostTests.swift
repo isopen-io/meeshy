@@ -54,7 +54,7 @@ final class UnifiedPostComposerRepostTests: XCTestCase {
 
     // MARK: - test_publish_invokesOnPublishRepostWithContentAndStory
 
-    func test_publish_invokesOnPublishRepostWithContentAndStory() {
+    func test_publish_invokesOnPublishRepostWithContentAndStory() async {
         var publishedContent: String?
         var publishedStory: StoryItem?
         let story = Self.makeStoryItem(id: "src-1")
@@ -69,8 +69,14 @@ final class UnifiedPostComposerRepostTests: XCTestCase {
             onDismiss: {}
         )
 
-        composer.triggerPublishForTests(content: "Mon commentaire")
+        // `triggerPublishForTests` dispatches its work onto an unstructured
+        // `Task` (the repost handler is stored as `async throws` regardless
+        // of whether the caller passed a sync or async closure), so a sync
+        // assertion right after it would race the published values. The
+        // `Awaiting` variant returns once the handler has run.
+        let ok = await composer.triggerPublishForTestsAwaiting(content: "Mon commentaire")
 
+        XCTAssertTrue(ok, "Publish handler must complete without throwing")
         XCTAssertEqual(publishedContent, "Mon commentaire",
                        "Publish action must forward the typed content to onPublishRepost")
         XCTAssertEqual(publishedStory?.id, "src-1",

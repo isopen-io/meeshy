@@ -79,6 +79,39 @@ final class UserPreferencesManagerTests: XCTestCase {
         XCTAssertEqual(manager.application, ApplicationPreferences.defaults)
     }
 
+    // MARK: - resetSession (P1 — logout)
+
+    /// Prouve que `resetSession()` purge à la fois les @Published en mémoire
+    /// ET les clés UserDefaults — sans ça, un cold-start sous user B
+    /// re-hydrate les préférences du user A depuis le disque. Câblée
+    /// depuis `AuthManager.logout()`.
+    func test_resetSession_clearsInMemoryAndWipesDisk() {
+        manager.updateAudio { $0.ttsEnabled = true }
+        manager.updateDocument { $0.autoDownloadEnabled = true }
+
+        // précondition : les valeurs et les clés disque existent
+        XCTAssertTrue(manager.audio.ttsEnabled, "precondition: audio.ttsEnabled should be true")
+        XCTAssertNotNil(
+            UserDefaults.standard.object(forKey: "meeshy_prefs_audio"),
+            "precondition: audio prefs should be persisted on disk"
+        )
+
+        manager.resetSession()
+
+        XCTAssertEqual(manager.audio, AudioPreferences.defaults)
+        XCTAssertEqual(manager.document, DocumentPreferences.defaults)
+        XCTAssertEqual(manager.privacy, PrivacyPreferences.defaults)
+        XCTAssertNil(manager.lastSyncDate)
+        XCTAssertFalse(manager.isSyncing)
+        for category in PreferenceCategory.allCases {
+            XCTAssertNil(
+                UserDefaults.standard.object(forKey: "meeshy_prefs_" + category.rawValue),
+                "disk key for \(category.rawValue) should be wiped"
+            )
+        }
+        XCTAssertNil(UserDefaults.standard.object(forKey: "meeshy_prefs_last_sync"))
+    }
+
     // MARK: - updatePrivacy
 
     func test_updatePrivacy_appliesTransform() {

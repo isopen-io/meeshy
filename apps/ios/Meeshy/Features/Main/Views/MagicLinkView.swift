@@ -61,7 +61,7 @@ struct MagicLinkView: View {
                     }
                 }
                 ToolbarItem(placement: .principal) {
-                    Text("Connexion par lien magique")
+                    Text(String(localized: "auth.magiclink.title", defaultValue: "Connexion par lien magique", bundle: .main))
                         .font(.system(size: MeeshyFont.headlineSize, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                 }
@@ -86,12 +86,12 @@ struct MagicLinkView: View {
                 )
                 .padding(.bottom, MeeshySpacing.lg)
 
-            Text("Entrez votre adresse email")
+            Text(String(localized: "auth.magiclink.email.title", defaultValue: "Entrez votre adresse email", bundle: .main))
                 .font(.system(size: MeeshyFont.titleSize, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .multilineTextAlignment(.center)
 
-            Text("Nous vous enverrons un lien de connexion securise")
+            Text(String(localized: "auth.magiclink.email.subtitle", defaultValue: "Nous vous enverrons un lien de connexion securise", bundle: .main))
                 .font(.system(size: MeeshyFont.subheadSize, weight: .regular))
                 .foregroundColor(theme.textMuted)
                 .multilineTextAlignment(.center)
@@ -101,7 +101,7 @@ struct MagicLinkView: View {
                 Image(systemName: "envelope.fill")
                     .foregroundColor(Color(hex: "8B5CF6").opacity(0.7))
                     .frame(width: 20)
-                TextField("nom@exemple.com", text: $email)
+                TextField(String(localized: "auth.magiclink.email.placeholder", defaultValue: "nom@exemple.com", bundle: .main), text: $email)
                     .textContentType(.emailAddress)
                     .keyboardType(.emailAddress)
                     .textInputAutocapitalization(.never)
@@ -154,7 +154,7 @@ struct MagicLinkView: View {
                         ProgressView()
                             .tint(.white)
                     } else {
-                        Text("Envoyer le lien magique")
+                        Text(String(localized: "auth.magiclink.send", defaultValue: "Envoyer le lien magique", bundle: .main))
                             .font(.system(size: MeeshyFont.headlineSize, weight: .bold))
                             .foregroundColor(.white)
                     }
@@ -198,11 +198,11 @@ struct MagicLinkView: View {
             }
             .padding(.bottom, MeeshySpacing.md)
 
-            Text("Lien envoye !")
+            Text(String(localized: "auth.magiclink.sent.title", defaultValue: "Lien envoye !", bundle: .main))
                 .font(.system(size: MeeshyFont.titleSize, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
-            Text("Un lien de connexion a ete envoye a")
+            Text(String(localized: "auth.magiclink.sent.subtitle", defaultValue: "Un lien de connexion a ete envoye a", bundle: .main))
                 .font(.system(size: MeeshyFont.subheadSize, weight: .regular))
                 .foregroundColor(theme.textMuted)
                 .multilineTextAlignment(.center)
@@ -212,13 +212,13 @@ struct MagicLinkView: View {
                 .foregroundColor(MeeshyColors.indigo400)
 
             if linkExpired {
-                Text("Lien expire, renvoyez-en un nouveau")
+                Text(String(localized: "auth.magiclink.expired", defaultValue: "Lien expire, renvoyez-en un nouveau", bundle: .main))
                     .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
                     .foregroundColor(MeeshyColors.error)
                     .multilineTextAlignment(.center)
                     .padding(.top, MeeshySpacing.sm)
             } else {
-                Text("Ouvrez votre email et cliquez sur le lien")
+                Text(String(localized: "auth.magiclink.instructions", defaultValue: "Ouvrez votre email et cliquez sur le lien", bundle: .main))
                     .font(.system(size: MeeshyFont.subheadSize, weight: .regular))
                     .foregroundColor(theme.textMuted)
                     .multilineTextAlignment(.center)
@@ -237,7 +237,7 @@ struct MagicLinkView: View {
                 HStack(spacing: MeeshySpacing.sm) {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
-                    Text("Renvoyer")
+                    Text(String(localized: "auth.magiclink.resend", defaultValue: "Renvoyer", bundle: .main))
                 }
                 .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
                 .foregroundColor(countdownRemaining > 0 ? theme.textMuted : MeeshyColors.indigo400)
@@ -252,7 +252,7 @@ struct MagicLinkView: View {
                     errorMessage = nil
                 }
             } label: {
-                Text("Annuler")
+                Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
                     .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
@@ -294,7 +294,7 @@ struct MagicLinkView: View {
                 isLoading = false
                 Self.logger.error("Magic link send failed: \(error.localizedDescription)")
             } catch {
-                errorMessage = "Une erreur est survenue. Veuillez reessayer."
+                errorMessage = String(localized: "auth.magiclink.error.generic", defaultValue: "Une erreur est survenue. Veuillez reessayer.", bundle: .main)
                 isLoading = false
                 Self.logger.error("Magic link send failed: \(error.localizedDescription)")
             }

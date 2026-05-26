@@ -261,12 +261,34 @@ class PostDetailViewModel: ObservableObject {
         }
     }
 
-    func bookmarkPost() async {
-        guard let post else { return }
+    /// Updates the loaded post's body content. Optimistic UX mirrors
+    /// FeedViewModel.updatePost: flip the in-memory post immediately, clear
+    /// translations so the bubble re-renders, rollback on API failure.
+    func updatePost(content: String) async {
+        guard let snapshot = post else { return }
+        var optimistic = snapshot
+        optimistic.content = content
+        optimistic.translatedContent = nil
+        optimistic.translations = nil
+        self.post = optimistic
         do {
-            try await postService.bookmark(postId: post.id)
+            let updated = try await postService.update(postId: snapshot.id, content: content, visibility: nil, moodEmoji: nil)
+            self.post = updated.toFeedPost(preferredLanguages: preferredLanguages)
+            ToastManager.shared.showSuccess(String(localized: "Post modifie", defaultValue: "Post modifie"))
         } catch {
-            ToastManager.shared.showError("Erreur lors de l'enregistrement")
+            self.post = snapshot
+            ToastManager.shared.showError(String(localized: "Erreur lors de la modification", defaultValue: "Erreur lors de la modification"))
+        }
+    }
+
+    /// Reports the loaded post as inappropriate. Mirrors `FeedViewModel.reportPost`
+    /// — uses ReportService directly so PostDetailView doesn't have to dual-wire.
+    func reportPost(_ postId: String) async {
+        do {
+            try await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
+            ToastManager.shared.showSuccess(String(localized: "Signalement envoye", defaultValue: "Signalement envoye"))
+        } catch {
+            ToastManager.shared.showError(String(localized: "Erreur lors du signalement", defaultValue: "Erreur lors du signalement"))
         }
     }
 

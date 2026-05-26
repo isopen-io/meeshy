@@ -99,7 +99,7 @@ struct OnboardingFlowView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left")
                             .font(.system(size: 15, weight: .semibold))
-                        Text("Retour")
+                        Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                             .font(.system(size: 14, weight: .medium))
                     }
                     .foregroundColor(.secondary)
@@ -175,7 +175,7 @@ struct OnboardingFlowView: View {
 
             if viewModel.currentStep == .profile {
                 Button(action: { viewModel.nextStep() }) {
-                    Text("Passer cette etape")
+                    Text(String(localized: "onboarding.skip-step", defaultValue: "Passer cette etape", bundle: .main))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.secondary)
                 }
@@ -195,11 +195,11 @@ struct OnboardingFlowView: View {
     private var buttonTitle: String {
         switch viewModel.currentStep {
         case .recap:
-            return "Creer mon compte"
+            return String(localized: "onboarding.button.create-account", defaultValue: "Creer mon compte", bundle: .main)
         case .profile:
-            return "Continuer"
+            return String(localized: "common.continue", defaultValue: "Continuer", bundle: .main)
         default:
-            return "C'est bon, suivant!"
+            return String(localized: "onboarding.button.next", defaultValue: "C'est bon, suivant!", bundle: .main)
         }
     }
 

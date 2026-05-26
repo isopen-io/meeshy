@@ -37,4 +37,36 @@ final class StoryBackgroundLayerVideoTests: XCTestCase {
         let avLayer = layer.sublayers?.first { $0 is AVPlayerLayer } as? AVPlayerLayer
         XCTAssertEqual(avLayer?.player?.rate, 0)
     }
+
+    func test_resolveVideoGravity_landscapeVideo_returnsResizeAspect() {
+        let canvas = CGSize(width: 1080, height: 1920)
+        let landscape = CGSize(width: 1920, height: 1080)
+        let gravity = StoryBackgroundLayer.resolveVideoGravity(
+            naturalSize: landscape, canvasSize: canvas, override: nil)
+        XCTAssertEqual(gravity, .resizeAspect)
+    }
+
+    func test_resolveVideoGravity_portraitVideo_returnsResizeAspectFill() {
+        let canvas = CGSize(width: 1080, height: 1920)
+        let portrait = CGSize(width: 1080, height: 1920)
+        let gravity = StoryBackgroundLayer.resolveVideoGravity(
+            naturalSize: portrait, canvasSize: canvas, override: nil)
+        XCTAssertEqual(gravity, .resizeAspectFill)
+    }
+
+    func test_resolveVideoGravity_overrideFit_returnsResizeAspect() {
+        let canvas = CGSize(width: 1080, height: 1920)
+        let portrait = CGSize(width: 1080, height: 1920)
+        let gravity = StoryBackgroundLayer.resolveVideoGravity(
+            naturalSize: portrait, canvasSize: canvas, override: "fit")
+        XCTAssertEqual(gravity, .resizeAspect)
+    }
+
+    func test_resolveVideoGravity_overrideFill_returnsResizeAspectFill() {
+        let canvas = CGSize(width: 1080, height: 1920)
+        let landscape = CGSize(width: 1920, height: 1080)
+        let gravity = StoryBackgroundLayer.resolveVideoGravity(
+            naturalSize: landscape, canvasSize: canvas, override: "fill")
+        XCTAssertEqual(gravity, .resizeAspectFill)
+    }
 }

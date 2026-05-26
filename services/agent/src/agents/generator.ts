@@ -283,36 +283,52 @@ function buildReaction(directive: ReactionDirective): PendingReaction {
 
 export function createGeneratorNode(llm: LlmProvider) {
   return async function generator(state: ConversationState) {
-    const plan = state.interventionPlan;
-    if (!plan?.shouldIntervene || plan.interventions.length === 0) {
+    try {
+      const plan = state.interventionPlan;
+      if (!plan?.shouldIntervene || plan.interventions.length === 0) {
+        return {
+          pendingActions: [],
+          _traceInputTokens: 0, _traceOutputTokens: 0, _traceModel: 'skipped', _traceExtra: { skipped: true },
+        };
+      }
+
+      const actions: PendingAction[] = [];
+
+      for (const directive of plan.interventions) {
+        if (directive.type === 'message') {
+          const message = await generateMessage(llm, state, directive);
+          if (message) actions.push(message);
+        } else if (directive.type === 'reaction') {
+          actions.push(buildReaction(directive));
+        }
+      }
+
+      console.log(`[Generator] Produced ${actions.length} actions (${actions.filter((a) => a.type === 'message').length} messages, ${actions.filter((a) => a.type === 'reaction').length} reactions)`);
+
+      return {
+        pendingActions: actions,
+        _traceInputTokens: 0,
+        _traceOutputTokens: 0,
+        _traceModel: 'aggregate',
+        _traceExtra: {
+          messagesGenerated: actions.filter((a) => a.type === 'message').length,
+          reactionsBuilt: actions.filter((a) => a.type === 'reaction').length,
+        },
+      };
+    } catch (error) {
+      console.error('[Generator] Error:', error);
       return {
         pendingActions: [],
-        _traceInputTokens: 0, _traceOutputTokens: 0, _traceModel: 'skipped', _traceExtra: { skipped: true },
+        _traceInputTokens: 0,
+        _traceOutputTokens: 0,
+        _traceModel: 'error',
+        _traceExtra: {
+          error: true,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorCode: (error as any)?.code ?? 'UNKNOWN',
+          errorStack: error instanceof Error ? error.stack : undefined,
+        },
       };
     }
-
-    const actions: PendingAction[] = [];
-
-    for (const directive of plan.interventions) {
-      if (directive.type === 'message') {
-        const message = await generateMessage(llm, state, directive);
-        if (message) actions.push(message);
-      } else if (directive.type === 'reaction') {
-        actions.push(buildReaction(directive));
-      }
-    }
-
-    console.log(`[Generator] Produced ${actions.length} actions (${actions.filter((a) => a.type === 'message').length} messages, ${actions.filter((a) => a.type === 'reaction').length} reactions)`);
-
-    return {
-      pendingActions: actions,
-      _traceInputTokens: 0,
-      _traceOutputTokens: 0,
-      _traceModel: 'aggregate',
-      _traceExtra: {
-        messagesGenerated: actions.filter((a) => a.type === 'message').length,
-        reactionsBuilt: actions.filter((a) => a.type === 'reaction').length,
-      },
-    };
   };
 }

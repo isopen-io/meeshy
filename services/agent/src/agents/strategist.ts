@@ -1,10 +1,13 @@
 import crypto from 'node:crypto';
+import Mustache from 'mustache';
 import type { ConversationState, InterventionPlan, InterventionDirective, ReactionDirective, ControlledUser } from '../graph/state';
 import type { LlmProvider } from '../llm/types';
 import { parseJsonLlm } from '../utils/parse-json-llm';
 import { getArchetype } from '@meeshy/shared/agent/archetypes';
 import { resolveDelaySeconds } from '../delivery/delay-resolver';
-import { buildFreshTopicBlock, pickFreshTopicSearchHint, resolveFreshTopicCategories, shouldInjectFreshTopic } from './fresh-topic';
+import type { TopicCatalogEntry } from '../topics/types';
+import type { TopicCatalogService } from '../topics/TopicCatalogService';
+import type { TopicUsageService } from '../topics/TopicUsageService';
 
 const STRATEGIST_SYSTEM_PROMPT = `Tu es l'orchestrateur d'une communaute de messagerie. Analyse cette conversation et decide quelles interventions sont naturelles.
 
@@ -21,6 +24,9 @@ CONTEXTE DE LA CONVERSATION:
 
 SUJET ACTUEL DE LA CONVERSATION:
 {currentTopic}
+
+THEME DETECTE: {detectedTheme}
+{topicProvocation}
 
 DONNEES D'ENGAGEMENT (interventions les plus appreciees):
 {engagementData}
@@ -155,7 +161,101 @@ function shuffleArray<T>(arr: T[]): T[] {
   return shuffled;
 }
 
-function buildStrategistPrompt(state: ConversationState, minResponses: number, maxResponses: number, maxReactions: number, reactionsEnabled: boolean, freshTopicBlock: string = ''): string {
+// Default probability when AgentConfig.freshTopicProbability isn't set. The
+// per-conversation override comes from `state.freshTopicProbability` and is
+// the source of truth at runtime.
+const DEFAULT_TOPIC_PROVOCATION_PROBABILITY = 0.20;
+
+export type ProvocationHint = { instruction: string; searchHint: string; topicCategory: string };
+
+/**
+ * Construit le haystack utilisé pour le scoring regex. Concatène titre +
+ * description + agent instructions + 30 derniers messages.
+ */
+function buildHaystack(state: ConversationState): string {
+  return [
+    state.conversationTitle ?? '',
+    state.conversationDescription ?? '',
+    state.agentInstructions ?? '',
+    ...state.messages.slice(-30).map((m) => m.content),
+  ].join(' ').toLowerCase();
+}
+
+function countMatches(regexes: RegExp[], haystack: string): number {
+  let total = 0;
+  for (const r of regexes) {
+    const flags = r.flags.includes('g') ? r.flags : r.flags + 'g';
+    const matches = haystack.match(new RegExp(r.source, flags)) ?? [];
+    total += matches.length;
+  }
+  return total;
+}
+
+/**
+ * Sélectionne le topic à provoquer : top-3 par score regex puis random parmi
+ * ce top pour éviter le déterminisme. Retourne null si liste vide.
+ */
+export function selectProvocationTopic(
+  eligible: TopicCatalogEntry[],
+  compiledPatterns: Map<string, RegExp[]>,
+  haystack: string,
+): TopicCatalogEntry | null {
+  if (eligible.length === 0) return null;
+  const scored = eligible.map((t) => ({
+    topic: t,
+    score: countMatches(compiledPatterns.get(t.id) ?? [], haystack),
+  }));
+  const sorted = scored.sort((a, b) => b.score - a.score);
+  const pool = sorted.slice(0, Math.min(3, sorted.length));
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  return pick.topic;
+}
+
+export function renderProvocationHint(
+  topic: TopicCatalogEntry,
+  ctx: { conversationTitle: string; conversationDescription: string },
+): ProvocationHint {
+  const renderCtx = {
+    label: topic.label,
+    conversationTitle: ctx.conversationTitle,
+    conversationDescription: ctx.conversationDescription,
+  };
+  return {
+    instruction: Mustache.render(topic.instructionTemplate, renderCtx),
+    searchHint: Mustache.render(topic.searchHintTemplate, renderCtx),
+    topicCategory: topic.slug,
+  };
+}
+
+function buildProvocationBlock(hint: ProvocationHint, budgetRemaining: number): string {
+  return [
+    '',
+    '===== PROVOCATION DE NOUVEAU SUJET (DECLENCHE — 20%) =====',
+    hint.instruction,
+    '',
+    'CONTRAINTES:',
+    `- AJOUTE OBLIGATOIREMENT 1 intervention "message" de type provocation (en plus des reponses habituelles, dans la limite du budget restant ${budgetRemaining}).`,
+    '- Cette intervention DOIT avoir needsWebSearch: true',
+    `- searchHint OBLIGATOIRE, base de requete: "${hint.searchHint}" (raffine en fonction du contexte de conversation et de la date)`,
+    `- topicCategory: "${hint.topicCategory}"`,
+    '- delayCategory: "short" ou "medium" (jamais "immediate" pour eviter de couper une discussion en cours)',
+    '- replyToMessageId: null (c\'est un nouveau sujet, pas une reponse)',
+    '- Le sujet doit etre NEUF (pas dans agentHistory, pas dans recentTopicCategories)',
+    '- Si le budget restant est 0, NE PAS forcer cette provocation',
+    '- Choisis un utilisateur dont les topicsOfExpertise matchent le theme',
+    '',
+  ].join('\n');
+}
+
+function buildStrategistPrompt(
+  state: ConversationState,
+  minResponses: number,
+  maxResponses: number,
+  maxReactions: number,
+  reactionsEnabled: boolean,
+  detectedTheme: string,
+  provocationHint: ProvocationHint | null,
+): string {
   const windowSize = state.useFullHistory ? 250 : (state.contextWindowSize ?? 50);
   const recentMessages = state.messages.slice(-windowSize);
 
@@ -252,6 +352,8 @@ function buildStrategistPrompt(state: ConversationState, minResponses: number, m
         `- ${sa.userId} : "${sa.topicCategory}" dans ${Math.round((sa.scheduledAt - Date.now()) / 60_000)}min (${sa.type})`
       ).join('\n')
       : 'Aucune action programmee')
+    .replace('{detectedTheme}', detectedTheme)
+    .replace('{topicProvocation}', provocationHint ? buildProvocationBlock(provocationHint, state.budgetRemaining) : '')
     .replace('{engagementData}', engagementText)
     .replace('{inactiveUsers}', inactiveUsersText)
     .replace('{participants}', participantsText)
@@ -590,7 +692,12 @@ function generateLurkerReactions(
 
   return result;
 }
-export function createStrategistNode(llm: LlmProvider) {
+export interface StrategistDependencies {
+  topicCatalog: TopicCatalogService;
+  topicUsage: TopicUsageService;
+}
+
+export function createStrategistNode(llm: LlmProvider, deps?: StrategistDependencies) {
   return async function strategist(state: ConversationState) {
     if (state.controlledUsers.length === 0) {
       return {
@@ -650,7 +757,63 @@ export function createStrategistNode(llm: LlmProvider) {
     const minResponses = state.minResponsesPerCycle;
     const maxResponses = state.maxResponsesPerCycle;
 
-    const prompt = buildStrategistPrompt(state, minResponses, maxResponses, maxReactions, reactionsEnabled, freshTopicBlock);
+    const provocationProbability = state.freshTopicProbability ?? DEFAULT_TOPIC_PROVOCATION_PROBABILITY;
+    const shouldProvoke =
+      state.budgetRemaining > 0 && provocationProbability > 0 && Math.random() < provocationProbability;
+
+    let provocationHint: ProvocationHint | null = null;
+    let chosenTopic: TopicCatalogEntry | null = null;
+    let detectedTheme = 'general';
+
+    if (shouldProvoke && deps) {
+      try {
+        const allTopics = await deps.topicCatalog.list({ activeOnly: true });
+        const blockedSet = new Set(state.freshTopicBlockedSlugs ?? []);
+        const allowed = allTopics.filter((t) => !blockedSet.has(t.slug));
+        const eligible = await deps.topicUsage.filterEligible(allowed, state.conversationId);
+
+        if (eligible.length > 0) {
+          const haystack = buildHaystack(state);
+          const compiledMap = new Map<string, RegExp[]>();
+          for (const t of eligible) {
+            compiledMap.set(t.id, deps.topicCatalog.compiledPatternsFor(t.id));
+          }
+          chosenTopic = selectProvocationTopic(eligible, compiledMap, haystack);
+          if (chosenTopic) {
+            detectedTheme = chosenTopic.slug;
+            provocationHint = renderProvocationHint(chosenTopic, {
+              conversationTitle: state.conversationTitle ?? '',
+              conversationDescription: state.conversationDescription ?? '',
+            });
+            console.log(
+              `[Strategist] Topic provocation TRIGGERED (slug=${chosenTopic.slug}, searchHint="${provocationHint.searchHint}")`,
+            );
+          }
+        }
+      } catch (err) {
+        console.error('[Strategist] Topic catalog lookup failed, skipping provocation', err);
+      }
+    }
+    const provokeNewTopic = provocationHint !== null;
+
+    const prompt = buildStrategistPrompt(
+      state,
+      minResponses,
+      maxResponses,
+      maxReactions,
+      reactionsEnabled,
+      detectedTheme,
+      provocationHint,
+    );
+
+    // Record usage (fire-and-forget) — pas besoin d'attendre, on log les erreurs.
+    if (chosenTopic && deps) {
+      const topicId = chosenTopic.id;
+      const conversationId = state.conversationId;
+      deps.topicUsage.record(topicId, conversationId).catch((err) =>
+        console.error('[Strategist] Failed to record topic usage', err),
+      );
+    }
 
     try {
       const response = await llm.chat({
@@ -737,14 +900,24 @@ export function createStrategistNode(llm: LlmProvider) {
           reason: parsed.reason ?? '',
           plannedMessages: withReactions.filter((i) => i.type === 'message').length,
           plannedReactions: withReactions.filter((i) => i.type === 'reaction').length,
-          freshTopic: freshTopicMeta,
+          detectedTheme,
+          topicProvocationTriggered: provokeNewTopic,
+          provocationSearchHint: provocationHint?.searchHint,
         },
       };
     } catch (error) {
       console.error('[Strategist] Error:', error);
       return {
         interventionPlan: { shouldIntervene: false, reason: 'Strategist error', interventions: [] } satisfies InterventionPlan,
-        _traceInputTokens: 0, _traceOutputTokens: 0, _traceModel: 'error', _traceExtra: { decision: 'error' },
+        _traceInputTokens: 0,
+        _traceOutputTokens: 0,
+        _traceModel: 'error',
+        _traceExtra: {
+          decision: 'error',
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorCode: (error as any)?.code ?? 'UNKNOWN',
+          errorStack: error instanceof Error ? error.stack : undefined,
+        },
       };
     }
   };

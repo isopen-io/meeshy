@@ -202,6 +202,13 @@ const stdErrorsWithNotFound = {
   404: errorResponseSchema,
 } as const;
 
+type InvalidationStatus = {
+  redisPublishOk: boolean;
+  redisSubscribersNotified: number;
+  httpInvalidateOk: boolean;
+  anyChannelSucceeded: boolean;
+};
+
 // ── Routes ──────────────────────────────────────────────────────────────────
 
 type InvalidationStatus = {
@@ -256,7 +263,6 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
     status.anyChannelSucceeded = status.redisSubscribersNotified > 0 || status.httpInvalidateOk;
     return status;
   }
-
 
   // GET /stats
   fastify.get('/stats', {

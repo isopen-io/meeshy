@@ -69,7 +69,7 @@ struct WidgetPreviewView: View {
                 MeeshyColors.mainBackgroundGradient(isDark: isDark)
                     .ignoresSafeArea()
             )
-            .navigationTitle("Tableau de bord")
+            .navigationTitle(String(localized: "widget.preview.dashboard", defaultValue: "Tableau de bord", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -80,7 +80,7 @@ struct WidgetPreviewView: View {
                             .font(.system(size: 22))
                             .foregroundStyle(theme.textMuted)
                     }
-                    .accessibilityLabel("Fermer le tableau de bord")
+                    .accessibilityLabel(String(localized: "widget.preview.a11y.closeDashboard", defaultValue: "Fermer le tableau de bord", bundle: .main))
                 }
             }
         }
@@ -124,10 +124,10 @@ struct WidgetPreviewView: View {
                     .contentTransition(.numericText())
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("messages")
+                    Text(String(localized: "widget.preview.messages", defaultValue: "messages", bundle: .main))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.white.opacity(0.8))
-                    Text("non lus")
+                    Text(String(localized: "widget.preview.unread", defaultValue: "non lus", bundle: .main))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.white.opacity(0.8))
                 }
@@ -140,7 +140,7 @@ struct WidgetPreviewView: View {
                 HStack(spacing: 6) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 14))
-                    Text("Tout est lu")
+                    Text(String(localized: "widget.preview.allRead", defaultValue: "Tout est lu", bundle: .main))
                         .font(.system(size: 13, weight: .semibold))
                 }
                 .foregroundColor(.white.opacity(0.8))
@@ -176,7 +176,7 @@ struct WidgetPreviewView: View {
                 Image(systemName: "clock.arrow.circlepath")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(MeeshyColors.indigo400)
-                Text("Conversations r\u{00e9}centes")
+                Text(String(localized: "widget.preview.recentConversations", defaultValue: "Conversations r\u{00e9}centes", bundle: .main))
                     .font(.system(size: 15, weight: .bold))
                     .foregroundColor(theme.textPrimary)
                 Spacer()
@@ -185,7 +185,7 @@ struct WidgetPreviewView: View {
             if recentConversations.isEmpty {
                 EmptyStateView(
                     icon: "bubble.left.and.bubble.right",
-                    title: "Aucune conversation",
+                    title: String(localized: "widget.preview.noConversations", defaultValue: "Aucune conversation", bundle: .main),
                     subtitle: ""
                 )
                 .padding(.vertical, 16)
@@ -250,8 +250,8 @@ struct WidgetPreviewView: View {
                     }
                 }
 
-                if conv.unreadCount > 0 {
-                    Text("\(conv.unreadCount)")
+                if conv.userState.unreadCount > 0 {
+                    Text("\(conv.userState.unreadCount)")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundColor(.white)
                         .frame(minWidth: 20, minHeight: 20)
@@ -264,7 +264,7 @@ struct WidgetPreviewView: View {
             .padding(.vertical, 4)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Ouvrir la conversation avec \(conv.name)")
+        .accessibilityLabel(String(localized: "widget.preview.a11y.openConversation", defaultValue: "Ouvrir la conversation avec \(conv.name)", bundle: .main))
     }
 
     // MARK: - Quick Actions Card
@@ -275,7 +275,7 @@ struct WidgetPreviewView: View {
                 Image(systemName: "bolt.fill")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(MeeshyColors.warning)
-                Text("Actions rapides")
+                Text(String(localized: "widget.preview.quickActions", defaultValue: "Actions rapides", bundle: .main))
                     .font(.system(size: 15, weight: .bold))
                     .foregroundColor(theme.textPrimary)
                 Spacer()
@@ -382,7 +382,7 @@ struct WidgetPreviewView: View {
                 Image(systemName: "link")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(theme.textSecondary)
-                Text("MES LIENS")
+                Text(String(localized: "widget.preview.myLinks", defaultValue: "MES LIENS", bundle: .main))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(theme.textSecondary)
                     .kerning(0.8)
@@ -392,11 +392,11 @@ struct WidgetPreviewView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     linkTypeCard(
-                        title: "Parrainage",
+                        title: String(localized: "widget.preview.referral", defaultValue: "Parrainage", bundle: .main),
                         icon: "person.badge.plus",
                         color: "2ECC71",
-                        stat1: "\(affiliateVM.tokens.count) lien(s)",
-                        stat2: "\(affiliateVM.tokens.reduce(0) { $0 + $1.referralCount }) inscrits"
+                        stat1: String(localized: "widget.preview.linkCount", defaultValue: "\(affiliateVM.tokens.count) lien(s)", bundle: .main),
+                        stat2: String(localized: "widget.preview.referralSignups", defaultValue: "\(affiliateVM.tokens.reduce(0) { $0 + $1.referralCount }) inscrits", bundle: .main)
                     ) {
                         dismiss()
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -405,11 +405,11 @@ struct WidgetPreviewView: View {
                     }
 
                     linkTypeCard(
-                        title: "Partage",
+                        title: String(localized: "widget.preview.share", defaultValue: "Partage", bundle: .main),
                         icon: "link.badge.plus",
                         color: "08D9D6",
-                        stat1: "\(shareStats?.totalLinks ?? 0) lien(s)",
-                        stat2: "\(shareStats?.totalUses ?? 0) rejoints"
+                        stat1: String(localized: "widget.preview.linkCountShare", defaultValue: "\(shareStats?.totalLinks ?? 0) lien(s)", bundle: .main),
+                        stat2: String(localized: "widget.preview.shareJoined", defaultValue: "\(shareStats?.totalUses ?? 0) rejoints", bundle: .main)
                     ) {
                         dismiss()
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -418,11 +418,11 @@ struct WidgetPreviewView: View {
                     }
 
                     linkTypeCard(
-                        title: "Tracking",
+                        title: String(localized: "widget.preview.tracking", defaultValue: "Tracking", bundle: .main),
                         icon: "chart.bar.fill",
                         color: "A855F7",
-                        stat1: "\(trackingStats?.totalLinks ?? 0) lien(s)",
-                        stat2: "\(trackingStats?.totalClicks ?? 0) clics"
+                        stat1: String(localized: "widget.preview.linkCountTracking", defaultValue: "\(trackingStats?.totalLinks ?? 0) lien(s)", bundle: .main),
+                        stat2: String(localized: "widget.preview.trackingClicks", defaultValue: "\(trackingStats?.totalClicks ?? 0) clics", bundle: .main)
                     ) {
                         dismiss()
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -431,11 +431,11 @@ struct WidgetPreviewView: View {
                     }
 
                     linkTypeCard(
-                        title: "Communaut\u{00e9}",
+                        title: String(localized: "widget.preview.community", defaultValue: "Communaut\u{00e9}", bundle: .main),
                         icon: "person.3.fill",
                         color: "F8B500",
-                        stat1: "\(communityLinks.count) groupe(s)",
-                        stat2: "\(communityLinks.reduce(0) { $0 + $1.memberCount }) membres"
+                        stat1: String(localized: "widget.preview.groupCount", defaultValue: "\(communityLinks.count) groupe(s)", bundle: .main),
+                        stat2: String(localized: "widget.preview.memberCount", defaultValue: "\(communityLinks.reduce(0) { $0 + $1.memberCount }) membres", bundle: .main)
                     ) {
                         dismiss()
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -520,10 +520,10 @@ struct WidgetPreviewView: View {
                 )
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Widgets Meeshy")
+                Text(String(localized: "widget.preview.widgetsTitle", defaultValue: "Widgets Meeshy", bundle: .main))
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(theme.textPrimary)
-                Text("Ajoutez ces widgets a votre ecran d'accueil pour un acces rapide.")
+                Text(String(localized: "widget.preview.widgetsHint", defaultValue: "Ajoutez ces widgets a votre ecran d'accueil pour un acces rapide.", bundle: .main))
                     .font(.system(size: 12))
                     .foregroundColor(theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)

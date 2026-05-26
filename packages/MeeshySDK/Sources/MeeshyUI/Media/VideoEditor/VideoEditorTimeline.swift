@@ -418,6 +418,25 @@ struct VideoEditorTimeline: View {
         .allowsHitTesting(false)
     }
 
+    /// Y du centre de la capsule de lecture en-dessous de la waveform.
+    ///
+    /// Layout vertical de la timeline :
+    /// - y=0..22                  → ruler (ticks + labels temps absolus)
+    /// - y=22..22+trackHeight     → filmstrip
+    /// - y=22+trackHeight..       → waveform audio (waveformHeight)
+    /// - y=...+waveformHeight..   → bande de la time readout (22pt)
+    ///
+    /// La readout DOIT vivre **sous** la waveform — sans ce repositionnement
+    /// elle était centrée à `y=trackHeight+36=94` et chevauchait la
+    /// waveform (qui occupe y=80..96), ce qui donnait l'impression que la
+    /// waveform avait disparu.
+    private var timeReadoutY: CGFloat {
+        let topInset: CGFloat = 22
+        let timelineExtent = trackHeight + waveformHeight
+        let readoutBandHeight: CGFloat = 22
+        return topInset + timelineExtent + readoutBandHeight / 2
+    }
+
     private func timeReadout(centerX: CGFloat, viewport: CGFloat) -> some View {
         HStack {
             Text(formatTime(viewModel.playheadTime))
@@ -431,7 +450,7 @@ struct VideoEditorTimeline: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
         .background(Capsule().fill(theme.backgroundPrimary.opacity(0.8)))
-        .position(x: centerX, y: trackHeight + 36)
+        .position(x: centerX, y: timeReadoutY)
         .allowsHitTesting(false)
     }
 

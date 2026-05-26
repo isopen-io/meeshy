@@ -119,16 +119,46 @@ final class PushNotificationManagerTests: XCTestCase {
     /// would have leaked state across this and other test classes).
     /// Each test builds its own SUT and tears down its suite — no
     /// `defer { restore previous value }` patch-up, no order coupling.
+    // MARK: - MockKeychainStore
+
+    final class MockKeychainStore: KeychainStoring, @unchecked Sendable {
+        var store: [String: String] = [:]
+        var saveError: Error?
+
+        func save(_ value: String, forKey key: String, account: String?) throws {
+            if let saveError { throw saveError }
+            store[key] = value
+        }
+
+        func load(forKey key: String, account: String?) -> String? {
+            store[key]
+        }
+
+        func delete(forKey key: String, account: String?) {
+            store.removeValue(forKey: key)
+        }
+
+        func saveAsync(_ value: String, forKey key: String, account: String?) async throws {
+            try save(value, forKey: key, account: account)
+        }
+
+        func loadAsync(forKey key: String, account: String?) async -> String? {
+            load(forKey: key, account: account)
+        }
+    }
+
+    // MARK: - registerDeviceToken (P1.3 — APNs registration chain)
+
     @MainActor
-    private func makePushManagerSUT(file: StaticString = #file, line: UInt = #line)
-    -> (sut: PushNotificationManager, defaults: UserDefaults, suiteName: String)
+    private func makePushManagerSUT(keychain: MockKeychainStore = MockKeychainStore(), file: StaticString = #file, line: UInt = #line)
+    -> (sut: PushNotificationManager, defaults: UserDefaults, keychain: MockKeychainStore, suiteName: String)
     {
         let suiteName = "test.push.\(UUID().uuidString)"
         guard let defaults = UserDefaults(suiteName: suiteName) else {
             XCTFail("Could not create isolated UserDefaults suite", file: file, line: line)
-            return (PushNotificationManager(userDefaults: .standard), .standard, suiteName)
+            return (PushNotificationManager(userDefaults: .standard, keychainStore: keychain), .standard, keychain, suiteName)
         }
-        return (PushNotificationManager(userDefaults: defaults), defaults, suiteName)
+        return (PushNotificationManager(userDefaults: defaults, keychainStore: keychain), defaults, keychain, suiteName)
     }
 
     @MainActor
@@ -136,15 +166,9 @@ final class PushNotificationManagerTests: XCTestCase {
         defaults.removePersistentDomain(forName: suiteName)
     }
 
-    /// Regression test for the AppDelegate
-    /// `didRegisterForRemoteNotificationsWithDeviceToken` → manager chain.
-    /// The audit previously suspected APNs registration was missing in code;
-    /// this test pins the actual contract so any future refactor that breaks
-    /// the chain (e.g. forgets to flip `@Published deviceToken`, or stops
-    /// persisting for `reRegisterTokenIfNeeded`) fails loudly.
     @MainActor
     func test_registerDeviceToken_setsPublishedTokenAndPersistsHex() {
-        let (sut, defaults, suite) = makePushManagerSUT()
+        let (sut, defaults, keychain, suite) = makePushManagerSUT()
         defer { tearDownDefaults(defaults, suiteName: suite) }
 
         let tokenData = Data([0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02, 0x03, 0x04])
@@ -152,25 +176,42 @@ final class PushNotificationManagerTests: XCTestCase {
 
         XCTAssertEqual(sut.deviceToken, "deadbeef01020304")
         XCTAssertEqual(
-            defaults.string(forKey: PushNotificationManager.persistedTokenKey),
+            keychain.load(forKey: PushNotificationManager.persistedTokenKey, account: nil),
             "deadbeef01020304"
         )
+        XCTAssertNil(defaults.string(forKey: PushNotificationManager.persistedTokenKey))
     }
 
-    /// `init(userDefaults:)` must read any previously persisted token so
-    /// `reRegisterTokenIfNeeded` has something to re-post when the app comes
-    /// back. Without this, a cold start after the user re-installed iOS
-    /// would silently drop the registration.
     @MainActor
     func test_init_readsPersistedTokenFromInjectedDefaults() {
         let suiteName = "test.push.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
-        defaults.set("cafefoodbeef", forKey: PushNotificationManager.persistedTokenKey)
 
-        let sut = PushNotificationManager(userDefaults: defaults)
+        let keychain = MockKeychainStore()
+        try? keychain.save("cafefoodbeef", forKey: PushNotificationManager.persistedTokenKey, account: nil)
+
+        let sut = PushNotificationManager(userDefaults: defaults, keychainStore: keychain)
 
         XCTAssertEqual(sut.deviceToken, "cafefoodbeef")
+    }
+
+    @MainActor
+    func test_init_migratesPersistedTokenFromUserDefaultsToKeychain() {
+        let suiteName = "test.push.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set("cafefoodbeef", forKey: PushNotificationManager.persistedTokenKey)
+        defaults.set("cafefoodbeef_last", forKey: PushNotificationManager.lastRegisteredTokenKey)
+
+        let keychain = MockKeychainStore()
+        let sut = PushNotificationManager(userDefaults: defaults, keychainStore: keychain)
+
+        XCTAssertEqual(sut.deviceToken, "cafefoodbeef")
+        XCTAssertEqual(keychain.load(forKey: PushNotificationManager.persistedTokenKey, account: nil), "cafefoodbeef")
+        XCTAssertEqual(keychain.load(forKey: PushNotificationManager.lastRegisteredTokenKey, account: nil), "cafefoodbeef_last")
+        XCTAssertNil(defaults.string(forKey: PushNotificationManager.persistedTokenKey))
+        XCTAssertNil(defaults.string(forKey: PushNotificationManager.lastRegisteredTokenKey))
     }
 
     // Note: `unregisterDeviceToken()` is intentionally NOT covered by a unit
@@ -180,4 +221,41 @@ final class PushNotificationManagerTests: XCTestCase {
     // this fix; the existing two tests already pin the injected-defaults
     // contract for the read + write paths. A follow-up PR can add the API
     // client injection if the unregister path needs unit coverage.
+
+    // MARK: - resetSession (P1 — logout)
+
+    /// Prouve que `resetSession()` clear le payload de navigation pending
+    /// + le deviceToken en mémoire + le token persisté Keychain, MAIS NE
+    /// touche PAS `isAuthorized` (qui reflète la permission système iOS,
+    /// device-level, persistante au-delà d'un logout). Toucher
+    /// `isAuthorized = false` au logout provoquerait un re-prompt
+    /// utilisateur que iOS rate-limit.
+    @MainActor
+    func test_resetSession_clearsPendingPayloadAndTokens_butKeepsAuthorization() {
+        let (sut, defaults, keychain, suite) = makePushManagerSUT()
+        defer { tearDownDefaults(defaults, suiteName: suite) }
+
+        sut.isAuthorized = true
+        sut.deviceToken = "abc123def456"
+        sut.pendingNotificationPayload = NotificationPayload(userInfo: ["type": "message"])
+        try? keychain.save("abc123def456", forKey: PushNotificationManager.persistedTokenKey, account: nil)
+        try? keychain.save("abc123def456_last", forKey: PushNotificationManager.lastRegisteredTokenKey, account: nil)
+
+        sut.resetSession()
+
+        XCTAssertNil(sut.pendingNotificationPayload, "navigation intent must clear")
+        XCTAssertNil(sut.deviceToken, "in-memory token must clear")
+        XCTAssertTrue(
+            sut.isAuthorized,
+            "iOS authorization is device-level, must NOT be touched at logout (re-prompt rate-limited)"
+        )
+        XCTAssertNil(
+            keychain.load(forKey: PushNotificationManager.persistedTokenKey, account: nil),
+            "persisted token in keychain must clear so a re-launch under user B does not auto-bind"
+        )
+        XCTAssertNil(
+            keychain.load(forKey: PushNotificationManager.lastRegisteredTokenKey, account: nil),
+            "last-registered marker must clear"
+        )
+    }
 }

@@ -535,9 +535,6 @@ export function registerMessagesRoutes(
         // ===== MENTIONS =====
         validatedMentions: true,
 
-        // ===== TRADUCTIONS (champ Json) =====
-        translations: true,
-
         // ===== RELATIONS OBLIGATOIRES =====
         sender: {
           select: {
@@ -572,8 +569,15 @@ export function registerMessagesRoutes(
       };
 
       // ===== RELATIONS OPTIONNELLES (selon paramètres include_*) =====
-      // Note: translations est un champ Json dans Message, pas une relation
-      // Il est déjà inclus dans le select de base (ligne 360)
+
+      // `translations` est un champ Json sur Message (pas une relation) — on
+      // ne le ramène du DB que si le client le demande. Économie bandwidth :
+      // une conv warm-cache iOS (GRDB déjà peuplé + socket temps réel) appelle
+      // `?include_translations=false` et évite ~22 KB par refresh sur 30
+      // messages × 3 langues. Cold-start envoie `true` par défaut.
+      if (includeTranslations) {
+        messageSelect.translations = true;
+      }
 
       if (includeReactions) {
         messageSelect.reactions = {

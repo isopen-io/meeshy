@@ -142,7 +142,12 @@ public struct StoryComposerView: View {
 
     // MARK: - Canvas viewport (pinch-to-zoom + drag-to-pan when zoomed)
 
-    @GestureState private var viewportPinchDelta: CGFloat = 1.0
+    /// Échelle éphémère du viewport pendant un pinch 3-doigts. Driven
+    /// par le callback `onCanvasZoomScaleChanged` du canvas UIKit ; remis à
+    /// 1.0 à `.ended`/`.cancelled`. Anciennement `@GestureState` lié au
+    /// `MagnificationGesture` SwiftUI 2-doigts qui entrait en conflit avec
+    /// le pinch d'élément.
+    @State private var viewportPinchDelta: CGFloat = 1.0
     @GestureState private var viewportDragDelta: CGSize = .zero
 
     /// Canvas gestures disabled only during drawing (PKCanvasView needs exclusive touch control).
@@ -155,22 +160,6 @@ public struct StoryComposerView: View {
     /// Pan always available when zoomed — uses high minimumDistance to avoid accidental triggers
     private var isPanEnabled: Bool {
         viewModel.isCanvasZoomed
-    }
-
-    private var viewportPinchGesture: some Gesture {
-        // MagnificationGesture (iOS 13+) au lieu de MagnifyGesture (iOS 17+).
-        // `value` est directement le CGFloat (pas via .magnification).
-        MagnificationGesture()
-            .updating($viewportPinchDelta) { value, state, _ in
-                state = value
-            }
-            .onEnded { value in
-                let newScale = min(4.0, max(0.5, viewModel.canvasScale * value))
-                withAnimation(.spring(response: 0.2)) {
-                    viewModel.canvasScale = newScale
-                    if newScale <= 1.0 { viewModel.canvasOffset = .zero }
-                }
-            }
     }
 
     private var viewportDragGesture: some Gesture {
@@ -492,16 +481,40 @@ public struct StoryComposerView: View {
                 url: item.url,
                 context: .story,
                 onComplete: { result in
-                    // 1. Remplace l'URL cached par la version éditée — la
-                    //    vidéo originale en mémoire est implicitement
-                    //    supplantée (le renderer la résout par `elementId`
-                    //    via `loadedVideoURLs`).
-                    viewModel.loadedVideoURLs[item.elementId] = result.url
+                    // 1. **Écrase le fichier cache** par la version éditée.
+                    //    Le caller a stocké `item.url` (path original cached
+                    //    dans le composer tmp) → on remplace son contenu par
+                    //    `result.url` (output du `VideoExportPipeline`).
+                    //    Bénéfices :
+                    //    - L'URL reste **identique** : AVPlayer items, thumb
+                    //      caches keyés par URL n'invalident pas → 0 reload.
+                    //    - Pas d'orphelin temp : `result.url` est consommé.
+                    //    Fallback : si le move échoue (cross-volume, perm),
+                    //    on garde simplement `result.url` (le comportement
+                    //    pré-fix).
+                    let destinationURL = item.url
+                    let cachedURL: URL
+                    if result.url != destinationURL {
+                        do {
+                            try? FileManager.default.removeItem(at: destinationURL)
+                            try FileManager.default.moveItem(at: result.url, to: destinationURL)
+                            cachedURL = destinationURL
+                        } catch {
+                            // Move impossible → on conserve result.url tel
+                            // quel. Le map pointera dessus, le contenu sera
+                            // valide. L'ancien item.url reste sur disque
+                            // jusqu'à l'éviction tmp système.
+                            cachedURL = result.url
+                        }
+                    } else {
+                        cachedURL = destinationURL
+                    }
+                    viewModel.loadedVideoURLs[item.elementId] = cachedURL
 
                     // 2. Refresh la vignette pour qu'elle reflète la frame
                     //    courante du clip édité (utilisée par le composer
                     //    tray, l'export et le placeholder).
-                    let thumbnail = Self.generateVideoThumbnail(url: result.url)
+                    let thumbnail = Self.generateVideoThumbnail(url: cachedURL)
                     if let thumbnail { viewModel.loadedImages[item.elementId] = thumbnail }
 
                     // 3. Si l'utilisateur a transcrit la piste audio, on
@@ -868,6 +881,7 @@ public struct StoryComposerView: View {
     private func tileAccent(for tool: StoryToolMode) -> Color {
         switch tool {
         case .media:    return MeeshyColors.coral          // peachy red
+        case .audio:    return MeeshyColors.indigo400      // soft lavender
         case .text:     return MeeshyColors.indigo400      // soft lavender
         case .drawing:  return MeeshyColors.success        // mint green
         case .texture:  return MeeshyColors.warning        // butter yellow
@@ -895,8 +909,8 @@ public struct StoryComposerView: View {
             .opacity(pickerSelectedTool == nil ? 1 : 0)
             .scaleEffect(pickerSelectedTool == nil ? 1 : 0.95)
 
-            // 4 tiles in a 2-column grid fit comfortably without scrolling.
-            // The grid sizes to its content (~190pt) so the picker stays at
+            // 6 tiles in a 2-column grid fit comfortably.
+            // The grid sizes to its content so the picker stays at
             // the bottom and leaves ≥ 80 % of the screen for the top bar +
             // canvas pastel preview, per the empty-state UX brief.
             LazyVGrid(
@@ -913,8 +927,19 @@ public struct StoryComposerView: View {
                                       defaultValue: "Médias",
                                       bundle: .module),
                         subtitle: String(localized: "story.composer.empty.tile.media.sub",
-                                         defaultValue: "Photos, vidéos, audio",
+                                         defaultValue: "Photos, vidéos",
                                          bundle: .module)
+                    )
+                    largeToolTile(
+                        .audio,
+                        icon: "music.note",
+                        title: String(localized: "story.composer.empty.tile.son",
+                                      defaultValue: "Son",
+                                      bundle: .module),
+                        subtitle: String(localized: "story.composer.empty.tile.son.sub",
+                                         defaultValue: "Musique, voix",
+                                         bundle: .module),
+                        specialCategory: .son
                     )
                     largeToolTile(
                         .text,
@@ -937,13 +962,23 @@ public struct StoryComposerView: View {
                                          bundle: .module)
                     )
                 largeToolTile(
-                    .texture,
-                    icon: "paintpalette.fill",
-                    title: String(localized: "story.composer.empty.tile.texture",
-                                  defaultValue: "Fond",
+                    .filters,
+                    icon: "camera.filters",
+                    title: String(localized: "story.composer.empty.tile.filters",
+                                  defaultValue: "Effets",
                                   bundle: .module),
-                    subtitle: String(localized: "story.composer.empty.tile.texture.sub",
-                                     defaultValue: "Couleur, dégradé",
+                    subtitle: String(localized: "story.composer.empty.tile.filters.sub",
+                                     defaultValue: "Filtres visuels",
+                                     bundle: .module)
+                )
+                largeToolTile(
+                    .timeline,
+                    icon: "clock",
+                    title: String(localized: "story.composer.empty.tile.timeline",
+                                  defaultValue: "Timeline",
+                                  bundle: .module),
+                    subtitle: String(localized: "story.composer.empty.tile.timeline.sub",
+                                     defaultValue: "Montage et durée",
                                      bundle: .module)
                 )
             }
@@ -991,7 +1026,8 @@ public struct StoryComposerView: View {
         _ tool: StoryToolMode,
         icon: String,
         title: String,
-        subtitle: String
+        subtitle: String,
+        specialCategory: BandCategory? = nil
     ) -> some View {
         let accent = tileAccent(for: tool)
         let isSelected = pickerSelectedTool == tool
@@ -1031,7 +1067,7 @@ public struct StoryComposerView: View {
                 // so controls appear immediately when the empty-state picker
                 // transitions out. Without this, the band stayed .hidden and
                 // the user had to manually tap a FAB to reveal controls.
-                bandStateMachine.tapFAB(tool.bandCategory)
+                bandStateMachine.tapFAB(specialCategory ?? tool.bandCategory)
                 bandStateMachine.tapTile(tool)
                 pickerSelectedTool = nil
             }
@@ -1104,7 +1140,11 @@ public struct StoryComposerView: View {
                 x: viewModel.canvasOffset.width + viewportDragDelta.width,
                 y: viewModel.canvasOffset.height + viewportDragDelta.height
             )
-            .gesture(isCanvasGestureEnabled ? viewportPinchGesture : nil)
+            // Le pinch viewport (zoom canvas) est maintenant un pinch 3 doigts
+            // géré par `ThreeFingerPinchGestureRecognizer` côté UIKit, routé
+            // via `onCanvasZoomScaleChanged`. Sans ça, l'ancien
+            // `MagnificationGesture` SwiftUI 2-doigts firait en parallèle du
+            // pinch d'élément UIKit → tout le canvas scalait.
             .gesture(isCanvasGestureEnabled && isPanEnabled ? viewportDragGesture : nil)
             .overlay { mediaLoadingOverlay }
             .overlay(alignment: .topTrailing) { canvasZoomResetButton }
@@ -1200,6 +1240,42 @@ public struct StoryComposerView: View {
             },
             onManipulationLayerChanged: { layer in
                 manipulationLayer = layer
+            },
+            onCanvasZoomScaleChanged: { scale, state in
+                // Pinch 3-doigts piloté par UIKit (cf. `ThreeFingerPinchGestureRecognizer`).
+                // On remplace l'ancien `MagnificationGesture` SwiftUI 2-doigts
+                // qui firait en parallèle du pinch d'élément et faisait scaler
+                // tout le canvas en même temps que l'élément.
+                switch state {
+                case .began, .changed:
+                    viewportPinchDelta = scale
+                case .ended:
+                    let newScale = min(4.0, max(0.5, viewModel.canvasScale * scale))
+                    withAnimation(.spring(response: 0.2)) {
+                        viewModel.canvasScale = newScale
+                        if newScale <= 1.0 { viewModel.canvasOffset = .zero }
+                    }
+                    viewportPinchDelta = 1.0
+                case .cancelled, .failed:
+                    viewportPinchDelta = 1.0
+                default:
+                    break
+                }
+            },
+            onBackgroundTapped: {
+                withAnimation(.spring(response: 0.3)) {
+                    areFabsVisible.toggle()
+                }
+            },
+            onBackgroundTransformChanged: { transform in
+                viewModel.backgroundTransform = StoryComposerViewModel.BackgroundTransform(
+                    scale: transform.scale ?? 1.0,
+                    offsetX: transform.offsetX ?? 0,
+                    offsetY: transform.offsetY ?? 0,
+                    rotation: transform.rotation ?? 0,
+                    videoFitMode: transform.videoFitMode
+                )
+                viewModel.saveBackgroundTransform()
             }
         )
         .allowsHitTesting(!viewModel.isDrawingActive)
@@ -1454,7 +1530,8 @@ public struct StoryComposerView: View {
         if let bt = e.backgroundTransform {
             viewModel.backgroundTransform = StoryComposerViewModel.BackgroundTransform(
                 scale: bt.scale ?? 1.0, offsetX: bt.offsetX ?? 0,
-                offsetY: bt.offsetY ?? 0, rotation: bt.rotation ?? 0
+                offsetY: bt.offsetY ?? 0, rotation: bt.rotation ?? 0,
+                videoFitMode: bt.videoFitMode
             )
         } else {
             viewModel.backgroundTransform = StoryComposerViewModel.BackgroundTransform()
@@ -1468,7 +1545,8 @@ public struct StoryComposerView: View {
             scale: bt.scale != 1.0 ? bt.scale : nil,
             offsetX: bt.offsetX != 0 ? bt.offsetX : nil,
             offsetY: bt.offsetY != 0 ? bt.offsetY : nil,
-            rotation: bt.rotation != 0 ? bt.rotation : nil
+            rotation: bt.rotation != 0 ? bt.rotation : nil,
+            videoFitMode: bt.videoFitMode
         )
         // Voice fields are NOT a function of the composer's @State — they live
         // entirely on `viewModel.currentEffects` (set by the voice recorder /

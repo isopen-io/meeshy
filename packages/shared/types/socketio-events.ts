@@ -133,6 +133,16 @@ export const SERVER_EVENTS = {
   CALL_SIGNAL: 'call:signal',
   CALL_MEDIA_TOGGLED: 'call:media-toggled',
   CALL_ERROR: 'call:error',
+  /**
+   * --- Call events RESERVED (no emitter yet) ---
+   * Declared for upcoming voice/video phases:
+   * - quality monitoring (CALL_QUALITY_ALERT, CALL_SCREEN_CAPTURE_ALERT)
+   * - in-call translation pipeline (CALL_TRANSLATED_SEGMENT,
+   *   CALL_TRANSLATION_REQUESTED/ENABLED, CALL_TRANSCRIPTION_RESULT)
+   * - state edge cases (CALL_MISSED, CALL_ALREADY_ANSWERED — iOS already
+   *   subscribes via MessageSocketManager but the gateway never emits)
+   * Keep names + types in sync until the emitters land.
+   */
   CALL_MISSED: 'call:missed',
   CALL_QUALITY_ALERT: 'call:quality-alert',
   CALL_TRANSLATED_SEGMENT: 'call:translated-segment',
@@ -162,6 +172,22 @@ export const SERVER_EVENTS = {
   CONVERSATION_PARTICIPANT_UNBANNED: 'conversation:participant-unbanned',
   ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
   /**
+   * Emitted whenever an attachment on an existing message has been
+   * enriched server-side : Whisper transcription finalized, NLLB+TTS
+   * translation finalized for one language, etc.
+   *
+   * Payload : { conversationId, messageId, attachment } — the FULL
+   * attachment object as serialized by `serializeAttachmentForSocket`
+   * (parity with the `message:new` shape). Clients replace the matching
+   * attachment in their store atomically and refresh derived metadata
+   * (transcription dictionaries, translated audio listings).
+   *
+   * Replaces the need for separate `audio-transcribed` / `audio-translated`
+   * events — one generic delta event is enough for any attachment field
+   * update post-creation.
+   */
+  MESSAGE_ATTACHMENT_UPDATED: 'message:attachment-updated',
+  /**
    * UNE seule traduction quand une seule langue est demandée
    */
   AUDIO_TRANSLATION_READY: 'audio:translation-ready',
@@ -178,7 +204,13 @@ export const SERVER_EVENTS = {
    */
   TRANSCRIPTION_READY: 'audio:transcription-ready',
 
-  // --- Message pinning ---
+  /**
+   * --- Message pinning (RESERVED — no emitter yet) ---
+   * Declared for future "pin message" feature. Gateway does not
+   * currently emit these and no client subscribes to them. Keep the
+   * constants + types in sync with the iOS roadmap so the feature
+   * can be wired without renaming.
+   */
   MESSAGE_PINNED: 'message:pinned',
   MESSAGE_UNPINNED: 'message:unpinned',
 
@@ -235,6 +267,13 @@ export const SERVER_EVENTS = {
 
   // --- User Preferences ---
   USER_PREFERENCES_UPDATED: 'user:preferences-updated',
+  USER_PREFERENCES_REORDERED: 'user:preferences-reordered',
+
+  // --- Conversation Categories ---
+  CATEGORY_CREATED: 'category:created',
+  CATEGORY_UPDATED: 'category:updated',
+  CATEGORY_DELETED: 'category:deleted',
+  CATEGORIES_REORDERED: 'categories:reordered',
 } as const;
 
 // Événements du client vers le serveur
@@ -344,13 +383,31 @@ export interface ErrorEventData {
 
 /**
  * Données de notification générique
- * Aligned with NotificationFormatter.formatNotification() output
+ * Aligned with NotificationFormatter.formatNotification() output.
+ *
+ * `title` / `subtitle` mirror the APN/FCM push payload header so the iOS
+ * in-app toast (driven by Socket.IO when the app is foreground + socket
+ * connected) can render the same "sender + conversation" framing as the
+ * native iOS banner. They are derived from `buildPushHeader()` server-side
+ * and propagated identically over the push channel and the socket channel
+ * to keep both surfaces in sync.
+ *  - `title`      : sender display name (or `customTitle` for system events,
+ *                   `"Meeshy"` fallback when no actor)
+ *  - `subtitle`   : conversation title for `new_message` notifications in
+ *                   group/global/public/community conversations.
+ *                   `undefined` for 1-on-1 direct messages and for non-message
+ *                   notification types (reactions / mentions / system events).
  */
 export interface NotificationEventData {
   readonly id: string;
   readonly userId: string;
   readonly type: string;
   readonly priority?: string;
+  /** Sender display name (or custom override / "Meeshy" fallback). */
+  readonly title?: string;
+  /** Conversation title for group messages — undefined for direct messages
+   *  and non-message notification types. */
+  readonly subtitle?: string;
   readonly content: string;
   readonly actor?: {
     readonly id?: string;
@@ -423,6 +480,22 @@ export interface AttachmentStatusUpdatedEventData {
   readonly userId: string;
   readonly action: string;
   readonly updatedAt: Date;
+}
+
+/**
+ * Payload de `SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED`.
+ *
+ * Reçu quand un worker gateway a enrichi un attachment d'un message
+ * existant (transcription Whisper finalisée, traduction audio NLLB+TTS
+ * finalisée pour une langue, etc.). `attachment` est la forme complète
+ * sérialisée par `serializeAttachmentForSocket` côté gateway — incluant
+ * `transcription` et `translations` enrichis. Le client remplace
+ * l'attachment correspondant dans son store atomiquement.
+ */
+export interface AttachmentUpdatedEventData {
+  readonly conversationId: string;
+  readonly messageId: string;
+  readonly attachment: unknown;
 }
 
 /**
@@ -549,7 +622,6 @@ export interface AudioTranslationEventData {
     readonly id: string;
     readonly targetLanguage: string;
     readonly url: string;
-    readonly path?: string;
     readonly transcription: string;
     readonly durationMs: number;
     readonly format: string;
@@ -711,9 +783,109 @@ export interface StoryTranslationUpdatedEventData {
   readonly translations: Record<string, string>;
 }
 
-export interface UserPreferencesUpdatedEventData {
+/**
+ * Snapshot complet des préférences user/conversation envoyé dans les
+ * événements `USER_PREFERENCES_UPDATED` (scope conversation). Reflète
+ * `UserConversationPreferences` côté Prisma.
+ *
+ * @see schema.prisma model UserConversationPreferences
+ */
+export interface ConversationPreferencesPayload {
+  readonly isPinned: boolean;
+  readonly isMuted: boolean;
+  readonly mentionsOnly: boolean;
+  readonly isArchived: boolean;
+  readonly tags: readonly string[];
+  readonly categoryId: string | null;
+  readonly orderInCategory: number | null;
+  readonly customName: string | null;
+  readonly reaction: string | null;
+  readonly deletedForUserAt: string | null;
+  readonly clearHistoryBefore: string | null;
+}
+
+/**
+ * Variante "préférences user-level" : émis par
+ * `me/preferences/{category}` factory. Le client doit refetch la
+ * catégorie nommée.
+ */
+export interface UserPreferencesCategoryUpdatedEventData {
   readonly userId: string;
   readonly category: string;
+}
+
+/**
+ * Variante "préférences scope conversation" : émis par
+ * `PUT/DELETE /user-preferences/conversations/:id`. Payload complet
+ * incluant `version` pour la résolution optimistic vs socket.
+ */
+export interface UserPreferencesConversationUpdatedEventData {
+  readonly userId: string;
+  readonly conversationId: string;
+  readonly version: number;
+  /** true si l'événement résulte d'un DELETE (reset aux defaults). */
+  readonly reset: boolean;
+  /** null si reset === true (le client applique ses defaults locaux). */
+  readonly preferences: ConversationPreferencesPayload | null;
+}
+
+/**
+ * Union des deux scopes possibles. La présence de `conversationId`
+ * discrimine côté client.
+ */
+export type UserPreferencesUpdatedEventData =
+  | UserPreferencesCategoryUpdatedEventData
+  | UserPreferencesConversationUpdatedEventData;
+
+/**
+ * Émis par `POST /user-preferences/conversations/reorder` après mise
+ * à jour batch de l'ordre dans une catégorie.
+ */
+export interface UserPreferencesReorderedEventData {
+  readonly userId: string;
+  readonly updates: ReadonlyArray<{
+    readonly conversationId: string;
+    readonly orderInCategory: number;
+  }>;
+}
+
+/**
+ * Snapshot d'une `UserConversationCategory` envoyé dans
+ * `CATEGORY_CREATED` / `CATEGORY_UPDATED`.
+ */
+export interface UserConversationCategoryPayload {
+  readonly id: string;
+  readonly userId: string;
+  readonly name: string;
+  readonly color: string | null;
+  readonly icon: string | null;
+  readonly order: number;
+  readonly isExpanded: boolean;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface CategoryCreatedEventData {
+  readonly userId: string;
+  readonly category: UserConversationCategoryPayload;
+}
+
+export interface CategoryUpdatedEventData {
+  readonly userId: string;
+  readonly category: UserConversationCategoryPayload;
+}
+
+export interface CategoryDeletedEventData {
+  readonly userId: string;
+  readonly categoryId: string;
+}
+
+export interface CategoriesReorderedEventData {
+  readonly userId: string;
+  readonly updates: ReadonlyArray<{
+    readonly categoryId: string;
+    readonly order: number;
+  }>;
 }
 
 /**
@@ -747,6 +919,7 @@ export interface MentionCreatedEventData {
 // Événements du serveur vers le client
 export interface ServerToClientEvents {
   [SERVER_EVENTS.MESSAGE_NEW]: (message: SocketIOMessage) => void;
+  [SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED]: (data: AttachmentUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_EDITED]: (message: SocketIOMessage) => void;
   [SERVER_EVENTS.MESSAGE_DELETED]: (data: MessageDeletedEventData) => void;
   [SERVER_EVENTS.MESSAGE_TRANSLATION]: (data: TranslationEvent) => void;
@@ -848,6 +1021,13 @@ export interface ServerToClientEvents {
 
   // User Preferences
   [SERVER_EVENTS.USER_PREFERENCES_UPDATED]: (data: UserPreferencesUpdatedEventData) => void;
+  [SERVER_EVENTS.USER_PREFERENCES_REORDERED]: (data: UserPreferencesReorderedEventData) => void;
+
+  // Conversation Categories
+  [SERVER_EVENTS.CATEGORY_CREATED]: (data: CategoryCreatedEventData) => void;
+  [SERVER_EVENTS.CATEGORY_UPDATED]: (data: CategoryUpdatedEventData) => void;
+  [SERVER_EVENTS.CATEGORY_DELETED]: (data: CategoryDeletedEventData) => void;
+  [SERVER_EVENTS.CATEGORIES_REORDERED]: (data: CategoriesReorderedEventData) => void;
 
   // Notifications
   [SERVER_EVENTS.NOTIFICATION_NEW]: (data: NotificationEventData) => void;

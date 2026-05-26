@@ -22,6 +22,10 @@ struct BubbleAttachmentView: View {
     var translatedAudios: [MessageTranslatedAudio] = []
     var onShareFile: ((URL) -> Void)? = nil
     var onTapLocation: ((MessageAttachment) -> Void)? = nil
+    /// Phase 5: forwarded to the audio router so taps route through
+    /// `ConversationViewModel.playAudio(attachmentId:)`. Nil-default keeps
+    /// non-audio attachment renders unchanged.
+    var onPlayAudio: ((String) -> Void)? = nil
 
     var body: some View {
         switch attachment.type {
@@ -33,27 +37,59 @@ struct BubbleAttachmentView: View {
             )
 
         case .video:
-            VideoPlayerView(
-                attachment: attachment,
-                context: .messageBubble,
-                accentColor: accentHex
-            )
+            // Dead path in practice — videos route through visualMediaGrid in
+            // BubbleStandardLayout. Keep a sound fallback that uses the
+            // unified MeeshyVideoPlayer so we don't ship a UX regression
+            // if a routing change ever lands a video in this branch.
+            VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
+                MeeshyVideoPlayer(
+                    attachment: attachment,
+                    style: .inline,
+                    controls: .inlineDefault,
+                    accentColor: accentHex,
+                    frame: .bubble,
+                    availability: availability,
+                    performance: .inline,
+                    onDownload: onDownload
+                )
+            }
 
         case .audio:
-            AudioPlayerView(
-                attachment: attachment,
-                context: .messageBubble,
-                accentColor: accentHex,
-                transcription: transcription,
-                translatedAudios: translatedAudios.filter { $0.attachmentId == attachment.id },
-                onRetranscribe: {
-                    Task {
-                        try? await AttachmentService.shared.requestTranscription(
-                            attachmentId: attachment.id, force: true
-                        )
-                    }
-                }
-            )
+            // Cohérence avec case .video : on wrap dans un resolver qui
+            // résout cache → policy → downloader. AudioMediaView (utilisé
+            // par BubbleStandardLayout.mediaStandaloneView) garde sa propre
+            // orchestration multi-langue ; ce chemin de fallback ne supporte
+            // que le cas mono-langue (attachment.fileUrl), suffisant pour
+            // les attachments audio mixés à un autre contenu de la bulle.
+            // Phase 5: wrapped in `AudioBubbleRouter` so playback survives
+            // scroll-off and routes through the shared coordinator engine
+            // when this attachment is the active one.
+            AudioAvailabilityResolver(attachment: attachment) { availability, onDownload in
+                AudioBubbleRouter(
+                    attachmentId: attachment.id,
+                    attachment: attachment,
+                    accentColorHex: accentHex,
+                    transcription: transcription,
+                    translatedAudios: translatedAudios.filter { $0.attachmentId == attachment.id },
+                    onRequestTranscription: {
+                        Task {
+                            try? await AttachmentService.shared.requestTranscription(
+                                attachmentId: attachment.id, force: false
+                            )
+                        }
+                    },
+                    onRetranscribe: {
+                        Task {
+                            try? await AttachmentService.shared.requestTranscription(
+                                attachmentId: attachment.id, force: true
+                            )
+                        }
+                    },
+                    availability: availability,
+                    onDownload: onDownload,
+                    onPlayRequest: { onPlayAudio?(attachment.id) }
+                )
+            }
 
         case .file:
             if let lang = CodeLanguage.detect(fileName: attachment.originalName, mimeType: attachment.mimeType) {
@@ -99,13 +135,13 @@ struct BubbleAttachmentView: View {
                                 .font(.system(size: 36))
                                 .foregroundColor(.white)
 
-                            Text("Position partagee")
+                            Text(String(localized: "bubble.attachment.locationShared", defaultValue: "Position partagee", bundle: .main))
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(.white.opacity(0.9))
                         }
                     )
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Position partagee")
+                    .accessibilityLabel(String(localized: "bubble.attachment.locationShared", defaultValue: "Position partagee", bundle: .main))
             }
         }
     }

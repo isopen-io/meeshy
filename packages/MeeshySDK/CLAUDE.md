@@ -3,6 +3,45 @@
 ## Purpose
 SDK Swift modulaire fournissant les services core (auth, networking, sockets, cache, notifications) et les composants UI rutilisables pour l'app iOS Meeshy. Spar en deux targets pour permettre l'utilisation du SDK sans la couche UI.
 
+## REGLE CRITIQUE — SDK Purity (NON NEGOTIABLE)
+
+**Le SDK fournit des building blocks. L'app compose ces blocks pour exprimer l'UX produit.**
+
+Ne JAMAIS mettre dans le SDK du code qui :
+- **Orchestre plusieurs services SDK pour exprimer une cascade UX produit** (ex : "cherche en cache → sinon résous via policy → sinon télécharge").
+- **Encode une décision produit Meeshy-specific** ("auto-DL quand WiFi + prefs OK", "afficher banner Y quand X").
+- **Lit/appelle des shared singletons nommés Meeshy** + applique une règle "quand faire X" (CacheCoordinator stores nommés, MediaDownloadPreferencesStore, NetworkConditionMonitor en combinaison avec une décision).
+- **Résout des URLs via `MeeshyConfig.resolveMediaURL`** + cascade sur d'autres helpers.
+
+Ce code va dans `apps/ios/Meeshy/Features/Main/Views/` (ou ViewModels selon le cas).
+
+### Tableau de placement
+
+| Type | Placement | Exemples |
+|---|---|---|
+| Atomes purs (UIViewRepresentable, CALayer subclass) | SDK | `MeeshyVideoSurface`, `MeeshyVideoCanvasLayer`, `MeeshyVideoThumbnail` |
+| Composants View polymorphes paramétrés opaques | SDK | `MeeshyVideoPlayer(style:controls:frame:performance:)` |
+| Models, types, schemas | SDK (`MeeshySDK/Models/`) | `MeeshyMessageAttachment`, `VideoAvailability` |
+| Rule engines stateless (pures functions) | SDK | `MediaDownloadPolicyEngine.shouldAutoDownload` |
+| Services low-level | SDK | `APIClient`, `CacheCoordinator`, `NetworkConditionMonitor` |
+| Stores de préférences | SDK | `MediaDownloadPreferencesStore` |
+| State machines internes | SDK (internal) | `VideoPlaybackController` |
+| **View wrappers cascadant cache + policy + downloader** | **APP** | `VideoAvailabilityResolver` |
+| **Downloaders qui parlent au CacheCoordinator nommé du produit** | **APP** | `AttachmentDownloader` |
+| **ViewModels** | APP | `ConversationViewModel`, `FeedViewModel` |
+| **Décisions UX produit** | APP | tout View qui encode "cette feature Meeshy fonctionne comme ça" |
+
+### Test du grain (à appliquer AVANT de déposer un fichier sous `packages/MeeshySDK/`)
+
+1. Le composant **prend des paramètres opaques** et reste agnostique du produit ? → SDK candidat.
+2. Le composant **lit/appelle des shared singletons Meeshy** + encode des règles "quand faire X" ? → APP.
+3. Le composant **résout des URLs via MeeshyConfig** + cascade ? → APP.
+4. Le composant **applique une cascade de fallbacks UX** ? → APP.
+
+### Précédent (à ne pas répéter)
+
+2026-05-24 : `VideoAvailabilityResolver` puis `AttachmentDownloader` ont initialement été placés au SDK sous prétexte de "réutilisable". Rollback (commit `83e55297c`) après challenge user — ces deux orchestrent les SDK building blocks pour exprimer des décisions UX Meeshy, donc app-side. "Réutilisable" tout court n'est PAS un critère suffisant pour justifier un placement SDK ; l'**atomicité** l'est.
+
 ## Tech Stack
 - Swift 6 (swift-tools-version 6.2), iOS 16.0+
 - Swift Package Manager (SPM)

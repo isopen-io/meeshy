@@ -73,6 +73,11 @@ public final class StoryCanvasUIView: UIView {
 
     public var slide: StorySlide {
         didSet {
+            // Refresh the cached background media id BEFORE early return paths
+            // so handlePan can branch correctly even mid-gesture.
+            backgroundMediaObjectId = slide.effects.mediaObjects?
+                .first(where: { $0.isBackground })?.id
+
             // Skip expensive full-layer rebuild while a gesture is actively
             // manipulating an item (pan/pinch/rotate). The gesture handlers
             // update the specific CALayer transform directly. A full rebuild
@@ -175,7 +180,8 @@ public final class StoryCanvasUIView: UIView {
     private let editOverlayLayer = CALayer()
 
     /// Background layer (color/gradient/image/video). Inserted at z=0 beneath itemsContainer.
-    private let backgroundLayer = StoryBackgroundLayer()
+    /// `internal` (not private) so test seams can introspect transform during live drag tests.
+    internal let backgroundLayer = StoryBackgroundLayer()
 
     /// Optional Metal filter overlay (Task 19). Non-nil iff `slide.effects.filter` maps to a
     /// known `StoryFilteredLayer.Kind`. Owned and removed by `updateFilterLayer()`.
@@ -224,6 +230,18 @@ public final class StoryCanvasUIView: UIView {
     /// waits on foreground video readiness (T6).
     private var backgroundContentReady: Bool = false
 
+    /// `true` quand l'activation du background playback (vidéo bg + audio bg)
+    /// a été demandée en `.play` mais que `contentReadyFired` était encore
+    /// `false`. Le user-spec : ni la vidéo bg ni l'audio bg ne doivent jouer
+    /// tant que TOUS les médias chargeables (image bg + foreground videos)
+    /// ne sont pas prêts. `fireContentReadyIfNeeded()` consomme ce drapeau
+    /// dès que `onContentReady` fire et active les deux à la fois. Sans ce
+    /// gate, l'audio jouait sur une slide dont l'image bg n'avait jamais
+    /// loadée (file:// dead, resolver nil, 404 réseau) — le user voit un
+    /// loader à 0% mais entend la TTS / musique de fond, et/ou la vidéo bg
+    /// joue sans son image fixed → désynchro UX inacceptable.
+    private var pendingBackgroundActivation: Bool = false
+
     /// KVO token watching `backgroundLayer.contentLayer.contents` while an
     /// image background is loading. Held until the real bytes land or the
     /// background is replaced. `NSKeyValueObservation` invalidates on deinit
@@ -257,6 +275,12 @@ public final class StoryCanvasUIView: UIView {
     private var rotationRecognizer: UIRotationGestureRecognizer!
     private var singleTapRecognizer: UITapGestureRecognizer!
     private var doubleTapRecognizer: UITapGestureRecognizer!
+    /// Pinch à 3 doigts dédié au zoom du viewport (canvas entier). Séparé du
+    /// `pinchRecognizer` 2-doigts qui agit sur un élément/fond : sans cette
+    /// séparation, un pinch sur un élément faisait aussi scaler le conteneur
+    /// SwiftUI (`.scaleEffect(canvasScale)`) parce que les deux gestures
+    /// firent en parallèle.
+    private var canvasZoomPinchRecognizer: ThreeFingerPinchGestureRecognizer!
 
     // MARK: - Drawing mode (Phase 3 Task 3.4)
 
@@ -278,6 +302,27 @@ public final class StoryCanvasUIView: UIView {
     private var baseScale: Double = 1.0
     private var baseRotation: Double = 0.0
 
+    /// Cache the id of the background media (resolved in `slide.didSet`). Used
+    /// by `handlePan` to branch into the live-drag path for the bg without
+    /// going through `updatePosition` (which would clamp + commit immediately).
+    private var backgroundMediaObjectId: String?
+    /// Drag-start snapshot of the background transform (path α — model
+    /// untouched during gesture, committed at `.ended`).
+    private var dragStartBgScale: Double = 1.0
+    private var dragStartBgOffsetX: Double = 0
+    private var dragStartBgOffsetY: Double = 0
+    private var dragStartBgRotation: Double = 0
+    private var dragStartBgFitMode: String?
+    /// Live transform applied during the current bg drag, committed to the
+    /// slide model on `.ended` (along with `onBackgroundTransformChanged`).
+    private var liveBackgroundTransformDuringDrag: BackgroundTransform?
+
+    /// Fires when the background transform is committed at gesture end (path
+    /// α). Parent composer uses this to mirror the value into its viewModel
+    /// cache so the persisted `slide.effects.backgroundTransform` round-trips
+    /// through save/restore.
+    public var onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)?
+
     /// `true` quand un gesture pan/pinch/rotate est en cours sur un item.
     /// Indique au parent SwiftUI (`StoryCanvasRepresentable.updateUIView`) que
     /// la vérité de `slide` est temporairement dans UIKit ; les mutations
@@ -295,6 +340,14 @@ public final class StoryCanvasUIView: UIView {
     /// mettre à jour l'indicateur visuel (chip row) et / ou bloquer des
     /// commandes inadéquates pour la couche courante.
     public var onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)?
+
+    /// Notifié pendant un pinch à 3 doigts (zoom du viewport). Le composer
+    /// SwiftUI s'y abonne pour piloter `canvasScale` + l'overlay éphémère
+    /// `viewportPinchDelta` sans avoir besoin d'un `MagnificationGesture`
+    /// SwiftUI parallèle (qui réagissait à un pinch 2-doigts sur un
+    /// élément). Le `scale` est cumulatif depuis `.began` ; le composer
+    /// applique son propre clamp + commit à `.ended`.
+    public var onCanvasZoomScaleChanged: ((CGFloat, UIGestureRecognizer.State) -> Void)?
 
     // MARK: - Audio
 
@@ -358,11 +411,16 @@ public final class StoryCanvasUIView: UIView {
     /// Notifié quand l'édition se termine (textId).
     public var onInlineTextEditEnded: ((String) -> Void)?
 
+    /// Notifié lors d'un tap sur le fond (zone vide) du canvas.
+    public var onBackgroundTapped: (() -> Void)?
+
     // MARK: - Init
 
     public init(slide: StorySlide, mode: RenderMode = .edit) {
         self.slide = slide
         self.mode = mode
+        self.backgroundMediaObjectId = slide.effects.mediaObjects?
+            .first(where: { $0.isBackground })?.id
         super.init(frame: .zero)
         layer.addSublayer(rootLayer)
         rootLayer.insertSublayer(backgroundLayer, at: 0)
@@ -802,6 +860,14 @@ public final class StoryCanvasUIView: UIView {
     /// the default fade envelope — consistently every time.
     private func startAudioPlayback() {
         guard mode == .play else { return }
+        // Gate "all media loaded": ne pas démarrer l'audio bg tant que les
+        // autres médias chargeables (image bg + foreground videos) ne sont
+        // pas prêts. `fireContentReadyIfNeeded()` consomme le drapeau dès que
+        // `onContentReady` fire et appelle à nouveau cette méthode.
+        if !contentReadyFired {
+            pendingBackgroundActivation = true
+            return
+        }
         requestPlaybackSessionIfNeeded()
         let origin = captureSlideTimelineOrigin()
         // Stop any other reader engine before starting this one (RC4.6).
@@ -1012,15 +1078,26 @@ public final class StoryCanvasUIView: UIView {
             return BackgroundTransform(scale: Double(t.scale ?? 1),
                                        offsetX: Double(t.offsetX ?? 0),
                                        offsetY: Double(t.offsetY ?? 0),
-                                       rotation: t.rotation ?? 0)
+                                       rotation: t.rotation ?? 0,
+                                       videoFitMode: t.videoFitMode)
         }()
         backgroundLayer.frame = CGRect(origin: .zero, size: geometry.renderSize)
+        // Letterbox fill : pour les vidéos/images bg en aspect (paysage), les
+        // bandes laissent voir le `backgroundColor` du StoryBackgroundLayer.
+        // On y peint la couleur de fond de la slide pour éviter les bandes
+        // noires sur du contenu paysage — le user veut préserver le fond
+        // coloré de la story, pas du noir.
+        let letterboxColor: UIColor? = {
+            guard let hex = slide.effects.background else { return nil }
+            return Self.parseBackgroundHex(hex)
+        }()
         backgroundLayer.configure(
             kind: bgKind,
             transform: bgTransform,
             geometry: geometry,
             resolver: readerContext.postMediaURLResolver,
-            imageCache: readerContext.imageCache
+            imageCache: readerContext.imageCache,
+            letterboxColor: letterboxColor
         )
 
         // Items — détache les sublayers existants AVANT de les ré-attacher.
@@ -1256,16 +1333,22 @@ public final class StoryCanvasUIView: UIView {
             return BackgroundTransform(scale: Double(t.scale ?? 1),
                                        offsetX: Double(t.offsetX ?? 0),
                                        offsetY: Double(t.offsetY ?? 0),
-                                       rotation: t.rotation ?? 0)
+                                       rotation: t.rotation ?? 0,
+                                       videoFitMode: t.videoFitMode)
         }()
         let captureBackground = StoryBackgroundLayer()
         captureBackground.frame = CGRect(origin: .zero, size: renderSize)
+        let captureLetterbox: UIColor? = {
+            guard let hex = slide.effects.background else { return nil }
+            return Self.parseBackgroundHex(hex)
+        }()
         captureBackground.configure(
             kind: bgKind,
             transform: bgTransform,
             geometry: geometry,
             resolver: readerContext.postMediaURLResolver,
-            imageCache: readerContext.imageCache
+            imageCache: readerContext.imageCache,
+            letterboxColor: captureLetterbox
         )
         host.addSublayer(captureBackground)
 
@@ -1349,6 +1432,21 @@ public final class StoryCanvasUIView: UIView {
                 self?.backgroundDidBecomeReady()
             }
         case .image:
+            // Fast-path warm hit : si le `StoryBackgroundLayer` a déjà stampé
+            // une image FINALE (warm L1 cache hit synchrone), le KVO observer
+            // ne firerait jamais — quand le NSCache renvoie la même instance
+            // UIImage entre le warm-hit et le re-stamp async, `contents` ne
+            // change pas d'identité de référence. On fire `backgroundDidBecomeReady()`
+            // directement, sans installer l'observer. Régression introduite
+            // par a60f636b5 (2026-05-20) — sans ce shortcut, le loader reste
+            // à 0% indéfiniment sur les stories image dès que le cache est
+            // warmed (prefetcher ou première vue).
+            if backgroundLayer.hasFinalContentStamped {
+                DispatchQueue.main.async { [weak self] in
+                    self?.backgroundDidBecomeReady()
+                }
+                break
+            }
             thumbHashPlaceholderRef = backgroundLayer.contentLayer?.contents.map { $0 as AnyObject }
             // If the real bytes already landed synchronously (warm L1 cache),
             // we still want to honor the contract: fire on the next runloop
@@ -1468,6 +1566,17 @@ public final class StoryCanvasUIView: UIView {
         }
         contentReadyFired = true
         onContentReady?()
+        // Consume pending background activation: vidéo bg ET audio bg
+        // démarrent ensemble une fois tous les médias chargés. Réutilise les
+        // entry points canoniques pour ne pas dupliquer la session/setup
+        // logic.
+        if pendingBackgroundActivation {
+            pendingBackgroundActivation = false
+            if mode == .play {
+                backgroundLayer.isPlaybackActive = true
+                startAudioPlayback()
+            }
+        }
         // Force `onContentProgress(1.0)` au moment où le signal binaire fire
         // afin que les listeners SwiftUI puissent fermer leur overlay même
         // si la slide n'a aucun foreground media (cas slide texte+bg).
@@ -1788,8 +1897,15 @@ public final class StoryCanvasUIView: UIView {
         // l'autorisation passe désormais EXCLUSIVEMENT par ce drapeau, ce qui
         // garantit qu'un canvas en `.edit` mode (prefetcher, composer
         // preview) n'émet jamais d'audio même si son player est attaché et
-        // prêt.
-        backgroundLayer.isPlaybackActive = true
+        // prêt. Gate supplémentaire : tant que tous les médias chargeables
+        // ne sont pas prêts (cf. `contentReadyFired`), la vidéo bg attend —
+        // le user-spec exige que ni vidéo ni audio bg ne joue tant que la
+        // slide n'est pas visuellement complète.
+        if contentReadyFired {
+            backgroundLayer.isPlaybackActive = true
+        } else {
+            pendingBackgroundActivation = true
+        }
     }
 
     private func stopPlayback() {
@@ -1875,7 +1991,11 @@ public final class StoryCanvasUIView: UIView {
         // qu'un double-tap déclenche deux fois le format panel (open puis
         // open-via-double). Pattern UIKit standard.
         singleTapRecognizer.require(toFail: doubleTapRecognizer)
-        for recognizer: UIGestureRecognizer in [panRecognizer, pinchRecognizer, rotationRecognizer, singleTapRecognizer, doubleTapRecognizer] {
+        canvasZoomPinchRecognizer = ThreeFingerPinchGestureRecognizer(
+            target: self,
+            action: #selector(handleCanvasZoomPinch(_:))
+        )
+        for recognizer: UIGestureRecognizer in [panRecognizer, pinchRecognizer, rotationRecognizer, singleTapRecognizer, doubleTapRecognizer, canvasZoomPinchRecognizer] {
             recognizer.delegate = self
             addGestureRecognizer(recognizer)
         }
@@ -1891,7 +2011,11 @@ public final class StoryCanvasUIView: UIView {
             // place → sortie de l'édition (déclencheur nº2 de la spec). `endEditing`
             // résigne le `StoryInlineTextEditor`, ce qui déclenche
             // `textViewDidEndEditing` → `onInlineTextEditEnded`.
-            if inlineEditingTextId != nil { endEditing(true) }
+            if inlineEditingTextId != nil {
+                endEditing(true)
+            } else {
+                onBackgroundTapped?()
+            }
             return
         }
         // Sémantique tactile : le tap simple ramène l'élément touché au
@@ -1906,6 +2030,33 @@ public final class StoryCanvasUIView: UIView {
     @objc private func handleDoubleTap(_ recognizer: UITapGestureRecognizer) {
         guard mode == .edit, recognizer.state == .ended else { return }
         let location = recognizer.location(in: self)
+
+        // Background double-tap → cycle videoFitMode (auto → fit → fill → auto).
+        // Use `resolveManipulationTarget` to honour the active manipulation
+        // layer (so a tap on the bg in `.background` layer triggers the cycle
+        // even when no foreground item is hit). Foreground items still get
+        // their dedicated double-tap handling below via `hitTestItem`.
+        if let bgId = backgroundMediaObjectId,
+           resolveManipulationTarget(at: location) == bgId,
+           hitTestItem(at: location) == nil {
+            let current = slide.effects.backgroundTransform?.videoFitMode
+            let next: String?
+            switch current {
+            case nil:    next = "fit"
+            case "fit":  next = "fill"
+            case "fill": next = nil
+            default:     next = nil
+            }
+            var updated = slide
+            var bg = updated.effects.backgroundTransform ?? StoryBackgroundTransform()
+            bg.videoFitMode = next
+            updated.effects.backgroundTransform = bg.isIdentity ? nil : bg
+            slide = updated
+            onItemModified?(slide)
+            onBackgroundTransformChanged?(bg)
+            return
+        }
+
         guard let id = hitTestItem(at: location), let kind = itemKind(forId: id) else { return }
         onItemDoubleTapped?(id, kind)
     }
@@ -1919,10 +2070,19 @@ public final class StoryCanvasUIView: UIView {
 
     @objc private func handlePinch(_ recognizer: UIPinchGestureRecognizer) {
         guard mode == .edit else { return }
+        // Garde-fou : ce recognizer est dédié au pinch 2 doigts (élément ou
+        // fond). Si trois doigts sont posés, c'est le `canvasZoomPinch` qui
+        // doit prendre la main — on annule pour éviter le double zoom
+        // (élément ET viewport).
+        if recognizer.numberOfTouches >= 3 {
+            recognizer.state = .cancelled
+            return
+        }
         switch recognizer.state {
         case .began:
             // Routage par couche : `.canvas` absorbe (recognizer cancelled),
-            // `.background` cible le bg media, `.foreground` hit-teste les fg.
+            // `.background` cible le bg media, `.foreground` hit-teste les fg
+            // (avec fallback bg si le doigt ne touche aucun foreground).
             guard let id = resolveManipulationTarget(at: recognizer.location(in: self)) else {
                 recognizer.state = .cancelled
                 return
@@ -1942,6 +2102,13 @@ public final class StoryCanvasUIView: UIView {
         default:
             break
         }
+    }
+
+    /// Pinch à 3 doigts → relaie l'échelle au composer pour piloter le zoom
+    /// du viewport. Ne mute pas la slide (le viewport est un état SwiftUI).
+    @objc private func handleCanvasZoomPinch(_ recognizer: ThreeFingerPinchGestureRecognizer) {
+        guard mode == .edit else { return }
+        onCanvasZoomScaleChanged?(recognizer.scale, recognizer.state)
     }
 
     @objc private func handleRotation(_ recognizer: UIRotationGestureRecognizer) {
@@ -1982,6 +2149,20 @@ public final class StoryCanvasUIView: UIView {
             manipulatedItemId = id
             dragStartSlideX = sx
             dragStartSlideY = sy
+
+            // Background drag (path α): snapshot the current bg transform so
+            // `.changed` can interpolate against it without rebuilding the
+            // slide model on every tick. Commit happens in `.ended`.
+            if id == backgroundMediaObjectId {
+                let current = slide.effects.backgroundTransform
+                dragStartBgScale = Double(current?.scale ?? 1)
+                dragStartBgOffsetX = Double(current?.offsetX ?? 0)
+                dragStartBgOffsetY = Double(current?.offsetY ?? 0)
+                dragStartBgRotation = current?.rotation ?? 0
+                dragStartBgFitMode = current?.videoFitMode
+                liveBackgroundTransformDuringDrag = nil
+            }
+
             // Bring-to-front au touch : l'élément touché passe immédiatement
             // devant les autres. Couvre tap simple ET début de drag (le pan
             // recognizer émet .began sur le touch initial même sans translation).
@@ -2001,6 +2182,29 @@ public final class StoryCanvasUIView: UIView {
             let renderHeightFor1920 = geo.render(CanvasGeometry.designHeight)
             let dxNorm = Double(translation.x / bounds.width)
             let dyNorm = Double(translation.y / renderHeightFor1920)
+
+            // Branche dédiée background (path α): live update du layer.transform
+            // SANS muter le modèle. Le commit dans le modèle + le callback
+            // viennent dans `.ended`. Évite l'aller-retour
+            // `updatePosition` → `slide.didSet` → `rebuildLayers` → `configure()`
+            // qui passait par `mediaObjects.x/y` au lieu de
+            // `backgroundTransform` et causait le bug "drag bg invisible".
+            if id == backgroundMediaObjectId {
+                let live = BackgroundTransform(
+                    scale: dragStartBgScale,
+                    offsetX: dragStartBgOffsetX + dxNorm * Double(bounds.width),
+                    offsetY: dragStartBgOffsetY + dyNorm * Double(bounds.height),
+                    rotation: dragStartBgRotation,
+                    videoFitMode: dragStartBgFitMode
+                )
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                backgroundLayer.transform = live.caTransform()
+                CATransaction.commit()
+                liveBackgroundTransformDuringDrag = live
+                return
+            }
+
             let rawX = clamp(dragStartSlideX + dxNorm)
             let rawY = clamp(dragStartSlideY + dyNorm)
             let (snappedX, didSnapX) = snap(rawX)
@@ -2010,10 +2214,36 @@ public final class StoryCanvasUIView: UIView {
             slide = updatePosition(slideId: id, x: snappedX, y: snappedY)
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
+            let wasBackgroundDrag = (manipulatedItemId == backgroundMediaObjectId)
             manipulatedItemId = nil
             hideSnapGuides()
-            slideContentRevision &+= 1
-            rebuildLayers()
+
+            if wasBackgroundDrag, let live = liveBackgroundTransformDuringDrag {
+                // Commit live transform into the slide model + notify parents:
+                // - `onItemModified` syncs the SwiftUI @Binding (parity with
+                //   other gesture branches).
+                // - `onBackgroundTransformChanged` provides the typed value
+                //   so the composer viewModel can update its bg cache.
+                // `slide = updated` triggers didSet, but the idempotent
+                // `configure()` (Task 12) detects the same kind and skips
+                // the rebuild flash.
+                var updated = slide
+                let persisted = StoryBackgroundTransform(
+                    scale: live.scale != 1.0 ? CGFloat(live.scale) : nil,
+                    offsetX: live.offsetX != 0 ? CGFloat(live.offsetX) : nil,
+                    offsetY: live.offsetY != 0 ? CGFloat(live.offsetY) : nil,
+                    rotation: live.rotation != 0 ? live.rotation : nil,
+                    videoFitMode: live.videoFitMode
+                )
+                updated.effects.backgroundTransform = persisted.isIdentity ? nil : persisted
+                slide = updated
+                onItemModified?(slide)
+                onBackgroundTransformChanged?(persisted)
+                liveBackgroundTransformDuringDrag = nil
+            } else {
+                slideContentRevision &+= 1
+                rebuildLayers()
+            }
         default:
             break
         }
@@ -2221,21 +2451,35 @@ public final class StoryCanvasUIView: UIView {
     /// vient de commencer. Retourne `nil` si la couche active est `.canvas`
     /// (gesture absorbé), ou si le hit-test n'a rien trouvé de manipulable
     /// pour la couche courante.
-    private func resolveManipulationTarget(at location: CGPoint) -> String? {
+    ///
+    /// Règle `.foreground` : si un foreground est sous le doigt, il prend la
+    /// priorité ; sinon on retombe sur le background media (s'il existe).
+    /// Sans ce fallback le fond devenait figé dès qu'on posait un texte /
+    /// sticker — frustrant pour recadrer une image de fond.
+    internal func resolveManipulationTarget(at location: CGPoint) -> String? {
         switch currentManipulationLayer {
         case .canvas:
             return nil
         case .background:
-            // En `.background`, peu importe où l'utilisateur touche, c'est le
-            // bg qui est manipulé. Résout le bg media (flag explicite ou
-            // résolution legacy via `resolvedBackgroundMedia`).
-            if let bg = slide.effects.mediaObjects?.first(where: { $0.isBackground == true }) {
-                return bg.id
-            }
-            return slide.effects.resolvedBackgroundMedia?.id
+            return resolveBackgroundMediaId()
         case .foreground:
-            return hitTestForegroundItem(at: location)
+            if let fgId = hitTestForegroundItem(at: location) {
+                return fgId
+            }
+            // Pas de foreground sous le doigt → on manipule le bg s'il existe
+            // pour permettre le recadrage du fond même quand des éléments
+            // sont déjà posés (cf. spec UX décidée 2026-05-22).
+            return resolveBackgroundMediaId()
         }
+    }
+
+    /// Résolution unique du bg media : préfère le flag explicite
+    /// `isBackground == true`, retombe sur `resolvedBackgroundMedia`.
+    private func resolveBackgroundMediaId() -> String? {
+        if let bg = slide.effects.mediaObjects?.first(where: { $0.isBackground == true }) {
+            return bg.id
+        }
+        return slide.effects.resolvedBackgroundMedia?.id
     }
 
     // MARK: - Slide mutation helpers
@@ -2316,6 +2560,18 @@ public final class StoryCanvasUIView: UIView {
 
     private nonisolated func clamp(_ value: Double) -> Double {
         max(0, min(1, value))
+    }
+
+    /// Parses a `#RRGGBB` or `RRGGBB` hex string into a UIColor.
+    /// Local helper; matches the logic used by StoryRenderer + StoryAVCompositor.
+    nonisolated static func parseBackgroundHex(_ hex: String) -> UIColor? {
+        var s = hex
+        if s.hasPrefix("#") { s.removeFirst() }
+        guard s.count == 6, let v = UInt32(s, radix: 16) else { return nil }
+        return UIColor(red: CGFloat((v >> 16) & 0xff) / 255,
+                       green: CGFloat((v >> 8) & 0xff) / 255,
+                       blue: CGFloat(v & 0xff) / 255,
+                       alpha: 1)
     }
 
     // MARK: - Item commands (used by context menu + accessibility)
@@ -2557,7 +2813,11 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         // Texte
         if let idx = slide.effects.textObjects.firstIndex(where: { $0.id == id }) {
             var texts = slide.effects.textObjects
-            guard texts[idx].zIndex < topZ
+            // Skip only when BOTH the z-index AND the array position
+            // already reflect the "front" state — `||` would always
+            // continue because `nextTopZ()` returns `currentMax + 1`,
+            // so `zIndex < topZ` is always true.
+            guard texts[idx].zIndex < topZ - 1
                   || idx != texts.count - 1 else { return }
             texts[idx].zIndex = topZ
             let item = texts.remove(at: idx)
@@ -2570,7 +2830,8 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         if var medias = slide.effects.mediaObjects,
            let idx = medias.firstIndex(where: { $0.id == id }),
            medias[idx].isBackground == false {
-            guard medias[idx].zIndex < topZ
+            // Same `< topZ - 1` rationale as in the texts branch above.
+            guard medias[idx].zIndex < topZ - 1
                   || idx != medias.count - 1 else { return }
             medias[idx].zIndex = topZ
             let item = medias.remove(at: idx)
@@ -2582,7 +2843,8 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         // Sticker
         if var stickers = slide.effects.stickerObjects,
            let idx = stickers.firstIndex(where: { $0.id == id }) {
-            guard stickers[idx].zIndex < topZ
+            // Same `< topZ - 1` rationale as in the texts branch above.
+            guard stickers[idx].zIndex < topZ - 1
                   || idx != stickers.count - 1 else { return }
             stickers[idx].zIndex = topZ
             let item = stickers.remove(at: idx)
@@ -2666,6 +2928,55 @@ extension StoryCanvasUIView: UIPointerInteractionDelegate {
         let preview = UITargetedPreview(view: view)
         return UIPointerStyle(effect: .lift(preview))
     }
+
+    #if DEBUG
+    /// Test seam: drives `handlePan`-equivalent live drag of the background as
+    /// if the user dragged with normalized delta `(dxNorm, dyNorm)`. Mirrors
+    /// the real `handlePan.changed` code path for `id == backgroundMediaObjectId`
+    /// so canvas observable state matches a real gesture. Does NOT commit to
+    /// the model — the real `.ended` branch handles that.
+    internal func simulatePanForTesting(targetId: String, dxNorm: Double, dyNorm: Double) {
+        guard targetId == backgroundMediaObjectId else { return }
+        let currentTransform = slide.effects.backgroundTransform
+        dragStartBgScale = Double(currentTransform?.scale ?? 1)
+        dragStartBgOffsetX = Double(currentTransform?.offsetX ?? 0)
+        dragStartBgOffsetY = Double(currentTransform?.offsetY ?? 0)
+        dragStartBgRotation = currentTransform?.rotation ?? 0
+        dragStartBgFitMode = currentTransform?.videoFitMode
+        let live = BackgroundTransform(
+            scale: dragStartBgScale,
+            offsetX: dragStartBgOffsetX + dxNorm * Double(bounds.width),
+            offsetY: dragStartBgOffsetY + dyNorm * Double(bounds.height),
+            rotation: dragStartBgRotation,
+            videoFitMode: dragStartBgFitMode
+        )
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        backgroundLayer.transform = live.caTransform()
+        CATransaction.commit()
+        liveBackgroundTransformDuringDrag = live
+    }
+
+    /// Test seam mirroring `handleDoubleTap` cycle (auto → fit → fill → auto)
+    /// for the background. Commits to the model + fires the callback.
+    internal func performDoubleTapForTesting(targetId: String) {
+        guard targetId == backgroundMediaObjectId else { return }
+        let current = slide.effects.backgroundTransform?.videoFitMode
+        let next: String?
+        switch current {
+        case nil:    next = "fit"
+        case "fit":  next = "fill"
+        case "fill": next = nil
+        default:     next = nil
+        }
+        var updated = slide
+        var bg = updated.effects.backgroundTransform ?? StoryBackgroundTransform()
+        bg.videoFitMode = next
+        updated.effects.backgroundTransform = bg.isIdentity ? nil : bg
+        slide = updated
+        onBackgroundTransformChanged?(bg)
+    }
+    #endif
 }
 
 // MARK: - UIGestureRecognizerDelegate
@@ -2674,10 +2985,121 @@ extension StoryCanvasUIView: UIGestureRecognizerDelegate {
     /// Pinch + rotation are allowed simultaneously (natural two-finger transform).
     /// Pan is exclusive — running it alongside pinch/rotation would corrupt the
     /// snapshot-based deltas (drag uses translation, others use scale/rotation).
+    /// Le `canvasZoomPinchRecognizer` (3 doigts) est exclusif vis-à-vis du
+    /// `pinchRecognizer` (2 doigts) pour éviter qu'un pinch sur élément
+    /// scale aussi le viewport.
     public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
                                    shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
         let isPanA = gestureRecognizer === panRecognizer
         let isPanB = other === panRecognizer
-        return !(isPanA || isPanB)
+        if isPanA || isPanB { return false }
+        let isCanvasZoomA = gestureRecognizer === canvasZoomPinchRecognizer
+        let isCanvasZoomB = other === canvasZoomPinchRecognizer
+        if isCanvasZoomA || isCanvasZoomB { return false }
+        return true
+    }
+}
+
+// MARK: - ThreeFingerPinchGestureRecognizer
+
+/// Custom recognizer qui détecte un pinch à exactement 3 doigts. Utilisé
+/// par `StoryCanvasUIView` pour le zoom du viewport — l'API standard
+/// `UIPinchGestureRecognizer` est verrouillée à 2 doigts, ce qui entrait
+/// en collision avec le pinch d'élément (mêmes 2 doigts, deux gestures
+/// firent en parallèle → l'élément ET le canvas scalent).
+///
+/// Géométrie : `scale` est calculé comme le ratio entre la distance moyenne
+/// actuelle des touches au centroïde et la distance moyenne à l'instant de
+/// `.began`. Comportement équivalent à `UIPinchGestureRecognizer.scale`
+/// mais sur N touches.
+///
+/// État :
+/// - `.possible` → tant que moins de 3 doigts ne sont pas posés
+/// - `.began` → 3ᵉ doigt posé, distance initiale capturée
+/// - `.changed` → mouvement d'un des 3 doigts (recalcule `scale`)
+/// - `.ended` → un doigt levé (passe à <3) après `.began/.changed`
+/// - `.failed` → 4ᵉ doigt posé avant `.began` (on n'accepte que 3 doigts)
+/// - `.cancelled` → touchesCancelled (interruption système)
+final class ThreeFingerPinchGestureRecognizer: UIGestureRecognizer {
+    /// Échelle cumulée depuis `.began`. Reset à 1.0 dans `reset()`.
+    private(set) var scale: CGFloat = 1.0
+    private var initialAverageDistance: CGFloat = 0
+
+    private static let requiredTouches: Int = 3
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesBegan(touches, with: event)
+        let count = numberOfTouches
+        if count < Self.requiredTouches {
+            // Pas encore assez de doigts — on reste `.possible`.
+            return
+        }
+        if count > Self.requiredTouches {
+            // Trop de doigts : ce recognizer cible exactement 3.
+            state = .failed
+            return
+        }
+        // count == 3 → capture la distance initiale et lance `.began`.
+        initialAverageDistance = Self.averageDistanceFromCentroid(of: self)
+        if state == .possible {
+            state = .began
+        }
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesMoved(touches, with: event)
+        guard numberOfTouches == Self.requiredTouches,
+              initialAverageDistance > 0 else { return }
+        let current = Self.averageDistanceFromCentroid(of: self)
+        scale = current / initialAverageDistance
+        if state == .began || state == .changed {
+            state = .changed
+        }
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesEnded(touches, with: event)
+        guard numberOfTouches < Self.requiredTouches else { return }
+        if state == .began || state == .changed {
+            state = .ended
+        } else {
+            state = .failed
+        }
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesCancelled(touches, with: event)
+        state = .cancelled
+    }
+
+    override func reset() {
+        super.reset()
+        scale = 1.0
+        initialAverageDistance = 0
+    }
+
+    /// Pure helper — extrait `static` pour permettre les tests sans monter
+    /// un environnement UITouch (testé via `Self.averageDistance(...)`).
+    /// Retourne 0 si moins d'une touche ou pas de view attachée.
+    private static func averageDistanceFromCentroid(of recognizer: UIGestureRecognizer) -> CGFloat {
+        guard let view = recognizer.view, recognizer.numberOfTouches > 0 else { return 0 }
+        let count = recognizer.numberOfTouches
+        let points = (0..<count).map { recognizer.location(ofTouch: $0, in: view) }
+        return Self.averageDistance(points: points)
+    }
+
+    /// Version pure pour les tests — calcule la distance moyenne d'un set
+    /// de points au centroïde. Retourne 0 si moins d'un point.
+    static func averageDistance(points: [CGPoint]) -> CGFloat {
+        guard !points.isEmpty else { return 0 }
+        let cx = points.reduce(0) { $0 + $1.x } / CGFloat(points.count)
+        let cy = points.reduce(0) { $0 + $1.y } / CGFloat(points.count)
+        let centroid = CGPoint(x: cx, y: cy)
+        let totalDist = points.reduce(CGFloat(0)) { acc, p in
+            let dx = p.x - centroid.x
+            let dy = p.y - centroid.y
+            return acc + sqrt(dx * dx + dy * dy)
+        }
+        return totalDist / CGFloat(points.count)
     }
 }

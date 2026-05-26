@@ -366,8 +366,8 @@ struct ConversationListView: View {
         let isLocked = lockManager.isLocked(conversation.id)
         return [
             SwipeAction(
-                icon: conversation.isPinned ? "pin.slash.fill" : "pin.fill",
-                label: conversation.isPinned
+                icon: conversation.userState.isPinned ? "pin.slash.fill" : "pin.fill",
+                label: conversation.userState.isPinned
                     ? String(localized: "swipe.unpin", defaultValue: "D\u{00e9}s\u{00e9}pingler")
                     : String(localized: "swipe.pin", defaultValue: "\u{00c9}pingler"),
                 color: Color(hex: "3B82F6")
@@ -375,8 +375,8 @@ struct ConversationListView: View {
                 Task { await conversationViewModel.togglePin(for: conversation.id) }
             },
             SwipeAction(
-                icon: conversation.isMuted ? "bell.fill" : "bell.slash.fill",
-                label: conversation.isMuted
+                icon: conversation.userState.isMuted ? "bell.fill" : "bell.slash.fill",
+                label: conversation.userState.isMuted
                     ? String(localized: "swipe.unmute", defaultValue: "Son")
                     : String(localized: "swipe.mute", defaultValue: "Silence"),
                 color: Color(hex: "6B7280")
@@ -405,7 +405,7 @@ struct ConversationListView: View {
 
     private func trailingSwipeActions(for conversation: Conversation) -> [SwipeAction] {
         let isArchived = !conversation.isActive
-        let isRead = conversation.unreadCount == 0
+        let isRead = conversation.userState.unreadCount == 0
         var actions: [SwipeAction] = [
             SwipeAction(
                 icon: isArchived ? "tray.and.arrow.up.fill" : "archivebox.fill",
@@ -543,13 +543,11 @@ struct ConversationListView: View {
 
     private var mainContent: some View {
         mainContentZStack
-            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: conversationViewModel.selectedFilter)
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: expandedSections)
             .adaptiveOnChange(of: isScrollingDown) { wasHidden, isHidden in
                 if !wasHidden && isHidden { showSearchOverlay = false }
             }
             .onAppear {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isScrollingDown = false }
+                withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }
             }
             .task {
                 print("[DIAG] ConversationListView.task ENTERED")
@@ -568,15 +566,15 @@ struct ConversationListView: View {
             }
             .adaptiveOnChange(of: conversationViewModel.groupedConversations.isEmpty) { _, isEmpty in
                 if isEmpty && isScrollingDown {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isScrollingDown = false }
+                    withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }
                 }
             }
             .adaptiveOnChange(of: conversationViewModel.selectedFilter) { _, _ in
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isScrollingDown = false }
+                withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }
             }
             .adaptiveOnChange(of: feedIsVisible) { wasVisible, isVisible in
                 if wasVisible && !isVisible {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isScrollingDown = false }
+                    withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }
                 }
             }
             .overlay {
@@ -598,11 +596,11 @@ struct ConversationListView: View {
                 )
                 .environmentObject(theme)
             }
-            .alert("Master PIN requis", isPresented: $showNoMasterPinAlert) {
-                Button("Configurer", role: .none) { router.push(.settings) }
-                Button("Annuler", role: .cancel) {}
+            .alert(String(localized: "conversation.list.master_pin_required.title", defaultValue: "Master PIN requis", bundle: .main), isPresented: $showNoMasterPinAlert) {
+                Button(String(localized: "conversation.list.master_pin_required.configure", defaultValue: "Configurer", bundle: .main), role: .none) { router.push(.settings) }
+                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
             } message: {
-                Text("Configurez d'abord un master PIN dans Paramètres > Sécurité pour verrouiller des conversations.")
+                Text(String(localized: "conversation.list.master_pin_required.message", defaultValue: "Configurez d'abord un master PIN dans Paramètres > Sécurité pour verrouiller des conversations.", bundle: .main))
             }
             .sheet(isPresented: $showWidgetPreview) {
                 WidgetPreviewView(onNewConversation: onNewConversation)
@@ -769,8 +767,8 @@ struct ConversationListView: View {
             // Hide on scroll down
             .offset(y: isScrollingDown ? 150 : 0)
             .opacity(isScrollingDown ? 0 : 1)
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isScrollingDown)
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showSearchOverlay)
+            .animation(.easeOut(duration: 0.25), value: isScrollingDown)
+            .animation(.easeOut(duration: 0.25), value: showSearchOverlay)
         }
         // Layer 3: Collapsible header overlay — pinned to top, respects safe area
         .overlay(alignment: .top) {
@@ -928,7 +926,7 @@ struct ShareLinkPickerSheet: View {
                         Image(systemName: "link.badge.plus")
                             .font(.system(size: 48))
                             .foregroundStyle(MeeshyColors.indigo300)
-                        Text("Aucune conversation eligible")
+                        Text(String(localized: "conversation.list.no_eligible_conversation", defaultValue: "Aucune conversation eligible", bundle: .main))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                     }
@@ -967,11 +965,11 @@ struct ShareLinkPickerSheet: View {
                     .listStyle(.plain)
                 }
             }
-            .navigationTitle("Creer un lien de partage")
+            .navigationTitle(String(localized: "conversation.list.create_share_link.title", defaultValue: "Creer un lien de partage", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Fermer") { dismiss() }
+                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { dismiss() }
                 }
             }
         }

@@ -1,0 +1,118 @@
+package me.meeshy.sdk.outbox
+
+import androidx.room.withTransaction
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import me.meeshy.core.database.MeeshyDatabase
+import me.meeshy.core.database.dao.OutboxDao
+import me.meeshy.core.database.entity.OutboxEntity
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * The durable offline-mutation queue (ARCHITECTURE.md §5; ADR-006).
+ *
+ * Enqueue applies in-queue coalescing transactionally; delivery itself is the
+ * `WorkManager` flusher's job. Per-`cmid` outcomes drive optimistic rollback.
+ */
+@Singleton
+class OutboxRepository @Inject constructor(
+    private val database: MeeshyDatabase,
+    private val outboxDao: OutboxDao,
+) {
+    private val _outcomes = MutableSharedFlow<OutboxOutcome>(extraBufferCapacity = 128)
+
+    /** Per-`cmid` delivery outcomes — drives optimistic rollback in the UI. */
+    val outcomes: SharedFlow<OutboxOutcome> = _outcomes.asSharedFlow()
+
+    /** Observes the whole queue (oldest first) — for a failed-message / pending UI. */
+    fun observeAll(): Flow<List<OutboxEntity>> = outboxDao.observeAll()
+
+    /**
+     * Enqueues [mutation], coalescing it against the pending lane.
+     * @return the persisted row's `cmid`, or `null` if it annihilated existing rows.
+     */
+    suspend fun enqueue(mutation: OutboxMutation): String? {
+        val incoming = mutation.toEntity(now())
+        val decision = database.withTransaction {
+            val pending = outboxDao.deliverableForLane(incoming.lane)
+                .filter { it.stateEnum == OutboxState.PENDING }
+            OutboxCoalescer.decide(incoming, pending).also { apply(it) }
+        }
+        return when (decision) {
+            is CoalesceDecision.Enqueue -> decision.row.cmid
+            is CoalesceDecision.Replace -> {
+                decision.supersededCmids.forEach { emit(OutboxOutcome.Superseded(it)) }
+                decision.row.cmid
+            }
+            is CoalesceDecision.Annihilate -> {
+                decision.cancelledCmids.forEach { emit(OutboxOutcome.Cancelled(it)) }
+                null
+            }
+        }
+    }
+
+    /** Still-deliverable rows of one lane, oldest first. */
+    suspend fun deliverable(lane: String): List<OutboxEntity> = outboxDao.deliverableForLane(lane)
+
+    suspend fun markInflight(cmid: String) {
+        val row = outboxDao.find(cmid) ?: return
+        outboxDao.updateState(cmid, OutboxState.INFLIGHT.name, row.attempts, now())
+    }
+
+    /** A successful delivery removes the row and signals [OutboxOutcome.Succeeded]. */
+    suspend fun markSucceeded(cmid: String) {
+        outboxDao.deleteAll(listOf(cmid))
+        emit(OutboxOutcome.Succeeded(cmid))
+    }
+
+    /**
+     * Records a failed attempt: back to `PENDING` for another try, or `EXHAUSTED`
+     * (with an [OutboxOutcome.Exhausted] signal) once [MAX_ATTEMPTS] is reached.
+     */
+    suspend fun markFailed(cmid: String): OutboxState {
+        val row = outboxDao.find(cmid) ?: return OutboxState.PENDING
+        val attempts = row.attempts + 1
+        return if (attempts >= MAX_ATTEMPTS) {
+            outboxDao.updateState(cmid, OutboxState.EXHAUSTED.name, attempts, now())
+            emit(OutboxOutcome.Exhausted(cmid, "Exceeded $MAX_ATTEMPTS delivery attempts"))
+            OutboxState.EXHAUSTED
+        } else {
+            outboxDao.updateState(cmid, OutboxState.PENDING.name, attempts, now())
+            OutboxState.PENDING
+        }
+    }
+
+    /** A permanent (non-retryable) failure — exhaust immediately, ignoring the attempt count. */
+    suspend fun markExhausted(cmid: String, reason: String) {
+        val row = outboxDao.find(cmid) ?: return
+        outboxDao.updateState(cmid, OutboxState.EXHAUSTED.name, row.attempts, now())
+        emit(OutboxOutcome.Exhausted(cmid, reason))
+    }
+
+    /** Crash-safe boot recovery (ARCHITECTURE.md §5) — any orphaned `INFLIGHT` row becomes `PENDING`. */
+    suspend fun recoverInflight(): Int = outboxDao.resetInflight(now())
+
+    private suspend fun apply(decision: CoalesceDecision) {
+        when (decision) {
+            is CoalesceDecision.Enqueue -> outboxDao.upsert(decision.row)
+            is CoalesceDecision.Replace -> {
+                outboxDao.deleteAll(decision.supersededCmids)
+                outboxDao.upsert(decision.row)
+            }
+            is CoalesceDecision.Annihilate -> outboxDao.deleteAll(decision.cancelledCmids)
+        }
+    }
+
+    private fun emit(outcome: OutboxOutcome) {
+        _outcomes.tryEmit(outcome)
+    }
+
+    private fun now(): Long = System.currentTimeMillis()
+
+    companion object {
+        const val MAX_ATTEMPTS: Int = 5
+    }
+}

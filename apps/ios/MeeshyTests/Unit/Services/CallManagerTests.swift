@@ -130,6 +130,7 @@ final class MockWebRTCClient: WebRTCClientProviding {
     var localVideoTrack: Any?
     var remoteVideoTrack: Any?
     var audioEffectsService: CallAudioEffectsServiceProviding?
+    let videoFilterPipeline = VideoFilterPipeline()
 
     var configureCallCount = 0
     var createOfferResult: Result<SessionDescription, Error> = .success(SessionDescription(type: .offer, sdp: "mock"))

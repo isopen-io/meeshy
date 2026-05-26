@@ -474,19 +474,39 @@ class FeedViewModel: ObservableObject {
         }
     }
 
-    func sharePost(_ postId: String, platform: String? = nil) async {
-        var body: [String: String] = [:]
+    /// Server-side payload returned by `POST /posts/:postId/share`. The
+    /// counter fields are always present; `shortUrl` + `token` are only
+    /// populated when the caller asked the gateway to mint a TrackingLink
+    /// for the share (so the user gets an attributable `meeshy.me/l/…`
+    /// URL to paste into any external share sheet).
+    struct PostSharePayload: Decodable {
+        let shared: Bool
+        let shareCount: Int
+        let shortUrl: String?
+        let token: String?
+    }
+
+    /// Records a share on `postId`. When `generateLink` is `true` the
+    /// gateway mints a `TrackingLink` owned by the current user and returns
+    /// the absolute short URL — returned here so the caller can immediately
+    /// hand it off to a `UIActivityViewController` / `ShareLink`.
+    @discardableResult
+    func sharePost(_ postId: String, platform: String? = nil, generateLink: Bool = false) async -> String? {
+        var body: [String: Any] = [:]
         if let platform { body["platform"] = platform }
+        if generateLink { body["generateLink"] = true }
 
         do {
             let bodyData = try JSONSerialization.data(withJSONObject: body)
-            let _: SimpleAPIResponse = try await api.request(
+            let response: APIResponse<PostSharePayload> = try await api.request(
                 endpoint: "/posts/\(postId)/share",
                 method: "POST",
                 body: bodyData
             )
+            return response.data.shortUrl
         } catch {
             ToastManager.shared.showError("Erreur lors du partage")
+            return nil
         }
     }
 
@@ -518,6 +538,43 @@ class FeedViewModel: ObservableObject {
             ToastManager.shared.showSuccess("Signalement envoye")
         } catch {
             ToastManager.shared.showError("Erreur lors du signalement")
+        }
+    }
+
+    /// Updates the body content of an authored post. Optimistic UX:
+    /// the new text is written into `posts[idx]` immediately, translations
+    /// are cleared (the gateway re-translates in background and pushes
+    /// `post:updated` via socket). Rolls back the snapshot on API failure.
+    /// No-op if the post isn't found in the current feed.
+    func updatePost(_ postId: String, content: String) async {
+        guard let idx = posts.firstIndex(where: { $0.id == postId }) else { return }
+        let snapshot = posts[idx]
+        // Apply optimistic mutation: new content + clear translations so the
+        // bubble re-renders with the new source text immediately.
+        var optimistic = snapshot
+        optimistic.content = content
+        optimistic.translatedContent = nil
+        optimistic.translations = nil
+        posts[idx] = optimistic
+        debouncedCacheSave()
+        do {
+            let updated = try await postService.update(postId: postId, content: content, visibility: nil, moodEmoji: nil)
+            // Re-hydrate from the server response so the gateway-authoritative
+            // fields (updatedAt, isEdited, sanitized content, …) replace the
+            // optimistic in-memory copy. Preserves the resolved translation
+            // for the user's preferred language chain.
+            if let newIdx = posts.firstIndex(where: { $0.id == postId }) {
+                posts[newIdx] = updated.toFeedPost(preferredLanguages: preferredLanguages)
+                debouncedCacheSave()
+            }
+            ToastManager.shared.showSuccess(String(localized: "Post modifie", defaultValue: "Post modifie"))
+        } catch {
+            // Rollback the optimistic snapshot.
+            if let rollbackIdx = posts.firstIndex(where: { $0.id == postId }) {
+                posts[rollbackIdx] = snapshot
+                debouncedCacheSave()
+            }
+            ToastManager.shared.showError(String(localized: "Erreur lors de la modification", defaultValue: "Erreur lors de la modification"))
         }
     }
 

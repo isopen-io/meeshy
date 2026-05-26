@@ -8,6 +8,14 @@ final class CrashDiagnosticsManagerTests: XCTestCase {
         // Restore the default reporter between tests so leakage from one
         // test's mock can't bleed into the next assertion.
         CrashDiagnosticsManager.setReporterForTesting(NoOpCrashReporter())
+        // Drain persisted diagnostic files written via `writeSync(...)`
+        // (the NSException path persists on disk by design — it must
+        // survive a real crash). Without this drain a sibling test that
+        // boots `MeeshyApp` would consume our fake diagnostic and pop a
+        // toast mid-run, contaminating `ToastManagerTests` and similar
+        // singleton-state tests. The drain also clears the in-memory
+        // queue so `consumePending()` is idempotent for the next test.
+        _ = CrashDiagnosticsManager.shared.consumePending()
         super.tearDown()
     }
 

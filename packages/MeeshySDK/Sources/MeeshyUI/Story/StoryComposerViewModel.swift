@@ -7,29 +7,16 @@ import PencilKit
 // MARK: - Tool Modes
 
 public nonisolated enum StoryToolMode: String, CaseIterable, Sendable {
-    // Contenu
-    case media      // Images, videos, audio (foreground + background)
+    case media
+    case audio
     case drawing
     case text
-    case texture    // Background color, patterns
-    // Effets
     case filters
     case timeline
+    case texture
 
-    // Legacy alias for code that still references .photo or .audio
+    // Legacy alias
     static let photo: StoryToolMode = .media
-    static let audio: StoryToolMode = .media
-
-    var tab: StoryTab {
-        switch self {
-        case .media, .drawing, .text, .texture: return .contenu
-        case .filters, .timeline: return .effets
-        }
-    }
-}
-
-nonisolated enum StoryTab: String {
-    case contenu, effets
 }
 
 
@@ -356,7 +343,13 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
 
     @Published var activeTool: StoryToolMode?
 
-    var isContentToolActive: Bool { activeTool?.tab == .contenu }
+    var isContentToolActive: Bool {
+        guard let tool = activeTool else { return false }
+        switch tool {
+        case .media, .audio, .drawing, .text, .texture: return true
+        case .filters, .timeline: return false
+        }
+    }
 
     // MARK: - Drawing
 
@@ -375,6 +368,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         var offsetX: CGFloat = 0
         var offsetY: CGFloat = 0
         var rotation: Double = 0
+        var videoFitMode: String? = nil
     }
     @Published var backgroundTransform: BackgroundTransform = BackgroundTransform()
     /// Per-slide background transform cache, keyed by `slide.id` rather than its index.
@@ -979,8 +973,13 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         let center = CGPoint(x: 0.5, y: 0.5)
         var targetEffects = slides[targetSlideIndex].effects
         // Auto-background uniquement si la slide n'a aucun media visuel (pre-migration
-        // inclus : resolvedBackgroundMedia retombe sur le 1er existant).
-        let shouldBeBackground = targetEffects.resolvedBackgroundMedia == nil
+        // inclus : resolvedBackgroundMedia retombe sur le 1er existant). Un fond
+        // statique stocké dans `slideImages` (slide-level bg image) compte aussi
+        // comme background — sans ce check, un media ajouté APRÈS un setImage(...)
+        // serait incorrectement marqué bg, masquerait l'image, et briserait le
+        // synthetic-clip injecté par loadCurrentSlideIntoTimeline.
+        let hasSlideLevelBgImage = slideImages[slides[targetSlideIndex].id] != nil
+        let shouldBeBackground = targetEffects.resolvedBackgroundMedia == nil && !hasSlideLevelBgImage
         let obj = StoryMediaObject(
             postMediaId: "",
             kind: kind,
@@ -1153,8 +1152,13 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
             if text.isLocked == true { return }
             guard canAddText else { return }
             text.id = UUID().uuidString
-            text.x = min(1.0, text.x + 0.05)
-            text.y = min(1.0, text.y + 0.05)
+            // Offset is 20 design pixels in the 1080x1920 canvas (≈2% x, ≈1% y).
+            // Small enough that the clone visibly overlaps its source so the
+            // user sees the duplication happened, large enough to be selectable
+            // independently. The previous 0.05 (54 design px) was too wide and
+            // jumped the clone outside the source's selection rect.
+            text.x = min(1.0, text.x + 20.0 / 1080.0)
+            text.y = min(1.0, text.y + 20.0 / 1920.0)
             effects.textObjects.append(text)
             selectedElementId = text.id
         } else if var media = effects.mediaObjects?.first(where: { $0.id == id }) {
@@ -1261,7 +1265,19 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     private var nextZIndex: Int = 1
 
     func zIndex(for id: String) -> Int {
-        zIndexMap[id] ?? 0
+        if let mapped = zIndexMap[id] { return mapped }
+        // Fall back to the model-stored zIndex for elements that haven't
+        // been re-stamped via the in-memory map yet (e.g. media added
+        // directly to `currentEffects` from outside the composer, or
+        // elements loaded from a persisted slide). Mirrors the lookup
+        // used inside `allElementsSortedByZ` so the public accessor and
+        // the sort agree on the same value.
+        let effects = currentEffects
+        if let t = effects.textObjects.first(where: { $0.id == id }) { return t.zIndex ?? 0 }
+        if let m = effects.mediaObjects?.first(where: { $0.id == id }) { return m.zIndex ?? 0 }
+        if let a = effects.audioPlayerObjects?.first(where: { $0.id == id }) { return a.zIndex ?? 0 }
+        if let s = effects.stickerObjects?.first(where: { $0.id == id }) { return s.zIndex ?? 0 }
+        return 0
     }
 
     /// Promote an element to the front. Persists the value into the slide's effects so
@@ -1302,19 +1318,36 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     func sendBackward(id: String) {
         let all = allElementsSortedByZ()
         guard let index = all.firstIndex(where: { $0.id == id }) else { return }
-        guard index > 0 else { return }
+        let currentZ = zIndex(for: id)
 
-        let prev = all[index - 1]
-        let currentZ = zIndexMap[id] ?? zIndex(for: id)
-        let prevZ = zIndexMap[prev.id] ?? zIndex(for: prev.id)
-        
-        let newCurrentZ = currentZ == prevZ ? prevZ : prevZ
-        let newPrevZ = currentZ == prevZ ? currentZ + 1 : currentZ
-        
-        persistZIndex(newCurrentZ, for: id)
-        persistZIndex(newPrevZ, for: prev.id)
-        zIndexMap[id] = newCurrentZ
-        zIndexMap[prev.id] = newPrevZ
+        // Pick the neighbor that needs to end up above us. When `index > 0`
+        // that's the predecessor in sort order. When we're already at
+        // sort-index 0 BUT tied at the same z with the next element, that
+        // next element is the de-facto predecessor — without this branch,
+        // a cross-kind tie (e.g. text bumped to the same z as a foreground
+        // media) silently no-ops and the ordering never settles.
+        let neighbor: AnyCanvasElement?
+        if index > 0 {
+            neighbor = all[index - 1]
+        } else if all.count > 1, zIndex(for: all[1].id) == currentZ {
+            neighbor = all[1]
+        } else {
+            neighbor = nil
+        }
+        guard let prev = neighbor else { return }
+
+        let prevZ = zIndex(for: prev.id)
+        if currentZ > prevZ {
+            // Strict above: swap z values (the standard send-backward step).
+            persistZIndex(prevZ, for: id)
+            persistZIndex(currentZ, for: prev.id)
+            zIndexMap[id] = prevZ
+            zIndexMap[prev.id] = currentZ
+        } else {
+            // Tie: leave us where we are and bump the neighbor strictly above.
+            persistZIndex(currentZ + 1, for: prev.id)
+            zIndexMap[prev.id] = currentZ + 1
+        }
     }
 
     func allElementsSortedByZ() -> [AnyCanvasElement] {
@@ -1359,7 +1392,12 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         let hasKeyframes = p.mediaObjects.contains(where: { !($0.keyframes?.isEmpty ?? true) }) ||
                            p.textObjects.contains(where: { !($0.keyframes?.isEmpty ?? true) })
         let hasTransitions = !p.clipTransitions.isEmpty
-        let hasNonDefaultDuration = abs(p.slideDuration - 12.0) > 0.01
+        // `TimelineViewModel.init` seeds `slideDuration = 0` until
+        // `bootstrap(project:)` runs, so a fresh composer would otherwise
+        // report `hasNonDefaultDuration == true` (|0 - 12| > 0.01) before
+        // any actual user customization. Treat the un-bootstrapped 0 as
+        // the default value, not as a customization.
+        let hasNonDefaultDuration = p.slideDuration > 0 && abs(p.slideDuration - 12.0) > 0.01
         return hasKeyframes || hasTransitions || hasNonDefaultDuration
     }
 

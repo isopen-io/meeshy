@@ -29,4 +29,30 @@ struct AudioAvailabilityTests {
         )
         #expect(result == .needsDownload)
     }
+
+    // MARK: - Downloading payload (bytes carried alongside progress)
+
+    @Test func downloading_carriesBytesForLabelRendering() {
+        let state: AudioAvailability = .downloading(
+            progress: 0.48, downloadedBytes: 408_000, totalBytes: 870_400
+        )
+        guard case .downloading(let progress, let downloaded, let total) = state else {
+            Issue.record("expected .downloading case")
+            return
+        }
+        #expect(progress == 0.48)
+        #expect(downloaded == 408_000)
+        #expect(total == 870_400)
+    }
+
+    @Test func downloading_convenienceInit_defaultsBytesToZero() {
+        let state: AudioAvailability = .downloading(progress: 0.3)
+        guard case .downloading(let progress, let downloaded, let total) = state else {
+            Issue.record("expected .downloading case")
+            return
+        }
+        #expect(progress == 0.3)
+        #expect(downloaded == 0)
+        #expect(total == 0)
+    }
 }

@@ -23,6 +23,16 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         self.onMaxDurationReached = onMaxDurationReached
     }
 
+    /// `AudioRecordingProviding` requires `configure(with:)` (commit 2a9188974,
+    /// security/maxDuration caps). On garde la surface étendue
+    /// `configure(settings:onMaxDurationReached:)` pour les callers app qui
+    /// branchent un callback ; cette méthode-shim sert simplement la conformité
+    /// au protocole côté SDK (callers SDK qui veulent juste configurer les
+    /// paramètres d'enregistrement sans observer la duration max).
+    func configure(with settings: AudioRecordingSettings) {
+        configure(settings: settings, onMaxDurationReached: nil)
+    }
+
     func startRecording() {
         // Audit P1-10 — refuse to start a voice-message recording while a
         // VoIP call is active: AVAudioRecorder activation overrides the

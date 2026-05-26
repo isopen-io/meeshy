@@ -90,6 +90,22 @@ public actor MessagePersistenceActor {
         self.processorTask = nil
     }
 
+    // MARK: - Session quiesce (P1 Q3 — logout)
+
+    /// Purge atomique de toute la table outbox au logout. La table outbox
+    /// **n'a pas de colonne userId** (cf. `MessageDatabaseMigrations.swift`
+    /// migration "outbox") — il est donc impossible de filtrer par user.
+    /// Approche safe-by-construction : drop tous les rows. Décision Q3
+    /// actée dans le design doc UserSession (2026-05-26). Sans ça, un
+    /// message enqueued offline par user A serait envoyé sous l'identité
+    /// du user B après un logout+login rapide sur le même device.
+    /// Câblée depuis `DependencyContainer.wireOutboxLogoutHook`.
+    public func clearOutbox() async throws {
+        try await dbWriter.write { db in
+            try db.execute(sql: "DELETE FROM outbox")
+        }
+    }
+
     /// Call after init to start the background write processor.
     public func start() {
         guard processorTask == nil else { return }
@@ -683,6 +699,7 @@ public actor MessagePersistenceActor {
         }
     }
 
+
     /// Append a reaction to a persisted message, deduplicating by emoji+participantId.
     /// The GRDB change triggers store observation so the view re-renders.
     public func appendReaction(localId: String, reactionId: String,
@@ -733,6 +750,91 @@ public actor MessagePersistenceActor {
             guard reactions.count != countBefore else { return }
             record.reactionsJson = try JSONEncoder().encode(reactions)
             record.reactionCount = reactions.count
+            record.updatedAt = Date()
+            record.changeVersion += 1
+            try record.update(db)
+            didMutate = true
+        }
+        if didMutate, let convId = affectedConversationId {
+            postMessageStoreRefresh(conversationIds: [convId])
+        }
+    }
+
+    /// Merge a server-pushed attachment enrichment (transcription and/or
+    /// audio translations) into the persisted `attachmentsJson` blob.
+    /// Used by the `message:attachment-updated` socket handler to write
+    /// through the delta so a subsequent conversation open surfaces the
+    /// enrichment from cache instead of pop-in-then-replace when
+    /// `refreshMessagesFromAPI` finally runs.
+    ///
+    /// The other attachment fields (fileUrl, fileSize, dimensions, ...)
+    /// are preserved. If the attachment id is not found in the blob, the
+    /// call is a no-op (the message either isn't in this window or hasn't
+    /// been hydrated yet — the next REST pass will pick the enrichment up).
+    public func applyAttachmentEnrichment(
+        messageId: String,
+        attachmentId: String,
+        transcription: APIAttachmentTranscription?,
+        translations: [String: APIAttachmentTranslation]?
+    ) throws {
+        var affectedConversationId: String?
+        var didMutate = false
+        try dbWriter.write { db in
+            guard var record = try MessageRecord
+                .filter(Column("localId") == messageId || Column("serverId") == messageId)
+                .fetchOne(db) else { return }
+            affectedConversationId = record.conversationId
+
+            guard let data = record.attachmentsJson else { return }
+            let decoder = JSONDecoder()
+            let encoder = JSONEncoder()
+            guard var attachments = try? decoder.decode([MeeshyMessageAttachment].self, from: data),
+                  let idx = attachments.firstIndex(where: { $0.id == attachmentId })
+            else { return }
+
+            // API → Embedded conversions (mirror of the mapping in
+            // upsertFromAPIMessages around line 865-898).
+            let embeddedTranscription: MeeshyMessageAttachment.EmbeddedTranscription? = transcription.flatMap { t in
+                guard let text = t.text ?? t.transcribedText, !text.isEmpty else { return nil }
+                return .init(
+                    text: text,
+                    language: t.language ?? "unknown",
+                    confidence: t.confidence,
+                    durationMs: t.durationMs,
+                    speakerCount: t.speakerCount,
+                    segments: t.segments?.map { s in
+                        .init(text: s.text, startTime: s.startTime, endTime: s.endTime, speakerId: s.speakerId)
+                    }
+                )
+            }
+            let embeddedAudioTranslations: [String: MeeshyMessageAttachment.EmbeddedAudioTranslation]? = translations.flatMap { dict in
+                let mapped: [String: MeeshyMessageAttachment.EmbeddedAudioTranslation] = dict.compactMapValues { t in
+                    guard let url = t.url, !url.isEmpty else { return nil }
+                    return .init(
+                        url: url,
+                        transcription: t.transcription,
+                        durationMs: t.durationMs,
+                        format: t.format,
+                        cloned: t.cloned,
+                        quality: t.quality,
+                        voiceModelId: t.voiceModelId,
+                        ttsModel: t.ttsModel,
+                        segments: t.segments?.map { s in
+                            .init(text: s.text, startTime: s.startTime, endTime: s.endTime, speakerId: s.speakerId)
+                        }
+                    )
+                }
+                return mapped.isEmpty ? nil : mapped
+            }
+
+            // Merge non-destructively — keep existing values when the new
+            // payload doesn't carry an enrichment for that slot.
+            var enriched = attachments[idx]
+            if let new = embeddedTranscription { enriched.transcription = new }
+            if let new = embeddedAudioTranslations { enriched.audioTranslations = new }
+            attachments[idx] = enriched
+
+            record.attachmentsJson = try? encoder.encode(attachments)
             record.updatedAt = Date()
             record.changeVersion += 1
             try record.update(db)

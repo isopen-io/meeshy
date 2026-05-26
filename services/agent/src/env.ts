@@ -21,6 +21,10 @@ const envSchema = z.object({
   AGENT_ROLE_LOCK_THRESHOLD: z.coerce.number().min(0).max(1).default(0.8),
   AGENT_DEFAULT_TIMEOUT_SECONDS: z.coerce.number().int().min(10).max(600).default(300),
   AGENT_DEFAULT_COOLDOWN_SECONDS: z.coerce.number().int().min(5).max(300).default(60),
+
+  LLM_MAX_RETRIES: z.coerce.number().int().min(0).max(10).default(2),
+  LLM_TIMEOUT_MS: z.coerce.number().int().min(1000).max(120000).default(30000),
+  LLM_BASE_DELAY_MS: z.coerce.number().int().min(100).max(10000).default(1000),
 }).superRefine((data, ctx) => {
   if (!data.OPENAI_API_KEY && !data.ANTHROPIC_API_KEY) {
     ctx.addIssue({

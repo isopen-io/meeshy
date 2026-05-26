@@ -152,7 +152,9 @@ extension BubbleContent {
         self.reactions = Self.summarizeReactions(message.reactions, currentUserId: currentUserId)
 
         // --- Meta ---
-        let resolvedTimeString = timeString ?? message.cachedTimeString ?? ""
+        let resolvedTimeString = timeString
+            ?? message.cachedTimeString
+            ?? MessageRecord.computeTimeString(for: message.createdAt)
         self.meta = Meta(
             timeString: resolvedTimeString,
             deliveryStatus: message.isMe ? message.deliveryStatus : nil

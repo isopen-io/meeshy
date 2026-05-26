@@ -8,24 +8,28 @@ import MeeshySDK
 /// Inputs are primitives (`Int`, optional `BandCategory`) so the view is
 /// `Equatable` and skips re-evaluation when its inputs haven't changed.
 struct ComposerFABColumn: View, Equatable {
-    let contenuBadge: Int
-    let effetsBadge: Int
+    let mediaBadge: Int
+    let sonBadge: Int
+    let textBadge: Int
+    let drawingBadge: Int
+    let filtersBadge: Int
+    let timelineBadge: Int
     let activeCategory: BandCategory?
 
-    let onTapContenu: () -> Void
-    let onTapEffets: () -> Void
-    let onSwipeUpContenu: () -> Void
-    let onSwipeUpEffets: () -> Void
+    let onTap: (BandCategory) -> Void
+    let onSwipeUp: (BandCategory) -> Void
     let onSwipeDownAny: () -> Void
 
     @Environment(\.theme) private var theme
 
     var body: some View {
         VStack(spacing: 12) {
-            fab(category: .effets, icon: "wand.and.stars", badge: effetsBadge,
-                onTap: onTapEffets, onSwipeUp: onSwipeUpEffets, onSwipeDown: onSwipeDownAny)
-            fab(category: .contenu, icon: "square.grid.2x2.fill", badge: contenuBadge,
-                onTap: onTapContenu, onSwipeUp: onSwipeUpContenu, onSwipeDown: onSwipeDownAny)
+            fab(category: .timeline, icon: "clock", badge: timelineBadge)
+            fab(category: .filters, icon: "camera.filters", badge: filtersBadge)
+            fab(category: .drawing, icon: "pencil.tip", badge: drawingBadge)
+            fab(category: .text, icon: "textformat", badge: textBadge)
+            fab(category: .son, icon: "music.note", badge: sonBadge)
+            fab(category: .media, icon: "play.rectangle.fill", badge: mediaBadge)
         }
         .padding(.leading, 16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
@@ -35,19 +39,25 @@ struct ComposerFABColumn: View, Equatable {
     private func fab(
         category: BandCategory,
         icon: String,
-        badge: Int,
-        onTap: @escaping () -> Void,
-        onSwipeUp: @escaping () -> Void,
-        onSwipeDown: @escaping () -> Void
+        badge: Int
     ) -> some View {
         let isActive = activeCategory == category
-        let accent: Color = category == .contenu ? MeeshyColors.indigo400 : MeeshyColors.indigo300
+        let accent: Color = {
+            switch category {
+            case .media: return MeeshyColors.coral
+            case .son: return MeeshyColors.indigo400
+            case .text: return MeeshyColors.indigo400
+            case .drawing: return MeeshyColors.success
+            case .filters: return MeeshyColors.info
+            case .timeline: return MeeshyColors.indigo300
+            }
+        }()
 
-        FABPanGestureWrapper(onSwipeUp: onSwipeUp, onSwipeDown: onSwipeDown) {
+        FABPanGestureWrapper(onSwipeUp: { onSwipeUp(category) }, onSwipeDown: onSwipeDownAny) {
             Button(action: {
                 let gen = UIImpactFeedbackGenerator(style: .medium)
                 gen.impactOccurred()
-                onTap()
+                onTap(category)
             }) {
                 ZStack {
                     if isActive {
@@ -68,7 +78,7 @@ struct ComposerFABColumn: View, Equatable {
                             .font(.system(size: 9, weight: .bold))
                             .foregroundStyle(.white)
                             .frame(minWidth: 16, minHeight: 16)
-                            .background(MeeshyColors.indigo400)
+                            .background(accent)
                             .clipShape(Capsule())
                             .offset(x: 6, y: -6)
                             .accessibilityHidden(true)
@@ -76,20 +86,20 @@ struct ComposerFABColumn: View, Equatable {
                 }
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(category == .contenu ? "Ouvrir les outils de contenu" : "Ouvrir les outils d'effets")
+            .accessibilityLabel("Ouvrir l'outil \(category)")
             .accessibilityValue(badge > 0 ? "\(badge) éléments actifs" : "Aucun élément")
-            .accessibilityHint(isActive ? "Touchez deux fois pour fermer. Faites glisser vers le bas pour masquer la barre." : "Touchez deux fois pour ouvrir les outils. Faites glisser vers le haut pour forcer l'ouverture.")
+            .accessibilityHint(isActive ? "Touchez deux fois pour fermer." : "Touchez deux fois pour ouvrir.")
         }
         .frame(width: 56, height: 56)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(category == .contenu ? "Ouvrir les outils de contenu" : "Ouvrir les outils d'effets")
-        .accessibilityValue(badge > 0 ? "\(badge) éléments actifs" : "Aucun élément")
-        .accessibilityHint(isActive ? "Touchez deux fois pour fermer. Faites glisser vers le bas pour masquer la barre." : "Touchez deux fois pour ouvrir les outils. Faites glisser vers le haut pour forcer l'ouverture.")
     }
 
     static func == (lhs: ComposerFABColumn, rhs: ComposerFABColumn) -> Bool {
-        lhs.contenuBadge == rhs.contenuBadge
-            && lhs.effetsBadge == rhs.effetsBadge
+        lhs.mediaBadge == rhs.mediaBadge
+            && lhs.sonBadge == rhs.sonBadge
+            && lhs.textBadge == rhs.textBadge
+            && lhs.drawingBadge == rhs.drawingBadge
+            && lhs.filtersBadge == rhs.filtersBadge
+            && lhs.timelineBadge == rhs.timelineBadge
             && lhs.activeCategory == rhs.activeCategory
     }
 }

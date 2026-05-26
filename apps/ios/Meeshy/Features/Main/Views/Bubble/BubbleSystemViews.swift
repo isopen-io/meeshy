@@ -21,7 +21,7 @@ struct BubbleDeletedView: View, Equatable {
                 Image(systemName: "nosign")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(ThemeManager.shared.textMuted)
-                Text("Message supprime")
+                Text(String(localized: "bubble.system.deleted", defaultValue: "Message supprime", bundle: .main))
                     .font(.system(size: 13, weight: .regular))
                     .italic()
                     .foregroundColor(ThemeManager.shared.textMuted)
@@ -37,7 +37,7 @@ struct BubbleDeletedView: View, Equatable {
                     )
             )
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("Message supprime")
+            .accessibilityLabel(String(localized: "bubble.system.deleted", defaultValue: "Message supprime", bundle: .main))
 
             if !isMe { Spacer(minLength: 50) }
         }
@@ -58,7 +58,7 @@ struct BubbleBurnedView: View, Equatable {
                 Image(systemName: "flame.fill")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.orange)
-                Text("Vu et effacé")
+                Text(String(localized: "bubble.system.burned", defaultValue: "Vu et effacé", bundle: .main))
                     .font(.system(size: 13, weight: .regular))
                     .italic()
                     .foregroundColor(ThemeManager.shared.textMuted)
@@ -74,7 +74,7 @@ struct BubbleBurnedView: View, Equatable {
                     )
             )
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("Message vu et effacé")
+            .accessibilityLabel(String(localized: "bubble.system.burned.a11y", defaultValue: "Message vu et effacé", bundle: .main))
 
             if !isMe { Spacer(minLength: 50) }
         }

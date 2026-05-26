@@ -229,17 +229,29 @@ struct BubbleFooter: View, Equatable {
 
     private func footerFlagPill(_ flag: FooterFlag) -> some View {
         let display = LanguageDisplay.from(code: flag.code)
-        return VStack(spacing: 1) {
-            Text(display?.flag ?? flag.code.uppercased())
-                .font(.system(size: flag.isActive ? 12 : 10))
-            if flag.isActive {
-                RoundedRectangle(cornerRadius: 1)
-                    .fill(Color(hex: display?.color ?? LanguageDisplay.defaultColor))
-                    .frame(width: 10, height: 1.5)
+        // `Button + .buttonStyle(.plain)` au lieu de `.onTapGesture` : sans ça
+        // le tap est avalé par le `.simultaneousGesture(LongPressGesture(0.35))`
+        // que `BubbleSwipeContainer` pose sur la bulle. C'est le même pattern
+        // que pour la coche delivery (read receipt) qui marche déjà, et que
+        // pour le bouton translate juste à côté. `.contentShape(Rectangle())`
+        // garde la hit-area de 22pt mini même quand le drapeau n'est pas actif
+        // (pas de soulignement → VStack collapse à ~12pt).
+        return Button {
+            actions.onFlagTap?(flag.code)
+        } label: {
+            VStack(spacing: 1) {
+                Text(display?.flag ?? flag.code.uppercased())
+                    .font(.system(size: flag.isActive ? 12 : 10))
+                if flag.isActive {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color(hex: display?.color ?? LanguageDisplay.defaultColor))
+                        .frame(width: 10, height: 1.5)
+                }
             }
+            .frame(minWidth: 22, minHeight: 22)
+            .contentShape(Rectangle())
         }
-        .contentShape(Rectangle())
-        .onTapGesture { actions.onFlagTap?(flag.code) }
+        .buttonStyle(.plain)
         .accessibilityLabel(display?.name ?? flag.code)
     }
 

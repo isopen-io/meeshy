@@ -147,7 +147,7 @@ struct ProfileView: View {
 
     private var header: some View {
         CollapsibleHeader(
-            title: "Profil",
+            title: String(localized: "profile.title", defaultValue: "Profil", bundle: .main),
             scrollOffset: scrollOffset,
             onBack: {
                 if isEditing {
@@ -173,7 +173,9 @@ struct ProfileView: View {
                             isEditing = true
                         }
                     } label: {
-                        Text(isEditing ? "Enregistrer" : "Modifier")
+                        Text(isEditing
+                             ? String(localized: "profile.save", defaultValue: "Enregistrer", bundle: .main)
+                             : String(localized: "profile.edit", defaultValue: "Modifier", bundle: .main))
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(Color(hex: accentColor))
                     }
@@ -237,7 +239,7 @@ struct ProfileView: View {
 
                 if isEditing {
                     PhotosPicker(selection: $bannerItem, matching: .images) {
-                        Label("Modifier", systemImage: "photo.fill")
+                        Label(String(localized: "profile.edit", defaultValue: "Modifier", bundle: .main), systemImage: "photo.fill")
                             .font(.system(size: 11, weight: .semibold))
                             .foregroundColor(.white)
                             .padding(.horizontal, 10)
@@ -292,7 +294,7 @@ struct ProfileView: View {
 
             if !isEditing {
                 VStack(spacing: 4) {
-                    Text(user?.displayName ?? user?.username ?? "Utilisateur")
+                    Text(user?.displayName ?? user?.username ?? String(localized: "profile.unknown_user", defaultValue: "Utilisateur", bundle: .main))
                         .font(.system(size: 20, weight: .bold))
                         .foregroundColor(theme.textPrimary)
 
@@ -343,14 +345,14 @@ struct ProfileView: View {
 
     private var identitySection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(icon: "person.text.rectangle.fill", title: "IDENTITE", color: accentColor)
+            sectionHeader(icon: "person.text.rectangle.fill", title: String(localized: "profile.section.identity", defaultValue: "IDENTITE", bundle: .main), color: accentColor)
 
             VStack(spacing: 0) {
-                profileField(icon: "person.fill", title: "Prenom", value: $firstName, placeholder: "Prenom")
-                profileField(icon: "person.fill", title: "Nom", value: $lastName, placeholder: "Nom")
-                profileInfoRow(icon: "at", title: "Pseudo", value: "@\(user?.username ?? "—")")
-                profileField(icon: "person.crop.rectangle.fill", title: "Nom d'affichage", value: $displayName, placeholder: "Nom d'affichage")
-                profileField(icon: "text.quote", title: "Bio", value: $bio, placeholder: "Parlez de vous...", isMultiline: true)
+                profileField(icon: "person.fill", title: String(localized: "profile.first_name", defaultValue: "Prenom", bundle: .main), value: $firstName, placeholder: String(localized: "profile.first_name", defaultValue: "Prenom", bundle: .main))
+                profileField(icon: "person.fill", title: String(localized: "profile.last_name", defaultValue: "Nom", bundle: .main), value: $lastName, placeholder: String(localized: "profile.last_name", defaultValue: "Nom", bundle: .main))
+                profileInfoRow(icon: "at", title: String(localized: "profile.username", defaultValue: "Pseudo", bundle: .main), value: "@\(user?.username ?? "—")")
+                profileField(icon: "person.crop.rectangle.fill", title: String(localized: "profile.display_name", defaultValue: "Nom d'affichage", bundle: .main), value: $displayName, placeholder: String(localized: "profile.display_name", defaultValue: "Nom d'affichage", bundle: .main))
+                profileField(icon: "text.quote", title: String(localized: "profile.bio", defaultValue: "Bio", bundle: .main), value: $bio, placeholder: String(localized: "profile.bio.placeholder", defaultValue: "Parlez de vous...", bundle: .main), isMultiline: true)
             }
             .background(sectionBackground)
         }
@@ -360,14 +362,14 @@ struct ProfileView: View {
 
     private var contactSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(icon: "envelope.fill", title: "CONTACT", color: "4ECDC4")
+            sectionHeader(icon: "envelope.fill", title: String(localized: "profile.section.contact", defaultValue: "CONTACT", bundle: .main), color: "4ECDC4")
 
             VStack(spacing: 0) {
                 HStack(spacing: 12) {
                     fieldIcon("envelope.fill")
                     
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Email")
+                        Text(String(localized: "profile.email", defaultValue: "Email", bundle: .main))
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(theme.textMuted)
                         
@@ -389,7 +391,7 @@ struct ProfileView: View {
                     fieldIcon("phone.fill")
                     
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Telephone")
+                        Text(String(localized: "profile.phone", defaultValue: "Telephone", bundle: .main))
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(theme.textMuted)
                         
@@ -415,25 +417,25 @@ struct ProfileView: View {
 
     private var languagesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(icon: "globe", title: "LANGUES", color: "FF6B6B")
+            sectionHeader(icon: "globe", title: String(localized: "profile.section.languages", defaultValue: "LANGUES", bundle: .main), color: "FF6B6B")
 
             VStack(spacing: 0) {
                 languagePickerRow(
-                    title: "Langue principale",
-                    subtitle: "Le contenu sera traduit dans cette langue",
+                    title: String(localized: "profile.language.primary", defaultValue: "Langue principale", bundle: .main),
+                    subtitle: String(localized: "profile.language.primary.subtitle", defaultValue: "Le contenu sera traduit dans cette langue", bundle: .main),
                     code: systemLanguage,
                     required: true,
                     showPicker: $showSystemLanguagePicker
                 )
                 languagePickerRow(
-                    title: "Langue regionale",
+                    title: String(localized: "profile.language.regional", defaultValue: "Langue regionale", bundle: .main),
                     subtitle: nil,
                     code: regionalLanguage,
                     required: false,
                     showPicker: $showRegionalLanguagePicker
                 )
                 languagePickerRow(
-                    title: "Langue personnalisee",
+                    title: String(localized: "profile.language.custom", defaultValue: "Langue personnalisee", bundle: .main),
                     subtitle: nil,
                     code: customDestinationLanguage,
                     required: false,
@@ -444,7 +446,7 @@ struct ProfileView: View {
         }
         .sheet(isPresented: $showSystemLanguagePicker) {
             ProfileLanguagePickerSheet(
-                title: "Langue principale",
+                title: String(localized: "profile.language.primary", defaultValue: "Langue principale", bundle: .main),
                 languages: LanguageData.allLanguages,
                 selectedCode: systemLanguage,
                 allowClear: false,
@@ -453,7 +455,7 @@ struct ProfileView: View {
         }
         .sheet(isPresented: $showRegionalLanguagePicker) {
             ProfileLanguagePickerSheet(
-                title: "Langue regionale",
+                title: String(localized: "profile.language.regional", defaultValue: "Langue regionale", bundle: .main),
                 languages: LanguageData.allLanguages,
                 selectedCode: regionalLanguage,
                 allowClear: true,
@@ -462,7 +464,7 @@ struct ProfileView: View {
         }
         .sheet(isPresented: $showCustomLanguagePicker) {
             ProfileLanguagePickerSheet(
-                title: "Langue personnalisee",
+                title: String(localized: "profile.language.custom", defaultValue: "Langue personnalisee", bundle: .main),
                 languages: LanguageData.allLanguages,
                 selectedCode: customDestinationLanguage,
                 allowClear: true,
@@ -475,16 +477,16 @@ struct ProfileView: View {
 
     private var statsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(icon: "chart.bar.fill", title: "STATISTIQUES", color: "4ECDC4")
+            sectionHeader(icon: "chart.bar.fill", title: String(localized: "profile.section.stats", defaultValue: "STATISTIQUES", bundle: .main), color: "4ECDC4")
 
             Button {
                 HapticFeedback.light()
                 showStats = true
             } label: {
                 HStack(spacing: 12) {
-                    statCard(value: "\(stats?.totalMessages ?? 0)", label: "Messages", color: "FF6B6B")
-                    statCard(value: "\(stats?.totalConversations ?? 0)", label: "Conversations", color: "4ECDC4")
-                    statCard(value: "\(stats?.friendRequestsReceived ?? 0)", label: "Amis", color: "9B59B6")
+                    statCard(value: "\(stats?.totalMessages ?? 0)", label: String(localized: "profile.stats.messages", defaultValue: "Messages", bundle: .main), color: "FF6B6B")
+                    statCard(value: "\(stats?.totalConversations ?? 0)", label: String(localized: "profile.stats.conversations", defaultValue: "Conversations", bundle: .main), color: "4ECDC4")
+                    statCard(value: "\(stats?.friendRequestsReceived ?? 0)", label: String(localized: "profile.stats.friends", defaultValue: "Amis", bundle: .main), color: "9B59B6")
                 }
             }
             .buttonStyle(.plain)
@@ -495,7 +497,7 @@ struct ProfileView: View {
 
     private var friendRequestsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(icon: "person.badge.plus.fill", title: "DEMANDES", color: "E91E63")
+            sectionHeader(icon: "person.badge.plus.fill", title: String(localized: "profile.section.requests", defaultValue: "DEMANDES", bundle: .main), color: "E91E63")
 
             Button {
                 HapticFeedback.light()
@@ -504,7 +506,7 @@ struct ProfileView: View {
                 HStack(spacing: 12) {
                     fieldIcon("person.2.fill")
 
-                    Text("Demandes d'amis")
+                    Text(String(localized: "profile.friend_requests", defaultValue: "Demandes d'amis", bundle: .main))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(theme.textPrimary)
 
@@ -534,7 +536,7 @@ struct ProfileView: View {
 
     private var memberSinceSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionHeader(icon: "calendar", title: "MEMBRE DEPUIS", color: "9B59B6")
+            sectionHeader(icon: "calendar", title: String(localized: "profile.section.member_since", defaultValue: "MEMBRE DEPUIS", bundle: .main), color: "9B59B6")
 
             HStack {
                 Text(user?.createdAt.flatMap { parseAndFormatDate($0) } ?? "—")
@@ -679,7 +681,9 @@ struct ProfileView: View {
                             .foregroundColor(theme.textMuted)
                     }
                 } else {
-                    Text(required ? "Choisir" : "Aucune")
+                    Text(required
+                         ? String(localized: "profile.language.choose", defaultValue: "Choisir", bundle: .main)
+                         : String(localized: "profile.language.none", defaultValue: "Aucune", bundle: .main))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
@@ -697,7 +701,9 @@ struct ProfileView: View {
     }
 
     private func verificationBadge(verified: Bool) -> some View {
-        Text(verified ? "Verifie" : "Non verifie")
+        Text(verified
+             ? String(localized: "profile.verified", defaultValue: "Verifie", bundle: .main)
+             : String(localized: "profile.not_verified", defaultValue: "Non verifie", bundle: .main))
             .font(.system(size: 10, weight: .semibold))
             .foregroundColor(.white)
             .padding(.horizontal, 6)
@@ -826,11 +832,11 @@ struct ProfileView: View {
                 let updatedUser = try await UserService.shared.updateAvatar(url: uploadedURL)
                 authManager.currentUser = updatedUser
                 HapticFeedback.success()
-                ToastManager.shared.showSuccess("Avatar mis a jour")
+                ToastManager.shared.showSuccess(String(localized: "profile.avatar.updated", defaultValue: "Avatar mis a jour", bundle: .main))
             } catch {
                 HapticFeedback.error()
-                ToastManager.shared.showError("Erreur lors du changement d'avatar")
-                withAnimation { errorMessage = "Erreur lors du changement d'avatar" }
+                ToastManager.shared.showError(String(localized: "profile.avatar.error", defaultValue: "Erreur lors du changement d'avatar", bundle: .main))
+                withAnimation { errorMessage = String(localized: "profile.avatar.error", defaultValue: "Erreur lors du changement d'avatar", bundle: .main) }
             }
             isUploadingAvatar = false
             avatarItem = nil
@@ -846,11 +852,11 @@ struct ProfileView: View {
                 let updatedUser = try await UserService.shared.updateBanner(url: uploadedURL)
                 authManager.currentUser = updatedUser
                 HapticFeedback.success()
-                ToastManager.shared.showSuccess("Banniere mise a jour")
+                ToastManager.shared.showSuccess(String(localized: "profile.banner.updated", defaultValue: "Banniere mise a jour", bundle: .main))
             } catch {
                 HapticFeedback.error()
-                ToastManager.shared.showError("Erreur lors du changement de banniere")
-                withAnimation { errorMessage = "Erreur lors du changement de banniere" }
+                ToastManager.shared.showError(String(localized: "profile.banner.error", defaultValue: "Erreur lors du changement de banniere", bundle: .main))
+                withAnimation { errorMessage = String(localized: "profile.banner.error", defaultValue: "Erreur lors du changement de banniere", bundle: .main) }
             }
             isUploadingBanner = false
             bannerItem = nil

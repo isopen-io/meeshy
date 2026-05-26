@@ -320,7 +320,7 @@ struct StoryActionSidebarView: View {
                                     .frame(width: 38, height: 38)
                                     .background(Circle().fill(Color.white.opacity(0.1)))
                             }
-                            .accessibilityLabel("Voir en \(lang.name)")
+                            .accessibilityLabel(String(localized: "story.viewer.a11y.viewIn", defaultValue: "Voir en \(lang.name)", bundle: .main))
                         }
                     }
                     .padding(.horizontal, 10)
@@ -349,8 +349,8 @@ struct StoryActionSidebarView: View {
             }
             .padding(.trailing, 10)
             .padding(.vertical, 6)
-            .accessibilityLabel("Demander une traduction")
-            .accessibilityHint("Ouvre la liste des langues pour demander une nouvelle traduction")
+            .accessibilityLabel(String(localized: "story.viewer.a11y.requestTranslation", defaultValue: "Demander une traduction", bundle: .main))
+            .accessibilityHint(String(localized: "story.viewer.a11y.requestTranslation.hint", defaultValue: "Ouvre la liste des langues pour demander une nouvelle traduction", bundle: .main))
         }
         .background(
             Capsule()
@@ -359,7 +359,7 @@ struct StoryActionSidebarView: View {
                 .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 0.5))
         )
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Traductions disponibles")
+        .accessibilityLabel(String(localized: "story.viewer.a11y.availableTranslations", defaultValue: "Traductions disponibles", bundle: .main))
     }
 }
 
@@ -376,6 +376,41 @@ struct StoryHeaderView: View {
     @Binding var selectedProfileUser: ProfileSheetUser?
     @Binding var editAndRepostAsPostSource: RepostPostSourceWrapper?
     @Binding var showReportSheet: Bool
+
+    /// Holds the freshly-minted `meeshy.me/l/<token>` URL for the current
+    /// story share — the sheet at the end of `body` presents the system
+    /// share UI as soon as it's non-nil and clears it on dismiss.
+    @State private var shareableStoryLink: ShareableLink?
+
+    /// Mints a TrackingLink for the given story (gateway route is shared
+    /// with posts — a story IS a `PostType.STORY`), then surfaces the
+    /// `meeshy.me/l/<token>` URL through `shareableStoryLink` so the
+    /// system share sheet picks it up. Falls back to the raw URL when the
+    /// mint fails so the user always has something to share.
+    @MainActor
+    private func mintAndShareStory(_ storyId: String) async {
+        let fallback = makeStoryExternalShareURL(storyId)
+        do {
+            let result = try await PostService.shared.share(
+                postId: storyId,
+                platform: "system",
+                generateLink: true
+            )
+            if let shortUrl = result.shortUrl, let url = URL(string: shortUrl) {
+                shareableStoryLink = ShareableLink(url: url)
+                HapticFeedback.light()
+                return
+            }
+        } catch {
+            // intentional fall-through: try raw URL fallback
+        }
+        if let fallback {
+            shareableStoryLink = ShareableLink(url: fallback)
+            HapticFeedback.light()
+        } else {
+            ToastManager.shared.showError("Lien indisponible")
+        }
+    }
 
     let makeStoryExternalShareURL: (String) -> URL?
     let storyTimeRemaining: (Date) -> String
@@ -484,7 +519,7 @@ struct StoryHeaderView: View {
                                             .font(.system(size: 10, weight: .semibold))
                                             .foregroundColor(.white.opacity(0.6))
                                         if let authorName = story.repostAuthorName {
-                                            Text("via @\(authorName)")
+                                            Text(String(localized: "story.viewer.via", defaultValue: "via @\(authorName)", bundle: .main))
                                                 .font(.system(size: 11, weight: .medium))
                                                 .foregroundColor(.white.opacity(0.55))
                                         }
@@ -508,8 +543,8 @@ struct StoryHeaderView: View {
                 }
                 .buttonStyle(.plain)
                 .frame(minHeight: 44)
-                .accessibilityLabel("Profil de \(group.username)")
-                .accessibilityHint("Ouvre le profil de \(group.username)")
+                .accessibilityLabel(String(localized: "story.viewer.a11y.profileOf", defaultValue: "Profil de \(group.username)", bundle: .main))
+                .accessibilityHint(String(localized: "story.viewer.a11y.profileOf.hint", defaultValue: "Ouvre le profil de \(group.username)", bundle: .main))
             }
 
             Spacer()
@@ -533,8 +568,8 @@ struct StoryHeaderView: View {
                 } label: {
                     Label(
                         isFullscreenStorySession
-                            ? "Quitter le plein écran"
-                            : "Plein écran",
+                            ? String(localized: "story.viewer.fullscreen.exit", defaultValue: "Quitter le plein écran", bundle: .main)
+                            : String(localized: "story.viewer.fullscreen.enter", defaultValue: "Plein écran", bundle: .main),
                         systemImage: isFullscreenStorySession
                             ? "arrow.down.right.and.arrow.up.left"
                             : "arrow.up.left.and.arrow.down.right"
@@ -547,26 +582,26 @@ struct StoryHeaderView: View {
                     if isOwnStory {
                         // External share via system share sheet (Messages,
                         // Mail, other apps). Only for public stories.
-                        if story.isPublic, let externalShareURL = makeStoryExternalShareURL(story.id) {
-                            ShareLink(
-                                item: externalShareURL,
-                                subject: Text("Story de @\(group.username)"),
-                                message: Text("Regardez cette story sur Meeshy")
-                            ) {
-                                Label("Partager hors Meeshy", systemImage: "square.and.arrow.up")
+                        // The link is minted on tap so the user always
+                        // shares a trackable `meeshy.me/l/<token>` URL.
+                        if story.isPublic {
+                            Button {
+                                Task { await mintAndShareStory(story.id) }
+                            } label: {
+                                Label(String(localized: "story.viewer.share.external", defaultValue: "Partager hors Meeshy", bundle: .main), systemImage: "square.and.arrow.up")
                             }
                             Divider()
                         }
                         Button(role: .destructive) {
                             deleteCurrentStory()
                         } label: {
-                            Label("Supprimer", systemImage: "trash")
+                            Label(String(localized: "story.viewer.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
                         }
                     } else {
                         Button {
                             selectedProfileUser = .from(storyGroup: group)
                         } label: {
-                            Label("Voir le profil", systemImage: "person.fill")
+                            Label(String(localized: "story.viewer.viewProfile", defaultValue: "Voir le profil", bundle: .main), systemImage: "person.fill")
                         }
 
                         // C.2: repost-as-post entry points. Gated on
@@ -576,7 +611,7 @@ struct StoryHeaderView: View {
                             Button {
                                 repostAsPostDirect()
                             } label: {
-                                Label("Republier en post", systemImage: "arrow.2.squarepath")
+                                Label(String(localized: "story.viewer.repostAsPost", defaultValue: "Republier en post", bundle: .main), systemImage: "arrow.2.squarepath")
                             }
 
                             Button {
@@ -587,20 +622,19 @@ struct StoryHeaderView: View {
                                     authorHandle: group.username
                                 )
                             } label: {
-                                Label("Éditer et republier en post", systemImage: "square.and.pencil")
+                                Label(String(localized: "story.viewer.editAndRepostAsPost", defaultValue: "Éditer et republier en post", bundle: .main), systemImage: "square.and.pencil")
                             }
 
                             // Pilier 18 SOTA — external share complement
                             // (Messages, Mail, other apps) alongside the
                             // internal SharePicker flow that lives elsewhere.
-                            if let externalShareURL = makeStoryExternalShareURL(story.id) {
-                                ShareLink(
-                                    item: externalShareURL,
-                                    subject: Text("Story de @\(group.username)"),
-                                    message: Text("Regardez cette story sur Meeshy")
-                                ) {
-                                    Label("Partager hors Meeshy", systemImage: "square.and.arrow.up")
-                                }
+                            // Mint the TrackingLink on tap so the shared
+                            // URL is `meeshy.me/l/<token>` and the author
+                            // can track external opens.
+                            Button {
+                                Task { await mintAndShareStory(story.id) }
+                            } label: {
+                                Label(String(localized: "story.viewer.share.external", defaultValue: "Partager hors Meeshy", bundle: .main), systemImage: "square.and.arrow.up")
                             }
                         }
 
@@ -609,7 +643,7 @@ struct StoryHeaderView: View {
                         Button(role: .destructive) {
                             showReportSheet = true
                         } label: {
-                            Label("Signaler", systemImage: "exclamationmark.triangle")
+                            Label(String(localized: "story.viewer.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
                         }
                     }
                 }
@@ -627,7 +661,7 @@ struct StoryHeaderView: View {
                     .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
             }
             .frame(minWidth: 44, minHeight: 44)
-            .accessibilityLabel("Options de la story")
+            .accessibilityLabel(String(localized: "story.viewer.a11y.options", defaultValue: "Options de la story", bundle: .main))
 
             // Close button
             Button {
@@ -647,8 +681,8 @@ struct StoryHeaderView: View {
                     .shadow(color: .black.opacity(0.15), radius: 4, y: 2)
             }
             .frame(minWidth: 44, minHeight: 44)
-            .accessibilityLabel("Fermer")
-            .accessibilityHint("Ferme le lecteur de stories")
+            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
+            .accessibilityHint(String(localized: "story.viewer.a11y.close.hint", defaultValue: "Ferme le lecteur de stories", bundle: .main))
         }
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(user: user)
@@ -675,6 +709,11 @@ struct StoryHeaderView: View {
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $shareableStoryLink) { link in
+            // Trackable `meeshy.me/l/<token>` URL minted in
+            // `mintAndShareStory` — the author owns the analytics.
+            ShareSheet(activityItems: [link.url])
         }
     }
 }

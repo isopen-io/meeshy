@@ -87,6 +87,15 @@ public final class BlockService: ObservableObject, BlockServiceProviding, @unche
     public func refreshCache() async {
         _ = try? await listBlockedUsers()
     }
+
+    // MARK: - Session quiesce (P1 — logout)
+
+    /// Purge la blocklist en mémoire pour que la session suivante (autre user
+    /// sur le même device) ne voie pas la blocklist du user précédent avant
+    /// le prochain refresh réseau. Câblée depuis `AuthManager.logout()`.
+    public func reset() async {
+        await MainActor.run { blockedUserIds.removeAll() }
+    }
 }
 
 public struct BlockActionResponse: Decodable {

@@ -334,6 +334,13 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
     public let thumbHash: String?
     public let thumbnailUrl: String?
     public let fullUrl: String?
+    /// When `true`, bypasses `MediaDownloadPolicy` and always downloads.
+    /// Use for surfaces (Feed, Posts, Stories tray) where the thumbHash is
+    /// only meant as a placeholder during the network fetch — the user
+    /// expects the actual image to appear automatically. Conversation media
+    /// keeps the default `false`: the policy gate honours the user's
+    /// per-network auto-download preference.
+    public let autoLoad: Bool
     public let placeholder: () -> Placeholder
 
     @State private var thumbHashImage: UIImage?
@@ -348,11 +355,13 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         thumbHash: String? = nil,
         thumbnailUrl: String?,
         fullUrl: String?,
+        autoLoad: Bool = false,
         @ViewBuilder placeholder: @escaping () -> Placeholder
     ) {
         self.thumbHash = thumbHash
         self.thumbnailUrl = thumbnailUrl
         self.fullUrl = fullUrl
+        self.autoLoad = autoLoad
         self.placeholder = placeholder
 
         // Tier 2: warm le full image depuis le disque vers la NSCache puis
@@ -448,8 +457,10 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         // placeholder remain visible — no spinner, no missing media. A
         // manual tap (fullscreen) bypasses this gate via the parent's own
         // download trigger. `file://` URLs and on-disk hits bypass the gate:
-        // they are zero-network reads.
-        if !ProgressiveCachedImage.isLocalFileURL(resolved),
+        // they are zero-network reads. `autoLoad` also bypasses the gate so
+        // Feed/Posts/Stories don't leave the thumbHash visible indefinitely.
+        if !autoLoad,
+           !ProgressiveCachedImage.isLocalFileURL(resolved),
            CacheCoordinator.imageLocalFileURL(for: resolved) == nil,
            DiskCacheStore.cachedImage(for: resolved) == nil,
            !MediaDownloadPolicy.shouldAutoLoadImage() {
@@ -470,8 +481,10 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         // disallowed. ThumbHash + thumbnail (if cached) keep the bubble
         // visually filled; the user can tap to open fullscreen which will
         // trigger an explicit download. `file://` URLs and on-disk hits
-        // bypass the gate: they are zero-network reads.
-        if !ProgressiveCachedImage.isLocalFileURL(resolved),
+        // bypass the gate: they are zero-network reads. `autoLoad` also
+        // bypasses the gate (Feed/Posts/Stories want eager display).
+        if !autoLoad,
+           !ProgressiveCachedImage.isLocalFileURL(resolved),
            CacheCoordinator.imageLocalFileURL(for: resolved) == nil,
            DiskCacheStore.cachedImage(for: resolved) == nil,
            !MediaDownloadPolicy.shouldAutoLoadImage() {

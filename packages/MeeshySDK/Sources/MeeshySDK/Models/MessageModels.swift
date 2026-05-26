@@ -146,6 +146,91 @@ public struct APIMessageAttachment: Decodable, Sendable {
     // ── Prisme Linguistique JSON blobs ──
     public let transcription: APIAttachmentTranscription?
     public let translations: [String: APIAttachmentTranslation]?
+
+    // MARK: - CodingKeys
+
+    private enum CodingKeys: String, CodingKey {
+        case id, messageId
+        case fileName, originalName, mimeType, fileSize, fileUrl
+        case thumbnailUrl, thumbHash, width, height
+        case duration, bitrate, sampleRate, codec, channels, fps, videoCodec
+        case pageCount, lineCount
+        case latitude, longitude
+        case uploadedBy, isAnonymous, createdAt
+        case forwardedFromAttachmentId, isForwarded
+        case isViewOnce, maxViewOnceCount, viewOnceCount, isBlurred, effectFlags
+        case deliveredToAllAt, viewedByAllAt, downloadedByAllAt
+        case listenedByAllAt, watchedByAllAt
+        case viewedCount, downloadedCount, consumedCount
+        case isEncrypted, encryptionMode, encryptionIv, encryptionAuthTag
+        case transcription, translations
+    }
+
+    /// Custom `init(from:)` to isolate `transcription` and `translations`
+    /// decode failures from the rest of the attachment. The Prisme
+    /// Linguistique JSON blobs are the only fields that can carry
+    /// partially-enriched payloads (e.g., a language entry mid-write by
+    /// a translator worker). Without isolation, a single malformed entry
+    /// would throw and the ENTIRE `APIMessageAttachment` decode would
+    /// fail — `MessageSocketManager.decode(_:from:)` would then silently
+    /// swallow the event and iOS would never see the enrichment. This
+    /// init wraps both fields with `try?` so the rest of the attachment
+    /// is still surfaced even if one Prisme blob is malformed.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(String.self, forKey: .id)
+        self.messageId = try c.decodeIfPresent(String.self, forKey: .messageId)
+        self.fileName = try c.decodeIfPresent(String.self, forKey: .fileName)
+        self.originalName = try c.decodeIfPresent(String.self, forKey: .originalName)
+        self.mimeType = try c.decodeIfPresent(String.self, forKey: .mimeType)
+        self.fileSize = try c.decodeIfPresent(Int.self, forKey: .fileSize)
+        self.fileUrl = try c.decodeIfPresent(String.self, forKey: .fileUrl)
+        self.thumbnailUrl = try c.decodeIfPresent(String.self, forKey: .thumbnailUrl)
+        self.thumbHash = try c.decodeIfPresent(String.self, forKey: .thumbHash)
+        self.width = try c.decodeIfPresent(Int.self, forKey: .width)
+        self.height = try c.decodeIfPresent(Int.self, forKey: .height)
+        self.duration = try c.decodeIfPresent(Int.self, forKey: .duration)
+        self.bitrate = try c.decodeIfPresent(Int.self, forKey: .bitrate)
+        self.sampleRate = try c.decodeIfPresent(Int.self, forKey: .sampleRate)
+        self.codec = try c.decodeIfPresent(String.self, forKey: .codec)
+        self.channels = try c.decodeIfPresent(Int.self, forKey: .channels)
+        self.fps = try c.decodeIfPresent(Double.self, forKey: .fps)
+        self.videoCodec = try c.decodeIfPresent(String.self, forKey: .videoCodec)
+        self.pageCount = try c.decodeIfPresent(Int.self, forKey: .pageCount)
+        self.lineCount = try c.decodeIfPresent(Int.self, forKey: .lineCount)
+        self.latitude = try c.decodeIfPresent(Double.self, forKey: .latitude)
+        self.longitude = try c.decodeIfPresent(Double.self, forKey: .longitude)
+        self.uploadedBy = try c.decodeIfPresent(String.self, forKey: .uploadedBy)
+        self.isAnonymous = try c.decodeIfPresent(Bool.self, forKey: .isAnonymous)
+        self.createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt)
+        self.forwardedFromAttachmentId = try c.decodeIfPresent(String.self, forKey: .forwardedFromAttachmentId)
+        self.isForwarded = try c.decodeIfPresent(Bool.self, forKey: .isForwarded)
+        self.isViewOnce = try c.decodeIfPresent(Bool.self, forKey: .isViewOnce)
+        self.maxViewOnceCount = try c.decodeIfPresent(Int.self, forKey: .maxViewOnceCount)
+        self.viewOnceCount = try c.decodeIfPresent(Int.self, forKey: .viewOnceCount)
+        self.isBlurred = try c.decodeIfPresent(Bool.self, forKey: .isBlurred)
+        self.effectFlags = try c.decodeIfPresent(UInt32.self, forKey: .effectFlags)
+        self.deliveredToAllAt = try c.decodeIfPresent(Date.self, forKey: .deliveredToAllAt)
+        self.viewedByAllAt = try c.decodeIfPresent(Date.self, forKey: .viewedByAllAt)
+        self.downloadedByAllAt = try c.decodeIfPresent(Date.self, forKey: .downloadedByAllAt)
+        self.listenedByAllAt = try c.decodeIfPresent(Date.self, forKey: .listenedByAllAt)
+        self.watchedByAllAt = try c.decodeIfPresent(Date.self, forKey: .watchedByAllAt)
+        self.viewedCount = try c.decodeIfPresent(Int.self, forKey: .viewedCount)
+        self.downloadedCount = try c.decodeIfPresent(Int.self, forKey: .downloadedCount)
+        self.consumedCount = try c.decodeIfPresent(Int.self, forKey: .consumedCount)
+        self.isEncrypted = try c.decodeIfPresent(Bool.self, forKey: .isEncrypted)
+        self.encryptionMode = try c.decodeIfPresent(String.self, forKey: .encryptionMode)
+        self.encryptionIv = try c.decodeIfPresent(String.self, forKey: .encryptionIv)
+        self.encryptionAuthTag = try c.decodeIfPresent(String.self, forKey: .encryptionAuthTag)
+
+        // ── Fault-tolerant Prisme Linguistique blobs ──
+        // The two fields below CAN be partial/malformed during async
+        // enrichment (translator workers writing in flight). `try?` here
+        // is INTENTIONAL : we'd rather show the attachment without its
+        // transcription / translations than lose the whole attachment.
+        self.transcription = (try? c.decodeIfPresent(APIAttachmentTranscription.self, forKey: .transcription)) ?? nil
+        self.translations = (try? c.decodeIfPresent([String: APIAttachmentTranslation].self, forKey: .translations)) ?? nil
+    }
 }
 
 public struct APIMessageReplyTo: Decodable, Sendable {

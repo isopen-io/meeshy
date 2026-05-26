@@ -10,7 +10,7 @@ import type { MessageRequest } from '@meeshy/shared/types';
 import { TrackingLinkService } from '../TrackingLinkService';
 import { MentionService } from '../MentionService';
 import { EncryptionService } from '../EncryptionService';
-import { NotificationService } from '../notifications/NotificationService';
+import { NotificationService, protectedPreview } from '../notifications/NotificationService';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { AttachmentService } from '../attachments';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
@@ -883,26 +883,25 @@ export class MessageProcessor {
 
     try {
       // Sanitize notification preview for protected messages.
-      // Use loc-key identifiers so the iOS NSE can resolve them to the
-      // user's preferred language via Localizable.xcstrings. The gateway
-      // does not know the recipient's locale — localisation is client-side.
-      let notificationPreview = processedContent;
-      let notificationLocKey: string | undefined;
-
-      if (message.isEncrypted || message.encryptionMode === 'e2ee') {
-        notificationPreview = 'Encrypted message';
-        notificationLocKey = 'notification.encrypted_message';
-      }
-
-      if (message.isViewOnce) {
-        notificationPreview = 'View-once message';
-        notificationLocKey = 'notification.view_once_message';
-      }
-
-      if (message.isBlurred || (message.effectFlags && (message.effectFlags & 0x02) !== 0)) {
-        notificationPreview = 'Hidden message';
-        notificationLocKey = 'notification.hidden_message';
-      }
+      // The body is now a compact icon-only string (e.g. "👁️ 🎵" for a
+      // view-once audio, "🔥 💬 5min" for a 5-minute ephemeral text) so the
+      // recipient instantly sees WHAT KIND of protected payload landed
+      // without the content itself leaking. `protectedPreview()` encodes
+      // the precedence ephemeral > view-once > blurred > encrypted and
+      // returns the matching `notificationLocKey` for the iOS NSE fallback
+      // path (only consumed when E2EE decryption fails — emojis don't
+      // need locale-side localisation).
+      const protectedOverride = protectedPreview({
+        messageType: message.messageType,
+        isEncrypted: message.isEncrypted || message.encryptionMode === 'e2ee',
+        isViewOnce: message.isViewOnce,
+        isBlurred: message.isBlurred,
+        effectFlags: message.effectFlags,
+        expiresAt: message.expiresAt as Date | null | undefined,
+        createdAt: message.createdAt as Date | null | undefined,
+      });
+      const notificationPreview = protectedOverride?.preview ?? processedContent;
+      const notificationLocKey = protectedOverride?.locKey;
       // 1. Résoudre le senderId en userId
       let senderUserId = data.senderId;
       const senderParticipant = await this.prisma.participant.findUnique({

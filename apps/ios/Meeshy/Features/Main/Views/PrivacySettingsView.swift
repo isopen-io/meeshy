@@ -37,7 +37,7 @@ struct PrivacySettingsView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14, weight: .semibold))
-                    Text("Retour")
+                    Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(.system(size: 15, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
@@ -45,7 +45,7 @@ struct PrivacySettingsView: View {
 
             Spacer()
 
-            Text("Confidentialité")
+            Text(String(localized: "settings.privacy.title", defaultValue: "Confidentialité", bundle: .main))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
@@ -77,20 +77,20 @@ struct PrivacySettingsView: View {
     // MARK: - Visibility
 
     private var visibilitySection: some View {
-        settingsSection(title: "Visibilité", icon: "eye.fill", color: "9B59B6") {
-            privacyToggle(icon: "circle.fill", title: "Statut en ligne", color: "4ADE80",
+        settingsSection(title: String(localized: "settings.privacy.visibility", defaultValue: "Visibilité", bundle: .main), icon: "eye.fill", color: "9B59B6") {
+            privacyToggle(icon: "circle.fill", title: String(localized: "settings.privacy.online_status", defaultValue: "Statut en ligne", bundle: .main), color: "4ADE80",
                           keyPath: \.showOnlineStatus)
 
-            privacyToggle(icon: "clock.fill", title: "Dernière connexion", color: "45B7D1",
+            privacyToggle(icon: "clock.fill", title: String(localized: "settings.privacy.last_seen", defaultValue: "Dernière connexion", bundle: .main), color: "45B7D1",
                           keyPath: \.showLastSeen)
 
-            privacyToggle(icon: "checkmark.message.fill", title: "Accusés de lecture", color: "3498DB",
+            privacyToggle(icon: "checkmark.message.fill", title: String(localized: "settings.privacy.read_receipts", defaultValue: "Accusés de lecture", bundle: .main), color: "3498DB",
                           keyPath: \.showReadReceipts)
 
-            privacyToggle(icon: "ellipsis.bubble.fill", title: "Indicateur de frappe", color: "F8B500",
+            privacyToggle(icon: "ellipsis.bubble.fill", title: String(localized: "settings.privacy.typing_indicator", defaultValue: "Indicateur de frappe", bundle: .main), color: "F8B500",
                           keyPath: \.showTypingIndicator)
 
-            privacyToggle(icon: "magnifyingglass", title: "Masquer du recherche", color: "FF6B6B",
+            privacyToggle(icon: "magnifyingglass", title: String(localized: "settings.privacy.hide_from_search", defaultValue: "Masquer du recherche", bundle: .main), color: "FF6B6B",
                           keyPath: \.hideProfileFromSearch)
         }
     }
@@ -98,14 +98,14 @@ struct PrivacySettingsView: View {
     // MARK: - Contacts & Groups
 
     private var contactsSection: some View {
-        settingsSection(title: "Contacts & Groupes", icon: "person.2.fill", color: "4ECDC4") {
-            privacyToggle(icon: "person.badge.plus", title: "Demandes de contact", color: "4ECDC4",
+        settingsSection(title: String(localized: "settings.privacy.contacts_groups", defaultValue: "Contacts & Groupes", bundle: .main), icon: "person.2.fill", color: "4ECDC4") {
+            privacyToggle(icon: "person.badge.plus", title: String(localized: "settings.privacy.contact_requests", defaultValue: "Demandes de contact", bundle: .main), color: "4ECDC4",
                           keyPath: \.allowContactRequests)
 
-            privacyToggle(icon: "person.3.fill", title: "Invitations de groupe", color: "45B7D1",
+            privacyToggle(icon: "person.3.fill", title: String(localized: "settings.privacy.group_invites", defaultValue: "Invitations de groupe", bundle: .main), color: "45B7D1",
                           keyPath: \.allowGroupInvites)
 
-            privacyToggle(icon: "phone.arrow.down.left", title: "Appels hors contacts", color: "FF6B6B",
+            privacyToggle(icon: "phone.arrow.down.left", title: String(localized: "settings.privacy.calls_non_contacts", defaultValue: "Appels hors contacts", bundle: .main), color: "FF6B6B",
                           keyPath: \.allowCallsFromNonContacts)
         }
     }
@@ -113,17 +113,17 @@ struct PrivacySettingsView: View {
     // MARK: - Media & Data
 
     private var mediaSection: some View {
-        settingsSection(title: "Média & Données", icon: "photo.fill", color: "F8B500") {
-            privacyToggle(icon: "square.and.arrow.down.fill", title: "Sauvegarder média", color: "4ADE80",
+        settingsSection(title: String(localized: "settings.privacy.media_data", defaultValue: "Média & Données", bundle: .main), icon: "photo.fill", color: "F8B500") {
+            privacyToggle(icon: "square.and.arrow.down.fill", title: String(localized: "settings.privacy.save_media", defaultValue: "Sauvegarder média", bundle: .main), color: "4ADE80",
                           keyPath: \.saveMediaToGallery)
 
-            privacyToggle(icon: "chart.bar.fill", title: "Analytics", color: "45B7D1",
+            privacyToggle(icon: "chart.bar.fill", title: String(localized: "settings.privacy.analytics", defaultValue: "Analytics", bundle: .main), color: "45B7D1",
                           keyPath: \.allowAnalytics)
 
-            privacyToggle(icon: "arrow.triangle.branch", title: "Partage données", color: "9B59B6",
+            privacyToggle(icon: "arrow.triangle.branch", title: String(localized: "settings.privacy.share_data", defaultValue: "Partage données", bundle: .main), color: "9B59B6",
                           keyPath: \.shareUsageData)
 
-            privacyToggle(icon: "camera.fill", title: "Bloquer captures", color: "FF6B6B",
+            privacyToggle(icon: "camera.fill", title: String(localized: "settings.privacy.block_screenshots", defaultValue: "Bloquer captures", bundle: .main), color: "FF6B6B",
                           keyPath: \.blockScreenshots)
         }
     }
@@ -131,8 +131,8 @@ struct PrivacySettingsView: View {
     // MARK: - Encryption
 
     private var encryptionSection: some View {
-        settingsSection(title: "Chiffrement", icon: "lock.shield.fill", color: "3498DB") {
-            settingsRow(icon: "key.fill", title: "Préférence", color: "3498DB") {
+        settingsSection(title: String(localized: "settings.privacy.encryption", defaultValue: "Chiffrement", bundle: .main), icon: "lock.shield.fill", color: "3498DB") {
+            settingsRow(icon: "key.fill", title: String(localized: "settings.privacy.encryption_preference", defaultValue: "Préférence", bundle: .main), color: "3498DB") {
                 Picker("", selection: Binding(
                     get: { prefs.privacy.encryptionPreference },
                     set: { val in prefs.updatePrivacy { $0.encryptionPreference = val } }
@@ -145,13 +145,13 @@ struct PrivacySettingsView: View {
                 .tint(Color(hex: accentColor))
             }
 
-            privacyToggle(icon: "lock.rotation", title: "Auto-chiffrer new conv.", color: "4ADE80",
+            privacyToggle(icon: "lock.rotation", title: String(localized: "settings.privacy.auto_encrypt", defaultValue: "Auto-chiffrer new conv.", bundle: .main), color: "4ADE80",
                           keyPath: \.autoEncryptNewConversations)
 
-            privacyToggle(icon: "lock.badge.clock", title: "Afficher statut chiffr.", color: "45B7D1",
+            privacyToggle(icon: "lock.badge.clock", title: String(localized: "settings.privacy.show_encryption_status", defaultValue: "Afficher statut chiffr.", bundle: .main), color: "45B7D1",
                           keyPath: \.showEncryptionStatus)
 
-            privacyToggle(icon: "exclamationmark.lock.fill", title: "Alerter non chiffré", color: "FF6B6B",
+            privacyToggle(icon: "exclamationmark.lock.fill", title: String(localized: "settings.privacy.warn_unencrypted", defaultValue: "Alerter non chiffré", bundle: .main), color: "FF6B6B",
                           keyPath: \.warnOnUnencrypted)
         }
     }
@@ -160,9 +160,9 @@ struct PrivacySettingsView: View {
 
     private func encryptionLabel(_ pref: EncryptionPreference) -> String {
         switch pref {
-        case .disabled: return "Désactivé"
-        case .optional: return "Optionnel"
-        case .always: return "Toujours"
+        case .disabled: return String(localized: "settings.privacy.encryption.disabled", defaultValue: "Désactivé", bundle: .main)
+        case .optional: return String(localized: "settings.privacy.encryption.optional", defaultValue: "Optionnel", bundle: .main)
+        case .always: return String(localized: "settings.privacy.encryption.always", defaultValue: "Toujours", bundle: .main)
         }
     }
 

@@ -29,7 +29,7 @@ struct StatusBarView: View {
                             .font(.system(size: 12))
                             .foregroundStyle(MeeshyColors.warning)
                             .accessibilityHidden(true)
-                        Text(String(localized: "Erreur de chargement", defaultValue: "Erreur de chargement"))
+                        Text(String(localized: "status.bar.load_error", defaultValue: "Erreur de chargement", bundle: .main))
                             .font(.system(size: 10, weight: .medium))
                             .foregroundColor(theme.textMuted)
                     }
@@ -76,7 +76,7 @@ struct StatusBarView: View {
             HStack(spacing: 6) {
                 Text(status.moodEmoji)
                     .font(.system(size: 22))
-                Text("Moi")
+                Text(String(localized: "status.bar.me", defaultValue: "Moi", bundle: .main))
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
             }
@@ -98,7 +98,7 @@ struct StatusBarView: View {
                 Image(systemName: "plus")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(MeeshyColors.avatarRingGradient)
-                Text("Status")
+                Text(String(localized: "status.bar.status", defaultValue: "Status", bundle: .main))
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundColor(theme.textMuted)
             }
@@ -149,7 +149,7 @@ struct StatusBarView: View {
             }
 
             if let via = entry.viaUsername {
-                Text("via @\(via)")
+                Text("\(String(localized: "status.bar.via", defaultValue: "via", bundle: .main)) @\(via)")
                     .font(.system(size: 11))
                     .foregroundColor(theme.textMuted)
             }
