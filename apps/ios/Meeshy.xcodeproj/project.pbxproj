@@ -26,6 +26,9 @@
 		1A2076D48750C41104782931 /* MediaBubbleCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = C06CA5A42EEF9B958642223F /* MediaBubbleCell.swift */; };
 		1AAC7F32729E5B684AB8C51A /* ConversationCommandHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75BB3BB6E01A899FDB29E8A8 /* ConversationCommandHandler.swift */; };
 		1CBAAFC69D3A2A2F928B9349 /* AudioPlayerManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 77988CFAAC714C1730B6ABD3 /* AudioPlayerManager.swift */; };
+		APED0002000200020002F001 /* AudioPlaybackEngineDriving.swift in Sources */ = {isa = PBXBuildFile; fileRef = APED0001000100010001F001 /* AudioPlaybackEngineDriving.swift */; };
+		MAPE0002000200020002F001 /* MockAudioPlaybackEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = MAPE0001000100010001F001 /* MockAudioPlaybackEngine.swift */; };
+		MAPP0002000200020002F001 /* MockAudioPlaybackEnginePrototypeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MAPP0001000100010001F001 /* MockAudioPlaybackEnginePrototypeTests.swift */; };
 		24AFF57E3E63AF37DB547005 /* UserProfileViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FF8351314E9A302F775DBCE /* UserProfileViewModelTests.swift */; };
 		24DF5E35B0F37E09512E704E /* VoIPDedupRingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66F7B674B538960BE3F198D4 /* VoIPDedupRingTests.swift */; };
 		26B4118AD22FEB73468C4F56 /* FeedListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17F9BAE1DE897740FE5B367B /* FeedListView.swift */; };
@@ -639,6 +642,9 @@
 		75BB3BB6E01A899FDB29E8A8 /* ConversationCommandHandler.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationCommandHandler.swift; sourceTree = "<group>"; };
 		7789A854759F389975CB9906 /* FeedViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FeedViewModelTests.swift; sourceTree = "<group>"; };
 		77988CFAAC714C1730B6ABD3 /* AudioPlayerManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AudioPlayerManager.swift; sourceTree = "<group>"; };
+		APED0001000100010001F001 /* AudioPlaybackEngineDriving.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AudioPlaybackEngineDriving.swift; sourceTree = "<group>"; };
+		MAPE0001000100010001F001 /* MockAudioPlaybackEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockAudioPlaybackEngine.swift; sourceTree = "<group>"; };
+		MAPP0001000100010001F001 /* MockAudioPlaybackEnginePrototypeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockAudioPlaybackEnginePrototypeTests.swift; sourceTree = "<group>"; };
 		7B489B1DA15CF189E770686F /* UserProfileViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = UserProfileViewModel.swift; sourceTree = "<group>"; };
 		7D674426B581D850405E32AE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		7EE5D71D9A67552B9345231E /* ConversationPreferencesBroadcaster.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationPreferencesBroadcaster.swift; sourceTree = "<group>"; };
@@ -1491,6 +1497,7 @@
 				CFCF53B6AD169522F7F20047 /* ThermalStateMonitor.swift */,
 				EC507BC8B27D02CB58CC096C /* DarkFrameDetector.swift */,
 				77988CFAAC714C1730B6ABD3 /* AudioPlayerManager.swift */,
+				APED0001000100010001F001 /* AudioPlaybackEngineDriving.swift */,
 				FCFL01A1A1A1A1A1A1A10002 /* MeeshyFocusFilter.swift */,
 				OBDP01A1A1A1A1A1A1A10002 /* OutboxDispatcher.swift */,
 				WDFL01B1B1B1B1B1B1B10002 /* WidgetActionFlusher.swift */,
@@ -1827,6 +1834,7 @@
 				MNMK0001000100010001REF /* MockMentionService.swift */,
 				BE78D3B42AA19F0490A676B0 /* MockVoIPTokenStore.swift */,
 				45DFAB2ED859C2AA5B59F337 /* MockSessionService.swift */,
+				MAPE0001000100010001F001 /* MockAudioPlaybackEngine.swift */,
 			);
 			path = Mocks;
 			sourceTree = "<group>";
@@ -2031,6 +2039,7 @@
 				85C42CC906C9AF05B0B3427E /* ThreadRepliesLoaderTests.swift */,
 				13BCD5ADC318DEED40437A0F /* TaskTimeoutTests.swift */,
 				66F7B674B538960BE3F198D4 /* VoIPDedupRingTests.swift */,
+				MAPP0001000100010001F001 /* MockAudioPlaybackEnginePrototypeTests.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -2521,6 +2530,7 @@
 				A54BCE9ED2645E3D01AFA679 /* FloatingCallPillView.swift in Sources */,
 				5C3EBC97C453A81EFEAE35E6 /* VideoFilterControlView.swift in Sources */,
 				1CBAAFC69D3A2A2F928B9349 /* AudioPlayerManager.swift in Sources */,
+				APED0002000200020002F001 /* AudioPlaybackEngineDriving.swift in Sources */,
 				FCFL01A1A1A1A1A1A1A10001 /* MeeshyFocusFilter.swift in Sources */,
 				OBDP01A1A1A1A1A1A1A10001 /* OutboxDispatcher.swift in Sources */,
 				WDFL01B1B1B1B1B1B1B10001 /* WidgetActionFlusher.swift in Sources */,
@@ -2681,6 +2691,8 @@
 				VPWT0001000100010001001 /* VoiceProfileWizardViewModelTests.swift in Sources */,
 				MASK0001000100010001001 /* MockAuthServiceSDK.swift in Sources */,
 				MVPS0001000100010001001 /* MockVoiceProfileService.swift in Sources */,
+				MAPE0002000200020002F001 /* MockAudioPlaybackEngine.swift in Sources */,
+				MAPP0002000200020002F001 /* MockAudioPlaybackEnginePrototypeTests.swift in Sources */,
 				ROUT0001000100010001001 /* RouterTests.swift in Sources */,
 				NRST0001000100010001001 /* NavigationStateRestorationTests.swift in Sources */,
 				TNAV0001000100010001001 /* TabNavigationTests.swift in Sources */,
