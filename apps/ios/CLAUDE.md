@@ -207,7 +207,7 @@ ConversationViewModel
 ThemedMessageBubble
   ├── effectiveContent → Affiche toujours la traduction preferee (ou original si aucune)
   ├── isDisplayingTranslation → true quand preferredTranslation existe
-  ├── translationFlagStrip → Drapeaux de langue (original + systeme + regional/custom, max 3)
+  ├── translationFlagStrip → Drapeaux de langue (original + systeme + regional/custom + deviceLocale, max 4)
   ├── flagButton → Drapeau cliquable avec underline colore et animation
   ├── secondaryLanguageCode → Code langue du contenu secondaire affiche (nil = rien)
   ├── secondaryContent → Contenu traduit/original pour la langue secondaire selectionnee
@@ -219,6 +219,15 @@ MessageDetailSheet (onglet Language)
   ├── Selection d'une langue → callback vers ViewModel → mise a jour bulle
   └── Bouton retraduire (arrow.clockwise)
 ```
+
+### Helper de normalisation locale appareil
+
+Trois sites maintiennent un helper identique pour normaliser un identifier de langue vers ISO 639-1 (2 lettres lowercase) :
+- `packages/shared/utils/language-normalize.ts` — source de vérité
+- `MeeshyUser.normalizeLanguageCode` (SDK Swift)
+- `ConversationLanguagePreferences.normalize` (app iOS)
+
+Toute évolution de la logique de normalisation doit toucher les **trois** sites pour préserver la symétrie cross-platform.
 
 ### UX Translation Flow
 - **Affichage par defaut** : `effectiveContent` retourne toujours `preferredTranslation.translatedContent` si disponible, sinon `message.content`
