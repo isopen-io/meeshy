@@ -469,4 +469,40 @@ final class SocialSocketAdditionalTests: XCTestCase {
         XCTAssertEqual(event.notificationType, .friendAccepted)
         XCTAssertEqual(event.senderUsername, "bob")
     }
+
+    // MARK: - B6 — conversation:closed lifecycle event
+
+    /// The gateway emits `conversation:closed` (not `:deleted`) when a
+    /// conversation is soft-deleted (`isActive=false + closedAt`). The
+    /// `ConversationAudioCoordinator` and other downstream consumers
+    /// listen to `SocialSocketManager.conversationDeleted` — the SDK must
+    /// therefore fan `conversation:closed` payloads into the same
+    /// publisher so they actually wake up.
+    ///
+    /// This exercises the production `decode + send` path through the
+    /// DEBUG-only `_test_handleConversationLifecyclePayload` seam.
+    func test_conversationClosedPayload_firesConversationDeletedPublisher() {
+        let sut = SocialSocketManager.shared
+        let exp = expectation(description: "conversationDeleted publishes")
+        var receivedId: String?
+        var cancellables = Set<AnyCancellable>()
+        sut.conversationDeleted
+            .sink { id in receivedId = id; exp.fulfill() }
+            .store(in: &cancellables)
+
+        // Same shape as the live `conversation:closed` payload from
+        // `services/gateway/src/routes/conversations/core.ts` — only
+        // `conversationId` is required for the audio coordinator to
+        // decide whether to close playback.
+        let payload: [Any] = [[
+            "conversationId": "conv-closed-123",
+            "closedBy": "user-1",
+            "closedAt": "2026-05-26T10:00:00.000Z"
+        ] as [String: Any]]
+
+        sut._test_handleConversationLifecyclePayload(payload)
+
+        wait(for: [exp], timeout: 1.0)
+        XCTAssertEqual(receivedId, "conv-closed-123")
+    }
 }

@@ -832,13 +832,25 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         // Surfaced on the social manager (in addition to MessageSocketManager)
         // so feature-level coordinators that don't own a message socket can
         // still react to a conversation being deleted server-side.
+        //
+        // B6 — The gateway emits the **`conversation:closed`** event when a
+        // conversation is "deleted" (soft-delete via `isActive=false +
+        // closedAt`; cf. `services/gateway/src/routes/conversations/core.ts`).
+        // The historical `conversation:deleted` listener stayed wired in
+        // case a future hard-delete code path emits it, but the actual
+        // server traffic is `conversation:closed` — both fan into the
+        // same `conversationDeleted` publisher so downstream consumers
+        // (audio coordinator, list view models) don't need to care which
+        // event the backend emitted.
 
-        socket.on("conversation:deleted") { [weak self] data, _ in
+        let conversationLifecycleHandler: ([Any]) -> Void = { [weak self] data in
             guard let self else { return }
             self.decode(SocketConversationDeletedData.self, from: data) { [weak self] payload in
                 self?.conversationDeleted.send(payload.conversationId)
             }
         }
+        socket.on("conversation:deleted") { data, _ in conversationLifecycleHandler(data) }
+        socket.on("conversation:closed") { data, _ in conversationLifecycleHandler(data) }
 
         // --- Comment events ---
 
@@ -946,6 +958,20 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     }
 
     // MARK: - Decode Helper
+
+    #if DEBUG
+    /// Test seam (DEBUG only): drives the same decode + publisher fan-out
+    /// that the production `conversation:closed` / `conversation:deleted`
+    /// listeners use, without requiring a live Socket.IO connection. Tests
+    /// pass the raw payload (e.g. `[["conversationId": "c1"]]`) to assert
+    /// that `conversationDeleted` publishes — covering B6's hook from the
+    /// gateway-side event name.
+    nonisolated func _test_handleConversationLifecyclePayload(_ data: [Any]) {
+        self.decode(SocketConversationDeletedData.self, from: data) { [weak self] payload in
+            self?.conversationDeleted.send(payload.conversationId)
+        }
+    }
+    #endif
 
     private nonisolated func decode<T: Decodable & Sendable>(_ type: T.Type, from data: [Any], handler: @escaping @Sendable (T) -> Void) {
         guard let first = data.first else { return }
