@@ -64,6 +64,15 @@ describe('Socket.IO notification:new payload — title / subtitle', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockPrisma = makePrismaMock();
+    // Default: message is live (not deleted, no TTL elapsed). Individual
+    // tests can override to exercise the race-guard branches in the
+    // dedicated `createMessageNotificationRaceGuard.test.ts` suite.
+    mockPrisma.message.findUnique.mockResolvedValue({
+      deletedAt: null,
+      expiresAt: null,
+      isViewOnce: false,
+      viewOnceCount: 0,
+    });
     mockIO = makeIO();
     service = new NotificationService(mockPrisma);
     service.setSocketIO(mockIO);

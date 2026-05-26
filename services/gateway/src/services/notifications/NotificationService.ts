@@ -868,6 +868,38 @@ export class NotificationService {
     encryptedContent?: string;
     notificationLocKey?: string;
   }): Promise<Notification | null> {
+    // Race-condition guard: between `MessageProcessor.handleMessage` and the
+    // moment the notification actually fans out (sender lookup + conversation
+    // lookup + push enqueue + socket emit) there can be hundreds of
+    // milliseconds. If the sender soft-deletes / burns / lets the message
+    // expire in that window we MUST NOT leak the original content via the
+    // banner. Refetch the live state right before the fan-out and bail when
+    // the message is no longer eligible.
+    const liveMessage = await this.prisma.message.findUnique({
+      where: { id: params.messageId },
+      select: { deletedAt: true, expiresAt: true, isViewOnce: true, viewOnceCount: true },
+    });
+    if (!liveMessage) {
+      notificationLogger.info('Skipping message notification (message vanished)', {
+        messageId: params.messageId,
+      });
+      return null;
+    }
+    if (liveMessage.deletedAt) {
+      notificationLogger.info('Skipping message notification (soft-deleted in flight)', {
+        messageId: params.messageId,
+        deletedAt: liveMessage.deletedAt,
+      });
+      return null;
+    }
+    if (liveMessage.expiresAt instanceof Date && liveMessage.expiresAt.getTime() <= Date.now()) {
+      notificationLogger.info('Skipping message notification (already expired)', {
+        messageId: params.messageId,
+        expiresAt: liveMessage.expiresAt,
+      });
+      return null;
+    }
+
     // Récupérer les infos de l'expéditeur
     const sender = await this.prisma.user.findUnique({
       where: { id: params.senderId },
