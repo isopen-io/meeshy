@@ -1520,7 +1520,8 @@ public struct StoryComposerView: View {
         if let bt = e.backgroundTransform {
             viewModel.backgroundTransform = StoryComposerViewModel.BackgroundTransform(
                 scale: bt.scale ?? 1.0, offsetX: bt.offsetX ?? 0,
-                offsetY: bt.offsetY ?? 0, rotation: bt.rotation ?? 0
+                offsetY: bt.offsetY ?? 0, rotation: bt.rotation ?? 0,
+                videoFitMode: bt.videoFitMode
             )
         } else {
             viewModel.backgroundTransform = StoryComposerViewModel.BackgroundTransform()
@@ -1534,7 +1535,8 @@ public struct StoryComposerView: View {
             scale: bt.scale != 1.0 ? bt.scale : nil,
             offsetX: bt.offsetX != 0 ? bt.offsetX : nil,
             offsetY: bt.offsetY != 0 ? bt.offsetY : nil,
-            rotation: bt.rotation != 0 ? bt.rotation : nil
+            rotation: bt.rotation != 0 ? bt.rotation : nil,
+            videoFitMode: bt.videoFitMode
         )
         // Voice fields are NOT a function of the composer's @State — they live
         // entirely on `viewModel.currentEffects` (set by the voice recorder /
