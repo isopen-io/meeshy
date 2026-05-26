@@ -1029,7 +1029,8 @@ public final class StoryCanvasUIView: UIView {
             return BackgroundTransform(scale: Double(t.scale ?? 1),
                                        offsetX: Double(t.offsetX ?? 0),
                                        offsetY: Double(t.offsetY ?? 0),
-                                       rotation: t.rotation ?? 0)
+                                       rotation: t.rotation ?? 0,
+                                       videoFitMode: t.videoFitMode)
         }()
         backgroundLayer.frame = CGRect(origin: .zero, size: geometry.renderSize)
         backgroundLayer.configure(
@@ -1273,7 +1274,8 @@ public final class StoryCanvasUIView: UIView {
             return BackgroundTransform(scale: Double(t.scale ?? 1),
                                        offsetX: Double(t.offsetX ?? 0),
                                        offsetY: Double(t.offsetY ?? 0),
-                                       rotation: t.rotation ?? 0)
+                                       rotation: t.rotation ?? 0,
+                                       videoFitMode: t.videoFitMode)
         }()
         let captureBackground = StoryBackgroundLayer()
         captureBackground.frame = CGRect(origin: .zero, size: renderSize)
