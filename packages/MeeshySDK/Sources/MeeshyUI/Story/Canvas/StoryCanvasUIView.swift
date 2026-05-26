@@ -230,6 +230,18 @@ public final class StoryCanvasUIView: UIView {
     /// waits on foreground video readiness (T6).
     private var backgroundContentReady: Bool = false
 
+    /// `true` quand l'activation du background playback (vidéo bg + audio bg)
+    /// a été demandée en `.play` mais que `contentReadyFired` était encore
+    /// `false`. Le user-spec : ni la vidéo bg ni l'audio bg ne doivent jouer
+    /// tant que TOUS les médias chargeables (image bg + foreground videos)
+    /// ne sont pas prêts. `fireContentReadyIfNeeded()` consomme ce drapeau
+    /// dès que `onContentReady` fire et active les deux à la fois. Sans ce
+    /// gate, l'audio jouait sur une slide dont l'image bg n'avait jamais
+    /// loadée (file:// dead, resolver nil, 404 réseau) — le user voit un
+    /// loader à 0% mais entend la TTS / musique de fond, et/ou la vidéo bg
+    /// joue sans son image fixed → désynchro UX inacceptable.
+    private var pendingBackgroundActivation: Bool = false
+
     /// KVO token watching `backgroundLayer.contentLayer.contents` while an
     /// image background is loading. Held until the real bytes land or the
     /// background is replaced. `NSKeyValueObservation` invalidates on deinit
@@ -848,6 +860,14 @@ public final class StoryCanvasUIView: UIView {
     /// the default fade envelope — consistently every time.
     private func startAudioPlayback() {
         guard mode == .play else { return }
+        // Gate "all media loaded": ne pas démarrer l'audio bg tant que les
+        // autres médias chargeables (image bg + foreground videos) ne sont
+        // pas prêts. `fireContentReadyIfNeeded()` consomme le drapeau dès que
+        // `onContentReady` fire et appelle à nouveau cette méthode.
+        if !contentReadyFired {
+            pendingBackgroundActivation = true
+            return
+        }
         requestPlaybackSessionIfNeeded()
         let origin = captureSlideTimelineOrigin()
         // Stop any other reader engine before starting this one (RC4.6).
@@ -1062,12 +1082,22 @@ public final class StoryCanvasUIView: UIView {
                                        videoFitMode: t.videoFitMode)
         }()
         backgroundLayer.frame = CGRect(origin: .zero, size: geometry.renderSize)
+        // Letterbox fill : pour les vidéos/images bg en aspect (paysage), les
+        // bandes laissent voir le `backgroundColor` du StoryBackgroundLayer.
+        // On y peint la couleur de fond de la slide pour éviter les bandes
+        // noires sur du contenu paysage — le user veut préserver le fond
+        // coloré de la story, pas du noir.
+        let letterboxColor: UIColor? = {
+            guard let hex = slide.effects.background else { return nil }
+            return Self.parseBackgroundHex(hex)
+        }()
         backgroundLayer.configure(
             kind: bgKind,
             transform: bgTransform,
             geometry: geometry,
             resolver: readerContext.postMediaURLResolver,
-            imageCache: readerContext.imageCache
+            imageCache: readerContext.imageCache,
+            letterboxColor: letterboxColor
         )
 
         // Items — détache les sublayers existants AVANT de les ré-attacher.
@@ -1308,12 +1338,17 @@ public final class StoryCanvasUIView: UIView {
         }()
         let captureBackground = StoryBackgroundLayer()
         captureBackground.frame = CGRect(origin: .zero, size: renderSize)
+        let captureLetterbox: UIColor? = {
+            guard let hex = slide.effects.background else { return nil }
+            return Self.parseBackgroundHex(hex)
+        }()
         captureBackground.configure(
             kind: bgKind,
             transform: bgTransform,
             geometry: geometry,
             resolver: readerContext.postMediaURLResolver,
-            imageCache: readerContext.imageCache
+            imageCache: readerContext.imageCache,
+            letterboxColor: captureLetterbox
         )
         host.addSublayer(captureBackground)
 
@@ -1531,6 +1566,17 @@ public final class StoryCanvasUIView: UIView {
         }
         contentReadyFired = true
         onContentReady?()
+        // Consume pending background activation: vidéo bg ET audio bg
+        // démarrent ensemble une fois tous les médias chargés. Réutilise les
+        // entry points canoniques pour ne pas dupliquer la session/setup
+        // logic.
+        if pendingBackgroundActivation {
+            pendingBackgroundActivation = false
+            if mode == .play {
+                backgroundLayer.isPlaybackActive = true
+                startAudioPlayback()
+            }
+        }
         // Force `onContentProgress(1.0)` au moment où le signal binaire fire
         // afin que les listeners SwiftUI puissent fermer leur overlay même
         // si la slide n'a aucun foreground media (cas slide texte+bg).
@@ -1851,8 +1897,15 @@ public final class StoryCanvasUIView: UIView {
         // l'autorisation passe désormais EXCLUSIVEMENT par ce drapeau, ce qui
         // garantit qu'un canvas en `.edit` mode (prefetcher, composer
         // preview) n'émet jamais d'audio même si son player est attaché et
-        // prêt.
-        backgroundLayer.isPlaybackActive = true
+        // prêt. Gate supplémentaire : tant que tous les médias chargeables
+        // ne sont pas prêts (cf. `contentReadyFired`), la vidéo bg attend —
+        // le user-spec exige que ni vidéo ni audio bg ne joue tant que la
+        // slide n'est pas visuellement complète.
+        if contentReadyFired {
+            backgroundLayer.isPlaybackActive = true
+        } else {
+            pendingBackgroundActivation = true
+        }
     }
 
     private func stopPlayback() {
@@ -2507,6 +2560,18 @@ public final class StoryCanvasUIView: UIView {
 
     private nonisolated func clamp(_ value: Double) -> Double {
         max(0, min(1, value))
+    }
+
+    /// Parses a `#RRGGBB` or `RRGGBB` hex string into a UIColor.
+    /// Local helper; matches the logic used by StoryRenderer + StoryAVCompositor.
+    nonisolated static func parseBackgroundHex(_ hex: String) -> UIColor? {
+        var s = hex
+        if s.hasPrefix("#") { s.removeFirst() }
+        guard s.count == 6, let v = UInt32(s, radix: 16) else { return nil }
+        return UIColor(red: CGFloat((v >> 16) & 0xff) / 255,
+                       green: CGFloat((v >> 8) & 0xff) / 255,
+                       blue: CGFloat(v & 0xff) / 255,
+                       alpha: 1)
     }
 
     // MARK: - Item commands (used by context menu + accessibility)

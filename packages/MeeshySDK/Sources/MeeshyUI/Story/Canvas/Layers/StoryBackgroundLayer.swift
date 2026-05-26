@@ -12,7 +12,13 @@ public struct BackgroundTransform: Sendable, Equatable {
     public nonisolated var offsetX: Double
     public nonisolated var offsetY: Double
     public nonisolated var rotation: Double  // degrees
-    /// `nil` = auto by orientation. `"fit"` | `"fill"` = override.
+    /// Background fit mode override. `nil` = auto-by-orientation (landscape
+    /// videos/images → letterbox, portrait → aspectFill). `"fit"` = forced
+    /// letterbox. `"fill"` = forced aspectFill. Despite its `videoFitMode`
+    /// name (legacy from the original spec), this override applies to BOTH
+    /// `.video` and `.image` backgrounds — the resolver helpers
+    /// `resolveVideoGravity` and `resolveImageGravity` share identical
+    /// orientation logic and both consume this same field.
     public nonisolated var videoFitMode: String?
 
     public nonisolated init(scale: Double = 1.0, offsetX: Double = 0,
@@ -134,12 +140,29 @@ extension StoryBackgroundLayer {
         CATransaction.commit()
     }
 
+    /// Loads a UIImage from a URL, supporting both `file://` (sync read) and
+    /// HTTP(S) (via CacheCoordinator with NSCache + disk TTL + dedup). Returns
+    /// `nil` on any error — the caller decides whether to fallback to another
+    /// URL or give up.
+    @MainActor
+    static func loadImage(from url: URL) async -> UIImage? {
+        if url.isFileURL {
+            guard let data = try? Data(contentsOf: url) else { return nil }
+            return UIImage(data: data)
+        }
+        guard let data = try? await CacheCoordinator.shared.images.data(for: url.absoluteString) else {
+            return nil
+        }
+        return UIImage(data: data)
+    }
+
     @MainActor
     public func configure(kind: Kind,
                           transform: BackgroundTransform,
                           geometry: CanvasGeometry,
                           resolver: ((String) -> URL?)?,
-                          imageCache: ImageCacheReader?) {
+                          imageCache: ImageCacheReader?,
+                          letterboxColor: UIColor? = nil) {
         // FAST PATH ANTI-FLASH :
         // `configure(...)` est appelé à CHAQUE `rebuildLayers()` du canvas
         // (i.e. à chaque slide.didSet, drop d'un élément foreground, lancement
@@ -201,10 +224,33 @@ extension StoryBackgroundLayer {
         if canReuseContent {
             // Même contenu visuel : on garde le sublayer en place pour éviter
             // un détachement transitoire. Resync frame (resize du canvas) +
-            // transform (pinch / pan utilisateur sur l'image bg).
+            // transform (pinch / pan utilisateur sur l'image bg) + gravity
+            // (changement de videoFitMode via double-tap, sans rebuild).
             contentLayer?.frame = bounds
             avPlayerLayer?.frame = bounds
             self.transform = transform.caTransform()
+
+            // Refresh gravity for the new videoFitMode override. Auto cases
+            // (override nil) need the naturalSize to compute — for video,
+            // attachBackgroundPlayer's Task already wrote the resolved gravity,
+            // so we only override here when the user explicitly chose fit/fill.
+            // For image, contentsGravity is already periodically refreshed by
+            // the async load Task each time it stamps a new bitmap; here we
+            // pick up the override change immediately.
+            if let override = transform.videoFitMode {
+                let videoGravity: AVLayerVideoGravity = (override == "fit") ? .resizeAspect : .resizeAspectFill
+                let imageGravity: CALayerContentsGravity = (override == "fit") ? .resizeAspect : .resizeAspectFill
+                Self.withDisabledCAActions {
+                    avPlayerLayer?.videoGravity = videoGravity
+                    if let img = contentLayer, !(img is CAGradientLayer) {
+                        img.contentsGravity = imageGravity
+                    }
+                    // Letterbox color refresh : same logic as initial paint.
+                    if videoGravity == .resizeAspect || imageGravity == .resizeAspect {
+                        backgroundColor = letterboxColor?.cgColor ?? UIColor.clear.cgColor
+                    }
+                }
+            }
             return
         }
 
@@ -297,7 +343,7 @@ extension StoryBackgroundLayer {
             // avant que le bitmap réel arrive — exactement le scintillement
             // décrit par l'utilisateur. Garder `.clear` rend la couche
             // muette pendant la latence d'async ; le parent reste visible.
-            backgroundColor = UIColor.clear.cgColor
+            backgroundColor = letterboxColor?.cgColor ?? UIColor.clear.cgColor
 
             // Charge le bitmap réel par-dessus le placeholder thumbHash.
             // Trois sources, dans l'ordre : (1) cache image fourni par le
@@ -339,26 +385,20 @@ extension StoryBackgroundLayer {
                     // (2) URL directe embarquée, sinon (3) resolver distant.
                     // Stories publiées avant le `sanitizedForServerPublish()`
                     // peuvent contenir un `file://` mediaURL pointant vers la
-                    // sandbox de l'auteur, inaccessible côté lecteur.
-                    // Défense profonde : si le file:// échoue, on retombe sur
-                    // le resolver (URL CDN canonique via le postMediaId).
+                    // sandbox de l'auteur, inaccessible côté lecteur. Plus
+                    // largement, n'importe quelle erreur sur l'URL primaire
+                    // (404, timeout, network error, fichier supprimé...) doit
+                    // déclencher un fallback sur l'URL canonique CDN obtenue
+                    // via le postMediaId (resolver) — c'est la vérité serveur,
+                    // toujours valide tant que le post existe.
                     let primary = directURL ?? urlResolver?(postMediaId)
                     guard let url = primary else { return }
 
-                    var loadedImage: UIImage?
-                    if url.isFileURL {
-                        if let data = try? Data(contentsOf: url) {
-                            loadedImage = UIImage(data: data)
-                        }
-                        if loadedImage == nil,
-                           let fallback = urlResolver?(postMediaId),
-                           fallback != url,
-                           !fallback.isFileURL,
-                           let data = try? await CacheCoordinator.shared.images.data(for: fallback.absoluteString) {
-                            loadedImage = UIImage(data: data)
-                        }
-                    } else if let data = try? await CacheCoordinator.shared.images.data(for: url.absoluteString) {
-                        loadedImage = UIImage(data: data)
+                    var loadedImage: UIImage? = await Self.loadImage(from: url)
+                    if loadedImage == nil,
+                       let fallback = urlResolver?(postMediaId),
+                       fallback != url {
+                        loadedImage = await Self.loadImage(from: fallback)
                     }
 
                     guard let uiImage = loadedImage else { return }
@@ -387,7 +427,7 @@ extension StoryBackgroundLayer {
                 // pendant qu'une vidéo de fond async se résout (le
                 // resolver peut retourner nil 1-2 frames le temps que le
                 // postMediaId soit enregistré côté cache).
-                backgroundColor = UIColor.clear.cgColor
+                backgroundColor = letterboxColor?.cgColor ?? UIColor.clear.cgColor
                 break
             }
 
@@ -395,13 +435,13 @@ extension StoryBackgroundLayer {
             // direct, sans placeholder noir ni ThumbHash (la première frame
             // de la vidéo est rendue très vite).
             if remoteURL.isFileURL {
-                backgroundColor = UIColor.clear.cgColor
+                backgroundColor = letterboxColor?.cgColor ?? UIColor.clear.cgColor
                 attachBackgroundPlayer(url: remoteURL, looping: looping, mute: mute,
                                        fitOverride: self.transform3D.videoFitMode)
                 break
             }
             if let local = CacheCoordinator.videoLocalFileURL(for: remoteURL.absoluteString) {
-                backgroundColor = UIColor.clear.cgColor
+                backgroundColor = letterboxColor?.cgColor ?? UIColor.clear.cgColor
                 attachBackgroundPlayer(url: local, looping: looping, mute: mute,
                                        fitOverride: self.transform3D.videoFitMode)
                 break
@@ -421,7 +461,7 @@ extension StoryBackgroundLayer {
                 addSublayer(placeholder)
                 contentLayer = placeholder
             }
-            backgroundColor = UIColor.clear.cgColor
+            backgroundColor = letterboxColor?.cgColor ?? UIColor.clear.cgColor
 
             // Précache async puis play. AVPlayerLayer s'ajoute par-dessus
             // le placeholder, qui disparaît visuellement quand la vidéo joue.
