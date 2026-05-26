@@ -13,6 +13,12 @@ struct SettingsView: View {
     private var isDark: Bool { colorScheme == .dark }
 
     @State private var showLogoutConfirm = false
+    /// Q6 (P1) — driver d'overlay pendant `await authManager.logout()`.
+    /// L'alert iOS native ne permet pas un spinner inline sur son bouton,
+    /// donc on affiche un overlay sobre tant que la quiesce-then-purge
+    /// async n'est pas terminée. Empêche aussi le double-tap sur le
+    /// bouton "Se déconnecter" (disabled).
+    @State private var isLoggingOut = false
     @State private var showPrivacySettings = false
     @State private var showNotificationSettings = false
     @State private var showSecurity = false
@@ -55,10 +61,40 @@ struct SettingsView: View {
                 // (disconnect sockets, reset services SDK, wipe keychain).
                 // Le disconnect explicite du socket n'est plus nécessaire,
                 // il est intégré au logout().
-                Task { await authManager.logout() }
+                // Q6 — overlay loading pendant l'await (300-800ms p50/p95).
+                isLoggingOut = true
+                Task {
+                    await authManager.logout()
+                    isLoggingOut = false
+                }
             }
         } message: {
             Text(String(localized: "settings.logout.message", defaultValue: "Voulez-vous vraiment vous déconnecter ?", bundle: .main))
+        }
+        .overlay {
+            // Q6 — overlay sobre pendant le logout async (p50 ~300ms,
+            // p95 ~800ms). Pattern industriel WhatsApp/Signal. Bloque
+            // les interactions utilisateur pour éviter qu'un tap arrive
+            // pendant le quiesce et provoque une navigation orpheline.
+            if isLoggingOut {
+                ZStack {
+                    Color.black.opacity(0.45).ignoresSafeArea()
+                    VStack(spacing: 14) {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .controlSize(.large)
+                            .tint(.white)
+                        Text(String(localized: "settings.logout.inprogress", defaultValue: "Déconnexion en cours…", bundle: .main))
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 32)
+                    .padding(.vertical, 24)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+                }
+                .transition(.opacity)
+                .animation(.easeInOut(duration: 0.18), value: isLoggingOut)
+            }
         }
         .sheet(isPresented: $showPrivacySettings) {
             PrivacySettingsView()
@@ -574,6 +610,9 @@ struct SettingsView: View {
             HapticFeedback.heavy()
             showLogoutConfirm = true
         } label: {
+            // Note: le label reste statique — l'overlay sur SettingsView
+            // gère le visual feedback pendant l'await. Le `.disabled`
+            // ci-dessous empêche le double-tap.
             HStack {
                 Image(systemName: "rectangle.portrait.and.arrow.forward")
                     .font(.system(size: 16, weight: .semibold))
@@ -592,6 +631,7 @@ struct SettingsView: View {
                     )
             )
         }
+        .disabled(isLoggingOut)
         .accessibilityLabel(String(localized: "settings.logout.a11y", defaultValue: "Deconnexion", bundle: .main))
         .accessibilityHint(String(localized: "settings.logout.hint", defaultValue: "Vous deconnecte de votre compte Meeshy", bundle: .main))
     }
