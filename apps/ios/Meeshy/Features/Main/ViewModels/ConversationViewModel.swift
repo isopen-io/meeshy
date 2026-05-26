@@ -1492,6 +1492,16 @@ class ConversationViewModel: ObservableObject {
             listenedAttachmentIds: listenedAttachmentIds
         )
 
+        // B1 — install the listened-tracking callback before starting
+        // playback. The coordinator is a process-wide singleton (or, in
+        // tests, an injected instance); whichever VM most recently kicked
+        // off playback owns the callback. Re-installing on every `play`
+        // keeps the hook bound to the currently-driving VM even if a
+        // different conversation took over in between.
+        audioCoordinator.onAttachmentFinished = { [weak self] finishedId in
+            self?.listenedAttachmentIds.insert(finishedId)
+        }
+
         audioCoordinator.play(
             current: current,
             tail: tail,

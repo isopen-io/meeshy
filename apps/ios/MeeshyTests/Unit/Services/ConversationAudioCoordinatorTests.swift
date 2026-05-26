@@ -223,4 +223,42 @@ final class ConversationAudioCoordinatorTests: XCTestCase {
         XCTAssertEqual(engine.stopCallCount, baseline + 1,
                        "advancing past the last queued audio must stop the engine")
     }
+
+    // MARK: - B1 — onAttachmentFinished callback
+
+    /// The coordinator MUST fire `onAttachmentFinished(id)` exactly once,
+    /// with the id of the audio that just finished, BEFORE advancing the
+    /// queue. The `ConversationViewModel` listens to this hook to enrich
+    /// `listenedAttachmentIds`. Without it the auto-play loop replayed
+    /// the same audios endlessly because the listened set stayed empty.
+    func test_engineFinished_firesOnAttachmentFinishedWithFinishedId() async {
+        let (sut, engine) = makeSUT()
+        var notified: [String] = []
+        sut.onAttachmentFinished = { id in notified.append(id) }
+        let head = makeQueuedAudio(attachmentId: "a1", fileUrl: "https://cdn/a1.m4a")
+        let next = makeQueuedAudio(attachmentId: "a2", fileUrl: "https://cdn/a2.m4a")
+        sut.play(current: head, tail: [next], conversationName: "T", conversationArtworkURL: nil)
+
+        engine.simulateFinishPlayback()
+        await Task.yield()
+
+        XCTAssertEqual(notified, ["a1"], "must report exactly the finished head id, not the next one")
+        XCTAssertEqual(sut.activeContext?.attachmentId, "a2")
+    }
+
+    /// Same callback contract for the failure path: the broken head id is
+    /// reported via `onAttachmentFinished` (so the VM still marks it as
+    /// listened — equivalent to "do not retry this in auto-builds").
+    func test_engineLoadFailure_firesOnAttachmentFinishedWithBrokenId() async {
+        let (sut, engine) = makeSUT()
+        var notified: [String] = []
+        sut.onAttachmentFinished = { id in notified.append(id) }
+        let head = makeQueuedAudio(attachmentId: "broken", fileUrl: "https://cdn/broken.m4a")
+        sut.play(current: head, tail: [], conversationName: "T", conversationArtworkURL: nil)
+
+        engine.simulateLoadFailure()
+        await Task.yield()
+
+        XCTAssertEqual(notified, ["broken"])
+    }
 }

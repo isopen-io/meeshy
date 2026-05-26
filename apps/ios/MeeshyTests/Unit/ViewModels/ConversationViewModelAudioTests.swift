@@ -236,7 +236,47 @@ final class ConversationViewModelAudioTests: XCTestCase {
         XCTAssertEqual(coordinator.queueCount, 2)
     }
 
-    // MARK: - 4. Realtime: a new audio for a different conv is ignored
+    // MARK: - 4. B1 — listenedAttachmentIds enriched when engine finishes
+
+    /// When the coordinator's engine reports `onPlaybackFinished`, the
+    /// finished attachment id MUST land in `vm.listenedAttachmentIds`.
+    /// Before the fix the coordinator only advanced the queue; the VM was
+    /// never told, so the listened set stayed empty and `AudioQueueBuilder`
+    /// kept including the same audios on the next play tap.
+    func test_engineFinish_enrichesListenedAttachmentIds() async {
+        let (vm, engine, _) = makeSUT()
+
+        let m1 = makeAudioMessage(
+            id: "m1",
+            senderId: otherUserId,
+            conversationId: testConversationId,
+            attachments: [makeAudioAttachment(id: "a1", fileUrl: "https://cdn/a1.m4a")],
+            createdAt: date(1_000)
+        )
+        let m2 = makeAudioMessage(
+            id: "m2",
+            senderId: otherUserId,
+            conversationId: testConversationId,
+            attachments: [makeAudioAttachment(id: "a2", fileUrl: "https://cdn/a2.m4a")],
+            createdAt: date(2_000)
+        )
+        vm.messages = [m1, m2]
+        await Task.yield()
+
+        vm.playAudio(attachmentId: "a1")
+        await Task.yield()
+        XCTAssertFalse(vm.listenedAttachmentIds.contains("a1"))
+
+        engine.simulateFinishPlayback()
+        // The coordinator routes `advanceQueue` through `Task { @MainActor in
+        // ... }` so let the runloop pick up the deferred work.
+        try? await Task.sleep(nanoseconds: 20_000_000)
+
+        XCTAssertTrue(vm.listenedAttachmentIds.contains("a1"),
+                      "finished audio must be recorded in listenedAttachmentIds")
+    }
+
+    // MARK: - 5. Realtime: a new audio for a different conv is ignored
 
     func test_newMessage_audioInOtherConv_doesNothing() async {
         let (vm, _, coordinator) = makeSUT()
