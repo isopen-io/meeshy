@@ -32,6 +32,8 @@
 		MAPE0002000200020002F001 /* MockAudioPlaybackEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = MAPE0001000100010001F001 /* MockAudioPlaybackEngine.swift */; };
 		CACD0002000200020002F001 /* ConversationAudioCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = CACD0001000100010001F001 /* ConversationAudioCoordinator.swift */; };
 		CACT0002000200020002F001 /* ConversationAudioCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CACT0001000100010001F001 /* ConversationAudioCoordinatorTests.swift */; };
+		MAPB0002000200020002F001 /* MiniAudioPlayerBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = MAPB0001000100010001F001 /* MiniAudioPlayerBar.swift */; };
+		MABT0002000200020002F001 /* MiniAudioPlayerBarTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MABT0001000100010001F001 /* MiniAudioPlayerBarTests.swift */; };
 		MLBT0002000200020002F001 /* MediaLifecycleBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MLBT0001000100010001F001 /* MediaLifecycleBridgeTests.swift */; };
 		MASP0002000200020002F001 /* MeeshyAppScenePhaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MASP0001000100010001F001 /* MeeshyAppScenePhaseTests.swift */; };
 		CVAT0002000200020002F001 /* ConversationViewModelAudioTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CVAT0001000100010001F001 /* ConversationViewModelAudioTests.swift */; };
@@ -427,6 +429,9 @@
 		NSE0SDK0000000001 /* MeeshySDK in Frameworks */ = {isa = PBXBuildFile; productRef = NSE0SDK0000000002 /* MeeshySDK */; };
 		NSEDC002 /* NSEDecryptor.swift in Sources */ = {isa = PBXBuildFile; fileRef = NSEDC001 /* NSEDecryptor.swift */; };
 		NSEDS002 /* NSEDataSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = NSEDS001 /* NSEDataSync.swift */; };
+		NPHX002 /* NotificationPayloadHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = NPHX001 /* NotificationPayloadHelpers.swift */; };
+		NPHT002 /* NotificationPayloadHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = NPHX001 /* NotificationPayloadHelpers.swift */; };
+		NPHT004 /* NotificationPayloadHelpersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = NPHT003 /* NotificationPayloadHelpersTests.swift */; };
 		NSEPC002 /* NSEPendingMessageConsumer.swift in Sources */ = {isa = PBXBuildFile; fileRef = NSEPC001 /* NSEPendingMessageConsumer.swift */; };
 		NTFY0001000100010001001 /* NotificationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = NTFY0001000100010001000 /* NotificationTests.swift */; };
 		NTIF002A002A002A002A0002 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = NTIF001A001A001A001A0001 /* NotificationSettingsView.swift */; };
@@ -656,6 +661,8 @@
 		MAPE0001000100010001F001 /* MockAudioPlaybackEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockAudioPlaybackEngine.swift; sourceTree = "<group>"; };
 		CACD0001000100010001F001 /* ConversationAudioCoordinator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationAudioCoordinator.swift; sourceTree = "<group>"; };
 		CACT0001000100010001F001 /* ConversationAudioCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationAudioCoordinatorTests.swift; sourceTree = "<group>"; };
+		MAPB0001000100010001F001 /* MiniAudioPlayerBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniAudioPlayerBar.swift; sourceTree = "<group>"; };
+		MABT0001000100010001F001 /* MiniAudioPlayerBarTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MiniAudioPlayerBarTests.swift; sourceTree = "<group>"; };
 		MLBT0001000100010001F001 /* MediaLifecycleBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLifecycleBridgeTests.swift; sourceTree = "<group>"; };
 		MASP0001000100010001F001 /* MeeshyAppScenePhaseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyAppScenePhaseTests.swift; sourceTree = "<group>"; };
 		CVAT0001000100010001F001 /* ConversationViewModelAudioTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModelAudioTests.swift; sourceTree = "<group>"; };
@@ -991,6 +998,8 @@
 		NRST0001000100010001000 /* NavigationStateRestorationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NavigationStateRestorationTests.swift; sourceTree = "<group>"; };
 		NSEDC001 /* NSEDecryptor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSEDecryptor.swift; sourceTree = "<group>"; };
 		NSEDS001 /* NSEDataSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSEDataSync.swift; sourceTree = "<group>"; };
+		NPHX001 /* NotificationPayloadHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPayloadHelpers.swift; sourceTree = "<group>"; };
+		NPHT003 /* NotificationPayloadHelpersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationPayloadHelpersTests.swift; sourceTree = "<group>"; };
 		NSEPC001 /* NSEPendingMessageConsumer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NSEPendingMessageConsumer.swift; sourceTree = "<group>"; };
 		NTFY0001000100010001000 /* NotificationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationTests.swift; sourceTree = "<group>"; };
 		NTIF001A001A001A001A0001 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
@@ -1204,6 +1213,7 @@
 				MNCC0001000100010001REF /* MentionComposerController.swift */,
 				MNSP0001000100010001REF /* MentionSuggestionPanel.swift */,
 				48CE3690D4CCEEC41757B801 /* EditPostSheet.swift */,
+				MAPB0001000100010001F001 /* MiniAudioPlayerBar.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -1297,6 +1307,7 @@
 				80584D60650A4F6BDC569D97 /* NotificationService.swift */,
 				NSEDC001 /* NSEDecryptor.swift */,
 				NSEDS001 /* NSEDataSync.swift */,
+				NPHX001 /* NotificationPayloadHelpers.swift */,
 				3CD3F73AED1D6C3D98E9730A /* Info.plist */,
 				DF83D8A3D5241D7D38A0C6B0 /* MeeshyNotificationExtension.entitlements */,
 			);
@@ -2000,8 +2011,17 @@
 				B5D82DF7CB3102A810AE6A49 /* ViewModels */,
 				GSTC005A3B4C5D6E7F890100 /* Views */,
 				33668F4D121C1D11C8401A08 /* Models */,
+				MABT000C000C000C000C001 /* Components */,
 			);
 			path = Unit;
+			sourceTree = "<group>";
+		};
+		MABT000C000C000C000C001 /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				MABT0001000100010001F001 /* MiniAudioPlayerBarTests.swift */,
+			);
+			path = Components;
 			sourceTree = "<group>";
 		};
 		TSTS000D000D000D000D001 /* Services */ = {
@@ -2013,6 +2033,7 @@
 				5F682CF63D510A2E111E7BD1 /* PresenceManagerTests.swift */,
 				F96C9A03A8540DCCEB3528A8 /* AuthServiceTests.swift */,
 				NTFY0001000100010001000 /* NotificationTests.swift */,
+				NPHT003 /* NotificationPayloadHelpersTests.swift */,
 				1C90BB2C475926F97226B943 /* ConversationLockManagerTests.swift */,
 				A0340CB5A3610F80C0D53F08 /* MediaCompressorTests.swift */,
 				OAA0000000000001F02 /* OptimisticAttachmentAdopterTests.swift */,
@@ -2260,6 +2281,7 @@
 				90541F6A2DB27962673BFD35 /* NotificationService.swift in Sources */,
 				NSEDC002 /* NSEDecryptor.swift in Sources */,
 				NSEDS002 /* NSEDataSync.swift in Sources */,
+				NPHX002 /* NotificationPayloadHelpers.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2557,6 +2579,7 @@
 				APED0002000200020002F001 /* AudioPlaybackEngineDriving.swift in Sources */,
 				AQBL0002000200020002F001 /* AudioQueueBuilder.swift in Sources */,
 				CACD0002000200020002F001 /* ConversationAudioCoordinator.swift in Sources */,
+				MAPB0002000200020002F001 /* MiniAudioPlayerBar.swift in Sources */,
 				ABRT0002000200020002F001 /* AudioBubbleRouter.swift in Sources */,
 				FCFL01A1A1A1A1A1A1A10001 /* MeeshyFocusFilter.swift in Sources */,
 				OBDP01A1A1A1A1A1A1A10001 /* OutboxDispatcher.swift in Sources */,
@@ -2668,6 +2691,8 @@
 				SKLN0005000100010001BLD /* SkeletonVisibilityResolverTests.swift in Sources */,
 				TDTH0001000100010001001 /* TypingDotTimerHarness.swift in Sources */,
 				NTFY0001000100010001001 /* NotificationTests.swift in Sources */,
+				NPHT002 /* NotificationPayloadHelpers.swift in Sources */,
+				NPHT004 /* NotificationPayloadHelpersTests.swift in Sources */,
 				DLNK0001000100010001001 /* DeepLinkTests.swift in Sources */,
 				8343E26FB2A5EB5EE38821C6 /* MediaCompressorTests.swift in Sources */,
 				OAA0000000000002F02 /* OptimisticAttachmentAdopterTests.swift in Sources */,
@@ -2721,6 +2746,7 @@
 				MAPE0002000200020002F001 /* MockAudioPlaybackEngine.swift in Sources */,
 				AQBT0002000200020002F001 /* AudioQueueBuilderTests.swift in Sources */,
 				CACT0002000200020002F001 /* ConversationAudioCoordinatorTests.swift in Sources */,
+				MABT0002000200020002F001 /* MiniAudioPlayerBarTests.swift in Sources */,
 				MLBT0002000200020002F001 /* MediaLifecycleBridgeTests.swift in Sources */,
 				MASP0002000200020002F001 /* MeeshyAppScenePhaseTests.swift in Sources */,
 				CVAT0002000200020002F001 /* ConversationViewModelAudioTests.swift in Sources */,

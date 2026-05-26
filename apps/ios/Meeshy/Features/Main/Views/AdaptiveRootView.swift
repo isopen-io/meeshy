@@ -18,5 +18,15 @@ struct AdaptiveRootView: View {
         // a message audio actually starts. Pre-mounting keeps the rest of
         // the app — including the background lifecycle bridge — in sync.
         .task { _ = ConversationAudioCoordinator.shared }
+        // Phase 7 — Mini-player flottant au-dessus du tab bar. Visible quand
+        // un audio est en cours. La navigation vers la conversation source
+        // est volontairement no-op ici : `Router` est instancié dans
+        // `RootView`/`iPadRootView` (au-dessous), donc inaccessible depuis ce
+        // niveau via `@EnvironmentObject`. Sera complété en Phase 9 si le QA
+        // l'exige (option : exposer un Router via singleton ou injection app).
+        .overlay(alignment: .bottom) {
+            MiniAudioPlayerBar(onTapBody: {})
+                .padding(.bottom, 60)
+        }
     }
 }
