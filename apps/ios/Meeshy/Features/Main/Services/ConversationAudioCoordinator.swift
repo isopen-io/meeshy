@@ -45,6 +45,13 @@ public final class ConversationAudioCoordinator: ObservableObject {
     private var currentArtwork: String?
     private var cancellables = Set<AnyCancellable>()
 
+    // MARK: - NowPlaying bridge state (Phase 8)
+    // Accessed from `ConversationAudioCoordinator+NowPlaying.swift` (same
+    // module, separate file) — internal access required so the extension can
+    // read/write these. The `_` prefix signals extension-only usage.
+    var _isNowPlayingActivated = false
+    var _nowPlayingCancellables = Set<AnyCancellable>()
+
     private static let log = Logger(subsystem: "me.meeshy.app", category: "audio-coordinator")
 
     // MARK: - Init
