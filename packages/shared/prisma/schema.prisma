@@ -113,6 +113,11 @@ model User {
   regionalLanguage          String?
   /// Custom destination language for on-demand translation override (Language tab)
   customDestinationLanguage String?
+  /// Locale appareil (Locale.current iOS, Accept-Language web) propagee par le client.
+  /// 4e priorite Prisme Linguistique (2026-05-26). Stockee normalisee ISO 639-1
+  /// (2 lettres lowercase) par le middleware gateway X-Device-Locale.
+  /// Null = pas encore propagee (comportement legacy preserve).
+  deviceLocale              String?
 
   /// Rôle global de l'utilisateur (enum typé fort)
   role          UserRole  @default(USER)
