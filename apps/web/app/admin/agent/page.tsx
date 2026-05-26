@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import dynamic from 'next/dynamic';
 import AdminLayout from '@/components/admin/AdminLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, BarChart3, MessageSquare, Cpu, Users, Activity, Settings, History } from 'lucide-react';
+import { Loader2, BarChart3, MessageSquare, Cpu, Users, Activity, Settings, History, Tag } from 'lucide-react';
 
 const AgentOverviewTab = dynamic(
   () => import('@/components/admin/agent/AgentOverviewTab').then(mod => mod.AgentOverviewTab),
@@ -41,6 +41,11 @@ const AgentHistoryTab = dynamic(
   { loading: () => <SectionLoader /> }
 );
 
+const AgentTopicsTab = dynamic(
+  () => import('@/components/admin/agent/AgentTopicsTab').then(mod => mod.AgentTopicsTab),
+  { loading: () => <SectionLoader /> }
+);
+
 function SectionLoader() {
   return (
     <div className="flex items-center justify-center p-12">
@@ -55,6 +60,7 @@ const tabs = [
   { id: 'global', label: 'Global', icon: Settings },
   { id: 'llm', label: 'Config LLM', icon: Cpu },
   { id: 'archetypes', label: 'Archétypes', icon: Users },
+  { id: 'topics', label: 'Topics', icon: Tag },
   { id: 'live', label: 'Live', icon: Activity },
   { id: 'history', label: 'Historique', icon: History },
 ] as const;
@@ -73,7 +79,7 @@ export default function AgentAdminPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 md:grid-cols-7 gap-1">
+          <TabsList className="grid w-full grid-cols-4 md:grid-cols-8 gap-1">
             {tabs.map(tab => {
               const Icon = tab.icon;
               return (
@@ -103,6 +109,10 @@ export default function AgentAdminPage() {
 
           <TabsContent value="archetypes" className="mt-6">
             <AgentArchetypesTab />
+          </TabsContent>
+
+          <TabsContent value="topics" className="mt-6">
+            <AgentTopicsTab />
           </TabsContent>
 
           <TabsContent value="live" className="mt-6">
