@@ -16,7 +16,12 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     @Published public var isLoading = false
 
     public var onPlaybackFinished: (() -> Void)?
-    public var attachmentId: String?
+    /// B3 fix — `@Published` so that observers (notably `AudioPlayerView` in
+    /// the external-engine path) re-evaluate `handlePlayTap` gating logic
+    /// the moment the coordinator swaps the loaded attachment. Without this,
+    /// mutations stayed invisible to SwiftUI's dependency tracking and a
+    /// rapid double-tap on the play button could resolve to a stale id.
+    @Published public var attachmentId: String?
 
     private var player: AVAudioPlayer?
     private var timer: Timer?

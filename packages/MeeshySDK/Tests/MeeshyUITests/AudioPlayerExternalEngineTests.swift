@@ -1,4 +1,5 @@
 import Testing
+import Combine
 @testable import MeeshyUI
 @testable import MeeshySDK
 
@@ -56,5 +57,27 @@ struct AudioPlayerExternalEngineTests {
         #expect(engine.isPlaying == false)
         #expect(engine.duration == 0)
         #expect(engine.currentUrl == nil)
+    }
+
+    /// B3 — `attachmentId` MUST be `@Published` so observers (notably
+    /// `AudioPlayerView` rendered via the external-engine path) re-evaluate
+    /// `handlePlayTap` gating logic the moment the coordinator swaps the
+    /// loaded attachment. Without `@Published`, mutations are invisible to
+    /// SwiftUI's dependency tracking and a double-tap race on the play
+    /// button can resolve to the stale attachmentId.
+    @Test("attachmentId mutation fires objectWillChange")
+    @MainActor
+    func test_attachmentId_mutation_firesObjectWillChange() async {
+        let engine = AudioPlaybackManager(registerWithCoordinator: false)
+        var willChangeCount = 0
+        let cancellable = engine.objectWillChange.sink { _ in
+            willChangeCount += 1
+        }
+        defer { cancellable.cancel() }
+
+        engine.attachmentId = "att_X"
+        // objectWillChange is a CurrentValueSubject in @Published-land — it
+        // fires synchronously on willSet of any @Published property.
+        #expect(willChangeCount >= 1)
     }
 }

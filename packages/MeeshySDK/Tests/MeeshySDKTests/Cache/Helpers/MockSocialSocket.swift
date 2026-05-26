@@ -33,6 +33,7 @@ final class MockSocialSocket: SocialSocketProviding, @unchecked Sendable {
     let postReactionRemoved = PassthroughSubject<SocketPostReactionUpdateEvent, Never>()
     let postReactionSync = PassthroughSubject<SocketPostReactionSyncEvent, Never>()
     let conversationDeleted = PassthroughSubject<String, Never>()
+    let inAppNotification = PassthroughSubject<APINotification, Never>()
 
     var isConnected: Bool = false
     var connectionState: ConnectionState = .disconnected
