@@ -2,6 +2,14 @@ import Foundation
 import MeeshySDK
 import MeeshyUI
 
+private enum BubbleContentBuilderHelpers {
+    static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "HH:mm"
+        return f
+    }()
+}
+
 extension BubbleContent {
     /// Construit le BubbleContent depuis un Message + son contexte de traduction.
     /// Centralise toute la logique aujourd'hui inline dans ThemedMessageBubble :
@@ -152,7 +160,9 @@ extension BubbleContent {
         self.reactions = Self.summarizeReactions(message.reactions, currentUserId: currentUserId)
 
         // --- Meta ---
-        let resolvedTimeString = timeString ?? message.cachedTimeString ?? ""
+        let resolvedTimeString = timeString
+            ?? message.cachedTimeString
+            ?? BubbleContentBuilderHelpers.timeFormatter.string(from: message.createdAt)
         self.meta = Meta(
             timeString: resolvedTimeString,
             deliveryStatus: message.isMe ? message.deliveryStatus : nil
