@@ -44,6 +44,32 @@ final class CanvasBackgroundIntegrationTests: XCTestCase {
         XCTAssertTrue(firstPlayer === secondPlayer, "AVPlayer must be reused, not recreated")
     }
 
+    func test_handlePan_bgDrag_updatesLayerTransformLiveBeforeCommit() throws {
+        let bgMedia = StoryMediaObject(
+            id: "bg-1",
+            postMediaId: "bg-1",
+            mediaURL: "file:///tmp/test.jpg",
+            mediaType: "image",
+            aspectRatio: 1.0,
+            isBackground: true
+        )
+        var effects = StoryEffects()
+        effects.mediaObjects = [bgMedia]
+        let slide = StorySlide(id: "s1", effects: effects)
+        let canvas = StoryCanvasUIView(slide: slide, mode: .edit)
+        canvas.frame = CGRect(x: 0, y: 0, width: 412, height: 732)
+        canvas.layoutIfNeeded()
+
+        let initialTransform = canvas.backgroundLayer.transform
+        canvas.simulatePanForTesting(targetId: "bg-1", dxNorm: 0.1, dyNorm: 0)
+        let liveTransform = canvas.backgroundLayer.transform
+
+        XCTAssertFalse(CATransform3DEqualToTransform(initialTransform, liveTransform),
+                      "backgroundLayer.transform must be updated live during drag")
+        XCTAssertNil(canvas.slide.effects.backgroundTransform,
+                     "Model must not be committed until gesture .ended")
+    }
+
     private func findBackgroundLayer(in root: CALayer) -> StoryBackgroundLayer? {
         if let bg = root as? StoryBackgroundLayer { return bg }
         for sub in (root.sublayers ?? []) {
