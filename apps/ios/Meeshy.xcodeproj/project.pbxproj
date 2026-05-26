@@ -32,6 +32,8 @@
 		MAPE0002000200020002F001 /* MockAudioPlaybackEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = MAPE0001000100010001F001 /* MockAudioPlaybackEngine.swift */; };
 		CACD0002000200020002F001 /* ConversationAudioCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = CACD0001000100010001F001 /* ConversationAudioCoordinator.swift */; };
 		CACT0002000200020002F001 /* ConversationAudioCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CACT0001000100010001F001 /* ConversationAudioCoordinatorTests.swift */; };
+		MLBT0002000200020002F001 /* MediaLifecycleBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MLBT0001000100010001F001 /* MediaLifecycleBridgeTests.swift */; };
+		MASP0002000200020002F001 /* MeeshyAppScenePhaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MASP0001000100010001F001 /* MeeshyAppScenePhaseTests.swift */; };
 		CVAT0002000200020002F001 /* ConversationViewModelAudioTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CVAT0001000100010001F001 /* ConversationViewModelAudioTests.swift */; };
 		ABRT0002000200020002F001 /* AudioBubbleRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABRT0001000100010001F001 /* AudioBubbleRouter.swift */; };
 		ABTT0002000200020002F001 /* AudioBubbleRouterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABTT0001000100010001F001 /* AudioBubbleRouterTests.swift */; };
@@ -654,6 +656,8 @@
 		MAPE0001000100010001F001 /* MockAudioPlaybackEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockAudioPlaybackEngine.swift; sourceTree = "<group>"; };
 		CACD0001000100010001F001 /* ConversationAudioCoordinator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationAudioCoordinator.swift; sourceTree = "<group>"; };
 		CACT0001000100010001F001 /* ConversationAudioCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationAudioCoordinatorTests.swift; sourceTree = "<group>"; };
+		MLBT0001000100010001F001 /* MediaLifecycleBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaLifecycleBridgeTests.swift; sourceTree = "<group>"; };
+		MASP0001000100010001F001 /* MeeshyAppScenePhaseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyAppScenePhaseTests.swift; sourceTree = "<group>"; };
 		CVAT0001000100010001F001 /* ConversationViewModelAudioTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModelAudioTests.swift; sourceTree = "<group>"; };
 		ABRT0001000100010001F001 /* AudioBubbleRouter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AudioBubbleRouter.swift; sourceTree = "<group>"; };
 		ABTT0001000100010001F001 /* AudioBubbleRouterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioBubbleRouterTests.swift; sourceTree = "<group>"; };
@@ -2058,6 +2062,8 @@
 				66F7B674B538960BE3F198D4 /* VoIPDedupRingTests.swift */,
 				AQBT0001000100010001F001 /* AudioQueueBuilderTests.swift */,
 				CACT0001000100010001F001 /* ConversationAudioCoordinatorTests.swift */,
+				MLBT0001000100010001F001 /* MediaLifecycleBridgeTests.swift */,
+				MASP0001000100010001F001 /* MeeshyAppScenePhaseTests.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -2715,6 +2721,8 @@
 				MAPE0002000200020002F001 /* MockAudioPlaybackEngine.swift in Sources */,
 				AQBT0002000200020002F001 /* AudioQueueBuilderTests.swift in Sources */,
 				CACT0002000200020002F001 /* ConversationAudioCoordinatorTests.swift in Sources */,
+				MLBT0002000200020002F001 /* MediaLifecycleBridgeTests.swift in Sources */,
+				MASP0002000200020002F001 /* MeeshyAppScenePhaseTests.swift in Sources */,
 				CVAT0002000200020002F001 /* ConversationViewModelAudioTests.swift in Sources */,
 				ABTT0002000200020002F001 /* AudioBubbleRouterTests.swift in Sources */,
 				ROUT0001000100010001001 /* RouterTests.swift in Sources */,

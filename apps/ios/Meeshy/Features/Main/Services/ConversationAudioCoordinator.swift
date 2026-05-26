@@ -191,5 +191,44 @@ extension ConversationAudioCoordinator {
             durationMs: 1000
         )
     }
+
+    /// Storage backing the test override. `nonisolated(unsafe)` because the
+    /// coordinator is `@MainActor` and we want a synchronous setter from
+    /// tests already running on the main actor without crossing actor hops.
+    /// The override is only read by `sharedForTesting`, also `@MainActor`.
+    nonisolated(unsafe) private static var _testOverride: ConversationAudioCoordinator?
+
+    /// Install an alternate instance as the "shared" coordinator visible to
+    /// the background-transition lifecycle. Call `testResetShared()` from
+    /// `tearDown` so the next test starts from a clean slate.
+    @MainActor
+    static func testSetShared(_ instance: ConversationAudioCoordinator) {
+        _testOverride = instance
+    }
+
+    /// Drops any installed test override so production code goes back to
+    /// reading the real `.shared` instance.
+    @MainActor
+    static func testResetShared() {
+        _testOverride = nil
+    }
+
+    /// Single accessor used by the app-side background lifecycle so that
+    /// tests can substitute the engine without forking the production code
+    /// path. Returns the installed override when present, otherwise the
+    /// canonical `.shared` instance.
+    @MainActor
+    static var sharedForTesting: ConversationAudioCoordinator {
+        _testOverride ?? .shared
+    }
+}
+#else
+extension ConversationAudioCoordinator {
+    /// Release builds never substitute the coordinator — `sharedForTesting`
+    /// is a pure alias for `.shared` and the override storage doesn't exist.
+    @MainActor
+    static var sharedForTesting: ConversationAudioCoordinator {
+        .shared
+    }
 }
 #endif

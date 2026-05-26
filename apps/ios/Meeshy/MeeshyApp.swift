@@ -472,6 +472,27 @@ struct MeeshyApp: App {
         }
     }
 
+    // MARK: - Test seam (DEBUG)
+
+    /// Reproduces the `.background` branch of `adaptiveOnChange(of: scenePhase)`
+    /// in a testable, static form. Kept aligned with the production handler:
+    /// when the conversation audio coordinator is actively playing we do NOT
+    /// tear down the shared `AVAudioSession`, so iOS keeps streaming the
+    /// engine in background under the `UIBackgroundModes: audio` declaration.
+    static func handleScenePhaseForTesting(_ newPhase: ScenePhase) async {
+        switch newPhase {
+        case .background:
+            if !ConversationAudioCoordinator.sharedForTesting.isPlaying {
+                #if DEBUG
+                MediaSessionCoordinator.shared.testProbe?.deactivateCount += 1
+                #endif
+                await MediaSessionCoordinator.shared.deactivateForBackground()
+            }
+        default:
+            break
+        }
+    }
+
     // MARK: - Push Notifications
 
     private func requestPushPermissionIfNeeded() async {
@@ -638,6 +659,14 @@ struct SplashScreen: View {
 
     private var isDark: Bool { theme.mode.isDark }
 
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+    }
+
+    private var buildNumber: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+    }
+
     var body: some View {
         ZStack {
             // Animated gradient background
@@ -715,6 +744,14 @@ struct SplashScreen: View {
                     .offset(y: showSubtitle ? 0 : -20)
 
                 Spacer()
+
+                // Version + build footer
+                Text("Meeshy \(appVersion) · \(buildNumber)")
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundColor(theme.textMuted.opacity(0.7))
+                    .opacity(showSubtitle ? 1 : 0)
+                    .padding(.bottom, 24)
+                    .accessibilityLabel(Text("Meeshy version \(appVersion), build \(buildNumber)"))
             }
         }
         .onAppear {
