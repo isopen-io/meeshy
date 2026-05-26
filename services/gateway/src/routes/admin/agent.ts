@@ -211,13 +211,6 @@ type InvalidationStatus = {
 
 // ── Routes ──────────────────────────────────────────────────────────────────
 
-type InvalidationStatus = {
-  redisPublishOk: boolean;
-  redisSubscribersNotified: number;
-  httpInvalidateOk: boolean;
-  anyChannelSucceeded: boolean;
-};
-
 export async function agentAdminRoutes(fastify: FastifyInstance) {
   const agentHost = process.env.AGENT_HOST;
   const agentHttpPort = process.env.AGENT_HTTP_PORT || '3200';

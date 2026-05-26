@@ -325,7 +325,7 @@ function buildStrategistPrompt(
   // to prevent template injection from user messages containing {placeholder} strings.
   // The fresh-topic block is appended LAST so it sits at the bottom of the prompt
   // and dominates the LLM's decision when activated.
-  return (STRATEGIST_SYSTEM_PROMPT + freshTopicBlock)
+  return STRATEGIST_SYSTEM_PROMPT
     .replace('{activityScore}', String(state.activityScore))
     .replace('{minResponses}', String(minResponses))
     .replace('{maxResponses}', String(maxResponses + effectiveMaxReactions))
@@ -709,22 +709,7 @@ export function createStrategistNode(llm: LlmProvider, deps?: StrategistDependen
     const maxReactions = state.maxReactionsPerCycle;
     const reactionsEnabled = state.reactionsEnabled;
 
-    // Fresh-topic injection: probabilistic per-scan dice roll. When triggered,
-    // forces a single "news/hot research" intervention tied to the conversation's
-    // category. Bypasses the "skip when activity > 0.7" guard because surfacing
-    // fresh angles is valuable even in active threads.
-    const freshTopicActive = shouldInjectFreshTopic(state);
-    let freshTopicBlock = '';
-    let freshTopicMeta: { category: string; searchHint: string } | null = null;
-    if (freshTopicActive) {
-      const categories = resolveFreshTopicCategories(state);
-      const picked = pickFreshTopicSearchHint(categories);
-      freshTopicBlock = buildFreshTopicBlock(picked.category, picked.searchHint);
-      freshTopicMeta = { category: picked.category, searchHint: picked.searchHint };
-      console.log(`[Strategist] Fresh-topic mode ACTIVE for conv=${state.conversationId} category=${picked.category}`);
-    }
-
-    if (state.activityScore > 0.7 && !freshTopicActive) {
+    if (state.activityScore > 0.7) {
       // Even in active conversations, lurkers can still react
       const lurkerReactions = reactionsEnabled
         ? generateLurkerReactions(state, maxReactions)
