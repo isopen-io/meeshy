@@ -124,7 +124,11 @@ struct MiniAudioPlayerBar: View {
                     .frame(width: 32, height: 32)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(coordinator.isPlaying ? "Pause" : "Lecture")
+            .accessibilityLabel(
+                coordinator.isPlaying
+                    ? String(localized: "mini_player.pause", defaultValue: "Pause", bundle: .main)
+                    : String(localized: "mini_player.play", defaultValue: "Lecture", bundle: .main)
+            )
 
             Button(action: { coordinator.playNext() }) {
                 Image(systemName: "forward.fill")
@@ -133,7 +137,7 @@ struct MiniAudioPlayerBar: View {
                     .frame(width: 28, height: 28)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Suivant")
+            .accessibilityLabel(String(localized: "mini_player.next", defaultValue: "Suivant", bundle: .main))
 
             Button(action: { coordinator.close() }) {
                 Image(systemName: "xmark")
@@ -142,7 +146,7 @@ struct MiniAudioPlayerBar: View {
                     .frame(width: 24, height: 24)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Fermer le lecteur")
+            .accessibilityLabel(String(localized: "mini_player.close", defaultValue: "Fermer le lecteur", bundle: .main))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
