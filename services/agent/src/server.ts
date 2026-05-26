@@ -103,8 +103,19 @@ async function start() {
   const llmRouter = new LlmRouter(await buildLlmFromConfig());
   const llm = llmRouter;
 
+  // Topic catalog : seed initial (idempotent) + instanciation services partagés
+  // AVANT le build du graph pour que createStrategistNode reçoive les deps.
+  // Le warm du cache + cron sont déplacés plus bas pour ne pas bloquer le boot
+  // sur Redis si on est en mode dégradé (le strategist tolère undefined deps).
+  await new TopicSeedService(prisma).run();
+  const topicCatalogService = new TopicCatalogService(prisma, redis);
+  const topicUsageService = new TopicUsageService(prisma);
+
   const tracerRef: TracerRef = { current: null };
-  const graph = buildAgentGraph(llm, tracerRef);
+  const graph = buildAgentGraph(llm, tracerRef, {
+    topicCatalog: topicCatalogService,
+    topicUsage: topicUsageService,
+  });
   const stateManager = new RedisStateManager(redis);
   const persistence = new MongoPersistence(prisma);
 
@@ -128,6 +139,18 @@ async function start() {
       server.log.info('[LLM] Provider rebuilt from updated config');
     } catch (err) {
       server.log.error({ err }, '[LLM] Failed to rebuild provider on config change — keeping previous instance');
+    }
+  });
+
+  // Quand l'admin modifie un topic via /admin/agent/topics/*, le gateway
+  // publie scope:'topics' sur le channel d'invalidation Redis. On bust ici
+  // le cache catalog (Redis + memory) — la prochaine `list()` re-fetche.
+  configCache.onTopicsInvalidated(async () => {
+    try {
+      await topicCatalogService.invalidate();
+      server.log.info('[TopicCatalog] Cache invalidated via pub/sub');
+    } catch (err) {
+      server.log.error({ err }, '[TopicCatalog] Cache invalidation failed');
     }
   });
 
@@ -254,12 +277,11 @@ async function start() {
   const snapshotInterval = startDailySnapshotCron(prisma);
   const profileRefreshInterval = startProfileRefreshCron(prisma);
 
-  // Topic catalog : seed initial (idempotent) + instanciation services partagés.
-  await new TopicSeedService(prisma).run();
-  const topicCatalogService = new TopicCatalogService(prisma, redis);
-  const topicUsageService = new TopicUsageService(prisma);
-  // Warm le cache + compiled regex au boot pour éviter le first-hit latency.
-  await topicCatalogService.list({ activeOnly: true });
+  // Warm le cache topics + compiled regex au boot pour éviter le first-hit latency.
+  // Best-effort : si Redis down, on continue (le strategist tolère).
+  topicCatalogService.list({ activeOnly: true }).catch((err) =>
+    server.log.warn({ err }, '[Startup] Topic catalog warm-up failed'),
+  );
   const topicUsageCleanupInterval = startTopicUsageCleanupCron(prisma);
 
   // STARTUP SUMMARY LOGGING

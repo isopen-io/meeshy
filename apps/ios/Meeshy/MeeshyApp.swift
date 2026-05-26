@@ -757,13 +757,32 @@ struct SplashScreen: View {
 
                 Spacer()
 
-                // Version + build footer
-                Text("Meeshy \(appVersion) · \(buildNumber)")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                    .foregroundColor(theme.textMuted.opacity(0.7))
-                    .opacity(showSubtitle ? 1 : 0)
-                    .padding(.bottom, 24)
-                    .accessibilityLabel(Text("Meeshy version \(appVersion), build \(buildNumber)"))
+                // Footer : version + signature + brand logo
+                VStack(spacing: 6) {
+                    Text("Meeshy \(appVersion) · \(buildNumber)")
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundColor(theme.textMuted.opacity(0.7))
+
+                    Text(String(localized: "splash.madeWith", defaultValue: "Made with ❤️", bundle: .main))
+                        .font(.system(size: 11, weight: .regular, design: .rounded))
+                        .foregroundColor(theme.textMuted.opacity(0.6))
+
+                    Text(String(localized: "splash.byServicesCEO", defaultValue: "by Services CEO", bundle: .main))
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundColor(theme.textMuted.opacity(0.8))
+
+                    Image("AppIconFooter")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 28, height: 28)
+                        .opacity(0.85)
+                        .padding(.top, 2)
+                        .accessibilityHidden(true)
+                }
+                .opacity(showSubtitle ? 1 : 0)
+                .padding(.bottom, 24)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(Text("Meeshy version \(appVersion), build \(buildNumber). Made with love by Services CEO"))
             }
         }
         .onAppear {

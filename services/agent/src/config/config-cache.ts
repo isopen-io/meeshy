@@ -12,6 +12,7 @@ type Listener = () => void | Promise<void>;
 export class ConfigCache {
   private subscriber: Redis | null = null;
   private globalInvalidationListeners: Listener[] = [];
+  private topicsInvalidationListeners: Listener[] = [];
 
   constructor(
     private redis: Redis,
@@ -25,6 +26,15 @@ export class ConfigCache {
    */
   onGlobalInvalidated(listener: Listener): void {
     this.globalInvalidationListeners.push(listener);
+  }
+
+  /**
+   * Register a hook that fires when the agent topic catalog is invalidated
+   * via pub/sub (admin mutation on /admin/agent/topics/*). Used by
+   * TopicCatalogService to bust its Redis cache + compiled regex map.
+   */
+  onTopicsInvalidated(listener: Listener): void {
+    this.topicsInvalidationListeners.push(listener);
   }
 
   async getConfig(conversationId: string) {
@@ -96,6 +106,16 @@ export class ConfigCache {
         if (parsed.global) {
           await this.invalidateGlobal();
           console.log('[ConfigCache] Invalidated global config');
+        }
+        if (parsed.scope === 'topics') {
+          for (const listener of this.topicsInvalidationListeners) {
+            try {
+              await listener();
+            } catch (err) {
+              console.error('[ConfigCache] Topics invalidation listener failed:', err);
+            }
+          }
+          console.log('[ConfigCache] Invalidated topic catalog');
         }
       } catch {
         console.error('[ConfigCache] Invalid invalidation message:', message);
