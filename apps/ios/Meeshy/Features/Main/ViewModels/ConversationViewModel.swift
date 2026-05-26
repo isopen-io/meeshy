@@ -1529,10 +1529,25 @@ class ConversationViewModel: ObservableObject {
     private var didSeedAudioQueueSnapshot = false
 
     private func subscribeToMessagesForAudioQueue() {
+        // Hot-path filter: `$messages` fires on EVERY mutation (insert,
+        // delete, edit, reaction, translation update, …). On a busy
+        // conversation with reactions in burst, that can be 20-50 emissions
+        // per second. The handler only cares about inserts/deletes (those
+        // are the only mutations that change the message-id set), so we
+        // dedupe on the id sequence to skip in-place mutations cheaply.
+        //
+        // Trade-off: an edit that REPLACES a message in place with a new
+        // audio attachment would not refire here. That case is rare in
+        // practice — audio attachments are not typically added to an
+        // existing message — and the seenMessageIdsForAudioQueue set below
+        // would still skip it correctly if the id is preserved.
         $messages
+            .map { $0.map(\.id) }
+            .removeDuplicates()
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] snapshot in
-                self?.processMessagesForAudioQueueAppend(snapshot)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                self.processMessagesForAudioQueueAppend(self.messages)
             }
             .store(in: &cancellables)
     }

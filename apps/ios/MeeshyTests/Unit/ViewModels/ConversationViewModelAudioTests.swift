@@ -13,44 +13,38 @@ import MeeshySDK
 @MainActor
 final class ConversationViewModelAudioTests: XCTestCase {
 
-    // MARK: - Fixtures
+    // MARK: - Constants
 
-    private var mockAuthManager: MockAuthManager!
-    private var mockMessageService: MockMessageService!
-    private var mockConversationService: MockConversationService!
-    private var mockReactionService: MockReactionService!
-    private var mockReportService: MockReportService!
-    private var mockMessageSocket: MockMessageSocket!
-    private let testConversationId = "000000000000000000000a01"
-    private let testUserId = "000000000000000000000b01"
-    private let otherUserId = "000000000000000000000b02"
+    private static let testConversationId = "000000000000000000000a01"
+    private static let testUserId = "000000000000000000000b01"
+    private static let otherUserId = "000000000000000000000b02"
+
+    private var testConversationId: String { Self.testConversationId }
+    private var testUserId: String { Self.testUserId }
+    private var otherUserId: String { Self.otherUserId }
 
     override func setUp() async throws {
         try await super.setUp()
-        await CacheCoordinator.shared.messages.invalidate(for: testConversationId)
-        mockAuthManager = MockAuthManager()
-        mockMessageService = MockMessageService()
-        mockConversationService = MockConversationService()
-        mockReactionService = MockReactionService()
-        mockReportService = MockReportService()
-        mockMessageSocket = MockMessageSocket()
-    }
-
-    override func tearDown() {
-        mockAuthManager = nil
-        mockMessageService = nil
-        mockConversationService = nil
-        mockReactionService = nil
-        mockReportService = nil
-        mockMessageSocket = nil
-        super.tearDown()
+        // Cache invalidation is the only shared-state cleanup we need —
+        // every other dependency is created fresh in `makeSUT()` per test
+        // (factory pattern, see apps/ios/CLAUDE.md).
+        await CacheCoordinator.shared.messages.invalidate(for: Self.testConversationId)
     }
 
     // MARK: - Factories
 
+    /// Primary SUT factory. Every dependency is instantiated locally — no
+    /// shared mutable state between tests (per apps/ios/CLAUDE.md TDD rules).
     private func makeSUT(
         conversationId: String? = nil
     ) -> (ConversationViewModel, MockAudioPlaybackEngine, ConversationAudioCoordinator) {
+        let mockAuthManager = MockAuthManager()
+        let mockMessageService = MockMessageService()
+        let mockConversationService = MockConversationService()
+        let mockReactionService = MockReactionService()
+        let mockReportService = MockReportService()
+        let mockMessageSocket = MockMessageSocket()
+
         let currentUser = MeeshyUser(id: testUserId, username: "bob", displayName: "Bob")
         mockAuthManager.simulateLoggedIn(user: currentUser)
 
@@ -83,11 +77,18 @@ final class ConversationViewModelAudioTests: XCTestCase {
     /// Builds a `ConversationViewModel` bound to an existing shared
     /// coordinator. Used by the cross-VM pollution test to drive two VMs
     /// (different conversation ids) through the same singleton-like
-    /// coordinator instance.
+    /// coordinator instance. Mocks are still fresh-per-call.
     private func makeSUT(
         conversationId: String,
         sharedCoordinator: ConversationAudioCoordinator
     ) -> ConversationViewModel {
+        let mockAuthManager = MockAuthManager()
+        let mockMessageService = MockMessageService()
+        let mockConversationService = MockConversationService()
+        let mockReactionService = MockReactionService()
+        let mockReportService = MockReportService()
+        let mockMessageSocket = MockMessageSocket()
+
         let currentUser = MeeshyUser(id: testUserId, username: "bob", displayName: "Bob")
         mockAuthManager.simulateLoggedIn(user: currentUser)
 
@@ -405,5 +406,43 @@ final class ConversationViewModelAudioTests: XCTestCase {
                        "VM_B must NOT receive a finished-event for an audio that doesn't belong to its conversation")
         XCTAssertTrue(vmB.listenedAttachmentIds.isEmpty,
                       "VM_B's listened set must stay empty — no foreign pollution")
+    }
+
+    // MARK: - 7. Hot-path debounce — id-set dedupe on $messages sink
+
+    /// `$messages` fires on EVERY mutation (insert, delete, edit, reaction,
+    /// translation update). On a busy conversation that can be 20-50
+    /// emissions per second; the audio queue sink only cares about
+    /// inserts/deletes that change the message-id set. Re-assigning the
+    /// SAME array (cosmetic mutation, same ids) MUST NOT grow the queue.
+    func test_audioQueueSink_doesNotFireOnNoOpMessagesReassignment() async {
+        let (vm, _, coordinator) = makeSUT()
+
+        let head = makeAudioMessage(
+            id: "m1",
+            senderId: otherUserId,
+            conversationId: testConversationId,
+            attachments: [makeAudioAttachment(id: "a1", fileUrl: "https://cdn/a1.m4a")],
+            createdAt: date(1_000)
+        )
+        vm.messages = [head]
+        await Task.yield()
+
+        vm.playAudio(attachmentId: "a1")
+        await Task.yield()
+        let queueCountBefore = coordinator.queueCount
+        XCTAssertEqual(queueCountBefore, 1)
+
+        // Cosmetic re-assignment: same ids, same order. With the id-set
+        // dedupe in place, the sink must NOT refire and the queue must
+        // remain unchanged. Without dedupe, the previous implementation
+        // would still no-op here thanks to `seenMessageIdsForAudioQueue`,
+        // BUT the sink would still wake up + walk the messages every time
+        // (the hot-path cost we're avoiding).
+        vm.messages = vm.messages
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(coordinator.queueCount, queueCountBefore,
+                       "Audio queue must not grow on a no-op message reassignment")
     }
 }
