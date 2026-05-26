@@ -187,6 +187,23 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         pendingNotificationPayload = nil
     }
 
+    // MARK: - Session quiesce (P1 — logout)
+
+    /// Purge l'état session-bound : payload de navigation pending et
+    /// deviceToken (en mémoire + Keychain). NE touche PAS `isAuthorized` —
+    /// c'est la permission système iOS, device-level, persistante. La toucher
+    /// au logout provoquerait un re-prompt utilisateur qu'iOS rate-limit.
+    /// Le binding user↔token côté gateway est désinscrit via
+    /// `unregisterDeviceToken()` (POST /auth/logout). Câblée depuis
+    /// `AuthManager.logout()`.
+    public func resetSession() {
+        pendingNotificationPayload = nil
+        deviceToken = nil
+        keychainStore.delete(forKey: Self.persistedTokenKey, account: nil)
+        keychainStore.delete(forKey: Self.lastRegisteredTokenKey, account: nil)
+        userDefaults.removeObject(forKey: Self.lastRegisteredAtKey)
+    }
+
     /// Émet le conversationId sur `messageNotificationReceived` quand une
     /// notification entrante dénote une activité de message — pour que la
     /// liste de conversations remonte la ligne. NE touche PAS

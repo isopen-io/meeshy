@@ -176,4 +176,25 @@ final class BlockServiceTests: XCTestCase {
             XCTFail("Expected MeeshyError, got \(type(of: error))")
         }
     }
+
+    // MARK: - reset (P1 — session quiesce on logout)
+
+    /// Prouve que `reset()` purge la blocklist en mémoire pour qu'un user B
+    /// qui se connecte sur le même device ne voie pas la blocklist du user A
+    /// avant le prochain refresh réseau. Câblé depuis `AuthManager.logout()`.
+    func testResetClearsBlockedUserIds() async throws {
+        let blocked = BlockedUser(id: "u1", username: "blocked1", displayName: nil, avatar: nil, blockedAt: nil)
+        let response = APIResponse<[BlockedUser]>(success: true, data: [blocked], error: nil)
+        mock.stub("/users/me/blocked-users", result: response)
+        await service.refreshCache()
+
+        let svc = service!
+        let preReset = await MainActor.run { svc.isBlocked(userId: "u1") }
+        XCTAssertTrue(preReset, "precondition: u1 should be blocked before reset")
+
+        await service.reset()
+
+        let postReset = await MainActor.run { svc.isBlocked(userId: "u1") }
+        XCTAssertFalse(postReset, "blockedUserIds should be empty after reset()")
+    }
 }

@@ -51,8 +51,11 @@ struct SettingsView: View {
         .alert(String(localized: "settings.logout.title", defaultValue: "Déconnexion", bundle: .main), isPresented: $showLogoutConfirm) {
             Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { }
             Button(String(localized: "settings.logout.title", defaultValue: "Déconnexion", bundle: .main), role: .destructive) {
-                authManager.logout()
-                MessageSocketManager.shared.disconnect()
+                // P1 — logout() est désormais async + quiesce-then-purge
+                // (disconnect sockets, reset services SDK, wipe keychain).
+                // Le disconnect explicite du socket n'est plus nécessaire,
+                // il est intégré au logout().
+                Task { await authManager.logout() }
             }
         } message: {
             Text(String(localized: "settings.logout.message", defaultValue: "Voulez-vous vraiment vous déconnecter ?", bundle: .main))

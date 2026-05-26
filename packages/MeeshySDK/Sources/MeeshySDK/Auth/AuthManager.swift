@@ -38,7 +38,12 @@ public protocol AuthManaging: AnyObject {
     func requestMagicLink(email: String) async -> Bool
     func validateMagicLink(token: String) async
     func requestPasswordReset(email: String) async -> Bool
-    func logout()
+    /// P1 — quiesce-then-purge : disconnect sockets, reset les services SDK
+    /// (BlockService, UserPreferences, PushNotification, Notification*, etc.),
+    /// wipe le SessionSnapshot puis le keychain, et enfin bascule
+    /// `isAuthenticated = false` en dernier pour que le router voie un état
+    /// cohérent. Voir `docs/superpowers/specs/2026-05-26-user-session-migration-design.md`.
+    func logout() async
     func checkExistingSession() async
     func handleUnauthorized()
     @discardableResult
@@ -350,17 +355,43 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     // MARK: - Logout
 
-    public func logout() {
+    public func logout() async {
         guard let userId = activeUserId else {
+            // Idempotent : peut être appelée plusieurs fois sans crash.
+            // Garde un état cohérent même quand aucune session n'est active.
             currentUser = nil
             isAuthenticated = false
             return
         }
 
-        // D5 — drive the server-side logout with retries (network blip
-        // should not leave the session live on the gateway).
+        // P1 D-7 — SessionSnapshot wipe en PREMIER : si l'app crash entre ici
+        // et la fin du logout, les extensions iOS (NSE, Widget) ne re-lisent
+        // pas les credentials de la session morte.
+        SessionSnapshotStore.wipe()
+
+        // D5 — server logout in background (best-effort, bounded retries).
+        // Le quiesce local ne dépend pas du serveur : si le réseau échoue,
+        // le gateway tuera la session paresseusement au prochain request.
         Task { await self.performServerLogoutWithRetries() }
 
+        // P1 quiesce — stop accepting new mutations BEFORE purging stores.
+        // Sans ça, un `message:new` arrivant pendant le purge pourrait
+        // ré-écrire dans les stores après leur reset.
+        MessageSocketManager.shared.disconnect()
+        SocialSocketManager.shared.disconnect()
+
+        // P1 reset des singletons SDK (cf. design doc D-13 + Q1-Q6).
+        // Ordre : les services qui ne dépendent de rien d'autre d'abord,
+        // puis ceux qui consomment leurs publishers (NotificationManager
+        // observe NotificationCoordinator).
+        NotificationCoordinator.shared.reset()
+        NotificationManager.shared.reset()
+        PushNotificationManager.shared.resetSession()
+        await BlockService.shared.reset()
+        UserPreferencesManager.shared.resetSession()
+        FriendshipCache.shared.clear()
+
+        // Keychain wipe + saved account remove (existant).
         keychain.delete(forKey: tokenKey(for: userId), account: nil)
         keychain.delete(forKey: sessionTokenKey(for: userId), account: nil)
         keychain.delete(forKey: userKey(for: userId), account: nil)
@@ -369,18 +400,17 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         activeUserId = nil
         currentUser = nil
-        isAuthenticated = false
         APIClient.shared.authToken = nil
 
-        // D3 — wipe every cached store so a subsequent login (same device,
-        // different user) cannot momentarily render the previous user's
-        // conversations / friends / profiles. `CacheCoordinator.reset()`
-        // also tears down lifecycle subscriptions so the next login starts
-        // from a clean slate. Best-effort: the local logout already
-        // succeeded above, so a cache reset failure here cannot block UX.
-        Task {
-            await CacheCoordinator.shared.reset()
-        }
+        // D3 — wipe every cached store. Désormais AWAITED (vs fire-and-forget)
+        // pour garantir que le router ne voie pas isAuthenticated=false
+        // avant que le cache soit purgé (sinon LoginView risque de se monter
+        // pendant que les caches user A sont encore en RAM).
+        await CacheCoordinator.shared.reset()
+
+        // En DERNIER : déclenche le router et tous les `wireAuthLogoutHook`
+        // app-side (ConversationAudioCoordinator, ToastManager, etc.).
+        isAuthenticated = false
     }
 
     /// D5 — best-effort server logout with bounded retries. Returns once

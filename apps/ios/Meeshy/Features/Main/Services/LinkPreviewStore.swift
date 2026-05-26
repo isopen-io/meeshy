@@ -23,6 +23,7 @@ final class LinkPreviewStore: ObservableObject {
     @Published private(set) var cache: [String: LinkMetadata] = [:]
     private var negativeCache: [String: Date] = [:]
     private var pendingKeys: Set<String> = []
+    private var cancellables = Set<AnyCancellable>()
 
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
@@ -37,6 +38,24 @@ final class LinkPreviewStore: ObservableObject {
 
     init() {
         self.cache = Self.loadFromDisk(fileName: fileName, decoder: decoder, maxAge: maxAge)
+        wireAuthLogoutHook()
+    }
+
+    // MARK: - Session quiesce (P1, Q2 — logout)
+
+    /// Q2 — privacy : un link preview révèle les sites partagés (potentiellement
+    /// des URLs privées Notion / Google Doc / Slack). Au logout, purge le cache
+    /// disque pour qu'un user B sur le même device ne puisse pas lire les
+    /// previews du user A via dump / forensic. Pattern calqué sur
+    /// `ConversationAudioCoordinator.wireAuthLogoutHook`.
+    private func wireAuthLogoutHook() {
+        AuthManager.shared.$isAuthenticated
+            .removeDuplicates()
+            .dropFirst()
+            .filter { !$0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.clearAll() }
+            .store(in: &cancellables)
     }
 
     func metadata(for urlString: String) -> LinkMetadata? {

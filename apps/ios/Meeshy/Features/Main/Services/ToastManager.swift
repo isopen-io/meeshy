@@ -12,9 +12,34 @@ final class ToastManager: ObservableObject {
     var onTapAction: (() -> Void)?
 
     private var dismissTask: Task<Void, Never>?
+    private var cancellables = Set<AnyCancellable>()
 
     private init() {
         observeSDKToasts()
+        wireAuthLogoutHook()
+    }
+
+    // MARK: - Session quiesce (P1, Q1 — logout)
+
+    /// Q1 — un toast triggé pour user A juste avant `logout()` ne doit pas
+    /// continuer à s'afficher après que la session A soit terminée. Pattern
+    /// calqué sur `ConversationAudioCoordinator.wireAuthLogoutHook`.
+    private func wireAuthLogoutHook() {
+        AuthManager.shared.$isAuthenticated
+            .removeDuplicates()
+            .dropFirst()
+            .filter { !$0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.clearAll() }
+            .store(in: &cancellables)
+    }
+
+    /// Q1 — purge tout toast pending + son tap handler. Plus large que
+    /// `dismiss()` qui ne touche pas `onTapAction`.
+    func clearAll() {
+        dismissTask?.cancel()
+        currentToast = nil
+        onTapAction = nil
     }
 
     func show(_ message: String, type: ToastType = .success) {

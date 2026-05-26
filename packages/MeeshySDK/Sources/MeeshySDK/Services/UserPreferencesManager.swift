@@ -144,6 +144,34 @@ public final class UserPreferencesManager: ObservableObject {
         application = .defaults; persist(application, category: .application)
     }
 
+    // MARK: - Session quiesce (P1 — logout)
+
+    /// Réinitialise les @Published aux defaults ET supprime les clés UserDefaults
+    /// pour que la session suivante (autre user sur le même device) ne re-hydrate
+    /// pas les préférences du user précédent depuis le disque. Différent de
+    /// `resetToDefaults()` qui persiste les defaults — ici on PURGE le disque.
+    /// Câblée depuis `AuthManager.logout()`.
+    public func resetSession() {
+        privacy = .defaults
+        audio = .defaults
+        message = .defaults
+        notification = .defaults
+        video = .defaults
+        document = .defaults
+        application = .defaults
+        isSyncing = false
+        lastSyncDate = nil
+
+        syncTasks.values.forEach { $0.cancel() }
+        syncTasks.removeAll()
+        cancellables.removeAll()
+
+        for category in PreferenceCategory.allCases {
+            UserDefaults.standard.removeObject(forKey: Self.keyPrefix + category.rawValue)
+        }
+        UserDefaults.standard.removeObject(forKey: Self.lastSyncKey)
+    }
+
     public func resetCategory(_ category: PreferenceCategory) async {
         switch category {
         case .privacy: privacy = .defaults; persist(privacy, category: .privacy)

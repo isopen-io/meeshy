@@ -221,4 +221,41 @@ final class PushNotificationManagerTests: XCTestCase {
     // this fix; the existing two tests already pin the injected-defaults
     // contract for the read + write paths. A follow-up PR can add the API
     // client injection if the unregister path needs unit coverage.
+
+    // MARK: - resetSession (P1 — logout)
+
+    /// Prouve que `resetSession()` clear le payload de navigation pending
+    /// + le deviceToken en mémoire + le token persisté Keychain, MAIS NE
+    /// touche PAS `isAuthorized` (qui reflète la permission système iOS,
+    /// device-level, persistante au-delà d'un logout). Toucher
+    /// `isAuthorized = false` au logout provoquerait un re-prompt
+    /// utilisateur que iOS rate-limit.
+    @MainActor
+    func test_resetSession_clearsPendingPayloadAndTokens_butKeepsAuthorization() {
+        let (sut, defaults, keychain, suite) = makePushManagerSUT()
+        defer { tearDownDefaults(defaults, suiteName: suite) }
+
+        sut.isAuthorized = true
+        sut.deviceToken = "abc123def456"
+        sut.pendingNotificationPayload = NotificationPayload(userInfo: ["type": "message"])
+        try? keychain.save("abc123def456", forKey: PushNotificationManager.persistedTokenKey, account: nil)
+        try? keychain.save("abc123def456_last", forKey: PushNotificationManager.lastRegisteredTokenKey, account: nil)
+
+        sut.resetSession()
+
+        XCTAssertNil(sut.pendingNotificationPayload, "navigation intent must clear")
+        XCTAssertNil(sut.deviceToken, "in-memory token must clear")
+        XCTAssertTrue(
+            sut.isAuthorized,
+            "iOS authorization is device-level, must NOT be touched at logout (re-prompt rate-limited)"
+        )
+        XCTAssertNil(
+            keychain.load(forKey: PushNotificationManager.persistedTokenKey, account: nil),
+            "persisted token in keychain must clear so a re-launch under user B does not auto-bind"
+        )
+        XCTAssertNil(
+            keychain.load(forKey: PushNotificationManager.lastRegisteredTokenKey, account: nil),
+            "last-registered marker must clear"
+        )
+    }
 }

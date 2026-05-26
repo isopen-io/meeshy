@@ -15,7 +15,7 @@ final class AuthManagerRefreshTests: XCTestCase {
     }
 
     override func tearDown() async throws {
-        AuthManager.shared.logout()
+        await AuthManager.shared.logout()
         AuthManager.shared.authService = originalAuthService
         try await super.tearDown()
     }
