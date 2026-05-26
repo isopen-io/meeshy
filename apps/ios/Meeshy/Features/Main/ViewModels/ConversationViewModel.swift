@@ -230,6 +230,68 @@ class ConversationViewModel: ObservableObject {
     /// When true, the effects picker sheet is presented
     @Published var showEffectsPicker: Bool = false
 
+    // MARK: - Audio Continuous Playback (Phase 4)
+
+    /// Attachments already played to completion. Excluded from the auto-built
+    /// queue so a tap on the second audio doesn't replay everything before it.
+    ///
+    /// Currently runtime-only: enriched when an audio finishes via the
+    /// coordinator's `onPlaybackFinished` hook (Phase 5 wiring). Persistence
+    /// across cold starts comes when `MeeshyMessageAttachment.listenedAt` is
+    /// added to the SDK model (tracked as dette).
+    @Published var listenedAttachmentIds: Set<String> = []
+
+    /// Cached metadata for the active conversation, hydrated lazily from the
+    /// cache when `loadMessages` runs. Used to feed `playAudio` with the
+    /// right `conversationName` / `conversationArtworkURL`.
+    @Published private(set) var currentConversation: MeeshyConversation?
+
+    #if DEBUG
+    private var _testAudioCoordinator: ConversationAudioCoordinator?
+    #endif
+
+    /// Resolves to the test-injected coordinator under DEBUG when present,
+    /// otherwise the shared singleton. Pure UX orchestration lives in the
+    /// coordinator — the VM only feeds it.
+    private var audioCoordinator: ConversationAudioCoordinator {
+        #if DEBUG
+        return _testAudioCoordinator ?? .shared
+        #else
+        return .shared
+        #endif
+    }
+
+    #if DEBUG
+    /// Test-only setter to inject a fresh `ConversationAudioCoordinator` so a
+    /// test class can assert side-effects without colliding with the global
+    /// singleton's state. Must be called BEFORE `playAudio(attachmentId:)` /
+    /// any other coordinator-routed call to take effect for that operation.
+    func _testSetAudioCoordinator(_ coordinator: ConversationAudioCoordinator) {
+        _testAudioCoordinator = coordinator
+    }
+    #endif
+
+    /// Display name shown in the audio mini-player while playing audios from
+    /// this conversation. Falls back to empty string when the conversation
+    /// hasn't been hydrated yet (very narrow race; coordinator handles "").
+    var currentConversationName: String {
+        currentConversation?.name ?? ""
+    }
+
+    /// Artwork URL shown in the audio mini-player. `nil` when the conversation
+    /// has no avatar or hasn't been hydrated yet — the coordinator falls back
+    /// to a placeholder.
+    var currentConversationArtworkURL: String? {
+        currentConversation?.avatar
+    }
+
+    /// Brand accent for the audio mini-player. Defaults to the Meeshy
+    /// indigo500 brand hex when the conversation isn't hydrated yet so the
+    /// player never paints with a flash of an unrelated color.
+    var currentAccentColorHex: String {
+        currentConversation?.accentColor ?? "6366F1"
+    }
+
     // MARK: - Mention Autocomplete State
 
     @Published var mentionController: MentionComposerController = MentionComposerController(context: .conversation(id: ""))
@@ -756,7 +818,9 @@ class ConversationViewModel: ObservableObject {
         subscribeToMessageStore()
         subscribeToQueueReconciliation()
         subscribeToLanguagePreferenceChanges()
+        subscribeToMessagesForAudioQueue()
         mirrorMessagesIntoStateStore()
+        hydrateCurrentConversationFromCache()
         // Cross-conversation unread aggregator powers the back-button pill.
         // Seed `currentConversationUnreadCount` BEFORE wiring the CombineLatest
         // so the initial `totalConversationsUnread` value (delivered as soon
@@ -1392,6 +1456,131 @@ class ConversationViewModel: ObservableObject {
         for i in msgs.indices {
             if let plaintext = resultsByMessageId[msgs[i].id]?.plaintext {
                 msgs[i].content = plaintext
+            }
+        }
+    }
+
+    // MARK: - Audio Continuous Playback (Phase 4)
+
+    /// Kicks off conversation-wide audio playback starting at `attachmentId`.
+    ///
+    /// Resolves the message/attachment in the current `messages` snapshot,
+    /// asks `AudioQueueBuilder` for the unlistened, non-self tail of audios
+    /// strictly after this one, then routes the whole queue through the app
+    /// coordinator (which gates on CallKit + auth and exposes the mini-player
+    /// state to the rest of the app).
+    func playAudio(attachmentId: String) {
+        guard let (message, attachment) = findAudioAttachment(id: attachmentId),
+              attachment.type == .audio,
+              let currentUserId = authManager.currentUser?.id else { return }
+
+        let current = QueuedAudio(
+            attachmentId: attachment.id,
+            messageId: message.id,
+            conversationId: message.conversationId,
+            fileUrl: attachment.fileUrl,
+            durationMs: attachment.duration ?? 0,
+            senderName: message.senderName ?? "",
+            senderAvatarURL: message.senderAvatarURL,
+            receivedAt: message.createdAt
+        )
+
+        let tail = AudioQueueBuilder.build(
+            from: messages,
+            startingAfterAttachmentId: attachment.id,
+            currentUserId: currentUserId,
+            listenedAttachmentIds: listenedAttachmentIds
+        )
+
+        audioCoordinator.play(
+            current: current,
+            tail: tail,
+            conversationName: currentConversationName,
+            conversationArtworkURL: currentConversationArtworkURL
+        )
+    }
+
+    /// O(n) scan over `messages` for the message that owns `attachmentId`.
+    /// `messages` rarely exceeds a few hundred rows in memory; an index would
+    /// have to invalidate on every attachment update for negligible gain.
+    private func findAudioAttachment(id: String) -> (Message, MessageAttachment)? {
+        for message in messages {
+            if let att = message.attachments.first(where: { $0.id == id && $0.type == .audio }) {
+                return (message, att)
+            }
+        }
+        return nil
+    }
+
+    /// Subscribes to `$messages` and forwards any newly-inserted audio messages
+    /// — from someone else, in the conversation currently being played by the
+    /// coordinator — into the active playback queue via `appendUpcoming`.
+    ///
+    /// Uses a snapshot of seen message ids to detect genuinely new inserts and
+    /// ignore re-orderings or in-place mutations (edits, reactions, etc.).
+    private var seenMessageIdsForAudioQueue: Set<String> = []
+    private var didSeedAudioQueueSnapshot = false
+
+    private func subscribeToMessagesForAudioQueue() {
+        $messages
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] snapshot in
+                self?.processMessagesForAudioQueueAppend(snapshot)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func processMessagesForAudioQueueAppend(_ snapshot: [Message]) {
+        // First emission (and any emission while no coordinator session is
+        // active for THIS conversation) just refreshes the baseline so the
+        // backlog never replays as "new" once playback starts.
+        guard didSeedAudioQueueSnapshot,
+              let activeConvId = audioCoordinator.activeContext?.conversationId,
+              activeConvId == conversationId,
+              let currentUserId = authManager.currentUser?.id else {
+            seenMessageIdsForAudioQueue = Set(snapshot.map(\.id))
+            didSeedAudioQueueSnapshot = true
+            return
+        }
+
+        for message in snapshot where !seenMessageIdsForAudioQueue.contains(message.id) {
+            seenMessageIdsForAudioQueue.insert(message.id)
+            guard message.senderId != currentUserId,
+                  message.conversationId == activeConvId else { continue }
+            for attachment in message.attachments
+                where attachment.type == .audio
+                && !listenedAttachmentIds.contains(attachment.id) {
+                audioCoordinator.appendUpcoming(QueuedAudio(
+                    attachmentId: attachment.id,
+                    messageId: message.id,
+                    conversationId: message.conversationId,
+                    fileUrl: attachment.fileUrl,
+                    durationMs: attachment.duration ?? 0,
+                    senderName: message.senderName ?? "",
+                    senderAvatarURL: message.senderAvatarURL,
+                    receivedAt: message.createdAt
+                ))
+            }
+        }
+    }
+
+    /// Pulls the conversation row out of the cache so the mini-player can
+    /// display its name + artwork + accent color. Best-effort — if the row
+    /// isn't cached yet, the fallback constants kick in.
+    private func hydrateCurrentConversationFromCache() {
+        let convId = conversationId
+        Task { [weak self] in
+            let cached = await CacheCoordinator.shared.conversations.load(for: "list")
+            guard let self else { return }
+            let list: [MeeshyConversation]
+            switch cached {
+            case .fresh(let data, _), .stale(let data, _):
+                list = data
+            case .expired, .empty:
+                return
+            }
+            if let match = list.first(where: { $0.id == convId }) {
+                self.currentConversation = match
             }
         }
     }
