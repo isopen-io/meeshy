@@ -73,6 +73,11 @@ public final class StoryCanvasUIView: UIView {
 
     public var slide: StorySlide {
         didSet {
+            // Refresh the cached background media id BEFORE early return paths
+            // so handlePan can branch correctly even mid-gesture.
+            backgroundMediaObjectId = slide.effects.mediaObjects?
+                .first(where: { $0.isBackground })?.id
+
             // Skip expensive full-layer rebuild while a gesture is actively
             // manipulating an item (pan/pinch/rotate). The gesture handlers
             // update the specific CALayer transform directly. A full rebuild
@@ -175,7 +180,8 @@ public final class StoryCanvasUIView: UIView {
     private let editOverlayLayer = CALayer()
 
     /// Background layer (color/gradient/image/video). Inserted at z=0 beneath itemsContainer.
-    private let backgroundLayer = StoryBackgroundLayer()
+    /// `internal` (not private) so test seams can introspect transform during live drag tests.
+    internal let backgroundLayer = StoryBackgroundLayer()
 
     /// Optional Metal filter overlay (Task 19). Non-nil iff `slide.effects.filter` maps to a
     /// known `StoryFilteredLayer.Kind`. Owned and removed by `updateFilterLayer()`.
@@ -223,6 +229,18 @@ public final class StoryCanvasUIView: UIView {
     /// visually settled. The combined `onContentReady` signal additionally
     /// waits on foreground video readiness (T6).
     private var backgroundContentReady: Bool = false
+
+    /// `true` quand l'activation du background playback (vidéo bg + audio bg)
+    /// a été demandée en `.play` mais que `contentReadyFired` était encore
+    /// `false`. Le user-spec : ni la vidéo bg ni l'audio bg ne doivent jouer
+    /// tant que TOUS les médias chargeables (image bg + foreground videos)
+    /// ne sont pas prêts. `fireContentReadyIfNeeded()` consomme ce drapeau
+    /// dès que `onContentReady` fire et active les deux à la fois. Sans ce
+    /// gate, l'audio jouait sur une slide dont l'image bg n'avait jamais
+    /// loadée (file:// dead, resolver nil, 404 réseau) — le user voit un
+    /// loader à 0% mais entend la TTS / musique de fond, et/ou la vidéo bg
+    /// joue sans son image fixed → désynchro UX inacceptable.
+    private var pendingBackgroundActivation: Bool = false
 
     /// KVO token watching `backgroundLayer.contentLayer.contents` while an
     /// image background is loading. Held until the real bytes land or the
@@ -283,6 +301,27 @@ public final class StoryCanvasUIView: UIView {
     private var dragStartSlideY: Double = 0
     private var baseScale: Double = 1.0
     private var baseRotation: Double = 0.0
+
+    /// Cache the id of the background media (resolved in `slide.didSet`). Used
+    /// by `handlePan` to branch into the live-drag path for the bg without
+    /// going through `updatePosition` (which would clamp + commit immediately).
+    private var backgroundMediaObjectId: String?
+    /// Drag-start snapshot of the background transform (path α — model
+    /// untouched during gesture, committed at `.ended`).
+    private var dragStartBgScale: Double = 1.0
+    private var dragStartBgOffsetX: Double = 0
+    private var dragStartBgOffsetY: Double = 0
+    private var dragStartBgRotation: Double = 0
+    private var dragStartBgFitMode: String?
+    /// Live transform applied during the current bg drag, committed to the
+    /// slide model on `.ended` (along with `onBackgroundTransformChanged`).
+    private var liveBackgroundTransformDuringDrag: BackgroundTransform?
+
+    /// Fires when the background transform is committed at gesture end (path
+    /// α). Parent composer uses this to mirror the value into its viewModel
+    /// cache so the persisted `slide.effects.backgroundTransform` round-trips
+    /// through save/restore.
+    public var onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)?
 
     /// `true` quand un gesture pan/pinch/rotate est en cours sur un item.
     /// Indique au parent SwiftUI (`StoryCanvasRepresentable.updateUIView`) que
@@ -380,6 +419,8 @@ public final class StoryCanvasUIView: UIView {
     public init(slide: StorySlide, mode: RenderMode = .edit) {
         self.slide = slide
         self.mode = mode
+        self.backgroundMediaObjectId = slide.effects.mediaObjects?
+            .first(where: { $0.isBackground })?.id
         super.init(frame: .zero)
         layer.addSublayer(rootLayer)
         rootLayer.insertSublayer(backgroundLayer, at: 0)
@@ -819,6 +860,14 @@ public final class StoryCanvasUIView: UIView {
     /// the default fade envelope — consistently every time.
     private func startAudioPlayback() {
         guard mode == .play else { return }
+        // Gate "all media loaded": ne pas démarrer l'audio bg tant que les
+        // autres médias chargeables (image bg + foreground videos) ne sont
+        // pas prêts. `fireContentReadyIfNeeded()` consomme le drapeau dès que
+        // `onContentReady` fire et appelle à nouveau cette méthode.
+        if !contentReadyFired {
+            pendingBackgroundActivation = true
+            return
+        }
         requestPlaybackSessionIfNeeded()
         let origin = captureSlideTimelineOrigin()
         // Stop any other reader engine before starting this one (RC4.6).
@@ -1029,15 +1078,26 @@ public final class StoryCanvasUIView: UIView {
             return BackgroundTransform(scale: Double(t.scale ?? 1),
                                        offsetX: Double(t.offsetX ?? 0),
                                        offsetY: Double(t.offsetY ?? 0),
-                                       rotation: t.rotation ?? 0)
+                                       rotation: t.rotation ?? 0,
+                                       videoFitMode: t.videoFitMode)
         }()
         backgroundLayer.frame = CGRect(origin: .zero, size: geometry.renderSize)
+        // Letterbox fill : pour les vidéos/images bg en aspect (paysage), les
+        // bandes laissent voir le `backgroundColor` du StoryBackgroundLayer.
+        // On y peint la couleur de fond de la slide pour éviter les bandes
+        // noires sur du contenu paysage — le user veut préserver le fond
+        // coloré de la story, pas du noir.
+        let letterboxColor: UIColor? = {
+            guard let hex = slide.effects.background else { return nil }
+            return Self.parseBackgroundHex(hex)
+        }()
         backgroundLayer.configure(
             kind: bgKind,
             transform: bgTransform,
             geometry: geometry,
             resolver: readerContext.postMediaURLResolver,
-            imageCache: readerContext.imageCache
+            imageCache: readerContext.imageCache,
+            letterboxColor: letterboxColor
         )
 
         // Items — détache les sublayers existants AVANT de les ré-attacher.
@@ -1273,16 +1333,22 @@ public final class StoryCanvasUIView: UIView {
             return BackgroundTransform(scale: Double(t.scale ?? 1),
                                        offsetX: Double(t.offsetX ?? 0),
                                        offsetY: Double(t.offsetY ?? 0),
-                                       rotation: t.rotation ?? 0)
+                                       rotation: t.rotation ?? 0,
+                                       videoFitMode: t.videoFitMode)
         }()
         let captureBackground = StoryBackgroundLayer()
         captureBackground.frame = CGRect(origin: .zero, size: renderSize)
+        let captureLetterbox: UIColor? = {
+            guard let hex = slide.effects.background else { return nil }
+            return Self.parseBackgroundHex(hex)
+        }()
         captureBackground.configure(
             kind: bgKind,
             transform: bgTransform,
             geometry: geometry,
             resolver: readerContext.postMediaURLResolver,
-            imageCache: readerContext.imageCache
+            imageCache: readerContext.imageCache,
+            letterboxColor: captureLetterbox
         )
         host.addSublayer(captureBackground)
 
@@ -1500,6 +1566,17 @@ public final class StoryCanvasUIView: UIView {
         }
         contentReadyFired = true
         onContentReady?()
+        // Consume pending background activation: vidéo bg ET audio bg
+        // démarrent ensemble une fois tous les médias chargés. Réutilise les
+        // entry points canoniques pour ne pas dupliquer la session/setup
+        // logic.
+        if pendingBackgroundActivation {
+            pendingBackgroundActivation = false
+            if mode == .play {
+                backgroundLayer.isPlaybackActive = true
+                startAudioPlayback()
+            }
+        }
         // Force `onContentProgress(1.0)` au moment où le signal binaire fire
         // afin que les listeners SwiftUI puissent fermer leur overlay même
         // si la slide n'a aucun foreground media (cas slide texte+bg).
@@ -1820,8 +1897,15 @@ public final class StoryCanvasUIView: UIView {
         // l'autorisation passe désormais EXCLUSIVEMENT par ce drapeau, ce qui
         // garantit qu'un canvas en `.edit` mode (prefetcher, composer
         // preview) n'émet jamais d'audio même si son player est attaché et
-        // prêt.
-        backgroundLayer.isPlaybackActive = true
+        // prêt. Gate supplémentaire : tant que tous les médias chargeables
+        // ne sont pas prêts (cf. `contentReadyFired`), la vidéo bg attend —
+        // le user-spec exige que ni vidéo ni audio bg ne joue tant que la
+        // slide n'est pas visuellement complète.
+        if contentReadyFired {
+            backgroundLayer.isPlaybackActive = true
+        } else {
+            pendingBackgroundActivation = true
+        }
     }
 
     private func stopPlayback() {
@@ -1946,6 +2030,33 @@ public final class StoryCanvasUIView: UIView {
     @objc private func handleDoubleTap(_ recognizer: UITapGestureRecognizer) {
         guard mode == .edit, recognizer.state == .ended else { return }
         let location = recognizer.location(in: self)
+
+        // Background double-tap → cycle videoFitMode (auto → fit → fill → auto).
+        // Use `resolveManipulationTarget` to honour the active manipulation
+        // layer (so a tap on the bg in `.background` layer triggers the cycle
+        // even when no foreground item is hit). Foreground items still get
+        // their dedicated double-tap handling below via `hitTestItem`.
+        if let bgId = backgroundMediaObjectId,
+           resolveManipulationTarget(at: location) == bgId,
+           hitTestItem(at: location) == nil {
+            let current = slide.effects.backgroundTransform?.videoFitMode
+            let next: String?
+            switch current {
+            case nil:    next = "fit"
+            case "fit":  next = "fill"
+            case "fill": next = nil
+            default:     next = nil
+            }
+            var updated = slide
+            var bg = updated.effects.backgroundTransform ?? StoryBackgroundTransform()
+            bg.videoFitMode = next
+            updated.effects.backgroundTransform = bg.isIdentity ? nil : bg
+            slide = updated
+            onItemModified?(slide)
+            onBackgroundTransformChanged?(bg)
+            return
+        }
+
         guard let id = hitTestItem(at: location), let kind = itemKind(forId: id) else { return }
         onItemDoubleTapped?(id, kind)
     }
@@ -2038,6 +2149,20 @@ public final class StoryCanvasUIView: UIView {
             manipulatedItemId = id
             dragStartSlideX = sx
             dragStartSlideY = sy
+
+            // Background drag (path α): snapshot the current bg transform so
+            // `.changed` can interpolate against it without rebuilding the
+            // slide model on every tick. Commit happens in `.ended`.
+            if id == backgroundMediaObjectId {
+                let current = slide.effects.backgroundTransform
+                dragStartBgScale = Double(current?.scale ?? 1)
+                dragStartBgOffsetX = Double(current?.offsetX ?? 0)
+                dragStartBgOffsetY = Double(current?.offsetY ?? 0)
+                dragStartBgRotation = current?.rotation ?? 0
+                dragStartBgFitMode = current?.videoFitMode
+                liveBackgroundTransformDuringDrag = nil
+            }
+
             // Bring-to-front au touch : l'élément touché passe immédiatement
             // devant les autres. Couvre tap simple ET début de drag (le pan
             // recognizer émet .began sur le touch initial même sans translation).
@@ -2057,6 +2182,29 @@ public final class StoryCanvasUIView: UIView {
             let renderHeightFor1920 = geo.render(CanvasGeometry.designHeight)
             let dxNorm = Double(translation.x / bounds.width)
             let dyNorm = Double(translation.y / renderHeightFor1920)
+
+            // Branche dédiée background (path α): live update du layer.transform
+            // SANS muter le modèle. Le commit dans le modèle + le callback
+            // viennent dans `.ended`. Évite l'aller-retour
+            // `updatePosition` → `slide.didSet` → `rebuildLayers` → `configure()`
+            // qui passait par `mediaObjects.x/y` au lieu de
+            // `backgroundTransform` et causait le bug "drag bg invisible".
+            if id == backgroundMediaObjectId {
+                let live = BackgroundTransform(
+                    scale: dragStartBgScale,
+                    offsetX: dragStartBgOffsetX + dxNorm * Double(bounds.width),
+                    offsetY: dragStartBgOffsetY + dyNorm * Double(bounds.height),
+                    rotation: dragStartBgRotation,
+                    videoFitMode: dragStartBgFitMode
+                )
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                backgroundLayer.transform = live.caTransform()
+                CATransaction.commit()
+                liveBackgroundTransformDuringDrag = live
+                return
+            }
+
             let rawX = clamp(dragStartSlideX + dxNorm)
             let rawY = clamp(dragStartSlideY + dyNorm)
             let (snappedX, didSnapX) = snap(rawX)
@@ -2066,10 +2214,36 @@ public final class StoryCanvasUIView: UIView {
             slide = updatePosition(slideId: id, x: snappedX, y: snappedY)
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
+            let wasBackgroundDrag = (manipulatedItemId == backgroundMediaObjectId)
             manipulatedItemId = nil
             hideSnapGuides()
-            slideContentRevision &+= 1
-            rebuildLayers()
+
+            if wasBackgroundDrag, let live = liveBackgroundTransformDuringDrag {
+                // Commit live transform into the slide model + notify parents:
+                // - `onItemModified` syncs the SwiftUI @Binding (parity with
+                //   other gesture branches).
+                // - `onBackgroundTransformChanged` provides the typed value
+                //   so the composer viewModel can update its bg cache.
+                // `slide = updated` triggers didSet, but the idempotent
+                // `configure()` (Task 12) detects the same kind and skips
+                // the rebuild flash.
+                var updated = slide
+                let persisted = StoryBackgroundTransform(
+                    scale: live.scale != 1.0 ? CGFloat(live.scale) : nil,
+                    offsetX: live.offsetX != 0 ? CGFloat(live.offsetX) : nil,
+                    offsetY: live.offsetY != 0 ? CGFloat(live.offsetY) : nil,
+                    rotation: live.rotation != 0 ? live.rotation : nil,
+                    videoFitMode: live.videoFitMode
+                )
+                updated.effects.backgroundTransform = persisted.isIdentity ? nil : persisted
+                slide = updated
+                onItemModified?(slide)
+                onBackgroundTransformChanged?(persisted)
+                liveBackgroundTransformDuringDrag = nil
+            } else {
+                slideContentRevision &+= 1
+                rebuildLayers()
+            }
         default:
             break
         }
@@ -2386,6 +2560,18 @@ public final class StoryCanvasUIView: UIView {
 
     private nonisolated func clamp(_ value: Double) -> Double {
         max(0, min(1, value))
+    }
+
+    /// Parses a `#RRGGBB` or `RRGGBB` hex string into a UIColor.
+    /// Local helper; matches the logic used by StoryRenderer + StoryAVCompositor.
+    nonisolated static func parseBackgroundHex(_ hex: String) -> UIColor? {
+        var s = hex
+        if s.hasPrefix("#") { s.removeFirst() }
+        guard s.count == 6, let v = UInt32(s, radix: 16) else { return nil }
+        return UIColor(red: CGFloat((v >> 16) & 0xff) / 255,
+                       green: CGFloat((v >> 8) & 0xff) / 255,
+                       blue: CGFloat(v & 0xff) / 255,
+                       alpha: 1)
     }
 
     // MARK: - Item commands (used by context menu + accessibility)
@@ -2742,6 +2928,55 @@ extension StoryCanvasUIView: UIPointerInteractionDelegate {
         let preview = UITargetedPreview(view: view)
         return UIPointerStyle(effect: .lift(preview))
     }
+
+    #if DEBUG
+    /// Test seam: drives `handlePan`-equivalent live drag of the background as
+    /// if the user dragged with normalized delta `(dxNorm, dyNorm)`. Mirrors
+    /// the real `handlePan.changed` code path for `id == backgroundMediaObjectId`
+    /// so canvas observable state matches a real gesture. Does NOT commit to
+    /// the model — the real `.ended` branch handles that.
+    internal func simulatePanForTesting(targetId: String, dxNorm: Double, dyNorm: Double) {
+        guard targetId == backgroundMediaObjectId else { return }
+        let currentTransform = slide.effects.backgroundTransform
+        dragStartBgScale = Double(currentTransform?.scale ?? 1)
+        dragStartBgOffsetX = Double(currentTransform?.offsetX ?? 0)
+        dragStartBgOffsetY = Double(currentTransform?.offsetY ?? 0)
+        dragStartBgRotation = currentTransform?.rotation ?? 0
+        dragStartBgFitMode = currentTransform?.videoFitMode
+        let live = BackgroundTransform(
+            scale: dragStartBgScale,
+            offsetX: dragStartBgOffsetX + dxNorm * Double(bounds.width),
+            offsetY: dragStartBgOffsetY + dyNorm * Double(bounds.height),
+            rotation: dragStartBgRotation,
+            videoFitMode: dragStartBgFitMode
+        )
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        backgroundLayer.transform = live.caTransform()
+        CATransaction.commit()
+        liveBackgroundTransformDuringDrag = live
+    }
+
+    /// Test seam mirroring `handleDoubleTap` cycle (auto → fit → fill → auto)
+    /// for the background. Commits to the model + fires the callback.
+    internal func performDoubleTapForTesting(targetId: String) {
+        guard targetId == backgroundMediaObjectId else { return }
+        let current = slide.effects.backgroundTransform?.videoFitMode
+        let next: String?
+        switch current {
+        case nil:    next = "fit"
+        case "fit":  next = "fill"
+        case "fill": next = nil
+        default:     next = nil
+        }
+        var updated = slide
+        var bg = updated.effects.backgroundTransform ?? StoryBackgroundTransform()
+        bg.videoFitMode = next
+        updated.effects.backgroundTransform = bg.isIdentity ? nil : bg
+        slide = updated
+        onBackgroundTransformChanged?(bg)
+    }
+    #endif
 }
 
 // MARK: - UIGestureRecognizerDelegate
