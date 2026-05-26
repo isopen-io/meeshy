@@ -368,6 +368,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         var offsetX: CGFloat = 0
         var offsetY: CGFloat = 0
         var rotation: Double = 0
+        var videoFitMode: String? = nil
     }
     @Published var backgroundTransform: BackgroundTransform = BackgroundTransform()
     /// Per-slide background transform cache, keyed by `slide.id` rather than its index.
