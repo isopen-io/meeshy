@@ -4,6 +4,14 @@ import MeeshyUI
 
 // MARK: - iPad Root View Overlays
 
+/// Named magic numbers for the iPad root-view audio overlay layout.
+private enum AudioOverlayConstants {
+    /// Padding above the bottom edge for the floating mini-player on iPad.
+    /// No tab bar at the bottom on iPad, just safe-area inset, so the bar
+    /// can sit closer to the edge than on iPhone.
+    static let iPadBottomPadding: CGFloat = 12
+}
+
 extension iPadRootView {
 
     var overlays: some View {
@@ -56,7 +64,7 @@ extension iPadRootView {
                         .activeContext?.conversationId else { return }
                     navigateToConversationById(convId)
                 })
-                .padding(.bottom, 12)
+                .padding(.bottom, AudioOverlayConstants.iPadBottomPadding)
             }
             .zIndex(202)
         }

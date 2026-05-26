@@ -10,6 +10,15 @@ import MeeshyUI
 ///
 /// Pure orchestration UX produit — kept app-side per SDK purity rule.
 struct MiniAudioPlayerBar: View {
+    /// Named magic numbers for the mini-player's grace-fade lifecycle.
+    private enum Constants {
+        /// Window during which the bar keeps showing the last-played context
+        /// after `activeContext` flips to nil. Allows a clean fade-out
+        /// animation rather than an instant pop.
+        static let graceDurationSeconds: TimeInterval = 5.0
+        static let graceDurationNanos: UInt64 = UInt64(graceDurationSeconds * 1_000_000_000)
+    }
+
     @ObservedObject private var coordinator: ConversationAudioCoordinator
     @State private var graceContext: ActiveAudioContext?
     @State private var graceTask: Task<Void, Never>?
@@ -67,7 +76,7 @@ struct MiniAudioPlayerBar: View {
             graceContext = lastObservedContext
             graceTask?.cancel()
             graceTask = Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                try? await Task.sleep(nanoseconds: Constants.graceDurationNanos)
                 if !Task.isCancelled { graceContext = nil }
             }
         } else {

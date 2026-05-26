@@ -22,6 +22,13 @@ struct StoryViewerRequest: Identifiable, Equatable {
     var initialAction: StoryViewerInitialAction? = nil
 }
 
+/// Named magic numbers for the iPhone root-view audio overlay layout.
+private enum AudioOverlayConstants {
+    /// Padding above the bottom edge for the floating mini-player, sized so
+    /// the bar clears the standard iOS tab bar (~49pt + safe area).
+    static let iPhoneBottomPadding: CGFloat = 60
+}
+
 struct RootView: View {
     @StateObject private var theme = ThemeManager.shared
     @StateObject private var toastManager = ToastManager.shared
@@ -428,7 +435,7 @@ struct RootView: View {
                     .activeContext?.conversationId else { return }
                 navigateToConversationById(convId)
             })
-            .padding(.bottom, 60)
+            .padding(.bottom, AudioOverlayConstants.iPhoneBottomPadding)
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showFeed)
         .animation(.spring(), value: showMenu)

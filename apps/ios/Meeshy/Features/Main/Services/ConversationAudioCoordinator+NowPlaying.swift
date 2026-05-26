@@ -24,6 +24,16 @@ import os
 /// can read/write it.
 extension ConversationAudioCoordinator {
 
+    /// Named magic numbers for the system NowPlaying bridge.
+    private enum NowPlayingConstants {
+        /// Throttle window for `currentTime → MPNowPlayingInfoCenter`
+        /// updates. The engine emits ~50Hz tick updates; pushing each of
+        /// them to the system widget would be wasteful and noisy. 250ms
+        /// keeps the lock-screen scrubber smooth to the eye without
+        /// spamming the framework.
+        static let currentTimeThrottle: DispatchQueue.SchedulerTimeType.Stride = .milliseconds(250)
+    }
+
     private static let nowPlayingLog = Logger(
         subsystem: "me.meeshy.app", category: "audio-nowplaying"
     )
@@ -39,7 +49,8 @@ extension ConversationAudioCoordinator {
         // MPNowPlayingInfoCenter (~50Hz from the engine timer would be
         // wasteful and noisy in the system widget).
         $currentTime
-            .throttle(for: .milliseconds(250), scheduler: DispatchQueue.main, latest: true)
+            .throttle(for: NowPlayingConstants.currentTimeThrottle,
+                      scheduler: DispatchQueue.main, latest: true)
             .sink { [weak self] _ in self?.pushNowPlayingInfo() }
             .store(in: &_nowPlayingCancellables)
 
