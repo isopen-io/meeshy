@@ -305,14 +305,28 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         case .image:
             // Image backgrounds resolve through `StoryBackgroundLayer.configure`
             // which reads the media object's local file URL OR fetches via
-            // CacheCoordinator. We replicate the `aspectFill` paint here so the
-            // export matches the live canvas. The lookup is best-effort —
-            // missing media leaves the substrate (black) intact rather than
-            // failing the export.
+            // CacheCoordinator. Respect the user's videoFitMode override
+            // (auto / "fit" / "fill") so the export matches the canvas.
             if let bgImage = resolveBackgroundImage(for: slide) {
-                paintAspectFill(image: bgImage,
-                                in: cg,
-                                size: CGSize(width: width, height: height))
+                let canvasSize = CGSize(width: width, height: height)
+                let mode = slide.effects.backgroundTransform?.videoFitMode
+                let gravity = StoryBackgroundLayer.resolveImageGravity(
+                    naturalSize: bgImage.size,
+                    canvasSize: canvasSize,
+                    override: mode)
+                if gravity == .resizeAspect {
+                    // Letterbox: paint the story background color first (revealed by bands)
+                    if let bgHex = slide.effects.background,
+                       let color = parseHex(bgHex) {
+                        cg.saveGState()
+                        cg.setFillColor(color.cgColor)
+                        cg.fill(CGRect(origin: .zero, size: canvasSize))
+                        cg.restoreGState()
+                    }
+                    paintAspectFit(image: bgImage, in: cg, size: canvasSize)
+                } else {
+                    paintAspectFill(image: bgImage, in: cg, size: canvasSize)
+                }
             }
         }
 
@@ -402,6 +416,44 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         // bottom-up natively, so we re-flip locally around `drawRect`
         // before drawing the CGImage — otherwise the background appears
         // upside-down vs. the live canvas.
+        cg.translateBy(x: drawRect.origin.x, y: drawRect.origin.y + drawRect.size.height)
+        cg.scaleBy(x: 1, y: -1)
+        cg.draw(cgImage, in: CGRect(origin: .zero, size: drawRect.size))
+        cg.restoreGState()
+    }
+
+    /// Parses a `#RRGGBB` or `RRGGBB` hex string into a UIColor. Returns nil if
+    /// the input doesn't match. Local helper to avoid leaking visibility from
+    /// the file-private `UIColor(hex:)` declared in StorySlideRenderer.
+    @MainActor
+    private static func parseHex(_ hex: String) -> UIColor? {
+        var s = hex
+        if s.hasPrefix("#") { s.removeFirst() }
+        guard s.count == 6, let v = UInt32(s, radix: 16) else { return nil }
+        return UIColor(red: CGFloat((v >> 16) & 0xff) / 255,
+                       green: CGFloat((v >> 8) & 0xff) / 255,
+                       blue: CGFloat(v & 0xff) / 255,
+                       alpha: 1)
+    }
+
+    /// Paints `image` in `cg` to FIT entirely inside `size`, preserving aspect
+    /// ratio (`UIView.ContentMode.scaleAspectFit`). Letterbox bands appear if
+    /// the image aspect ratio differs from the canvas. Caller paints the
+    /// background color first so bands are coloured, not transparent.
+    @MainActor
+    private static func paintAspectFit(image: UIImage, in cg: CGContext, size: CGSize) {
+        guard let cgImage = image.cgImage else { return }
+        let imageSize = CGSize(width: cgImage.width, height: cgImage.height)
+        guard imageSize.width > 0, imageSize.height > 0 else { return }
+        let scale = min(size.width / imageSize.width, size.height / imageSize.height)
+        let drawSize = CGSize(width: imageSize.width * scale,
+                              height: imageSize.height * scale)
+        let drawRect = CGRect(x: (size.width - drawSize.width) / 2,
+                              y: (size.height - drawSize.height) / 2,
+                              width: drawSize.width,
+                              height: drawSize.height)
+        cg.saveGState()
+        // Same UIKit top-down compensation as paintAspectFill — flip locally.
         cg.translateBy(x: drawRect.origin.x, y: drawRect.origin.y + drawRect.size.height)
         cg.scaleBy(x: 1, y: -1)
         cg.draw(cgImage, in: CGRect(origin: .zero, size: drawRect.size))
