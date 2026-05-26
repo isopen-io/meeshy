@@ -448,6 +448,16 @@ struct AudioMediaView: View, Equatable {
     var parentIsMe: Bool = false
     var onReplyTap: ((String) -> Void)? = nil
     var onStoryReplyTap: ((String) -> Void)? = nil
+    /// Phase 5: a tap on the play button of this bubble routes here.
+    /// Wired by `BubbleStandardLayout` -> `ThemedMessageBubble` ->
+    /// `MessageListViewController.onPlayAudio` ->
+    /// `ConversationViewModel.playAudio(attachmentId:)`. When nil, the
+    /// router falls back to a no-op + local engine (legacy behavior).
+    /// **Excluded from Equatable** for the same reason as the other
+    /// callbacks: closures change identity per re-render but never affect
+    /// the bubble's visual output, so comparing them would force
+    /// re-evaluation on every refresh.
+    var onPlayAudio: ((String) -> Void)? = nil
 
     static func == (lhs: AudioMediaView, rhs: AudioMediaView) -> Bool {
         lhs.attachment.id == rhs.attachment.id
@@ -686,11 +696,19 @@ struct AudioMediaView: View, Equatable {
     /// - reply absent, footer absent → aucun slot (variant B historique).
     @ViewBuilder
     private var audioPlayer: some View {
+        // All three variants route through `AudioBubbleRouter`, which decides
+        // (per body re-eval) whether to give `AudioPlayerView` the shared
+        // coordinator engine (when this attachment is the coordinator's
+        // `activeContext`) or its owned local engine (otherwise). The play
+        // tap is intercepted via `onPlayRequest` and bubbled up through
+        // `onPlayAudio` -> `BubbleStandardLayout` -> `ThemedMessageBubble`
+        // -> `MessageListViewController` -> `ConversationViewModel.playAudio`,
+        // which builds the queue and asks the coordinator to start.
         if replyReference != nil {
-            AudioPlayerView(
+            AudioBubbleRouter(
+                attachmentId: attachment.id,
                 attachment: attachment,
-                context: .messageBubble,
-                accentColor: contactColor,
+                accentColorHex: contactColor,
                 transcription: transcription,
                 translatedAudios: translatedAudios,
                 onFullscreen: { showAudioFullscreen = true },
@@ -714,22 +732,15 @@ struct AudioMediaView: View, Equatable {
                 externalLanguage: $selectedAudioLangCode,
                 availability: availability,
                 onDownload: { triggerCurrentLanguageDownload() },
-                topContent: { replyTopSlot },
-                bottomContent: { playerBottomContent }
+                topContent: AnyView(replyTopSlot),
+                bottomContent: AnyView(playerBottomContent),
+                onPlayRequest: { onPlayAudio?(attachment.id) }
             )
         } else if footerModel != nil {
-            // ⚠ NE PAS utiliser de trailing closure ici. `AudioPlayerView` a
-            // DEUX `@ViewBuilder` closure params (topContent + bottomContent)
-            // tous deux avec une default value `{ EmptyView() }`. Avec un
-            // trailing closure unique non labellisé, Swift le mappe au PREMIER
-            // closure param (topContent), pas au dernier — résultat observé :
-            // le `BubbleFooter` rendu via `playerBottomContent` apparaissait
-            // EN HAUT du player au lieu d'en bas. Passer `bottomContent:` de
-            // façon explicite force le routing correct vers `bottomSlot`.
-            AudioPlayerView(
+            AudioBubbleRouter(
+                attachmentId: attachment.id,
                 attachment: attachment,
-                context: .messageBubble,
-                accentColor: contactColor,
+                accentColorHex: contactColor,
                 transcription: transcription,
                 translatedAudios: translatedAudios,
                 onFullscreen: { showAudioFullscreen = true },
@@ -753,13 +764,14 @@ struct AudioMediaView: View, Equatable {
                 externalLanguage: $selectedAudioLangCode,
                 availability: availability,
                 onDownload: { triggerCurrentLanguageDownload() },
-                bottomContent: { playerBottomContent }
+                bottomContent: AnyView(playerBottomContent),
+                onPlayRequest: { onPlayAudio?(attachment.id) }
             )
         } else {
-            AudioPlayerView(
+            AudioBubbleRouter(
+                attachmentId: attachment.id,
                 attachment: attachment,
-                context: .messageBubble,
-                accentColor: contactColor,
+                accentColorHex: contactColor,
                 transcription: transcription,
                 translatedAudios: translatedAudios,
                 onFullscreen: { showAudioFullscreen = true },
@@ -782,7 +794,8 @@ struct AudioMediaView: View, Equatable {
                 },
                 externalLanguage: $selectedAudioLangCode,
                 availability: availability,
-                onDownload: { triggerCurrentLanguageDownload() }
+                onDownload: { triggerCurrentLanguageDownload() },
+                onPlayRequest: { onPlayAudio?(attachment.id) }
             )
         }
     }

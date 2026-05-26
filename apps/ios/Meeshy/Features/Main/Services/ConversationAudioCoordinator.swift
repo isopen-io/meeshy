@@ -167,3 +167,29 @@ public final class ConversationAudioCoordinator: ObservableObject {
             .store(in: &cancellables)
     }
 }
+
+#if DEBUG
+extension ConversationAudioCoordinator {
+    /// Test seam: directly seed `activeContext` so unit tests can exercise
+    /// router/observer behavior without driving the full play() + queue
+    /// machinery. `internal` + DEBUG-only so it's never reachable from a
+    /// release binary. The setter writes to the same `private(set)` storage
+    /// via this same-file extension, preserving production immutability.
+    func test_setActiveContext(
+        attachmentId: String,
+        conversationId: String = "test-conv",
+        messageId: String = "test-msg"
+    ) {
+        self.activeContext = ActiveAudioContext(
+            attachmentId: attachmentId,
+            messageId: messageId,
+            conversationId: conversationId,
+            conversationName: "Test",
+            conversationArtworkURL: nil,
+            senderName: "S",
+            senderAvatarURL: nil,
+            durationMs: 1000
+        )
+    }
+}
+#endif

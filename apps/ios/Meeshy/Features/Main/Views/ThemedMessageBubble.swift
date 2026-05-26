@@ -63,6 +63,12 @@ struct ThemedMessageBubble: View {
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)? = nil
     var onRequestTranslation: ((String, String) -> Void)? = nil
     var onShowTranslationDetail: ((String) -> Void)? = nil
+    /// Phase 5 wiring (audio playback persistence): forwarded to
+    /// `AudioBubbleRouter` so a tap on the play button of an audio bubble
+    /// routes through `ConversationViewModel.playAudio(attachmentId:)`,
+    /// which builds the queue and asks the shared coordinator to start.
+    /// Nil-default keeps preview / overlay call sites unchanged.
+    var onPlayAudio: ((String) -> Void)? = nil
     var allAudioItems: [ConversationViewModel.AudioItem] = []
     var onScrollToMessage: ((String) -> Void)? = nil
     var activeAudioLanguage: String? = nil
@@ -198,6 +204,7 @@ struct ThemedMessageBubble: View {
             onConsumeViewOnce: onConsumeViewOnce,
             onRequestTranslation: onRequestTranslation,
             onShowTranslationDetail: onShowTranslationDetail,
+            onPlayAudio: onPlayAudio,
             onScrollToMessage: onScrollToMessage,
             activeDisplayLangCode: $activeDisplayLangCode,
             secondaryLangCode: $secondaryLangCode,

@@ -33,6 +33,8 @@
 		CACD0002000200020002F001 /* ConversationAudioCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = CACD0001000100010001F001 /* ConversationAudioCoordinator.swift */; };
 		CACT0002000200020002F001 /* ConversationAudioCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CACT0001000100010001F001 /* ConversationAudioCoordinatorTests.swift */; };
 		CVAT0002000200020002F001 /* ConversationViewModelAudioTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CVAT0001000100010001F001 /* ConversationViewModelAudioTests.swift */; };
+		ABRT0002000200020002F001 /* AudioBubbleRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABRT0001000100010001F001 /* AudioBubbleRouter.swift */; };
+		ABTT0002000200020002F001 /* AudioBubbleRouterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABTT0001000100010001F001 /* AudioBubbleRouterTests.swift */; };
 		24AFF57E3E63AF37DB547005 /* UserProfileViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FF8351314E9A302F775DBCE /* UserProfileViewModelTests.swift */; };
 		24DF5E35B0F37E09512E704E /* VoIPDedupRingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66F7B674B538960BE3F198D4 /* VoIPDedupRingTests.swift */; };
 		26B4118AD22FEB73468C4F56 /* FeedListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17F9BAE1DE897740FE5B367B /* FeedListView.swift */; };
@@ -653,6 +655,8 @@
 		CACD0001000100010001F001 /* ConversationAudioCoordinator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationAudioCoordinator.swift; sourceTree = "<group>"; };
 		CACT0001000100010001F001 /* ConversationAudioCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationAudioCoordinatorTests.swift; sourceTree = "<group>"; };
 		CVAT0001000100010001F001 /* ConversationViewModelAudioTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModelAudioTests.swift; sourceTree = "<group>"; };
+		ABRT0001000100010001F001 /* AudioBubbleRouter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AudioBubbleRouter.swift; sourceTree = "<group>"; };
+		ABTT0001000100010001F001 /* AudioBubbleRouterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioBubbleRouterTests.swift; sourceTree = "<group>"; };
 		7B489B1DA15CF189E770686F /* UserProfileViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = UserProfileViewModel.swift; sourceTree = "<group>"; };
 		7D674426B581D850405E32AE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		7EE5D71D9A67552B9345231E /* ConversationPreferencesBroadcaster.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationPreferencesBroadcaster.swift; sourceTree = "<group>"; };
@@ -1625,6 +1629,7 @@
 				BBLR0001000100010001REF /* BubbleReactionsOverlay.swift */,
 				BBLY0001000100010001REF /* BubbleQuotedReply.swift */,
 				BBLZ0001000100010001REF /* BubbleAttachmentView.swift */,
+				ABRT0001000100010001F001 /* AudioBubbleRouter.swift */,
 				BBLX0001000100010001REF /* BubbleExpandableText.swift */,
 				BBLV0001000100010001REF /* BubbleSystemViews.swift */,
 				BBLD0001000100010001REF /* BubbleStandardLayout.swift */,
@@ -1657,6 +1662,7 @@
 				MDLT0001000100010001REF /* MessageDayLabelTests.swift */,
 				MDGT0001000100010001REF /* MessageDayGroupingTests.swift */,
 				0CA24A84F29125EC7C338F81 /* BubbleQuotedReplyAttachmentKindTests.swift */,
+				ABTT0001000100010001F001 /* AudioBubbleRouterTests.swift */,
 			);
 			path = Bubble;
 			sourceTree = "<group>";
@@ -2545,6 +2551,7 @@
 				APED0002000200020002F001 /* AudioPlaybackEngineDriving.swift in Sources */,
 				AQBL0002000200020002F001 /* AudioQueueBuilder.swift in Sources */,
 				CACD0002000200020002F001 /* ConversationAudioCoordinator.swift in Sources */,
+				ABRT0002000200020002F001 /* AudioBubbleRouter.swift in Sources */,
 				FCFL01A1A1A1A1A1A1A10001 /* MeeshyFocusFilter.swift in Sources */,
 				OBDP01A1A1A1A1A1A1A10001 /* OutboxDispatcher.swift in Sources */,
 				WDFL01B1B1B1B1B1B1B10001 /* WidgetActionFlusher.swift in Sources */,
@@ -2709,6 +2716,7 @@
 				AQBT0002000200020002F001 /* AudioQueueBuilderTests.swift in Sources */,
 				CACT0002000200020002F001 /* ConversationAudioCoordinatorTests.swift in Sources */,
 				CVAT0002000200020002F001 /* ConversationViewModelAudioTests.swift in Sources */,
+				ABTT0002000200020002F001 /* AudioBubbleRouterTests.swift in Sources */,
 				ROUT0001000100010001001 /* RouterTests.swift in Sources */,
 				NRST0001000100010001001 /* NavigationStateRestorationTests.swift in Sources */,
 				TNAV0001000100010001001 /* TabNavigationTests.swift in Sources */,

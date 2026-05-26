@@ -475,6 +475,9 @@ final class MessageListViewController: UIViewController {
                         onConsumeViewOnce: consumeViewOnceHandler,
                         onRequestTranslation: requestTranslationHandler,
                         onShowTranslationDetail: showTranslationHandler,
+                        onPlayAudio: { [weak self] attachmentId in
+                            self?.conversationViewModel?.playAudio(attachmentId: attachmentId)
+                        },
                         allAudioItems: allAudioItems,
                         onScrollToMessage: scrollHandler,
                         isLastInGroup: true,

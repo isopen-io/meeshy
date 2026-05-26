@@ -22,6 +22,10 @@ struct BubbleAttachmentView: View {
     var translatedAudios: [MessageTranslatedAudio] = []
     var onShareFile: ((URL) -> Void)? = nil
     var onTapLocation: ((MessageAttachment) -> Void)? = nil
+    /// Phase 5: forwarded to the audio router so taps route through
+    /// `ConversationViewModel.playAudio(attachmentId:)`. Nil-default keeps
+    /// non-audio attachment renders unchanged.
+    var onPlayAudio: ((String) -> Void)? = nil
 
     var body: some View {
         switch attachment.type {
@@ -57,11 +61,14 @@ struct BubbleAttachmentView: View {
             // orchestration multi-langue ; ce chemin de fallback ne supporte
             // que le cas mono-langue (attachment.fileUrl), suffisant pour
             // les attachments audio mixés à un autre contenu de la bulle.
+            // Phase 5: wrapped in `AudioBubbleRouter` so playback survives
+            // scroll-off and routes through the shared coordinator engine
+            // when this attachment is the active one.
             AudioAvailabilityResolver(attachment: attachment) { availability, onDownload in
-                AudioPlayerView(
+                AudioBubbleRouter(
+                    attachmentId: attachment.id,
                     attachment: attachment,
-                    context: .messageBubble,
-                    accentColor: accentHex,
+                    accentColorHex: accentHex,
                     transcription: transcription,
                     translatedAudios: translatedAudios.filter { $0.attachmentId == attachment.id },
                     onRequestTranscription: {
@@ -79,7 +86,8 @@ struct BubbleAttachmentView: View {
                         }
                     },
                     availability: availability,
-                    onDownload: onDownload
+                    onDownload: onDownload,
+                    onPlayRequest: { onPlayAudio?(attachment.id) }
                 )
             }
 

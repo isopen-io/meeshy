@@ -73,6 +73,12 @@ struct BubbleStandardLayout: View {
     let onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)?
     let onRequestTranslation: ((String, String) -> Void)?
     let onShowTranslationDetail: ((String) -> Void)?
+    /// Phase 5 wiring (audio playback persistence): a tap on the play button
+    /// of an audio bubble forwards the attachmentId here so the parent VM
+    /// can build the queue and ask the shared `ConversationAudioCoordinator`
+    /// to start. Optional so non-audio bubbles and preview call sites stay
+    /// unchanged.
+    let onPlayAudio: ((String) -> Void)?
     let onScrollToMessage: ((String) -> Void)?
 
     // MARK: - Bindings (state owned by ThemedMessageBubble wrapper)
@@ -887,7 +893,8 @@ struct BubbleStandardLayout: View {
             },
             onTapLocation: { att in
                 fullscreenLocationAttachment = att
-            }
+            },
+            onPlayAudio: onPlayAudio
         )
     }
 
@@ -976,7 +983,8 @@ struct BubbleStandardLayout: View {
                 replyIsStory: replyIsStory,
                 parentIsMe: isMe,
                 onReplyTap: onReplyTap,
-                onStoryReplyTap: onStoryReplyTap
+                onStoryReplyTap: onStoryReplyTap,
+                onPlayAudio: onPlayAudio
             )
             .equatable()
 

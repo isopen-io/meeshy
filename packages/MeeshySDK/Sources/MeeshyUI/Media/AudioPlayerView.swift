@@ -334,6 +334,16 @@ public struct AudioPlayerView: View {
     public var onDelete: (() -> Void)? = nil
     public var onEdit: (() -> Void)? = nil
     public var onPlayingChange: ((Bool) -> Void)? = nil
+    /// Optional play-tap router for callers that own the playback engine and
+    /// the audio queue (e.g. a `ConversationAudioCoordinator`). When provided,
+    /// taps on the play button delegate to this closure as long as the
+    /// underlying engine isn't already loaded with THIS attachment — i.e. as
+    /// long as starting playback for this bubble requires the parent to set
+    /// up the queue / active-context first. Once the engine is loaded
+    /// (`player.attachmentId == attachment.id`), play/pause routes through
+    /// the engine directly so subsequent toggles are instantaneous and don't
+    /// rebuild the queue. Backward-compat: when nil, behavior is unchanged.
+    private var onPlayRequest: (() -> Void)? = nil
     private var externalLanguage: Binding<String?>?
     private var topSlot: AnyView?
     private var bottomSlot: AnyView?
@@ -457,6 +467,7 @@ public struct AudioPlayerView: View {
         availability: AudioAvailability = .ready,
         onDownload: (() -> Void)? = nil,
         externalPlayer: AudioPlaybackManager? = nil,
+        onPlayRequest: (() -> Void)? = nil,
         @ViewBuilder topContent: () -> TopContent = { EmptyView() },
         @ViewBuilder bottomContent: () -> BottomContent = { EmptyView() }
     ) {
@@ -466,6 +477,7 @@ public struct AudioPlayerView: View {
         self.onRetranscribe = onRetranscribe
         self.onDelete = onDelete; self.onEdit = onEdit
         self.onPlayingChange = onPlayingChange
+        self.onPlayRequest = onPlayRequest
         self.externalLanguage = externalLanguage
         self.availability = availability
         self.onDownload = onDownload
@@ -511,7 +523,16 @@ public struct AudioPlayerView: View {
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTranscriptionExpanded)
         .onAppear {
-            player.attachmentId = attachment.id
+            // CRITICAL: when an external engine is injected, the parent owns
+            // `attachmentId` (it tracks which audio the shared engine is
+            // currently loaded with). Overwriting it here would clobber that
+            // tracking the moment a second audio bubble appears on-screen
+            // while another is playing — breaking the `handlePlayTap`
+            // gate that relies on `player.attachmentId == attachment.id` to
+            // decide between "route to parent" vs "toggle play/pause".
+            if !usesExternalPlayer {
+                player.attachmentId = attachment.id
+            }
             let autoplayUrl = attachment.fileUrl
             AudioPlaybackManager.registerAutoplay(url: autoplayUrl) { [player] in
                 // Optimistic local audio can never load through the cache
@@ -527,7 +548,14 @@ public struct AudioPlayerView: View {
         }
         .onDisappear {
             AudioPlaybackManager.unregisterAutoplay(url: attachment.fileUrl)
-            player.unregisterFromCoordinator()
+            // Symmetrical to onAppear: when an external engine is injected
+            // it is owned by the parent (e.g. ConversationAudioCoordinator)
+            // and survives view hierarchy churn. Unregistering it from
+            // PlaybackCoordinator on every scroll-off would break sibling
+            // bubbles + the coordinator itself.
+            if !usesExternalPlayer {
+                player.unregisterFromCoordinator()
+            }
         }
         .onChange(of: player.isPlaying) { playing in
             onPlayingChange?(playing)
@@ -900,6 +928,22 @@ public struct AudioPlayerView: View {
     }
 
     private func handlePlayTap() {
+        // External-engine interception: when the parent injected an
+        // `onPlayRequest` handler AND the shared engine is not currently
+        // loaded with THIS attachment, defer to the parent so it can set up
+        // the queue / active-context BEFORE asking the engine to play.
+        // Without this gate, tapping play on a bubble while the coordinator
+        // is mid-playback of a different audio would call
+        // `engine.togglePlayPause()` and either pause that other audio
+        // (busy engine) or be a no-op (idle engine) — neither of which is
+        // what the user asked for. Once the engine IS loaded with this
+        // attachment, fall through to `togglePlayPause()` so subsequent
+        // play/pause taps are instantaneous and never rebuild the queue.
+        if let onPlayRequest, player.attachmentId != attachment.id {
+            onPlayRequest()
+            HapticFeedback.light()
+            return
+        }
         if player.isPlaying || player.progress > 0 {
             player.togglePlayPause()
         } else if attachment.fileUrl.hasPrefix("file://"),
