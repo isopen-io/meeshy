@@ -140,9 +140,22 @@ extension StoryBackgroundLayer {
         // image / video, même type pour color/gradient), on garde le
         // `contentLayer` existant et on rafraîchit juste frame + transform.
         // Le bitmap déjà affiché reste à l'écran sans interruption.
-        let previousIdentity = Self.contentIdentity(for: self.kind)
-        let nextIdentity = Self.contentIdentity(for: kind)
-        let canReuseContent = (previousIdentity == nextIdentity) && (contentLayer != nil)
+        let previousContentIdentity = Self.contentIdentity(for: self.kind)
+        let nextContentIdentity = Self.contentIdentity(for: kind)
+
+        // NO-OP DIFF (D3): when kind+transform+geometry are all unchanged AND we
+        // already have visible content, skip the entire configure pipeline. This
+        // prevents the flash on text keystrokes that trigger rebuildLayers() →
+        // configure() with the same parameters as the previous tick.
+        let hasVisibleContent = (contentLayer != nil) || (avPlayerLayer != nil)
+            || (backgroundColor != nil && backgroundColor != UIColor.clear.cgColor)
+        let nothingChanged = (previousContentIdentity == nextContentIdentity)
+            && (self.transform3D == transform)
+            && (self.frame.size == geometry.renderSize)
+            && hasVisibleContent
+        if nothingChanged { return }
+
+        let canReuseContent = (previousContentIdentity == nextContentIdentity) && (contentLayer != nil)
 
         self.kind = kind
         self.transform3D = transform
