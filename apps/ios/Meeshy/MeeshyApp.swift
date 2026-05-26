@@ -763,19 +763,17 @@ struct SplashScreen: View {
                         .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundColor(theme.textMuted.opacity(0.7))
 
-                    Text(String(localized: "splash.madeWith", defaultValue: "Made with ❤️", bundle: .main))
-                        .font(.system(size: 11, weight: .regular, design: .rounded))
-                        .foregroundColor(theme.textMuted.opacity(0.6))
-
-                    Text(String(localized: "splash.byServicesCEO", defaultValue: "by Services CEO", bundle: .main))
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundColor(theme.textMuted.opacity(0.8))
+                    Text(String(localized: "splash.madeWithLove", defaultValue: "Made with ❤️ by Services CEO", bundle: .main))
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundColor(theme.textMuted.opacity(0.7))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
 
                     Image("AppIconFooter")
                         .renderingMode(.template)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 28, height: 28)
+                        .frame(width: 21, height: 21)
                         .foregroundColor(MeeshyColors.error)
                         .opacity(0.9)
                         .padding(.top, 2)
@@ -784,7 +782,7 @@ struct SplashScreen: View {
                 .opacity(showSubtitle ? 1 : 0)
                 .padding(.bottom, 24)
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel(Text("Meeshy version \(appVersion), build \(buildNumber). Made with love by Services CEO"))
+                .accessibilityLabel(Text("Meeshy version \(appVersion), build \(buildNumber). Made with love by Services CEO."))
             }
         }
         .onAppear {

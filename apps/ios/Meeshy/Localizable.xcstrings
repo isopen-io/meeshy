@@ -15871,72 +15871,37 @@
         }
       }
     },
-    "splash.madeWith" : {
+    "splash.madeWithLove" : {
       "extractionState" : "manual",
       "localizations" : {
         "fr" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Fait avec ❤️"
+            "value" : "Fait avec ❤️ par Services CEO"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Made with ❤️"
+            "value" : "Made with ❤️ by Services CEO"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hecho con ❤️"
+            "value" : "Hecho con ❤️ por Services CEO"
           }
         },
         "de" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Erstellt mit ❤️"
+            "value" : "Erstellt mit ❤️ von Services CEO"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Feito com ❤️"
-          }
-        }
-      }
-    },
-    "splash.byServicesCEO" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "par Services CEO"
-          }
-        },
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "by Services CEO"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "por Services CEO"
-          }
-        },
-        "de" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "von Services CEO"
-          }
-        },
-        "pt-BR" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "por Services CEO"
+            "value" : "Feito com ❤️ por Services CEO"
           }
         }
       }
