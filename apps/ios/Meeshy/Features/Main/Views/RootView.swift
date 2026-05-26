@@ -414,6 +414,22 @@ struct RootView: View {
             FloatingCallPillView()
                 .padding(.top, 8)
         }
+        // B4 — Mini audio player floats above the tab bar. Mounted HERE
+        // (not in `AdaptiveRootView`) so the tap-body handler can reach
+        // the `router` via the local `@StateObject` — `AdaptiveRootView`
+        // sits above the router scope, which was why the original
+        // `onTapBody: {}` no-op shipped with Phase 7. The handler routes
+        // through `navigateToConversationById` (same path used by deep
+        // links and push notifications), so the cache-first resolution +
+        // navigation retry logic is shared.
+        .overlay(alignment: .bottom) {
+            MiniAudioPlayerBar(onTapBody: {
+                guard let convId = ConversationAudioCoordinator.shared
+                    .activeContext?.conversationId else { return }
+                navigateToConversationById(convId)
+            })
+            .padding(.bottom, 60)
+        }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showFeed)
         .animation(.spring(), value: showMenu)
         .onReceive(NotificationCenter.default.publisher(for: .navigateToConversation)) { notification in
