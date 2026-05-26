@@ -156,11 +156,36 @@ extension StoryBackgroundLayer {
         let nextContentIdentity = Self.contentIdentity(for: kind)
 
         // NO-OP DIFF (D3): when kind+transform+geometry are all unchanged AND we
-        // already have visible content, skip the entire configure pipeline. This
-        // prevents the flash on text keystrokes that trigger rebuildLayers() →
-        // configure() with the same parameters as the previous tick.
-        let hasVisibleContent = (contentLayer != nil) || (avPlayerLayer != nil)
-            || (backgroundColor != nil && backgroundColor != UIColor.clear.cgColor)
+        // already have FINAL visible content, skip the entire configure pipeline.
+        // This prevents the flash on text keystrokes that trigger rebuildLayers()
+        // → configure() with the same parameters as the previous tick.
+        //
+        // The "final visible content" check is per-kind because a CALayer is
+        // created synchronously for `.image` BEFORE the async fetch stamps the
+        // bitmap. If we skipped on `contentLayer != nil` alone, an image whose
+        // first fetch failed (offline, dead file://, 404) would never re-trigger
+        // — the loader would stay stuck at 0% forever (bug pré-existant aggravé
+        // par le diff naïf : audio bg + image bg, ThumbHash bloqué à 0%).
+        let hasVisibleContent: Bool = {
+            switch kind {
+            case .solidColor:
+                return backgroundColor != nil && backgroundColor != UIColor.clear.cgColor
+            case .gradient:
+                return contentLayer is CAGradientLayer
+            case .image:
+                // Le `contentLayer` est créé synchronement mais reste un layer
+                // vide tant que l'async load n'a pas stampé `contents`.
+                // `hasFinalContentStamped` est armé exclusivement par les
+                // chemins qui stampent un bitmap FINAL (warm cache hit ou
+                // bytes téléchargés), jamais par le placeholder ThumbHash —
+                // donc tant qu'il est false on doit autoriser un re-trigger.
+                return hasFinalContentStamped
+            case .video:
+                // AVPlayer démarre quasi instantanément ; la présence du layer
+                // est suffisante pour considérer le contenu prêt.
+                return avPlayerLayer != nil
+            }
+        }()
         let nothingChanged = (previousContentIdentity == nextContentIdentity)
             && (self.transform3D == transform)
             && (self.frame.size == geometry.renderSize)
@@ -312,34 +337,41 @@ extension StoryBackgroundLayer {
                         return
                     }
                     // (2) URL directe embarquée, sinon (3) resolver distant.
-                    guard let url = directURL ?? urlResolver?(postMediaId) else { return }
+                    // Stories publiées avant le `sanitizedForServerPublish()`
+                    // peuvent contenir un `file://` mediaURL pointant vers la
+                    // sandbox de l'auteur, inaccessible côté lecteur.
+                    // Défense profonde : si le file:// échoue, on retombe sur
+                    // le resolver (URL CDN canonique via le postMediaId).
+                    let primary = directURL ?? urlResolver?(postMediaId)
+                    guard let url = primary else { return }
+
+                    var loadedImage: UIImage?
                     if url.isFileURL {
-                        if let data = try? Data(contentsOf: url),
-                           let uiImage = UIImage(data: data) {
-                            Self.withDisabledCAActions {
-                                img?.contents = uiImage.cgImage
-                                if let layer = img, let cg = uiImage.cgImage, let canvas = self?.bounds.size {
-                                    layer.contentsGravity = StoryBackgroundLayer.resolveImageGravity(
-                                        naturalSize: CGSize(width: cg.width, height: cg.height),
-                                        canvasSize: canvas,
-                                        override: self?.transform3D.videoFitMode)
-                                }
-                            }
-                            self?.hasFinalContentStamped = true
+                        if let data = try? Data(contentsOf: url) {
+                            loadedImage = UIImage(data: data)
                         }
-                    } else if let data = try? await CacheCoordinator.shared.images.data(for: url.absoluteString),
-                              let uiImage = UIImage(data: data) {
-                        Self.withDisabledCAActions {
-                            img?.contents = uiImage.cgImage
-                            if let layer = img, let cg = uiImage.cgImage, let canvas = self?.bounds.size {
-                                layer.contentsGravity = StoryBackgroundLayer.resolveImageGravity(
-                                    naturalSize: CGSize(width: cg.width, height: cg.height),
-                                    canvasSize: canvas,
-                                    override: self?.transform3D.videoFitMode)
-                            }
+                        if loadedImage == nil,
+                           let fallback = urlResolver?(postMediaId),
+                           fallback != url,
+                           !fallback.isFileURL,
+                           let data = try? await CacheCoordinator.shared.images.data(for: fallback.absoluteString) {
+                            loadedImage = UIImage(data: data)
                         }
-                        self?.hasFinalContentStamped = true
+                    } else if let data = try? await CacheCoordinator.shared.images.data(for: url.absoluteString) {
+                        loadedImage = UIImage(data: data)
                     }
+
+                    guard let uiImage = loadedImage else { return }
+                    Self.withDisabledCAActions {
+                        img?.contents = uiImage.cgImage
+                        if let layer = img, let cg = uiImage.cgImage, let canvas = self?.bounds.size {
+                            layer.contentsGravity = StoryBackgroundLayer.resolveImageGravity(
+                                naturalSize: CGSize(width: cg.width, height: cg.height),
+                                canvasSize: canvas,
+                                override: self?.transform3D.videoFitMode)
+                        }
+                    }
+                    self?.hasFinalContentStamped = true
                 }
                 break
             }
@@ -476,12 +508,14 @@ extension StoryBackgroundLayer {
         }
         self.avPlayerLayer = pl
 
-        // Async resolve naturalSize to refine gravity once available
+        // Async resolve naturalSize to refine gravity once available.
+        // `[weak pl]` so we don't strand the AVPlayerLayer alive if the bg is
+        // re-attached (slide change / configure() with different kind) between
+        // the Task launch and the asset load completion.
         let canvasSize = self.bounds.size
         let asset = AVURLAsset(url: url)
-        let weakLayer = pl
-        Task { @MainActor [weak self] in
-            guard let _ = self else { return }
+        Task { @MainActor [weak self, weak pl] in
+            guard self != nil else { return }
             let tracks: [AVAssetTrack]
             if #available(iOS 16.0, *) {
                 tracks = (try? await asset.loadTracks(withMediaType: .video)) ?? []
@@ -496,11 +530,12 @@ extension StoryBackgroundLayer {
                 naturalSize = videoTrack.naturalSize
             }
             guard naturalSize.width > 0, naturalSize.height > 0 else { return }
+            guard let pl else { return }
             let resolved = StoryBackgroundLayer.resolveVideoGravity(
                 naturalSize: naturalSize, canvasSize: canvasSize, override: fitOverride)
             CATransaction.begin()
             CATransaction.setDisableActions(true)
-            weakLayer.videoGravity = resolved
+            pl.videoGravity = resolved
             CATransaction.commit()
         }
         // IMPORTANT — on n'appelle PLUS `play()` ici inconditionnellement.
