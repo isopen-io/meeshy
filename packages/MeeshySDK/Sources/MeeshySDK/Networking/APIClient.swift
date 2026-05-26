@@ -610,3 +610,43 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         return try await request(endpoint: endpoint, method: "DELETE", body: data)
     }
 }
+
+#if DEBUG
+extension APIClient {
+    /// Test seam — reproduces the header pipeline used by `request(...)` so
+    /// suites can assert that `X-Device-Locale` (and any other `ClientInfo`
+    /// header) is present on every outgoing request, without actually
+    /// hitting the network.
+    ///
+    /// Internal-only on purpose: production code MUST go through
+    /// `request(...)` to benefit from retry / auth refresh / error mapping.
+    public func _buildURLRequestForTesting(
+        endpoint: String,
+        method: String = "GET",
+        body: Data? = nil,
+        headers: [String: String]? = nil,
+        authToken: String? = nil
+    ) async throws -> URLRequest {
+        guard let url = URL(string: "https://example.test\(endpoint)") else {
+            throw MeeshyError.server(statusCode: 0, message: "URL invalide")
+        }
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = method
+
+        let clientHeaders = await ClientInfoProvider.shared.buildHeaders()
+        for (key, value) in clientHeaders {
+            urlRequest.setValue(value, forHTTPHeaderField: key)
+        }
+
+        if let authToken {
+            urlRequest.setValue("Bearer \(authToken)", forHTTPHeaderField: "Authorization")
+        }
+        if let body {
+            urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            urlRequest.httpBody = body
+        }
+        headers?.forEach { urlRequest.setValue($1, forHTTPHeaderField: $0) }
+        return urlRequest
+    }
+}
+#endif

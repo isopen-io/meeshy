@@ -4,6 +4,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   resolveUserLanguage,
+  resolveUserLanguagesOrdered,
   generateConversationIdentifier,
   isValidMongoId,
   canEditMessage,
@@ -344,5 +345,151 @@ describe('getRequiredLanguages', () => {
     const members = [{}];
     const languages = getRequiredLanguages(members);
     expect(languages).toContain('fr');
+  });
+
+  it('should include deviceLocale when no in-app pref is set on the member', () => {
+    const members = [
+      { deviceLocale: 'it' },
+      { systemLanguage: 'fr' },
+    ];
+    const languages = getRequiredLanguages(members);
+    expect(languages).toContain('it');
+    expect(languages).toContain('fr');
+  });
+
+  it('should not let deviceLocale shadow systemLanguage on the same member', () => {
+    const members = [
+      { systemLanguage: 'fr', deviceLocale: 'it' },
+    ];
+    const languages = getRequiredLanguages(members);
+    expect(languages).toEqual(['fr']);
+  });
+});
+
+describe('resolveUserLanguage with deviceLocale (4th priority)', () => {
+  it('returns systemLanguage when set, ignoring deviceLocale', () => {
+    expect(
+      resolveUserLanguage(
+        { systemLanguage: 'fr' },
+        { deviceLocale: 'it' }
+      )
+    ).toBe('fr');
+  });
+
+  it('returns regionalLanguage when system is missing, ignoring deviceLocale', () => {
+    expect(
+      resolveUserLanguage(
+        { regionalLanguage: 'es' },
+        { deviceLocale: 'it' }
+      )
+    ).toBe('es');
+  });
+
+  it('returns customDestinationLanguage when system+regional are missing, ignoring deviceLocale', () => {
+    expect(
+      resolveUserLanguage(
+        { customDestinationLanguage: 'pt' },
+        { deviceLocale: 'it' }
+      )
+    ).toBe('pt');
+  });
+
+  it('returns deviceLocale when all 3 in-app prefs are unset', () => {
+    expect(
+      resolveUserLanguage({}, { deviceLocale: 'it-IT' })
+    ).toBe('it');
+  });
+
+  it('normalizes deviceLocale (zh-Hant-HK → zh)', () => {
+    expect(
+      resolveUserLanguage({}, { deviceLocale: 'zh-Hant-HK' })
+    ).toBe('zh');
+  });
+
+  it('normalizes underscore form (fr_FR → fr)', () => {
+    expect(
+      resolveUserLanguage({}, { deviceLocale: 'fr_FR' })
+    ).toBe('fr');
+  });
+
+  it('falls back to fr when deviceLocale is malformed', () => {
+    expect(
+      resolveUserLanguage({}, { deviceLocale: '@@@' })
+    ).toBe('fr');
+  });
+
+  it('falls back to fr when nothing is set', () => {
+    expect(resolveUserLanguage({})).toBe('fr');
+  });
+
+  it('backward compat: single-argument call still works', () => {
+    expect(resolveUserLanguage({ systemLanguage: 'es' })).toBe('es');
+  });
+});
+
+describe('resolveUserLanguagesOrdered', () => {
+  it('returns 4-level priority list when all set and distinct', () => {
+    expect(
+      resolveUserLanguagesOrdered(
+        {
+          systemLanguage: 'fr',
+          regionalLanguage: 'es',
+          customDestinationLanguage: 'pt',
+        },
+        { deviceLocale: 'it' }
+      )
+    ).toEqual(['fr', 'es', 'pt', 'it']);
+  });
+
+  it('preserves order even when in-app prefs are mixed-case', () => {
+    expect(
+      resolveUserLanguagesOrdered(
+        { systemLanguage: 'FR', regionalLanguage: 'Es' },
+        { deviceLocale: 'IT' }
+      )
+    ).toEqual(['fr', 'es', 'it']);
+  });
+
+  it('dedupes when deviceLocale matches an in-app pref', () => {
+    expect(
+      resolveUserLanguagesOrdered(
+        { systemLanguage: 'fr' },
+        { deviceLocale: 'fr-FR' }
+      )
+    ).toEqual(['fr']);
+  });
+
+  it('normalizes deviceLocale before deduping', () => {
+    expect(
+      resolveUserLanguagesOrdered(
+        { systemLanguage: 'zh' },
+        { deviceLocale: 'zh-Hant-HK' }
+      )
+    ).toEqual(['zh']);
+  });
+
+  it('omits deviceLocale when invalid', () => {
+    expect(
+      resolveUserLanguagesOrdered(
+        { systemLanguage: 'fr' },
+        { deviceLocale: '@@@' }
+      )
+    ).toEqual(['fr']);
+  });
+
+  it('omits deviceLocale when not provided in opts', () => {
+    expect(
+      resolveUserLanguagesOrdered({ systemLanguage: 'fr', regionalLanguage: 'es' })
+    ).toEqual(['fr', 'es']);
+  });
+
+  it('returns empty array when nothing is set (caller decides fallback)', () => {
+    expect(resolveUserLanguagesOrdered({})).toEqual([]);
+  });
+
+  it('handles deviceLocale-only when no in-app prefs set', () => {
+    expect(
+      resolveUserLanguagesOrdered({}, { deviceLocale: 'ja' })
+    ).toEqual(['ja']);
   });
 });
