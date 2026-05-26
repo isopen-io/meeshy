@@ -271,4 +271,32 @@ final class ConversationAudioCoordinatorTests: XCTestCase {
         XCTAssertEqual(notified.map(\.attachmentId), ["broken"])
         XCTAssertEqual(notified.map(\.conversationId), ["conv-1"])
     }
+
+    // MARK: - engineForBubble contract (mock coverage gap)
+
+    /// `engineForBubble` casts the protocol-bound engine to the concrete
+    /// `AudioPlaybackManager`. The cast succeeds only when the coordinator
+    /// owns a real manager — production behaviour. This test pins the
+    /// contract so a future protocol refactor that breaks the cast surfaces
+    /// here (the bubble would otherwise silently lose its external-engine
+    /// binding and fall back to a per-bubble owned engine).
+    func test_engineForBubble_returnsManager_whenEngineIsRealAudioPlaybackManager() {
+        let realEngine = AudioPlaybackManager(registerWithCoordinator: false)
+        let coordinator = ConversationAudioCoordinator(engine: realEngine)
+        XCTAssertNotNil(coordinator.engineForBubble,
+                        "engineForBubble must expose the concrete AudioPlaybackManager backing the coordinator")
+        XCTAssertTrue(coordinator.engineForBubble === realEngine,
+                      "engineForBubble must return the exact instance, not a clone")
+    }
+
+    /// Documents the mock case: with a `MockAudioPlaybackEngine` the cast
+    /// fails and `engineForBubble` returns nil. Bubbles in this case must
+    /// route through the protocol-level coordinator API (toggle/seek/etc.)
+    /// rather than expecting the manager handle.
+    func test_engineForBubble_returnsNil_whenEngineIsMock() {
+        let mockEngine = MockAudioPlaybackEngine()
+        let coordinator = ConversationAudioCoordinator(engine: mockEngine)
+        XCTAssertNil(coordinator.engineForBubble,
+                     "engineForBubble must be nil under a mock engine — the cast to AudioPlaybackManager fails")
+    }
 }
