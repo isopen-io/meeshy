@@ -16,7 +16,17 @@ public actor ClientInfoProvider {
     public func buildHeaders() async -> [String: String] {
         var headers = staticHeaders()
 
-        headers["X-Meeshy-Locale"]   = Locale.current.identifier.replacingOccurrences(of: "_", with: "-")
+        // Locale appareil — diffusée via deux headers distincts par convention :
+        //   - `X-Meeshy-Locale` : signal d'enrichissement client (telemetry, geo)
+        //   - `X-Device-Locale` : signal Prisme Linguistique 4e priorité,
+        //                        lu par le middleware gateway pour persister
+        //                        `User.deviceLocale`. Spec :
+        //                        docs/superpowers/specs/2026-05-26-device-locale-fourth-priority-design.md
+        // Format RFC 5646 (underscore → dash) car `Locale.current.identifier`
+        // retourne `"fr_FR"` (POSIX) tandis que le serveur attend `"fr-FR"`.
+        let localeRFC5646 = Locale.current.identifier.replacingOccurrences(of: "_", with: "-")
+        headers["X-Meeshy-Locale"]   = localeRFC5646
+        headers["X-Device-Locale"]   = localeRFC5646
         headers["X-Meeshy-Timezone"] = TimeZone.current.identifier
         if let country = Locale.current.region?.identifier {
             headers["X-Meeshy-Country"] = country
