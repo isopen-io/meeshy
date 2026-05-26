@@ -72,7 +72,7 @@ struct ConversationLanguagePreferences: Equatable, Sendable {
         } else if let stored = user?.deviceLocale, !stored.isEmpty {
             self.resolvedDeviceLocaleRaw = stored
         } else {
-            self.resolvedDeviceLocaleRaw = Locale.current.languageCode
+            self.resolvedDeviceLocaleRaw = Locale.current.language.languageCode?.identifier
         }
     }
 
