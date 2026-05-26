@@ -51,6 +51,7 @@ import { systemRankingsRoutes } from './routes/admin/system-rankings';
 import { broadcastRoutes } from './routes/admin/broadcasts';
 import { adminPostRoutes } from './routes/admin/posts';
 import { agentAdminRoutes } from './routes/admin/agent';
+import { agentTopicsRoutes } from './routes/admin/agent-topics';
 import { userRoutes } from './routes/users';
 import meRoutes from './routes/me';
 import conversationPreferencesRoutes from './routes/conversation-preferences';
@@ -971,6 +972,7 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
     // Register agent admin routes (at /api/v1/admin/agent)
     await this.server.register(agentAdminRoutes, { prefix: `${API_PREFIX}/admin/agent` });
+    await this.server.register(agentTopicsRoutes, { prefix: `${API_PREFIX}/admin/agent` });
 
     // Register user routes
     await this.server.register(userRoutes, { prefix: API_PREFIX });
