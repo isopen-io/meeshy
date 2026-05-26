@@ -772,10 +772,12 @@ struct SplashScreen: View {
                         .foregroundColor(theme.textMuted.opacity(0.8))
 
                     Image("AppIconFooter")
+                        .renderingMode(.template)
                         .resizable()
                         .scaledToFit()
                         .frame(width: 28, height: 28)
-                        .opacity(0.85)
+                        .foregroundColor(MeeshyColors.error)
+                        .opacity(0.9)
                         .padding(.top, 2)
                         .accessibilityHidden(true)
                 }
