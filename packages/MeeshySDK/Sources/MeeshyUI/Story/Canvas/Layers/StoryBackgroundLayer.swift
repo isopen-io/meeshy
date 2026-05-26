@@ -12,13 +12,17 @@ public struct BackgroundTransform: Sendable, Equatable {
     public nonisolated var offsetX: Double
     public nonisolated var offsetY: Double
     public nonisolated var rotation: Double  // degrees
+    /// `nil` = auto by orientation. `"fit"` | `"fill"` = override.
+    public nonisolated var videoFitMode: String?
 
     public nonisolated init(scale: Double = 1.0, offsetX: Double = 0,
-                            offsetY: Double = 0, rotation: Double = 0) {
+                            offsetY: Double = 0, rotation: Double = 0,
+                            videoFitMode: String? = nil) {
         self.scale = scale
         self.offsetX = offsetX
         self.offsetY = offsetY
         self.rotation = rotation
+        self.videoFitMode = videoFitMode
     }
 
     public nonisolated static let identity = BackgroundTransform()
@@ -467,5 +471,44 @@ enum ThumbHashDecoder {
     nonisolated static func decodeIfAvailable(_ hash: String) -> UIImage? {
         guard !hash.isEmpty else { return nil }
         return UIImage.fromThumbHash(hash)
+    }
+}
+
+// MARK: - Gravity Resolution
+
+extension StoryBackgroundLayer {
+    /// Resolves the AVLayerVideoGravity for a video background.
+    /// `nil` override = auto by orientation: landscape→letterbox, portrait→fill.
+    public nonisolated static func resolveVideoGravity(
+        naturalSize: CGSize,
+        canvasSize: CGSize,
+        override: String?
+    ) -> AVLayerVideoGravity {
+        if let o = override {
+            return o == "fit" ? .resizeAspect : .resizeAspectFill
+        }
+        guard naturalSize.height > 0, canvasSize.height > 0 else {
+            return .resizeAspectFill
+        }
+        let mediaRatio = naturalSize.width / naturalSize.height
+        let canvasRatio = canvasSize.width / canvasSize.height
+        return mediaRatio > canvasRatio ? .resizeAspect : .resizeAspectFill
+    }
+
+    /// Resolves the contentsGravity for an image background. Same logic as video.
+    public nonisolated static func resolveImageGravity(
+        naturalSize: CGSize,
+        canvasSize: CGSize,
+        override: String?
+    ) -> CALayerContentsGravity {
+        if let o = override {
+            return o == "fit" ? .resizeAspect : .resizeAspectFill
+        }
+        guard naturalSize.height > 0, canvasSize.height > 0 else {
+            return .resizeAspectFill
+        }
+        let mediaRatio = naturalSize.width / naturalSize.height
+        let canvasRatio = canvasSize.width / canvasSize.height
+        return mediaRatio > canvasRatio ? .resizeAspect : .resizeAspectFill
     }
 }
