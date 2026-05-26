@@ -30,6 +30,7 @@ import { StatusService } from './services/StatusService';
 import { AuthMiddleware, createUnifiedAuthMiddleware } from './middleware/auth';
 import { registerGlobalRateLimiter } from './middleware/rate-limiter';
 import { registerClientMutationIdHook } from './middleware/clientMutationId';
+import { createDeviceLocaleMiddleware } from './middleware/deviceLocale';
 import { MutationLogService } from './services/MutationLogService';
 import { authRoutes } from './routes/auth';
 import { conversationRoutes } from './routes/conversations';
@@ -577,6 +578,14 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     // `request.clientMutationId`.
     registerClientMutationIdHook(this.server);
     logger.info('✅ clientMutationId hook registered');
+
+    // Plan B — Device locale 4e priorité Prisme Linguistique.
+    // Registered as `preHandler` (not `onRequest`) because the auth layer
+    // attaches `request.user` via per-route `preValidation` which fires
+    // after `onRequest`. By the time `preHandler` runs, authenticated
+    // routes already carry `request.user`; public routes simply no-op.
+    this.server.addHook('preHandler', createDeviceLocaleMiddleware(this.prisma));
+    logger.info('✅ deviceLocale hook registered (X-Device-Locale → User.deviceLocale)');
 
     // Wave 1 Task 3.4 — expose MutationLogService on fastify so routes
     // can wrap their writes in `recordOrReturn(...)` for idempotency.
