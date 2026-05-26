@@ -122,6 +122,11 @@ public final class ConversationAudioCoordinator: ObservableObject {
         if !queue.isEmpty { queue.removeFirst() }
         queueCount = queue.count
         if queue.isEmpty {
+            // B2 fix — when the queue empties, the engine was still alive
+            // and would play the just-loaded audio to natural end while the
+            // mini-player vanished. Explicitly stop it so playback halts
+            // atomically with the UI dismissal.
+            engine.stop()
             activeContext = nil
         } else {
             startCurrentHead()
