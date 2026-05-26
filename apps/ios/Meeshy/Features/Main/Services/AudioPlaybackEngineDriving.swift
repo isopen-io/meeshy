@@ -38,3 +38,67 @@ extension AudioPlaybackManager: AudioPlaybackEngineDriving {
     public var progressPublisher: Published<Double>.Publisher { $progress }
     public var speedPublisher: Published<PlaybackSpeed>.Publisher { $speed }
 }
+
+// MARK: - Queue data models
+
+public struct QueuedAudio: Equatable, Identifiable, Sendable {
+    public let attachmentId: String
+    public let messageId: String
+    public let conversationId: String
+    public let fileUrl: String
+    public let durationMs: Int
+    public let senderName: String
+    public let senderAvatarURL: String?
+    public let receivedAt: Date
+    public var id: String { attachmentId }
+
+    public init(attachmentId: String, messageId: String, conversationId: String,
+                fileUrl: String, durationMs: Int, senderName: String,
+                senderAvatarURL: String?, receivedAt: Date) {
+        self.attachmentId = attachmentId
+        self.messageId = messageId
+        self.conversationId = conversationId
+        self.fileUrl = fileUrl
+        self.durationMs = durationMs
+        self.senderName = senderName
+        self.senderAvatarURL = senderAvatarURL
+        self.receivedAt = receivedAt
+    }
+}
+
+public struct ActiveAudioContext: Equatable, Sendable {
+    public let attachmentId: String
+    public let messageId: String
+    public let conversationId: String
+    public let conversationName: String
+    public let conversationArtworkURL: String?
+    public let senderName: String
+    public let senderAvatarURL: String?
+    public let durationMs: Int
+
+    public init(from queued: QueuedAudio,
+                conversationName: String,
+                conversationArtworkURL: String?) {
+        self.attachmentId = queued.attachmentId
+        self.messageId = queued.messageId
+        self.conversationId = queued.conversationId
+        self.conversationName = conversationName
+        self.conversationArtworkURL = conversationArtworkURL
+        self.senderName = queued.senderName
+        self.senderAvatarURL = queued.senderAvatarURL
+        self.durationMs = queued.durationMs
+    }
+
+    public init(attachmentId: String, messageId: String, conversationId: String,
+                conversationName: String, conversationArtworkURL: String?,
+                senderName: String, senderAvatarURL: String?, durationMs: Int) {
+        self.attachmentId = attachmentId
+        self.messageId = messageId
+        self.conversationId = conversationId
+        self.conversationName = conversationName
+        self.conversationArtworkURL = conversationArtworkURL
+        self.senderName = senderName
+        self.senderAvatarURL = senderAvatarURL
+        self.durationMs = durationMs
+    }
+}
