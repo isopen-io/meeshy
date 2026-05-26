@@ -145,6 +145,7 @@ export type AgentConfigUpsert = {
   maxMessagesPerUserPer10Min?: number;
   freshTopicProbability?: number;
   freshTopicCategoryHints?: string[];
+  freshTopicBlockedSlugs?: string[];
 };
 
 export type DeliveryItemAction =
