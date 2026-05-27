@@ -465,6 +465,7 @@ struct StoryHeaderView: View {
                                 name: group.username,
                                 context: .storyViewer,
                                 accentColor: group.avatarColor,
+                                avatarURL: group.avatarURL,
                                 onViewProfile: { selectedProfileUser = .from(storyGroup: group) },
                                 contextMenuItems: [
                                     AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {

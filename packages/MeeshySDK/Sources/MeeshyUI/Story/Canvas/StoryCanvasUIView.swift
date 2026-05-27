@@ -491,6 +491,20 @@ public final class StoryCanvasUIView: UIView {
         // sur `false` — la vidéo est attachée silencieuse, prête à jouer
         // dès la promotion au mode `.play`.
         backgroundLayer.isPlaybackActive = (mode == .play)
+        // Démarre le `CADisplayLink` quand le canvas est créé directement
+        // en `.play` (StoryReaderRepresentable.makeUIView). Sans ça, le
+        // displayLink n'est créé que via `setMode(.play)` — qui n'est
+        // appelé QU'AU SLIDE-CHANGE (identityChanged). Pour la première
+        // story ouverte (canvas frais en .play, pas de transition), le
+        // displayLink restait inexistant → `displayLinkTick` jamais appelé
+        // → `currentTime` n'avançait pas → `onPlaybackTime` jamais émis
+        // → progress bar du viewer gelée à 0 % même quand la vidéo BG
+        // jouait en boucle (video bg piloté par `isPlaybackActive`,
+        // indépendant du displayLink). Bug user-reporté 2026-05-27 :
+        // « la vidéo joue en boucle mais la progress bar n'avance pas ».
+        if mode == .play {
+            startPlayback()
+        }
     }
 
     nonisolated deinit {
@@ -1563,6 +1577,22 @@ public final class StoryCanvasUIView: UIView {
                         Task { @MainActor in
                             self?.backgroundDidBecomeReady()
                         }
+                    }
+                    // Failsafe timeout 2s — bug user-reporté 2026-05-27 :
+                    // le KVO `.status` peut être attaché APRÈS la transition
+                    // `.unknown → .readyToPlay` sur les vidéos remote en
+                    // warm cache (item recyclé). Visible quand la vidéo
+                    // JOUE en boucle mais la progress bar reste à 0%
+                    // (`onPlaybackTime` jamais émis car
+                    // `displayLinkTick` gated sur `contentReadyFired`).
+                    // Le forced fire après 2s rattrape le KVO miss.
+                    pendingVideoReadinessTask?.cancel()
+                    pendingVideoReadinessTask = Task { @MainActor [weak self] in
+                        try? await Task.sleep(for: .seconds(2))
+                        if Task.isCancelled { return }
+                        guard let self else { return }
+                        guard !self.contentReadyFired else { return }
+                        self.backgroundDidBecomeReady()
                     }
                 }
             } else {
