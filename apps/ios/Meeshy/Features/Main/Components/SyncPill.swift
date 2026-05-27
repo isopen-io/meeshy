@@ -52,10 +52,10 @@ struct SyncPill: View {
             .padding(.vertical, 6)
             .background(Capsule().fill(chromeBackground))
             .shadow(color: .black.opacity(0.08), radius: 6, x: 0, y: 2)
-            .onChange(of: state.items.count) { newCount in
+            .adaptiveOnChange(of: state.items.count) { _, newCount in
                 rotator.setItemCount(newCount)
             }
-            .onChange(of: reduceMotion) { newValue in
+            .adaptiveOnChange(of: reduceMotion) { _, newValue in
                 rotator.setAutoRotation(!newValue)
             }
             .onAppear {
