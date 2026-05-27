@@ -155,10 +155,17 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // un rebuild par body eval (updateUIView est appelé fréquemment).
         // Le bump de version est piloté par le composer (cf.
         // `MeeshyImageEditorView` onAccept → `viewModel.loadedImagesVersion &+= 1`).
+        //
+        // `invalidateImageCache()` bump la révision pour forcer le re-stamp
+        // des layers du `StoryRendererCache` — cet appel EST réservé au
+        // composer ; le reader passe par `setReaderContext` direct qui ne
+        // bump plus (sinon ça gèle la progress bar et le canvas reader, cf.
+        // régression 2026-05-27).
         if context.coordinator.lastLoadedImagesVersion != loadedImagesVersion {
             context.coordinator.lastLoadedImagesVersion = loadedImagesVersion
             let reader = ComposerImageCacheReader(images: loadedImages, version: loadedImagesVersion)
             uiView.setReaderContext(StoryReaderContext(imageCache: reader))
+            uiView.invalidateImageCache()
         }
 
         // Re-emit la couche courante après chaque body eval (deferred via
