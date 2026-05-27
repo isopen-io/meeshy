@@ -8,7 +8,6 @@ struct ConnectionBanner: View {
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     @State private var dotPhase: Int = 0
-    @State private var showAfterDelay = false
     private let dotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     private var isDisconnected: Bool {
@@ -27,35 +26,12 @@ struct ConnectionBanner: View {
                     .onReceive(dotTimer) { _ in
                         dotPhase += 1
                     }
-            } else if isDisconnected && showAfterDelay {
+            } else if isDisconnected {
                 reconnectingPill
                     .transition(.opacity.combined(with: .scale(scale: 0.8)))
                     .onReceive(dotTimer) { _ in
                         dotPhase += 1
                     }
-            }
-        }
-        .task(id: isDisconnected) {
-            guard isDisconnected else {
-                if showAfterDelay {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showAfterDelay = false
-                    }
-                }
-                return
-            }
-
-            if showAfterDelay { return }
-
-            do {
-                try await Task.sleep(for: .seconds(10))
-            } catch {
-                return
-            }
-
-            guard !Task.isCancelled, isDisconnected else { return }
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                showAfterDelay = true
             }
         }
     }
