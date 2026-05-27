@@ -2045,7 +2045,24 @@ class ConversationViewModel: ObservableObject {
                 replyToId: replyToId,
                 attachmentIds: attachmentIds
             )
-            Task { try? await OfflineQueue.shared.enqueue(retryItem) }
+
+            // AWAITED enqueue (Bug 1 fix — online retry path, B2 2026-05-27).
+            // The legacy `Task { try? await OfflineQueue.shared.enqueue(...) }`
+            // fire-and-forgot the outbox write: the function returned before
+            // GRDB had committed the retry row, so a process kill or a fast
+            // second tap could silently drop the auto-retry. Mirror B1's
+            // offline-branch fix here — `await` the injected `offlineQueue`
+            // and flip the optimistic bubble to `.failed` on disk-full /
+            // coding errors so the user can manually retry.
+            do {
+                try await offlineQueue.enqueue(retryItem)
+            } catch {
+                Logger.messages.error("online retry enqueue failed: \(error.localizedDescription, privacy: .public)")
+                try? await messagePersistence.markOptimisticFailed(
+                    localId: tempId,
+                    reason: "online retry enqueue failed: \(error.localizedDescription)"
+                )
+            }
 
             return false
         }

@@ -248,6 +248,37 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
         XCTAssertEqual(forwardedFromIds, ["orig-msg-id"])
         XCTAssertEqual(forwardedFromConvIds, ["orig-conv-id"])
     }
+
+    /// Bug 1 — online retry path (B2). When the REST send fails AND the
+    /// socket fallback returns no ACK, the catch block enqueues a retry
+    /// item in the offline queue for the unified outbox to flush. The
+    /// legacy `Task { try? await OfflineQueue.shared.enqueue(...) }` was
+    /// fire-and-forget — the function returned before GRDB committed the
+    /// retry row, so a process kill or fast second tap could silently
+    /// drop the auto-retry. This test exercises the awaited path: with
+    /// network online + REST stubbed to throw + socket fallback returning
+    /// nil, exactly one item must reach the injected `offlineQueue` via
+    /// the now-awaited enqueue call.
+    func test_online_send_failure_falls_back_to_awaited_retry_enqueue() async {
+        fakeNetworkMonitor.isOnline = true
+        mockMessageService.sendResult = .failure(NSError(
+            domain: "ConversationViewModelOfflineQueueTests",
+            code: 500,
+            userInfo: [NSLocalizedDescriptionKey: "synthetic REST failure"]
+        ))
+        // Default MockMessageSocket.sendViaSocketFallbackResult is nil → the
+        // catch block skips the socket-recovery early-return and falls
+        // through to the retry-enqueue path under test.
+        let sut = makeSUT()
+
+        let ok = await sut.sendMessage(content: "online-then-retry")
+
+        XCTAssertFalse(ok, "Online send with REST failure + no socket ack returns false")
+        let enqueueCount = await fakeOfflineQueue.enqueueCount
+        XCTAssertEqual(enqueueCount, 1, "Retry path must AWAIT the enqueue, not fire-and-forget")
+        let contents = await fakeOfflineQueue.enqueuedContents
+        XCTAssertEqual(contents, ["online-then-retry"])
+    }
 }
 
 // MARK: - Test helpers on FakeOfflineMessageQueue
