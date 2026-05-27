@@ -421,6 +421,16 @@ struct RootView: View {
             FloatingCallPillView()
                 .padding(.top, 8)
         }
+        .overlay(alignment: .top) {
+            SyncPillHost(
+                router: SyncPillRouter(
+                    router: router,
+                    conversationLookup: { [weak conversationViewModel] id in
+                        conversationViewModel?.conversations.first(where: { $0.id == id })
+                    }
+                )
+            )
+        }
         // B4 — Mini audio player floats above the tab bar. Mounted HERE
         // (not in `AdaptiveRootView`) so the tap-body handler can reach
         // the `router` via the local `@StateObject` — `AdaptiveRootView`
