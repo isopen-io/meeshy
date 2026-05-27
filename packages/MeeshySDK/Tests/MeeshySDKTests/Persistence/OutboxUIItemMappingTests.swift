@@ -60,7 +60,7 @@ struct OutboxUIItemMappingTests {
 
     // MARK: - 16 explicit @Test blocks (from plan §A2.1)
 
-    @Test func text_sendMessage_maps_to_message_text() {
+    @Test func test_from_sendMessageWithText_returnsMessageKindAndTextIcon() {
         let r = record(kind: .sendMessage, payload: sendMessagePayload(content: "Bonjour Marie"))
         let item = OutboxUIItem.from(record: r)
         #expect(item.kind == .message)
@@ -70,7 +70,7 @@ struct OutboxUIItemMappingTests {
         #expect(item.source == .conversation(id: "conv-1"))
     }
 
-    @Test func long_text_is_truncated_to_60_chars_with_ellipsis() {
+    @Test func test_from_longContent_truncatesAt61CharsWithEllipsis() {
         let long = String(repeating: "a", count: 100)
         let r = record(kind: .sendMessage, payload: sendMessagePayload(content: long))
         let item = OutboxUIItem.from(record: r)
@@ -78,14 +78,14 @@ struct OutboxUIItemMappingTests {
         #expect(item.titlePreview?.hasSuffix("…") == true)
     }
 
-    @Test func audio_only_message_uses_audio_placeholder() {
+    @Test func test_from_audioOnlyMessage_usesAudioPlaceholder() {
         let r = record(kind: .sendMessage, payload: sendMessagePayload(content: "", audioPath: "/tmp/note.m4a"))
         let item = OutboxUIItem.from(record: r)
         #expect(item.iconKind == .audio)
         #expect(item.titlePreview == "🎙 Note vocale")
     }
 
-    @Test func image_only_message_uses_image_placeholder() {
+    @Test func test_from_imageOnlyMessage_usesImagePlaceholder() {
         let r = record(kind: .sendMessage, payload: sendMessagePayload(content: "", attachmentIds: ["att-1"]))
         let item = OutboxUIItem.from(record: r)
         #expect(item.iconKind == .image)
@@ -93,19 +93,19 @@ struct OutboxUIItemMappingTests {
         #expect(item.attachmentCount == 1)
     }
 
-    @Test func multiple_attachments_counts_correctly() {
+    @Test func test_from_multipleAttachments_countsCorrectly() {
         let r = record(kind: .sendMessage, payload: sendMessagePayload(content: "Photos", attachmentIds: ["a", "b", "c"]))
         let item = OutboxUIItem.from(record: r)
         #expect(item.attachmentCount == 3)
     }
 
-    @Test func editMessage_maps_to_edit_kind() {
+    @Test func test_from_editMessage_returnsEditKind() {
         let r = record(kind: .editMessage, payload: Data())
         let item = OutboxUIItem.from(record: r)
         #expect(item.kind == .edit)
     }
 
-    @Test func deleteMessage_maps_to_delete_kind() {
+    @Test func test_from_deleteMessage_returnsDeleteKindWithSuppressionPreview() {
         let r = record(kind: .deleteMessage, payload: Data())
         let item = OutboxUIItem.from(record: r)
         #expect(item.kind == .delete)
@@ -113,7 +113,7 @@ struct OutboxUIItemMappingTests {
         #expect(item.titlePreview == "Suppression…")
     }
 
-    @Test func sendReaction_maps_to_reaction_kind_with_emoji() {
+    @Test func test_from_sendReaction_returnsReactionKindWithEmoji() {
         struct ReactionPayload: Codable { let messageId: String; let emoji: String; let action: String; let conversationId: String }
         let payload = try! JSONEncoder().encode(ReactionPayload(messageId: "m", emoji: "👍", action: "add", conversationId: "conv-1"))
         let r = record(kind: .sendReaction, payload: payload)
@@ -123,7 +123,7 @@ struct OutboxUIItemMappingTests {
         #expect(item.titlePreview == "👍")
     }
 
-    @Test func unknown_kind_falls_back_to_other() {
+    @Test func test_from_sendMessageWithEmptyPayload_returnsMessageKindNotCrash() {
         // sendMessage with garbage payload degrades gracefully — must not crash.
         let r = record(kind: .sendMessage, payload: Data())
         let item = OutboxUIItem.from(record: r)
@@ -131,23 +131,23 @@ struct OutboxUIItemMappingTests {
         #expect(item.kind == .message)
     }
 
-    @Test func status_failed_is_preserved() {
+    @Test func test_from_failedRecord_preservesFailedStatus() {
         let r = record(kind: .sendMessage, payload: sendMessagePayload(content: "x"), status: .failed)
         #expect(OutboxUIItem.from(record: r).status == .failed)
     }
 
-    @Test func createdAt_is_preserved() {
+    @Test func test_from_record_preservesCreatedAt() {
         let date = Date(timeIntervalSince1970: 1_700_000_000)
         let r = record(kind: .sendMessage, payload: sendMessagePayload(content: "x"), createdAt: date)
         #expect(OutboxUIItem.from(record: r).createdAt == date)
     }
 
-    @Test func conversationId_becomes_source() {
+    @Test func test_from_record_mapsConversationIdToSource() {
         let r = record(kind: .sendMessage, payload: sendMessagePayload(content: "x"))
         #expect(OutboxUIItem.from(record: r).source == .conversation(id: "conv-1"))
     }
 
-    @Test func text_with_attachment_keeps_text_icon() {
+    @Test func test_from_textWithAttachment_keepsTextIcon() {
         let r = record(kind: .sendMessage, payload: sendMessagePayload(content: "Bonjour", attachmentIds: ["att-1"]))
         let item = OutboxUIItem.from(record: r)
         #expect(item.iconKind == .text)
@@ -155,13 +155,13 @@ struct OutboxUIItemMappingTests {
         #expect(item.attachmentCount == 1)
     }
 
-    @Test func text_exactly_60_chars_not_truncated() {
+    @Test func test_from_text60Chars_notTruncated() {
         let s = String(repeating: "b", count: 60)
         let r = record(kind: .sendMessage, payload: sendMessagePayload(content: s))
         #expect(OutboxUIItem.from(record: r).titlePreview == s)
     }
 
-    @Test func text_61_chars_is_truncated() {
+    @Test func test_from_text61Chars_truncatesWithEllipsis() {
         let s = String(repeating: "c", count: 61)
         let r = record(kind: .sendMessage, payload: sendMessagePayload(content: s))
         let title = OutboxUIItem.from(record: r).titlePreview!
@@ -169,7 +169,7 @@ struct OutboxUIItemMappingTests {
         #expect(title.hasSuffix("…"))
     }
 
-    @Test func video_attachment_uses_video_placeholder() {
+    @Test func test_from_videoAttachment_usesVideoPlaceholder() {
         let r = record(kind: .sendMessage, payload: sendMessagePayload(
             content: "",
             attachmentIds: ["vid_xyz"],
@@ -181,7 +181,7 @@ struct OutboxUIItemMappingTests {
         #expect(item.attachmentCount == 1)
     }
 
-    @Test func file_attachment_uses_file_placeholder() {
+    @Test func test_from_fileAttachment_usesFilePlaceholder() {
         let r = record(kind: .sendMessage, payload: sendMessagePayload(
             content: "",
             attachmentIds: ["pdf-1"],
@@ -192,7 +192,7 @@ struct OutboxUIItemMappingTests {
         #expect(item.titlePreview == "📎 Fichier")
     }
 
-    @Test func legacy_payload_without_attachmentKinds_falls_back_to_image() {
+    @Test func test_from_legacyPayloadWithoutAttachmentKinds_fallsBackToImage() {
         // Backward-compat: OutboxRecord payloads enqueued before SDK rev
         // omit `attachmentKinds` from JSON entirely. Mapper must default
         // to .image per spec §4.2 instead of crashing or showing nil.
@@ -206,7 +206,7 @@ struct OutboxUIItemMappingTests {
         #expect(item.titlePreview == "📷 Image")
     }
 
-    @Test func mixed_attachment_kinds_picks_first_non_other_for_icon() {
+    @Test func test_from_mixedAttachmentKinds_picksFirstNonOtherForIcon() {
         // First .other is skipped; first real kind wins.
         let r = record(kind: .sendMessage, payload: sendMessagePayload(
             content: "",
@@ -225,14 +225,14 @@ struct OutboxUIItemMappingTests {
 
     // MARK: - 9 additional tests
 
-    @Test func createComment_text_maps_to_postComment_kind() {
+    @Test func test_from_createCommentText_returnsPostCommentKind() {
         let r = record(kind: .createComment, payload: Data())
         let item = OutboxUIItem.from(record: r)
         #expect(item.kind == .postComment)
         #expect(item.iconKind == .text)
     }
 
-    @Test func createComment_with_audio_maps_to_postComment_audio() {
+    @Test func test_from_createCommentWithAudio_returnsPostCommentAudioIcon() {
         struct CommentPayload: Codable { let localAudioPath: String? }
         let payload = try! JSONEncoder().encode(CommentPayload(localAudioPath: "/tmp/comment.m4a"))
         let r = record(kind: .createComment, payload: payload)
@@ -241,20 +241,20 @@ struct OutboxUIItemMappingTests {
         #expect(item.iconKind == .audio)
     }
 
-    @Test func publishStory_image_maps_to_story_kind() {
+    @Test func test_from_publishStory_returnsStoryKind() {
         let r = record(kind: .publishStory, payload: Data())
         let item = OutboxUIItem.from(record: r)
         #expect(item.kind == .story)
         #expect(item.iconKind == .image)
     }
 
-    @Test func repostStory_maps_to_story_kind() {
+    @Test func test_from_repostStory_returnsStoryKind() {
         let r = record(kind: .repostStory, payload: Data())
         let item = OutboxUIItem.from(record: r)
         #expect(item.kind == .story)
     }
 
-    @Test func markAsRead_maps_to_other() {
+    @Test func test_from_markAsRead_returnsOtherKind() {
         let r = record(kind: .markAsRead, payload: Data())
         let item = OutboxUIItem.from(record: r)
         if case .other = item.kind { } else {
@@ -263,7 +263,7 @@ struct OutboxUIItemMappingTests {
         #expect(item.iconKind == .none)
     }
 
-    @Test func respondFriendRequest_maps_to_other() {
+    @Test func test_from_respondFriendRequest_returnsOtherKind() {
         let r = record(kind: .respondFriendRequest, payload: Data())
         let item = OutboxUIItem.from(record: r)
         if case .other = item.kind { } else {
@@ -271,7 +271,7 @@ struct OutboxUIItemMappingTests {
         }
     }
 
-    @Test func blockUser_maps_to_other() {
+    @Test func test_from_blockUser_returnsOtherKind() {
         let r = record(kind: .blockUser, payload: Data())
         let item = OutboxUIItem.from(record: r)
         if case .other = item.kind { } else {
@@ -279,7 +279,7 @@ struct OutboxUIItemMappingTests {
         }
     }
 
-    @Test func updateProfile_maps_to_other() {
+    @Test func test_from_updateProfile_returnsOtherKind() {
         let r = record(kind: .updateProfile, payload: Data())
         let item = OutboxUIItem.from(record: r)
         if case .other = item.kind { } else {
@@ -287,14 +287,14 @@ struct OutboxUIItemMappingTests {
         }
     }
 
-    @Test func toggleLikePost_maps_to_postReaction_kind() {
+    @Test func test_from_toggleLikePost_returnsPostReactionKind() {
         let r = record(kind: .toggleLikePost, payload: Data())
         let item = OutboxUIItem.from(record: r)
         #expect(item.kind == .postReaction)
         #expect(item.iconKind == .reaction)
     }
 
-    @Test func empty_content_no_attachments_shows_message_placeholder() {
+    @Test func test_from_emptyContentAndNoAttachments_showsMessagePlaceholder() {
         let r = record(kind: .sendMessage, payload: sendMessagePayload(content: ""))
         let item = OutboxUIItem.from(record: r)
         #expect(item.iconKind == .text)
