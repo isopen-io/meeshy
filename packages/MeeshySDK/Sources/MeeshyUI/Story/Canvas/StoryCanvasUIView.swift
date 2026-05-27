@@ -2017,15 +2017,21 @@ public final class StoryCanvasUIView: UIView {
     }
 
     @objc private func displayLinkTick(_ link: CADisplayLink) {
-        // Le displayLink reste vivant pour les rebuilds (modèle muté → re-layout),
-        // mais l'avancement de la timeline est gated sur :
+        // L'avancement de la timeline est gated sur :
         // - mode == .play (l'edit a son propre `editDisplayLink`)
         // - contentReadyFired (sans ça, currentTime avançait pendant le
         //   chargement initial → progress bar du viewer sautait dès le content
         //   ready)
         // - !isPlaybackPaused (pauses propagées par le viewer via `setPaused`)
+        //
+        // Si le gate échoue, on RETOURNE sans rebuild — les mutations modèle
+        // sont déjà capturées par `slide.didSet → rebuildLayers()` à
+        // l'écriture, pas besoin de re-render à 60 Hz pendant le chargement
+        // initial. L'ancien `rebuildLayers()` ici causait un scintillement
+        // visible (60 rebuilds/s avant content ready → loader overlay et
+        // backgroundLayer alternaient leurs frames). Bug user-reporté
+        // 2026-05-27 « la story scintille seulement ».
         guard mode == .play, contentReadyFired, !isPlaybackPaused else {
-            rebuildLayers()
             return
         }
         let dt = link.targetTimestamp - link.timestamp
