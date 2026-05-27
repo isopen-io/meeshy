@@ -3,135 +3,108 @@ import Combine
 import MeeshySDK
 import MeeshyUI
 
+/// Single inline pill at the top of every NavigationStack content view
+/// (mounted via `.safeAreaInset(edge: .top, spacing: 0)` on `RootView` /
+/// `iPadRootView`). Acts as the **orchestrator** for the unified
+/// `SyncPill` chip: it collects every signal worth surfacing
+/// (`ConnectionStatus`, offline outbox items) and emits a single list of
+/// `SyncPillEntry` to rotate through.
+///
+/// Display order in the rotation (priority high to low):
+///   1. `.offline`        — device has no network (red dot + wifi.slash)
+///   2. `.disconnected`   — socket dropped, awaiting reconnect (amber dot)
+///   3. `.syncing` (when no specific item) — generic background sync
+///   4. Each pending outbox item — one entry per item, label = the
+///      concrete French operation (`Envoi d'audio`, `Envoi d'image`, …),
+///      carries `source` so taps route to the conversation / post / story.
 struct ConnectionBanner: View {
     @StateObject private var statusVM = ConnectionStatusViewModel()
     @StateObject private var syncPillVM = SyncPillViewModel()
-    @Environment(\.colorScheme) private var colorScheme
-    private var isDark: Bool { colorScheme == .dark }
-    @State private var dotPhase: Int = 0
-    private let dotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
-    private var isDisconnected: Bool {
-        statusVM.status == .disconnected
+    /// Callback invoked when the user taps an entry whose `source` is
+    /// non-nil. The mount point (`RootView` / `iPadRootView`) wires this
+    /// to its router to push onto the navigation stack.
+    private let onItemTap: ((OutboxUIItem.Source) -> Void)?
+
+    init(onItemTap: ((OutboxUIItem.Source) -> Void)? = nil) {
+        self.onItemTap = onItemTap
     }
 
-    private var isOffline: Bool {
-        statusVM.status == .offline
-    }
-
-    private var isSyncing: Bool {
-        statusVM.status == .syncing
-    }
+    private var isDisconnected: Bool { statusVM.status == .disconnected }
+    private var isOffline: Bool { statusVM.status == .offline }
+    private var isSyncing: Bool { statusVM.status == .syncing }
 
     /// Items currently held in the offline outbox queue, derived from
-    /// `SyncPillViewModel.state`. When non-empty the rotating `SyncPill`
-    /// replaces the generic "Synchronisation…" chip so the user sees the
-    /// concrete latent operations (envoi d'audio, envoi d'image, etc.).
+    /// `SyncPillViewModel.state`.
     private var pendingItems: [OutboxUIItem] {
         syncPillVM.state.items
     }
 
+    /// Compose the unified rotation list. Empty when there is nothing to
+    /// surface — the pill collapses to `EmptyView` automatically.
+    private var entries: [SyncPillEntry] {
+        var result: [SyncPillEntry] = []
+
+        if isOffline {
+            result.append(SyncPillEntry(
+                id: "status.offline",
+                label: String(localized: "connection.offline", defaultValue: "Hors ligne"),
+                iconName: "wifi.slash",
+                dotStyle: .error,
+                source: nil
+            ))
+        } else if isDisconnected {
+            result.append(SyncPillEntry(
+                id: "status.disconnected",
+                label: String(localized: "connection.reconnecting", defaultValue: "Reconnexion"),
+                iconName: nil,
+                dotStyle: .warning,
+                source: nil
+            ))
+        } else if isSyncing && pendingItems.isEmpty {
+            // Connection-level sync without per-item detail (e.g. socket
+            // catch-up read receipts, presence). When pendingItems are
+            // present we let those drive the label instead.
+            result.append(SyncPillEntry(
+                id: "status.syncing",
+                label: String(localized: "connection.syncing", defaultValue: "Synchronisation"),
+                iconName: nil,
+                dotStyle: .brand,
+                source: nil
+            ))
+        }
+
+        for item in pendingItems {
+            result.append(SyncPillEntry(
+                id: item.id,
+                label: SyncPillLabels.operationLabel(for: item),
+                iconName: itemIcon(for: item.iconKind),
+                dotStyle: item.status == .failed ? .error : .brand,
+                source: item.source
+            ))
+        }
+
+        return result
+    }
+
     var body: some View {
-        Group {
-            if !pendingItems.isEmpty {
-                SyncPill(items: pendingItems)
-            } else if isOffline {
-                offlinePill
-                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
-                    .onReceive(dotTimer) { _ in
-                        dotPhase += 1
-                    }
-            } else if isSyncing {
-                syncingPill
-                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
-                    .onReceive(dotTimer) { _ in
-                        dotPhase += 1
-                    }
-            } else if isDisconnected {
-                reconnectingPill
-                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
-                    .onReceive(dotTimer) { _ in
-                        dotPhase += 1
-                    }
-            }
+        SyncPill(entries: entries, onTap: onItemTap)
+    }
+
+    /// Maps an `OutboxUIItem.IconKind` to the SFSymbol used as the
+    /// leading icon for an entry. Returns `nil` for the generic `.text`
+    /// case so the pulsing dot is used instead — keeps the bandeau
+    /// visually quiet for the most common case (plain text messages).
+    private func itemIcon(for kind: OutboxUIItem.IconKind) -> String? {
+        switch kind {
+        case .text:     return nil
+        case .audio:    return "mic.fill"
+        case .image:    return "photo.fill"
+        case .video:    return "play.rectangle.fill"
+        case .file:     return "paperclip"
+        case .reaction: return "face.smiling.fill"
+        case .sticker:  return "face.dashed.fill"
+        case .none:     return nil
         }
-    }
-
-    // MARK: - Subviews
-
-    /// Discreet inline chip shown when `NetworkMonitor` reports the device
-    /// has no network. Replaces the legacy full-width red `OfflineBanner`
-    /// per user feedback (2026-05-27): the offline state should feel as
-    /// subtle as 'Synchronisation…' and 'Reconnexion…', not a screaming
-    /// alert bar. Uses `MeeshyColors.error` on the leading dot to keep the
-    /// 'offline = error' semantic without flooding the layout.
-    private var offlinePill: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "wifi.slash")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(MeeshyColors.error.opacity(pulseOpacity))
-                .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: dotPhase)
-
-            Text(String(localized: "connection.offline", defaultValue: "Hors ligne"))
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(isDark ? .white.opacity(0.7) : .primary.opacity(0.6))
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(
-            Capsule()
-                .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
-        )
-    }
-
-    private var reconnectingPill: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(MeeshyColors.warning)
-                .frame(width: 6, height: 6)
-                .opacity(pulseOpacity)
-                .animation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true), value: dotPhase)
-
-            Text(String(localized: "connection.reconnecting", defaultValue: "Reconnexion") + animatedDots)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(isDark ? .white.opacity(0.6) : .primary.opacity(0.5))
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(
-            Capsule()
-                .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
-        )
-    }
-
-    private var syncingPill: some View {
-        HStack(spacing: 6) {
-            Circle()
-                .fill(MeeshyColors.brandGradient)
-                .frame(width: 6, height: 6)
-                .opacity(pulseOpacity)
-                .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: dotPhase)
-
-            Text(String(localized: "connection.syncing", defaultValue: "Synchronisation") + animatedDots)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(isDark ? .white.opacity(0.7) : .primary.opacity(0.6))
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 5)
-        .background(
-            Capsule()
-                .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
-        )
-    }
-
-    private var animatedDots: String {
-        String(repeating: ".", count: (dotPhase % 3) + 1)
-    }
-
-    private var pulseOpacity: Double {
-        dotPhase % 2 == 0 ? 1.0 : 0.4
     }
 }

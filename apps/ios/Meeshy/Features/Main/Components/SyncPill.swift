@@ -2,46 +2,83 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-/// Inline rotating pill that lists the operations currently held in the
-/// offline queue. Matches the dimensions and chrome of the legacy
-/// `ConnectionBanner.syncingPill` (height ~22pt, font 11/medium, capsule
-/// background with subtle tint) so the bandeau in the safe-area inset
-/// keeps the same visual weight whether one or many items are pending.
+/// Visual style of the leading status dot in a `SyncPillEntry`. Maps to
+/// concrete `MeeshyColors` tokens at render time — kept as an opaque enum
+/// here so `SyncPillEntry` stays `Equatable`/`Sendable` without depending
+/// on SwiftUI `Color` / `LinearGradient` types (which are not stable
+/// `Equatable` across iOS versions).
+enum SyncPillDotStyle: Equatable, Sendable {
+    case brand     // Indigo brand gradient — default for "in-flight" ops
+    case warning   // Amber — used for transient reconnection states
+    case error     // Red — used for fully offline or failed ops
+}
+
+/// One row of information surfaced by the rotating sync pill. Built by the
+/// orchestrator (`ConnectionBanner`) from a heterogenous set of sources:
+/// pending outbox items (with concrete `source` for navigation),
+/// connection states (offline / disconnected / syncing — no source,
+/// label is the state name).
 ///
-/// Each item in `items` is shown in turn for 2.7 seconds with a label
-/// derived from `SyncPillLabels.operationLabel(for:)` — "Envoi de message",
-/// "Envoi d'audio", "Synchronisation des lus", etc. — so the user sees the
-/// concrete background work, not "Synchronisation" duplicated N times.
+/// The view layer (`SyncPill`) is agnostic to the entry's origin — it
+/// just rotates through the array, renders the label, and forwards taps
+/// when `source != nil`.
+struct SyncPillEntry: Identifiable, Equatable, Sendable {
+    let id: String
+    let label: String
+    /// SFSymbol name shown to the left of the label. Optional — when nil
+    /// the leading slot is filled with the dotStyle's pulsing circle.
+    let iconName: String?
+    let dotStyle: SyncPillDotStyle
+    /// Navigation target when the user taps this entry. `nil` for pure
+    /// status rows (offline / reconnecting / syncing) — those swallow the
+    /// tap as a manual advance instead.
+    let source: OutboxUIItem.Source?
+}
+
+/// Inline rotating pill that lists every signal the user might care about
+/// from the top of the screen — connection state, queued offline ops, and
+/// stuck inflight work — in a single discreet chip. Matches the legacy
+/// `ConnectionBanner.syncingPill` chrome (height ~22pt, font 11/medium,
+/// capsule background with subtle tint).
 ///
-/// After the rotator has cycled through every item 3 complete times
-/// (`SyncPillRotator.maxCycles`), the pill auto-hides via the host's
-/// `hasCompletedAllCycles` binding. Re-shows automatically when the items
-/// array changes (new enqueue, queue drain, item transitions to .failed).
+/// Behaviour highlights:
+/// - Rotates one entry per 2.7 s; pauses 5 s on manual tap.
+/// - Auto-hides after `SyncPillRotator.maxCycles` (3) complete passes.
+/// - Tap on an entry with `source != nil` invokes `onTap(source)` so the
+///   caller can route to the conversation / post / story where the
+///   operation is taking place.
 struct SyncPill: View {
-    let items: [OutboxUIItem]
+    let entries: [SyncPillEntry]
+    /// Invoked when the user taps the pill and the currently visible
+    /// entry has a non-nil `source`. The caller is expected to push onto
+    /// the navigation stack (`Router.push(.conversation/.postDetail/...)`).
+    let onTap: ((OutboxUIItem.Source) -> Void)?
+
     @StateObject private var rotator = SyncPillRotator()
     @Environment(\.colorScheme) private var colorScheme
     @State private var dotPhase: Int = 0
     private let dotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
+    init(
+        entries: [SyncPillEntry],
+        onTap: ((OutboxUIItem.Source) -> Void)? = nil
+    ) {
+        self.entries = entries
+        self.onTap = onTap
+    }
+
     private var isDark: Bool { colorScheme == .dark }
 
-    /// Item shown right now. Clamped against `items.count` so a queue that
-    /// shrinks (drain) between two SwiftUI updates doesn't crash the
-    /// subscript.
-    private var visibleItem: OutboxUIItem? {
-        guard !items.isEmpty else { return nil }
-        let i = min(rotator.currentIndex, items.count - 1)
-        return items[i]
+    /// Entry shown right now. Clamped against `entries.count` so a list
+    /// that shrinks between two SwiftUI updates doesn't crash the subscript.
+    private var visibleEntry: SyncPillEntry? {
+        guard !entries.isEmpty else { return nil }
+        let i = min(rotator.currentIndex, entries.count - 1)
+        return entries[i]
     }
 
-    private var visibleLabel: String {
-        guard let item = visibleItem else { return "" }
-        return SyncPillLabels.operationLabel(for: item)
-    }
-
-    /// Pulsing alpha on the leading status dot, matching the existing
-    /// `ConnectionBanner.syncingPill` cadence (0.5s tick, 50% duty cycle).
+    /// Pulsing alpha on the leading status dot. Matches the legacy chrome
+    /// (0.5 s tick, 50 % duty cycle).
     private var pulseOpacity: Double { dotPhase % 2 == 0 ? 1.0 : 0.4 }
 
     private var animatedDots: String {
@@ -50,17 +87,17 @@ struct SyncPill: View {
 
     var body: some View {
         Group {
-            if !items.isEmpty && !rotator.hasCompletedAllCycles {
+            if !entries.isEmpty && !rotator.hasCompletedAllCycles {
                 pillContent
                     .transition(.opacity.combined(with: .scale(scale: 0.85)))
             } else {
                 EmptyView()
             }
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: items.isEmpty)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: entries.isEmpty)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: rotator.hasCompletedAllCycles)
-        .onAppear { rotator.setItemCount(items.count) }
-        .adaptiveOnChange(of: items.count) { _, newCount in
+        .onAppear { rotator.setItemCount(entries.count) }
+        .adaptiveOnChange(of: entries.count) { _, newCount in
             rotator.setItemCount(newCount)
         }
         .onReceive(dotTimer) { _ in dotPhase += 1 }
@@ -70,14 +107,14 @@ struct SyncPill: View {
     private var pillContent: some View {
         HStack(spacing: 6) {
             statusDot
-            Text(visibleLabel + animatedDots)
+            Text((visibleEntry?.label ?? "") + animatedDots)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(isDark ? .white.opacity(0.7) : .primary.opacity(0.6))
                 .lineLimit(1)
                 .transition(.opacity.combined(with: .move(edge: .top)))
-                .id(visibleItem?.id ?? "empty")
-            if items.count > 1 {
-                Text("\(min(rotator.currentIndex + 1, items.count))/\(items.count)")
+                .id(visibleEntry?.id ?? "empty")
+            if entries.count > 1 {
+                Text("\(min(rotator.currentIndex + 1, entries.count))/\(entries.count)")
                     .font(.system(size: 10, weight: .regular))
                     .foregroundStyle(isDark ? .white.opacity(0.45) : .primary.opacity(0.4))
                     .monospacedDigit()
@@ -86,32 +123,75 @@ struct SyncPill: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
         .background(Capsule().fill(capsuleBackground))
+        .contentShape(Capsule())
+        .onTapGesture(perform: handleTap)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
+        .accessibilityHint(visibleEntry?.source != nil
+            ? "Touchez pour ouvrir l'emplacement de l'opération."
+            : "")
     }
 
+    /// Leading visual indicator. If the entry carries a concrete SFSymbol
+    /// (e.g. `wifi.slash` for offline) we render it tinted by the dot
+    /// style; otherwise we fall back to the pulsing 6×6 circle used by
+    /// the legacy syncingPill.
+    @ViewBuilder
     private var statusDot: some View {
-        Group {
-            if visibleItem?.status == .failed {
-                Circle().fill(MeeshyColors.error)
-            } else {
-                Circle().fill(MeeshyColors.brandGradient)
-            }
+        if let iconName = visibleEntry?.iconName {
+            Image(systemName: iconName)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(dotForeground)
+                .opacity(pulseOpacity)
+                .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: dotPhase)
+        } else {
+            dotShape
+                .frame(width: 6, height: 6)
+                .opacity(pulseOpacity)
+                .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: dotPhase)
         }
-        .frame(width: 6, height: 6)
-        .opacity(pulseOpacity)
-        .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: dotPhase)
+    }
+
+    @ViewBuilder
+    private var dotShape: some View {
+        switch visibleEntry?.dotStyle ?? .brand {
+        case .brand:
+            Circle().fill(MeeshyColors.brandGradient)
+        case .warning:
+            Circle().fill(MeeshyColors.warning)
+        case .error:
+            Circle().fill(MeeshyColors.error)
+        }
+    }
+
+    private var dotForeground: AnyShapeStyle {
+        switch visibleEntry?.dotStyle ?? .brand {
+        case .brand:    return AnyShapeStyle(MeeshyColors.brandGradient)
+        case .warning:  return AnyShapeStyle(MeeshyColors.warning)
+        case .error:    return AnyShapeStyle(MeeshyColors.error)
+        }
     }
 
     private var capsuleBackground: Color {
         isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05)
     }
 
-    private var accessibilityText: String {
-        if items.isEmpty { return "" }
-        if items.count == 1 {
-            return "\(visibleLabel) en cours."
+    private func handleTap() {
+        guard let entry = visibleEntry else { return }
+        if let source = entry.source, let onTap {
+            onTap(source)
+        } else {
+            // Pure status row (offline/syncing/reconnecting) — single tap
+            // just advances the rotation manually.
+            rotator.advance()
         }
-        return "\(items.count) opérations en attente. En cours : \(visibleLabel)."
+    }
+
+    private var accessibilityText: String {
+        guard let entry = visibleEntry else { return "" }
+        if entries.count == 1 {
+            return entry.label
+        }
+        return "\(entries.count) signaux. Actif : \(entry.label)."
     }
 }

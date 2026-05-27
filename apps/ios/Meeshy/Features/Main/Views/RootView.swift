@@ -129,7 +129,7 @@ struct RootView: View {
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
-                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
+                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(onItemTap: handleSyncPillTap) }
                     case .communityDetail(let communityId):
                         CommunityDetailView(
                             communityId: communityId,
@@ -150,7 +150,7 @@ struct RootView: View {
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
-                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
+                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(onItemTap: handleSyncPillTap) }
                     case .communityCreate:
                         CommunityCreateView(
                             onCreated: { community in
@@ -184,7 +184,7 @@ struct RootView: View {
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
-                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
+                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(onItemTap: handleSyncPillTap) }
                         .onDisappear {
                             Task { await notificationManager.refreshUnreadCount() }
                         }
@@ -577,6 +577,33 @@ struct RootView: View {
         // to process.
         .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink, initial: true) { _, newValue in
             handleDeepLink(newValue)
+        }
+    }
+
+    // MARK: - Sync Pill Tap
+
+    /// Tap handler wired into the `ConnectionBanner` → `SyncPill` chain.
+    /// Routes each `OutboxUIItem.Source` to the appropriate destination
+    /// using the local `router` + cached `conversations` list. Logs and
+    /// no-ops when the source can't be resolved (e.g. a conversation
+    /// that hasn't been hydrated into the cache yet).
+    private func handleSyncPillTap(_ source: OutboxUIItem.Source) {
+        switch source {
+        case .conversation(let id):
+            guard let conv = conversationViewModel.conversations.first(where: { $0.id == id }) else {
+                Logger.messages.info("syncPill tap: conversation \(id, privacy: .public) not in cache, skipping")
+                return
+            }
+            router.push(.conversation(conv))
+        case .post(let id):
+            router.push(.postDetail(id, nil, showComments: false))
+        case .story:
+            // V1 no-op — opening a story requires a StoryIntent +
+            // StoryNotificationContext that the inline pill does not
+            // carry. The status row is enough acknowledgement.
+            Logger.messages.info("syncPill tap: story open not yet supported")
+        case .unknown:
+            break
         }
     }
 
