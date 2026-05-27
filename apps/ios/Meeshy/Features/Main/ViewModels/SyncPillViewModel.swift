@@ -35,7 +35,7 @@ final class SyncPillViewModel: ObservableObject {
     /// Inflight rows older than this threshold are treated as "stuck" and
     /// surfaced via `.offline(...)` even when the network reports online —
     /// catches the case where a socket stalled silently.
-    static let staleInflightThreshold: TimeInterval = 4.0
+    nonisolated static let staleInflightThreshold: TimeInterval = 4.0
 
     init(
         offlineQueue: OfflineQueuePillProviding = OfflineQueue.shared,
@@ -55,7 +55,7 @@ final class SyncPillViewModel: ObservableObject {
         .store(in: &cancellables)
     }
 
-    static func derive(
+    nonisolated static func derive(
         items: [OutboxUIItem],
         isOffline: Bool,
         now: Date
