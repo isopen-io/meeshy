@@ -323,6 +323,22 @@ public final class StoryCanvasUIView: UIView {
     /// through save/restore.
     public var onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)?
 
+    /// `true` quand le composer affiche son `DrawingOverlayView` (PKCanvasView
+    /// SwiftUI overlay) au-dessus du canvas. Tant que `true`, le canvas ne
+    /// rend PLUS le drawing persisté de `slide.effects.drawingData` —
+    /// l'overlay live le remplace, sinon les 2 drawings se superposent
+    /// (l'ancien à la mauvaise position en design space + le nouveau en
+    /// bounds space → bug "écrit en double" reporté 2026-05-27). Le composer
+    /// toggle ce flag en miroir de `viewModel.isDrawingActive`. Force un
+    /// rebuild pour ré-render (suppression / re-apparition du drawingLayer).
+    public var isDrawingOverlayActive: Bool = false {
+        didSet {
+            guard oldValue != isDrawingOverlayActive else { return }
+            slideContentRevision &+= 1
+            rebuildLayers()
+        }
+    }
+
     /// `true` quand un gesture pan/pinch/rotate est en cours sur un item.
     /// Indique au parent SwiftUI (`StoryCanvasRepresentable.updateUIView`) que
     /// la vérité de `slide` est temporairement dans UIKit ; les mutations
@@ -1142,7 +1158,8 @@ public final class StoryCanvasUIView: UIView {
                                             cache: cacheForRender,
                                             backdropProvider: { [weak backdropCapture] frame in
                                                 backdropCapture?.cropRegion(frame)
-                                            })
+                                            },
+                                            suppressDrawingOverlay: isDrawingOverlayActive)
         for sub in rendered.sublayers ?? [] {
             itemsContainer.addSublayer(sub)
         }

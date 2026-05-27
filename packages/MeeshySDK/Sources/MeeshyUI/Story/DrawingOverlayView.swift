@@ -214,31 +214,51 @@ public struct PencilKitCanvas: UIViewRepresentable {
     var inkWidth: CGFloat
     var toolType: DrawingTool
 
+    /// Design-space size (1080x1920) — the canonical coordinate system used by
+    /// `StoryRenderer.render` to project the persisted drawing back into the
+    /// canvas render size. We store the drawing in DESIGN coordinates so it
+    /// is portable across devices (iPhone bounds ≠ iPad bounds, but design
+    /// is constant) and the renderer's `drawing.image(from: design)` aligns.
+    public static let designSize: CGSize = CGSize(width: 1080, height: 1920)
+
     public func makeUIView(context: Context) -> PKCanvasView {
         canvasView.backgroundColor = .clear
         canvasView.isOpaque = false
         canvasView.drawingPolicy = .anyInput
         canvasView.delegate = context.coordinator
 
+        // Load any pre-existing drawing projected DESIGN→BOUNDS so it shows
+        // up 1:1 over the user's finger on the visible canvas bounds.
         if let data = drawingData, let drawing = try? PKDrawing(data: data) {
-            canvasView.drawing = drawing
+            canvasView.drawing = Self.projectDesignToBounds(drawing, bounds: canvasView.bounds)
         }
 
         applyTool(to: canvasView)
+        context.coordinator.lastAppliedTool = ToolSignature(tool: toolType, color: inkColor, width: inkWidth)
         return canvasView
     }
 
     public func updateUIView(_ uiView: PKCanvasView, context: Context) {
         uiView.isUserInteractionEnabled = isActive
-        applyTool(to: uiView)
+        // Only re-apply the tool when it actually changed — re-applying on
+        // EVERY `updateUIView` reset `canvas.tool` mid-stroke when an
+        // unrelated SwiftUI state nearby triggered a body recompute,
+        // interrupting the user's drawing.
+        let nextSignature = ToolSignature(tool: toolType, color: inkColor, width: inkWidth)
+        if context.coordinator.lastAppliedTool != nextSignature {
+            applyTool(to: uiView)
+            context.coordinator.lastAppliedTool = nextSignature
+        }
 
-        // Sync drawing when slide changes (drawingData changed externally)
+        // Sync drawing when slide changes (drawingData changed externally).
+        // The persisted `drawingData` is in DESIGN coords; project to BOUNDS
+        // before assigning so what the user sees matches what is stored.
         guard !context.coordinator.isUpdatingFromDelegate else { return }
         if let data = drawingData {
             if uiView.drawing.dataRepresentation() != data,
                let drawing = try? PKDrawing(data: data) {
                 context.coordinator.isUpdatingFromDelegate = true
-                uiView.drawing = drawing
+                uiView.drawing = Self.projectDesignToBounds(drawing, bounds: uiView.bounds)
                 context.coordinator.isUpdatingFromDelegate = false
             }
         } else if !uiView.drawing.strokes.isEmpty {
@@ -263,13 +283,52 @@ public struct PencilKitCanvas: UIViewRepresentable {
         }
     }
 
+    /// Projects a PKDrawing from PKCanvasView bounds-coords into the canonical
+    /// design space (1080x1920). The scale uses `min(scaleX, scaleY)` so the
+    /// drawing aspect ratio is preserved regardless of device bounds.
+    static func projectBoundsToDesign(_ drawing: PKDrawing, bounds: CGRect) -> PKDrawing {
+        guard bounds.width > 0, bounds.height > 0 else { return drawing }
+        let scale = min(designSize.width / bounds.width,
+                        designSize.height / bounds.height)
+        return drawing.transformed(using: CGAffineTransform(scaleX: scale, y: scale))
+    }
+
+    /// Inverse of `projectBoundsToDesign` — used when loading a persisted
+    /// drawing into a freshly-mounted PKCanvasView so the strokes line up
+    /// with the user's finger on the visible bounds.
+    static func projectDesignToBounds(_ drawing: PKDrawing, bounds: CGRect) -> PKDrawing {
+        guard bounds.width > 0, bounds.height > 0 else { return drawing }
+        let scale = min(designSize.width / bounds.width,
+                        designSize.height / bounds.height)
+        guard scale > 0 else { return drawing }
+        return drawing.transformed(using: CGAffineTransform(scaleX: 1.0 / scale, y: 1.0 / scale))
+    }
+
     public func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
+    }
+
+    /// Lightweight equatable signature of the active tool — used to skip
+    /// redundant `canvas.tool = ...` assignments in `updateUIView` that would
+    /// otherwise interrupt an in-flight stroke.
+    struct ToolSignature: Equatable {
+        let tool: DrawingTool
+        let colorRGBA: [CGFloat]  // [r, g, b, a]
+        let width: CGFloat
+
+        init(tool: DrawingTool, color: UIColor, width: CGFloat) {
+            self.tool = tool
+            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+            color.getRed(&r, green: &g, blue: &b, alpha: &a)
+            self.colorRGBA = [r, g, b, a]
+            self.width = width
+        }
     }
 
     public class Coordinator: NSObject, PKCanvasViewDelegate {
         var parent: PencilKitCanvas
         var isUpdatingFromDelegate = false
+        var lastAppliedTool: ToolSignature?
 
         init(parent: PencilKitCanvas) {
             self.parent = parent
@@ -277,7 +336,13 @@ public struct PencilKitCanvas: UIViewRepresentable {
 
         public func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
             guard !isUpdatingFromDelegate else { return }
-            parent.drawingData = canvasView.drawing.dataRepresentation()
+            // Persist in DESIGN coords so the drawing is portable across
+            // devices and StoryRenderer renders it correctly (StoryRenderer
+            // always projects design-space → render-size via
+            // `drawing.image(from: CGRect(size: designSize))`).
+            let projected = PencilKitCanvas.projectBoundsToDesign(canvasView.drawing,
+                                                                  bounds: canvasView.bounds)
+            parent.drawingData = projected.dataRepresentation()
         }
     }
 }

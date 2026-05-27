@@ -1276,7 +1276,12 @@ public struct StoryComposerView: View {
                     videoFitMode: transform.videoFitMode
                 )
                 viewModel.saveBackgroundTransform()
-            }
+            },
+            // Quand le drawing overlay est actif, le canvas doit supprimer
+            // son drawingLayer persisté — sinon double rendu (ancien drawing
+            // au mauvais endroit dans le design space + nouveau drawing live
+            // du PKCanvasView en bounds space). Bug "écrit en double", 2026-05-27.
+            isDrawingOverlayActive: viewModel.isDrawingActive
         )
         .allowsHitTesting(!viewModel.isDrawingActive)
         .overlay {
