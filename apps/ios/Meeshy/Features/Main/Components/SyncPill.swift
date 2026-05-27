@@ -9,8 +9,10 @@ import MeeshyUI
 /// `Equatable` across iOS versions).
 enum SyncPillDotStyle: Equatable, Sendable {
     case brand     // Indigo brand gradient — default for "in-flight" ops
-    case warning   // Amber — used for transient reconnection states
-    case error     // Red — used for fully offline or failed ops
+    case warning   // Amber — used for offline / transient reconnection states
+    case success   // Green — used for the transient "En ligne" entry that
+                   // appears for ~4s after coming back from offline
+    case error     // Red — used for permanently failed ops in the queue
 }
 
 /// One row of information surfaced by the rotating sync pill. Built by the
@@ -87,7 +89,7 @@ struct SyncPill: View {
 
     var body: some View {
         Group {
-            if !entries.isEmpty && !rotator.hasCompletedAllCycles {
+            if !entries.isEmpty {
                 pillContent
                     .transition(.opacity.combined(with: .scale(scale: 0.85)))
             } else {
@@ -95,7 +97,6 @@ struct SyncPill: View {
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: entries.isEmpty)
-        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: rotator.hasCompletedAllCycles)
         .onAppear { rotator.setItemCount(entries.count) }
         .adaptiveOnChange(of: entries.count) { _, newCount in
             rotator.setItemCount(newCount)
@@ -159,6 +160,8 @@ struct SyncPill: View {
             Circle().fill(MeeshyColors.brandGradient)
         case .warning:
             Circle().fill(MeeshyColors.warning)
+        case .success:
+            Circle().fill(MeeshyColors.success)
         case .error:
             Circle().fill(MeeshyColors.error)
         }
@@ -168,6 +171,7 @@ struct SyncPill: View {
         switch visibleEntry?.dotStyle ?? .brand {
         case .brand:    return AnyShapeStyle(MeeshyColors.brandGradient)
         case .warning:  return AnyShapeStyle(MeeshyColors.warning)
+        case .success:  return AnyShapeStyle(MeeshyColors.success)
         case .error:    return AnyShapeStyle(MeeshyColors.error)
         }
     }

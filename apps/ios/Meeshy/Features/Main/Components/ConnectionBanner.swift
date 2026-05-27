@@ -7,16 +7,22 @@ import MeeshyUI
 /// (mounted via `.safeAreaInset(edge: .top, spacing: 0)` on `RootView` /
 /// `iPadRootView`). Acts as the **orchestrator** for the unified
 /// `SyncPill` chip: it collects every signal worth surfacing
-/// (`ConnectionStatus`, offline outbox items) and emits a single list of
-/// `SyncPillEntry` to rotate through.
+/// (`ConnectionStatus`, offline outbox items, transient online return)
+/// and emits a single list of `SyncPillEntry` to rotate through.
 ///
 /// Display order in the rotation (priority high to low):
-///   1. `.offline`        — device has no network (red dot + wifi.slash)
-///   2. `.disconnected`   — socket dropped, awaiting reconnect (amber dot)
-///   3. `.syncing` (when no specific item) — generic background sync
-///   4. Each pending outbox item — one entry per item, label = the
-///      concrete French operation (`Envoi d'audio`, `Envoi d'image`, …),
-///      carries `source` so taps route to the conversation / post / story.
+///   1. `.offline`            — device has no network (amber dot + wifi.slash)
+///   2. `.justReturnedOnline` — transient ~4 s entry that confirms network
+///                              has come back (green dot + wifi)
+///   3. `.disconnected`       — socket dropped, awaiting reconnect (amber)
+///   4. `.syncing` (no items) — generic background sync (indigo)
+///   5. Each pending outbox item — one entry per item, label = the concrete
+///      French operation (`Envoi d'audio`, `Envoi d'image`, …), carries
+///      `source` so taps route to the conversation / post / story.
+///
+/// The pill collapses to `EmptyView` automatically when every signal
+/// clears — there is no 3-cycle auto-hide; the rotation runs as long as
+/// the entry list is non-empty.
 struct ConnectionBanner: View {
     @StateObject private var statusVM = ConnectionStatusViewModel()
     @StateObject private var syncPillVM = SyncPillViewModel()
@@ -25,6 +31,24 @@ struct ConnectionBanner: View {
     /// non-nil. The mount point (`RootView` / `iPadRootView`) wires this
     /// to its router to push onto the navigation stack.
     private let onItemTap: ((OutboxUIItem.Source) -> Void)?
+
+    /// Set to `true` for ~4 seconds after the device transitions from
+    /// `.offline` to any non-offline state. Drives the transient green
+    /// "En ligne" entry — gives the user explicit acknowledgement that
+    /// connectivity has been restored before the pill collapses.
+    @State private var showJustReturnedOnline: Bool = false
+
+    /// Tracks the previously observed status so we can detect the
+    /// offline → online transition exactly once per occurrence.
+    @State private var lastObservedStatus: ConnectionStatusViewModel.Status?
+
+    /// Cancellable handle for the timer that clears
+    /// `showJustReturnedOnline`. Stored on `@State` so successive
+    /// transitions don't pile up handlers.
+    @State private var justReturnedOnlineTimer: Task<Void, Never>?
+
+    /// Duration of the "En ligne" acknowledgement (seconds).
+    private static let onlineAckDuration: Duration = .seconds(4)
 
     init(onItemTap: ((OutboxUIItem.Source) -> Void)? = nil) {
         self.onItemTap = onItemTap
@@ -50,7 +74,15 @@ struct ConnectionBanner: View {
                 id: "status.offline",
                 label: String(localized: "connection.offline", defaultValue: "Hors ligne"),
                 iconName: "wifi.slash",
-                dotStyle: .error,
+                dotStyle: .warning,
+                source: nil
+            ))
+        } else if showJustReturnedOnline {
+            result.append(SyncPillEntry(
+                id: "status.online",
+                label: String(localized: "connection.online", defaultValue: "En ligne"),
+                iconName: "wifi",
+                dotStyle: .success,
                 source: nil
             ))
         } else if isDisconnected {
@@ -89,6 +121,33 @@ struct ConnectionBanner: View {
 
     var body: some View {
         SyncPill(entries: entries, onTap: onItemTap)
+            .adaptiveOnChange(of: statusVM.status) { oldValue, newValue in
+                handleStatusTransition(from: oldValue, to: newValue)
+            }
+            .onAppear {
+                lastObservedStatus = statusVM.status
+            }
+    }
+
+    /// Detects the `.offline → non-.offline` transition. Schedules a
+    /// task that clears the "En ligne" acknowledgement after
+    /// `onlineAckDuration`. Cancels any pending task so successive
+    /// flap-up / flap-down cycles don't pile up handlers.
+    private func handleStatusTransition(
+        from oldValue: ConnectionStatusViewModel.Status?,
+        to newValue: ConnectionStatusViewModel.Status
+    ) {
+        let previous = oldValue ?? lastObservedStatus
+        lastObservedStatus = newValue
+        guard previous == .offline, newValue != .offline else { return }
+
+        justReturnedOnlineTimer?.cancel()
+        showJustReturnedOnline = true
+        justReturnedOnlineTimer = Task { @MainActor [showDuration = Self.onlineAckDuration] in
+            try? await Task.sleep(for: showDuration)
+            guard !Task.isCancelled else { return }
+            showJustReturnedOnline = false
+        }
     }
 
     /// Maps an `OutboxUIItem.IconKind` to the SFSymbol used as the
