@@ -50,7 +50,7 @@ struct StoryTrayView: View {
                 storyScrollView
             }
         }
-        .frame(height: 72)
+        .frame(height: 120)
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
@@ -214,7 +214,7 @@ struct StoryTrayView: View {
                 .font(.system(size: 10, weight: group.hasUnviewed ? .semibold : .medium))
                 .foregroundColor(group.hasUnviewed ? .white : theme.textMuted)
                 .lineLimit(1)
-                .frame(width: 56)
+                .frame(width: 96)
         }
     }
 

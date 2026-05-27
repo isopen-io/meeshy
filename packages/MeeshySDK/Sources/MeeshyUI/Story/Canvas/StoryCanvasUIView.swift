@@ -1517,6 +1517,20 @@ public final class StoryCanvasUIView: UIView {
                         self.backgroundDidBecomeReady()
                     }
                 }
+                // Failsafe timeout 2s — si le KVO `contents` n'a jamais fire
+                // (image déjà stampée avant que l'observer ne soit attaché,
+                // ou bug d'identité de référence sur le NSCache), on force
+                // `backgroundDidBecomeReady` après 2s pour ne pas geler la
+                // progress bar indéfiniment (bug user-reporté 2026-05-27
+                // « progress bar ne progresse même plus du tout »).
+                pendingVideoReadinessTask?.cancel()
+                pendingVideoReadinessTask = Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .seconds(2))
+                    if Task.isCancelled { return }
+                    guard let self else { return }
+                    guard !self.contentReadyFired else { return }
+                    self.backgroundDidBecomeReady()
+                }
             } else {
                 // Defensive — no contentLayer means the kind switch already
                 // settled (e.g. solidColor path took precedence). Fire async

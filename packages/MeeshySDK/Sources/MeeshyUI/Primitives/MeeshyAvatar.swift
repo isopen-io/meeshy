@@ -5,7 +5,7 @@ import MeeshySDK
 
 public enum AvatarContext: Sendable {
     // Stories
-    case storyTray              // 44pt
+    case storyTray              // 88pt (doubled 2026-05-27 — story trail = primary CTA)
     case storyViewer            // 44pt
 
     // Feed
@@ -41,7 +41,8 @@ public enum AvatarContext: Sendable {
 
     public var size: CGFloat {
         switch self {
-        case .storyTray, .storyViewer, .conversationHeaderCollapsed,
+        case .storyTray: return 88  // doubled 2026-05-27 (user request — trail = primary CTA)
+        case .storyViewer, .conversationHeaderCollapsed,
              .conversationHeaderExpanded, .postAuthor, .userListItem, .notification:
             return 44
         case .conversationList: return 52
