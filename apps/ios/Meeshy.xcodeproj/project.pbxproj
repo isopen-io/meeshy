@@ -427,12 +427,8 @@
 		SPVT0001000100010001TST1 /* SyncPillViewModelDeriveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPVT0001000100010001TST0 /* SyncPillViewModelDeriveTests.swift */; };
 		SPRT0001000100010001PRD1 /* SyncPillRotator.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPRT0001000100010001PRD0 /* SyncPillRotator.swift */; };
 		SPRT0001000100010001TST1 /* SyncPillRotatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPRT0001000100010001TST0 /* SyncPillRotatorTests.swift */; };
-		SPIV0001000100010001PRD1 /* SyncPillItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPIV0001000100010001PRD0 /* SyncPillItemView.swift */; };
 		SPVW0001000100010001PRD1 /* SyncPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPVW0001000100010001PRD0 /* SyncPill.swift */; };
-		SPRR0001000100010001PRD1 /* SyncPillRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPRR0001000100010001PRD0 /* SyncPillRouter.swift */; };
-		SPRR0001000100010001TST1 /* SyncPillRouterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPRR0001000100010001TST0 /* SyncPillRouterTests.swift */; };
-		SPHS0001000100010001PRD1 /* SyncPillHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPHS0001000100010001PRD0 /* SyncPillHost.swift */; };
-		MCSP0001000100010001PRD1 /* MeeshyColors+SyncPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = MCSP0001000100010001PRD0 /* MeeshyColors+SyncPill.swift */; };
+		SPLB0001000100010001PRD1 /* SyncPillLabels.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPLB0001000100010001PRD0 /* SyncPillLabels.swift */; };
 		MPHK000000002F01 /* MediaPipelineHook.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPHK000000001F01 /* MediaPipelineHook.swift */; };
 		MPHT000000002F01 /* MediaPipelineHookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPHT000000001F01 /* MediaPipelineHookTests.swift */; };
 		MSTS02002002002002001 /* MessageStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MSTS01001001001001001 /* MessageStoreTests.swift */; };
@@ -1011,14 +1007,8 @@
 		SPVT0001000100010001TST0 /* SyncPillViewModelDeriveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillViewModelDeriveTests.swift; sourceTree = "<group>"; };
 		SPRT0001000100010001PRD0 /* SyncPillRotator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillRotator.swift; sourceTree = "<group>"; };
 		SPRT0001000100010001TST0 /* SyncPillRotatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillRotatorTests.swift; sourceTree = "<group>"; };
-		SPIV0001000100010001PRD0 /* SyncPillItemView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillItemView.swift; sourceTree = "<group>"; };
 		SPVW0001000100010001PRD0 /* SyncPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPill.swift; sourceTree = "<group>"; };
-		SPRR0001000100010001PRD0 /* SyncPillRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillRouter.swift; sourceTree = "<group>"; };
-		SPRR0001000100010001TST0 /* SyncPillRouterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillRouterTests.swift; sourceTree = "<group>"; };
-		SPHS0001000100010001PRD0 /* SyncPillHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillHost.swift; sourceTree = "<group>"; };
-		SPRG0001000100010001GRP /* Routing */ = {isa = PBXGroup; children = (SPRR0001000100010001PRD0 /* SyncPillRouter.swift */, ); path = Routing; sourceTree = "<group>"; };
-		SPTG0001000100010001GRP /* Routing */ = {isa = PBXGroup; children = (SPRR0001000100010001TST0 /* SyncPillRouterTests.swift */, ); path = Routing; sourceTree = "<group>"; };
-		MCSP0001000100010001PRD0 /* MeeshyColors+SyncPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MeeshyColors+SyncPill.swift"; sourceTree = "<group>"; };
+		SPLB0001000100010001PRD0 /* SyncPillLabels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillLabels.swift; sourceTree = "<group>"; };
 		MPHK000000001F01 /* MediaPipelineHook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipelineHook.swift; sourceTree = "<group>"; };
 		MPHT000000001F01 /* MediaPipelineHookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipelineHookTests.swift; sourceTree = "<group>"; };
 		MSTS01001001001001001 /* MessageStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageStoreTests.swift; sourceTree = "<group>"; };
@@ -1245,9 +1235,8 @@
 				48CE3690D4CCEEC41757B801 /* EditPostSheet.swift */,
 				MAPB0001000100010001F001 /* MiniAudioPlayerBar.swift */,
 				SPRT0001000100010001PRD0 /* SyncPillRotator.swift */,
-				SPIV0001000100010001PRD0 /* SyncPillItemView.swift */,
 				SPVW0001000100010001PRD0 /* SyncPill.swift */,
-				SPHS0001000100010001PRD0 /* SyncPillHost.swift */,
+				SPLB0001000100010001PRD0 /* SyncPillLabels.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -1295,7 +1284,6 @@
 				239EA92B51CC63E846FDE461 /* Components */,
 				DD00AA11BB22CC33EE44FF01 /* Models */,
 				RR1100000000003F01 /* Navigation */,
-				SPRG0001000100010001GRP /* Routing */,
 				AABB00110022DD01 /* Services */,
 				THMG0001000100010001GRP /* Theming */,
 				B8C9D0E1F2A3B4C5D6E7F8A9 /* ViewModels */,
@@ -1307,7 +1295,6 @@
 		THMG0001000100010001GRP /* Theming */ = {
 			isa = PBXGroup;
 			children = (
-				MCSP0001000100010001PRD0 /* MeeshyColors+SyncPill.swift */,
 			);
 			path = Theming;
 			sourceTree = "<group>";
@@ -2062,7 +2049,6 @@
 				GSTC005A3B4C5D6E7F890100 /* Views */,
 				33668F4D121C1D11C8401A08 /* Models */,
 				MABT000C000C000C000C001 /* Components */,
-				SPTG0001000100010001GRP /* Routing */,
 			);
 			path = Unit;
 			sourceTree = "<group>";
@@ -2404,11 +2390,8 @@
 				CSVM470A470A470A470A4701 /* ConnectionStatusViewModel.swift in Sources */,
 				SPVM0001000100010001PRD1 /* SyncPillViewModel.swift in Sources */,
 				SPRT0001000100010001PRD1 /* SyncPillRotator.swift in Sources */,
-				SPIV0001000100010001PRD1 /* SyncPillItemView.swift in Sources */,
 				SPVW0001000100010001PRD1 /* SyncPill.swift in Sources */,
-				SPRR0001000100010001PRD1 /* SyncPillRouter.swift in Sources */,
-				SPHS0001000100010001PRD1 /* SyncPillHost.swift in Sources */,
-				MCSP0001000100010001PRD1 /* MeeshyColors+SyncPill.swift in Sources */,
+				SPLB0001000100010001PRD1 /* SyncPillLabels.swift in Sources */,
 				AA11BB22CC33DD44EE55FF04 /* StoryTrayView.swift in Sources */,
 				AA11BB22CC33DD44EE55FF05 /* StoryViewerView.swift in Sources */,
 				D974F1384869B32923B076E7 /* StoryViewerContainer.swift in Sources */,
@@ -2728,7 +2711,6 @@
 				CVOQ000F000F000F000F001 /* ConversationViewModelOfflineQueueTests.swift in Sources */,
 				SPVT0001000100010001TST1 /* SyncPillViewModelDeriveTests.swift in Sources */,
 				SPRT0001000100010001TST1 /* SyncPillRotatorTests.swift in Sources */,
-				SPRR0001000100010001TST1 /* SyncPillRouterTests.swift in Sources */,
 				MOCK0009000900090009001 /* MockStatusService.swift in Sources */,
 				MOCK000A000A000A000A001 /* MockUserService.swift in Sources */,
 				MOCK000B000B000B000B001 /* MockBlockService.swift in Sources */,

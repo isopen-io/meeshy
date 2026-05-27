@@ -5,6 +5,7 @@ import MeeshyUI
 
 struct ConnectionBanner: View {
     @StateObject private var statusVM = ConnectionStatusViewModel()
+    @StateObject private var syncPillVM = SyncPillViewModel()
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     @State private var dotPhase: Int = 0
@@ -19,9 +20,19 @@ struct ConnectionBanner: View {
         statusVM.status == .syncing
     }
 
+    /// Items currently held in the offline outbox queue, derived from
+    /// `SyncPillViewModel.state`. When non-empty the rotating `SyncPill`
+    /// replaces the generic "Synchronisation…" chip so the user sees the
+    /// concrete latent operations (envoi d'audio, envoi d'image, etc.).
+    private var pendingItems: [OutboxUIItem] {
+        syncPillVM.state.items
+    }
+
     var body: some View {
         Group {
-            if isSyncing {
+            if !pendingItems.isEmpty {
+                SyncPill(items: pendingItems)
+            } else if isSyncing {
                 syncingPill
                     .transition(.opacity.combined(with: .scale(scale: 0.8)))
                     .onReceive(dotTimer) { _ in
