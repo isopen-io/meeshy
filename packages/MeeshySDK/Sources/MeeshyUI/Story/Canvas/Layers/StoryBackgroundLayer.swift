@@ -185,6 +185,26 @@ extension StoryBackgroundLayer {
         }
     }
 
+    /// Commit le live transform appliqué pendant un geste (pan / pinch /
+    /// rotation sur le background) au MODÈLE `transform3D` du layer. Appelé
+    /// par `StoryCanvasUIView.handle*.ended` AVANT `slide = updated` pour que
+    /// le `configure()` qui suit (déclenché par `slide.didSet → rebuildLayers`)
+    /// détecte `nothingChanged` (transform3D == bgTransform construit depuis
+    /// le slide mis à jour) et SKIP la reconfiguration des contentLayer
+    /// frames — sinon le `contentLayer?.frame = bounds` du chemin reuse-content
+    /// sur un sublayer encore transformé produit un glitch visuel au release
+    /// ("bg grandi momentanément puis se replace incorrectement", bug
+    /// 2026-05-27).
+    @MainActor
+    public func commitLiveTransform(_ transform: BackgroundTransform) {
+        self.transform3D = transform
+        // Idempotent : le drag avait déjà posé `img.transform = t` via
+        // `applyContentTransform`. Réappliquer ici garantit la cohérence
+        // si un caller appelle `commitLiveTransform` sans `applyContentTransform`
+        // préalable (ex. tests).
+        applyContentTransform(transform.caTransform())
+    }
+
     /// Loads a UIImage from a URL, supporting both `file://` (sync read) and
     /// HTTP(S) (via CacheCoordinator with NSCache + disk TTL + dedup). Returns
     /// `nil` on any error — the caller decides whether to fallback to another

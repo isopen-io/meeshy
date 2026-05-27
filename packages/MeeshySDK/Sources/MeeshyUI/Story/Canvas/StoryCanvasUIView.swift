@@ -2201,6 +2201,16 @@ public final class StoryCanvasUIView: UIView {
             let wasBackgroundDrag = (manipulatedItemId == backgroundMediaObjectId)
             manipulatedItemId = nil
             if wasBackgroundDrag, let live = liveBackgroundTransformDuringDrag {
+                // Sync le MODÈLE du layer AVANT slide = updated : le rebuild
+                // déclenché par slide.didSet appelle configure() qui détecte
+                // alors `nothingChanged` (transform3D == bgTransform) et skip
+                // la reconfiguration des contentLayer frames — sans ça le
+                // chemin reuse-content reset `contentLayer.frame = bounds` sur
+                // un sublayer encore transformé, produisant le glitch visuel
+                // "bg grossit puis ne se place pas correctement" reporté
+                // 2026-05-27.
+                backgroundLayer.commitLiveTransform(live)
+
                 var updated = slide
                 let persisted = StoryBackgroundTransform(
                     scale: live.scale != 1.0 ? CGFloat(live.scale) : nil,
@@ -2238,20 +2248,18 @@ public final class StoryCanvasUIView: UIView {
                 recognizer.state = .cancelled
                 return
             }
-            manipulatedItemId = id
-            // Background rotation : same path α pattern as handlePan / handlePinch.
+            // Rotation interdite sur le background media — user feedback
+            // 2026-05-27 « la rotation du media doit etre … bloqués sur les
+            // background ». Les 2-doigts pour pan+pinch firent souvent une
+            // rotation accidentelle non désirée sur le fond. Le foreground
+            // reste rotable (intent explicite).
             if id == backgroundMediaObjectId {
-                let current = slide.effects.backgroundTransform
-                dragStartBgScale = Double(current?.scale ?? 1)
-                dragStartBgOffsetX = Double(current?.offsetX ?? 0)
-                dragStartBgOffsetY = Double(current?.offsetY ?? 0)
-                dragStartBgRotation = current?.rotation ?? 0
-                dragStartBgFitMode = current?.videoFitMode
-                liveBackgroundTransformDuringDrag = nil
-            } else {
-                baseRotation = currentRotation(forId: id) ?? 0
-                bringForegroundToFront(id: id)
+                recognizer.state = .cancelled
+                return
             }
+            manipulatedItemId = id
+            baseRotation = currentRotation(forId: id) ?? 0
+            bringForegroundToFront(id: id)
         case .changed:
             guard let id = manipulatedItemId else { return }
             // Sensibilité rotation divisée par 2 — user feedback 2026-05-27 :
@@ -2260,41 +2268,12 @@ public final class StoryCanvasUIView: UIView {
             // peut quand même tourner à 360° en faisant 2 tours avec les
             // doigts, ce qui reste raisonnable pour un geste manuel.
             let degrees = (Double(recognizer.rotation) * 180 / .pi) * 0.5
-            if id == backgroundMediaObjectId {
-                let live = BackgroundTransform(
-                    scale: dragStartBgScale,
-                    offsetX: dragStartBgOffsetX,
-                    offsetY: dragStartBgOffsetY,
-                    rotation: dragStartBgRotation + degrees,
-                    videoFitMode: dragStartBgFitMode
-                )
-                backgroundLayer.applyContentTransform(live.caTransform())
-                liveBackgroundTransformDuringDrag = live
-                return
-            }
             slide = updateRotation(slideId: id, rotation: baseRotation + degrees)
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
-            let wasBackgroundDrag = (manipulatedItemId == backgroundMediaObjectId)
             manipulatedItemId = nil
-            if wasBackgroundDrag, let live = liveBackgroundTransformDuringDrag {
-                var updated = slide
-                let persisted = StoryBackgroundTransform(
-                    scale: live.scale != 1.0 ? CGFloat(live.scale) : nil,
-                    offsetX: live.offsetX != 0 ? CGFloat(live.offsetX) : nil,
-                    offsetY: live.offsetY != 0 ? CGFloat(live.offsetY) : nil,
-                    rotation: live.rotation != 0 ? live.rotation : nil,
-                    videoFitMode: live.videoFitMode
-                )
-                updated.effects.backgroundTransform = persisted.isIdentity ? nil : persisted
-                slide = updated
-                onItemModified?(slide)
-                onBackgroundTransformChanged?(persisted)
-                liveBackgroundTransformDuringDrag = nil
-            } else {
-                slideContentRevision &+= 1
-                rebuildLayers()
-            }
+            slideContentRevision &+= 1
+            rebuildLayers()
         default:
             break
         }
@@ -2380,14 +2359,21 @@ public final class StoryCanvasUIView: UIView {
             hideSnapGuides()
 
             if wasBackgroundDrag, let live = liveBackgroundTransformDuringDrag {
+                // Sync MODEL du layer AVANT `slide = updated` : sans ça le
+                // rebuild post slide.didSet rentre dans le chemin reuse-content
+                // de `StoryBackgroundLayer.configure` qui reset
+                // `contentLayer.frame = bounds` sur un sublayer encore
+                // transformé — produit le glitch user "bg grossit puis ne se
+                // place pas correctement" au release (bug 2026-05-27).
+                // Après commit, `transform3D == bgTransform reconstruit du
+                // slide` → `nothingChanged = true` → configure() skip.
+                backgroundLayer.commitLiveTransform(live)
+
                 // Commit live transform into the slide model + notify parents:
                 // - `onItemModified` syncs the SwiftUI @Binding (parity with
                 //   other gesture branches).
                 // - `onBackgroundTransformChanged` provides the typed value
                 //   so the composer viewModel can update its bg cache.
-                // `slide = updated` triggers didSet, but the idempotent
-                // `configure()` (Task 12) detects the same kind and skips
-                // the rebuild flash.
                 var updated = slide
                 let persisted = StoryBackgroundTransform(
                     scale: live.scale != 1.0 ? CGFloat(live.scale) : nil,
@@ -2506,15 +2492,26 @@ public final class StoryCanvasUIView: UIView {
 
         // Read the current model values for this item
         if let media = slide.effects.mediaObjects?.first(where: { $0.id == id }) {
+            // Alignement strict sur `StoryMediaLayer.configure` : scale cuit
+            // dans `bounds` (base × scale), transform = rotation only.
+            // L'ancien chemin posait `transform = scale × rotation` sur des
+            // `bounds` déjà × scale (depuis le dernier configure), ce qui
+            // double-scale dès le 2e geste sur le même media → bug
+            // "media grossit après rotation puis pan" (2026-05-27). Même
+            // pattern que la branche text plus bas qui ne pose que la
+            // rotation parce que scale est déjà cuit dans fontSize.
+            let baseDesign = StoryMediaLayer.baseMediaDesignSize(aspectRatio: media.aspectRatio)
+            let scaledDesign = CGSize(width: baseDesign.width * CGFloat(media.scale),
+                                      height: baseDesign.height * CGFloat(media.scale))
+            let renderedSize = geo.render(scaledDesign)
             CATransaction.begin()
             CATransaction.setDisableActions(true)
+            if layer.bounds.size != renderedSize {
+                layer.bounds = CGRect(origin: .zero, size: renderedSize)
+            }
             layer.position = renderPosition(x: media.x, y: media.y)
-            let scale = CGFloat(media.scale)
             let rotation = CGFloat(media.rotation * .pi / 180)
-            layer.transform = CATransform3DConcat(
-                CATransform3DMakeScale(scale, scale, 1),
-                CATransform3DMakeRotation(rotation, 0, 0, 1)
-            )
+            layer.transform = CATransform3DMakeRotation(rotation, 0, 0, 1)
             CATransaction.commit()
         } else if let text = slide.effects.textObjects.first(where: { $0.id == id }) {
             CATransaction.begin()
@@ -2530,15 +2527,21 @@ public final class StoryCanvasUIView: UIView {
             layer.transform = CATransform3DMakeRotation(rotation, 0, 0, 1)
             CATransaction.commit()
         } else if let sticker = slide.effects.stickerObjects?.first(where: { $0.id == id }) {
+            // Alignement strict sur `StoryStickerLayer.configure` : scale cuit
+            // dans bounds (baseSide × scale), transform = rotation only.
+            // Mêmes raisons que la branche media — éviter le double-scale au
+            // 2e geste sur le même sticker.
+            let designSide = CGFloat(sticker.baseSize * sticker.scale)
+            let renderedSide = geo.render(designSide)
             CATransaction.begin()
             CATransaction.setDisableActions(true)
+            let newBounds = CGRect(x: 0, y: 0, width: renderedSide, height: renderedSide)
+            if layer.bounds.size != newBounds.size {
+                layer.bounds = newBounds
+            }
             layer.position = renderPosition(x: sticker.x, y: sticker.y)
-            let scale = CGFloat(sticker.scale)
             let rotation = CGFloat(sticker.rotation * .pi / 180)
-            layer.transform = CATransform3DConcat(
-                CATransform3DMakeScale(scale, scale, 1),
-                CATransform3DMakeRotation(rotation, 0, 0, 1)
-            )
+            layer.transform = CATransform3DMakeRotation(rotation, 0, 0, 1)
             CATransaction.commit()
         }
     }

@@ -143,7 +143,7 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         self.media = media
 
         // Design-space frame (1080-référentiel) → render-space via geometry.
-        let baseDesignSize = baseMediaDesignSize(aspectRatio: media.aspectRatio)
+        let baseDesignSize = Self.baseMediaDesignSize(aspectRatio: media.aspectRatio)
         let scaledDesignSize = CGSize(
             width: baseDesignSize.width * CGFloat(media.scale),
             height: baseDesignSize.height * CGFloat(media.scale)
@@ -194,7 +194,14 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
 
     /// Base design size (in 1080-référentiel pixels) of a media before user `scale`
     /// is layered on. Envelope is 65 % of the short canvas side, fitted to aspect.
-    private nonisolated func baseMediaDesignSize(aspectRatio: Double) -> CGSize {
+    ///
+    /// Exposé `internal static` pour que `StoryCanvasUIView.updateManipulatedItemLayer`
+    /// puisse appliquer la MÊME convention que `configure` (bounds = base ×
+    /// scale, transform = rotation only) — sinon le lightweight gesture
+    /// update double-scale en posant `transform = scale × rotation` sur des
+    /// bounds déjà × scale (bug "media grossit après rotation puis pan",
+    /// 2026-05-27). Aligne avec le pattern déjà appliqué au text scale.
+    internal static func baseMediaDesignSize(aspectRatio: Double) -> CGSize {
         let target: CGFloat = CanvasGeometry.designWidth * 0.65   // 702
         let ratio = max(0.1, min(10.0, CGFloat(aspectRatio)))
         if abs(ratio - 1.0) < 0.05 {
