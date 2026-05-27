@@ -420,6 +420,9 @@
 		MOCK000A000A000A000A001 /* MockUserService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK000A000A000A000A000 /* MockUserService.swift */; };
 		MOCK000B000B000B000B001 /* MockBlockService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK000B000B000B000B000 /* MockBlockService.swift */; };
 		MOCK000C000C000C000C001 /* MockLanguageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK000C000C000C000C000 /* MockLanguageProvider.swift */; };
+		FOMQ000D000D000D000D001 /* FakeOfflineMessageQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = FOMQ000D000D000D000D000 /* FakeOfflineMessageQueue.swift */; };
+		FNMN000E000E000E000E001 /* FakeNetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = FNMN000E000E000E000E000 /* FakeNetworkMonitor.swift */; };
+		CVOQ000F000F000F000F001 /* ConversationViewModelOfflineQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CVOQ000F000F000F000F000 /* ConversationViewModelOfflineQueueTests.swift */; };
 		MPHK000000002F01 /* MediaPipelineHook.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPHK000000001F01 /* MediaPipelineHook.swift */; };
 		MPHT000000002F01 /* MediaPipelineHookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPHT000000001F01 /* MediaPipelineHookTests.swift */; };
 		MSTS02002002002002001 /* MessageStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MSTS01001001001001001 /* MessageStoreTests.swift */; };
@@ -991,6 +994,9 @@
 		MOCK000A000A000A000A000 /* MockUserService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockUserService.swift; sourceTree = "<group>"; };
 		MOCK000B000B000B000B000 /* MockBlockService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBlockService.swift; sourceTree = "<group>"; };
 		MOCK000C000C000C000C000 /* MockLanguageProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockLanguageProvider.swift; sourceTree = "<group>"; };
+		FOMQ000D000D000D000D000 /* FakeOfflineMessageQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FakeOfflineMessageQueue.swift; sourceTree = "<group>"; };
+		FNMN000E000E000E000E000 /* FakeNetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FakeNetworkMonitor.swift; sourceTree = "<group>"; };
+		CVOQ000F000F000F000F000 /* ConversationViewModelOfflineQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModelOfflineQueueTests.swift; sourceTree = "<group>"; };
 		MPHK000000001F01 /* MediaPipelineHook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipelineHook.swift; sourceTree = "<group>"; };
 		MPHT000000001F01 /* MediaPipelineHookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipelineHookTests.swift; sourceTree = "<group>"; };
 		MSTS01001001001001001 /* MessageStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageStoreTests.swift; sourceTree = "<group>"; };
@@ -1580,6 +1586,7 @@
 				12EC32EE90955ED041C92F06 /* ConversationViewModelTests.swift */,
 				D3AD91E4BFD44CDA82DEAD02 /* ConversationViewModelOtherUnreadTests.swift */,
 				CVAT0001000100010001F001 /* ConversationViewModelAudioTests.swift */,
+				CVOQ000F000F000F000F000 /* ConversationViewModelOfflineQueueTests.swift */,
 				7789A854759F389975CB9906 /* FeedViewModelTests.swift */,
 				E5AC4E027FC1B934E44A48FD /* GlobalSearchViewModelTests.swift */,
 				E4A4562A9E8160E9EF7098B7 /* StatusViewModelTests.swift */,
@@ -1870,6 +1877,8 @@
 				BE78D3B42AA19F0490A676B0 /* MockVoIPTokenStore.swift */,
 				45DFAB2ED859C2AA5B59F337 /* MockSessionService.swift */,
 				MAPE0001000100010001F001 /* MockAudioPlaybackEngine.swift */,
+				FOMQ000D000D000D000D000 /* FakeOfflineMessageQueue.swift */,
+				FNMN000E000E000E000E000 /* FakeNetworkMonitor.swift */,
 			);
 			path = Mocks;
 			sourceTree = "<group>";
@@ -2667,6 +2676,9 @@
 				MOCK0007000700070007001 /* MockStoryService.swift in Sources */,
 				MOCK0008000800080008001 /* MockPostService.swift in Sources */,
 				MOCK000C000C000C000C001 /* MockLanguageProvider.swift in Sources */,
+				FOMQ000D000D000D000D001 /* FakeOfflineMessageQueue.swift in Sources */,
+				FNMN000E000E000E000E001 /* FakeNetworkMonitor.swift in Sources */,
+				CVOQ000F000F000F000F001 /* ConversationViewModelOfflineQueueTests.swift in Sources */,
 				MOCK0009000900090009001 /* MockStatusService.swift in Sources */,
 				MOCK000A000A000A000A001 /* MockUserService.swift in Sources */,
 				MOCK000B000B000B000B001 /* MockBlockService.swift in Sources */,

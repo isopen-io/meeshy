@@ -148,6 +148,27 @@ public actor MessagePersistenceActor {
         postMessageStoreRefresh(conversationIds: [r.conversationId])
     }
 
+    /// Flip an existing optimistic row to `.failed` after an offline-enqueue
+    /// or fire-and-forget write blew up. Mirrors the `.sendFailed` branch of
+    /// `applyEvent` but bypasses the state machine because the caller already
+    /// knows the row never reached the network and needs a deterministic
+    /// `.failed` regardless of `MessageState`'s monotone transitions.
+    public func markOptimisticFailed(localId: String, reason: String) throws {
+        var affectedConversationId: String?
+        try dbWriter.write { db in
+            guard var record = try MessageRecord.fetchOne(db, key: localId) else { return }
+            affectedConversationId = record.conversationId
+            record.state = .failed
+            record.lastError = reason
+            record.updatedAt = Date()
+            record.changeVersion += 1
+            try record.update(db)
+        }
+        if let convId = affectedConversationId {
+            postMessageStoreRefresh(conversationIds: [convId])
+        }
+    }
+
     public func applyEvent(localId: String, event: MessageEvent) throws -> MessageState? {
         // We need the record's conversationId outside the write block so we
         // can post a *targeted* refresh notification. MessageStore observers
