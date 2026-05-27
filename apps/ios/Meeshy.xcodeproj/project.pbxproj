@@ -427,6 +427,8 @@
 		SPVT0001000100010001TST1 /* SyncPillViewModelDeriveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPVT0001000100010001TST0 /* SyncPillViewModelDeriveTests.swift */; };
 		SPRT0001000100010001PRD1 /* SyncPillRotator.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPRT0001000100010001PRD0 /* SyncPillRotator.swift */; };
 		SPRT0001000100010001TST1 /* SyncPillRotatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPRT0001000100010001TST0 /* SyncPillRotatorTests.swift */; };
+		SPIV0001000100010001PRD1 /* SyncPillItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPIV0001000100010001PRD0 /* SyncPillItemView.swift */; };
+		SPVW0001000100010001PRD1 /* SyncPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPVW0001000100010001PRD0 /* SyncPill.swift */; };
 		MCSP0001000100010001PRD1 /* MeeshyColors+SyncPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = MCSP0001000100010001PRD0 /* MeeshyColors+SyncPill.swift */; };
 		MPHK000000002F01 /* MediaPipelineHook.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPHK000000001F01 /* MediaPipelineHook.swift */; };
 		MPHT000000002F01 /* MediaPipelineHookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPHT000000001F01 /* MediaPipelineHookTests.swift */; };
@@ -1006,6 +1008,8 @@
 		SPVT0001000100010001TST0 /* SyncPillViewModelDeriveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillViewModelDeriveTests.swift; sourceTree = "<group>"; };
 		SPRT0001000100010001PRD0 /* SyncPillRotator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillRotator.swift; sourceTree = "<group>"; };
 		SPRT0001000100010001TST0 /* SyncPillRotatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillRotatorTests.swift; sourceTree = "<group>"; };
+		SPIV0001000100010001PRD0 /* SyncPillItemView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillItemView.swift; sourceTree = "<group>"; };
+		SPVW0001000100010001PRD0 /* SyncPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPill.swift; sourceTree = "<group>"; };
 		MCSP0001000100010001PRD0 /* MeeshyColors+SyncPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MeeshyColors+SyncPill.swift"; sourceTree = "<group>"; };
 		MPHK000000001F01 /* MediaPipelineHook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipelineHook.swift; sourceTree = "<group>"; };
 		MPHT000000001F01 /* MediaPipelineHookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipelineHookTests.swift; sourceTree = "<group>"; };
@@ -1233,6 +1237,8 @@
 				48CE3690D4CCEEC41757B801 /* EditPostSheet.swift */,
 				MAPB0001000100010001F001 /* MiniAudioPlayerBar.swift */,
 				SPRT0001000100010001PRD0 /* SyncPillRotator.swift */,
+				SPIV0001000100010001PRD0 /* SyncPillItemView.swift */,
+				SPVW0001000100010001PRD0 /* SyncPill.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -2387,6 +2393,8 @@
 				CSVM470A470A470A470A4701 /* ConnectionStatusViewModel.swift in Sources */,
 				SPVM0001000100010001PRD1 /* SyncPillViewModel.swift in Sources */,
 				SPRT0001000100010001PRD1 /* SyncPillRotator.swift in Sources */,
+				SPIV0001000100010001PRD1 /* SyncPillItemView.swift in Sources */,
+				SPVW0001000100010001PRD1 /* SyncPill.swift in Sources */,
 				MCSP0001000100010001PRD1 /* MeeshyColors+SyncPill.swift in Sources */,
 				AA11BB22CC33DD44EE55FF04 /* StoryTrayView.swift in Sources */,
 				AA11BB22CC33DD44EE55FF05 /* StoryViewerView.swift in Sources */,
