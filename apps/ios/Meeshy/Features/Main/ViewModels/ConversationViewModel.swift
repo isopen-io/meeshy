@@ -2643,6 +2643,12 @@ class ConversationViewModel: ObservableObject {
             )
             do {
                 try await OfflineQueue.shared.enqueue(.markAsRead, payload: payload, conversationId: convId)
+                // Mirror of ConversationCommandHandler.markAsRead: without
+                // an explicit flushNow() the markAsRead row sits .pending
+                // until an unrelated mutation (reaction, send, etc.) wakes
+                // the flusher up, leaving "Synchronisation des lus" stuck
+                // in the SyncPill indefinitely.
+                await OutboxFlushTrigger.flushNow()
             } catch {
                 await PendingStatusQueue.shared.enqueue(.init(
                     conversationId: convId, type: "read", timestamp: Date()
