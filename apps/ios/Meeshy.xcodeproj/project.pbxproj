@@ -423,6 +423,8 @@
 		FOMQ000D000D000D000D001 /* FakeOfflineMessageQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = FOMQ000D000D000D000D000 /* FakeOfflineMessageQueue.swift */; };
 		FNMN000E000E000E000E001 /* FakeNetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = FNMN000E000E000E000E000 /* FakeNetworkMonitor.swift */; };
 		CVOQ000F000F000F000F001 /* ConversationViewModelOfflineQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CVOQ000F000F000F000F000 /* ConversationViewModelOfflineQueueTests.swift */; };
+		SPVM0001000100010001PRD1 /* SyncPillViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPVM0001000100010001PRD0 /* SyncPillViewModel.swift */; };
+		SPVT0001000100010001TST1 /* SyncPillViewModelDeriveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPVT0001000100010001TST0 /* SyncPillViewModelDeriveTests.swift */; };
 		MPHK000000002F01 /* MediaPipelineHook.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPHK000000001F01 /* MediaPipelineHook.swift */; };
 		MPHT000000002F01 /* MediaPipelineHookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPHT000000001F01 /* MediaPipelineHookTests.swift */; };
 		MSTS02002002002002001 /* MessageStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MSTS01001001001001001 /* MessageStoreTests.swift */; };
@@ -997,6 +999,8 @@
 		FOMQ000D000D000D000D000 /* FakeOfflineMessageQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FakeOfflineMessageQueue.swift; sourceTree = "<group>"; };
 		FNMN000E000E000E000E000 /* FakeNetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FakeNetworkMonitor.swift; sourceTree = "<group>"; };
 		CVOQ000F000F000F000F000 /* ConversationViewModelOfflineQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModelOfflineQueueTests.swift; sourceTree = "<group>"; };
+		SPVM0001000100010001PRD0 /* SyncPillViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillViewModel.swift; sourceTree = "<group>"; };
+		SPVT0001000100010001TST0 /* SyncPillViewModelDeriveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillViewModelDeriveTests.swift; sourceTree = "<group>"; };
 		MPHK000000001F01 /* MediaPipelineHook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipelineHook.swift; sourceTree = "<group>"; };
 		MPHT000000001F01 /* MediaPipelineHookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipelineHookTests.swift; sourceTree = "<group>"; };
 		MSTS01001001001001001 /* MessageStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageStoreTests.swift; sourceTree = "<group>"; };
@@ -1607,6 +1611,7 @@
 				A6D1738BD9811301B9F54CC3 /* NewConversationViewModelTests.swift */,
 				F724878269B34D64666FE22F /* SharePickerViewModelTests.swift */,
 				58E474C4D36CC00D6996402D /* ActiveSessionsViewModelTests.swift */,
+				SPVT0001000100010001TST0 /* SyncPillViewModelDeriveTests.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -1634,6 +1639,7 @@
 				22A41274BF8D576660206AD8 /* NewConversationViewModel.swift */,
 				917EA2F73850B030DA882892 /* SharePickerViewModel.swift */,
 				279C3702E1E676F9B782AA66 /* ActiveSessionsViewModel.swift */,
+				SPVM0001000100010001PRD0 /* SyncPillViewModel.swift */,
 				0839132BDE66F1FFD67D64A7 /* Conversation */,
 			);
 			path = ViewModels;
@@ -2362,6 +2368,7 @@
 				AA11BB22CC33DD44EE55FF02 /* StoryViewModel.swift in Sources */,
 				AA11BB22CC33DD44EE55FF03 /* StatusViewModel.swift in Sources */,
 				CSVM470A470A470A470A4701 /* ConnectionStatusViewModel.swift in Sources */,
+				SPVM0001000100010001PRD1 /* SyncPillViewModel.swift in Sources */,
 				AA11BB22CC33DD44EE55FF04 /* StoryTrayView.swift in Sources */,
 				AA11BB22CC33DD44EE55FF05 /* StoryViewerView.swift in Sources */,
 				D974F1384869B32923B076E7 /* StoryViewerContainer.swift in Sources */,
@@ -2679,6 +2686,7 @@
 				FOMQ000D000D000D000D001 /* FakeOfflineMessageQueue.swift in Sources */,
 				FNMN000E000E000E000E001 /* FakeNetworkMonitor.swift in Sources */,
 				CVOQ000F000F000F000F001 /* ConversationViewModelOfflineQueueTests.swift in Sources */,
+				SPVT0001000100010001TST1 /* SyncPillViewModelDeriveTests.swift in Sources */,
 				MOCK0009000900090009001 /* MockStatusService.swift in Sources */,
 				MOCK000A000A000A000A001 /* MockUserService.swift in Sources */,
 				MOCK000B000B000B000B001 /* MockBlockService.swift in Sources */,
