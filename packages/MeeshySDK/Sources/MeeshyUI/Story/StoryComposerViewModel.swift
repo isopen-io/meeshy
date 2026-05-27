@@ -990,7 +990,14 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
             scale: 1.0,
             rotation: 0,
             volume: 1.0,
+            // Bg media loops by default so a short video/asset covers the
+            // full slide duration. Without this, `StoryMediaObject.loop`
+            // defaults to false → `bgVideo.loop ?? true` in StoryRenderer
+            // never falls back to true → AVPlayerLooper never armed → video
+            // stops at its native end while the slide progress bar continues
+            // (user report 2026-05-27).
             isBackground: shouldBeBackground,
+            loop: shouldBeBackground,
             sourceLanguage: detectedKeyboardLanguage
         )
         var medias = targetEffects.mediaObjects ?? []
