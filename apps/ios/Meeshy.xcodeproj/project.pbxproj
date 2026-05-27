@@ -429,6 +429,8 @@
 		SPRT0001000100010001TST1 /* SyncPillRotatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPRT0001000100010001TST0 /* SyncPillRotatorTests.swift */; };
 		SPIV0001000100010001PRD1 /* SyncPillItemView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPIV0001000100010001PRD0 /* SyncPillItemView.swift */; };
 		SPVW0001000100010001PRD1 /* SyncPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPVW0001000100010001PRD0 /* SyncPill.swift */; };
+		SPRR0001000100010001PRD1 /* SyncPillRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPRR0001000100010001PRD0 /* SyncPillRouter.swift */; };
+		SPRR0001000100010001TST1 /* SyncPillRouterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPRR0001000100010001TST0 /* SyncPillRouterTests.swift */; };
 		MCSP0001000100010001PRD1 /* MeeshyColors+SyncPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = MCSP0001000100010001PRD0 /* MeeshyColors+SyncPill.swift */; };
 		MPHK000000002F01 /* MediaPipelineHook.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPHK000000001F01 /* MediaPipelineHook.swift */; };
 		MPHT000000002F01 /* MediaPipelineHookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPHT000000001F01 /* MediaPipelineHookTests.swift */; };
@@ -1010,6 +1012,10 @@
 		SPRT0001000100010001TST0 /* SyncPillRotatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillRotatorTests.swift; sourceTree = "<group>"; };
 		SPIV0001000100010001PRD0 /* SyncPillItemView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillItemView.swift; sourceTree = "<group>"; };
 		SPVW0001000100010001PRD0 /* SyncPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPill.swift; sourceTree = "<group>"; };
+		SPRR0001000100010001PRD0 /* SyncPillRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillRouter.swift; sourceTree = "<group>"; };
+		SPRR0001000100010001TST0 /* SyncPillRouterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillRouterTests.swift; sourceTree = "<group>"; };
+		SPRG0001000100010001GRP /* Routing */ = {isa = PBXGroup; children = (SPRR0001000100010001PRD0 /* SyncPillRouter.swift */, ); path = Routing; sourceTree = "<group>"; };
+		SPTG0001000100010001GRP /* Routing */ = {isa = PBXGroup; children = (SPRR0001000100010001TST0 /* SyncPillRouterTests.swift */, ); path = Routing; sourceTree = "<group>"; };
 		MCSP0001000100010001PRD0 /* MeeshyColors+SyncPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MeeshyColors+SyncPill.swift"; sourceTree = "<group>"; };
 		MPHK000000001F01 /* MediaPipelineHook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipelineHook.swift; sourceTree = "<group>"; };
 		MPHT000000001F01 /* MediaPipelineHookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipelineHookTests.swift; sourceTree = "<group>"; };
@@ -1286,6 +1292,7 @@
 				239EA92B51CC63E846FDE461 /* Components */,
 				DD00AA11BB22CC33EE44FF01 /* Models */,
 				RR1100000000003F01 /* Navigation */,
+				SPRG0001000100010001GRP /* Routing */,
 				AABB00110022DD01 /* Services */,
 				THMG0001000100010001GRP /* Theming */,
 				B8C9D0E1F2A3B4C5D6E7F8A9 /* ViewModels */,
@@ -2052,6 +2059,7 @@
 				GSTC005A3B4C5D6E7F890100 /* Views */,
 				33668F4D121C1D11C8401A08 /* Models */,
 				MABT000C000C000C000C001 /* Components */,
+				SPTG0001000100010001GRP /* Routing */,
 			);
 			path = Unit;
 			sourceTree = "<group>";
@@ -2395,6 +2403,7 @@
 				SPRT0001000100010001PRD1 /* SyncPillRotator.swift in Sources */,
 				SPIV0001000100010001PRD1 /* SyncPillItemView.swift in Sources */,
 				SPVW0001000100010001PRD1 /* SyncPill.swift in Sources */,
+				SPRR0001000100010001PRD1 /* SyncPillRouter.swift in Sources */,
 				MCSP0001000100010001PRD1 /* MeeshyColors+SyncPill.swift in Sources */,
 				AA11BB22CC33DD44EE55FF04 /* StoryTrayView.swift in Sources */,
 				AA11BB22CC33DD44EE55FF05 /* StoryViewerView.swift in Sources */,
@@ -2715,6 +2724,7 @@
 				CVOQ000F000F000F000F001 /* ConversationViewModelOfflineQueueTests.swift in Sources */,
 				SPVT0001000100010001TST1 /* SyncPillViewModelDeriveTests.swift in Sources */,
 				SPRT0001000100010001TST1 /* SyncPillRotatorTests.swift in Sources */,
+				SPRR0001000100010001TST1 /* SyncPillRouterTests.swift in Sources */,
 				MOCK0009000900090009001 /* MockStatusService.swift in Sources */,
 				MOCK000A000A000A000A001 /* MockUserService.swift in Sources */,
 				MOCK000B000B000B000B001 /* MockBlockService.swift in Sources */,
