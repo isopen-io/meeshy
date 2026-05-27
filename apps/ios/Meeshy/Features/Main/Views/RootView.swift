@@ -269,21 +269,13 @@ struct RootView: View {
                 menuLadder
             }
 
-            // 7. Offline banner — source unique : ConnectionStatusViewModel.
-            // Quand le réseau revient, `status` cesse d'être `.offline` et la
-            // bannière disparaît immédiatement ; les sockets se reconnectent
-            // en parallèle (cf. NetworkMonitor → forceReconnect dans le SDK).
-            if connectionStatus.status == .offline {
-                VStack {
-                    OfflineBanner()
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                    Spacer()
-                }
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: connectionStatus.status)
-                .zIndex(190)
-            } else {
-                pendingSettingsBannerOverlay
-            }
+            // 7. Offline state — surfaced as a discreet inline chip inside
+            // `ConnectionBanner` (the safe-area inset at the top of every
+            // NavigationStack content view). The legacy full-width red
+            // `OfflineBanner` was retired 2026-05-27 — the offline state
+            // is just one of {.syncing, .offline, .disconnected} that the
+            // small ConnectionBanner pill rotates through.
+            pendingSettingsBannerOverlay
 
             // 8. Toast overlay — handled at MeeshyApp level to avoid duplicates
 

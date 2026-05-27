@@ -16,15 +16,9 @@ extension iPadRootView {
 
     var overlays: some View {
         ZStack {
-            if networkMonitor.isOffline {
-                VStack {
-                    OfflineBanner()
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                    Spacer()
-                }
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: networkMonitor.isOffline)
-                .zIndex(190)
-            }
+            // Offline state surfaced via ConnectionBanner inline chip
+            // (safe-area inset) — see iOS root pattern. Legacy
+            // full-width red OfflineBanner retired 2026-05-27.
 
             VStack {
                 if let toast = toastManager.currentToast {

@@ -15,6 +15,10 @@ struct ConnectionBanner: View {
         statusVM.status == .disconnected
     }
 
+    private var isOffline: Bool {
+        statusVM.status == .offline
+    }
+
     private var isSyncing: Bool {
         statusVM.status == .syncing
     }
@@ -31,6 +35,12 @@ struct ConnectionBanner: View {
         Group {
             if !pendingItems.isEmpty {
                 SyncPill(items: pendingItems)
+            } else if isOffline {
+                offlinePill
+                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                    .onReceive(dotTimer) { _ in
+                        dotPhase += 1
+                    }
             } else if isSyncing {
                 syncingPill
                     .transition(.opacity.combined(with: .scale(scale: 0.8)))
@@ -48,6 +58,32 @@ struct ConnectionBanner: View {
     }
 
     // MARK: - Subviews
+
+    /// Discreet inline chip shown when `NetworkMonitor` reports the device
+    /// has no network. Replaces the legacy full-width red `OfflineBanner`
+    /// per user feedback (2026-05-27): the offline state should feel as
+    /// subtle as 'Synchronisation…' and 'Reconnexion…', not a screaming
+    /// alert bar. Uses `MeeshyColors.error` on the leading dot to keep the
+    /// 'offline = error' semantic without flooding the layout.
+    private var offlinePill: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "wifi.slash")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(MeeshyColors.error.opacity(pulseOpacity))
+                .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: dotPhase)
+
+            Text(String(localized: "connection.offline", defaultValue: "Hors ligne"))
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(isDark ? .white.opacity(0.7) : .primary.opacity(0.6))
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(
+            Capsule()
+                .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
+        )
+    }
 
     private var reconnectingPill: some View {
         HStack(spacing: 6) {
