@@ -425,6 +425,7 @@
 		CVOQ000F000F000F000F001 /* ConversationViewModelOfflineQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CVOQ000F000F000F000F000 /* ConversationViewModelOfflineQueueTests.swift */; };
 		SPVM0001000100010001PRD1 /* SyncPillViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPVM0001000100010001PRD0 /* SyncPillViewModel.swift */; };
 		SPVT0001000100010001TST1 /* SyncPillViewModelDeriveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPVT0001000100010001TST0 /* SyncPillViewModelDeriveTests.swift */; };
+		MCSP0001000100010001PRD1 /* MeeshyColors+SyncPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = MCSP0001000100010001PRD0 /* MeeshyColors+SyncPill.swift */; };
 		MPHK000000002F01 /* MediaPipelineHook.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPHK000000001F01 /* MediaPipelineHook.swift */; };
 		MPHT000000002F01 /* MediaPipelineHookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPHT000000001F01 /* MediaPipelineHookTests.swift */; };
 		MSTS02002002002002001 /* MessageStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MSTS01001001001001001 /* MessageStoreTests.swift */; };
@@ -1001,6 +1002,7 @@
 		CVOQ000F000F000F000F000 /* ConversationViewModelOfflineQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModelOfflineQueueTests.swift; sourceTree = "<group>"; };
 		SPVM0001000100010001PRD0 /* SyncPillViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillViewModel.swift; sourceTree = "<group>"; };
 		SPVT0001000100010001TST0 /* SyncPillViewModelDeriveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillViewModelDeriveTests.swift; sourceTree = "<group>"; };
+		MCSP0001000100010001PRD0 /* MeeshyColors+SyncPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MeeshyColors+SyncPill.swift"; sourceTree = "<group>"; };
 		MPHK000000001F01 /* MediaPipelineHook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipelineHook.swift; sourceTree = "<group>"; };
 		MPHT000000001F01 /* MediaPipelineHookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipelineHookTests.swift; sourceTree = "<group>"; };
 		MSTS01001001001001001 /* MessageStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageStoreTests.swift; sourceTree = "<group>"; };
@@ -1274,10 +1276,19 @@
 				DD00AA11BB22CC33EE44FF01 /* Models */,
 				RR1100000000003F01 /* Navigation */,
 				AABB00110022DD01 /* Services */,
+				THMG0001000100010001GRP /* Theming */,
 				B8C9D0E1F2A3B4C5D6E7F8A9 /* ViewModels */,
 				937EE8EE8FCFAC22BCD07F51 /* Views */,
 			);
 			path = Main;
+			sourceTree = "<group>";
+		};
+		THMG0001000100010001GRP /* Theming */ = {
+			isa = PBXGroup;
+			children = (
+				MCSP0001000100010001PRD0 /* MeeshyColors+SyncPill.swift */,
+			);
+			path = Theming;
 			sourceTree = "<group>";
 		};
 		437B1D92F1A225C5E1B044C2 /* Meeshy */ = {
@@ -2369,6 +2380,7 @@
 				AA11BB22CC33DD44EE55FF03 /* StatusViewModel.swift in Sources */,
 				CSVM470A470A470A470A4701 /* ConnectionStatusViewModel.swift in Sources */,
 				SPVM0001000100010001PRD1 /* SyncPillViewModel.swift in Sources */,
+				MCSP0001000100010001PRD1 /* MeeshyColors+SyncPill.swift in Sources */,
 				AA11BB22CC33DD44EE55FF04 /* StoryTrayView.swift in Sources */,
 				AA11BB22CC33DD44EE55FF05 /* StoryViewerView.swift in Sources */,
 				D974F1384869B32923B076E7 /* StoryViewerContainer.swift in Sources */,
