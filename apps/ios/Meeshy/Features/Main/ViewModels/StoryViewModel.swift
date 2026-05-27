@@ -431,10 +431,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                                      storyEffects: effects, createdAt: post.createdAt, isViewed: true)
             insertOrAppendStoryItem(newItem, forAuthor: post.author)
             showStoryComposer = false
-            ToastManager.shared.showSuccess("Story publiee")
+            FeedbackToastManager.shared.showSuccess("Story publiee")
         } catch {
             publishError = "Failed to publish story"
-            ToastManager.shared.showError("Echec de la publication de la story")
+            FeedbackToastManager.shared.showError("Echec de la publication de la story")
         }
 
         isPublishing = false
@@ -660,7 +660,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         guard let payload = try? encoder.encode(slides) else {
-            ToastManager.shared.showError(String(
+            FeedbackToastManager.shared.showError(String(
                 localized: "story.publish.queue.encodeError",
                 defaultValue: "Impossible d'enregistrer la story pour publication différée"
             ))
@@ -681,7 +681,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         // 5. User feedback. The PendingStoryBanner mounted in RootView
         //    reflects the new pending count via StoryPublishService.
         HapticFeedback.success()
-        ToastManager.shared.showSuccess(String(
+        FeedbackToastManager.shared.showSuccess(String(
             localized: "story.publish.queue.enqueued",
             defaultValue: "Story enregistrée — publication au retour en ligne"
         ))
@@ -714,11 +714,11 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 self.activeUpload = nil
                 self.uploadTask = nil
                 HapticFeedback.success()
-                ToastManager.shared.showSuccess("Story publiee")
+                FeedbackToastManager.shared.showSuccess("Story publiee")
             } catch {
                 if !Task.isCancelled {
                     self.activeUpload?.phase = .failed(error.localizedDescription)
-                    ToastManager.shared.showError("Echec de la publication de la story")
+                    FeedbackToastManager.shared.showError("Echec de la publication de la story")
                     // Don't cleanup temp files on failure — retry may need them
                 }
             }

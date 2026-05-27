@@ -507,9 +507,9 @@ struct StoryViewerView: View {
                             isQuote: !content.isEmpty
                         )
                         editAndRepostAsPostSource = nil
-                        ToastManager.shared.show("Publié")
+                        FeedbackToastManager.shared.show("Publié")
                     } catch {
-                        ToastManager.shared.showError("Échec de la publication")
+                        FeedbackToastManager.shared.showError("Échec de la publication")
                         throw error
                     }
                 },
@@ -756,19 +756,19 @@ struct StoryViewerView: View {
                 )
                 await MainActor.run {
                     HapticFeedback.success()
-                    ToastManager.shared.show("Republié dans ton feed")
+                    FeedbackToastManager.shared.show("Republié dans ton feed")
                 }
             } catch APIError.serverError(404, _) {
                 await MainActor.run {
-                    ToastManager.shared.showError("La story n'est plus disponible")
+                    FeedbackToastManager.shared.showError("La story n'est plus disponible")
                 }
             } catch APIError.serverError(403, _) {
                 await MainActor.run {
-                    ToastManager.shared.showError("Cette story ne peut pas être repartagée")
+                    FeedbackToastManager.shared.showError("Cette story ne peut pas être repartagée")
                 }
             } catch {
                 await MainActor.run {
-                    ToastManager.shared.showError("Échec de la republication")
+                    FeedbackToastManager.shared.showError("Échec de la republication")
                 }
             }
         }

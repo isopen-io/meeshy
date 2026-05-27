@@ -10,7 +10,7 @@ struct MeeshyApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     private let dependencies = DependencyContainer.shared
     @StateObject private var authManager = AuthManager.shared
-    @StateObject private var toastManager = ToastManager.shared
+    @StateObject private var toastManager = FeedbackToastManager.shared
     @StateObject private var pushManager = PushNotificationManager.shared
     @StateObject private var deepLinkRouter = DeepLinkRouter.shared
     @StateObject private var theme = ThemeManager.shared
@@ -93,7 +93,7 @@ struct MeeshyApp: App {
                 }
                 .overlay(alignment: .top) {
                     if let toast = toastManager.currentToast {
-                        ToastView(toast: toast)
+                        FeedbackToastView(toast: toast)
                             .transition(.move(edge: .top).combined(with: .opacity))
                             .padding(.top, MeeshySpacing.xxl)
                             .onTapGesture {
@@ -106,18 +106,6 @@ struct MeeshyApp: App {
                     }
                 }
                 .animation(MeeshyAnimation.springDefault, value: toastManager.currentToast)
-                .onReceive(SocialSocketManager.shared.inAppNotification) { payload in
-                    // In-app toast for `notification:new`. The tap action
-                    // builds a custom-scheme Meeshy URL (`meeshy://c/<id>`,
-                    // mapped by DeepLinkRouter) so the toast lands on the
-                    // right conversation regardless of stack depth.
-                    let conversationId = payload.context?.conversationId
-                    let tap: (() -> Void)? = conversationId.flatMap { id in
-                        guard let url = URL(string: "meeshy://c/\(id)") else { return nil }
-                        return { _ = deepLinkRouter.handle(url: url) }
-                    }
-                    _ = toastManager.showInAppNotification(payload, tapAction: tap)
-                }
                 .sheet(isPresented: $showCrashSheet) {
                     CrashReportSheet(reports: crashReportsToShow)
                 }
@@ -153,7 +141,7 @@ struct MeeshyApp: App {
                     MeeshyConfig.shared.restoreEnvironment()
                     // Bridge iOS Focus filter selection into the SDK so in-app
                     // toasts respect the currently-active Focus filter.
-                    NotificationManager.shared.focusFilterProvider = {
+                    NotificationToastManager.shared.focusFilterProvider = {
                         MeeshyFocusStore.shared.current.toSDKSnapshot()
                     }
                     await CacheCoordinator.shared.start()
@@ -325,7 +313,7 @@ struct MeeshyApp: App {
                             _ = authManager  // capture explicite (lint)
                             await requestPushPermissionIfNeeded()
                             VoIPPushManager.shared.register()
-                            await NotificationManager.shared.refreshUnreadCount()
+                            await NotificationToastManager.shared.refreshUnreadCount()
                             await NotificationCoordinator.shared.syncNow()
                         }
 
@@ -448,7 +436,7 @@ struct MeeshyApp: App {
                         MessageSocketManager.shared.forceReconnect()
                         SocialSocketManager.shared.forceReconnect()
                         Task { await requestPushPermissionIfNeeded() }
-                        Task { await NotificationManager.shared.refreshUnreadCount() }
+                        Task { await NotificationToastManager.shared.refreshUnreadCount() }
                         pushManager.reRegisterTokenIfNeeded()
                         // Force a PushKit re-registration on every login so the
                         // gateway UPSERT-by-(userId,token,type) flips back to
@@ -469,7 +457,7 @@ struct MeeshyApp: App {
                             handlePushNavigation(payload: pending)
                         }
                     } else {
-                        NotificationManager.shared.reset()
+                        NotificationToastManager.shared.reset()
                         NotificationCoordinator.shared.reset()
                         // Clear the in-memory friendship graph BEFORE the
                         // cache purge so any view that re-renders during the

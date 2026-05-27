@@ -382,10 +382,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         // P1 reset des singletons SDK (cf. design doc D-13 + Q1-Q6).
         // Ordre : les services qui ne dépendent de rien d'autre d'abord,
-        // puis ceux qui consomment leurs publishers (NotificationManager
+        // puis ceux qui consomment leurs publishers (NotificationToastManager
         // observe NotificationCoordinator).
         NotificationCoordinator.shared.reset()
-        NotificationManager.shared.reset()
+        NotificationToastManager.shared.reset()
         PushNotificationManager.shared.resetSession()
         await BlockService.shared.reset()
         UserPreferencesManager.shared.resetSession()
@@ -409,7 +409,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         await CacheCoordinator.shared.reset()
 
         // En DERNIER : déclenche le router et tous les `wireAuthLogoutHook`
-        // app-side (ConversationAudioCoordinator, ToastManager, etc.).
+        // app-side (ConversationAudioCoordinator, FeedbackToastManager, etc.).
         isAuthenticated = false
     }
 

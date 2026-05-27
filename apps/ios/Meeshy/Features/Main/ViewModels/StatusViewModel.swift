@@ -147,7 +147,7 @@ class StatusViewModel: ObservableObject {
                 await saveCacheSnapshot()
             }
         } catch {
-            ToastManager.shared.showError("Erreur lors de la publication du statut")
+            FeedbackToastManager.shared.showError("Erreur lors de la publication du statut")
         }
     }
 
@@ -167,7 +167,7 @@ class StatusViewModel: ObservableObject {
         } catch {
             statuses = snapshot
             myStatus = previousStatus
-            ToastManager.shared.showError("Erreur lors de la suppression du statut")
+            FeedbackToastManager.shared.showError("Erreur lors de la suppression du statut")
         }
     }
 
@@ -251,7 +251,7 @@ class StatusViewModel: ObservableObject {
         do {
             try await statusService.react(statusId: statusId, emoji: emoji)
         } catch {
-            ToastManager.shared.showError("Erreur lors de la reaction")
+            FeedbackToastManager.shared.showError("Erreur lors de la reaction")
         }
     }
 

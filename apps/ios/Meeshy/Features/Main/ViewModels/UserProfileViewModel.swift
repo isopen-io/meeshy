@@ -186,7 +186,7 @@ final class UserProfileViewModel: ObservableObject {
             for await event in stream {
                 if case .exhausted = event {
                     rollback()
-                    ToastManager.shared.showError(toast)
+                    FeedbackToastManager.shared.showError(toast)
                     HapticFeedback.error()
                 }
             }

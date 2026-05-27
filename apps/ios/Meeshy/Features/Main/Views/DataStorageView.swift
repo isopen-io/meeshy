@@ -159,7 +159,7 @@ struct DataStorageView: View {
             await CacheCoordinator.shared.video.clearAll()
             await CacheCoordinator.shared.thumbnails.clearAll()
             HapticFeedback.success()
-            ToastManager.shared.showSuccess(String(localized: "settings.data.storage.toast.cleared", defaultValue: "Cache vide", bundle: .main))
+            FeedbackToastManager.shared.showSuccess(String(localized: "settings.data.storage.toast.cleared", defaultValue: "Cache vide", bundle: .main))
             isClearing = false
         }
     }

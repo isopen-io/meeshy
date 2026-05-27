@@ -121,10 +121,10 @@ final class DiscoverViewModel: ObservableObject {
             let request = try await friendService.sendFriendRequest(receiverId: userId, message: nil)
             cache.didSendRequest(to: userId, requestId: request.id)
             objectWillChange.send()
-            ToastManager.shared.showSuccess("Demande envoyee")
+            FeedbackToastManager.shared.showSuccess("Demande envoyee")
         } catch {
             HapticFeedback.error()
-            ToastManager.shared.showError("Impossible d'envoyer")
+            FeedbackToastManager.shared.showError("Impossible d'envoyer")
         }
     }
 
@@ -138,12 +138,12 @@ final class DiscoverViewModel: ObservableObject {
         HapticFeedback.success()
         do {
             _ = try await friendService.respond(requestId: requestId, accepted: true)
-            ToastManager.shared.showSuccess("Connexion acceptee")
+            FeedbackToastManager.shared.showSuccess("Connexion acceptee")
         } catch {
             cache.rollbackAccept(senderId: userId, requestId: requestId)
             objectWillChange.send()
             HapticFeedback.error()
-            ToastManager.shared.showError("Impossible d'accepter")
+            FeedbackToastManager.shared.showError("Impossible d'accepter")
         }
     }
 
@@ -155,11 +155,11 @@ final class DiscoverViewModel: ObservableObject {
         isSendingInvite = true
         do {
             try await friendService.sendEmailInvitation(email: email)
-            ToastManager.shared.showSuccess("Invitation envoyee a \(email)")
+            FeedbackToastManager.shared.showSuccess("Invitation envoyee a \(email)")
             emailText = ""
             HapticFeedback.success()
         } catch {
-            ToastManager.shared.showError("Impossible d'envoyer l'invitation")
+            FeedbackToastManager.shared.showError("Impossible d'envoyer l'invitation")
             HapticFeedback.error()
         }
         isSendingInvite = false

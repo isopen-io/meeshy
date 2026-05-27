@@ -367,7 +367,7 @@ class FeedViewModel: ObservableObject {
             updated.insert(post, at: 0)
             try? await CacheCoordinator.shared.feed.save(updated, for: bookmarksKey)
         }
-        ToastManager.shared.showSuccess(String(localized: "Ajoute aux favoris", defaultValue: "Ajoute aux favoris"))
+        FeedbackToastManager.shared.showSuccess(String(localized: "Ajoute aux favoris", defaultValue: "Ajoute aux favoris"))
 
         do {
             let _: APIResponse<[String: Bool]> = try await api.request(
@@ -377,7 +377,7 @@ class FeedViewModel: ObservableObject {
         } catch {
             // Rollback the optimistic cache insertion.
             try? await CacheCoordinator.shared.feed.save(snapshot, for: bookmarksKey)
-            ToastManager.shared.showError("Erreur lors de l'enregistrement")
+            FeedbackToastManager.shared.showError("Erreur lors de l'enregistrement")
         }
     }
 
@@ -439,7 +439,7 @@ class FeedViewModel: ObservableObject {
                 }
             }
         } catch {
-            ToastManager.shared.showError("Erreur lors de l'envoi du commentaire")
+            FeedbackToastManager.shared.showError("Erreur lors de l'envoi du commentaire")
         }
     }
 
@@ -457,7 +457,7 @@ class FeedViewModel: ObservableObject {
         do {
             try await OfflineQueue.shared.enqueue(.toggleLikeComment, payload: payload, conversationId: postId)
         } catch {
-            ToastManager.shared.showError("Erreur lors du like")
+            FeedbackToastManager.shared.showError("Erreur lors du like")
         }
     }
 
@@ -470,7 +470,7 @@ class FeedViewModel: ObservableObject {
                 isQuote: isQuote ? (content != nil) : false
             )
         } catch {
-            ToastManager.shared.showError("Erreur lors du repost")
+            FeedbackToastManager.shared.showError("Erreur lors du repost")
         }
     }
 
@@ -505,7 +505,7 @@ class FeedViewModel: ObservableObject {
             )
             return response.data.shortUrl
         } catch {
-            ToastManager.shared.showError("Erreur lors du partage")
+            FeedbackToastManager.shared.showError("Erreur lors du partage")
             return nil
         }
     }
@@ -525,19 +525,19 @@ class FeedViewModel: ObservableObject {
                 }
             }
 
-            ToastManager.shared.showSuccess("Post supprime")
+            FeedbackToastManager.shared.showSuccess("Post supprime")
         } catch {
             posts = snapshot
-            ToastManager.shared.showError("Erreur lors de la suppression")
+            FeedbackToastManager.shared.showError("Erreur lors de la suppression")
         }
     }
 
     func reportPost(_ postId: String) async {
         do {
             try await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
-            ToastManager.shared.showSuccess("Signalement envoye")
+            FeedbackToastManager.shared.showSuccess("Signalement envoye")
         } catch {
-            ToastManager.shared.showError("Erreur lors du signalement")
+            FeedbackToastManager.shared.showError("Erreur lors du signalement")
         }
     }
 
@@ -567,23 +567,23 @@ class FeedViewModel: ObservableObject {
                 posts[newIdx] = updated.toFeedPost(preferredLanguages: preferredLanguages)
                 debouncedCacheSave()
             }
-            ToastManager.shared.showSuccess(String(localized: "Post modifie", defaultValue: "Post modifie"))
+            FeedbackToastManager.shared.showSuccess(String(localized: "Post modifie", defaultValue: "Post modifie"))
         } catch {
             // Rollback the optimistic snapshot.
             if let rollbackIdx = posts.firstIndex(where: { $0.id == postId }) {
                 posts[rollbackIdx] = snapshot
                 debouncedCacheSave()
             }
-            ToastManager.shared.showError(String(localized: "Erreur lors de la modification", defaultValue: "Erreur lors de la modification"))
+            FeedbackToastManager.shared.showError(String(localized: "Erreur lors de la modification", defaultValue: "Erreur lors de la modification"))
         }
     }
 
     func pinPost(_ postId: String) async {
         do {
             try await postService.pinPost(postId: postId)
-            ToastManager.shared.showSuccess("Post epingle")
+            FeedbackToastManager.shared.showSuccess("Post epingle")
         } catch {
-            ToastManager.shared.showError("Erreur lors de l'epinglage")
+            FeedbackToastManager.shared.showError("Erreur lors de l'epinglage")
         }
     }
 

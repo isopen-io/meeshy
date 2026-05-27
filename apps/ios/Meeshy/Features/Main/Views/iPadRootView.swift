@@ -24,7 +24,7 @@ import MeeshyUI
 
 struct iPadRootView: View {
     @StateObject var theme = ThemeManager.shared
-    @StateObject var toastManager = ToastManager.shared
+    @StateObject var toastManager = FeedbackToastManager.shared
     @StateObject var storyViewModel = StoryViewModel()
     @StateObject var statusViewModel = StatusViewModel()
     @StateObject var conversationViewModel = ConversationListViewModel()
@@ -38,7 +38,7 @@ struct iPadRootView: View {
     @StateObject var storyViewerCoordinator = StoryViewerCoordinator()
     @ObservedObject var callManager = CallManager.shared
     @ObservedObject var networkMonitor = NetworkMonitor.shared
-    @ObservedObject var notificationManager = NotificationManager.shared
+    @ObservedObject var notificationManager = NotificationToastManager.shared
     @EnvironmentObject var deepLinkRouter: DeepLinkRouter
     @Environment(\.colorScheme) var systemColorScheme
 

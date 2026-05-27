@@ -271,7 +271,7 @@ final class Router: ObservableObject {
             Self.logger.info("Deep link navigated to conversation \(conversationId)")
         } catch {
             Self.logger.error("Failed to load conversation for deep link: \(error.localizedDescription)")
-            ToastManager.shared.showError("Impossible d'ouvrir la conversation")
+            FeedbackToastManager.shared.showError("Impossible d'ouvrir la conversation")
         }
     }
 
@@ -281,10 +281,10 @@ final class Router: ObservableObject {
         await AuthManager.shared.validateMagicLink(token: token)
 
         if AuthManager.shared.isAuthenticated {
-            ToastManager.shared.showSuccess("Connexion reussie !")
+            FeedbackToastManager.shared.showSuccess("Connexion reussie !")
             Self.logger.info("Magic link validated successfully")
         } else {
-            ToastManager.shared.showError(AuthManager.shared.errorMessage ?? "Lien invalide ou expire")
+            FeedbackToastManager.shared.showError(AuthManager.shared.errorMessage ?? "Lien invalide ou expire")
             Self.logger.error("Magic link validation failed")
         }
     }

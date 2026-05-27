@@ -17,12 +17,12 @@ private let logger = Logger(subsystem: "me.meeshy.sdk", category: "notifications
 /// system badge and the widget data store. This class must not write directly to
 /// `UIApplication.setBadgeCount` or to the App Group defaults.
 @MainActor
-public final class NotificationManager: ObservableObject {
-    public static let shared = NotificationManager()
+public final class NotificationToastManager: ObservableObject {
+    public static let shared = NotificationToastManager()
 
     /// Mirrors `NotificationCoordinator.inAppNotificationUnread`. Kept as a
     /// `@Published` convenience so legacy SwiftUI views that observe
-    /// `NotificationManager.shared` continue to refresh without changes.
+    /// `NotificationToastManager.shared` continue to refresh without changes.
     @Published public private(set) var unreadCount: Int = 0
 
     @Published public private(set) var currentToast: SocketNotificationEvent?

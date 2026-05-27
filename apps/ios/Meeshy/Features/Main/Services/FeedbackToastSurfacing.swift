@@ -1,9 +1,9 @@
 import Foundation
 
 @MainActor
-protocol ToastSurfacing: AnyObject {
+protocol FeedbackToastSurfacing: AnyObject {
     func showSuccess(_ message: String)
     func showError(_ message: String)
 }
 
-extension ToastManager: ToastSurfacing {}
+extension FeedbackToastManager: FeedbackToastSurfacing {}

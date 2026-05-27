@@ -311,7 +311,7 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
     /// because `@Published` mutations must originate there.
     ///
     /// Persistence invalidation is NOT triggered from here on purpose:
-    /// callers (RequestsViewModel, ConnectionActionView, NotificationManager)
+    /// callers (RequestsViewModel, ConnectionActionView, NotificationToastManager)
     /// often need to interleave invalidation with an optimistic `save()`
     /// into the same GRDB entry, and a fire-and-forget Task here would race
     /// against that save. Each mutation site invokes

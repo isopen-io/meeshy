@@ -632,7 +632,7 @@ struct CommentsSheetView: View {
                         liveCommentCount = (liveCommentCount ?? post.comments.count) + 1
                         mentionController.clearDraft()
                     } catch {
-                        ToastManager.shared.showError(String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
+                        FeedbackToastManager.shared.showError(String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
                     }
                 }
             },

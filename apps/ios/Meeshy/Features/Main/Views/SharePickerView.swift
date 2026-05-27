@@ -339,7 +339,7 @@ struct SharePickerView: View {
         Task {
             guard let content = contentToSend, !content.isEmpty else {
                 HapticFeedback.error()
-                ToastManager.shared.showError("Erreur lors du partage")
+                FeedbackToastManager.shared.showError("Erreur lors du partage")
                 return
             }
             let success = await viewModel.send(
@@ -351,7 +351,7 @@ struct SharePickerView: View {
                 HapticFeedback.success()
             } else {
                 HapticFeedback.error()
-                ToastManager.shared.showError("Erreur lors du partage")
+                FeedbackToastManager.shared.showError("Erreur lors du partage")
             }
         }
     }

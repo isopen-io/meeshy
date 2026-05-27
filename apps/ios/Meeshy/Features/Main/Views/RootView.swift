@@ -31,14 +31,14 @@ private enum AudioOverlayConstants {
 
 struct RootView: View {
     @StateObject private var theme = ThemeManager.shared
-    @StateObject private var toastManager = ToastManager.shared
+    @StateObject private var toastManager = FeedbackToastManager.shared
     @StateObject private var storyViewModel = StoryViewModel()
     @StateObject private var statusViewModel = StatusViewModel()
     @StateObject private var conversationViewModel = ConversationListViewModel()
     @StateObject private var router = Router()
     @ObservedObject private var callManager = CallManager.shared
     @StateObject private var connectionStatus = ConnectionStatusViewModel()
-    @ObservedObject private var notificationManager = NotificationManager.shared
+    @ObservedObject private var notificationManager = NotificationToastManager.shared
     @EnvironmentObject private var deepLinkRouter: DeepLinkRouter
     @Environment(\.colorScheme) private var systemColorScheme
     @State private var showFeed = false
@@ -478,7 +478,7 @@ struct RootView: View {
                     let conv = apiConv.toConversation(currentUserId: currentUserId)
                     router.navigateToConversation(conv)
                 } catch {
-                    ToastManager.shared.showError(String(localized: "root.create_conversation.error", defaultValue: "Impossible de creer la conversation", bundle: .main))
+                    FeedbackToastManager.shared.showError(String(localized: "root.create_conversation.error", defaultValue: "Impossible de creer la conversation", bundle: .main))
                 }
             }
         }
@@ -685,9 +685,9 @@ struct RootView: View {
                 default:
                     message = error.errorDescription ?? String(localized: "Impossible d'ouvrir le lien", defaultValue: "Impossible d'ouvrir le lien")
                 }
-                ToastManager.shared.showError(message)
+                FeedbackToastManager.shared.showError(message)
             } catch {
-                ToastManager.shared.showError(
+                FeedbackToastManager.shared.showError(
                     String(localized: "Impossible d'ouvrir le lien", defaultValue: "Impossible d'ouvrir le lien")
                 )
             }
@@ -1023,7 +1023,7 @@ struct RootView: View {
             }
             let underlying = (lastError as? LocalizedError)?.errorDescription ?? lastError?.localizedDescription
             let detail = underlying.map { " (\($0))" } ?? ""
-            ToastManager.shared.showError(
+            FeedbackToastManager.shared.showError(
                 String(localized: "Impossible d'ouvrir la conversation", defaultValue: "Impossible d'ouvrir la conversation") + detail
             )
         }

@@ -63,7 +63,7 @@ extension FeedView {
                 HapticFeedback.success()
             case .failure(.preparationFailed(let message)):
                 HapticFeedback.error()
-                ToastManager.shared.showError(message)
+                FeedbackToastManager.shared.showError(message)
             }
             preparingAttachments.removeAll { $0.id == prep.id }
         }
@@ -206,7 +206,7 @@ extension FeedView {
                     uploadProgress = nil
                     isUploading = false
                     HapticFeedback.success()
-                    ToastManager.shared.showSuccess("Post publie")
+                    FeedbackToastManager.shared.showSuccess("Post publie")
                 }
             } catch {
                 await MainActor.run {
@@ -216,7 +216,7 @@ extension FeedView {
                     for (_, url) in mediaFiles { try? FileManager.default.removeItem(at: url) }
                     if let audioURL { try? FileManager.default.removeItem(at: audioURL) }
                     HapticFeedback.error()
-                    ToastManager.shared.showError("Echec de la publication du post")
+                    FeedbackToastManager.shared.showError("Echec de la publication du post")
                 }
             }
         }
@@ -243,14 +243,14 @@ extension FeedView {
             await MainActor.run {
                 isUploading = false
                 HapticFeedback.success()
-                ToastManager.shared.showSuccess("Post audio publie")
+                FeedbackToastManager.shared.showSuccess("Post audio publie")
             }
         } catch {
             try? FileManager.default.removeItem(at: audioURL)
             await MainActor.run {
                 isUploading = false
                 HapticFeedback.error()
-                ToastManager.shared.showError("Echec de la publication du post audio")
+                FeedbackToastManager.shared.showError("Echec de la publication du post audio")
             }
         }
     }
@@ -989,7 +989,7 @@ struct FeedComposerSheet: View {
                 HapticFeedback.success()
             case .failure(.preparationFailed(let message)):
                 HapticFeedback.error()
-                ToastManager.shared.showError(message)
+                FeedbackToastManager.shared.showError(message)
             }
             preparingAttachments.removeAll { $0.id == prep.id }
         }
@@ -1089,7 +1089,7 @@ struct FeedComposerSheet: View {
                     uploadProgress = nil
                     onDismiss()
                     HapticFeedback.success()
-                    ToastManager.shared.showSuccess("Post publie")
+                    FeedbackToastManager.shared.showSuccess("Post publie")
                 }
             } catch {
                 await MainActor.run {
@@ -1097,7 +1097,7 @@ struct FeedComposerSheet: View {
                     uploadProgress = nil
                     for (_, url) in mediaFiles { try? FileManager.default.removeItem(at: url) }
                     HapticFeedback.error()
-                    ToastManager.shared.showError("Echec de la publication du post")
+                    FeedbackToastManager.shared.showError("Echec de la publication du post")
                 }
             }
         }
@@ -1120,13 +1120,13 @@ struct FeedComposerSheet: View {
                 isUploading = false
                 onDismiss()
                 HapticFeedback.success()
-                ToastManager.shared.showSuccess("Post audio publie")
+                FeedbackToastManager.shared.showSuccess("Post audio publie")
             }
         } catch {
             await MainActor.run {
                 isUploading = false
                 HapticFeedback.error()
-                ToastManager.shared.showError("Echec de la publication")
+                FeedbackToastManager.shared.showError("Echec de la publication")
             }
         }
     }

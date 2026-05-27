@@ -216,7 +216,7 @@ extension ConversationView {
                             composerState.isUploading = false
                             viewModel.error = "Échec de la mise en file du message vocal"
                         }
-                        ToastManager.shared.showError("Échec de la mise en file du message vocal")
+                        FeedbackToastManager.shared.showError("Échec de la mise en file du message vocal")
                         return
                     }
                 }
@@ -384,7 +384,7 @@ extension ConversationView {
                     if let audioURL { try? FileManager.default.removeItem(at: audioURL) }
                     viewModel.error = "Echec de l'envoi du media: \(error.localizedDescription)"
                     HapticFeedback.error()
-                    ToastManager.shared.showError("Echec de l'envoi de la piece jointe")
+                    FeedbackToastManager.shared.showError("Echec de l'envoi de la piece jointe")
                 }
             }
         }
@@ -517,7 +517,7 @@ extension ConversationView {
                 HapticFeedback.success()
             case .failure(.preparationFailed(let message)):
                 HapticFeedback.error()
-                ToastManager.shared.showError(message)
+                FeedbackToastManager.shared.showError(message)
             }
             composerState.preparingAttachments.removeAll { $0.id == prep.id }
         }

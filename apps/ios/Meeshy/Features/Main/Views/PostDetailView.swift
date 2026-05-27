@@ -60,7 +60,7 @@ struct PostDetailView: View {
         let fallbackUrlString = "\(ShareableLink.webBaseURL)/feeds/post/\(post.id)"
         let resolvedString = trackingShortUrl ?? fallbackUrlString
         guard let resolvedUrl = URL(string: resolvedString) else {
-            ToastManager.shared.showError("Lien indisponible")
+            FeedbackToastManager.shared.showError("Lien indisponible")
             return
         }
 
@@ -69,7 +69,7 @@ struct PostDetailView: View {
             case .copyToPasteboard:
                 UIPasteboard.general.string = resolvedString
                 HapticFeedback.success()
-                ToastManager.shared.show(
+                FeedbackToastManager.shared.show(
                     String(localized: "feed.post.detail.copy_link.success", defaultValue: "Lien copié", bundle: .main)
                 )
             case .presentShareSheet:
@@ -186,9 +186,9 @@ struct PostDetailView: View {
             }()
             if !ok {
                 isPostBookmarked = wasBookmarked
-                ToastManager.shared.showError("Erreur lors de l'enregistrement")
+                FeedbackToastManager.shared.showError("Erreur lors de l'enregistrement")
             } else {
-                ToastManager.shared.showSuccess(wasBookmarked
+                FeedbackToastManager.shared.showSuccess(wasBookmarked
                     ? String(localized: "Retire des favoris", defaultValue: "Retire des favoris")
                     : String(localized: "Ajoute aux favoris", defaultValue: "Ajoute aux favoris"))
             }
@@ -209,10 +209,10 @@ struct PostDetailView: View {
                     content: nil,
                     isQuote: quote
                 )
-                ToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
+                FeedbackToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
             } catch {
                 isPostReposted = false
-                ToastManager.shared.showError("Erreur lors du repost")
+                FeedbackToastManager.shared.showError("Erreur lors du repost")
             }
         }
     }
@@ -248,7 +248,7 @@ struct PostDetailView: View {
             if let raw = ShareableLink.fallback(forPostId: postId) {
                 shareableLink = raw
             } else {
-                ToastManager.shared.showError("Erreur lors du partage")
+                FeedbackToastManager.shared.showError("Erreur lors du partage")
             }
         }
     }
@@ -489,16 +489,16 @@ struct PostDetailView: View {
             // Join the post room for real-time reaction events (single focused post).
             SocialSocketManager.shared.joinPostRoom(postId: postId)
             // Anti-spam banner: declare this post as "currently visible" so
-            // NotificationManager can drop in-app banners about it (the user
+            // NotificationToastManager can drop in-app banners about it (the user
             // already sees the content live).
-            NotificationManager.shared.activePostId = postId
+            NotificationToastManager.shared.activePostId = postId
             // Record view when post detail is opened
             try? await PostService.shared.viewPost(postId: postId, duration: nil)
         }
         .onDisappear {
             SocialSocketManager.shared.leavePostRoom(postId: postId)
-            if NotificationManager.shared.activePostId == postId {
-                NotificationManager.shared.activePostId = nil
+            if NotificationToastManager.shared.activePostId == postId {
+                NotificationToastManager.shared.activePostId = nil
             }
         }
         .adaptiveOnChange(of: viewModel.post) { _, updatedPost in

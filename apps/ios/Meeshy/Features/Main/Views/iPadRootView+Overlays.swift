@@ -28,7 +28,7 @@ extension iPadRootView {
 
             VStack {
                 if let toast = toastManager.currentToast {
-                    ToastView(toast: toast)
+                    FeedbackToastView(toast: toast)
                         .transition(.move(edge: .top).combined(with: .opacity))
                         .padding(.top, MeeshySpacing.xxl)
                         .onTapGesture { toastManager.dismiss() }

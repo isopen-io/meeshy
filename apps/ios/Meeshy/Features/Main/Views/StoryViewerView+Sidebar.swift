@@ -408,7 +408,7 @@ struct StoryHeaderView: View {
             shareableStoryLink = ShareableLink(url: fallback)
             HapticFeedback.light()
         } else {
-            ToastManager.shared.showError("Lien indisponible")
+            FeedbackToastManager.shared.showError("Lien indisponible")
         }
     }
 

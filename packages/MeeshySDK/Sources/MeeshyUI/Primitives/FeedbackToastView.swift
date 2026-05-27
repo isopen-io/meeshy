@@ -1,8 +1,8 @@
 import SwiftUI
 
-// MARK: - Toast Type
+// MARK: - FeedbackToast Type
 
-public enum ToastType {
+public enum FeedbackToastType {
     case success
     case error
     case info
@@ -24,16 +24,16 @@ public enum ToastType {
     }
 }
 
-// MARK: - Toast Data
+// MARK: - FeedbackToast Data
 
-public struct Toast: Equatable {
+public struct FeedbackToast: Equatable {
     public let id: UUID
     public let message: String
-    public let type: ToastType
+    public let type: FeedbackToastType
     public let icon: String
     public let isTappable: Bool
 
-    public init(message: String, type: ToastType, icon: String? = nil, isTappable: Bool = false) {
+    public init(message: String, type: FeedbackToastType, icon: String? = nil, isTappable: Bool = false) {
         self.id = UUID()
         self.message = message
         self.type = type
@@ -41,17 +41,17 @@ public struct Toast: Equatable {
         self.isTappable = isTappable
     }
 
-    public static func == (lhs: Toast, rhs: Toast) -> Bool {
+    public static func == (lhs: FeedbackToast, rhs: FeedbackToast) -> Bool {
         lhs.id == rhs.id
     }
 }
 
-// MARK: - Toast View
+// MARK: - FeedbackToast View
 
-public struct ToastView: View {
-    let toast: Toast
+public struct FeedbackToastView: View {
+    let toast: FeedbackToast
 
-    public init(toast: Toast) {
+    public init(toast: FeedbackToast) {
         self.toast = toast
     }
 

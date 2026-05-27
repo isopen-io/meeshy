@@ -98,7 +98,7 @@ struct DiscoverTab: View {
                     if MFMessageComposeViewController.canSendText() {
                         showSMSComposer = true
                     } else {
-                        ToastManager.shared.showError(String(localized: "contacts.discover.sms.unavailable", defaultValue: "SMS non disponible", bundle: .main))
+                        FeedbackToastManager.shared.showError(String(localized: "contacts.discover.sms.unavailable", defaultValue: "SMS non disponible", bundle: .main))
                     }
                 } label: {
                     Text(String(localized: "common.send", defaultValue: "Envoyer", bundle: .main))
@@ -130,7 +130,7 @@ struct DiscoverTab: View {
 
     private var importContactsButton: some View {
         Button {
-            ToastManager.shared.show(String(localized: "common.coming-soon", defaultValue: "Bientot disponible", bundle: .main), type: .success)
+            FeedbackToastManager.shared.show(String(localized: "common.coming-soon", defaultValue: "Bientot disponible", bundle: .main), type: .success)
             HapticFeedback.light()
         } label: {
             HStack(spacing: 8) {
@@ -271,8 +271,8 @@ struct DiscoverTab: View {
                 userId: user.id,
                 userName: name,
                 accentColor: MeeshyColors.indigo500,
-                onError: { ToastManager.shared.showError($0) },
-                onSuccess: { ToastManager.shared.showSuccess($0) }
+                onError: { FeedbackToastManager.shared.showError($0) },
+                onSuccess: { FeedbackToastManager.shared.showSuccess($0) }
             )
         }
         .padding(.horizontal, 4)

@@ -287,9 +287,9 @@ struct FeedView: View {
             if success {
                 if wasBookmarked {
                     await pruneBookmarkFromCache(postId: postId)
-                    ToastManager.shared.showSuccess(String(localized: "Retire des favoris", defaultValue: "Retire des favoris"))
+                    FeedbackToastManager.shared.showSuccess(String(localized: "Retire des favoris", defaultValue: "Retire des favoris"))
                 } else {
-                    ToastManager.shared.showSuccess(String(localized: "Ajoute aux favoris", defaultValue: "Ajoute aux favoris"))
+                    FeedbackToastManager.shared.showSuccess(String(localized: "Ajoute aux favoris", defaultValue: "Ajoute aux favoris"))
                 }
             } else {
                 // Rollback both the UI flip and the cache pre-population.
@@ -303,7 +303,7 @@ struct FeedView: View {
                         try? await CacheCoordinator.shared.feed.save(snap, for: "bookmarks")
                     }
                 }
-                ToastManager.shared.showError(String(localized: "Erreur lors de l'enregistrement", defaultValue: "Erreur lors de l'enregistrement"))
+                FeedbackToastManager.shared.showError(String(localized: "Erreur lors de l'enregistrement", defaultValue: "Erreur lors de l'enregistrement"))
             }
         }
     }
@@ -355,11 +355,11 @@ struct FeedView: View {
                     content: nil,
                     isQuote: false
                 )
-                ToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
+                FeedbackToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
             } catch {
                 postRepostedIds.remove(postId)
                 postRepostDelta[postId, default: 0] -= 1
-                ToastManager.shared.showError(String(localized: "Erreur lors du repost", defaultValue: "Erreur lors du repost"))
+                FeedbackToastManager.shared.showError(String(localized: "Erreur lors du repost", defaultValue: "Erreur lors du repost"))
             }
         }
     }

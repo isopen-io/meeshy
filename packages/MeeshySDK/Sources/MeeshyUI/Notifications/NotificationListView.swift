@@ -353,7 +353,7 @@ final class NotificationListViewModel: ObservableObject {
     @Published var unreadOnly = false
     @Published var selectedCategory: NotificationCategory = .all
 
-    var unreadCount: Int { NotificationManager.shared.unreadCount }
+    var unreadCount: Int { NotificationToastManager.shared.unreadCount }
 
     private var offset = 0
     private let limit = 30
@@ -378,7 +378,7 @@ final class NotificationListViewModel: ObservableObject {
     // MARK: - Real-Time Socket Subscriptions
 
     private func subscribeToRealTimeEvents() {
-        let manager = NotificationManager.shared
+        let manager = NotificationToastManager.shared
 
         manager.objectWillChange
             .receive(on: DispatchQueue.main)
@@ -454,7 +454,7 @@ final class NotificationListViewModel: ObservableObject {
             hasMore = response.pagination?.hasMore ?? false
             offset = limit
             try await CacheCoordinator.shared.notifications.save(response.data, for: "all")
-            await NotificationManager.shared.refreshUnreadCount()
+            await NotificationToastManager.shared.refreshUnreadCount()
         } catch {
             Logger.notifications.error("Failed to refresh notifications: \(error.localizedDescription)")
         }
@@ -488,7 +488,7 @@ final class NotificationListViewModel: ObservableObject {
     }
 
     func markAllRead() async {
-        await NotificationManager.shared.markAllAsRead()
+        await NotificationToastManager.shared.markAllAsRead()
         await loadInitial()
     }
 
@@ -496,7 +496,7 @@ final class NotificationListViewModel: ObservableObject {
         do {
             try await NotificationService.shared.delete(notificationId: notification.id)
             notifications.removeAll { $0.id == notification.id }
-            await NotificationManager.shared.refreshUnreadCount()
+            await NotificationToastManager.shared.refreshUnreadCount()
         } catch {
             Logger.notifications.error("Failed to delete notification: \(error.localizedDescription)")
         }
