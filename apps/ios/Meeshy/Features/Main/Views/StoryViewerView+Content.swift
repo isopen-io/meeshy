@@ -565,31 +565,35 @@ extension StoryViewerView {
         // 2ᵉ moitié de la slide » quelle que soit la durée.
         let nextPrefetchThreshold = max(0.5, 1.0 - (5.0 / duration))
 
-        // SOURCE DE VÉRITÉ TIMELINE — le canvas (StoryCanvasUIView) pilote la
-        // timeline réelle via son displayLink interne et émet `lastPlaybackTime`
-        // à chaque tick. Le proxy ici n'est plus un accumulator wall-clock
-        // indépendant : il LIT `lastPlaybackTime` à 60 Hz et le mappe sur
-        // `progress`. Avantages :
-        //   - Progress bar EXACTEMENT synchrone avec la vidéo BG (le canvas
-        //     advance currentTime au tempo de son AVPlayer).
-        //   - `goToNext()` n'est jamais déclenché avant la fin réelle de la
-        //     slide : `computedStoryDuration` inclut `ceil(slideDur / bgLoop) ×
-        //     bgLoop`, et le canvas ne fire `onCompletion` qu'à cette borne.
-        //   - Pause synchrone : `isCanvasPlaybackPaused` propagé au canvas via
-        //     `StoryReaderRepresentable.isPaused` → le displayLink canvas se
-        //     met en isPaused=true, `lastPlaybackTime` arrête d'avancer.
+        // PROGRESS BAR = WALL-CLOCK aligné sur `computedStoryDuration` —
+        // user feedback 2026-05-27 « il suffit d'aligner la progress bar
+        // avec la timeline configurée ou par défaut de la story ».
+        // Ancien design : lisait `lastPlaybackTime` émis par le canvas →
+        // gelé tant que `contentReadyFired` du canvas était false → progress
+        // bar scintillait avec le loader overlay. Nouveau design :
+        // accumulator wall-clock indépendant du canvas, monotonic via
+        // CACurrentMediaTime. Le canvas garde sa playback (vidéo BG, audio
+        // mixer) mais ne pilote PLUS la progress bar.
         //
-        // Le proxy garde son rôle de coordinateur des seuils (fadeOut,
-        // prefetch, goToNext) et du diff-guard 1/300 sur progress pour limiter
-        // les re-evaluations SwiftUI.
+        // Pause = on suspend l'accumulation (shouldPauseTimer ∪ {sheets,
+        // composer engaged, long-press}). Resume = la prochaine tick
+        // reprend le delta-time à partir de l'horloge courante. Pas de
+        // gate sur isContentReady — la progress bar tourne dès l'ouverture
+        // de la slide, le loader overlay vit en parallèle si le contenu
+        // doit encore charger.
         let lastCommitted = StoryProgressDisplayLinkProxy.MutableDouble(0)
+        let elapsedAccumulator = StoryProgressDisplayLinkProxy.MutableDouble(0)
+        let lastTickTime = StoryProgressDisplayLinkProxy.MutableDouble(0)
         let proxy = StoryProgressDisplayLinkProxy { [self] in
-            // Failsafe : si pause UI active ou content pas encore prêt, on ne
-            // touche pas à progress. Le canvas est en isPaused=true en parallèle
-            // donc `lastPlaybackTime` est gelé — la lecture reprendra en phase
-            // dès que `isPaused` redescend à false.
-            guard !shouldPauseTimer, isContentReady else { return }
-            let elapsed = lastPlaybackTime
+            let now = CACurrentMediaTime()
+            let dt: Double = lastTickTime.value > 0 ? (now - lastTickTime.value) : 0
+            lastTickTime.value = now
+            // Pause UI active : on n'accumule pas le delta-time courant.
+            // Garde l'accumulator et l'horloge — le prochain tick reprendra
+            // depuis `now` (donc dt=0 sur la première tick post-resume).
+            guard !shouldPauseTimer else { return }
+            elapsedAccumulator.value += dt
+            let elapsed = elapsedAccumulator.value
             let raw = min(1.0, CGFloat(elapsed / duration))
             if abs(raw - CGFloat(lastCommitted.value)) >= 1.0 / 300.0 || raw >= 1.0 {
                 lastCommitted.value = Double(raw)
@@ -599,17 +603,11 @@ extension StoryViewerView {
                 hasFiredFadeOut = true
                 NotificationCenter.default.post(name: .storyAudioFadeOut, object: nil)
             }
-            // Prefetch de la slide suivante : déclenchement basé sur le seuil
-            // dérivé du temps canvas (et non plus du wall-clock), donc respecte
-            // les pauses et l'extension par durée vidéo BG.
             if raw >= nextPrefetchThreshold && !hasFiredNextPrefetch {
                 hasFiredNextPrefetch = true
                 _ = prefetchStory(at: currentStoryIndex + 1)
             }
-            // Auto-advance EXACTEMENT à la fin de la timeline canvas. Le canvas
-            // garantit que `lastPlaybackTime` n'atteint `duration` qu'après la
-            // dernière frame vidéo BG du dernier loop (cf. `roundedUpToBgLoops`
-            // dans `updateStoryDuration`). Aucune vidéo n'est coupée mid-cycle.
+            // Auto-advance à la fin de la durée configurée (computedStoryDuration).
             if elapsed >= duration {
                 goToNext()
             }

@@ -640,7 +640,22 @@ struct StoryCardView: View {
                                       preloadedAudioURLs: preloadedAudioURLs,
                                       isPaused: isCanvasPlaybackPaused,
                                       onContentReady: { isContentReady = true },
-                                      onContentProgress: { p in slideContentProgress = p },
+                                      onContentProgress: { p in
+                                          // Latch monotone : une fois le contenu prêt
+                                          // (≥ 0.95), on ne redescend JAMAIS. Sans ça
+                                          // chaque `scheduleContentReadyEvaluation`
+                                          // (déclenché par les didSet slide cumulés)
+                                          // remettait `contentReadyFired=false` →
+                                          // `recomputeContentProgress` émettait 0 →
+                                          // loader overlay réapparaissait → scintillement
+                                          // (user-reporté 2026-05-27 « la story scintille
+                                          // seulement »). Le reset à 0 se fait UNIQUEMENT
+                                          // sur slide-change (cf. `.task(id:)` plus bas).
+                                          if slideContentProgress >= 0.95 && p < slideContentProgress {
+                                              return
+                                          }
+                                          slideContentProgress = p
+                                      },
                                       onPlaybackTime: { t in lastPlaybackTime = t })
                     .id(story.id)
                     // Strict 9:16-fit (parité avec UnifiedPostComposer:324).
