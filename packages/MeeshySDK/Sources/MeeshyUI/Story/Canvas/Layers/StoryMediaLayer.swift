@@ -262,6 +262,26 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         masksToBounds = true
 
         let resolvedURL = resolvedMediaURL(for: media, resolver: resolver)
+        // Cache key : pour les médias publiés on a un `postMediaId` serveur ;
+        // pour les médias composer (PhotosPicker → tmp file) postMediaId reste
+        // vide, donc on retombe sur `media.id` (UUID local) qui est exactement
+        // la clé utilisée par `viewModel.loadedImages` côté composer. Sans
+        // ce fallback, `MeeshyImageEditorView` onAccept écrivait
+        // `loadedImages[media.id] = edited` et le `ComposerImageCacheReader`
+        // était bien câblé, mais la lookup ici utilisait `""` → cache miss →
+        // chemin file:// servait l'ancien bitmap (bug 2026-05-27).
+        let cacheKey: String = media.postMediaId.isEmpty ? media.id : media.postMediaId
+
+        // Composer fast-path : si un bitmap in-memory est dans le reader
+        // (typiquement après `MeeshyImageEditorView` onAccept), il prime sur
+        // le chemin file:// — la version éditée n'a pas été ré-écrite dans
+        // le fichier tmp et le file:// servirait l'original obsolète.
+        if let imageCache,
+           let synchronousReader = imageCache as? ComposerImageCacheReader,
+           let cached = synchronousReader.images[cacheKey]?.cgImage {
+            contents = cached
+            return
+        }
 
         // Local file:// URLs stay on the synchronous path — they are not
         // blocking in any meaningful sense (no DNS / TCP / TLS) and the
@@ -277,7 +297,6 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         }
 
         let loader = imageLoader
-        let postMediaId = media.postMediaId
         // Strong capture de `self` dans la Task. `[weak self]` faisait que la
         // layer se désallouait entre le `await` et le stamp `contents` —
         // `rebuildLayers()` à 60 Hz détache la layer du parent et, à chaque
@@ -289,7 +308,7 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         currentLoadTask = Task { @MainActor in
             // (1) Fast-path image cache (composer preview / disk-backed reader).
             if let imageCache,
-               let cached = await imageCache.cachedImage(for: postMediaId)?.cgImage {
+               let cached = await imageCache.cachedImage(for: cacheKey)?.cgImage {
                 guard !Task.isCancelled else { return }
                 self.contents = cached
                 return

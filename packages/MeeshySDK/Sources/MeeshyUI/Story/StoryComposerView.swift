@@ -471,6 +471,13 @@ public struct StoryComposerView: View {
                 context: .story,
                 onAccept: { edited in
                     viewModel.loadedImages[item.elementId] = edited
+                    // Bump version pour signaler au `StoryComposerCanvasView`
+                    // qu'un bitmap intra-clé a muté. SwiftUI ne peut pas
+                    // détecter ce genre de mutation sur un `[String: UIImage]`
+                    // (UIImage non Equatable). Sans ce bump, le main canvas
+                    // ne re-stampait jamais l'image éditée et restait stale
+                    // (bug 2026-05-27). Cf. `StoryComposerCanvasView.Coordinator`.
+                    viewModel.loadedImagesVersion &+= 1
                     editingElementImage = nil
                 },
                 onCancel: { editingElementImage = nil }
@@ -515,7 +522,13 @@ public struct StoryComposerView: View {
                     //    courante du clip édité (utilisée par le composer
                     //    tray, l'export et le placeholder).
                     let thumbnail = Self.generateVideoThumbnail(url: cachedURL)
-                    if let thumbnail { viewModel.loadedImages[item.elementId] = thumbnail }
+                    if let thumbnail {
+                        viewModel.loadedImages[item.elementId] = thumbnail
+                        // Bump version : même rationale que le bloc image
+                        // editor — la vignette vidéo est une mutation
+                        // intra-clé non détectable par SwiftUI.
+                        viewModel.loadedImagesVersion &+= 1
+                    }
 
                     // 3. Si l'utilisateur a transcrit la piste audio, on
                     //    propage les sous-titres comme **metadata** de la
@@ -1285,7 +1298,15 @@ public struct StoryComposerView: View {
             // son drawingLayer persisté — sinon double rendu (ancien drawing
             // au mauvais endroit dans le design space + nouveau drawing live
             // du PKCanvasView en bounds space). Bug "écrit en double", 2026-05-27.
-            isDrawingOverlayActive: viewModel.isDrawingActive
+            isDrawingOverlayActive: viewModel.isDrawingActive,
+            // Pont vers `StoryCanvasUIView.readerContext.imageCache` —
+            // `StoryMediaLayer.configureImage` consulte d'abord ce cache
+            // (clé = media.id) avant le file:// path, donc le main canvas
+            // reflète immédiatement les éditions image (bug 2026-05-27).
+            // La version sert de cookie au Coordinator pour ne déclencher
+            // un rebuild qu'aux mutations utiles.
+            loadedImages: viewModel.loadedImages,
+            loadedImagesVersion: viewModel.loadedImagesVersion
         )
         .allowsHitTesting(!viewModel.isDrawingActive)
         .overlay {

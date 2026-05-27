@@ -70,6 +70,7 @@ final class MockStoryComposerViewModel: StoryComposerProviding {
     var loadedImages: [String: UIImage] = [:]
     var loadedVideoURLs: [String: URL] = [:]
     var loadedAudioURLs: [String: URL] = [:]
+    var loadedImagesVersion: UInt64 = 0
     var loadedVideoCaptions: [String: StoryVideoCaptionMetadata] = [:]
     var mediaAspectRatios: [String: CGFloat] = [:]
 

@@ -124,6 +124,10 @@ protocol StoryComposerProviding: AnyObject {
     var loadedImages: [String: UIImage] { get set }
     var loadedVideoURLs: [String: URL] { get set }
     var loadedAudioURLs: [String: URL] { get set }
+    /// Cookie monotone à bumper après chaque édition utile d'un bitmap déjà
+    /// présent dans `loadedImages`. Lu par le `StoryComposerCanvasView` pour
+    /// déclencher un rebuild canvas. Cf. impl pour le rationale détaillé.
+    var loadedImagesVersion: UInt64 { get set }
     /// Captions de transcription (vidéo) produites par `MeeshyVideoEditorView`
     /// au confirm. Keyed par `StoryMediaObject.id`. Metadata render-time —
     /// pas persistée dans le slide model (cf. doc dans l'impl).
@@ -353,7 +357,24 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
 
     // MARK: - Drawing
 
-    @Published var drawingData: Data?
+    /// Données du dessin courant en design-coords (1080×1920) — écrites par le
+    /// délégué `PKCanvasView`. La source de vérité historique pour le rendu
+    /// canvas reste `currentSlide.effects.drawingData` (lu par `StoryRenderer`).
+    /// Le `didSet` ci-dessous propage chaque write vers la slide courante
+    /// sinon le canvas redessine la version persistée stale dès que l'overlay
+    /// PKCanvasView disparaît — bug "garde un des dessins non correspondant"
+    /// reporté 2026-05-27.
+    @Published var drawingData: Data? {
+        didSet {
+            guard oldValue != drawingData else { return }
+            guard slides.indices.contains(currentSlideIndex) else { return }
+            if currentEffects.drawingData != drawingData {
+                var effects = currentEffects
+                effects.drawingData = drawingData
+                currentEffects = effects
+            }
+        }
+    }
     @Published var drawingColor: Color = .white
     @Published var drawingWidth: CGFloat = 5
     var isDrawingActive: Bool { activeTool == .drawing }
@@ -396,6 +417,16 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     @Published var loadedImages: [String: UIImage] = [:]
     @Published var loadedVideoURLs: [String: URL] = [:]
     @Published var loadedAudioURLs: [String: URL] = [:]
+
+    /// Cookie monotone bumpé à chaque édition d'un bitmap déjà présent dans
+    /// `loadedImages` (typiquement `MeeshyImageEditorView` onAccept qui
+    /// remplace la valeur sous une clé inchangée). Le `Coordinator` du
+    /// `StoryComposerCanvasView` compare ce cookie à `lastLoadedImagesVersion`
+    /// pour déclencher un rebuild des media layers — sans ça le canvas
+    /// principal restait stale après image edit (les dicts UIImage ne sont
+    /// pas Equatable et SwiftUI ne peut donc pas détecter une mutation
+    /// de valeur intra-clé). Cf. `ComposerImageCacheReader.version`.
+    @Published var loadedImagesVersion: UInt64 = 0
 
     /// Captions / transcription metadata produced by `MeeshyVideoEditorView`
     /// when the user transcribes a foreground video then taps « Terminer ».

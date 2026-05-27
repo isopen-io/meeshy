@@ -27,6 +27,13 @@ struct ComposerToolPanelHost: View {
 
     @Environment(\.colorScheme) private var colorScheme
 
+    /// État local pour piloter le `PhotosPicker` programmatiquement quand on
+    /// entre dans l'outil media sur une slide vide. Pendant — comme le
+    /// `textPanel.onAppear` qui crée un texte vide + ouvre l'éditeur, l'outil
+    /// media ouvre directement le picker système quand l'utilisateur n'a
+    /// encore aucun media. Voir le `.onAppear` sur `mediaPanel`.
+    @State private var autoOpenMediaPicker: Bool = false
+
     // Texte adaptatif. Le bandeau étant désormais opaque (tint indigo950@92% dark
     // / white@92% light), on peut viser de vrais ratios de contraste WCAG-AA :
     //   primary   ≥ 4.5:1 → couleur pleine (indigo950 / white)
@@ -228,6 +235,18 @@ struct ComposerToolPanelHost: View {
                 .frame(maxHeight: 150)
             }
         }
+        // Ouvrir l'outil Son sur une slide vierge déclenche directement le
+        // voice recorder — parité avec `textPanel.onAppear` qui ouvre
+        // l'éditeur de texte sans étape intermédiaire. Couvre les deux
+        // entrées : tap FAB son (band → audioPanel) et empty-state tile son.
+        // Si la slide a déjà au moins un audio, on respecte l'intent (l'user
+        // veut probablement gérer la liste existante).
+        .onAppear {
+            let isEmpty = (viewModel.currentEffects.audioPlayerObjects?.isEmpty ?? true)
+            if isEmpty && viewModel.canAddAudio && !showVoiceRecorderSheet {
+                showVoiceRecorderSheet = true
+            }
+        }
     }
 
     // MARK: - Media Panel
@@ -291,6 +310,21 @@ struct ComposerToolPanelHost: View {
                     .padding(.horizontal, 12)
                 }
                 .frame(maxHeight: 150)
+            }
+        }
+        // Ouvrir l'outil Media sur une slide vierge déclenche directement le
+        // PhotosPicker — parité avec `textPanel.onAppear` et l'audioPanel
+        // qui ouvre le voice recorder. Couvre les deux entrées : tap FAB
+        // media (band → mediaPanel) et empty-state tile media.
+        .photosPicker(
+            isPresented: $autoOpenMediaPicker,
+            selection: $fgMediaItem,
+            matching: .any(of: [.images, .videos])
+        )
+        .onAppear {
+            let isEmpty = (viewModel.currentEffects.mediaObjects?.isEmpty ?? true)
+            if isEmpty && viewModel.canAddMedia && !autoOpenMediaPicker {
+                autoOpenMediaPicker = true
             }
         }
     }

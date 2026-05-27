@@ -799,6 +799,13 @@ public final class StoryCanvasUIView: UIView {
         // `attachPlayer()` au moment du re-stamping.
         forEachMediaLayer { $0.isMuted = context.mute }
         backgroundLayer.isMuted = context.mute
+        // Bump la révision pour que les media layers re-résolvent leur bitmap
+        // via le nouveau `imageCache`. Sans ce bump, le composer wire
+        // `ComposerImageCacheReader` (loadedImages mis à jour) mais la layer
+        // tree garde l'ancien stamp via le `StoryRendererCache` (clé inchangée
+        // tant que la révision ne bouge pas) — main canvas reste stale après
+        // image edit (bug 2026-05-27).
+        slideContentRevision &+= 1
         rebuildLayers()
         // The context carries `postMediaURLResolver` / `preferredLanguages`,
         // both inputs to audio URL resolution. A context swap (e.g. `.empty`
