@@ -271,10 +271,7 @@ extension OutboxUIItem {
     private static func decodeOfflineQueueItem(_ data: Data) -> OfflineQueueItem? {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        if let item = try? decoder.decode(OfflineQueueItem.self, from: data) {
-            return item
-        }
-        return try? JSONDecoder().decode(OfflineQueueItem.self, from: data)
+        return try? decoder.decode(OfflineQueueItem.self, from: data)
     }
 
     private static func extractStoryId(from payload: Data) -> String? {
