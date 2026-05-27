@@ -13,10 +13,9 @@ struct SyncPillHost: View {
         SyncPill(
             state: viewModel.state,
             onSingleTap: {},
-            onDoubleTap: {
-                let items = viewModel.state.items
-                guard let first = items.first else { return }
-                Task { await router.open(first.source) }
+            onDoubleTap: { visible in
+                guard let visible else { return }
+                Task { await router.open(visible.source) }
             }
         )
         .padding(.top, 8)

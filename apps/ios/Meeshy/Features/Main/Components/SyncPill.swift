@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 
 struct SyncPill: View {
@@ -7,16 +8,22 @@ struct SyncPill: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
     let onSingleTap: () -> Void
-    let onDoubleTap: () -> Void
+    let onDoubleTap: (OutboxUIItem?) -> Void
 
     init(
         state: PillState,
         onSingleTap: @escaping () -> Void = {},
-        onDoubleTap: @escaping () -> Void = {}
+        onDoubleTap: @escaping (OutboxUIItem?) -> Void = { _ in }
     ) {
         self.state = state
         self.onSingleTap = onSingleTap
         self.onDoubleTap = onDoubleTap
+    }
+
+    private var currentVisibleItem: OutboxUIItem? {
+        guard !state.items.isEmpty else { return nil }
+        let i = min(rotator.currentIndex, state.items.count - 1)
+        return state.items[i]
     }
 
     var body: some View {
@@ -33,11 +40,12 @@ struct SyncPill: View {
                         .font(.system(size: 11, weight: .regular))
                         .foregroundColor(.secondary)
                 }
-                if !state.items.isEmpty {
-                    let visible = state.items[min(rotator.currentIndex, state.items.count - 1)]
+                if let visible = currentVisibleItem {
                     SyncPillItemView(item: visible, index: rotator.currentIndex)
+                        .equatable()
                         .transition(.opacity)
                         .id(visible.id)
+                        .accessibilityRespondsToUserInteraction(false)
                 }
             }
             .padding(.horizontal, 12)
@@ -47,10 +55,16 @@ struct SyncPill: View {
             .onChange(of: state.items.count) { newCount in
                 rotator.setItemCount(newCount)
             }
-            .onAppear { rotator.setItemCount(state.items.count) }
+            .onChange(of: reduceMotion) { newValue in
+                rotator.setAutoRotation(!newValue)
+            }
+            .onAppear {
+                rotator.setAutoRotation(!reduceMotion)
+                rotator.setItemCount(state.items.count)
+            }
             .gesture(
                 SpatialTapGesture(count: 2)
-                    .onEnded { _ in onDoubleTap() }
+                    .onEnded { _ in onDoubleTap(currentVisibleItem) }
                     .exclusively(before:
                         SpatialTapGesture(count: 1)
                             .onEnded { _ in
@@ -58,6 +72,17 @@ struct SyncPill: View {
                                 onSingleTap()
                             }
                     )
+            )
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 30)
+                    .onEnded { value in
+                        guard reduceMotion else { return }
+                        if value.translation.width < -30 {
+                            rotator.advance()
+                        } else if value.translation.width > 30 {
+                            rotator.rewind()
+                        }
+                    }
             )
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(accessibilityText)

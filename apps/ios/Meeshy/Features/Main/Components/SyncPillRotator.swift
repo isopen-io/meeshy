@@ -5,6 +5,7 @@ import Combine
 final class SyncPillRotator: ObservableObject {
     @Published private(set) var currentIndex: Int = 0
     private(set) var itemCount: Int = 0
+    private(set) var autoRotationEnabled: Bool = true
 
     private var timer: AnyCancellable?
     private var userPauseUntil: Date?
@@ -22,7 +23,12 @@ final class SyncPillRotator: ObservableObject {
             return
         }
         if currentIndex >= count { currentIndex = 0 }
-        if count > 1 { startTimer() } else { timer?.cancel() }
+        if count > 1 && autoRotationEnabled { startTimer() } else { timer?.cancel() }
+    }
+
+    func setAutoRotation(_ enabled: Bool) {
+        autoRotationEnabled = enabled
+        if enabled && itemCount > 1 { startTimer() } else { timer?.cancel() }
     }
 
     func advance() {

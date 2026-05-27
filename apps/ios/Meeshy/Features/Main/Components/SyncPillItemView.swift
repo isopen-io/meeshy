@@ -2,10 +2,14 @@ import SwiftUI
 import MeeshySDK
 import MeeshyUI
 
-struct SyncPillItemView: View {
+struct SyncPillItemView: View, Equatable {
     let item: OutboxUIItem
     let index: Int
     @Environment(\.colorScheme) private var colorScheme
+
+    static func == (lhs: SyncPillItemView, rhs: SyncPillItemView) -> Bool {
+        lhs.item == rhs.item && lhs.index == rhs.index
+    }
 
     var body: some View {
         HStack(spacing: 6) {
