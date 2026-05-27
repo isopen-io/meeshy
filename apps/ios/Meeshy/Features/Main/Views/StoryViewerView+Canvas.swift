@@ -561,6 +561,22 @@ struct StoryCardView: View {
         max(geometry.safeAreaInsets.top, 59)
     }
 
+    /// Dimensions strictes 9:16 du canvas dans la géométrie courante.
+    /// `.aspectRatio(.fit) + .frame(maxWidth/Height)` ne contraint pas
+    /// correctement le `StoryReaderRepresentable` (UIViewRepresentable) sur
+    /// iPhone 16 Pro (402×874pt) — le canvas se retrouvait à 491×754pt
+    /// (height-fit avec width qui déborde) au lieu de 402×715pt (width-fit
+    /// attendu). La sidebar droite tombait alors hors écran à x=389+w=46
+    /// → out of 402 (bug 2026-05-27). On force ici les dimensions explicites
+    /// par calcul direct du fit ratio.
+    private var canvasFitSize: CGSize {
+        let w = geometry.size.width
+        let h = geometry.size.height
+        let ratio: CGFloat = 9.0 / 16.0
+        let widthBound = min(w, h * ratio)
+        return CGSize(width: widthBound, height: widthBound / ratio)
+    }
+
     var body: some View {
         ZStack {
             // === Layer 1: Background ===
@@ -601,9 +617,13 @@ struct StoryCardView: View {
                     // la projection design→render (scaleFactor = width/1080)
                     // décalait visuellement les textes/stickers de ~77pt vers le
                     // haut sur iPhone 16 Pro (bug audit 2026-05-27).
-                    .aspectRatio(9.0 / 16.0, contentMode: .fit)
-                    .frame(maxWidth: geometry.size.width,
-                           maxHeight: geometry.size.height)
+                    // Dimensions explicites 9:16 — cf. `canvasFitSize`. Le
+                    // duo `.aspectRatio(.fit) + .frame(maxWidth/Height)`
+                    // ne contraint pas correctement le UIViewRepresentable
+                    // sur iPhone 16 Pro et le canvas débordait en largeur
+                    // (sidebar droite hors écran).
+                    .frame(width: canvasFitSize.width,
+                           height: canvasFitSize.height)
                     .clipped()
                     .opacity(outgoingOpacity)
                     .scaleEffect(closingScale)
@@ -628,9 +648,13 @@ struct StoryCardView: View {
                     // hors ratio design et décalait visuellement le contenu.
                     // Le letterbox au-dessus/en dessous est habillé par le
                     // `storyBlurredBackdrop` (Layer 1.5).
-                    .aspectRatio(9.0 / 16.0, contentMode: .fit)
-                    .frame(maxWidth: geometry.size.width,
-                           maxHeight: geometry.size.height)
+                    // Dimensions explicites 9:16 — cf. `canvasFitSize`. Le
+                    // duo `.aspectRatio(.fit) + .frame(maxWidth/Height)`
+                    // ne contraint pas correctement le UIViewRepresentable
+                    // sur iPhone 16 Pro et le canvas débordait en largeur
+                    // (sidebar droite hors écran).
+                    .frame(width: canvasFitSize.width,
+                           height: canvasFitSize.height)
                     .clipped()
                     .opacity(contentOpacity)
                     .offset(y: textSlideOffset)
@@ -662,9 +686,13 @@ struct StoryCardView: View {
                     // ZStack and push the sidebar/composer beyond the viewport.
                     // Aligné sur le canvas 9:16 (et non plein écran) pour ne pas
                     // recouvrir le `storyBlurredBackdrop` en bandes letterbox.
-                    .aspectRatio(9.0 / 16.0, contentMode: .fit)
-                    .frame(maxWidth: geometry.size.width,
-                           maxHeight: geometry.size.height)
+                    // Dimensions explicites 9:16 — cf. `canvasFitSize`. Le
+                    // duo `.aspectRatio(.fit) + .frame(maxWidth/Height)`
+                    // ne contraint pas correctement le UIViewRepresentable
+                    // sur iPhone 16 Pro et le canvas débordait en largeur
+                    // (sidebar droite hors écran).
+                    .frame(width: canvasFitSize.width,
+                           height: canvasFitSize.height)
                     .clipped()
                     .allowsHitTesting(false)
                     .transition(.opacity)
@@ -824,6 +852,12 @@ struct StoryCardView: View {
 
                 Spacer()
             }
+            // Width strict — même rationale que le sidebar Layer 8 : le
+            // UIViewRepresentable du canvas expanse le ZStack parent ce qui
+            // fait sortir le bouton « Fermer » (xmark) du header hors écran
+            // (mesuré x=391 r=427 sur viewport 402pt avant ce fix, 2026-05-27).
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
+            .clipped()
             // Glissement vers le HAUT à la disparition + fondu. Le `.offset`
             // négatif fait sortir progress bars + header de l'écran ; on
             // ajoute une opacity 0 pour que l'élément reste totalement
@@ -880,7 +914,15 @@ struct StoryCardView: View {
             }
             .padding(.top, topReserved)
             .padding(.bottom, bottomReserved)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+            // Width strict + clipped — sur iPhone 16 Pro le UIViewRepresentable
+            // du canvas expanse le ZStack parent à ~491pt (cf. canvasFitSize
+            // doc). Le sidebar à right edge tombait alors hors écran. Cap
+            // dur du HStack à `geometry.size.width` + clip pour empêcher
+            // tout débordement (bug 2026-05-27). Le Spacer + l'alignement
+            // .trailing dans le HStack interne suffisent pour pousser le
+            // sidebar VStack au bord droit visible.
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .trailing)
+            .clipped()
             // Glissement vers la DROITE à la disparition + fondu. L'offset
             // de 110pt couvre largement la largeur du chip (max 48pt) + son
             // padding-trailing (6pt) + un peu de marge pour les écrans sans
