@@ -173,6 +173,19 @@ public final class StoryCanvasUIView: UIView {
     /// (cf. spec § 3.D.2).
     public var onContentProgress: (@MainActor (Double) -> Void)?
 
+    /// Position de lecture canonique de la slide (secondes), émise à chaque
+    /// tick du displayLink interne en mode `.play`. Source de vérité unique
+    /// pour la progress bar du viewer parent — elle reflète l'avancement réel
+    /// de la timeline (vidéo BG, audio, keyframes) avec auto-pause sur
+    /// `setStoryPlaybackPaused(true)` et accumulation cohérente avec
+    /// `slide.computedTotalDuration()` (qui inclut le roundup des cycles bg).
+    ///
+    /// Le viewer dérive `progress = playheadTime / computedTotalDuration` et
+    /// déclenche `goToNext()` sur `onCompletion` (et non sur son propre
+    /// wall-clock), garantissant que la transition n'interrompt JAMAIS un
+    /// cycle vidéo bg mid-loop.
+    public var onPlaybackTime: (@MainActor (Double) -> Void)?
+
     // MARK: - Internal layers
 
     private let rootLayer = CALayer()
@@ -1818,6 +1831,17 @@ public final class StoryCanvasUIView: UIView {
     ///
     /// Idempotent — re-applying the same state est cheap (early-return).
     /// Gated on `.play` because pause has no meaning in edit / preview modes.
+    /// Public seam pour le viewer parent : propage les pauses UI (sheets,
+    /// composer, drag-to-dismiss, long-press) au canvas afin que la timeline
+    /// canvas (displayLink + AVPlayer + audioMixer) gèle EN PHASE avec la
+    /// progress bar du viewer. Sans ça, `lastPlaybackTime` continuait à
+    /// avancer pendant qu'un sheet était ouvert → saut visible au resume.
+    /// Idempotent — re-applying the same state est cheap (early-return dans
+    /// `setStoryPlaybackPaused`).
+    public func setPaused(_ paused: Bool) {
+        setStoryPlaybackPaused(paused)
+    }
+
     private func setStoryPlaybackPaused(_ paused: Bool) {
         guard mode == .play else { return }
         guard isPlaybackPaused != paused else { return }
@@ -1942,6 +1966,17 @@ public final class StoryCanvasUIView: UIView {
     }
 
     @objc private func displayLinkTick(_ link: CADisplayLink) {
+        // Le displayLink reste vivant pour les rebuilds (modèle muté → re-layout),
+        // mais l'avancement de la timeline est gated sur :
+        // - mode == .play (l'edit a son propre `editDisplayLink`)
+        // - contentReadyFired (sans ça, currentTime avançait pendant le
+        //   chargement initial → progress bar du viewer sautait dès le content
+        //   ready)
+        // - !isPlaybackPaused (pauses propagées par le viewer via `setPaused`)
+        guard mode == .play, contentReadyFired, !isPlaybackPaused else {
+            rebuildLayers()
+            return
+        }
         let dt = link.targetTimestamp - link.timestamp
         let nextSeconds = CMTimeGetSeconds(currentTime) + dt
         let effectiveDuration = slide.computedTotalDuration()
@@ -1956,6 +1991,11 @@ public final class StoryCanvasUIView: UIView {
         // image statique). Auto-throttle à ~30 Hz dans la state.
         let publishedTime = audioMixer.slideElapsedSeconds ?? clamped
         StoryReaderPlayheadState.shared.publish(min(publishedTime, effectiveDuration))
+        // Source de vérité timeline pour la progress bar du viewer —
+        // on émet la même valeur que celle utilisée pour le clamp ci-dessus
+        // (et non le `publishedTime` audio-priorisé) pour rester cohérent
+        // avec le check `clamped >= effectiveDuration` qui fire `onCompletion`.
+        onPlaybackTime?(clamped)
         rebuildLayers()
         if clamped >= effectiveDuration {
             stopPlayback()
@@ -1968,9 +2008,14 @@ public final class StoryCanvasUIView: UIView {
 
     /// Test-only seam: simulate a displayLink tick at a specific timestamp
     /// to validate completion logic without spinning a real CADisplayLink.
+    /// Bypasses the `contentReadyFired` gate of `displayLinkTick` — tests
+    /// drive the seam directly, so the gate isn't relevant for unit testing.
+    /// Émet aussi `onPlaybackTime` pour parité avec le tick réel.
     public func simulateTickAt(seconds: Double) {
         let effectiveDuration = slide.computedTotalDuration()
-        currentTime = CMTime(seconds: seconds, preferredTimescale: 600_000)
+        let clamped = min(seconds, effectiveDuration)
+        currentTime = CMTime(seconds: clamped, preferredTimescale: 600_000)
+        onPlaybackTime?(clamped)
         rebuildLayers()
         if !completionFired,
            mode == .play,
@@ -2762,11 +2807,15 @@ public final class StoryCanvasUIView: UIView {
         let currentZ = elements[index].1
         let nextZ = elements[index + 1].1
         
-        let newCurrentZ = currentZ == nextZ ? nextZ + 1 : nextZ
-        let newNextZ = currentZ == nextZ ? currentZ : currentZ
-        
+        // Quand currentZ == nextZ (égalité fortuite), on doit "casser" l'égalité
+        // en plaçant current au-dessus. Sinon swap pur (newCurrentZ = nextZ,
+        // newNextZ = currentZ). Dans les deux cas, newNextZ vaut currentZ — le
+        // ternaire trivial `cond ? currentZ : currentZ` a été remplacé.
+        let newCurrentZ = (currentZ == nextZ) ? nextZ + 1 : nextZ
+        let newNextZ = currentZ
+
         let nextId = elements[index + 1].0
-        
+
         slide = mutateItem(slideId: id, text: { $0.zIndex = newCurrentZ }, media: { $0.zIndex = newCurrentZ }, sticker: { $0.zIndex = newCurrentZ })
         slide = mutateItem(slideId: nextId, text: { $0.zIndex = newNextZ }, media: { $0.zIndex = newNextZ }, sticker: { $0.zIndex = newNextZ })
         onItemModified?(slide)
@@ -2785,8 +2834,11 @@ public final class StoryCanvasUIView: UIView {
         let currentZ = elements[index].1
         let prevZ = elements[index - 1].1
         
-        let newCurrentZ = currentZ == prevZ ? prevZ : prevZ
-        let newPrevZ = currentZ == prevZ ? currentZ + 1 : currentZ
+        // Miroir de bringForward : si égalité fortuite, on incrémente prev
+        // au-dessus pour casser l'égalité. Sinon swap pur. newCurrentZ vaut
+        // prevZ dans les deux cas (ternaire trivial nettoyé).
+        let newCurrentZ = prevZ
+        let newPrevZ = (currentZ == prevZ) ? currentZ + 1 : currentZ
         
         let prevId = elements[index - 1].0
         
@@ -2976,14 +3028,20 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
     private func contextDuplicate(id: String) {
         var duplicatedNewId: String?
         var duplicatedKind: CanvasItemKind?
-        if let idx = slide.effects.mediaObjects?.firstIndex(where: { $0.id == id }) {
-            var copy = slide.effects.mediaObjects![idx]
+        // Branche media : `guard var` au lieu de `mediaObjects![idx]` — même si
+        // l'optional est non-nil au moment du firstIndex (single-thread
+        // MainActor), le force unwrap restait fragile face à un refacto futur.
+        if var medias = slide.effects.mediaObjects,
+           let idx = medias.firstIndex(where: { $0.id == id }) {
+            var copy = medias[idx]
             let newId = UUID().uuidString
             copy.id = newId
             copy.x += 0.05
             copy.y += 0.05
             copy.isBackground = false
-            slide.effects.mediaObjects?.append(copy)
+            copy.zIndex = nextTopZ()
+            medias.append(copy)
+            slide.effects.mediaObjects = medias
             duplicatedNewId = newId
             duplicatedKind = .media
         } else if let idx = slide.effects.textObjects.firstIndex(where: { $0.id == id }) {
@@ -2992,9 +3050,25 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
             copy.id = newId
             copy.x += 0.05
             copy.y += 0.05
+            copy.zIndex = nextTopZ()
             slide.effects.textObjects.append(copy)
             duplicatedNewId = newId
             duplicatedKind = .text
+        } else if var stickers = slide.effects.stickerObjects,
+                  let idx = stickers.firstIndex(where: { $0.id == id }) {
+            // Parité avec `duplicateItem` (ligne 2706) — la branche sticker
+            // manquait dans le context menu : tap "Dupliquer" sur un sticker
+            // restait un no-op silencieux.
+            var copy = stickers[idx]
+            let newId = UUID().uuidString
+            copy.id = newId
+            copy.x += 0.05
+            copy.y += 0.05
+            copy.zIndex = nextTopZ()
+            stickers.append(copy)
+            slide.effects.stickerObjects = stickers
+            duplicatedNewId = newId
+            duplicatedKind = .sticker
         }
         onItemModified?(slide)
         if let newId = duplicatedNewId, let kind = duplicatedKind {

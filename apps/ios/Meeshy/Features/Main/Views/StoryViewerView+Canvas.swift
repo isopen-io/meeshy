@@ -512,6 +512,17 @@ struct StoryCardView: View {
     /// uniquement sur ses transitions — pas sur celles de `isPaused`.
     @Binding var isLongPressPaused: Bool
 
+    /// Position de lecture (secondes) émise par le canvas — pilote la progress
+    /// bar et l'auto-advance du timer parent. Bound pour que le viewer parent
+    /// puisse la lire dans `startTimer()`.
+    @Binding var lastPlaybackTime: Double
+
+    /// Reflète `shouldPauseTimer` du parent (aggrégation des pauses UI : sheets,
+    /// composer, drag, long-press, transition). Propagée au canvas via
+    /// `StoryReaderRepresentable.isPaused` pour que la timeline canvas (vidéo,
+    /// audio, displayLink) gèle EN PHASE avec la progress bar du viewer.
+    let isCanvasPlaybackPaused: Bool
+
     @ObservedObject var keyboard: KeyboardObserver
 
     /// Fraction `[0, 1]` de contenu de la slide active disponible localement.
@@ -556,6 +567,27 @@ struct StoryCardView: View {
             // Color/gradient fallback (always present)
             storyBackground
 
+            // === Layer 1.5: Blurred backdrop derived from the slide ThumbHash ===
+            // Le canvas réel est contraint à 9:16 (fidélité au design composer).
+            // Sur un iPhone "plus haut que 9:16" (iPhone 16 Pro = 0.461 vs 9/16 = 0.5625),
+            // ~150pt restent libres au-dessus et en dessous ; on les habille
+            // d'un blur du contenu story (ThumbHash upscaled + flou + scale) pour
+            // une transition douce entre les letterbox et le canvas net.
+            //
+            // SINGLE BACKDROP : un seul `storyBlurredBackdrop(for: currentStory)`
+            // avec une `.id(currentStory?.id)` pour que SwiftUI swap natif
+            // (transition.opacity de defaut, gérée par `withAnimation` du
+            // `crossFadeStory`). Le pattern précédent (deux backdrops avec
+            // `outgoingOpacity` ET `contentOpacity` additifs) produisait un pic
+            // de luminosité au milieu de la transition car les deux blurs
+            // semi-transparents s'additionnaient dans le ZStack.
+            storyBlurredBackdrop(for: currentStory)
+                .id(currentStory?.id ?? "no-story")
+                .transition(.opacity)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+
             // === Outgoing canvas (cross-dissolve pixel-perfect) ===
             if let outgoing = outgoingStory, outgoingOpacity > 0 {
                 StoryReaderRepresentable(story: outgoing, preferredLanguage: resolvedViewerLanguage,
@@ -564,7 +596,15 @@ struct StoryCardView: View {
                                       preloadedVideoURLs: preloadedVideoURLs,
                                       preloadedAudioURLs: preloadedAudioURLs)
                     .id("out-\(outgoing.id)")
-                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    // Strict 9:16-fit (parité avec UnifiedPostComposer:324).
+                    // Sans contrainte, le reader s'étirait à la hauteur écran et
+                    // la projection design→render (scaleFactor = width/1080)
+                    // décalait visuellement les textes/stickers de ~77pt vers le
+                    // haut sur iPhone 16 Pro (bug audit 2026-05-27).
+                    .aspectRatio(9.0 / 16.0, contentMode: .fit)
+                    .frame(maxWidth: geometry.size.width,
+                           maxHeight: geometry.size.height)
+                    .clipped()
                     .opacity(outgoingOpacity)
                     .scaleEffect(closingScale)
                     .allowsHitTesting(false)
@@ -578,14 +618,20 @@ struct StoryCardView: View {
                                       preloadedImages: preloadedImages,
                                       preloadedVideoURLs: preloadedVideoURLs,
                                       preloadedAudioURLs: preloadedAudioURLs,
+                                      isPaused: isCanvasPlaybackPaused,
                                       onContentReady: { isContentReady = true },
-                                      onContentProgress: { p in slideContentProgress = p })
+                                      onContentProgress: { p in slideContentProgress = p },
+                                      onPlaybackTime: { t in lastPlaybackTime = t })
                     .id(story.id)
-                    // Force the reader to the canvas size — UIViewRepresentable
-                    // can otherwise report an intrinsic size that drifts with
-                    // foreground media natural dimensions and pushes the
-                    // sidebar/composer beyond the viewport.
-                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    // Strict 9:16-fit (parité avec UnifiedPostComposer:324).
+                    // Sans contrainte, `geometry.size.height` étirait le canvas
+                    // hors ratio design et décalait visuellement le contenu.
+                    // Le letterbox au-dessus/en dessous est habillé par le
+                    // `storyBlurredBackdrop` (Layer 1.5).
+                    .aspectRatio(9.0 / 16.0, contentMode: .fit)
+                    .frame(maxWidth: geometry.size.width,
+                           maxHeight: geometry.size.height)
+                    .clipped()
                     .opacity(contentOpacity)
                     .offset(y: textSlideOffset)
                     .scaleEffect(openingScale)
@@ -614,11 +660,11 @@ struct StoryCardView: View {
                     // it: the loader hosts a thumbhash Image + .blur() whose
                     // intrinsic/halo size could otherwise inflate the parent
                     // ZStack and push the sidebar/composer beyond the viewport.
-                    // Note: pas de `.ignoresSafeArea()` ici — le parent
-                    // `StoryViewerView` l'applique déjà au scope racine, en
-                    // rajouter localement après `.frame()` ré-étend l'overlay
-                    // horizontalement (~89pt) et casse à nouveau la sidebar.
-                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    // Aligné sur le canvas 9:16 (et non plein écran) pour ne pas
+                    // recouvrir le `storyBlurredBackdrop` en bandes letterbox.
+                    .aspectRatio(9.0 / 16.0, contentMode: .fit)
+                    .frame(maxWidth: geometry.size.width,
+                           maxHeight: geometry.size.height)
                     .clipped()
                     .allowsHitTesting(false)
                     .transition(.opacity)
@@ -1024,6 +1070,64 @@ struct StoryCardView: View {
         }
         .ignoresSafeArea()
         .accessibilityHidden(true)
+    }
+
+    // MARK: - Blurred backdrop (letterbox au-dessus/en dessous du canvas 9:16)
+
+    /// Habille les bandes letterbox d'un blur du contenu story.
+    /// Cascade de sources (priorité descendante) :
+    ///   1. `slide.effects.thumbHash` — thumbHash explicite côté slide
+    ///   2. `media[backgroundId].thumbHash` — thumbHash du média de fond
+    ///      (couvre les vidéos uploadées qui portent leur thumbHash côté
+    ///      `FeedMedia` plutôt que sur le slide composite)
+    ///   3. Color.clear → le `storyBackground` gradient indigo se voit dans
+    ///      les bandes (fallback graceful, jamais de rectangle noir)
+    ///
+    /// Décodage ThumbHash < 0.5 ms (16×16 → upscaled), blur GPU SwiftUI < 1 ms.
+    @ViewBuilder
+    private func storyBlurredBackdrop(for story: StoryItem?) -> some View {
+        if let img = resolvedBackdropImage(for: story) {
+            Image(uiImage: img)
+                .resizable()
+                .scaledToFill()
+                .blur(radius: 60)
+                .scaleEffect(1.18)
+                .opacity(0.85)
+        } else {
+            Color.clear
+        }
+    }
+
+    /// Résout l'image-source du backdrop selon la cascade documentée plus haut.
+    /// Retourne `nil` si aucune source exploitable n'existe (Color.clear path).
+    private func resolvedBackdropImage(for story: StoryItem?) -> UIImage? {
+        guard let story else { return nil }
+        let slide = story.toRenderableSlide(preferredLanguages: resolvedViewerLanguageChain)
+        // (1) thumbHash slide-level
+        if let hash = slide.effects.thumbHash,
+           !hash.isEmpty,
+           let img = UIImage.fromThumbHash(hash) {
+            return img
+        }
+        // (2) thumbHash du media de fond — typique pour vidéo uploadée
+        let bgMediaId: String? = {
+            if let bg = slide.effects.resolvedBackgroundMedia {
+                return bg.postMediaId
+            }
+            // Fallback historique : premier média si pas de canvas mediaObjects
+            if (slide.effects.mediaObjects ?? []).isEmpty {
+                return story.media.first?.id
+            }
+            return nil
+        }()
+        if let bgMediaId,
+           let media = story.media.first(where: { $0.id == bgMediaId }),
+           let mediaHash = media.thumbHash,
+           !mediaHash.isEmpty,
+           let img = UIImage.fromThumbHash(mediaHash) {
+            return img
+        }
+        return nil
     }
 
     // MARK: - Background Audio Badge

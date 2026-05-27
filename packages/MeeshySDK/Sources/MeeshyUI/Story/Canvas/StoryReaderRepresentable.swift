@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import CoreMedia
 import MeeshySDK
 
 /// SwiftUI drop-in surface for the story reader.
@@ -17,6 +18,12 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     let storyItem: StoryItem
     public internal(set) var preferredLanguages: [String]
     public internal(set) var mute: Bool
+    /// Drives `StoryCanvasUIView.setPaused(_:)` — gels la timeline canvas
+    /// (displayLink + AVPlayer + audioMixer) en phase avec la progress bar
+    /// du viewer parent. Sans ça, ouvrir un sheet pendant la lecture laissait
+    /// `lastPlaybackTime` avancer dans le vide → saut visible au resume.
+    /// Drivé depuis `shouldPauseTimer` du viewer.
+    public internal(set) var isPaused: Bool
     /// Stored as `@Sendable` so it can be forwarded into `StoryReaderContext`
     /// which requires `@Sendable () -> Void`. Call-sites supply a plain `() -> Void`
     /// which Swift coerces automatically when the closure itself has no captures
@@ -33,6 +40,14 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     /// foreground, etc.). Permet de piloter un overlay loader granulaire
     /// (`StoryReaderLoadingOverlay`) qui fade out au-delà du seuil 20 %.
     let onContentProgress: ((Double) -> Void)?
+
+    /// Position de lecture (secondes) émise par le displayLink interne du
+    /// canvas à ~60 Hz. Source de vérité pour piloter la progress bar du
+    /// viewer parent en sync EXACTE avec la timeline (vidéo BG + audio +
+    /// keyframes). Aligné sur `slide.computedTotalDuration()` qui inclut
+    /// le roundup des cycles bg → la transition n'interrompt jamais un
+    /// loop mid-cycle.
+    let onPlaybackTime: ((Double) -> Void)?
 
     /// Locally-loaded assets handed in by the composer "Preview" path for a
     /// story whose media has not been uploaded yet. Keyed by media id.
@@ -55,9 +70,11 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
                 preloadedVideoURLs: [String: URL] = [:],
                 preloadedAudioURLs: [String: URL] = [:],
                 mute: Bool = false,
+                isPaused: Bool = false,
                 onCompletion: (@Sendable () -> Void)? = nil,
                 onContentReady: (() -> Void)? = nil,
-                onContentProgress: ((Double) -> Void)? = nil) {
+                onContentProgress: ((Double) -> Void)? = nil,
+                onPlaybackTime: ((Double) -> Void)? = nil) {
         self.storyItem = story
         // `preferredContentLanguages` is the legacy label; it takes priority over
         // `preferredLanguages` when provided so existing call-sites compile unchanged.
@@ -67,9 +84,11 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
             : effective
         self.preferredLanguages = chain
         self.mute = mute
+        self.isPaused = isPaused
         self.onCompletion = onCompletion
         self.onContentReady = onContentReady
         self.onContentProgress = onContentProgress
+        self.onPlaybackTime = onPlaybackTime
         self.preloadedImages = preloadedImages
         self.preloadedVideoURLs = preloadedVideoURLs
         self.preloadedAudioURLs = preloadedAudioURLs
@@ -117,6 +136,8 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         view.onContentReady = { contentReady?() }
         let progress = onContentProgress
         view.onContentProgress = { value in progress?(value) }
+        let playback = onPlaybackTime
+        view.onPlaybackTime = { t in playback?(t) }
         view.setReaderContext(StoryReaderContext(
             preferredLanguages: preferredLanguages,
             mute: mute,
@@ -146,9 +167,23 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
 
     public func updateUIView(_ view: StoryCanvasUIView, context: Context) {
         let newSlide = storyItem.toRenderableSlide(preferredLanguages: preferredLanguages)
-        if newSlide.id != view.slide.id || newSlide.content != view.slide.content {
+        let identityChanged = newSlide.id != view.slide.id
+        if identityChanged || newSlide.content != view.slide.content {
             view.slide = newSlide
         }
+        if identityChanged {
+            // Reset défensif de la timeline canvas quand l'id slide change :
+            // garantit que `currentTime` redémarre à zéro EN PHASE avec
+            // `lastPlaybackTime = 0` côté viewer (cf. `startTimer()`). Sans ça,
+            // un canvas dont l'identité change (rare avec SwiftUI `.id(story.id)`
+            // qui teardown + makeUIView, mais possible si on factorise le
+            // representable à une instance long-lived plus tard) pourrait
+            // démarrer la slide N+1 avec le `currentTime` résiduel de la slide N.
+            view.setMode(.play, time: .zero)
+        }
+        // Pause synchronisée avec le viewer : sheets, composer, drag, long-press.
+        // `setPaused` est idempotent côté canvas.
+        view.setPaused(isPaused)
     }
 }
 

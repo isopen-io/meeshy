@@ -517,7 +517,10 @@ extension StoryViewerView {
     ///   (timer-only — le canvas continue à jouer).
     /// - `isLongPressPaused` : toggle long-press utilisateur (timer + canvas
     ///   gelés ensemble via `.storyPlayerPause`).
-    private var shouldPauseTimer: Bool {
+    /// Internal car lu depuis `StoryViewerView.swift` (cross-file extension) :
+    /// le helper `storyCard(geometry:)` passe cette valeur à `StoryCardView`
+    /// pour propager la pause au canvas via `StoryReaderRepresentable.isPaused`.
+    var shouldPauseTimer: Bool {
         isPaused
         || isLongPressPaused
         || isComposerEngaged
@@ -538,6 +541,7 @@ extension StoryViewerView {
         isContentReady = false
         hasFiredFadeOut = false
         hasFiredNextPrefetch = false
+        lastPlaybackTime = 0
         showCommentsOverlay = false
         replyingToStoryComment = nil
         storyCommentRepliesMap = [:]
@@ -547,42 +551,46 @@ extension StoryViewerView {
         storyReactionCount = currentStory?.reactionCount ?? 0
         updateStoryDuration()
         let duration = computedStoryDuration
-        let fadeOutThreshold = max(0, 1.0 - (2.0 / duration))
+        // Fade-out audio 2 s avant la fin — borné à 50 % de la slide minimum
+        // pour que la slide par défaut 6 s laisse 3 s de lecture franche avant
+        // d'amorcer la fade (sans borne inférieure, 1 - 2/6 = 33 % → fade dès
+        // 2 s, perçu comme prématuré).
+        let fadeOutThreshold = max(0.5, 1.0 - (2.0 / duration))
         // Seuil d'amorçage du prefetch de la slide suivante : 5 secondes avant
-        // la fin de la slide en cours (clamp à 0 pour les slides ≤ 5 s, où
-        // le prefetch s'arme dès l'apparition). Ça donne ~5 s de marge réseau
-        // au décodeur pour avoir au moins quelques secondes de la prochaine
-        // vidéo prêtes en mémoire / cache disk avant la transition, ce qui
-        // élimine le loader 0% lors du switch.
-        let nextPrefetchThreshold = max(0, 1.0 - (5.0 / duration))
+        // la fin de la slide en cours, borné à 50 % minimum. Sur une slide 6 s
+        // ce ratio donne 50 % (≈ 3 s avant la fin) au lieu de 17 % (≈ 5 s avant
+        // la fin → quasi immédiatement, ce qui faisait fire le prefetch sur la
+        // slide précédente et masquait le diagnostic du cache miss). Le bornage
+        // garantit qu'on reste cohérent avec l'intent « pré-charger pendant la
+        // 2ᵉ moitié de la slide » quelle que soit la durée.
+        let nextPrefetchThreshold = max(0.5, 1.0 - (5.0 / duration))
 
-        // Drive the progress bar from a CADisplayLink instead of `Timer.publish(every: 0.03)`.
-        // Two wins:
-        // (a) CADisplayLink syncs to the display refresh, auto-pauses when the
-        //     app backgrounds, and stops cleanly when invalidated. The Combine
-        //     timer kept ticking on background and accumulated wake-ups.
-        // (b) A diff-guarded write only commits `progress` when the bar would
-        //     visually advance by at least 1/300 (≈1 pixel on a 300pt-wide
-        //     viewer). On a 5s story that's ~60 commits total instead of ~165
-        //     timer fires — a 2.5x reduction in body re-evaluations of the
-        //     storyCard ZStack (audit E1: ~10% CPU continuous).
+        // SOURCE DE VÉRITÉ TIMELINE — le canvas (StoryCanvasUIView) pilote la
+        // timeline réelle via son displayLink interne et émet `lastPlaybackTime`
+        // à chaque tick. Le proxy ici n'est plus un accumulator wall-clock
+        // indépendant : il LIT `lastPlaybackTime` à 60 Hz et le mappe sur
+        // `progress`. Avantages :
+        //   - Progress bar EXACTEMENT synchrone avec la vidéo BG (le canvas
+        //     advance currentTime au tempo de son AVPlayer).
+        //   - `goToNext()` n'est jamais déclenché avant la fin réelle de la
+        //     slide : `computedStoryDuration` inclut `ceil(slideDur / bgLoop) ×
+        //     bgLoop`, et le canvas ne fire `onCompletion` qu'à cette borne.
+        //   - Pause synchrone : `isCanvasPlaybackPaused` propagé au canvas via
+        //     `StoryReaderRepresentable.isPaused` → le displayLink canvas se
+        //     met en isPaused=true, `lastPlaybackTime` arrête d'avancer.
         //
-        // Elapsed time is a PAUSE-AWARE ACCUMULATOR rather than raw wall-clock:
-        // each frame adds its delta to `accumulated` ONLY while the timer is not
-        // paused AND the slide's real media has loaded (`isContentReady`). This
-        // gates the progress bar on content readiness (it stays at 0 until the
-        // canvas signals `onContentReady`) and fixes the legacy pause-jump bug
-        // where wall-clock kept running behind a sheet/composer/drag pause.
-        let accumulated = StoryProgressDisplayLinkProxy.MutableDouble(0)
-        let lastFrame = StoryProgressDisplayLinkProxy.MutableDouble(CACurrentMediaTime())
+        // Le proxy garde son rôle de coordinateur des seuils (fadeOut,
+        // prefetch, goToNext) et du diff-guard 1/300 sur progress pour limiter
+        // les re-evaluations SwiftUI.
         let lastCommitted = StoryProgressDisplayLinkProxy.MutableDouble(0)
         let proxy = StoryProgressDisplayLinkProxy { [self] in
-            let now = CACurrentMediaTime()
-            let delta = now - lastFrame.value
-            lastFrame.value = now
+            // Failsafe : si pause UI active ou content pas encore prêt, on ne
+            // touche pas à progress. Le canvas est en isPaused=true en parallèle
+            // donc `lastPlaybackTime` est gelé — la lecture reprendra en phase
+            // dès que `isPaused` redescend à false.
             guard !shouldPauseTimer, isContentReady else { return }
-            accumulated.value += delta
-            let raw = min(1.0, CGFloat(accumulated.value / duration))
+            let elapsed = lastPlaybackTime
+            let raw = min(1.0, CGFloat(elapsed / duration))
             if abs(raw - CGFloat(lastCommitted.value)) >= 1.0 / 300.0 || raw >= 1.0 {
                 lastCommitted.value = Double(raw)
                 progress = raw
@@ -591,18 +599,18 @@ extension StoryViewerView {
                 hasFiredFadeOut = true
                 NotificationCenter.default.post(name: .storyAudioFadeOut, object: nil)
             }
-            // Prefetch de la slide suivante 5 secondes avant la fin. On laisse
-            // ainsi au décodeur le temps de mettre en cache disk au moins les
-            // premières secondes (typiquement 5 s suffisent même sur 4G) avant
-            // que l'utilisateur transitionne — la prochaine ouverture est alors
-            // instantanée. Idempotent via `hasFiredNextPrefetch` : un seul
-            // déclenchement par slide. Sécurisé en bout de groupe (prefetchStory
-            // borne l'index et `prefetchAllMedia` est un no-op si déjà en cache).
+            // Prefetch de la slide suivante : déclenchement basé sur le seuil
+            // dérivé du temps canvas (et non plus du wall-clock), donc respecte
+            // les pauses et l'extension par durée vidéo BG.
             if raw >= nextPrefetchThreshold && !hasFiredNextPrefetch {
                 hasFiredNextPrefetch = true
                 _ = prefetchStory(at: currentStoryIndex + 1)
             }
-            if raw >= 1.0 {
+            // Auto-advance EXACTEMENT à la fin de la timeline canvas. Le canvas
+            // garantit que `lastPlaybackTime` n'atteint `duration` qu'après la
+            // dernière frame vidéo BG du dernier loop (cf. `roundedUpToBgLoops`
+            // dans `updateStoryDuration`). Aucune vidéo n'est coupée mid-cycle.
+            if elapsed >= duration {
                 goToNext()
             }
         }
@@ -628,20 +636,22 @@ extension StoryViewerView {
     }
 
     /// Calcule la durée du slide courant en fonction des médias (vidéo/audio).
-    /// Minimum 12s pour les slides texte/image seules — l'ancien 5s coupait
-    /// trop tôt la lecture des captions et stickers.
+    /// Minimum 6s pour les slides texte/image seules — parité Instagram/Snapchat,
+    /// abaissé depuis 12s après retour utilisateur « les stories durent trop ».
     ///
-    /// Spec: la story dure `max(longest_media_end_time, configured_slideDuration, 12s_minimum)`.
+    /// Spec: la story dure `max(longest_media_end_time, configured_slideDuration, 6s_minimum)`,
+    /// puis arrondie au multiple supérieur de chaque période de loop bg pour
+    /// que la vidéo/audio bg ne soit JAMAIS coupée au milieu d'un cycle.
     /// Avant ce fix, `effects.slideDuration` early-returned et les médias plus longs
     /// que la durée configurée étaient coupés (la vidéo apparaissait quelques
     /// secondes puis disparaissait alors que le son continuait — typique d'un
     /// timer de slide expirant avant la fin du média).
     private func updateStoryDuration() {
         guard let story = currentStory else {
-            computedStoryDuration = 12.0
+            computedStoryDuration = 6.0
             return
         }
-        var maxDuration: Double = 12.0
+        var maxDuration: Double = 6.0
         let effects = story.storyEffects
 
         // Configured timeline duration is one CANDIDATE — not authoritative.
@@ -689,7 +699,7 @@ extension StoryViewerView {
                 let extraWords = words - 30
                 let extraSeconds = Double(extraWords) / 6.0
                 // L'extension s'applique sur la durée de base du slide (floor)
-                let base = effects?.slideDuration.map { Double($0) } ?? 12.0
+                let base = effects?.slideDuration.map { Double($0) } ?? 6.0
                 maxDuration = max(maxDuration, base + extraSeconds)
             }
         }
@@ -698,9 +708,9 @@ extension StoryViewerView {
         // they DON'T extend the story directly to their full duration (bg
         // audio/video loop). Instead we round the foreground baseline up to
         // the next multiple of each loop period below, so the loop completes
-        // its Nth cycle before the slide advances. Without this, a 12s slide
-        // with a 5s bg video would cut at 12s mid-third-loop; with it, the
-        // slide extends to 15s (3 full cycles).
+        // its Nth cycle before the slide advances. Without this, a 6s slide
+        // with a 5s bg video would cut at 6s mid-second-loop; with it, the
+        // slide extends to 10s (2 full cycles).
         var bgLoopPeriods: [Double] = []
         if let bgMedia = effects?.resolvedBackgroundMedia, bgMedia.kind == .video,
            let dur = story.media.first(where: { $0.id == bgMedia.postMediaId })?.duration, dur > 0 {

@@ -125,14 +125,24 @@ struct StoryViewerView: View {
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
 
-    /// Durée dynamique du slide courant — max(12, durée max des médias vidéo/audio).
-    /// Static text/image slides default to 12s so the reader has time to take in
-    /// captions and stickers (the previous 5s default felt rushed for anything
-    /// beyond a single-emoji story).
-    @State var computedStoryDuration: Double = 12.0 // internal for cross-file extension access
+    /// Durée dynamique du slide courant — max(6, durée max des médias vidéo/audio).
+    /// Static text/image slides default to 6s (parité Instagram/Snapchat) — la
+    /// transition n'interrompt JAMAIS un média en cours : `updateStoryDuration`
+    /// retient `max(6, durée vidéo BG, durée vidéo FG, durée audio, words/6)` puis
+    /// arrondit à `ceil(base / loopPeriod) × loopPeriod` pour que chaque loop bg
+    /// termine son cycle avant l'avance.
+    @State var computedStoryDuration: Double = 6.0 // internal for cross-file extension access
     @State var timerCancellable: AnyCancellable? // internal for cross-file extension access
     @State var hasFiredFadeOut = false // internal for cross-file extension access
     @State var hasFiredNextPrefetch = false // déclencheur du prefetch de la slide N+1, armé à 5s de la fin de la slide en cours pour que la transition soit fluide.
+
+    /// Position de lecture (secondes) émise par le displayLink interne du canvas
+    /// via `StoryReaderRepresentable.onPlaybackTime`. Source de vérité unique
+    /// pour piloter la progress bar du viewer en sync EXACTE avec la timeline
+    /// canvas (vidéo BG + audio + keyframes). Aligné sur `computedStoryDuration`
+    /// qui inclut le roundup des cycles bg → la transition n'interrompt jamais
+    /// un loop mid-cycle. Reset à 0 à chaque slide change (cf. `startTimer`).
+    @State var lastPlaybackTime: Double = 0 // internal for cross-file extension access
 
     /// Visibilité du chrome (header, sidebar droite, composer) — animé par
     /// glissements directionnels. En mode normal `chromeVisible = true` au
@@ -548,7 +558,7 @@ struct StoryViewerView: View {
     /// so reading it here after `refreshPrefetchWindowAndTimer()` calls
     /// `updateStoryDuration()` indirectly via `startTimer()` is safe.
     var currentSlideDuration: TimeInterval {
-        computedStoryDuration > 0 ? computedStoryDuration : 12.0
+        computedStoryDuration > 0 ? computedStoryDuration : 6.0
     }
 
     /// Installs the prefetcher host pipeline once per viewer lifecycle. The
@@ -894,6 +904,8 @@ struct StoryViewerView: View {
             chromeVisible: $chromeVisible,
             isFullscreenStorySession: $isFullscreenStorySession,
             isLongPressPaused: $isLongPressPaused,
+            lastPlaybackTime: $lastPlaybackTime,
+            isCanvasPlaybackPaused: shouldPauseTimer,
             keyboard: keyboard,
             triggerStoryReaction: { triggerStoryReaction($0) },
             pauseTimer: { pauseTimer() },
