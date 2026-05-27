@@ -319,6 +319,18 @@ public protocol OfflineQueueing: Sendable {
 
 extension OfflineQueue: OfflineQueueing {}
 
+/// Test seam for the message-centric `enqueue(_:)` path used by
+/// `ConversationViewModel.sendMessage`. Naming avoids collision with
+/// `OfflineQueueProviding` (story-specific) and `OfflineQueueing` (generic
+/// non-message payload). Conforming types own the `OfflineQueueItem`
+/// coalescing semantics so callers can `await` the persistence write before
+/// reporting success to the user.
+public protocol OfflineMessageQueueing: Sendable {
+    func enqueue(_ item: OfflineQueueItem) async throws
+}
+
+extension OfflineQueue: OfflineMessageQueueing {}
+
 // MARK: - Offline Queue
 
 public actor OfflineQueue {

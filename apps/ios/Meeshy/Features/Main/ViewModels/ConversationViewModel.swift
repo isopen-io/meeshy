@@ -616,6 +616,8 @@ class ConversationViewModel: ObservableObject {
     private let syncEngine: ConversationSyncEngineProviding
     private let mentionService: MentionServiceProviding
     private let messageSocket: MessageSocketProviding
+    private let networkMonitor: NetworkMonitorProviding
+    private let offlineQueue: OfflineMessageQueueing
     private let decryptionActor = DecryptionActor(provider: LiveSessionProvider())
 
     private var currentUserId: String { authManager.currentUser?.id ?? "" }
@@ -739,7 +741,9 @@ class ConversationViewModel: ObservableObject {
         syncEngine: ConversationSyncEngineProviding = ConversationSyncEngine.shared,
         mentionService: MentionServiceProviding = MentionService.shared,
         messageSocket: MessageSocketProviding = MessageSocketManager.shared,
-        dependencies: ConversationDependencies = .live
+        dependencies: ConversationDependencies = .live,
+        networkMonitor: NetworkMonitorProviding = NetworkMonitor.shared,
+        offlineQueue: OfflineMessageQueueing = OfflineQueue.shared
     ) {
         self.conversationId = conversationId
         self.memberJoinedAt = memberJoinedAt
@@ -755,6 +759,8 @@ class ConversationViewModel: ObservableObject {
         self.syncEngine = syncEngine
         self.mentionService = mentionService
         self.messageSocket = messageSocket
+        self.networkMonitor = networkMonitor
+        self.offlineQueue = offlineQueue
         // Eagerly create GRDB persistence so messageStore is available at first paint.
         self.messagePersistence = dependencies.persistence
 
@@ -1640,19 +1646,24 @@ class ConversationViewModel: ObservableObject {
         // Debounce: a fast double-tap on the send button used to trigger two
         // concurrent `sendMessage` runs, both inserting their own optimistic
         // record with a fresh `tempId`, both POSTing the request — the user
-        // saw the same content twice in the bubble list. The `isSending`
-        // flag flips to `true` for the duration of the online send (cleared
-        // in both the success and failure paths), so the second tap exits
-        // early instead of duplicating. Retries from the offline / retry
-        // queues bypass this entry point — they call lower-level paths
-        // directly with the same `clientMessageId` already used by the
-        // original send.
+        // saw the same content twice in the bubble list. Lifted ABOVE the
+        // offline branch so a second tap while the first send is still
+        // `await`-ing on the outbox write exits early instead of inserting
+        // a parallel optimistic row + enqueuing twice.
         //
-        // Phase 4 §6.1 — the offline path runs BEFORE the debounce guard so
-        // a user typing quickly while disconnected (subway, airplane) can
-        // queue back-to-back messages without the second one being silently
-        // dropped. The offline branch is itself debounced inside `OfflineQueue`
-        // by the `clientMessageId` coalescing rules.
+        // Phase 4 §6.1 fix (Bug 1 — 2026-05-26): the legacy code ran the
+        // offline branch BEFORE the guard with a fire-and-forget
+        // `Task { try? await OfflineQueue.shared.enqueue(...) }`, so two
+        // rapid taps while offline could both reach the queue *or* the
+        // second one could be lost when the actor's pending-state machine
+        // observed a duplicate `clientMessageId` mid-enqueue. The guard
+        // now serializes both paths and the offline enqueue is awaited.
+        guard !isSending else { return false }
+        isSending = true
+        defer { isSending = false }
+
+        // Stop typing emission on send
+        socketHandler?.stopTypingEmission()
 
         // Offline: enqueue for later delivery + show optimistic message.
         // NOTE: we only gate on network availability here — NOT on socket
@@ -1660,7 +1671,7 @@ class ConversationViewModel: ObservableObject {
         // regardless of socket status. Routing through the offline queue when
         // the socket is still handshaking (common at startup) caused the clock
         // indicator to stay visible for seconds while waiting for retryAll().
-        if NetworkMonitor.shared.isOffline {
+        if !networkMonitor.isOnline {
             let offlineClientMessageId = existingTempId ?? ClientMessageId.generate()
             let queueItem = OfflineQueueItem(
                 conversationId: conversationId,
@@ -1672,7 +1683,6 @@ class ConversationViewModel: ObservableObject {
                 forwardedFromConversationId: forwardedFromConversationId,
                 attachmentIds: attachmentIds
             )
-            Task { try? await OfflineQueue.shared.enqueue(queueItem) }
 
             let offlineTempId = queueItem.tempId
             let offlineMessage = Message(
@@ -1723,9 +1733,16 @@ class ConversationViewModel: ObservableObject {
                 layoutVersion: 0, layoutMaxWidth: nil,
                 changeVersion: 0
             )
-            let persistence = messagePersistence
-            Task.detached(priority: .utility) {
-                try? await persistence.insertOptimistic(offlineRecord)
+
+            // Insert optimistic row SYNCHRONOUSLY (await) so the bubble is in
+            // GRDB BEFORE we await the queue write. If the queue throws, the
+            // catch path below flips this row to `.failed` deterministically.
+            do {
+                try await messagePersistence.insertOptimistic(offlineRecord)
+            } catch {
+                Logger.messages.error("offline insertOptimistic failed: \(error.localizedDescription, privacy: .public)")
+                // Persistence is best-effort here — the outbox row below is
+                // the actual source of truth. Continue.
             }
 
             let convId = conversationId
@@ -1754,12 +1771,23 @@ class ConversationViewModel: ObservableObject {
                 )
             }
 
-            Logger.messages.info("Message enqueued for offline delivery")
-            return true
+            // AWAITED enqueue (Bug 1 fix). If the outbox write throws, flip
+            // the optimistic bubble to `.failed` so the user can retry — the
+            // old fire-and-forget `Task { try? ... }` silently dropped the
+            // message on disk-full / coding errors.
+            do {
+                try await offlineQueue.enqueue(queueItem)
+                Logger.messages.info("Message enqueued for offline delivery")
+                return true
+            } catch {
+                Logger.messages.error("offline enqueue failed: \(error.localizedDescription, privacy: .public)")
+                try? await messagePersistence.markOptimisticFailed(
+                    localId: offlineTempId,
+                    reason: error.localizedDescription
+                )
+                return false
+            }
         }
-
-        // Stop typing emission on send
-        socketHandler?.stopTypingEmission()
 
         // Resolve ephemeral: use explicit param or ViewModel state
         let resolvedExpiresAt = expiresAt ?? ephemeralDuration?.expiresAt
@@ -1771,14 +1799,6 @@ class ConversationViewModel: ObservableObject {
 
         // Resolve blur: use explicit param or ViewModel state
         let resolvedBlur = isBlurred ?? (isBlurEnabled ? true : nil)
-
-        // Phase 4 §6.1 — debounce only the ONLINE send path. The offline
-        // branch above already returned, so a fast double-tap while offline
-        // queues both messages (deduped server-side via `clientMessageId`).
-        // For online sends, two concurrent runs would each post an HTTP
-        // request — `isSending` blocks the second tap.
-        guard !isSending else { return false }
-        isSending = true
 
         // Build ReplyReference from quoted message or story via la helper
         // unifiee — meme logique que `insertOptimisticMediaMessage` pour
@@ -1965,7 +1985,6 @@ class ConversationViewModel: ObservableObject {
                 pendingEffects = .none
             }
             mentionController.clearDraft()
-            isSending = false
             return true
         } catch {
             let failElapsedMs = Int(Date().timeIntervalSince(sendStartedAt) * 1000)
@@ -1999,7 +2018,6 @@ class ConversationViewModel: ObservableObject {
                         event: .serverAck(serverId: socketAck.messageId, at: socketAck.createdAt ?? Date())
                     )
                     Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(socketAck.messageId, privacy: .public) transport=socket-fallback durationMs=\(failElapsedMs, privacy: .public)")
-                    isSending = false
                     return true
                 }
             }
@@ -2029,7 +2047,6 @@ class ConversationViewModel: ObservableObject {
             )
             Task { try? await OfflineQueue.shared.enqueue(retryItem) }
 
-            isSending = false
             return false
         }
     }
