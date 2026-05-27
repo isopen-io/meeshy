@@ -1,7 +1,15 @@
 import XCTest
+import Combine
 @testable import MeeshySDK
 
 final class NetworkMonitorTests: XCTestCase {
+
+    private var cancellables = Set<AnyCancellable>()
+
+    override func tearDown() {
+        cancellables.removeAll()
+        super.tearDown()
+    }
 
     // MARK: - Singleton
 
@@ -48,5 +56,49 @@ final class NetworkMonitorTests: XCTestCase {
     func test_shared_conformsToObservableObject() {
         let monitor: any ObservableObject = NetworkMonitor.shared
         XCTAssertNotNil(monitor)
+    }
+
+    // MARK: - isOfflinePublisher (debounced, deduplicated)
+
+    func test_isOfflinePublisher_emits_on_state_change_after_debounce() {
+        let monitor = NetworkMonitor.makeForTesting()
+        let exp = expectation(description: "got true after debounce")
+        let lock = NSLock()
+        var fulfilled = false
+        monitor.isOfflinePublisher
+            .filter { $0 }
+            .sink { value in
+                lock.lock(); defer { lock.unlock() }
+                guard !fulfilled else { return }
+                fulfilled = true
+                XCTAssertTrue(value)
+                exp.fulfill()
+            }
+            .store(in: &cancellables)
+        monitor.simulateOffline()
+        wait(for: [exp], timeout: 2)
+    }
+
+    func test_isOfflinePublisher_dedupes_repeated_same_value() {
+        let monitor = NetworkMonitor.makeForTesting()
+        let lock = NSLock()
+        var trueEmissions = 0
+        let exp = expectation(description: "got first true after debounce")
+        monitor.isOfflinePublisher
+            .filter { $0 }
+            .sink { _ in
+                lock.lock(); defer { lock.unlock() }
+                trueEmissions += 1
+                if trueEmissions == 1 { exp.fulfill() }
+            }
+            .store(in: &cancellables)
+        monitor.simulateOffline()
+        monitor.simulateOffline()
+        wait(for: [exp], timeout: 2)
+        let settle = expectation(description: "settle")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { settle.fulfill() }
+        wait(for: [settle], timeout: 2)
+        lock.lock(); defer { lock.unlock() }
+        XCTAssertEqual(trueEmissions, 1, "removeDuplicates must coalesce repeated true values into a single emission")
     }
 }
