@@ -80,6 +80,10 @@ struct iPadRootView: View {
             .environmentObject(statusViewModel)
             .environmentObject(conversationViewModel)
             .environmentObject(storyViewerCoordinator)
+            // Propagate story viewer presentation state — same role as
+            // RootView (cf. ConnectionBanner sync pill chevauchement fix
+            // 2026-05-27).
+            .environment(\.isStoryViewerPresenting, storyViewerCoordinator.pendingRequest != nil)
             .onAppear {
                 router.onRouteRequested = { route in
                     if case .conversation(let conv) = route {

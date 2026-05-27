@@ -725,15 +725,23 @@ struct StoryCardView: View {
                 )
                 .frame(height: topInset + 110)
                 Spacer()
+                // Scrim bottom plus opaque + plus haut — assure que le caption
+                // texte d'une slide (rendu par le canvas à y≈0.95 en design
+                // coords) ne déborde plus visuellement sur la zone composer
+                // « Commenter... ». Le canvas du reader est positionné au
+                // centre du geometry (9:16 fit-to-width), donc un text
+                // positioné bas du slide tombe juste au-dessus du composer.
+                // Sans ce scrim fort, les deux se superposent — symptôme
+                // user-reporté 2026-05-27.
                 LinearGradient(
                     stops: [
                         .init(color: .black.opacity(0.0), location: 0),
-                        .init(color: .black.opacity(0.35), location: 0.5),
-                        .init(color: .black.opacity(0.65), location: 1)
+                        .init(color: .black.opacity(0.55), location: 0.45),
+                        .init(color: .black.opacity(0.92), location: 1)
                     ],
                     startPoint: .top, endPoint: .bottom
                 )
-                .frame(height: 180)
+                .frame(height: 240)
             }
             .ignoresSafeArea()
             .allowsHitTesting(false)

@@ -309,6 +309,11 @@ struct RootView: View {
         .environmentObject(statusViewModel)
         .environmentObject(conversationViewModel)
         .environmentObject(storyViewerCoordinator)
+        // Propagate story viewer presentation state down to chrome (sync
+        // pill, etc.) so they can skip rendering while a `fullScreenCover`
+        // story is on top. Read by `ConnectionBanner` via
+        // `@Environment(\.isStoryViewerPresenting)`. Cf. bug 2026-05-27.
+        .environment(\.isStoryViewerPresenting, storyViewerCoordinator.pendingRequest != nil)
         .adaptiveOnChange(of: router.sceneTitle) { _, title in
             UIApplication.shared.connectedScenes
                 .compactMap { $0 as? UIWindowScene }
@@ -389,6 +394,12 @@ struct RootView: View {
             .environmentObject(router)
             .environmentObject(statusViewModel)
             .environmentObject(conversationViewModel)
+            // Re-inject le flag isStoryViewerPresenting — fullScreenCover
+            // n'hérite pas non plus des `Environment` values du parent,
+            // donc le `StoryViewerContainer.ConnectionBanner` interne au
+            // cover ne pouvait pas se cacher sans ça. Bug sync pill
+            // chevauche header 2026-05-27.
+            .environment(\.isStoryViewerPresenting, true)
         }
         // Call presentation is split between fullScreen and PiP modes so the
         // user can keep using the rest of the app during an active call:

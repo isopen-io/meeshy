@@ -26,6 +26,14 @@ import MeeshyUI
 struct ConnectionBanner: View {
     @StateObject private var statusVM = ConnectionStatusViewModel()
     @StateObject private var syncPillVM = SyncPillViewModel()
+    /// Flag d'environnement injecté par `RootView` / `iPadRootView` quand
+    /// `StoryViewerView` est présenté en `fullScreenCover`. Cache la pill
+    /// pour qu'elle ne rende plus par-dessus le header story (le cover ne
+    /// supprime pas les `.safeAreaInset`/overlays du parent). Bug
+    /// 2026-05-27. Par défaut `false` via `IsStoryViewerPresentingKey` —
+    /// safe quand ConnectionBanner est monté hors d'un container qui
+    /// l'injecte (previews, tests, futurs callers).
+    @Environment(\.isStoryViewerPresenting) private var isStoryViewerPresenting
 
     /// Callback invoked when the user taps an entry whose `source` is
     /// non-nil. The mount point (`RootView` / `iPadRootView`) wires this
@@ -120,13 +128,21 @@ struct ConnectionBanner: View {
     }
 
     var body: some View {
-        SyncPill(entries: entries, onTap: onItemTap)
-            .adaptiveOnChange(of: statusVM.status) { oldValue, newValue in
-                handleStatusTransition(from: oldValue, to: newValue)
-            }
-            .onAppear {
-                lastObservedStatus = statusVM.status
-            }
+        // Skip rendering when StoryViewerView est présenté plein écran —
+        // le fullScreenCover du root ne supprime pas les safeAreaInset /
+        // overlays du parent et le pill restait visible par-dessus le
+        // header story (bug 2026-05-27).
+        if isStoryViewerPresenting {
+            EmptyView()
+        } else {
+            SyncPill(entries: entries, onTap: onItemTap)
+                .adaptiveOnChange(of: statusVM.status) { oldValue, newValue in
+                    handleStatusTransition(from: oldValue, to: newValue)
+                }
+                .onAppear {
+                    lastObservedStatus = statusVM.status
+                }
+        }
     }
 
     /// Detects the `.offline → non-.offline` transition. Schedules a
@@ -165,5 +181,22 @@ struct ConnectionBanner: View {
         case .sticker:  return "face.dashed.fill"
         case .none:     return nil
         }
+    }
+}
+
+// MARK: - Environment Value
+
+/// Flag transitoire propagé par les root views quand `StoryViewerView` est
+/// présenté en `fullScreenCover`. Lu par `ConnectionBanner` (et tout autre
+/// chrome global susceptible de baver derrière le cover) pour skip son
+/// rendu. Default `false` — safe quand non injecté (previews, tests).
+private struct IsStoryViewerPresentingKey: EnvironmentKey {
+    static let defaultValue: Bool = false
+}
+
+extension EnvironmentValues {
+    var isStoryViewerPresenting: Bool {
+        get { self[IsStoryViewerPresentingKey.self] }
+        set { self[IsStoryViewerPresentingKey.self] = newValue }
     }
 }
