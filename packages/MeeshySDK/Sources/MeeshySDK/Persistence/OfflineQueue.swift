@@ -348,6 +348,29 @@ public actor OfflineQueue {
         pendingCountSubject.publisher
     }
 
+    /// Backing subject for `pendingUIItemsPublisher`. Mirrors the
+    /// `.pending`/`.inflight`/`.failed` outbox rows as `OutboxUIItem` snapshots
+    /// for the `SyncPill` UI. Kept `nonisolated` so SwiftUI bodies can read it
+    /// without hopping into the actor.
+    private nonisolated let pendingUIItemsSubject = SendableCurrentValueSubject<[OutboxUIItem]>([])
+
+    /// Cap on the number of `OutboxUIItem` snapshots surfaced through the
+    /// publisher. The pill UI only renders the head of the queue; an unbounded
+    /// fetch on a large backlog would burn memory and decode time for rows the
+    /// user can never see.
+    private static let pendingUIItemsLimit = 50
+
+    /// Publishes the current pending outbox UI snapshot and every subsequent
+    /// change. Rows are ordered by `createdAt` ascending and filtered to
+    /// `.pending` / `.inflight` / `.failed` statuses (drained rows are deleted
+    /// from the table — there is no `.applied` status to exclude). Emits the
+    /// latest value immediately on subscription.
+    public nonisolated var pendingUIItemsPublisher: AnyPublisher<[OutboxUIItem], Never> {
+        pendingUIItemsSubject.publisher
+            .removeDuplicates()
+            .eraseToAnyPublisher()
+    }
+
     private static let maxQueueSize = 100
 
     /// Subdirectory under `Documents/` that holds pending audio files referenced
@@ -527,9 +550,12 @@ public actor OfflineQueue {
     /// Counts rows currently in `.pending` or `.inflight` state and updates
     /// `pendingCountSubject`. Called after every enqueue/dequeue/retryItem
     /// touchpoint. Falls back to the in-memory mirror if no pool is wired.
+    /// Also refreshes the `pendingUIItemsSubject` snapshot so the SyncPill UI
+    /// re-renders on the same touchpoints.
     private func refreshPendingCount() async {
         guard let pool = outboxPool else {
             pendingCountSubject.send(items.count)
+            pendingUIItemsSubject.send([])
             return
         }
         // Seules les opérations qui justifient l'indicateur « Synchronisation… »
@@ -546,6 +572,33 @@ public actor OfflineQueue {
                 .fetchCount(db)
         }) ?? items.count
         pendingCountSubject.send(count)
+        await refreshPendingUIItems()
+    }
+
+    /// Reads the head of the outbox table (rows in `.pending`, `.inflight` or
+    /// `.failed` ordered by `createdAt` ascending, capped at
+    /// `pendingUIItemsLimit`) and pushes the corresponding `OutboxUIItem`
+    /// snapshots onto `pendingUIItemsSubject`. Decoding cost is paid once on
+    /// each outbox mutation, never on the SwiftUI render path.
+    private func refreshPendingUIItems() async {
+        guard let pool = outboxPool else {
+            pendingUIItemsSubject.send([])
+            return
+        }
+        let limit = Self.pendingUIItemsLimit
+        let records: [OutboxRecord] = (try? await pool.read { db in
+            try OutboxRecord
+                .filter([
+                    OutboxStatus.pending.rawValue,
+                    OutboxStatus.inflight.rawValue,
+                    OutboxStatus.failed.rawValue
+                ].contains(Column("status")))
+                .order(Column("createdAt").asc)
+                .limit(limit)
+                .fetchAll(db)
+        }) ?? []
+        let items = records.map(OutboxUIItem.from(record:))
+        pendingUIItemsSubject.send(items)
     }
 
     // MARK: - Queue Operations
@@ -1684,4 +1737,56 @@ public actor OfflineQueue {
             try? FileManager.default.removeItem(at: url)
         }
     }
+
+#if DEBUG
+    // MARK: - Test Seams
+    //
+    // Narrow helpers used by the publisher refresh tests. They short-circuit
+    // the production drain paths (`OutboxFlusher`, `retryAll()`) which would
+    // require a far heavier test rig for what we only need: prove the
+    // publisher reacts when outbox rows are deleted or flipped to `.failed`.
+
+    /// Forces a refresh of both `pendingCountSubject` and
+    /// `pendingUIItemsSubject` from the current outbox table state. Used by
+    /// tests that mutate the table directly (bypassing `enqueue`) and need to
+    /// observe the resulting snapshot.
+    public func refreshForTesting() async {
+        await refreshPendingCount()
+    }
+
+    /// Deletes every outbox row whose `clientMessageId` matches `cmid`,
+    /// simulating a successful drain (the production drain path in
+    /// `OutboxFlusher` and `retryAll()` also deletes the row outright since
+    /// `OutboxStatus` has no `.applied` case).
+    public func deleteForTesting(clientMessageId cmid: String) async throws {
+        guard let pool = outboxPool else { throw OfflineQueueError.poolNotConfigured }
+        try await pool.write { db in
+            try OutboxRecord
+                .filter(Column("clientMessageId") == cmid)
+                .deleteAll(db)
+        }
+        await refreshPendingCount()
+    }
+
+    /// Flips every outbox row whose `clientMessageId` matches `cmid` to
+    /// `.failed`, stamping `lastError` with `reason`. Mirrors what
+    /// `OutboxFlusher` does after exceeding the retry budget without
+    /// requiring a full flusher setup in the test.
+    public func markFailedForTesting(clientMessageId cmid: String, reason: String) async throws {
+        guard let pool = outboxPool else { throw OfflineQueueError.poolNotConfigured }
+        try await pool.write { db in
+            try db.execute(sql: """
+                UPDATE outbox
+                SET status = ?, lastError = ?, updatedAt = ?
+                WHERE clientMessageId = ?
+                """, arguments: [
+                    OutboxStatus.failed.rawValue,
+                    reason,
+                    Date(),
+                    cmid
+                ])
+        }
+        await refreshPendingCount()
+    }
+#endif
 }
