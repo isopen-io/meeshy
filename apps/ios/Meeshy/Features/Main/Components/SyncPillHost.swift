@@ -21,5 +21,8 @@ struct SyncPillHost: View {
         .padding(.top, 8)
         .padding(.horizontal, 16)
         .animation(.easeInOut(duration: 0.35), value: viewModel.state)
+        // Spec §7.5: above feed overlay (50) and floating call pill (190),
+        // below notification toasts (201).
+        .zIndex(195)
     }
 }

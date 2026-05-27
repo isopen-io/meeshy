@@ -43,7 +43,12 @@ struct SyncPill: View {
                 if let visible = currentVisibleItem {
                     SyncPillItemView(item: visible, index: rotator.currentIndex)
                         .equatable()
-                        .transition(.opacity)
+                        .transition(
+                            .asymmetric(
+                                insertion: .opacity.combined(with: .move(edge: .top)),
+                                removal: .opacity.combined(with: .move(edge: .bottom))
+                            )
+                        )
                         .id(visible.id)
                         .accessibilityRespondsToUserInteraction(false)
                 }
