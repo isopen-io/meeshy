@@ -25,6 +25,12 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
     public let forwardedFromId: String?
     public let forwardedFromConversationId: String?
     public let attachmentIds: [String]?
+    /// Raw values of `AttachmentKind` aligned with `attachmentIds` by index.
+    /// `nil` when the queue item was created before this field existed (old
+    /// on-disk rows decoded after a SDK upgrade) — the mapper falls back to
+    /// `.image` per spec §4.2 in that case. Optional so the synthesized
+    /// `Decodable` keeps reading legacy payloads without migration.
+    public let attachmentKinds: [String]?
     /// Local filesystem path to a pending audio file kept under
     /// `Documents/pending-audio/<clientMessageId>.m4a` while the message
     /// waits for upload. `nil` for non-audio messages. The pattern is
@@ -44,6 +50,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         forwardedFromId: String? = nil,
         forwardedFromConversationId: String? = nil,
         attachmentIds: [String]? = nil,
+        attachmentKinds: [String]? = nil,
         localAudioPath: String? = nil
     ) {
         self.id = UUID().uuidString
@@ -55,6 +62,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.forwardedFromId = forwardedFromId
         self.forwardedFromConversationId = forwardedFromConversationId
         self.attachmentIds = attachmentIds
+        self.attachmentKinds = attachmentKinds
         self.localAudioPath = localAudioPath
         self.createdAt = Date()
     }
@@ -71,6 +79,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         forwardedFromId: String?,
         forwardedFromConversationId: String?,
         attachmentIds: [String]?,
+        attachmentKinds: [String]? = nil,
         localAudioPath: String?,
         createdAt: Date
     ) {
@@ -83,6 +92,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.forwardedFromId = forwardedFromId
         self.forwardedFromConversationId = forwardedFromConversationId
         self.attachmentIds = attachmentIds
+        self.attachmentKinds = attachmentKinds
         self.localAudioPath = localAudioPath
         self.createdAt = createdAt
     }

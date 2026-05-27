@@ -1673,6 +1673,10 @@ class ConversationViewModel: ObservableObject {
         // indicator to stay visible for seconds while waiting for retryAll().
         if !networkMonitor.isOnline {
             let offlineClientMessageId = existingTempId ?? ClientMessageId.generate()
+            // Spec §4.2 — record the AttachmentKind of each attachment so the
+            // SyncPill mapper picks .video / .file icons instead of always
+            // falling back to .image. Aligned with attachmentIds by index.
+            let offlineKinds = localAttachments?.map { $0.kind.rawValue }
             let queueItem = OfflineQueueItem(
                 conversationId: conversationId,
                 content: text,
@@ -1681,7 +1685,8 @@ class ConversationViewModel: ObservableObject {
                 replyToId: replyToId,
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,
-                attachmentIds: attachmentIds
+                attachmentIds: attachmentIds,
+                attachmentKinds: offlineKinds
             )
 
             let offlineTempId = queueItem.tempId
@@ -1734,9 +1739,12 @@ class ConversationViewModel: ObservableObject {
                 changeVersion: 0
             )
 
-            // Insert optimistic row SYNCHRONOUSLY (await) so the bubble is in
-            // GRDB BEFORE we await the queue write. If the queue throws, the
-            // catch path below flips this row to `.failed` deterministically.
+            // `insertOptimistic` is a synchronous actor-isolated throw (no
+            // suspension point inside), so `try await` lands the GRDB write
+            // before the next runloop turn. The bubble is therefore in GRDB
+            // BEFORE we await the queue enqueue below — pixel repaint follows
+            // SwiftUI's next coalesced redraw, but the data is durable. If
+            // the queue throws, the catch path flips this row to `.failed`.
             do {
                 try await messagePersistence.insertOptimistic(offlineRecord)
             } catch {
@@ -1873,9 +1881,9 @@ class ConversationViewModel: ObservableObject {
             )
             do {
                 try await persistence.insertOptimistic(optimisticRecord)
-                print("[SendFlow] insertOptimistic OK tempId=\(tempId) state=.sending convId=\(conversationId)")
+                Logger.messages.debug("SendFlow insertOptimistic OK tempId=\(tempId, privacy: .public) state=.sending convId=\(self.conversationId, privacy: .public)")
             } catch {
-                print("[SendFlow] insertOptimistic FAILED tempId=\(tempId) error=\(error.localizedDescription)")
+                Logger.messages.error("SendFlow insertOptimistic FAILED tempId=\(tempId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
             }
         }
 
@@ -1926,13 +1934,13 @@ class ConversationViewModel: ObservableObject {
             // investigation 2026-05-17). REST is direct (~25 ms server-side).
             // Re-enable the WebSocket-first path once the Socket.IO channel
             // is repaired and the `message:send` ACK round-trip is verified.
-            print("[SendFlow] POST /messages tempId=\(tempId) — awaiting response")
+            Logger.messages.debug("SendFlow POST /messages tempId=\(tempId, privacy: .public) — awaiting response")
             let responseData = try await messageService.send(
                 conversationId: conversationId, request: body
             )
             let serverId = responseData.id
             let serverCreatedAt = responseData.createdAt
-            print("[SendFlow] POST OK tempId=\(tempId) serverId=\(responseData.id) createdAt=\(responseData.createdAt)")
+            Logger.messages.debug("SendFlow POST OK tempId=\(tempId, privacy: .public) serverId=\(responseData.id, privacy: .public)")
 
             // Register tempId → serverId mapping so the socket handler can reconcile
             // the `message:new` broadcast without creating a duplicate row.
@@ -1948,7 +1956,7 @@ class ConversationViewModel: ObservableObject {
                 localId: tempId,
                 event: .serverAck(serverId: serverId, at: serverCreatedAt)
             )
-            print("[SendFlow] applyEvent serverAck tempId=\(tempId) → resultState=\(ackResult.map { String(describing: $0) } ?? "nil")")
+            Logger.messages.debug("SendFlow applyEvent serverAck tempId=\(tempId, privacy: .public) resultState=\(ackResult.map { String(describing: $0) } ?? "nil", privacy: .public)")
             let ackElapsedMs = Int(Date().timeIntervalSince(sendStartedAt) * 1000)
             Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(serverId, privacy: .public) transport=rest durationMs=\(ackElapsedMs, privacy: .public)")
 
@@ -2037,13 +2045,15 @@ class ConversationViewModel: ObservableObject {
             // Wave 1 Task 3.6 — the deleted `MessageRetryQueue` used to own a
             // parallel retry loop ; both paths converged on the same outbox
             // table so behavior is preserved while LoC drops by ~600.
+            let retryKinds = localAttachments?.map { $0.kind.rawValue }
             let retryItem = OfflineQueueItem(
                 conversationId: conversationId,
                 content: text,
                 clientMessageId: tempId,
                 originalLanguage: originalLanguage ?? "fr",
                 replyToId: replyToId,
-                attachmentIds: attachmentIds
+                attachmentIds: attachmentIds,
+                attachmentKinds: retryKinds
             )
 
             // AWAITED enqueue (Bug 1 fix — online retry path, B2 2026-05-27).
@@ -2219,12 +2229,14 @@ class ConversationViewModel: ObservableObject {
             changeVersion: 0
         )
         let persistence = messagePersistence
+        let recordConversationId = record.conversationId
+        let attachmentCount = attachments.count
         Task.detached(priority: .userInitiated) {
             do {
                 try await persistence.insertOptimistic(record)
-                print("[SendFlow] insertOptimisticMedia OK tempId=\(tempId) state=.sending convId=\(record.conversationId) attachments=\(attachments.count)")
+                Logger.messages.debug("SendFlow insertOptimisticMedia OK tempId=\(tempId, privacy: .public) convId=\(recordConversationId, privacy: .public) attachments=\(attachmentCount, privacy: .public)")
             } catch {
-                print("[SendFlow] insertOptimisticMedia FAILED tempId=\(tempId) error=\(error.localizedDescription)")
+                Logger.messages.error("SendFlow insertOptimisticMedia FAILED tempId=\(tempId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
             }
         }
     }
