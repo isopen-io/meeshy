@@ -54,8 +54,8 @@ struct SyncPill: View {
                     .exclusively(before:
                         SpatialTapGesture(count: 1)
                             .onEnded { _ in
-                                if reduceMotion { return }
-                                rotator.advance(); onSingleTap()
+                                rotator.advance()
+                                onSingleTap()
                             }
                     )
             )
