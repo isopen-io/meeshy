@@ -181,6 +181,24 @@ struct StoryTrayView: View {
 
     // MARK: - Story Ring
 
+    /// URL de la miniature de la dernière story du groupe — user request
+    /// 2026-05-27 « dans la tray il faut mettre la vue miniature de la
+    /// dernière story du groupe ». `stories` est trié ascendant par
+    /// `createdAt` (cf. `FeedDataResponse.toStoryGroups`), donc `last` =
+    /// plus récente. Préfère `thumbnailUrl` (servi optimisé par le
+    /// gateway) au full `url` si dispo. Fallback sur l'avatar du profil
+    /// pour les stories text-only (pas de media).
+    private func latestStoryThumbnailURL(_ group: StoryGroup) -> String? {
+        guard let lastStory = group.stories.last else { return group.avatarURL }
+        if let thumb = lastStory.media.first?.thumbnailUrl, !thumb.isEmpty {
+            return thumb
+        }
+        if let url = lastStory.media.first?.url, !url.isEmpty {
+            return url
+        }
+        return group.avatarURL
+    }
+
     private func storyRing(group: StoryGroup, userId: String) -> some View {
         VStack(spacing: 5) {
             ZStack {
@@ -188,7 +206,7 @@ struct StoryTrayView: View {
                     name: group.username,
                     context: .storyTray,
                     accentColor: group.avatarColor,
-                    avatarURL: group.avatarURL,
+                    avatarURL: latestStoryThumbnailURL(group),
                     storyState: group.hasUnviewed ? .unread : .read,
                     moodEmoji: statusViewModel.statusForUser(userId: group.id)?.moodEmoji,
                     presenceState: presenceManager.presenceState(for: group.id),

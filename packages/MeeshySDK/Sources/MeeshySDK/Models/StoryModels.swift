@@ -1597,7 +1597,14 @@ extension Array where Element == APIPost {
         for post in storyPosts {
             let authorId = post.author.id
             let media: [FeedMedia] = (post.media ?? []).map { m in
-                FeedMedia(id: m.id, type: m.mediaType, url: m.fileUrl, thumbnailColor: "4ECDC4",
+                // Propage `thumbnailUrl` + `thumbHash` du gateway — sinon le
+                // tray (`StoryTrayView.latestStoryThumbnailURL`) tombe sur
+                // `url` (souvent une vidéo) ou sur l'avatar du profil.
+                // Bug user-reporté 2026-05-27 « la tray doit montrer la
+                // miniature de la dernière story du groupe ».
+                FeedMedia(id: m.id, type: m.mediaType, url: m.fileUrl,
+                          thumbnailUrl: m.thumbnailUrl, thumbHash: m.thumbHash,
+                          thumbnailColor: "4ECDC4",
                           width: m.width, height: m.height, duration: m.duration.map { $0 / 1000 })
             }
             let storyTranslations: [StoryTranslation]? = post.translations.map { dict in
