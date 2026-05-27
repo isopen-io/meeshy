@@ -115,8 +115,18 @@ public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
     /// commit a60f636b5 / 2026-05-20).
     @MainActor public private(set) var hasFinalContentStamped: Bool = false
 
-    public override nonisolated init() { super.init() }
-    public override nonisolated init(layer: Any) { super.init(layer: layer) }
+    public override nonisolated init() {
+        super.init()
+        // Clip le contenu interne aux bounds du backgroundLayer pour le
+        // pinch/pan "INSIDE the bg" (style Instagram) — sinon scaler le
+        // content fait déborder l'image / vidéo au-delà du canvas et le user
+        // perçoit "tout le canvas zoom" (bug reporté 2026-05-27).
+        self.masksToBounds = true
+    }
+    public override nonisolated init(layer: Any) {
+        super.init(layer: layer)
+        self.masksToBounds = true
+    }
 
     @available(*, unavailable)
     public required nonisolated init?(coder: NSCoder) {
@@ -138,6 +148,41 @@ extension StoryBackgroundLayer {
         CATransaction.setDisableActions(true)
         block()
         CATransaction.commit()
+    }
+
+    /// Applies a user transform to the bg CONTENT (image/video/gradient/color
+    /// sublayer) instead of to `self`. The backgroundLayer itself always
+    /// covers the full canvas — scaling its content while the layer stays
+    /// fixed gives the "zoom inside the bg" UX (Instagram-style), with
+    /// `masksToBounds = true` clipping anything that overflows.
+    ///
+    /// Why not scale `self.transform` ? Because that scales the WHOLE
+    /// backgroundLayer relative to the rootLayer parent — the bg overflows
+    /// the canvas and the user perceives "everything is zooming" (bug
+    /// reported 2026-05-27 in `.background` manipulation layer). Items in
+    /// `itemsContainer` (sibling of backgroundLayer) stay in place because
+    /// they're not affected by `backgroundLayer.transform`, but the bg
+    /// growing past its bounds is what the user sees.
+    @MainActor
+    public func applyContentTransform(_ t: CATransform3D) {
+        Self.withDisabledCAActions {
+            // Apply to whichever content sublayer is active. For image and
+            // video we scale the content sublayer so the backgroundLayer
+            // itself stays put (clipped to canvas bounds via masksToBounds).
+            // For solid color (no content sublayer) we fall back to scaling
+            // self — visually a no-op because a uniform color fill doesn't
+            // change under any affine transform, but it preserves the
+            // contract that "applyContentTransform always applies somewhere".
+            if let img = contentLayer {
+                img.transform = t
+                return
+            }
+            if let pl = avPlayerLayer {
+                pl.transform = t
+                return
+            }
+            self.transform = t
+        }
     }
 
     /// Loads a UIImage from a URL, supporting both `file://` (sync read) and
@@ -228,7 +273,10 @@ extension StoryBackgroundLayer {
             // (changement de videoFitMode via double-tap, sans rebuild).
             contentLayer?.frame = bounds
             avPlayerLayer?.frame = bounds
-            self.transform = transform.caTransform()
+            // Transform appliqué au CONTENT, pas à self : le backgroundLayer
+            // reste fixe (couvre tout le canvas) et seul son contenu zoom /
+            // pan dedans (Instagram-style "zoom inside bg").
+            applyContentTransform(transform.caTransform())
 
             // Refresh gravity for the new videoFitMode override. Auto cases
             // (override nil) need the naturalSize to compute — for video,
@@ -473,7 +521,8 @@ extension StoryBackgroundLayer {
             }
         }
 
-        self.transform = transform.caTransform()
+        // Transform appliqué au CONTENT — voir `applyContentTransform`.
+        applyContentTransform(transform.caTransform())
     }
 
     /// Identité visuelle du `Kind`, utilisée par le fast-path de `configure()`
