@@ -6,6 +6,7 @@ import type { User } from '@/types';
 import type { LanguageChoice } from '@/types/bubble-stream';
 import { SUPPORTED_LANGUAGES } from '@meeshy/shared/utils/languages';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
+import { getDeviceLocale } from '@/lib/device-locale';
 
 /**
  * Génère les choix de langues disponibles pour un utilisateur
@@ -49,10 +50,25 @@ export function getUserLanguageChoices(user: User): LanguageChoice[] {
 
 /**
  * Détermine la langue préférée d'un utilisateur selon sa configuration.
- * Délègue à resolveUserLanguage() depuis @meeshy/shared — source de vérité unique.
+ *
+ * Délègue à `resolveUserLanguage()` depuis `@meeshy/shared` — source de vérité
+ * unique du Prisme Linguistique. Injecte automatiquement la `deviceLocale`
+ * en 4e priorité (Prisme étendu 2026-05-26) :
+ *
+ *   1. systemLanguage
+ *   2. regionalLanguage
+ *   3. customDestinationLanguage
+ *   4. user.deviceLocale (persistée par le gateway) ?? navigator.language
+ *   5. 'fr' (fallback)
+ *
+ * Préfère la valeur persistée côté serveur (`user.deviceLocale`) à celle du
+ * navigateur courant, pour rester cohérent avec la résolution effectuée par
+ * le translator quand iOS et web partagent un compte.
  */
 export function resolveUserPreferredLanguage(user: User): string {
-  return resolveUserLanguage(user);
+  const persisted = (user as { deviceLocale?: string | null }).deviceLocale;
+  const deviceLocale = persisted ?? getDeviceLocale() ?? undefined;
+  return resolveUserLanguage(user, { deviceLocale });
 }
 
 /**
@@ -82,20 +98,19 @@ export function getUserLanguagePreferences(user: User): string[] {
 }
 
 /**
- * Détermine les langues nécessaires pour une conversation multi-utilisateurs
+ * Détermine les langues nécessaires pour une conversation multi-utilisateurs.
+ *
+ * Délègue à `resolveUserPreferredLanguage` pour appliquer l'ordre canonique
+ * du Prisme Linguistique étendu (system > regional > custom > deviceLocale).
+ * L'ancienne implémentation locale priorisait `customDestinationLanguage` en
+ * premier, ce qui divergeait de `resolveUserLanguage()`.
  */
 export function getRequiredLanguagesForConversation(users: User[]): string[] {
   const languages = new Set<string>();
-  
+
   users.forEach(user => {
-    if (user.customDestinationLanguage) {
-      languages.add(user.customDestinationLanguage);
-    } else if (user.systemLanguage) {
-      languages.add(user.systemLanguage);
-    } else {
-      languages.add('fr');
-    }
+    languages.add(resolveUserPreferredLanguage(user));
   });
-  
+
   return Array.from(languages);
 }

@@ -2,29 +2,52 @@ import { describe, it, expect } from 'vitest'
 import { resolveParticipantLanguage } from '../../utils/conversation-helpers'
 
 describe('resolveParticipantLanguage', () => {
-  it('should return customDestinationLanguage for user with custom preference', () => {
+  it('should return systemLanguage when configured (Prisme priority 1)', () => {
     const participant = {
       type: 'user' as const,
       language: 'en',
       user: { customDestinationLanguage: 'ja', regionalLanguage: 'es', systemLanguage: 'en' },
     }
-    expect(resolveParticipantLanguage(participant)).toBe('ja')
+    expect(resolveParticipantLanguage(participant)).toBe('en')
   })
 
-  it('should return regionalLanguage when no custom destination', () => {
+  it('should return regionalLanguage when no systemLanguage', () => {
     const participant = {
       type: 'user' as const,
       language: 'en',
-      user: { customDestinationLanguage: null, regionalLanguage: 'es', systemLanguage: 'en' },
+      user: { customDestinationLanguage: 'ja', regionalLanguage: 'es', systemLanguage: null },
     }
     expect(resolveParticipantLanguage(participant)).toBe('es')
   })
 
-  it('should return systemLanguage as fallback for user', () => {
+  it('should return customDestinationLanguage when no system nor regional', () => {
     const participant = {
       type: 'user' as const,
       language: 'en',
-      user: { customDestinationLanguage: null, regionalLanguage: null, systemLanguage: 'fr' },
+      user: { customDestinationLanguage: 'ja', regionalLanguage: null, systemLanguage: null },
+    }
+    expect(resolveParticipantLanguage(participant)).toBe('ja')
+  })
+
+  it('should return deviceLocale (normalised) as 4th priority', () => {
+    const participant = {
+      type: 'user' as const,
+      language: 'en',
+      user: {
+        customDestinationLanguage: null,
+        regionalLanguage: null,
+        systemLanguage: null,
+        deviceLocale: 'it-IT',
+      },
+    }
+    expect(resolveParticipantLanguage(participant)).toBe('it')
+  })
+
+  it('should return participant.language fallback when user has no preferences nor deviceLocale', () => {
+    const participant = {
+      type: 'user' as const,
+      language: 'fr',
+      user: { customDestinationLanguage: null, regionalLanguage: null, systemLanguage: null },
     }
     expect(resolveParticipantLanguage(participant)).toBe('fr')
   })
@@ -49,29 +72,44 @@ describe('resolveParticipantLanguage', () => {
     expect(resolveParticipantLanguage(participant)).toBe('it')
   })
 
-  it('should prioritize customDestinationLanguage over regionalLanguage and systemLanguage', () => {
+  it('should prioritize systemLanguage over regional, custom and deviceLocale', () => {
     const participant = {
       type: 'user' as const,
       language: 'en',
-      user: { customDestinationLanguage: 'zh', regionalLanguage: 'ko', systemLanguage: 'ja' },
+      user: {
+        customDestinationLanguage: 'zh',
+        regionalLanguage: 'ko',
+        systemLanguage: 'ja',
+        deviceLocale: 'pt',
+      },
     }
-    expect(resolveParticipantLanguage(participant)).toBe('zh')
+    expect(resolveParticipantLanguage(participant)).toBe('ja')
   })
 
-  it('should prioritize regionalLanguage over systemLanguage when no custom', () => {
+  it('should prioritize regionalLanguage over custom and deviceLocale when no system', () => {
     const participant = {
       type: 'user' as const,
       language: 'en',
-      user: { customDestinationLanguage: null, regionalLanguage: 'pt', systemLanguage: 'de' },
+      user: {
+        customDestinationLanguage: 'de',
+        regionalLanguage: 'pt',
+        systemLanguage: null,
+        deviceLocale: 'sv',
+      },
     }
     expect(resolveParticipantLanguage(participant)).toBe('pt')
   })
 
-  it('should fall back to systemLanguage when both custom and regional are null', () => {
+  it('should prioritize customDestinationLanguage over deviceLocale when no system nor regional', () => {
     const participant = {
       type: 'user' as const,
-      language: 'fr',
-      user: { customDestinationLanguage: null, regionalLanguage: null, systemLanguage: 'ar' },
+      language: 'en',
+      user: {
+        customDestinationLanguage: 'ar',
+        regionalLanguage: null,
+        systemLanguage: null,
+        deviceLocale: 'sv',
+      },
     }
     expect(resolveParticipantLanguage(participant)).toBe('ar')
   })
@@ -94,20 +132,20 @@ describe('resolveParticipantLanguage', () => {
     expect(resolveParticipantLanguage(participant)).toBe('es')
   })
 
-  it('should return participant.language when user type has empty string customDestinationLanguage', () => {
+  it('should treat empty string systemLanguage as absent and fall through to regional', () => {
     const participant = {
       type: 'user' as const,
       language: 'en',
-      user: { customDestinationLanguage: '', regionalLanguage: 'es', systemLanguage: 'fr' },
+      user: { customDestinationLanguage: '', regionalLanguage: 'es', systemLanguage: '' },
     }
     expect(resolveParticipantLanguage(participant)).toBe('es')
   })
 
-  it('should return systemLanguage when user has empty string for both custom and regional', () => {
+  it('should fall back to participant.language when all preferences are empty strings', () => {
     const participant = {
       type: 'user' as const,
-      language: 'en',
-      user: { customDestinationLanguage: '', regionalLanguage: '', systemLanguage: 'de' },
+      language: 'de',
+      user: { customDestinationLanguage: '', regionalLanguage: '', systemLanguage: '' },
     }
     expect(resolveParticipantLanguage(participant)).toBe('de')
   })

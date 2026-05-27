@@ -106,6 +106,14 @@ export const Component = memo(function Component({ prop }: Props) {
 - Never hardcode URLs - derive from `window.location` in `lib/config.ts`
 - Encryption handlers set on SocketIO service per conversation
 
+## Device Locale (Prisme Linguistique étendu — 4e priorité)
+- `lib/device-locale.ts` → source unique de `navigator.language` côté navigateur (`null` en SSR)
+- `apiService.buildHeaders()` injecte automatiquement `X-Device-Locale` sur **toutes** les requêtes HTTP authentifiées (idem `getBlob` / `uploadFile`)
+- Le gateway lit ce header en `preHandler` et persiste `User.deviceLocale` (debounce 5 min/user)
+- `resolveUserPreferredLanguage` (`utils/user-language-preferences.ts`) injecte la `deviceLocale` en 4e priorité : préfère `user.deviceLocale` persistée → fallback `navigator.language`
+- **JAMAIS** appeler `resolveUserLanguage` from `@meeshy/shared` directement dans un composant — toujours passer par `resolveUserPreferredLanguage` pour bénéficier de l'injection automatique
+- Source de vérité : `packages/shared/utils/conversation-helpers.ts` → `resolveUserLanguage()` (5 niveaux)
+
 ## React Query Patterns (Obligatoire)
 
 Reference: `docs/superpowers/specs/2026-03-17-architecture-bible-design.md` Patterns W1-W7

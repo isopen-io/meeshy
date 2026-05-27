@@ -1,4 +1,5 @@
 import { buildApiUrl } from '@/lib/config';
+import { getDeviceLocaleHeaders } from '@/lib/device-locale';
 import { getGeolocationHeaders } from '@/lib/geolocation';
 import { isJWTExpired } from '@/utils/auth';
 import { authManager } from './auth-manager.service';
@@ -101,6 +102,7 @@ class ApiService {
 
     const headers: Record<string, string> = {
       ...this.config.headers,
+      ...getDeviceLocaleHeaders(),
       ...getGeolocationHeaders(),
       ...customHeaders,
     };
@@ -264,13 +266,24 @@ class ApiService {
       });
     }
     const token = authManager.getAuthToken();
-    return this.request<T>(endpoint, { method: 'POST', body: formData, headers: { ...(token && { Authorization: `Bearer ${token}` }) } });
+    return this.request<T>(endpoint, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        ...getDeviceLocaleHeaders(),
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+    });
   }
 
   async getBlob(endpoint: string, options?: { signal?: AbortSignal; headers?: Record<string, string> }): Promise<Blob> {
     const url = buildApiUrl(endpoint);
     const token = authManager.getAuthToken();
-    const headers = { ...(token && { Authorization: `Bearer ${token}` }), ...options?.headers };
+    const headers = {
+      ...getDeviceLocaleHeaders(),
+      ...(token && { Authorization: `Bearer ${token}` }),
+      ...options?.headers,
+    };
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
 

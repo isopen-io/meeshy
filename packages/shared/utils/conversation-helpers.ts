@@ -149,8 +149,20 @@ export function generateConversationIdentifier(title?: string): string {
 }
 
 /**
- * Résout la langue préférée d'un participant unifié (user, anonymous, bot)
- * Applique le Prisme Linguistique : custom > regional > system > fallback language
+ * Résout la langue préférée d'un participant unifié (user, anonymous, bot).
+ *
+ * Applique l'ordre canonique du Prisme Linguistique étendu (2026-05-26) en
+ * déléguant à {@link resolveUserLanguage} :
+ *   1. systemLanguage
+ *   2. regionalLanguage
+ *   3. customDestinationLanguage
+ *   4. deviceLocale (si connu côté serveur)
+ *   5. participant.language (fallback métier — JAMAIS `'fr'` ici)
+ *
+ * Le fallback diffère de `resolveUserLanguage` parce qu'un participant non-user
+ * (anonymous, bot) ou un user sans préférence configurée doit retomber sur la
+ * langue déclarée par le call site (typiquement la langue de la conversation
+ * ou la langue déduite du message original), pas sur la default app `'fr'`.
  */
 type LanguageResolvable = {
   type: string
@@ -158,16 +170,21 @@ type LanguageResolvable = {
   user?: {
     customDestinationLanguage?: string | null
     regionalLanguage?: string | null
-    systemLanguage: string
+    systemLanguage?: string | null
+    deviceLocale?: string | null
   } | null
 }
 
 export function resolveParticipantLanguage(participant: LanguageResolvable): string {
-  if (participant.type === 'user' && participant.user) {
-    if (participant.user.customDestinationLanguage) return participant.user.customDestinationLanguage
-    if (participant.user.regionalLanguage) return participant.user.regionalLanguage
-    return participant.user.systemLanguage
+  if (participant.type !== 'user' || !participant.user) {
+    return participant.language
   }
+  const user = participant.user
+  if (user.systemLanguage) return user.systemLanguage
+  if (user.regionalLanguage) return user.regionalLanguage
+  if (user.customDestinationLanguage) return user.customDestinationLanguage
+  const normalizedDevice = normalizeLanguageCode(user.deviceLocale)
+  if (normalizedDevice) return normalizedDevice
   return participant.language
 }
 

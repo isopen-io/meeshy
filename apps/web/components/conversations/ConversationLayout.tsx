@@ -36,8 +36,7 @@ import { ConversationList } from './ConversationList';
 import { ConversationView } from './ConversationView';
 import { ConversationEmptyState } from './ConversationEmptyState';
 import { CreateConversationModal } from './create-conversation-modal';
-import { getUserLanguageChoices } from '@/utils/user-language-preferences';
-import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
+import { getUserLanguageChoices, resolveUserPreferredLanguage } from '@/utils/user-language-preferences';
 import { cn } from '@/lib/utils';
 import { useReplyStore } from '@/stores/reply-store';
 import { toast } from 'sonner';
@@ -387,9 +386,9 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     if (user && !hasLoadedInitialConversations.current) {
       hasLoadedInitialConversations.current = true;
       refreshConversations();
-      setSelectedLanguage(resolveUserLanguage(user));
+      setSelectedLanguage(resolveUserPreferredLanguage(user));
     } else if (user) {
-      setSelectedLanguage(resolveUserLanguage(user));
+      setSelectedLanguage(resolveUserPreferredLanguage(user));
     }
   }, [user?.id, refreshConversations]);
 
