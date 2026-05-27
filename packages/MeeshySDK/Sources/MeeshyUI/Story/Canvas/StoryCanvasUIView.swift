@@ -2088,17 +2088,70 @@ public final class StoryCanvasUIView: UIView {
                 return
             }
             manipulatedItemId = id
-            baseScale = currentScale(forId: id) ?? 1.0
-            bringForegroundToFront(id: id)
+
+            // Background pinch (path α — same architecture as handlePan):
+            // snapshot the bg transform at .began, live-update the CALayer
+            // transform during .changed without mutating the model, commit
+            // backgroundTransform at .ended. The bg is NOT in mediaObjects
+            // routing — `updateScale` would mute `mediaObjects[bg].scale`
+            // (visible on mini-preview only) but the canvas itself reads
+            // `slide.effects.backgroundTransform.scale` via the bgTransform
+            // converter → user-perceived bug "pinch bg reacts on mini but
+            // not on main canvas" (report 2026-05-27).
+            if id == backgroundMediaObjectId {
+                let current = slide.effects.backgroundTransform
+                dragStartBgScale = Double(current?.scale ?? 1)
+                dragStartBgOffsetX = Double(current?.offsetX ?? 0)
+                dragStartBgOffsetY = Double(current?.offsetY ?? 0)
+                dragStartBgRotation = current?.rotation ?? 0
+                dragStartBgFitMode = current?.videoFitMode
+                liveBackgroundTransformDuringDrag = nil
+            } else {
+                baseScale = currentScale(forId: id) ?? 1.0
+                bringForegroundToFront(id: id)
+            }
         case .changed:
             guard let id = manipulatedItemId else { return }
+            if id == backgroundMediaObjectId {
+                let newScale = max(0.3, min(4.0, dragStartBgScale * Double(recognizer.scale)))
+                let live = BackgroundTransform(
+                    scale: newScale,
+                    offsetX: dragStartBgOffsetX,
+                    offsetY: dragStartBgOffsetY,
+                    rotation: dragStartBgRotation,
+                    videoFitMode: dragStartBgFitMode
+                )
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                backgroundLayer.transform = live.caTransform()
+                CATransaction.commit()
+                liveBackgroundTransformDuringDrag = live
+                return
+            }
             let newScale = max(0.3, min(4.0, baseScale * Double(recognizer.scale)))
             slide = updateScale(slideId: id, scale: newScale)
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
+            let wasBackgroundDrag = (manipulatedItemId == backgroundMediaObjectId)
             manipulatedItemId = nil
-            slideContentRevision &+= 1
-            rebuildLayers()
+            if wasBackgroundDrag, let live = liveBackgroundTransformDuringDrag {
+                var updated = slide
+                let persisted = StoryBackgroundTransform(
+                    scale: live.scale != 1.0 ? CGFloat(live.scale) : nil,
+                    offsetX: live.offsetX != 0 ? CGFloat(live.offsetX) : nil,
+                    offsetY: live.offsetY != 0 ? CGFloat(live.offsetY) : nil,
+                    rotation: live.rotation != 0 ? live.rotation : nil,
+                    videoFitMode: live.videoFitMode
+                )
+                updated.effects.backgroundTransform = persisted.isIdentity ? nil : persisted
+                slide = updated
+                onItemModified?(slide)
+                onBackgroundTransformChanged?(persisted)
+                liveBackgroundTransformDuringDrag = nil
+            } else {
+                slideContentRevision &+= 1
+                rebuildLayers()
+            }
         default:
             break
         }
@@ -2120,17 +2173,60 @@ public final class StoryCanvasUIView: UIView {
                 return
             }
             manipulatedItemId = id
-            baseRotation = currentRotation(forId: id) ?? 0
-            bringForegroundToFront(id: id)
+            // Background rotation : same path α pattern as handlePan / handlePinch.
+            if id == backgroundMediaObjectId {
+                let current = slide.effects.backgroundTransform
+                dragStartBgScale = Double(current?.scale ?? 1)
+                dragStartBgOffsetX = Double(current?.offsetX ?? 0)
+                dragStartBgOffsetY = Double(current?.offsetY ?? 0)
+                dragStartBgRotation = current?.rotation ?? 0
+                dragStartBgFitMode = current?.videoFitMode
+                liveBackgroundTransformDuringDrag = nil
+            } else {
+                baseRotation = currentRotation(forId: id) ?? 0
+                bringForegroundToFront(id: id)
+            }
         case .changed:
             guard let id = manipulatedItemId else { return }
             let degrees = Double(recognizer.rotation) * 180 / .pi
+            if id == backgroundMediaObjectId {
+                let live = BackgroundTransform(
+                    scale: dragStartBgScale,
+                    offsetX: dragStartBgOffsetX,
+                    offsetY: dragStartBgOffsetY,
+                    rotation: dragStartBgRotation + degrees,
+                    videoFitMode: dragStartBgFitMode
+                )
+                CATransaction.begin()
+                CATransaction.setDisableActions(true)
+                backgroundLayer.transform = live.caTransform()
+                CATransaction.commit()
+                liveBackgroundTransformDuringDrag = live
+                return
+            }
             slide = updateRotation(slideId: id, rotation: baseRotation + degrees)
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
+            let wasBackgroundDrag = (manipulatedItemId == backgroundMediaObjectId)
             manipulatedItemId = nil
-            slideContentRevision &+= 1
-            rebuildLayers()
+            if wasBackgroundDrag, let live = liveBackgroundTransformDuringDrag {
+                var updated = slide
+                let persisted = StoryBackgroundTransform(
+                    scale: live.scale != 1.0 ? CGFloat(live.scale) : nil,
+                    offsetX: live.offsetX != 0 ? CGFloat(live.offsetX) : nil,
+                    offsetY: live.offsetY != 0 ? CGFloat(live.offsetY) : nil,
+                    rotation: live.rotation != 0 ? live.rotation : nil,
+                    videoFitMode: live.videoFitMode
+                )
+                updated.effects.backgroundTransform = persisted.isIdentity ? nil : persisted
+                slide = updated
+                onItemModified?(slide)
+                onBackgroundTransformChanged?(persisted)
+                liveBackgroundTransformDuringDrag = nil
+            } else {
+                slideContentRevision &+= 1
+                rebuildLayers()
+            }
         default:
             break
         }
@@ -2359,12 +2455,14 @@ public final class StoryCanvasUIView: UIView {
             CATransaction.begin()
             CATransaction.setDisableActions(true)
             layer.position = renderPosition(x: text.x, y: text.y)
-            let scale = CGFloat(text.scale)
+            // Text scale is baked into the rendered `fontSize` at configure-time
+            // (see `StoryTextLayer.configure`: `text.fontSize * text.scale`).
+            // Applying scale again on the CATextLayer.transform would
+            // double-scale the glyphs during the gesture and snap back to the
+            // correct size only at .ended → user-perceived "text grows then
+            // shrinks while dragging" (regression report 2026-05-27).
             let rotation = CGFloat(text.rotation * .pi / 180)
-            layer.transform = CATransform3DConcat(
-                CATransform3DMakeScale(scale, scale, 1),
-                CATransform3DMakeRotation(rotation, 0, 0, 1)
-            )
+            layer.transform = CATransform3DMakeRotation(rotation, 0, 0, 1)
             CATransaction.commit()
         } else if let sticker = slide.effects.stickerObjects?.first(where: { $0.id == id }) {
             CATransaction.begin()
