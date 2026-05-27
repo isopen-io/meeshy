@@ -818,9 +818,30 @@ public actor OfflineQueue {
         let outboxId = "ofqm_\(cmid)"
         let anchor = conversationId ?? Self.globalConversationSentinel
         let now = Date()
+        let shouldCoalesce = Self.coalescesByAnchor(kind: kind)
 
         do {
             try await pool.write { db in
+                if shouldCoalesce {
+                    // Latest-state-wins kinds (e.g. `markAsRead`): drop every
+                    // earlier `.pending` / `.failed` row for the same anchor
+                    // before writing the new one. The newer payload always
+                    // supersedes (reading up to msg N also covers 1..N-1) —
+                    // so letting them pile up burns bandwidth and inflates
+                    // the SyncPill rotation with 17 duplicates for 4 convs.
+                    let stale: [OutboxRecord] = try OutboxRecord
+                        .filter(Column("kind") == kind.rawValue)
+                        .filter(Column("conversationId") == anchor)
+                        .filter([OutboxStatus.pending.rawValue, OutboxStatus.failed.rawValue]
+                            .contains(Column("status")))
+                        .fetchAll(db)
+                    if !stale.isEmpty {
+                        let staleIds = stale.map(\.id)
+                        try OutboxRecord
+                            .filter(staleIds.contains(Column("id")))
+                            .deleteAll(db)
+                    }
+                }
                 try OutboxRecord(
                     id: outboxId,
                     kind: kind,
@@ -840,6 +861,30 @@ public actor OfflineQueue {
         logger.info("Enqueued \(kind.rawValue, privacy: .public) outbox row \(outboxId, privacy: .public)")
         await refreshPendingCount()
         return outboxId
+    }
+
+    /// Whether the given `OutboxKind` should coalesce-on-enqueue: every new
+    /// row for the same conversationId anchor supersedes earlier
+    /// `.pending` / `.failed` rows of the same kind. Reserved for kinds
+    /// whose payload is **monotonically idempotent** — applying only the
+    /// latest one alone is equivalent to applying every intermediate one
+    /// in sequence.
+    ///
+    /// Currently includes only `.markAsRead`: reading up to message N
+    /// implicitly marks 1..N-1 as well, so a busy group conversation that
+    /// fires `markAsRead` on every inbound message can collapse 17 stacked
+    /// rows into a single one carrying the highest `upToMessageId` with
+    /// no observable difference server-side. Other latest-state kinds
+    /// (profile / settings / conversation updates) might be added later,
+    /// but each needs a case-by-case audit to confirm intermediate states
+    /// can be safely dropped.
+    private static func coalescesByAnchor(kind: OutboxKind) -> Bool {
+        switch kind {
+        case .markAsRead:
+            return true
+        default:
+            return false
+        }
     }
 
     /// Reads the top-level `clientMutationId` field from a JSON-encoded
