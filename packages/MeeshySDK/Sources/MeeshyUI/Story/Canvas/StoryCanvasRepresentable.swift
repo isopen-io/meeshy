@@ -29,6 +29,10 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// via `onItemModified` → `@Binding`, ce callback est complémentaire et
     /// fournit la valeur structurée sans avoir à re-parser le slide.
     public var onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)?
+    /// Miroir de `viewModel.isDrawingActive` du composer. Quand `true`, le
+    /// canvas supprime son drawingLayer persisté pour éviter le double rendu
+    /// avec le PKCanvasView SwiftUI overlay (bug "écrit en double", 2026-05-27).
+    public var isDrawingOverlayActive: Bool = false
 
     public init(slide: Binding<StorySlide>,
                 onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
@@ -40,7 +44,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)? = nil,
                 onCanvasZoomScaleChanged: ((CGFloat, UIGestureRecognizer.State) -> Void)? = nil,
                 onBackgroundTapped: (() -> Void)? = nil,
-                onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)? = nil) {
+                onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)? = nil,
+                isDrawingOverlayActive: Bool = false) {
         self._slide = slide
         self.onItemTapped = onItemTapped
         self.onItemDoubleTapped = onItemDoubleTapped
@@ -52,6 +57,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         self.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         self.onBackgroundTapped = onBackgroundTapped
         self.onBackgroundTransformChanged = onBackgroundTransformChanged
+        self.isDrawingOverlayActive = isDrawingOverlayActive
     }
 
     public func makeUIView(context: Context) -> StoryCanvasUIView {
@@ -68,6 +74,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         view.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         view.onBackgroundTapped = onBackgroundTapped
         view.onBackgroundTransformChanged = onBackgroundTransformChanged
+        view.isDrawingOverlayActive = isDrawingOverlayActive
         // Bootstrap : la couche initiale calculée par `init` n'a pas pu être
         // poussée au callback (nil à ce moment). On force l'émission après
         // une frame pour que le chip indicator reflète bien la couche
@@ -89,6 +96,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         uiView.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         uiView.onBackgroundTapped = onBackgroundTapped
         uiView.onBackgroundTransformChanged = onBackgroundTransformChanged
+        uiView.isDrawingOverlayActive = isDrawingOverlayActive
         // Re-emit la couche courante après chaque body eval (deferred via
         // async pour ne pas muter le @State pendant la phase d'update
         // SwiftUI). SwiftUI dédupe les writes égaux côté @State, donc le
