@@ -584,7 +584,18 @@ extension StoryViewerView {
         let lastCommitted = StoryProgressDisplayLinkProxy.MutableDouble(0)
         let elapsedAccumulator = StoryProgressDisplayLinkProxy.MutableDouble(0)
         let lastTickTime = StoryProgressDisplayLinkProxy.MutableDouble(0)
+        // Guard one-shot pour `goToNext()` — sans ça le proxy continue de
+        // ticker entre l'appel à goToNext et le cancel via timerCancellable,
+        // chaque tick re-firant goToNext qui skip une slide de plus →
+        // l'utilisateur traverse tout le groupe en quelques frames (bug
+        // user-reporté 2026-05-27 « ça ne s'arrête jamais jusqu'à la fin
+        // des stories du groupe »). Encodé en MutableDouble 0/1 pour
+        // capture-by-reference dans la closure proxy.
+        let hasFiredGoToNext = StoryProgressDisplayLinkProxy.MutableDouble(0)
         let proxy = StoryProgressDisplayLinkProxy { [self] in
+            // Skip définitif après le premier goToNext — empêche le
+            // multi-fire pendant la fenêtre tick∽cancel (< 16 ms typique).
+            guard hasFiredGoToNext.value == 0 else { return }
             let now = CACurrentMediaTime()
             let dt: Double = lastTickTime.value > 0 ? (now - lastTickTime.value) : 0
             lastTickTime.value = now
@@ -609,6 +620,7 @@ extension StoryViewerView {
             }
             // Auto-advance à la fin de la durée configurée (computedStoryDuration).
             if elapsed >= duration {
+                hasFiredGoToNext.value = 1
                 goToNext()
             }
         }
