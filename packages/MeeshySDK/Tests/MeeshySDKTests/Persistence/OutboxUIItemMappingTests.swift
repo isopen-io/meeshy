@@ -8,9 +8,16 @@ struct OutboxUIItemMappingTests {
     // MARK: - Helpers
 
     /// Build a payload Data for sendMessage.
+    ///
+    /// Encoder MUST match `OfflineQueue.encoder` (private, .iso8601 strategy).
+    /// The previous helper used a bare `JSONEncoder()` whose default
+    /// `.deferredToDate` strategy was incidentally accepted by the now-removed
+    /// fallback decoder. The 2026-05-27 fix that collapsed `decodeOfflineQueueItem`
+    /// to a single .iso8601 decoder surfaced this latent mismatch.
     private func sendMessagePayload(
         content: String,
         attachmentIds: [String] = [],
+        attachmentKinds: [String]? = nil,
         audioPath: String? = nil
     ) -> Data {
         let item = OfflineQueueItem(
@@ -22,9 +29,12 @@ struct OutboxUIItemMappingTests {
             forwardedFromId: nil,
             forwardedFromConversationId: nil,
             attachmentIds: attachmentIds.isEmpty ? nil : attachmentIds,
+            attachmentKinds: attachmentKinds,
             localAudioPath: audioPath
         )
-        return try! JSONEncoder().encode(item)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        return try! encoder.encode(item)
     }
 
     private func record(
@@ -160,10 +170,57 @@ struct OutboxUIItemMappingTests {
     }
 
     @Test func video_attachment_uses_video_placeholder() {
-        // attachmentIds prefixed "vid_" → still counted as attachment; iconKind is .image by default.
-        let r = record(kind: .sendMessage, payload: sendMessagePayload(content: "", attachmentIds: ["vid_xyz"]))
+        let r = record(kind: .sendMessage, payload: sendMessagePayload(
+            content: "",
+            attachmentIds: ["vid_xyz"],
+            attachmentKinds: [AttachmentKind.video.rawValue]
+        ))
         let item = OutboxUIItem.from(record: r)
+        #expect(item.iconKind == .video)
+        #expect(item.titlePreview == "🎞 Vidéo")
         #expect(item.attachmentCount == 1)
+    }
+
+    @Test func file_attachment_uses_file_placeholder() {
+        let r = record(kind: .sendMessage, payload: sendMessagePayload(
+            content: "",
+            attachmentIds: ["pdf-1"],
+            attachmentKinds: [AttachmentKind.pdf.rawValue]
+        ))
+        let item = OutboxUIItem.from(record: r)
+        #expect(item.iconKind == .file)
+        #expect(item.titlePreview == "📎 Fichier")
+    }
+
+    @Test func legacy_payload_without_attachmentKinds_falls_back_to_image() {
+        // Backward-compat: OutboxRecord payloads enqueued before SDK rev
+        // omit `attachmentKinds` from JSON entirely. Mapper must default
+        // to .image per spec §4.2 instead of crashing or showing nil.
+        let r = record(kind: .sendMessage, payload: sendMessagePayload(
+            content: "",
+            attachmentIds: ["att-1"],
+            attachmentKinds: nil
+        ))
+        let item = OutboxUIItem.from(record: r)
+        #expect(item.iconKind == .image)
+        #expect(item.titlePreview == "📷 Image")
+    }
+
+    @Test func mixed_attachment_kinds_picks_first_non_other_for_icon() {
+        // First .other is skipped; first real kind wins.
+        let r = record(kind: .sendMessage, payload: sendMessagePayload(
+            content: "",
+            attachmentIds: ["x", "y", "z"],
+            attachmentKinds: [
+                AttachmentKind.other.rawValue,
+                AttachmentKind.video.rawValue,
+                AttachmentKind.image.rawValue
+            ]
+        ))
+        let item = OutboxUIItem.from(record: r)
+        #expect(item.iconKind == .video)
+        #expect(item.titlePreview == "🎞 Vidéo")
+        #expect(item.attachmentCount == 3)
     }
 
     // MARK: - 9 additional tests

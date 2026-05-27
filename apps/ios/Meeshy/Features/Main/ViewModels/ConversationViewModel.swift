@@ -1673,6 +1673,10 @@ class ConversationViewModel: ObservableObject {
         // indicator to stay visible for seconds while waiting for retryAll().
         if !networkMonitor.isOnline {
             let offlineClientMessageId = existingTempId ?? ClientMessageId.generate()
+            // Spec §4.2 — record the AttachmentKind of each attachment so the
+            // SyncPill mapper picks .video / .file icons instead of always
+            // falling back to .image. Aligned with attachmentIds by index.
+            let offlineKinds = localAttachments?.map { $0.kind.rawValue }
             let queueItem = OfflineQueueItem(
                 conversationId: conversationId,
                 content: text,
@@ -1681,7 +1685,8 @@ class ConversationViewModel: ObservableObject {
                 replyToId: replyToId,
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,
-                attachmentIds: attachmentIds
+                attachmentIds: attachmentIds,
+                attachmentKinds: offlineKinds
             )
 
             let offlineTempId = queueItem.tempId
@@ -2037,13 +2042,15 @@ class ConversationViewModel: ObservableObject {
             // Wave 1 Task 3.6 — the deleted `MessageRetryQueue` used to own a
             // parallel retry loop ; both paths converged on the same outbox
             // table so behavior is preserved while LoC drops by ~600.
+            let retryKinds = localAttachments?.map { $0.kind.rawValue }
             let retryItem = OfflineQueueItem(
                 conversationId: conversationId,
                 content: text,
                 clientMessageId: tempId,
                 originalLanguage: originalLanguage ?? "fr",
                 replyToId: replyToId,
-                attachmentIds: attachmentIds
+                attachmentIds: attachmentIds,
+                attachmentKinds: retryKinds
             )
 
             // AWAITED enqueue (Bug 1 fix — online retry path, B2 2026-05-27).

@@ -112,6 +112,7 @@ extension OutboxUIItem {
         let decoded = decodeOfflineQueueItem(record.payload)
         let content = decoded?.content ?? ""
         let attachments = decoded?.attachmentIds ?? []
+        let kinds = decoded?.attachmentKinds ?? []
         let audioPath = decoded?.localAudioPath
 
         let icon: IconKind
@@ -123,8 +124,9 @@ extension OutboxUIItem {
             icon = .audio
             preview = "🎙 Note vocale"
         } else if !attachments.isEmpty {
-            icon = .image
-            preview = "📷 Image"
+            let (resolvedIcon, resolvedPreview) = attachmentDisplayHints(kinds: kinds)
+            icon = resolvedIcon
+            preview = resolvedPreview
         } else {
             icon = .text
             preview = "(message)"
@@ -140,6 +142,30 @@ extension OutboxUIItem {
             status: record.status,
             createdAt: record.createdAt
         )
+    }
+
+    /// Pick a single `IconKind` + French preview literal for an attachment-only
+    /// message based on the first non-`.other` `AttachmentKind`. Legacy
+    /// payloads without `attachmentKinds` (or unknown raw values) fall back
+    /// to `.image` / `"📷 Image"` per spec §4.2.
+    private static func attachmentDisplayHints(kinds: [String]) -> (IconKind, String) {
+        let primary = kinds
+            .compactMap(AttachmentKind.init(rawValue:))
+            .first { $0 != .other }
+        switch primary {
+        case .video:        return (.video, "🎞 Vidéo")
+        case .audio:        return (.audio, "🎙 Note vocale")
+        case .pdf,
+             .document,
+             .spreadsheet,
+             .presentation,
+             .archive,
+             .code,
+             .text:         return (.file, "📎 Fichier")
+        case .image,
+             .other,
+             nil:           return (.image, "📷 Image")
+        }
     }
 
     private static func mapEditMessage(record: OutboxRecord) -> OutboxUIItem {
