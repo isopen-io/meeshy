@@ -45,10 +45,10 @@ final class SyncPillViewModel: ObservableObject {
             offlineQueue.pendingUIItemsPublisher,
             networkMonitor.isOfflinePublisher
         )
+        .receive(on: DispatchQueue.main)
         .map { items, isOffline in
             Self.derive(items: items, isOffline: isOffline, now: Date())
         }
-        .receive(on: DispatchQueue.main)
         .sink { [weak self] newState in
             self?.state = newState
         }
