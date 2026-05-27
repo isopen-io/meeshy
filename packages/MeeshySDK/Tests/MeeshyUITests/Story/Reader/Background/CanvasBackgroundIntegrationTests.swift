@@ -85,12 +85,18 @@ final class CanvasBackgroundIntegrationTests: XCTestCase {
         canvas.frame = CGRect(x: 0, y: 0, width: 412, height: 732)
         canvas.layoutIfNeeded()
 
-        let initialTransform = canvas.backgroundLayer.transform
+        // Le transform est appliqué au CONTENT sublayer (image/video) plutôt
+        // qu'au backgroundLayer entier (depuis le fix "zoom inside bg",
+        // 2026-05-27). Le test doit vérifier l'endroit où la transformation
+        // visuelle a réellement lieu, sinon il faux-passe.
+        let contentLayer = canvas.backgroundLayer.contentLayer
+        XCTAssertNotNil(contentLayer, "Image bg should have created contentLayer in configure()")
+        let initialTransform = contentLayer?.transform ?? CATransform3DIdentity
         canvas.simulatePanForTesting(targetId: "bg-1", dxNorm: 0.1, dyNorm: 0)
-        let liveTransform = canvas.backgroundLayer.transform
+        let liveTransform = contentLayer?.transform ?? CATransform3DIdentity
 
         XCTAssertFalse(CATransform3DEqualToTransform(initialTransform, liveTransform),
-                      "backgroundLayer.transform must be updated live during drag")
+                      "bg content sublayer transform must be updated live during drag")
         XCTAssertNil(canvas.slide.effects.backgroundTransform,
                      "Model must not be committed until gesture .ended")
     }

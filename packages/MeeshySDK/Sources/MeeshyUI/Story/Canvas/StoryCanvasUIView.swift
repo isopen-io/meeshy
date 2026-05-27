@@ -2121,10 +2121,7 @@ public final class StoryCanvasUIView: UIView {
                     rotation: dragStartBgRotation,
                     videoFitMode: dragStartBgFitMode
                 )
-                CATransaction.begin()
-                CATransaction.setDisableActions(true)
-                backgroundLayer.transform = live.caTransform()
-                CATransaction.commit()
+                backgroundLayer.applyContentTransform(live.caTransform())
                 liveBackgroundTransformDuringDrag = live
                 return
             }
@@ -2188,7 +2185,12 @@ public final class StoryCanvasUIView: UIView {
             }
         case .changed:
             guard let id = manipulatedItemId else { return }
-            let degrees = Double(recognizer.rotation) * 180 / .pi
+            // Sensibilité rotation divisée par 2 — user feedback 2026-05-27 :
+            // la rotation 1:1 (chaque degré de doigt = 1° sur l'élément) était
+            // trop sensible et difficile à contrôler avec précision. Le user
+            // peut quand même tourner à 360° en faisant 2 tours avec les
+            // doigts, ce qui reste raisonnable pour un geste manuel.
+            let degrees = (Double(recognizer.rotation) * 180 / .pi) * 0.5
             if id == backgroundMediaObjectId {
                 let live = BackgroundTransform(
                     scale: dragStartBgScale,
@@ -2197,10 +2199,7 @@ public final class StoryCanvasUIView: UIView {
                     rotation: dragStartBgRotation + degrees,
                     videoFitMode: dragStartBgFitMode
                 )
-                CATransaction.begin()
-                CATransaction.setDisableActions(true)
-                backgroundLayer.transform = live.caTransform()
-                CATransaction.commit()
+                backgroundLayer.applyContentTransform(live.caTransform())
                 liveBackgroundTransformDuringDrag = live
                 return
             }
@@ -2293,10 +2292,7 @@ public final class StoryCanvasUIView: UIView {
                     rotation: dragStartBgRotation,
                     videoFitMode: dragStartBgFitMode
                 )
-                CATransaction.begin()
-                CATransaction.setDisableActions(true)
-                backgroundLayer.transform = live.caTransform()
-                CATransaction.commit()
+                backgroundLayer.applyContentTransform(live.caTransform())
                 liveBackgroundTransformDuringDrag = live
                 return
             }
@@ -3048,10 +3044,7 @@ extension StoryCanvasUIView: UIPointerInteractionDelegate {
             rotation: dragStartBgRotation,
             videoFitMode: dragStartBgFitMode
         )
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        backgroundLayer.transform = live.caTransform()
-        CATransaction.commit()
+        backgroundLayer.applyContentTransform(live.caTransform())
         liveBackgroundTransformDuringDrag = live
     }
 
