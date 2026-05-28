@@ -862,7 +862,7 @@ public struct StorySlide: Identifiable, Codable, Sendable {
 
     public init(id: String = UUID().uuidString, mediaURL: String? = nil, mediaData: Data? = nil,
                 content: String? = nil, effects: StoryEffects = StoryEffects(),
-                duration: TimeInterval = 12, order: Int = 0) {
+                duration: TimeInterval = 6, order: Int = 0) {
         self.id = id; self.mediaURL = mediaURL; self.mediaData = mediaData
         self.content = content; self.effects = effects
         self.duration = duration; self.order = order
@@ -879,7 +879,7 @@ public struct StorySlide: Identifiable, Codable, Sendable {
         mediaData = nil
         content = try container.decodeIfPresent(String.self, forKey: .content)
         effects = try container.decodeIfPresent(StoryEffects.self, forKey: .effects) ?? StoryEffects()
-        duration = try container.decodeIfPresent(TimeInterval.self, forKey: .duration) ?? 12
+        duration = try container.decodeIfPresent(TimeInterval.self, forKey: .duration) ?? 6
         order = try container.decodeIfPresent(Int.self, forKey: .order) ?? 0
     }
 
@@ -895,100 +895,45 @@ public struct StorySlide: Identifiable, Codable, Sendable {
 }
 
 extension StorySlide {
-    /// Deterministic total slide duration covering every element on the timeline.
+    /// SINGLE SOURCE OF TRUTH pour la durée d'un slide story.
+    /// User spec 2026-05-27 :
+    /// - Slide statique (texte / image foreground / pas de media bg) → 6 s
+    /// - Slide avec vidéo OU audio bg → durée du media :
+    ///     - media_duration >= 6 s → on prend la durée exacte du media
+    ///     - media_duration < 6 s → on loop jusqu'à atteindre >= 6 s
+    ///       (= `ceil(6 / dur) × dur`)
     ///
-    /// Computed as the max of :
-    /// 1. The user-authored `slide.duration` (acts as the floor — the author
-    ///    can still pin a minimum length, e.g. for a static text-only slide).
-    /// 2. For every foreground media : `startTime + (duration ?? intrinsicDuration ?? 0)`.
-    /// 3. For every non-looped background media : same formula (a non-looping
-    ///    background video that runs past the user-set duration extends the
-    ///    slide so its tail isn't cut).
-    /// 4. For every non-looped audio (foreground or background) :
-    ///    `startTime + duration`.
-    /// 5. For every text object that declares an explicit `duration` :
-    ///    `startTime + duration`. (`duration == nil` means "permanent" — already
-    ///    covered by the slide-length floor.)
-    /// 6. For every clip transition : `start + duration` (implicit via the
-    ///    bounding media end-times — kept explicit for forward-compat).
+    /// `effects.slideDuration` configuré par l'auteur PRIME sur ces règles
+    /// quand > 0 — il permet de pinner explicitement une durée (ex: slide
+    /// texte volontairement plus long que 6 s).
     ///
-    /// The result is then rounded UP to a full repetition of any looping
-    /// background video so the loop never freezes on a partial cycle (Section
-    /// 3.6 of the Story Canvas Fidelity spec).
-    ///
-    /// Use this everywhere a "story length" is needed — exporter, playhead,
-    /// progress bar, audio mixer fade envelope, AVPlayer composition.
-    /// `effectiveSlideDuration()` is now a thin alias kept for binary compat.
+    /// Pas d'extension par foreground media / audio / texte long / fadeOut
+    /// d'élément — supprimés 2026-05-27 (« on doit avoir un seul point pour
+    /// changer », « le son baisse à un moment »). Les médias foreground
+    /// loop/clip naturellement dans la fenêtre de durée du slide.
+    static let defaultStaticDuration: TimeInterval = 6.0
+
     public func computedTotalDuration() -> TimeInterval {
-        let baseDuration = duration
-        var bound = baseDuration
-
-        // Extension dynamique basée sur la longueur du texte (Section 5 de la review)
-        // Les textes longs de plus de 30 mots devraient rajouter 1 seconde de plus à la story
-        // pour chaque 6 mots supplémentaire.
-        for text in effects.textObjects {
-            let words = text.text.split(separator: " ").count
-            if words > 30 {
-                let extraWords = words - 30
-                let extraSeconds = Double(extraWords) / 6.0
-                bound = max(bound, baseDuration + extraSeconds)
-            }
+        // 1. Auteur a explicitement pinné une durée → respecter
+        if let authored = effects.slideDuration, authored > 0 {
+            return TimeInterval(authored)
         }
-
-        for media in effects.mediaObjects ?? [] {
-            // Backgrounds NEVER extend the slide. Looped backgrounds are
-            // handled in the rounding step below; non-looped backgrounds
-            // are clipped (longer → exporter truncates to slide.duration)
-            // or padded (shorter → exporter pads tail frames) by the
-            // render pipeline. The user-authored slide.duration is the
-            // single authoritative length for everything behind the
-            // foreground layer.
-            if media.isBackground { continue }
-            let start = media.startTime ?? 0
-            let dur = media.duration ?? media.intrinsicDuration ?? 0
-            if dur > 0 { bound = max(bound, start + dur) }
+        // 2. Background video ou audio → durée du media (loopé si < 6 s)
+        let bgVideoDur = effects.mediaObjects?
+            .first(where: { $0.isBackground && $0.kind == .video })?
+            .duration
+        let bgAudioDur = effects.audioPlayerObjects?
+            .first(where: { $0.isBackground == true })?
+            .duration
+        let mediaDur = bgVideoDur ?? bgAudioDur.map { Double($0) }
+        if let m = mediaDur, m > 0 {
+            if m >= Self.defaultStaticDuration { return m }
+            // Loop pour atteindre >= 6 s
+            let loops = ceil(Self.defaultStaticDuration / m)
+            return loops * m
         }
-
-        for audio in effects.audioPlayerObjects ?? [] {
-            if audio.isBackground == true && audio.loop == true { continue }
-            let start = Double(audio.startTime ?? 0)
-            guard let dur = audio.duration, dur > 0 else { continue }
-            bound = max(bound, start + Double(dur))
-        }
-
-        for text in effects.textObjects {
-            let start = text.startTime ?? 0
-            guard let dur = text.duration, dur > 0 else { continue }
-            bound = max(bound, start + dur)
-        }
-
-        for transition in effects.clipTransitions ?? [] {
-            // Transitions span between two clips; their tail extends the
-            // implied end-time of the `toClip`, which is already counted via
-            // the media bound above. Kept defensive in case a transition is
-            // longer than its bounding clips for any reason.
-            bound = max(bound, Double(transition.duration))
-        }
-
-        // Background Looping: ensure duration is a multiple of the video/voice duration.
-        // If content didn't force us over baseDuration, we pick the largest multiple <= baseDuration.
-        // If it did, we pick the smallest multiple >= bound to avoid cutting content.
-        let loopVideoDuration = effects.mediaObjects?.first(where: { $0.isBackground && $0.loop })?.duration
-        let loopAudioDuration = effects.audioPlayerObjects?.first(where: { $0.isBackground == true && $0.loop == true })?.duration
-
-        let L = loopVideoDuration ?? Double(loopAudioDuration ?? 0)
-        if L > 0 {
-            // Spec §3.6: "the loop never freezes on a partial cycle". When
-            // the loop period doesn't divide the slide duration evenly we
-            // round UP to the next full repetition, even if that extends
-            // past the user-authored slide.duration. Rounding DOWN would
-            // truncate the slide below the duration the author chose.
-            let target = max(bound, baseDuration)
-            let repetitions = max(1, ceil(target / L))
-            bound = repetitions * L
-        }
-
-        return bound
+        // 3. Slide statique → 6 s
+        return Self.defaultStaticDuration
     }
 
     /// Effective slide duration that completes any background looping video to a full repetition.

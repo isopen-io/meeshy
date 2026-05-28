@@ -610,10 +610,10 @@ extension StoryViewerView {
                 lastCommitted.value = Double(raw)
                 progress = raw
             }
-            if raw >= fadeOutThreshold && !hasFiredFadeOut {
-                hasFiredFadeOut = true
-                NotificationCenter.default.post(name: .storyAudioFadeOut, object: nil)
-            }
+            // Fade-out audio retiré 2026-05-27 — user feedback « le son
+            // baisse à un moment, ne plus baisser le son quelque part ».
+            // L'auto-advance gère déjà le passage de slide ; pas besoin
+            // d'attenuer le son artificiellement avant la fin.
             if raw >= nextPrefetchThreshold && !hasFiredNextPrefetch {
                 hasFiredNextPrefetch = true
                 _ = prefetchStory(at: currentStoryIndex + 1)
@@ -657,24 +657,25 @@ extension StoryViewerView {
     /// secondes puis disparaissait alors que le son continuait — typique d'un
     /// timer de slide expirant avant la fin du média).
     /// SINGLE SOURCE OF TRUTH pour la durée du slide.
-    /// User feedback 2026-05-27 « on doit avoir un seul point pour changer ».
-    /// Ordre de résolution :
-    ///   1. `storyEffects.slideDuration` si configuré (> 0)
-    ///   2. Fallback constant 6 secondes
+    /// User spec 2026-05-27 :
+    /// - Slide statique → 6 s
+    /// - Slide avec vidéo OU audio bg → durée du media (loopé si < 6 s)
+    /// - `storyEffects.slideDuration` configuré prime quand > 0
     ///
-    /// Pas d'extension par les médias (vidéo bg, audio bg, texte long, etc.).
-    /// Les médias bg loop / clip naturellement dans la fenêtre du slide. Si
-    /// l'auteur veut un slide plus long, il configure `slideDuration` au
-    /// composer — pas de calcul implicite côté reader.
+    /// Délégation à `StorySlide.toRenderableSlide(...).computedTotalDuration()`
+    /// pour aligner exactement avec la durée que pilote le canvas
+    /// (`StoryCanvasUIView.displayLinkTick.effectiveDuration`). Garantit que
+    /// progress bar (wall-clock viewer-side) et auto-advance (canvas-side)
+    /// utilisent la MÊME valeur.
     static let defaultSlideDuration: Double = 6.0
 
     private func updateStoryDuration() {
-        if let configured = currentStory?.storyEffects?.slideDuration,
-           configured > 0 {
-            computedStoryDuration = Double(configured)
-        } else {
+        guard let story = currentStory else {
             computedStoryDuration = Self.defaultSlideDuration
+            return
         }
+        let renderable = story.toRenderableSlide(preferredLanguages: resolvedViewerLanguageChain)
+        computedStoryDuration = renderable.computedTotalDuration()
     }
 
     /// For each background loop period, round the base duration up to the
