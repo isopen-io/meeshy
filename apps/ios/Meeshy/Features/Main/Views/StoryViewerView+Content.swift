@@ -1153,17 +1153,16 @@ struct StoryCommentsOverlayView: View {
     /// background catching taps). Composer alone wears a subtle glass strip so
     /// the input is legible against any background.
     ///
-    /// A dark scrim gradient (transparent at top → opaque at bottom) sits
-    /// BEHIND the comments list so white-on-bright-background (video stories,
-    /// pale photos) comments stay readable without making the whole overlay
-    /// feel heavy — the gradient fades to nothing at the top so the user can
-    /// still see the story above the comments.
+    /// No global scrim behind the list — each individual `StoryCommentRowView`
+    /// carries its own dark bubble for legibility (user spec 2026-05-28:
+    /// « enlève le fond dégradé noir sur le composant de listing »). The
+    /// `listFadeMask` keeps fading rows out at the top so older comments
+    /// dissolve into the story above as the user scrolls up.
     var body: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 0)
             commentsList
                 .frame(maxHeight: listMaxHeight)
-                .background(commentsScrim)
                 .mask(listFadeMask)
                 // Réserve l'espace occupé par le composer principal rendu
                 // dans la canvas « Bottom area » (cf. `StoryComposerBarView`
@@ -1175,6 +1174,16 @@ struct StoryCommentsOverlayView: View {
                 // s'arrêter juste au-dessus.
                 .padding(.bottom, composerSpaceReservation)
         }
+        // **CRITIQUE** : forcer la VStack à remplir toute la hauteur du
+        // canvas. Sans `.frame(maxHeight: .infinity)`, le `Spacer(minLength:
+        // 0)` collapse à 0pt et la liste se positionne au TOP de la VStack
+        // intrinsèque (~150-200pt) qui se centre dans le canvas ZStack →
+        // les commentaires apparaissent dans le tiers supérieur de l'écran
+        // au lieu de juste au-dessus du composer (bug user 2026-05-28
+        // « la zone de commentaire est coupé »). Auparavant `composerStrip`
+        // avec son `Rectangle.ignoresSafeArea(.bottom)` étirait
+        // implicitement la VStack ; maintenant il faut le déclarer.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         .animation(.easeInOut(duration: 0.25), value: keyboard.isVisible)
         .animation(.easeInOut(duration: 0.2), value: replyingToStoryComment?.id)
     }
@@ -1199,24 +1208,6 @@ struct StoryCommentsOverlayView: View {
         // Half-composer overlap — list ends at composer.middle, the lower
         // half is the « emerge » zone where new rows transition into view.
         return composerHeight / 2 + bottomPadding
-    }
-
-    /// Scrim derrière la liste : transparent en haut, opacity ~0.55 en bas.
-    /// Sans ce fond, du texte clair sur fond clair (photo / vidéo très
-    /// lumineuse) est illisible (bug 2026-05-28 « les commentaires incrustés
-    /// sont illisibles dans la vidéo »). Le mask `listFadeMask` est ensuite
-    /// appliqué PAR-DESSUS pour dissoudre simultanément le scrim et les rows
-    /// au scroll vers le haut — les deux disparaissent ensemble.
-    private var commentsScrim: LinearGradient {
-        LinearGradient(
-            stops: [
-                .init(color: .clear, location: 0.0),
-                .init(color: .black.opacity(0.25), location: 0.3),
-                .init(color: .black.opacity(0.55), location: 1.0)
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
     }
 
     // MARK: - Comments List
