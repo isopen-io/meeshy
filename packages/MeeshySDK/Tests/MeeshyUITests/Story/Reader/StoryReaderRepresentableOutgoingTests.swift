@@ -103,6 +103,59 @@ final class StoryReaderRepresentableOutgoingTests: XCTestCase {
                        "Outgoing canvas must NOT activate its background video playback")
     }
 
+    /// User report 2026-05-28 (suite Fix A) : « quand je reviens à une story
+    /// arrière avec vidéo de fond, puis je repars à la story suivante avec
+    /// les mêmes types de media, j'ai les deux medias qui jouent en même
+    /// temps ».
+    ///
+    /// Cause : SwiftUI peut maintenir transitoirement deux `StoryCanvasUIView`
+    /// en `.play` dans la window pendant la fenêtre de diff (~1-2 frames =
+    /// 16-33 ms). Le `PlaybackCoordinator.willStartPlaying(external:)` mutex
+    /// les **audio mixers** mais NE COORDONNE PAS les `AVPlayer` bg/FG. Sur
+    /// une slide avec vidéo bg portant une piste audio + audio mixer
+    /// foreground, le bleed est audible.
+    ///
+    /// Fix : la création d'un canvas en `.play` doit préempter tous les
+    /// autres canvases déjà en `.play` (pause bg AVPlayer + FG AVPlayer +
+    /// audio mixer).
+    func test_newCanvasInPlay_preemptsOtherActiveCanvases() {
+        let slideA = StoryItem(
+            id: "slide-a",
+            content: "A",
+            media: [],
+            storyEffects: StoryEffects(),
+            createdAt: Date(),
+            expiresAt: nil,
+            isViewed: false
+        ).toRenderableSlide(preferredLanguages: ["fr"])
+        let slideB = StoryItem(
+            id: "slide-b",
+            content: "B",
+            media: [],
+            storyEffects: StoryEffects(),
+            createdAt: Date(),
+            expiresAt: nil,
+            isViewed: false
+        ).toRenderableSlide(preferredLanguages: ["fr"])
+
+        let canvasA = StoryCanvasUIView(slide: slideA, mode: .play)
+        // Simulate post-contentReady state : en production
+        // `fireContentReadyIfNeeded` met `isPlaybackActive = true` quand
+        // l'image bg / vidéo bg sont chargées. Ici on force l'état pour
+        // tester la préemption pure sans dépendre du flux async.
+        canvasA.backgroundLayer.isPlaybackActive = true
+        XCTAssertTrue(canvasA.backgroundLayer.isPlaybackActive,
+                      "Test setup : canvas A simule l'état post-content-ready")
+
+        // Création d'un second canvas en `.play` — simule le swap visible
+        // pendant que l'ancien canvas n'est pas encore détruit par SwiftUI.
+        let canvasB = StoryCanvasUIView(slide: slideB, mode: .play)
+
+        XCTAssertFalse(canvasA.backgroundLayer.isPlaybackActive,
+                       "Creating a second .play canvas must preempt the first canvas's bg playback — sinon les deux vidéos bg jouent en parallèle quand SwiftUI tarde à détruire l'ancien (window de teardown 16-33 ms entre body re-render et removeFromSuperview)")
+        _ = canvasB  // Keep canvasB alive until end of test (prevents premature dealloc).
+    }
+
     /// Tous les canvases bootstrapés par le prefetcher restent en `.edit` —
     /// ils servent uniquement de cache chaud (image bg pré-décodée, AVPlayer
     /// asset chargé), pas de lecture. Le canvas visible (`StoryCardView`)

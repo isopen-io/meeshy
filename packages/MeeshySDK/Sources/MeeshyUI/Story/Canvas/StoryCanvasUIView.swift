@@ -443,6 +443,61 @@ public final class StoryCanvasUIView: UIView {
     /// Notifié lors d'un tap sur le fond (zone vide) du canvas.
     public var onBackgroundTapped: (() -> Void)?
 
+    // MARK: - Active canvas registry (canvas-wide preemption)
+
+    /// Faible-ref registry de toutes les instances actuellement en `.play`
+    /// **dans tout le process**. Mutée uniquement depuis `MainActor`. Sert à
+    /// préempter (pause bg/FG/audio mixer) les anciennes instances dès qu'une
+    /// nouvelle entre en `.play`.
+    ///
+    /// Pourquoi un registry SDK et non `PlaybackCoordinator` ?
+    /// `PlaybackCoordinator.willStartPlaying(external:)` mutex uniquement les
+    /// `StoppablePlayer` enregistrés (typiquement les `audioMixer`). Il ignore
+    /// les `AVPlayer` bg/FG attachés au canvas. SwiftUI peut maintenir deux
+    /// canvases en window pendant 1-2 frames lors d'un swap `.id(story.id)`
+    /// (~16-33 ms), assez pour que les pistes audio des vidéos bg se
+    /// chevauchent audiblement quand on enchaîne back→forward sur des slides
+    /// vidéo. Ce registry coordonne le **canvas entier**.
+    ///
+    /// NSHashTable.weakObjects() s'auto-nettoie quand les canvases sont
+    /// désalloués — aucune cleanup explicite requise au `deinit` (sauf le
+    /// removeAll que ferait NSHashTable spontanément).
+    @MainActor private static let activePlayingCanvases = NSHashTable<StoryCanvasUIView>.weakObjects()
+
+    /// Pause tout le média actif sur ce canvas — bg AVPlayer + FG AVPlayer +
+    /// audio mixer — sans changer le `mode`. Utilisé par la préemption
+    /// canvas-wide pour qu'un canvas évincé n'émette plus rien jusqu'à ce que
+    /// SwiftUI le détruise officiellement (willMove(toWindow: nil)).
+    ///
+    /// Note : on ne touche pas au displayLink ni à `isPlaybackPaused` —
+    /// l'instance est en fin de vie côté SwiftUI, son cleanup viendra. On
+    /// coupe juste les sources sonores et visuelles immédiatement.
+    fileprivate func preemptMediaPlayback() {
+        backgroundLayer.isPlaybackActive = false
+        forEachAVPlayer { $0.pause() }
+        audioMixer.stop()
+    }
+
+    /// Enregistre `self` comme canvas actif et préempte tous les autres
+    /// canvases en `.play` (sauf self). Appelé à chaque entrée en mode `.play`
+    /// (init avec mode `.play`, ou `setMode(.play)`).
+    @MainActor private func registerAsActiveAndPreemptOthers() {
+        let others = Self.activePlayingCanvases.allObjects.filter { $0 !== self }
+        for other in others {
+            other.preemptMediaPlayback()
+            Self.activePlayingCanvases.remove(other)
+        }
+        Self.activePlayingCanvases.add(self)
+    }
+
+    /// Retire `self` du registry actif. Appelé à chaque sortie de `.play` :
+    /// `setMode(.edit)`, `willMove(toWindow: nil)`, et lors du deinit (via
+    /// la `weakObjects` table — auto-cleanup en théorie, mais on le fait
+    /// explicitement quand on sait que le canvas quitte la window).
+    @MainActor private func unregisterFromActive() {
+        Self.activePlayingCanvases.remove(self)
+    }
+
     // MARK: - Init
 
     public init(slide: StorySlide, mode: RenderMode = .edit) {
@@ -476,6 +531,19 @@ public final class StoryCanvasUIView: UIView {
         // second reader surface (viewer + composer preview mounted together)
         // stop this engine before starting its own (RC4.6).
         PlaybackCoordinator.shared.registerExternal(audioMixer)
+        // Canvas-wide preemption : si on entre en `.play`, on coupe TOUS les
+        // canvases déjà en `.play` (bg AVPlayer + FG AVPlayer + audio mixer).
+        // Doit arriver AVANT `backgroundLayer.isPlaybackActive = true` plus
+        // bas, sinon le bg AVPlayer de self démarre AVANT que les autres
+        // canvases soient coupés → leur audio bleed pendant la fenêtre de
+        // teardown SwiftUI (~16-33 ms entre body re-render et
+        // removeFromSuperview du canvas évincé). User report 2026-05-28 :
+        // « quand je reviens à une story arrière avec vidéo de fond puis
+        // repars à la story suivante, j'ai les deux médias qui jouent en
+        // même temps ».
+        if mode == .play {
+            registerAsActiveAndPreemptOthers()
+        }
         observeAudioSessionEvents()
         // Calcul initial de la couche active à partir du contenu initial.
         // `slide.didSet` ne se déclenche pas dans l'init donc on appelle
@@ -886,11 +954,17 @@ public final class StoryCanvasUIView: UIView {
         if didChange {
             switch newMode {
             case .play:
+                // Préemption canvas-wide : on coupe les autres canvases en
+                // `.play` AVANT de démarrer notre propre playback. Évite la
+                // double-lecture pendant le swap visible↔outgoing du
+                // cross-fade quand SwiftUI tarde à détruire l'ancien canvas.
+                registerAsActiveAndPreemptOthers()
                 stopEditDisplayLink()
                 startPlayback()
                 reconfigureAudioForPlayback()
                 startAudioPlayback()
             case .edit:
+                unregisterFromActive()
                 stopPlayback()
                 audioMixer.pause()
                 releasePlaybackSessionIfNeeded()
@@ -1969,6 +2043,7 @@ public final class StoryCanvasUIView: UIView {
     public override func willMove(toWindow newWindow: UIWindow?) {
         super.willMove(toWindow: newWindow)
         guard newWindow == nil else { return }
+        unregisterFromActive()
         backgroundLayer.isPlaybackActive = false
         forEachAVPlayer { $0.pause() }
         audioMixer.stop()
