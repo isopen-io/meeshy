@@ -970,29 +970,12 @@ struct StoryCardView: View {
                     .accessibilityHidden(true)
             }
 
-            // === Layer 10: Live comments overlay (Instagram-style) ===
-            if showCommentsOverlay {
-                StoryCommentsOverlayView(
-                    storyComments: storyComments,
-                    storyCommentCount: storyCommentCount,
-                    storyCommentRepliesMap: storyCommentRepliesMap,
-                    storyCommentExpandedThreads: storyCommentExpandedThreads,
-                    storyCommentLoadingReplies: storyCommentLoadingReplies,
-                    isLoadingComments: isLoadingComments,
-                    userLang: commentsUserLang,
-                    composerAccentColor: composerAccentColor,
-                    showCommentsOverlay: $showCommentsOverlay,
-                    replyingToStoryComment: $replyingToStoryComment,
-                    composerLanguage: $composerLanguage,
-                    commentEffects: $commentEffects,
-                    commentBlurEnabled: $commentBlurEnabled,
-                    makeStoryCommentRow: makeStoryCommentRow,
-                    toggleStoryCommentThread: toggleStoryCommentThread,
-                    sendComment: sendComment
-                )
-                    .transition(.opacity)
-                    .allowsHitTesting(true)
-            }
+            // NOTE: Live comments overlay (Instagram-style) is rendered by
+            // `StoryViewerContentView` as a sibling of the card transform
+            // stack — see this file's `StoryViewerContentView.body`.
+            // Keeping it inside the card meant it inherited the card's
+            // `.offset(x: totalSlideX)`, scale and rotation3D, and shifted
+            // left during drag / scale / 3D transitions (bug 2026-05-28).
 
             // Bottom area: composer + emoji panel / keyboard space
             VStack(spacing: 0) {
@@ -1288,9 +1271,20 @@ struct StoryViewerContentView: View {
 
     @Binding var isPresented: Bool
 
+    /// Drives the conditional render of the floating comments overlay. Kept at
+    /// this level (sibling of `makeStoryCard`) so the overlay does not inherit
+    /// the card's drag offset / scale / 3D rotation.
+    @Binding var showCommentsOverlay: Bool
+
     /// Builds the story card for the supplied geometry. The closure is owned by
     /// `StoryViewerView` so the card receives the view's `@State` bindings.
     let makeStoryCard: (GeometryProxy) -> StoryCardView
+
+    /// Builds the Instagram-style floating comments overlay. The closure is
+    /// owned by `StoryViewerView` so the overlay receives the same `@State`
+    /// bindings as the card without us re-plumbing every parameter through
+    /// this struct.
+    let makeCommentsOverlay: () -> StoryCommentsOverlayView
 
     var body: some View {
         ZStack {
@@ -1348,6 +1342,18 @@ struct StoryViewerContentView: View {
                             }
                             Spacer()
                         }
+                    }
+
+                    // Floating comments overlay — sibling of `makeStoryCard`
+                    // so the card's offset / scale / 3D rotation never reach
+                    // the comments list or the sheet composer. The overlay
+                    // owns its own transparent layout (story behind stays
+                    // visible AND interactable).
+                    if showCommentsOverlay {
+                        makeCommentsOverlay()
+                            .frame(width: geometry.size.width, height: geometry.size.height)
+                            .transition(.opacity)
+                            .zIndex(50)
                     }
                 }
             }

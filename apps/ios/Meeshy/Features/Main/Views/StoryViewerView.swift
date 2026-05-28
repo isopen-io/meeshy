@@ -323,7 +323,9 @@ struct StoryViewerView: View {
             slideProgress: slideProgress,
             dragProgress: dragProgress,
             isPresented: $isPresented,
-            makeStoryCard: { geometry in storyCard(geometry: geometry) }
+            showCommentsOverlay: $showCommentsOverlay,
+            makeStoryCard: { geometry in storyCard(geometry: geometry) },
+            makeCommentsOverlay: { storyCommentsOverlay() }
         )
         .background(Color.black)
         .preferredColorScheme(.dark)
@@ -844,6 +846,35 @@ struct StoryViewerView: View {
     @State private var editAndRepostAsPostSource: RepostPostSourceWrapper?
 
     private let quickEmojis = ["❤️", "😂", "😮", "🔥", "😢", "👏"]
+
+    // MARK: - Comments Overlay (Instagram-style)
+
+    /// Builds the floating comments overlay (`StoryCommentsOverlayView`).
+    /// Rendered by `StoryViewerContentView` as a sibling of the story card,
+    /// NOT inside it, so the overlay does not inherit the card's drag offset,
+    /// scale, or 3D rotation (bug 2026-05-28: overlay shifted left during
+    /// drag / scale transitions).
+    private func storyCommentsOverlay() -> StoryCommentsOverlayView {
+        StoryCommentsOverlayView(
+            storyComments: storyComments,
+            storyCommentCount: storyCommentCount,
+            storyCommentRepliesMap: storyCommentRepliesMap,
+            storyCommentExpandedThreads: storyCommentExpandedThreads,
+            storyCommentLoadingReplies: storyCommentLoadingReplies,
+            isLoadingComments: isLoadingComments,
+            userLang: AuthManager.shared.currentUser?.preferredContentLanguages.first ?? "fr",
+            composerAccentColor: currentGroup?.avatarColor ?? "6366F1",
+            showCommentsOverlay: $showCommentsOverlay,
+            replyingToStoryComment: $replyingToStoryComment,
+            composerLanguage: $composerLanguage,
+            commentEffects: $commentEffects,
+            commentBlurEnabled: $commentBlurEnabled,
+            keyboard: keyboard,
+            makeStoryCommentRow: makeStoryCommentRow,
+            toggleStoryCommentThread: toggleStoryCommentThread,
+            sendComment: sendComment
+        )
+    }
 
     // MARK: - Story Card
 
