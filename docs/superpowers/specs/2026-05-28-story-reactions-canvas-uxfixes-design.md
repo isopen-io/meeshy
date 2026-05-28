@@ -3,8 +3,9 @@
 **Date** : 2026-05-28
 **Auteur** : Claude (Opus 4.7) — discussion avec @jcnm
 **Statut** : Design — prêt pour writing-plans
-**Effort estimé** : ~1.5–2 jours
+**Effort estimé** : ~1.5–2 jours (peut glisser à 2.5j si H1/H2/H3 ne se confirment pas en investigation 2A ou 2C)
 **Approche** : Fixes chirurgicaux par axe (Approche A retenue après brainstorming)
+**Re-revue Opus 4.7** : 2026-05-28 — 5 erreurs draft corrigées (FeedComment SDK-side, CodingKeys manuel, computeLikedIds dual-path, GlassBackdropLayer default = blanc translucide pas noir, strip dismiss = délai préservé)
 
 Distinct de `2026-05-28-story-canvas-unification-design.md` qui traite la
 mutualisation des instances `StoryCanvasUIView` au niveau prefetcher (perf
@@ -53,27 +54,25 @@ chantier indépendant, testable isolément, mergeable en commit séparé.
 
 **Cause** : le wiring (`onReact → triggerStoryReaction → sendReaction → POST /posts/:id/like`) est OK. Mais la sheet ne se dismiss pas après le tap, et l'animation `bigReactionEmoji` est rendue derrière la sheet plein écran → utilisateur ne voit aucun feedback.
 
-**Fix** : factoriser un préambule dans `triggerStoryReaction` (StoryViewerView.swift:1004) qui dismiss toutes les overlays bloquantes **avant** de lancer l'animation :
+**Fix** : factoriser dans `triggerStoryReaction` (StoryViewerView.swift:1004) un préambule qui dismiss **uniquement le full picker** immédiatement (sinon utilisateur ne voit rien). Le strip rapide garde son `asyncAfter(0.5)` existant — c'est un **feedback visuel délibéré** (écho de l'emoji choisi avant disparition) :
 
 ```swift
 private func triggerStoryReaction(_ emoji: String) {
     HapticFeedback.medium()
-    // Dismiss any overlay that would mask the big-reaction animation.
+    // Full picker covers ENTIRE screen → must dismiss immediately so the big-reaction
+    // animation (`bigReactionEmoji`) is visible. Strip is partial overlay → keep its
+    // 0.5s dismissal delay below (deliberate visual echo, established UX).
     if showFullEmojiPicker {
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             showFullEmojiPicker = false
         }
     }
-    if showEmojiStrip {
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            showEmojiStrip = false
-        }
-    }
     // ... existing animation + count/state mutation + sendReaction(emoji)
+    // ... existing `DispatchQueue.asyncAfter(0.5) { showEmojiStrip = false }` STAYS
 }
 ```
 
-Supprimer le `DispatchQueue.asyncAfter(0.5) { showEmojiStrip = false }` ligne 1028 (devenu redondant).
+Le `DispatchQueue.asyncAfter(0.5) { showEmojiStrip = false }` ligne 1028 est **conservé** (rectification du draft précédent qui le supprimait à tort).
 
 **À auditer pendant l'impl** : vérifier que `EmojiFullPickerSheet.selectEmoji` (Primitives/EmojiReactionPicker.swift:417) déclenche bien `onReact?(emoji)`. Si le `Button` est intercepté par un gesture parent, corriger côté SDK.
 
@@ -94,22 +93,35 @@ Supprimer le `DispatchQueue.asyncAfter(0.5) { showEmojiStrip = false }` ligne 10
 
 **3 bugs identifiés** :
 
-**B.1** — `applyCommentReactionEvent` (StoryViewerView+Content.swift:1446) early-return si `!showCommentsOverlay`. L'event socket reçu plus tard est ignoré → drift entre optimistic et serveur.
+**B.1** — `applyCommentReactionEvent` (StoryViewerView+Content.swift:1457) early-return si `!showCommentsOverlay`. L'event socket reçu plus tard est ignoré → drift entre optimistic et serveur.
 
-**Fix B.1** : retirer le `guard showCommentsOverlay else { return }`. L'état doit s'aligner sur le serveur que l'overlay soit ouvert ou fermé.
+**Fix B.1** : retirer le `guard showCommentsOverlay else { return }`. Conserver les deux autres guards (`postId == currentStory?.id`, `emoji == heartEmoji`). Précaution : si l'event arrive et que `storyComments` est vide (overlay jamais ouvert), `firstIndex(where:)` retourne `nil` et le code skip silencieusement — comportement OK, pas de crash, on ré-aligne au prochain load.
 
-**B.2** — Au reload via cache (`loadStoryCommentsAsync` ligne 1530), `storyComments` est remplacé mais `storyCommentLikedIds` n'est jamais recalculé.
+**B.2** — Au reload (`loadStoryCommentsAsync` ligne 1540), `storyComments` est remplacé mais `storyCommentLikedIds` n'est jamais recalculé. Deux chemins distincts à traiter :
+- **Network path** (`fetchStoryCommentsFromNetwork`) : a accès à `response.data: [APIPostComment]` qui porte `currentUserReactions`. La fonction existante `Self.computeLikedIds(from: [APIPostComment])` (ligne 1527) marche directement.
+- **Cache path** (`loadStoryCommentsAsync` cases `.fresh`/`.stale`) : reçoit `[FeedComment]` (déjà mappé). `FeedComment` ne porte PAS `currentUserReactions` aujourd'hui → impossible de recalculer.
 
-**Fix B.2** : appeler `storyCommentLikedIds = Self.computeLikedIds(from: response.data)` à chaque chargement (cache hit ET network). La fonction pure existe déjà ligne 1517 mais n'est appelée nulle part.
+**Fix B.2** :
+1. Ajouter une overload `static func computeLikedIds(fromCachedComments: [FeedComment]) -> Set<String>` qui lit le nouveau champ (cf. B.3)
+2. Appeler la bonne overload selon le chemin (network → APIPostComment, cache → FeedComment)
+3. Mettre à jour `storyCommentLikedIds` à chaque hit (fresh, stale, network success)
 
-**B.3** — `FeedComment` mis en cache (`CacheCoordinator.shared.comments`) ne porte pas `currentUserReactions`. Au cache hit, on n'a aucun moyen de savoir si l'utilisateur avait liké.
+**B.3** — `FeedComment` (défini SDK-side `packages/MeeshySDK/Sources/MeeshySDK/Models/FeedModels.swift:221`) ne porte pas `currentUserReactions`. Le mapping `APIPostComment → FeedComment` (StoryViewerView+Content.swift:1398) drop ce champ.
 
-**Fix B.3** : étendre `FeedComment` avec `currentUserReactions: [String]?` (transitoire, hydraté depuis `APIPostComment.currentUserReactions` au mapping ligne 1571). Le cache GRDB le persiste automatiquement via Codable.
+**Fix B.3** :
+1. Ajouter `public var currentUserReactions: [String]?` au struct `FeedComment` (SDK)
+2. Ajouter `currentUserReactions` aux `CodingKeys` enum (ligne 261-262) — sinon le cache GRDB ne persiste PAS le champ (CodingKeys est strict dans ce fichier)
+3. Étendre `init(from decoder:)` et `encode(to encoder:)` (lignes 265+ et suivantes) — ce sont des implémentations manuelles, pas synthétisées
+4. Étendre l'init principal (ligne 243-254) avec `currentUserReactions: [String]? = nil`
+5. Étendre le mapping `APIPostComment → FeedComment` (ligne 1398) pour propager le champ
+
+Note : la `FeedComment` SDK est consommée par d'autres vues (feed, postes). L'ajout d'un champ optionnel `currentUserReactions: [String]?` est rétrocompatible — les vues qui ne le lisent pas ne changent rien.
 
 **Fichiers touchés** :
-- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift` (applyCommentReactionEvent, loadStoryCommentsAsync, fetchStoryCommentsFromNetwork)
-- `apps/ios/Meeshy/Features/Main/Models/StoryModels.swift` ou équivalent (FeedComment + currentUserReactions)
-- `apps/ios/MeeshyTests/Features/Stories/StoryViewerCommentReactionTests.swift` (étendre les tests)
+- `packages/MeeshySDK/Sources/MeeshySDK/Models/FeedModels.swift` (`FeedComment` struct + Codable manuel)
+- `apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Content.swift` (`applyCommentReactionEvent`, `loadStoryCommentsAsync`, `fetchStoryCommentsFromNetwork`, mapping ligne 1398, overload `computeLikedIds(fromCachedComments:)`)
+- `apps/ios/MeeshyTests/Features/Stories/StoryViewerCommentReactionTests.swift` (étendre)
+- `packages/MeeshySDK/Tests/MeeshySDKTests/Models/FeedCommentCodableTests.swift` (créer ou étendre)
 
 **Tests** :
 - `StoryViewerCommentReactionTests.test_applyEvent_whenOverlayClosed_stillUpdatesState`
@@ -147,7 +159,9 @@ Supprimer le `DispatchQueue.asyncAfter(0.5) { showEmojiStrip = false }` ligne 10
 Le bouclage natif est déjà géré par `AVPlayerLooper` (`StoryBackgroundLayer.swift:612`). C'est seulement la **durée nominale de la slide** qui doit s'ajuster.
 
 **Fix** :
-- Centraliser la règle dans `StoryDurationPolicy` (nouveau fichier sous `MeeshyUI/Story/Canvas/`, code pur sans dépendance UIKit — testable depuis `MeeshyUITests`) :
+- Centraliser la règle dans `StoryDurationPolicy` (nouveau fichier sous `MeeshyUI/Story/Canvas/`, code pur sans dépendance UIKit — testable depuis `MeeshyUITests`)
+- **Data flow** : la durée du média BG (`backgroundMediaDuration`) doit être disponible **avant** de programmer le timer de slide. Aujourd'hui `AVPlayer.duration` est résolu async via KVO sur `AVURLAsset`. Le `StoryReaderTimerController` doit attendre ce signal AVANT de démarrer le timer (ou re-programmer une fois la durée connue). Cas dégradé : si la durée arrive après que le timer a démarré avec la valeur `intrinsic`, on ajuste le timer dynamiquement à `adjustedDuration` (no-op si elle est déjà ≥ adjusted).
+- Constante :
   ```swift
   public enum StoryDurationPolicy {
       public static let minimumLoopAccumulation: TimeInterval = 6.0
@@ -184,22 +198,29 @@ Le bouclage natif est déjà géré par `AVPlayerLooper` (`StoryBackgroundLayer.
 
 **Symptôme** : texte avec `backgroundStyle: .glass` apparaît comme cadre noir uni dans le viewer (et donc dans le preview, qui EST le viewer).
 
-**Cause à confirmer pendant impl** : `StoryGlassBackdropLayer` a deux chemins (a) MPS texture via `setBackdropTexture()`, (b) fallback `CAFilter "gaussianBlur"`. Si AUCUN des deux n'est actif en mode `.play`, la couche reste sur sa couleur de fond par défaut (probablement noir).
+**Cause à confirmer pendant impl** : `StoryGlassBackdropLayer` a deux chemins (a) MPS texture via `setBackdropTexture()`, (b) fallback `CAFilter "gaussianBlur"`. **Rectification du draft** : `StoryGlassBackdropLayer.init()` ligne 52 pose `backgroundColor = UIColor.white.withAlphaComponent(0.18).cgColor` — donc la couleur de fond par défaut est BLANC translucide, pas noir. Le cadre noir vient donc d'ailleurs.
+
+Hypothèses ré-orientées :
+- **H1** : Le `CAFilter "gaussianBlur"` n'est pas supporté en mode `.play` (déprécié / privé API). Sans filtre, le layer rend juste son backgroundColor blanc — mais SI la couche au-dessus (le `CATextLayer`) a un `backgroundColor` noir ou un état rendu différent, l'apparence finale est noire.
+- **H2** : `setBackdropTexture()` n'est jamais appelé en mode `.play` parce que `StoryBackdropCapture.captureCanvasBackdrop` (cf. StoryBackdropCapture.swift) est gaté à `.edit` ou n'a pas accès à la canvas snapshot en mode `.play`.
+- **H3** : Le `bounds` de `StoryGlassBackdropLayer` est `.zero` en mode `.play` à cause d'une race entre l'attache du layer et le layout. Un layer 0×0 avec backgroundColor blanc translucide est invisible — le noir perçu est en réalité le `CATextLayer` parent.
 
 **Fix** :
-1. Vérifier dans `rebuildLayers()` (StoryCanvasUIView.swift:1286) que `backdropProvider` est appelé en mode `.play`. Si gaté à `.edit`, débloquer.
-2. Vérifier que `StoryGlassBackdropLayer.init()` initialise `backgroundColor = clear` (pas opaque noir).
-3. S'assurer que `setBackdropTexture()` est ré-appelé après chaque `rebuildLayers()` en `.play` mode.
-4. Si AUCUNE de ces causes ne se vérifie : documenter la nouvelle cause + valider l'angle de fix avec @jcnm avant impl.
+1. Reproduire en RUNNING + inspecter la couche dans le debugger (Xcode View Hierarchy)
+2. Si H1 : remplacer le fallback `CAFilter` par un `UIVisualEffectView` snapshot baked dans le layer, OU forcer la capture MPS aussi en `.play` mode
+3. Si H2 : étendre `StoryBackdropCapture` pour fonctionner en `.play` mode (besoin d'une snapshot canvas même quand le user n'édite pas)
+4. Si H3 : assurer le layout chain entre attach + bounds set, possiblement via `setNeedsLayout` après `rebuildLayers`
+5. Si AUCUNE des trois ne se vérifie : documenter H4 + valider avec @jcnm avant code
 
 **Fichiers touchés** :
-- `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Layers/StoryGlassBackdropLayer.swift` (init + defaults)
+- `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Layers/StoryGlassBackdropLayer.swift` (selon H choisie)
 - `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView.swift` (rebuildLayers / backdropProvider gate)
 - (potentiellement) `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryBackdropCapture.swift`
 
 **Tests** :
-- `StoryGlassBackdropLayerTests.test_defaultBackgroundColor_isClear`
-- `StoryCanvasPlayModeTests.test_textWithGlassBackground_invokesBackdropProvider`
+- `StoryCanvasPlayModeTests.test_textWithGlassBackground_invokesBackdropProvider` (à adapter selon la cause confirmée)
+- `StoryGlassBackdropLayerTests.test_initialBackgroundColor_isWhiteTranslucent` (snapshot de l'état attendu)
+- Test snapshot end-to-end : `StoryViewerView_GlassBackdropSnapshotTests.test_textWithGlassBg_renderedInPlayMode` (visuel : pas de cadre noir, blur visible)
 
 ### Section 3 — UX bordure texte
 
@@ -249,7 +270,11 @@ if let borderHex = text.borderColor, let borderColor = parseHexColor(borderHex) 
 
 ### Section 4 — Cohérence cross-chantier (animation reaction visibility)
 
-Le pattern `dismiss-then-react` (Section 1A) est appliqué dans `triggerStoryReaction`. Il bénéficie à **tous les chemins d'entrée** : strip rapide, full picker, et tout chemin futur. Aucune logique supplémentaire à section 1A.
+Le pattern `dismiss-full-picker-immediately + keep-strip-delay` (Section 1A) règle la visibilité de l'animation `bigReactionEmoji` pour les **deux** chemins d'entrée :
+- **Full picker** : dismiss immédiat synchrone avec l'animation (sinon écran couvert, utilisateur ne voit rien)
+- **Strip** : dismiss après 0.5s (existant ; feedback visuel délibéré de l'emoji choisi)
+
+Aucune logique supplémentaire à 1A. Cette section sert de documentation transverse pour les futurs chemins de réaction (ex : tap direct sur canvas, raccourci clavier) — la règle est : **si l'overlay couvre l'animation, dismisser immédiatement ; sinon, garder l'écho visuel.**
 
 ## Order d'implémentation suggéré
 
@@ -265,12 +290,12 @@ Le pattern `dismiss-then-react` (Section 1A) est appliqué dans `triggerStoryRea
 | Section | Tests ajoutés | Type |
 |---|---|---|
 | 1A | 3 | XCTest viewmodel + integration |
-| 1B | 3 | XCTest viewmodel + codable |
+| 1B | 4 | XCTest viewmodel + Swift Testing codable (MeeshySDKTests) |
 | 2A | 1 | XCTest UIKit gesture |
 | 2B | 6 | Swift Testing (`@Test`) pure SDK |
 | 2C | 2 | XCTest UIKit layer |
 | 3 | 5 | XCTest viewmodel + snapshot |
-| **Total** | **~20** | |
+| **Total** | **~21** | |
 
 ## Risques + mitigations
 
@@ -286,7 +311,8 @@ Le pattern `dismiss-then-react` (Section 1A) est appliqué dans `triggerStoryRea
 
 - Pas de refonte de `SlideMiniPreview` (la tray garde son approximation SwiftUI — décision @jcnm)
 - Pas d'introduction d'un mode `.preview` distinct de `.play` (Approche B rejetée — divergence pas justifiée aujourd'hui)
-- Pas de migration du schema `FeedComment` en base : `currentUserReactions` est transitoire (hydraté depuis API, persisté dans le cache GRDB iOS uniquement)
+- Pas de migration du schema `FeedComment` en base backend : le champ `currentUserReactions` est ajouté **côté model SDK Swift** (`FeedModels.swift`) et persisté dans le cache GRDB iOS uniquement. Le backend continue à le servir via `APIPostComment.currentUserReactions` (déjà existant).
+- Pas d'event queue persistante pour les `applyCommentReactionEvent` reçus quand `storyComments` est vide (overlay jamais ouvert) — on s'aligne au prochain reload. Acceptable car les events socket sont éphémères et le state serveur est toujours autoritaire au load suivant.
 
 ## Décisions architecturales
 
