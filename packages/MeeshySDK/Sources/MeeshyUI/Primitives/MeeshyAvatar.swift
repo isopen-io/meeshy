@@ -156,12 +156,13 @@ public enum AvatarContext: Sendable {
         }
     }
     public var badgeSize: CGFloat {
-        // x2 pour `storyTray` — user request 2026-05-27 « augmente l'icone
-        // de l'émoji aussi x2 ». Le mood emoji du tray passe de 37pt (= 88
-        // × 0.42) à 75pt (= 88 × 0.85), plus visible matchant le poids
-        // visuel du nouvel avatar doublé.
+        // storyTray — user request 2026-05-28 « augmente un peu l'icone
+        // de mood de x1.5 ». Précédent 0.85 (commité 2026-05-27 dans
+        // 3682aac76 sous label « x2 ») × 1.5 ≈ 1.275. Le mood emoji du
+        // tray passe de 49pt (= 75 × 0.65) à 73pt (= 112 × 0.65),
+        // proportion plus visible vs l'avatar 88pt.
         switch self {
-        case .storyTray: return size * 0.85
+        case .storyTray: return size * 1.275
         default: return size * 0.42
         }
     }
@@ -438,10 +439,16 @@ public struct MeeshyAvatar: View {
     }
 
     private func moodBadge(emoji: String) -> some View {
+        // Frame explicite = `context.badgeSize` pour éviter le collapse du
+        // GeometryReader en overlay context (sans frame, le reader peut
+        // s'effondrer à 0×0 selon le contexte parent → emoji invisible).
+        // Le glyphe Text est rendu à `badgeSize × 0.65` ; le frame de la
+        // bounding box vaut badgeSize pour donner au glyph la place
+        // visuelle complète + la hit area du tap mood.
         GeometryReader { geo in
             Text(emoji)
                 .font(.system(size: context.badgeSize * 0.65))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(width: context.badgeSize, height: context.badgeSize)
                 .scaleEffect(moodScale)
                 .contentShape(Circle())
                 .onTapGesture {
