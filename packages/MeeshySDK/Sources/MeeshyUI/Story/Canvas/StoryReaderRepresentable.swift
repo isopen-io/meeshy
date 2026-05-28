@@ -24,6 +24,17 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     /// `lastPlaybackTime` avancer dans le vide → saut visible au resume.
     /// Drivé depuis `shouldPauseTimer` du viewer.
     public internal(set) var isPaused: Bool
+    /// `true` quand cette représentable est utilisée comme calque sortant
+    /// (`outgoingStory` dans `StoryCardView`) pendant un cross-fade. Force le
+    /// canvas à monter en `.edit` mode dès `makeUIView` — ses AVPlayer bg /
+    /// FG et son audio mixer ne démarrent JAMAIS, supprimant la double-lecture
+    /// 350-400 ms pendant la transition (user 2026-05-28).
+    ///
+    /// Visuellement, le slide affiche son image bg + ses textes/stickers
+    /// rendus par `rebuildLayers()` mais les vidéos sont figées frame 0. C'est
+    /// suffisant pour un cross-fade d'animation : le canvas sort en opacity 0
+    /// avant qu'on perçoive l'absence de mouvement vidéo.
+    public internal(set) var isOutgoing: Bool
     /// Stored as `@Sendable` so it can be forwarded into `StoryReaderContext`
     /// which requires `@Sendable () -> Void`. Call-sites supply a plain `() -> Void`
     /// which Swift coerces automatically when the closure itself has no captures
@@ -71,6 +82,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
                 preloadedAudioURLs: [String: URL] = [:],
                 mute: Bool = false,
                 isPaused: Bool = false,
+                isOutgoing: Bool = false,
                 onCompletion: (@Sendable () -> Void)? = nil,
                 onContentReady: (() -> Void)? = nil,
                 onContentProgress: ((Double) -> Void)? = nil,
@@ -85,6 +97,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         self.preferredLanguages = chain
         self.mute = mute
         self.isPaused = isPaused
+        self.isOutgoing = isOutgoing
         self.onCompletion = onCompletion
         self.onContentReady = onContentReady
         self.onContentProgress = onContentProgress
@@ -98,7 +111,12 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
 
     public func makeUIView(context: Context) -> StoryCanvasUIView {
         let slide = storyItem.toRenderableSlide(preferredLanguages: preferredLanguages)
-        let view = StoryCanvasUIView(slide: slide, mode: .play)
+        // Outgoing canvas (cross-fade sortant) doit naître en `.edit` pour ne
+        // jamais démarrer ses médias — sinon les bg/FG AVPlayer + audio mixer
+        // jouent en double avec le canvas visible 350-400 ms le temps de
+        // l'anim (user 2026-05-28 « les média jouent en double / s'entrevauche »).
+        let initialMode: RenderMode = isOutgoing ? .edit : .play
+        let view = StoryCanvasUIView(slide: slide, mode: initialMode)
         let mediaList = storyItem.media
         let completion = onCompletion
         let contentReady = onContentReady
@@ -171,7 +189,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         if identityChanged || newSlide.content != view.slide.content {
             view.slide = newSlide
         }
-        if identityChanged {
+        if identityChanged && !isOutgoing {
             // Reset défensif de la timeline canvas quand l'id slide change :
             // garantit que `currentTime` redémarre à zéro EN PHASE avec
             // `lastPlaybackTime = 0` côté viewer (cf. `startTimer()`). Sans ça,
@@ -179,11 +197,16 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
             // qui teardown + makeUIView, mais possible si on factorise le
             // representable à une instance long-lived plus tard) pourrait
             // démarrer la slide N+1 avec le `currentTime` résiduel de la slide N.
+            //
+            // Skip pour outgoing : le canvas reste en `.edit` et son média
+            // reste figé jusqu'à ce que SwiftUI détruise la vue.
             view.setMode(.play, time: .zero)
         }
         // Pause synchronisée avec le viewer : sheets, composer, drag, long-press.
-        // `setPaused` est idempotent côté canvas.
-        view.setPaused(isPaused)
+        // `setPaused` est idempotent côté canvas. Pour outgoing, le canvas est
+        // en `.edit` donc `setPaused` est no-op (gate `guard mode == .play`)
+        // — mais on l'appelle quand même pour préserver le contrat idempotent.
+        view.setPaused(isPaused || isOutgoing)
     }
 }
 

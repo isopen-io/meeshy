@@ -246,6 +246,12 @@ struct StoryViewerView: View {
     @StateObject var exportShareViewModel = StoryExportShareViewModel()
     @State var showCommentsOverlay = false
     @State var storyReactionCount: Int = 0
+    /// Emojis the logged-in user has applied to the CURRENT story. Seeded from
+    /// `currentStory?.currentUserReactions` in `startTimer()` and bumped
+    /// optimistically by `triggerStoryReaction`. Drives the sidebar heart's
+    /// active state so it only lights up when *this* viewer has reacted —
+    /// not when somebody else has (bug 2026-05-28).
+    @State var storyCurrentUserReactions: [String] = []
     @State var storyComments: [FeedComment] = []
     @State var isLoadingComments = false
     @State var storyCommentCount: Int = 0
@@ -669,11 +675,21 @@ struct StoryViewerView: View {
                        preferredLanguages: chain)
 
         let current = stories[currentStoryIndex]
-        // Promote the current slide to `.play` and demote neighbours to
-        // `.edit`. Without this, all three prefetched canvases run in
-        // `.play` simultaneously, pre-caching + starting their audio at
-        // window mount time (NOT when the user actually arrives on the slide).
-        p.activate(currentId: current.id)
+        // PREFETCHER CANVASES RESTENT EN `.edit` (jamais promus en `.play`).
+        //
+        // Le promote-au-`.play` du canvas prefetcher du slide courant a été
+        // retiré 2026-05-28 : il créait une double-lecture parallèle avec le
+        // `StoryReaderRepresentable` visible (qui est, lui, instancié en
+        // `.play` par `makeUIView`). Chaque slide visible avait alors DEUX
+        // canvases qui démarraient leur AVPlayer bg + leur audio mixer + leurs
+        // AVPlayer FG. `PlaybackCoordinator` mutex-stoppait le second audio
+        // mixer mais ni les bg/FG AVPlayer ni leur piste audio embarquée
+        // (= bleed audio + bleed vidéo bg).
+        //
+        // Le prefetcher conserve son rôle de **cache chaud** : ses canvases
+        // restent en `.edit` à vie pour pré-décoder l'image bg, charger
+        // l'asset AVPlayer, etc. Le canvas visible (StoryReaderRepresentable)
+        // est la SEULE source de lecture média.
         t.setCurrentSlide(id: current.id, duration: currentSlideDuration)
 
         // Re-wire `onContentReady` on the prefetched canvas of the
@@ -862,6 +878,7 @@ struct StoryViewerView: View {
             bigReactionPhase: bigReactionPhase,
             heartBouncePulse: heartBouncePulse,
             storyReactionCount: storyReactionCount,
+            storyCurrentUserHasReacted: !storyCurrentUserReactions.isEmpty,
             storyCommentCount: storyCommentCount,
             isStoryCommentsEmpty: storyComments.isEmpty,
             storyHasAudibleSound: storyHasAudibleSound,
@@ -980,6 +997,9 @@ struct StoryViewerView: View {
         }
 
         storyReactionCount += 1
+        if !storyCurrentUserReactions.contains(emoji) {
+            storyCurrentUserReactions.append(emoji)
+        }
         heartBouncePulse += 1
         sendReaction(emoji: emoji)
     }

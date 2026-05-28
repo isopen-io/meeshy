@@ -448,6 +448,7 @@ struct StoryCardView: View {
 
     // Sidebar inputs
     let storyReactionCount: Int
+    let storyCurrentUserHasReacted: Bool
     let storyCommentCount: Int
     let isStoryCommentsEmpty: Bool
     let storyHasAudibleSound: Bool
@@ -606,11 +607,19 @@ struct StoryCardView: View {
 
             // === Outgoing canvas (cross-dissolve pixel-perfect) ===
             if let outgoing = outgoingStory, outgoingOpacity > 0 {
+                // `isOutgoing: true` force le canvas en `.edit` mode dès
+                // makeUIView — ses bg/FG AVPlayer + audio mixer ne démarrent
+                // PAS, supprimant le bleed audio/vidéo 350-400 ms pendant le
+                // cross-fade (bug user 2026-05-28 « médias jouent en double »).
+                // Visuellement, le slide reste rendu (image bg + textes), seule
+                // l'animation vidéo est gelée — invisible à l'œil pendant une
+                // sortie en opacity sur 350 ms.
                 StoryReaderRepresentable(story: outgoing, preferredLanguage: resolvedViewerLanguage,
                                       preferredContentLanguages: resolvedViewerLanguageChain,
                                       preloadedImages: preloadedImages,
                                       preloadedVideoURLs: preloadedVideoURLs,
-                                      preloadedAudioURLs: preloadedAudioURLs)
+                                      preloadedAudioURLs: preloadedAudioURLs,
+                                      isOutgoing: true)
                     .id("out-\(outgoing.id)")
                     // Strict 9:16-fit (parité avec UnifiedPostComposer:324).
                     // Sans contrainte, le reader s'étirait à la hauteur écran et
@@ -898,6 +907,7 @@ struct StoryCardView: View {
                 StoryActionSidebarView(
                     isOwnStory: isOwnStory,
                     storyReactionCount: storyReactionCount,
+                    storyCurrentUserHasReacted: storyCurrentUserHasReacted,
                     heartBouncePulse: heartBouncePulse,
                     quickEmojis: quickEmojis,
                     onReplyToStory: onReplyToStory,
@@ -988,7 +998,11 @@ struct StoryCardView: View {
             VStack(spacing: 0) {
                 Spacer()
 
-                if !isOwnStory {
+                // Suppressed when the comments overlay is visible — the overlay
+                // hosts its own `mode: .comment` composer with a reply banner,
+                // so a second bottom composer would just stack on top
+                // (bug 2026-05-28: double "Commenter…" field visible).
+                if !isOwnStory && !showCommentsOverlay {
                     StoryComposerBarView(
                         accentColor: currentGroup?.avatarColor ?? "6366F1",
                         storyId: currentStory?.id,
@@ -1005,7 +1019,13 @@ struct StoryCardView: View {
                             sendComment(text, effectFlags, nil)
                         }
                     )
-                        .padding(.horizontal, 14)
+                        // 20pt clears the iPhone Pro bottom-rounded-corners
+                        // (~55pt radius). Root viewer uses `.ignoresSafeArea()`
+                        // so we can't rely on the SwiftUI safe-area inset to
+                        // pad us — without this the (+) and send buttons land
+                        // inside the screen's curvature and get visually clipped
+                        // (bug 2026-05-28: send button half-cut off the right).
+                        .padding(.horizontal, 20)
                         .simultaneousGesture(
                             DragGesture(minimumDistance: 20, coordinateSpace: .local)
                                 .onEnded { value in
