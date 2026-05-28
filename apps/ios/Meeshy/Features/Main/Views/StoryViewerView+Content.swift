@@ -599,10 +599,18 @@ extension StoryViewerView {
             let now = CACurrentMediaTime()
             let dt: Double = lastTickTime.value > 0 ? (now - lastTickTime.value) : 0
             lastTickTime.value = now
-            // Pause UI active : on n'accumule pas le delta-time courant.
-            // Garde l'accumulator et l'horloge — le prochain tick reprendra
-            // depuis `now` (donc dt=0 sur la première tick post-resume).
-            guard !shouldPauseTimer else { return }
+            // Pause UI active OU contenu pas encore prêt : on n'accumule pas.
+            // User feedback 2026-05-27 « les vidéos sont arrêtées en plein
+            // milieu sans finir » — sans le gate `isContentReady`, le
+            // timer wall-clock démarrait dès l'ouverture du slide même si
+            // la vidéo BG mettait 1-2 s à se lancer. Résultat : la slide
+            // avançait après `duration` secondes wall-clock alors que la
+            // vidéo n'avait joué que `duration - latency`, coupant la fin.
+            // En gateant sur isContentReady on garantit que le compteur ne
+            // démarre qu'au moment où le media commence vraiment à jouer →
+            // la vidéo finit son cycle (loop ou one-shot) exactement quand
+            // la slide expire.
+            guard !shouldPauseTimer, isContentReady else { return }
             elapsedAccumulator.value += dt
             let elapsed = elapsedAccumulator.value
             let raw = min(1.0, CGFloat(elapsed / duration))

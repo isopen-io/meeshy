@@ -155,7 +155,16 @@ public enum AvatarContext: Sendable {
         default: return size <= 32 ? 1.5 : 2.5
         }
     }
-    public var badgeSize: CGFloat { size * 0.42 }
+    public var badgeSize: CGFloat {
+        // x2 pour `storyTray` — user request 2026-05-27 « augmente l'icone
+        // de l'émoji aussi x2 ». Le mood emoji du tray passe de 37pt (= 88
+        // × 0.42) à 75pt (= 88 × 0.85), plus visible matchant le poids
+        // visuel du nouvel avatar doublé.
+        switch self {
+        case .storyTray: return size * 0.85
+        default: return size * 0.42
+        }
+    }
     public var onlineDotSize: CGFloat { size * 0.26 }
 }
 

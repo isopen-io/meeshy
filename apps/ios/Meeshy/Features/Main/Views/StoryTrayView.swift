@@ -181,24 +181,6 @@ struct StoryTrayView: View {
 
     // MARK: - Story Ring
 
-    /// URL de la miniature de la dernière story du groupe — user request
-    /// 2026-05-27 « dans la tray il faut mettre la vue miniature de la
-    /// dernière story du groupe ». `stories` est trié ascendant par
-    /// `createdAt` (cf. `FeedDataResponse.toStoryGroups`), donc `last` =
-    /// plus récente. Préfère `thumbnailUrl` (servi optimisé par le
-    /// gateway) au full `url` si dispo. Fallback sur l'avatar du profil
-    /// pour les stories text-only (pas de media).
-    private func latestStoryThumbnailURL(_ group: StoryGroup) -> String? {
-        guard let lastStory = group.stories.last else { return group.avatarURL }
-        if let thumb = lastStory.media.first?.thumbnailUrl, !thumb.isEmpty {
-            return thumb
-        }
-        if let url = lastStory.media.first?.url, !url.isEmpty {
-            return url
-        }
-        return group.avatarURL
-    }
-
     private func storyRing(group: StoryGroup, userId: String) -> some View {
         VStack(spacing: 5) {
             ZStack {
@@ -255,6 +237,27 @@ struct StoryTrayView: View {
 
 }
 
+// MARK: - Thumbnail Helper
+
+/// URL de la miniature de la dernière story du groupe — user request
+/// 2026-05-27 « dans la tray il faut mettre la vue miniature de la
+/// dernière story du groupe ». `stories` est trié ascendant par
+/// `createdAt` (cf. `FeedDataResponse.toStoryGroups`), donc `last` =
+/// plus récente. Préfère `thumbnailUrl` (servi optimisé par le
+/// gateway) au full `url` si dispo. Fallback sur l'avatar du profil
+/// pour les stories text-only (pas de media). Helper fileprivate
+/// pour pouvoir s'appeler depuis `MyStoryButton` aussi.
+fileprivate func latestStoryThumbnailURL(_ group: StoryGroup) -> String? {
+    guard let lastStory = group.stories.last else { return group.avatarURL }
+    if let thumb = lastStory.media.first?.thumbnailUrl, !thumb.isEmpty {
+        return thumb
+    }
+    if let url = lastStory.media.first?.url, !url.isEmpty {
+        return url
+    }
+    return group.avatarURL
+}
+
 // MARK: - My Story Button (extracted struct to avoid PAC issues with @ViewBuilder + @EnvironmentObject)
 
 private struct MyStoryButton: View {
@@ -283,7 +286,7 @@ private struct MyStoryButton: View {
                     name: userName,
                     context: .storyTray,
                     accentColor: accentColor,
-                    avatarURL: currentUser?.avatar,
+                    avatarURL: myGroup.flatMap { latestStoryThumbnailURL($0) } ?? currentUser?.avatar,
                     storyState: storyState,
                     moodEmoji: myMoodEmoji,
                     presenceState: .offline,
@@ -345,20 +348,25 @@ private struct MyStoryButton: View {
                             viewModel.showStoryComposer = true
                             HapticFeedback.medium()
                         } label: {
+                            // x2 — user request 2026-05-27 « augmente le (+)
+                            // d'ajouter une story ». Avant : font 11 / frame
+                            // 20×20 / offset (-2,-2). Maintenant doublé pour
+                            // matcher la taille trail (avatars passés à 88pt
+                            // en ab691abaf).
                             Image(systemName: "plus")
-                                .font(.system(size: 11, weight: .bold))
+                                .font(.system(size: 22, weight: .bold))
                                 .foregroundStyle(Color.white)
-                                .frame(width: 20, height: 20)
+                                .frame(width: 40, height: 40)
                                 .background(
                                     Circle()
                                         .fill(MeeshyColors.brandGradient)
-                                        .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2))
+                                        .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 3))
                                 )
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(String(localized: "story.tray.addStory",
                                                    defaultValue: "Ajouter une story"))
-                        .offset(x: -2, y: -2)
+                        .offset(x: -4, y: -4)
                     }
                 }
                 .overlay {
