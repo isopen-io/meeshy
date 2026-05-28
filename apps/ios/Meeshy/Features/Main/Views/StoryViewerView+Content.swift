@@ -1260,7 +1260,13 @@ struct StoryCommentsOverlayView: View {
                         emptyPlaceholder
                     }
                 }
-                .padding(.horizontal, 16)
+                // Réserve à droite la colonne du sidebar (React / Répondre /
+                // Envoyer / Son / Comments). Sans cette marge, les rows
+                // s'étendent `Spacer(minLength: 0)` jusqu'au bord droit et
+                // passent SOUS la sidebar (Layer 8 du ZStack), qui les masque
+                // et rend le texte illisible (bug user 2026-05-28).
+                .padding(.leading, 16)
+                .padding(.trailing, 80)
                 .padding(.top, 24)
                 .padding(.bottom, 12)
             }
@@ -1284,19 +1290,28 @@ struct StoryCommentsOverlayView: View {
 
     // MARK: - Composer Strip
 
+    /// Bande composer ancrée au bas du viewport. Le fond est un **gradient
+    /// vertical transparent → sombre** (transparent au sommet pour fondre
+    /// vers la liste de commentaires au-dessus, opaque au pied pour anchrer
+    /// la zone d'écriture et garantir la lisibilité du placeholder
+    /// « Commenter… »). Le `.frame(maxWidth: .infinity)` force le voile à
+    /// s'étendre edge-to-edge ; sans ça, le wrapper composer prenait sa
+    /// largeur intrinsèque et la zone d'écriture paraissait « coupée » à
+    /// gauche et à droite (bug user 2026-05-28).
     private var composerStrip: some View {
         storyCommentComposerBar
+            .frame(maxWidth: .infinity)
             .background(
-                Rectangle()
-                    .fill(.ultraThinMaterial)
-                    .opacity(0.85)
-                    .overlay(
-                        Rectangle()
-                            .fill(Color.white.opacity(0.08))
-                            .frame(height: 0.5),
-                        alignment: .top
-                    )
-                    .ignoresSafeArea(edges: .bottom)
+                LinearGradient(
+                    stops: [
+                        .init(color: .black.opacity(0.0), location: 0.0),
+                        .init(color: .black.opacity(0.45), location: 0.35),
+                        .init(color: .black.opacity(0.85), location: 1.0)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea(edges: .bottom)
             )
     }
 
@@ -1647,6 +1662,14 @@ struct StoryCommentRowView: View, Equatable {
 
     private var bubbleColor: Color { Color(hex: comment.authorColor) }
 
+    /// Fond sombre transparent garanti lisible quelle que soit la slide
+    /// derrière (vidéo claire, photo blanche, fond pastel, dark/light theme).
+    /// Pas de dérive sur la couleur d'auteur (`bubbleColor.opacity(0.18)`)
+    /// qui — superposée au scrim et à des slides clair-sur-sombre — donnait
+    /// un fond illisible et créait des artefacts visuels (bug user 2026-05-28
+    /// « les commentaires sont illisibles »). L'identité couleur de l'auteur
+    /// est conservée via le sliver vertical à gauche + la couleur du nom
+    /// dans le headerRow.
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             avatar
@@ -1660,13 +1683,21 @@ struct StoryCommentRowView: View, Equatable {
             Spacer(minLength: 0)
         }
         .padding(.vertical, 8)
-        .padding(.horizontal, 12)
+        .padding(.leading, 12)
+        .padding(.trailing, 12)
         .background(
-            ZStack {
+            ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(bubbleColor.opacity(0.18))
+                    .fill(Color.black.opacity(0.55))
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(bubbleColor.opacity(0.35), lineWidth: 0.5)
+                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
+                // Sliver vertical d'accent : conserve l'identité couleur de
+                // l'auteur sans empoisonner toute la surface du fond.
+                Capsule(style: .continuous)
+                    .fill(bubbleColor)
+                    .frame(width: 3)
+                    .padding(.vertical, 6)
+                    .padding(.leading, 4)
             }
         )
     }

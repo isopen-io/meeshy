@@ -7,6 +7,17 @@ import MeeshyUI
 
 @MainActor
 class StoryViewModel: ObservableObject, StoryPublishExecutor {
+    /// Versioned cache key for the home tray story list. Bump the suffix
+    /// whenever `StoryItem` / `StoryGroup` gains a non-optional field or a
+    /// formerly-dropped enrichment becomes load-bearing — the previous
+    /// version's serialized JSON would deserialize with that field missing.
+    /// One-shot invalidation, no perma-refetch noise.
+    /// `_v2` (2026-05-28): forces a re-fetch so `visibility`, `shareCount`,
+    /// `viewCount`, `repostCount`, `currentUserReactions` reach clients that
+    /// cached stories before `toStoryGroups` started propagating them
+    /// (Partager button stayed hidden on PUBLIC stories until this).
+    static let storiesCacheKey = "recent_tray_v2"
+
     @Published var storyGroups: [StoryGroup] = []
     @Published var isLoading = false
     @Published var isPublishing = false
@@ -196,7 +207,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             return
         }
 
-        let cached = await CacheCoordinator.shared.stories.load(for: "recent_tray")
+        let cached = await CacheCoordinator.shared.stories.load(for: Self.storiesCacheKey)
         switch cached {
         case .fresh(let data, _):
             storyGroups = data
@@ -236,7 +247,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 }
 
                 storyGroups = groups
-                try? await CacheCoordinator.shared.stories.save(groups, for: "recent_tray")
+                try? await CacheCoordinator.shared.stories.save(groups, for: Self.storiesCacheKey)
                 prefetchAllStoryMedia(groups)
             }
         } catch {
@@ -1187,6 +1198,6 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
     private func persistStoryCache() {
         let snapshot = storyGroups
-        Task { try? await CacheCoordinator.shared.stories.save(snapshot, for: "recent_tray") }
+        Task { try? await CacheCoordinator.shared.stories.save(snapshot, for: Self.storiesCacheKey) }
     }
 }
