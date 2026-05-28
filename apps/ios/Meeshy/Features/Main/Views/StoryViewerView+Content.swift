@@ -656,123 +656,25 @@ extension StoryViewerView {
     /// que la durée configurée étaient coupés (la vidéo apparaissait quelques
     /// secondes puis disparaissait alors que le son continuait — typique d'un
     /// timer de slide expirant avant la fin du média).
+    /// SINGLE SOURCE OF TRUTH pour la durée du slide.
+    /// User feedback 2026-05-27 « on doit avoir un seul point pour changer ».
+    /// Ordre de résolution :
+    ///   1. `storyEffects.slideDuration` si configuré (> 0)
+    ///   2. Fallback constant 6 secondes
+    ///
+    /// Pas d'extension par les médias (vidéo bg, audio bg, texte long, etc.).
+    /// Les médias bg loop / clip naturellement dans la fenêtre du slide. Si
+    /// l'auteur veut un slide plus long, il configure `slideDuration` au
+    /// composer — pas de calcul implicite côté reader.
+    static let defaultSlideDuration: Double = 6.0
+
     private func updateStoryDuration() {
-        guard let story = currentStory else {
-            computedStoryDuration = 6.0
-            return
+        if let configured = currentStory?.storyEffects?.slideDuration,
+           configured > 0 {
+            computedStoryDuration = Double(configured)
+        } else {
+            computedStoryDuration = Self.defaultSlideDuration
         }
-        var maxDuration: Double = 6.0
-        let effects = story.storyEffects
-
-        // Configured timeline duration is one CANDIDATE — not authoritative.
-        // We always pick the largest of (configured, longest media, minimum).
-        if let authoritative = effects?.slideDuration, authoritative > 0 {
-            maxDuration = max(maxDuration, Double(authoritative))
-        }
-
-        // Durées des médias foreground (composer écrit `placement: "media"`, jamais
-        // `"foreground"` — le filtre legacy laissait passer aucun élément, écrasant la
-        // durée à 5s pour toute vidéo > 5s). On s'aligne sur les accesseurs partagés.
-        for obj in effects?.resolvedForegroundMediaObjects ?? [] {
-            let startOffset = Double(obj.startTime ?? 0)
-            if let feedMedia = story.media.first(where: { $0.id == obj.postMediaId }),
-               let dur = feedMedia.duration, dur > 0 {
-                maxDuration = max(maxDuration, startOffset + Double(dur))
-            } else if let objDur = obj.duration {
-                maxDuration = max(maxDuration, startOffset + Double(objDur))
-            }
-        }
-
-        // Durées des audio players foreground — même correctif.
-        for obj in effects?.resolvedForegroundAudioPlayers ?? [] {
-            let startOffset = Double(obj.startTime ?? 0)
-            if let feedMedia = story.media.first(where: { $0.id == obj.postMediaId }),
-               let dur = feedMedia.duration, dur > 0 {
-                maxDuration = max(maxDuration, startOffset + Double(dur))
-            } else if let objDur = obj.duration {
-                maxDuration = max(maxDuration, startOffset + Double(objDur))
-            }
-        }
-
-        // Durées des text objects — startTime + duration
-        for obj in effects?.textObjects ?? [] {
-            let startOffset = obj.startTime ?? 0
-            if let dur = obj.duration {
-                maxDuration = max(maxDuration, startOffset + dur)
-            }
-
-            // Extension dynamique basée sur la longueur du texte (Section 5 de la review)
-            // Les textes longs de plus de 30 mots devraient rajouter 1 seconde de plus à la story
-            // pour chaque 6 mots supplémentaire.
-            let words = obj.text.split(separator: " ").count
-            if words > 30 {
-                let extraWords = words - 30
-                let extraSeconds = Double(extraWords) / 6.0
-                // L'extension s'applique sur la durée de base du slide (floor)
-                let base = effects?.slideDuration.map { Double($0) } ?? 6.0
-                maxDuration = max(maxDuration, base + extraSeconds)
-            }
-        }
-
-        // Background loop periods — collected here as a separate signal because
-        // they DON'T extend the story directly to their full duration (bg
-        // audio/video loop). Instead we round the foreground baseline up to
-        // the next multiple of each loop period below, so the loop completes
-        // its Nth cycle before the slide advances. Without this, a 6s slide
-        // with a 5s bg video would cut at 6s mid-second-loop; with it, the
-        // slide extends to 10s (2 full cycles).
-        var bgLoopPeriods: [Double] = []
-        if let bgMedia = effects?.resolvedBackgroundMedia, bgMedia.kind == .video,
-           let dur = story.media.first(where: { $0.id == bgMedia.postMediaId })?.duration, dur > 0 {
-            bgLoopPeriods.append(Double(dur))
-        }
-        // Legacy background video (when no canvas mediaObjects).
-        if (effects?.mediaObjects ?? []).isEmpty,
-           let legacyMedia = story.media.first,
-           legacyMedia.type == .video,
-           let dur = legacyMedia.duration, dur > 0 {
-            bgLoopPeriods.append(Double(dur))
-        }
-        // Background audio (trimmed range or full clip).
-        if let bgAudioId = effects?.backgroundAudioId {
-            if let start = effects?.backgroundAudioStart, let end = effects?.backgroundAudioEnd, end > start {
-                bgLoopPeriods.append(end - start)
-            } else if let feedMedia = story.media.first(where: { $0.id == bgAudioId }),
-                      let dur = feedMedia.duration, dur > 0 {
-                bgLoopPeriods.append(Double(dur))
-            }
-        }
-
-        // Pour les vidéos/audios locales en preview, utiliser AVURLAsset si FeedMedia.duration est nil
-        if isPreviewMode {
-            let capturedVideoURLs = preloadedVideoURLs
-            let capturedAudioURLs = preloadedAudioURLs
-            let capturedMaxDuration = maxDuration
-            let capturedBgPeriods = bgLoopPeriods
-            Task { @MainActor in
-                var asyncMax = capturedMaxDuration
-                for (_, url) in capturedVideoURLs {
-                    let asset = AVURLAsset(url: url)
-                    if let cmDur = try? await asset.load(.duration) {
-                        let dur = CMTimeGetSeconds(cmDur)
-                        if dur > 0 && dur.isFinite { asyncMax = max(asyncMax, dur) }
-                    }
-                }
-                for (_, url) in capturedAudioURLs {
-                    let asset = AVURLAsset(url: url)
-                    if let cmDur = try? await asset.load(.duration) {
-                        let dur = CMTimeGetSeconds(cmDur)
-                        if dur > 0 && dur.isFinite { asyncMax = max(asyncMax, dur) }
-                    }
-                }
-                computedStoryDuration = Self.roundedUpToBgLoops(baseDuration: asyncMax,
-                                                                bgLoopPeriods: capturedBgPeriods)
-            }
-            return
-        }
-
-        computedStoryDuration = Self.roundedUpToBgLoops(baseDuration: maxDuration,
-                                                        bgLoopPeriods: bgLoopPeriods)
     }
 
     /// For each background loop period, round the base duration up to the
