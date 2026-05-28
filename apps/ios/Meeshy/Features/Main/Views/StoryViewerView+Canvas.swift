@@ -1129,6 +1129,16 @@ struct StoryCardView: View {
                     }
                 }
             }
+            // **CRITIQUE** : `maxHeight: .infinity, alignment: .bottom` force la
+            // VStack à remplir la hauteur du canvas ZStack. Sans cela, le
+            // `Spacer()` au top collapse à minLength: 0 et la VStack prend sa
+            // hauteur intrinsèque (~150pt = composer + emoji panel). Le canvas
+            // ZStack parent utilisant `alignment: .center` (line 1192), une
+            // VStack courte se faisait CENTRER verticalement dans le canvas
+            // 874pt → composer apparaissait à y≈360pt au lieu de y≈760pt en
+            // bas (bug user 2026-05-28 « le composeur est rogné au lieu d'être
+            // bien aligné, le composant sort du viewport »).
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .padding(.bottom, composerBottomPadding(geometry))
             .animation(.easeInOut(duration: 0.25), value: keyboard.height)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showTextEmojiPicker)

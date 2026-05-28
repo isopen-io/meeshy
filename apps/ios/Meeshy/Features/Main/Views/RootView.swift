@@ -437,11 +437,19 @@ struct RootView: View {
         // links and push notifications), so the cache-first resolution +
         // navigation retry logic is shared.
         .overlay(alignment: .bottom) {
-            MiniAudioPlayerBar(onTapBody: {
-                guard let convId = ConversationAudioCoordinator.shared
-                    .activeContext?.conversationId else { return }
-                navigateToConversationById(convId)
-            })
+            MiniAudioPlayerBar(
+                onTapBody: {
+                    guard let convId = ConversationAudioCoordinator.shared
+                        .activeContext?.conversationId else { return }
+                    navigateToConversationById(convId)
+                },
+                // Hide the bar whenever the user is already inside the
+                // conversation playing the audio — the in-place audio
+                // bubble owns the controls there. Captures `router` so
+                // every `router.path` mutation propagates through to the
+                // bar's next body eval via the parent re-render chain.
+                currentConversationId: { router.currentConversationId }
+            )
             .padding(.bottom, AudioOverlayConstants.iPhoneBottomPadding)
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showFeed)

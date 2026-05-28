@@ -243,14 +243,38 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     }
 
     // MARK: - Timer
+    //
+    // Perf budget (2026-05-28): the previous 20 Hz tick (0.05 s) was the
+    // single biggest CPU drain during sustained audio playback because
+    // every wakeup re-published `currentTime` + `progress` through the
+    // coordinator cascade → invalidated every `@ObservedObject coordinator`
+    // observer (mini-player, etc.) at 20 Hz. Dropping to 10 Hz halves the
+    // wakeups and is visually indistinguishable on the waveform / progress
+    // chip (both round to 0.01-resolution display anyway). Additionally,
+    // we skip writes whose delta is below a perceptible threshold to
+    // collapse the Combine downstream into ~5 Hz of distinct values.
+    private static let progressTickInterval: TimeInterval = 0.1
+    /// `currentTime` is exposed in seconds with 100ms display granularity
+    /// (`formatMediaDuration` truncates below that). Any smaller delta is
+    /// invisible to the user and only generates wasted re-renders.
+    private static let currentTimeWriteThresholdSeconds: TimeInterval = 0.05
+    /// `progress` drives a 200-ish-pixel waveform; sub-half-pixel deltas
+    /// yield no visible change. 0.002 (=0.2%) is a comfortable cutoff.
+    private static let progressWriteThreshold: Double = 0.002
+
     private func startProgressTimer() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: Self.progressTickInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self = self, let player = self.player else { return }
-                if player.isPlaying {
-                    self.currentTime = player.currentTime
-                    self.progress = player.duration > 0 ? player.currentTime / player.duration : 0
+                guard player.isPlaying else { return }
+                let newTime = player.currentTime
+                let newProgress = player.duration > 0 ? newTime / player.duration : 0
+                if abs(newTime - self.currentTime) >= Self.currentTimeWriteThresholdSeconds {
+                    self.currentTime = newTime
+                }
+                if abs(newProgress - self.progress) >= Self.progressWriteThreshold {
+                    self.progress = newProgress
                 }
             }
         }

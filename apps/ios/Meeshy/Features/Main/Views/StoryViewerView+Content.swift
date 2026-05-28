@@ -551,6 +551,15 @@ extension StoryViewerView {
         storyCommentRepliesMap = [:]
         storyCommentExpandedThreads = []
         storyCommentLoadingReplies = []
+        // Slide changed → drop previous slide's comment list, like overrides, and
+        // any in-flight heart taps. Without this, `isStoryCommentsEmpty` stays
+        // false in the sidebar tap path (Sidebar:277) and the overlay re-opens
+        // with the prior slide's comments without ever refetching.
+        storyComments = []
+        storyCommentLikedIds = []
+        storyCommentLikeDelta = [:]
+        heartInFlightIds = []
+        isLoadingComments = false
         loadStoryCommentCount()
         storyReactionCount = currentStory?.reactionCount ?? 0
         storyCurrentUserReactions = currentStory?.currentUserReactions ?? []
@@ -1116,6 +1125,16 @@ struct StoryCommentsOverlayView: View {
     /// screen so the underlying story stays manipulable above the list.
     @ObservedObject var keyboard: KeyboardObserver
 
+    /// Vrai safe area bas lu sur la keyWindow par le parent
+    /// (`StoryViewerView.windowBottomInset`). Necessaire parce que cet
+    /// overlay est rendu dans le ZStack canvas qui herite du
+    /// `.ignoresSafeArea()` root — `geometry.safeAreaInsets.bottom` y vaut 0.
+    /// Sans cette valeur, `composerSpaceReservation` retombait sur une
+    /// constante hardcodee (54pt pour iPhone Pro) qui derivait sur iPhone
+    /// SE / iPad / pliables (bug 2026-05-28 : « le commentaire sort du
+    /// viewport EXACTEMENT comme la zone de composition »).
+    let safeBottom: CGFloat
+
     let makeStoryCommentRow: (FeedComment, String) -> StoryCommentRowView
     let toggleStoryCommentThread: (String) async -> Void
 
@@ -1202,9 +1221,14 @@ struct StoryCommentsOverlayView: View {
     /// - clavier caché : safe area ~34pt + 20pt breathing room + composer/2.
     private var composerSpaceReservation: CGFloat {
         let composerHeight: CGFloat = replyingToStoryComment != nil ? 142 : 92
+        // Mirror `composerBottomPadding(geometry:)` cote canvas : safe area
+        // reel + 20pt breathing room quand clavier cache, sinon hauteur clavier.
+        // `safeBottom` arrive du parent via `windowBottomInset` (keyWindow),
+        // pas via `geometry.safeAreaInsets.bottom` qui vaut 0 sous
+        // `.ignoresSafeArea()` (bug 2026-05-28).
         let bottomPadding: CGFloat = keyboard.isVisible
             ? keyboard.height
-            : 54  // estime safeAreaInsets.bottom (34 iPhone Pro) + 20pt breathing
+            : safeBottom + 20
         // Half-composer overlap — list ends at composer.middle, the lower
         // half is the « emerge » zone where new rows transition into view.
         return composerHeight / 2 + bottomPadding
@@ -1282,12 +1306,15 @@ struct StoryCommentsOverlayView: View {
                         emptyPlaceholder
                     }
                 }
-                // Padding symétrique horizontal : les rows respirent du même
-                // espace à gauche et à droite. La sidebar (Layer 8) du
-                // viewer flotte au-dessus si besoin — chaque comment row a
-                // déjà son scrim individuel qui le rend lisible même si
-                // une icône du sidebar passe par-dessus.
-                .padding(.horizontal, 16)
+                // **Aligned with composer's 28pt outer padding** (cf.
+                // canvas line 1108). Le commentaire-row visuel commence
+                // exactement au même `leading` que la rangée de saisie du
+                // composer → plus de désalignement entre la liste
+                // commentaires et la zone Commenter / reply banner (bug
+                // user 2026-05-28). Trailing 80pt préserve le dégagement
+                // sidebar (Layer 8 ~56+6=62pt depuis le bord droit).
+                .padding(.leading, 28)
+                .padding(.trailing, 80)
                 .padding(.top, 24)
                 .padding(.bottom, 12)
             }
@@ -1504,6 +1531,10 @@ extension StoryViewerView {
         let cacheKey = "post-\(story.id)"
 
         let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
+        // Stale-write guard: if the viewer swiped to another slide while the
+        // cache read was in flight, drop the result so we never paint slide A's
+        // comments onto slide B's overlay.
+        guard currentStory?.id == story.id else { return }
         switch cached {
         case .fresh(let comments, _):
             storyComments = comments
@@ -1526,6 +1557,9 @@ extension StoryViewerView {
         let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
         do {
             let response = try await PostService.shared.getComments(postId: story.id, cursor: nil, limit: 50)
+            // Stale-write guard: viewer may have swiped to another slide while
+            // the network request was in flight.
+            guard currentStory?.id == story.id else { return }
             let comments = response.data.map { c -> FeedComment in
                 let translated: String? = {
                     guard let dict = c.translations else { return nil }
@@ -1579,6 +1613,7 @@ extension StoryViewerView {
         Task {
             let cacheKey = "post-\(story.id)"
             let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
+            guard currentStory?.id == story.id else { return }
             switch cached {
             case .fresh(let comments, _), .stale(let comments, _):
                 let top = comments.filter { $0.parentId == nil }

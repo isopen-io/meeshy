@@ -134,6 +134,21 @@ final class Router: ObservableObject {
 
     var currentRoute: Route? { path.last }
 
+    /// Conversation id at the top of the navigation stack, if the active
+    /// route is `.conversation(...)`. Used by the floating mini audio
+    /// player to hide itself when the user is already inside the
+    /// conversation that's driving playback. Returns `nil` for any other
+    /// route — settings, profile, communities, etc. — so the bar stays
+    /// visible there. Does not cross iPad two-column boundaries: on iPad
+    /// the active conversation is owned by `iPadRootView.activeConversation`
+    /// instead of `Router.path`.
+    var currentConversationId: String? {
+        if case let .conversation(conv) = path.last {
+            return conv.id
+        }
+        return nil
+    }
+
     var sceneTitle: String {
         currentRoute?.displayTitle ?? "Conversations"
     }

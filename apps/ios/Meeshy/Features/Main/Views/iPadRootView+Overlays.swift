@@ -53,11 +53,18 @@ extension iPadRootView {
             // right column instead of pushing onto a NavigationStack.
             VStack {
                 Spacer()
-                MiniAudioPlayerBar(onTapBody: {
-                    guard let convId = ConversationAudioCoordinator.shared
-                        .activeContext?.conversationId else { return }
-                    navigateToConversationById(convId)
-                })
+                MiniAudioPlayerBar(
+                    onTapBody: {
+                        guard let convId = ConversationAudioCoordinator.shared
+                            .activeContext?.conversationId else { return }
+                        navigateToConversationById(convId)
+                    },
+                    // iPad two-column tracks the active conversation via
+                    // `activeConversation` @State rather than `router.path`.
+                    // Surface that id so the bar hides when the user is
+                    // already viewing the conversation driving playback.
+                    currentConversationId: { activeConversation?.id }
+                )
                 .padding(.bottom, AudioOverlayConstants.iPadBottomPadding)
             }
             .zIndex(202)

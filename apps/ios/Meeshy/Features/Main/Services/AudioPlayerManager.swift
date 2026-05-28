@@ -175,17 +175,29 @@ class AudioPlayerManager: NSObject, ObservableObject, StoppablePlayer, AVAudioPl
     }
 
     // MARK: - Progress Timer
+    //
+    // 10 Hz tick (2026-05-28). Same perf rationale as the SDK engine
+    // (see `MeeshyUI.AudioPlaybackManager.progressTickInterval`): the
+    // 20 Hz tick burned CPU + Combine cascade cycles for sub-perceptible
+    // updates. Coupled with a write-threshold of 0.002 to collapse
+    // redundant `@Published` emissions.
+
+    private static let progressTickInterval: TimeInterval = 0.1
+    private static let progressWriteThreshold: Double = 0.002
 
     private func startProgressTimer() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: Self.progressTickInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self = self, let player = self.player else { return }
-                if player.isPlaying {
-                    self.progress = player.duration > 0 ? player.currentTime / player.duration : 0
-                    if self.progress >= 1.0 {
-                        self.stop()
-                    }
+                guard player.isPlaying else { return }
+                let newProgress = player.duration > 0 ? player.currentTime / player.duration : 0
+                if newProgress >= 1.0 {
+                    self.stop()
+                    return
+                }
+                if abs(newProgress - self.progress) >= Self.progressWriteThreshold {
+                    self.progress = newProgress
                 }
             }
         }

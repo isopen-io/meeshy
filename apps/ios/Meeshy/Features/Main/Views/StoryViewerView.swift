@@ -285,6 +285,20 @@ struct StoryViewerView: View {
             .bounds.size ?? UIScreen.main.bounds.size
     }
 
+    /// Bas du safe area lu directement sur la keyWindow. Necessaire parce que
+    /// le `GeometryReader` interne au viewer est rendu dans un contexte
+    /// `.ignoresSafeArea()` (cf. `viewerContent`), ce qui aplatit
+    /// `geometry.safeAreaInsets.bottom` a 0 — le composer et la liste de
+    /// commentaires se retrouvaient alors plaques sur le bord physique et
+    /// chevauchaient le home indicator + les coins arrondis (bug 2026-05-28).
+    var windowBottomInset: CGFloat { // internal for cross-file extension access
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first(where: { $0.activationState == .foregroundActive })?
+            .windows.first(where: { $0.isKeyWindow })?
+            .safeAreaInsets.bottom ?? 0
+    }
+
     private var screenH: CGFloat { windowSize.height }
 
     var screenW: CGFloat { windowSize.width } // internal for cross-file extension access
@@ -856,6 +870,7 @@ struct StoryViewerView: View {
             showCommentsOverlay: $showCommentsOverlay,
             replyingToStoryComment: $replyingToStoryComment,
             keyboard: keyboard,
+            safeBottom: windowBottomInset,
             makeStoryCommentRow: makeStoryCommentRow,
             toggleStoryCommentThread: toggleStoryCommentThread
         )
@@ -1027,15 +1042,20 @@ struct StoryViewerView: View {
     // MARK: - Computed Bottom Padding
 
     private func composerBottomPadding(geometry: GeometryProxy) -> CGFloat {
+        // `.ignoresSafeArea()` au root du viewer aplatit `geometry.safeAreaInsets.bottom`
+        // a 0 dans le `GeometryReader` interne. On retombe sur le vrai inset de la
+        // keyWindow (`windowBottomInset`) pour ne pas plaquer le composer sur le
+        // home indicator et les coins arrondis iPhone Pro (bug 2026-05-28).
+        let safeBottom = max(geometry.safeAreaInsets.bottom, windowBottomInset)
         if showTextEmojiPicker {
             // Emoji panel is showing — just need safe area below it
-            return geometry.safeAreaInsets.bottom
+            return safeBottom
         } else if keyboard.isVisible {
             // Keyboard is showing — push everything above it
             return keyboard.height
         } else {
             // Default — safe area + breathing room
-            return geometry.safeAreaInsets.bottom + 20
+            return safeBottom + 20
         }
     }
 

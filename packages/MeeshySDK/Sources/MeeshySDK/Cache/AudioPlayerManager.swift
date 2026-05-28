@@ -102,12 +102,19 @@ public class AudioPlayerManager: ObservableObject {
             }
             .store(in: &streamCancellables)
 
-        // Progress observer
-        let interval = CMTime(seconds: 0.05, preferredTimescale: 600)
+        // Progress observer — 10 Hz tick (down from 20 Hz, 2026-05-28).
+        // The streaming path mirrors the local path's perf budget: the
+        // mini-player + waveform UI cap visible at ~10 Hz anyway, and the
+        // Combine cascade through `ConversationAudioCoordinator` was the
+        // dominant CPU hit during sustained playback.
+        let interval = CMTime(seconds: Self.progressTickInterval, preferredTimescale: 600)
         streamObserver = avPlayer.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             Task { @MainActor [weak self] in
                 guard let self, self.duration > 0 else { return }
-                self.progress = time.seconds / self.duration
+                let newProgress = time.seconds / self.duration
+                if abs(newProgress - self.progress) >= Self.progressWriteThreshold {
+                    self.progress = newProgress
+                }
             }
         }
 
@@ -186,17 +193,29 @@ public class AudioPlayerManager: ObservableObject {
     }
 
     // MARK: - Progress Timer (local player only)
+    //
+    // 10 Hz tick (2026-05-28) — see `progressTickInterval` doc. The
+    // `>= 1.0` end-of-playback guard tolerates the lower poll rate
+    // because `AVAudioPlayer` invokes the delegate path at natural
+    // playback end anyway; this guard is the secondary belt for the
+    // rare cases where rate / seek pushes `currentTime` past `duration`.
+
+    fileprivate static let progressTickInterval: TimeInterval = 0.1
+    fileprivate static let progressWriteThreshold: Double = 0.002
 
     private func startLocalProgressTimer() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: Self.progressTickInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self = self, let player = self.localPlayer else { return }
-                if player.isPlaying {
-                    self.progress = player.duration > 0 ? player.currentTime / player.duration : 0
-                    if self.progress >= 1.0 {
-                        self.stop()
-                    }
+                guard player.isPlaying else { return }
+                let newProgress = player.duration > 0 ? player.currentTime / player.duration : 0
+                if newProgress >= 1.0 {
+                    self.stop()
+                    return
+                }
+                if abs(newProgress - self.progress) >= Self.progressWriteThreshold {
+                    self.progress = newProgress
                 }
             }
         }
