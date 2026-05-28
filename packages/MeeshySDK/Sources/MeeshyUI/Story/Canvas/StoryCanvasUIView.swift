@@ -503,6 +503,16 @@ public final class StoryCanvasUIView: UIView {
         // indépendant du displayLink). Bug user-reporté 2026-05-27 :
         // « la vidéo joue en boucle mais la progress bar n'avance pas ».
         if mode == .play {
+            // ALL-STOP préventif des autres mixers externes AVANT que le
+            // displayLink + setReaderContext de ce canvas démarrent leur
+            // audio. Empêche l'audio du slide précédent de jouer pendant
+            // la fenêtre `oldCanvas.deinit` → deferred Task → unregister
+            // (qui peut prendre plusieurs runloop ticks). Bug
+            // user-reporté 2026-05-27 « des audios de slide précédent
+            // jouent dans les autres slide ». Le `willStartPlaying(external:)`
+            // itère tous les externals enregistrés et les stop sauf
+            // celui passé en argument.
+            PlaybackCoordinator.shared.willStartPlaying(external: audioMixer)
             startPlayback()
         }
     }
@@ -930,17 +940,15 @@ public final class StoryCanvasUIView: UIView {
         // Stop any other reader engine before starting this one (RC4.6).
         PlaybackCoordinator.shared.willStartPlaying(external: audioMixer)
         do {
-            let scheduledFresh = try audioMixer.play(originHost: origin,
-                                                     slideKey: currentSlideKey)
-            // Default fade envelope — applied once per scheduled pass, never
-            // on an idempotent resume. Self-guards: no-op when the slide
-            // authored explicit fadeIn/fadeOut (RC4.7).
-            if scheduledFresh {
-                audioMixer.applyDefaultBackgroundEnvelope(
-                    originHost: origin,
-                    slideDuration: slide.computedTotalDuration()
-                )
-            }
+            _ = try audioMixer.play(originHost: origin,
+                                    slideKey: currentSlideKey)
+            // Default fade envelope retiré 2026-05-27 — user feedback
+            // « il y a encore des fade out et in dans le jeu des audio ».
+            // Le mixer respecte uniquement les fadeIn/fadeOut explicites
+            // posés par l'auteur via le composer (cf. `scheduleFades` pour
+            // foreground, `scheduleExplicitBackgroundFades` pour bg). Plus
+            // d'enveloppe automatique 30%→100%→5% — le son joue à volume
+            // plein dès le début et jusqu'au changement de slide.
         } catch {
             os.Logger(subsystem: "me.meeshy.app", category: "media")
                 .error("ReaderAudioMixer.play failed: \(error.localizedDescription, privacy: .public)")
