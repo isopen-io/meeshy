@@ -276,21 +276,27 @@ struct ConversationListHeaderOverlay: View {
                     )
             },
             trailing: {
-                HStack(spacing: 12) {
+                HStack(spacing: 16) {
+                    // x2 — user request 2026-05-28 « augmente x2 la taille
+                    // des icones (+) et emoji nuage ». Icône link.badge.plus
+                    // (créer lien de partage) ressemble à un nuage de
+                    // connexion ; doublée 20 → 40pt. Plus visible dans le
+                    // header à côté du titre « Meeshy ».
                     Button {
                         showShareLinkSheet = true
                     } label: {
                         Image(systemName: "link.badge.plus")
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(.system(size: 40, weight: .semibold))
                             .foregroundColor(MeeshyColors.indigo500)
                     }
                     .accessibilityLabel(String(localized: "conversation.list.create_share_link", defaultValue: "Creer un lien de partage", bundle: .main))
 
+                    // (+) Nouvelle conversation x2 : 22 → 44pt.
                     Button {
                         onNewConversation?()
                     } label: {
                         Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 22, weight: .semibold))
+                            .font(.system(size: 44, weight: .semibold))
                             .foregroundColor(MeeshyColors.indigo500)
                     }
                     .accessibilityLabel(String(localized: "conversation.list.new_conversation", defaultValue: "Nouvelle conversation", bundle: .main))
