@@ -313,9 +313,18 @@ enum StoryGestureDecisions {
 
 // MARK: - Story Composer Bar
 
-/// Bottom comment composer used by the non-owner story viewer flow.
-/// Extracted from `StoryViewerView.storyComposerBar` so the
-/// `UniversalComposerBar` wiring is its own type-metadata unit.
+/// **UNIQUE composer** du story viewer (réutilisé en mode story-reply ET
+/// en mode comment-reply). Extrait de `StoryViewerView.storyComposerBar`
+/// pour que le wiring `UniversalComposerBar` soit son propre type-metadata
+/// unit.
+///
+/// Spec user 2026-05-28 : « Il faut avoir qu'une seule zone de saisie de
+/// commentaire ». L'overlay commentaires affiche uniquement la LISTE +
+/// actions reply/like ; le composer reste celui-ci, toujours présent en bas
+/// de l'écran. Quand l'utilisateur tape « Répondre » sur un commentaire,
+/// `replyingToStoryComment` est set → une banner « Réponse à X » apparaît
+/// au-dessus de la rangée de saisie de CE composer (pas dans un second
+/// composer).
 struct StoryComposerBarView: View {
     let accentColor: String
     let storyId: String?
@@ -329,14 +338,18 @@ struct StoryComposerBarView: View {
     @Binding var emojiToInject: String
     @Binding var composerFocusTrigger: Bool
     @Binding var storyDrafts: [String: StoryDraft]
+    @Binding var replyingToStoryComment: FeedComment?
 
-    let sendComment: (_ text: String, _ effectFlags: Int?) -> Void
+    /// `parentId` non-nil quand l'utilisateur répond à un commentaire (via
+    /// `replyingToStoryComment` set par l'overlay). Sinon nil → commentaire
+    /// top-level sur la story.
+    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?) -> Void
 
     var body: some View {
         UniversalComposerBar(
             style: .dark,
             mode: .comment,
-            accentColor: accentColor,
+            accentColor: replyingToStoryComment?.authorColor ?? accentColor,
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
             onSend: { text in
@@ -346,7 +359,11 @@ struct StoryComposerBarView: View {
                 commentBlurEnabled = false
                 let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
                 let effectFlags = flags > 0 ? Int(flags) : nil
-                sendComment(text, effectFlags)
+                // Capture le parentId AVANT de clear le reply context, sinon
+                // la closure async perd la référence et envoie nil.
+                let parentId = replyingToStoryComment?.id
+                replyingToStoryComment = nil
+                sendComment(text, effectFlags, parentId)
             },
             onFocusChange: { focused in
                 if focused {
@@ -363,6 +380,53 @@ struct StoryComposerBarView: View {
                         isComposerEngaged = false
                     }
                 }
+            },
+            replyBanner: replyingToStoryComment.map { reply in
+                AnyView(
+                    HStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color(hex: reply.authorColor))
+                            .frame(width: 3, height: 30)
+
+                        VStack(alignment: .leading, spacing: 1) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrowshape.turn.up.left.fill")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundColor(Color(hex: reply.authorColor))
+                                Text(String(localized: "story.viewer.replyTo", defaultValue: "R\u{00E9}ponse \u{00E0} \(reply.author)", bundle: .main))
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(Color(hex: reply.authorColor))
+                            }
+                            Text(reply.displayContent)
+                                .font(.system(size: 11))
+                                .foregroundColor(.white.opacity(0.6))
+                                .lineLimit(1)
+                        }
+
+                        Spacer()
+
+                        Button {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                replyingToStoryComment = nil
+                            }
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.white.opacity(0.6))
+                                .frame(width: 22, height: 22)
+                                .background(Circle().fill(Color.white.opacity(0.12)))
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color(hex: reply.authorColor).opacity(0.18))
+                    .overlay(
+                        Rectangle()
+                            .fill(Color(hex: reply.authorColor).opacity(0.35))
+                            .frame(height: 0.5),
+                        alignment: .bottom
+                    )
+                )
             },
             onRequestTextEmoji: {
                 isComposerEngaged = true
@@ -1006,11 +1070,13 @@ struct StoryCardView: View {
             VStack(spacing: 0) {
                 Spacer()
 
-                // Suppressed when the comments overlay is visible — the overlay
-                // hosts its own `mode: .comment` composer with a reply banner,
-                // so a second bottom composer would just stack on top
-                // (bug 2026-05-28: double "Commenter…" field visible).
-                if !isOwnStory && !showCommentsOverlay {
+                // **Toujours visible** quand l'utilisateur n'est pas l'auteur
+                // de la story (un seul composer pour la story-reply ET la
+                // comment-reply — spec user 2026-05-28). Quand l'overlay
+                // commentaires est ouvert et qu'on tape « Répondre » sur un
+                // commentaire, la reply banner apparaît au-dessus de CETTE
+                // rangée de saisie via le binding `replyingToStoryComment`.
+                if !isOwnStory {
                     StoryComposerBarView(
                         accentColor: currentGroup?.avatarColor ?? "6366F1",
                         storyId: currentStory?.id,
@@ -1023,9 +1089,8 @@ struct StoryCardView: View {
                         emojiToInject: $emojiToInject,
                         composerFocusTrigger: $composerFocusTrigger,
                         storyDrafts: $storyDrafts,
-                        sendComment: { text, effectFlags in
-                            sendComment(text, effectFlags, nil)
-                        }
+                        replyingToStoryComment: $replyingToStoryComment,
+                        sendComment: sendComment
                     )
                         // Clears the iPhone Pro bottom-rounded-corners
                         // (~55pt radius). Root viewer uses `.ignoresSafeArea()`

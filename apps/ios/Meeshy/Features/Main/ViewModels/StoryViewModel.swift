@@ -1161,7 +1161,105 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 }
             }
             .store(in: &cancellables)
+
+        // === Real-time counter sync (user spec 2026-05-28) ===
+        // When anyone comments / reacts to a story we already have in the
+        // tray, update its denormalized counters in place. Without these
+        // sinks the sidebar `storyCommentCount` / `storyReactionCount`
+        // reset to the cached `StoryItem` value on every slide change —
+        // the « brayan a commenté Belva mais on voit comments=0 »
+        // symptom.
+
+        socialSocket.commentAdded
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] data in
+                self?.applyStoryCommentCountDelta(postId: data.postId, newCount: data.commentCount)
+            }
+            .store(in: &cancellables)
+
+        socialSocket.commentDeleted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] data in
+                guard let self else { return }
+                self.mutateStoryItem(byPostId: data.postId) { item in
+                    item.commentCount = max(0, item.commentCount - 1)
+                }
+            }
+            .store(in: &cancellables)
+
+        socialSocket.postReactionSync
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] sync in
+                guard let self else { return }
+                self.mutateStoryItem(byPostId: sync.postId) { item in
+                    item.reactionCount = sync.totalCount
+                    item.currentUserReactions = sync.userReactions
+                }
+            }
+            .store(in: &cancellables)
+
+        // Optimistic deltas — the SDK ack already mutates the post, but
+        // peers don't get a sync event; the *-added/*-removed broadcast is
+        // their only signal. We use totalCount when present, otherwise we
+        // step the counter ±1 around the user's currentUserReactions.
+        socialSocket.postReactionAdded
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.applyPostReactionDelta(event: event, delta: +1)
+            }
+            .store(in: &cancellables)
+
+        socialSocket.postReactionRemoved
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.applyPostReactionDelta(event: event, delta: -1)
+            }
+            .store(in: &cancellables)
     }
+
+    /// Apply an authoritative `commentCount` snapshot to the matching story.
+    /// Called by `comment:added` sinks — the gateway already incremented
+    /// the denormalized counter and broadcast the new total.
+    private func applyStoryCommentCountDelta(postId: String, newCount: Int) {
+        mutateStoryItem(byPostId: postId) { item in
+            item.commentCount = newCount
+        }
+    }
+
+    /// Increment or decrement the story's `reactionCount` and toggle the
+    /// current viewer's emoji presence in `currentUserReactions` if the
+    /// event was triggered by this device.
+    private func applyPostReactionDelta(event: SocketPostReactionUpdateEvent, delta: Int) {
+        let myId = AuthManager.shared.currentUser?.id
+        mutateStoryItem(byPostId: event.postId) { item in
+            item.reactionCount = max(0, item.reactionCount + delta)
+            if let myId, event.userId == myId {
+                var mine = item.currentUserReactions ?? []
+                if delta > 0 {
+                    if !mine.contains(event.emoji) { mine.append(event.emoji) }
+                } else {
+                    mine.removeAll { $0 == event.emoji }
+                }
+                item.currentUserReactions = mine
+            }
+        }
+    }
+
+    /// Locates the `StoryItem` carrying `postId` in any group and applies
+    /// `mutation` in place. Persists the cache so the next cold start
+    /// reflects the live counter. No-op when the story isn't in the tray
+    /// (e.g. the user's own post that never feeds back into `getStories`).
+    private func mutateStoryItem(byPostId postId: String, _ mutation: (inout StoryItem) -> Void) {
+        for i in storyGroups.indices {
+            guard let j = storyGroups[i].stories.firstIndex(where: { $0.id == postId }) else { continue }
+            var stories = storyGroups[i].stories
+            mutation(&stories[j])
+            storyGroups[i] = storyGroups[i].with(stories: stories)
+            persistStoryCache()
+            return
+        }
+    }
+
 
     // MARK: - Helpers
 

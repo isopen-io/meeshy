@@ -1102,13 +1102,14 @@ struct StoryCommentsOverlayView: View {
     let storyCommentLoadingReplies: Set<String>
     let isLoadingComments: Bool
     let userLang: String
-    let composerAccentColor: String
 
     @Binding var showCommentsOverlay: Bool
+    /// Réservation visuelle. Quand non-nil, le composer principal (un
+    /// `StoryComposerBarView` rendu dans la canvas « Bottom area ») affiche
+    /// sa reply banner. L'overlay s'en sert seulement pour étirer sa
+    /// `composerSpaceReservation` afin que la liste ne passe pas sous la
+    /// banner.
     @Binding var replyingToStoryComment: FeedComment?
-    @Binding var composerLanguage: String
-    @Binding var commentEffects: MessageEffects
-    @Binding var commentBlurEnabled: Bool
 
     /// Drives the dynamic max-height of the comment list — with keyboard the
     /// list expands toward the top, without it the list caps at ~50 % of the
@@ -1117,7 +1118,6 @@ struct StoryCommentsOverlayView: View {
 
     let makeStoryCommentRow: (FeedComment, String) -> StoryCommentRowView
     let toggleStoryCommentThread: (String) async -> Void
-    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?) -> Void
 
     private var topLevelComments: [FeedComment] {
         storyComments.filter { $0.parentId == nil }
@@ -1165,9 +1165,40 @@ struct StoryCommentsOverlayView: View {
                 .frame(maxHeight: listMaxHeight)
                 .background(commentsScrim)
                 .mask(listFadeMask)
-            composerStrip
+                // Réserve l'espace occupé par le composer principal rendu
+                // dans la canvas « Bottom area » (cf. `StoryComposerBarView`
+                // à canvas line ~1078). Sans cette réservation, les derniers
+                // commentaires de la liste passeraient SOUS le composer
+                // (bug user 2026-05-28 « deuxième instance de composer
+                // apparaît et fait disparaître l'autre »). On unifie sur
+                // UN SEUL composer (le principal) et on laisse la liste
+                // s'arrêter juste au-dessus.
+                .padding(.bottom, composerSpaceReservation)
         }
         .animation(.easeInOut(duration: 0.25), value: keyboard.isVisible)
+        .animation(.easeInOut(duration: 0.2), value: replyingToStoryComment?.id)
+    }
+
+    /// Hauteur réservée pour le composer principal (StoryComposerBarView)
+    /// + son safe area / sa montée clavier. La liste s'arrête au MILIEU du
+    /// composer (et non au-dessus) pour que les nouveaux commentaires
+    /// paraissent « émerger » de la zone de composition au scroll — le
+    /// composer recouvre visuellement la moitié inférieure de la liste,
+    /// et la masque-gradient `listFadeMask` cache déjà les rows arrivant
+    /// par le haut. User spec 2026-05-28 : « le composant pour remonter
+    /// les commentaires doit débuter en milieu de la zone de composition
+    /// […] on verra les commentaires sortir de cette zone ».
+    /// - clavier visible : `keyboard.height` + composer ~ 92pt (sans banner)
+    ///   ou ~140pt (avec reply banner)
+    /// - clavier caché : safe area ~34pt + 20pt breathing room + composer/2.
+    private var composerSpaceReservation: CGFloat {
+        let composerHeight: CGFloat = replyingToStoryComment != nil ? 142 : 92
+        let bottomPadding: CGFloat = keyboard.isVisible
+            ? keyboard.height
+            : 54  // estime safeAreaInsets.bottom (34 iPhone Pro) + 20pt breathing
+        // Half-composer overlap — list ends at composer.middle, the lower
+        // half is the « emerge » zone where new rows transition into view.
+        return composerHeight / 2 + bottomPadding
     }
 
     /// Scrim derrière la liste : transparent en haut, opacity ~0.55 en bas.
@@ -1260,13 +1291,12 @@ struct StoryCommentsOverlayView: View {
                         emptyPlaceholder
                     }
                 }
-                // Réserve à droite la colonne du sidebar (React / Répondre /
-                // Envoyer / Son / Comments). Sans cette marge, les rows
-                // s'étendent `Spacer(minLength: 0)` jusqu'au bord droit et
-                // passent SOUS la sidebar (Layer 8 du ZStack), qui les masque
-                // et rend le texte illisible (bug user 2026-05-28).
-                .padding(.leading, 16)
-                .padding(.trailing, 80)
+                // Padding symétrique horizontal : les rows respirent du même
+                // espace à gauche et à droite. La sidebar (Layer 8) du
+                // viewer flotte au-dessus si besoin — chaque comment row a
+                // déjà son scrim individuel qui le rend lisible même si
+                // une icône du sidebar passe par-dessus.
+                .padding(.horizontal, 16)
                 .padding(.top, 24)
                 .padding(.bottom, 12)
             }
@@ -1288,33 +1318,6 @@ struct StoryCommentsOverlayView: View {
         }
     }
 
-    // MARK: - Composer Strip
-
-    /// Bande composer ancrée au bas du viewport. Le fond est un **gradient
-    /// vertical transparent → sombre** (transparent au sommet pour fondre
-    /// vers la liste de commentaires au-dessus, opaque au pied pour anchrer
-    /// la zone d'écriture et garantir la lisibilité du placeholder
-    /// « Commenter… »). Le `.frame(maxWidth: .infinity)` force le voile à
-    /// s'étendre edge-to-edge ; sans ça, le wrapper composer prenait sa
-    /// largeur intrinsèque et la zone d'écriture paraissait « coupée » à
-    /// gauche et à droite (bug user 2026-05-28).
-    private var composerStrip: some View {
-        storyCommentComposerBar
-            .frame(maxWidth: .infinity)
-            .background(
-                LinearGradient(
-                    stops: [
-                        .init(color: .black.opacity(0.0), location: 0.0),
-                        .init(color: .black.opacity(0.45), location: 0.35),
-                        .init(color: .black.opacity(0.85), location: 1.0)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea(edges: .bottom)
-            )
-    }
-
     // MARK: - Empty State
 
     private var emptyPlaceholder: some View {
@@ -1333,84 +1336,6 @@ struct StoryCommentsOverlayView: View {
         .padding(.vertical, 32)
     }
 
-    // MARK: - Story Comment Composer
-
-    private var storyCommentComposerBar: some View {
-        let replyContext = replyingToStoryComment
-        return UniversalComposerBar(
-            style: .dark,
-            mode: .comment,
-            accentColor: replyContext?.authorColor ?? composerAccentColor,
-            selectedLanguage: composerLanguage,
-            onLanguageChange: { composerLanguage = $0 },
-            onSend: { text in
-                let effects = commentEffects
-                let blur = commentBlurEnabled
-                commentEffects = .none
-                commentBlurEnabled = false
-                let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
-                let effectFlags = flags > 0 ? Int(flags) : nil
-                let parentId = replyingToStoryComment?.id
-                replyingToStoryComment = nil
-                sendComment(text, effectFlags, parentId)
-            },
-            replyBanner: replyContext.map { reply in
-                AnyView(
-                    HStack(spacing: 8) {
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color(hex: reply.authorColor))
-                            .frame(width: 3, height: 30)
-
-                        VStack(alignment: .leading, spacing: 1) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrowshape.turn.up.left.fill")
-                                    .font(.system(size: 9, weight: .semibold))
-                                    .foregroundColor(Color(hex: reply.authorColor))
-                                Text(String(localized: "story.viewer.replyTo", defaultValue: "R\u{00E9}ponse \u{00E0} \(reply.author)", bundle: .main))
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(Color(hex: reply.authorColor))
-                            }
-                            Text(reply.displayContent)
-                                .font(.system(size: 11))
-                                .foregroundColor(.white.opacity(0.6))
-                                .lineLimit(1)
-                        }
-
-                        Spacer()
-
-                        Button {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                replyingToStoryComment = nil
-                            }
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(.white.opacity(0.6))
-                                .frame(width: 22, height: 22)
-                                .background(Circle().fill(Color.white.opacity(0.12)))
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color(hex: reply.authorColor).opacity(0.18))
-                    .overlay(
-                        Rectangle()
-                            .fill(Color(hex: reply.authorColor).opacity(0.35))
-                            .frame(height: 0.5),
-                        alignment: .bottom
-                    )
-                )
-            },
-            isBlurEnabled: $commentBlurEnabled,
-            pendingEffects: $commentEffects
-        )
-        // 28pt clears the iPhone Pro bottom rounded corners (see canvas-side
-        // composer wrapping). The sheet composer used to sit at 8pt and the
-        // (+) / send buttons landed inside the corner curvature → visually
-        // half-cut.
-        .padding(.horizontal, 28)
-        .padding(.bottom, 4)
-    }
 }
 
 extension StoryViewerView {

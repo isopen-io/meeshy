@@ -853,6 +853,14 @@ struct StoryViewerView: View {
     /// scale, or 3D rotation (bug 2026-05-28: overlay shifted left during
     /// drag / scale transitions).
     private func storyCommentsOverlay() -> StoryCommentsOverlayView {
+        // L'overlay commentaires n'embarque PLUS son propre composer. Il
+        // affiche uniquement : (1) la liste des commentaires, (2) les
+        // actions « Répondre » / « like » de chaque row qui mutent
+        // `replyingToStoryComment`. Le composer principal — toujours
+        // visible en bas via `StoryComposerBarView` rendu dans la canvas
+        // « Bottom area » — lit ce binding et affiche sa reply banner
+        // au-dessus de sa rangée de saisie. Spec user 2026-05-28 :
+        // « une seule zone de saisie de commentaire ».
         StoryCommentsOverlayView(
             storyComments: storyComments,
             storyCommentCount: storyCommentCount,
@@ -861,16 +869,11 @@ struct StoryViewerView: View {
             storyCommentLoadingReplies: storyCommentLoadingReplies,
             isLoadingComments: isLoadingComments,
             userLang: AuthManager.shared.currentUser?.preferredContentLanguages.first ?? "fr",
-            composerAccentColor: currentGroup?.avatarColor ?? "6366F1",
             showCommentsOverlay: $showCommentsOverlay,
             replyingToStoryComment: $replyingToStoryComment,
-            composerLanguage: $composerLanguage,
-            commentEffects: $commentEffects,
-            commentBlurEnabled: $commentBlurEnabled,
             keyboard: keyboard,
             makeStoryCommentRow: makeStoryCommentRow,
-            toggleStoryCommentThread: toggleStoryCommentThread,
-            sendComment: sendComment
+            toggleStoryCommentThread: toggleStoryCommentThread
         )
     }
 
