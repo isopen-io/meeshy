@@ -924,34 +924,44 @@ extension StorySlide {
     static let longTextSecondsPerWord: Double = 1.0 / 6.0
 
     public func computedTotalDuration() -> TimeInterval {
-        // 1. Background vidéo/audio prime — un media bg authore la durée
-        //    naturelle de la slide.
+        // Règle : MAX(durée bg media, durée lecture texte, 6 s statique).
+        // Un bg audio de 4 s avec un texte long doit respecter la lecture
+        // du texte ; un bg vidéo de 12 s sans texte tient ses 12 s.
+
+        // Composante 1 : background vidéo/audio (auteur de durée naturelle).
         let bgVideoDur = effects.mediaObjects?
             .first(where: { $0.isBackground && $0.kind == .video })?
             .duration
         let bgAudioDur = effects.audioPlayerObjects?
             .first(where: { $0.isBackground == true })?
             .duration
-        let mediaDur = bgVideoDur ?? bgAudioDur.map { Double($0) }
-        if let m = mediaDur, m > 0 {
-            if m >= Self.defaultStaticDuration { return m }
-            let loops = ceil(Self.defaultStaticDuration / m)
-            return loops * m
-        }
+        let rawMediaDur = bgVideoDur ?? bgAudioDur.map { Double($0) }
 
-        // 2. Texte long — cumul des mots de TOUS les textObjects.
-        //    Au-delà de 30 mots : +1 s par 6 mots supplémentaires.
+        // Composante 2 : texte long. >30 mots → 6 s + (mots-30)/6 secondes.
         let totalWords = effects.textObjects.reduce(0) { acc, text in
             acc + text.text.split(separator: " ").count
         }
-        if totalWords > Self.longTextThresholdWords {
+        let textDur: TimeInterval = {
+            guard totalWords > Self.longTextThresholdWords else {
+                return Self.defaultStaticDuration
+            }
             let extraWords = totalWords - Self.longTextThresholdWords
             return Self.defaultStaticDuration
                 + Double(extraWords) * Self.longTextSecondsPerWord
-        }
+        }()
 
-        // 3. Slide statique → 6 s strict.
-        return Self.defaultStaticDuration
+        // Cible = max(textDur, 6 s).
+        let target = max(textDur, Self.defaultStaticDuration)
+
+        // Si pas de media → cible directe.
+        guard let m = rawMediaDur, m > 0 else { return target }
+
+        // Si media ≥ cible → durée exacte du media (pas de loop forcé).
+        if m >= target { return m }
+
+        // Sinon loop le media jusqu'à atteindre la cible.
+        let loops = ceil(target / m)
+        return loops * m
     }
 
     /// Effective slide duration that completes any background looping video to a full repetition.
@@ -1423,6 +1433,17 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     public var reactionCount: Int
     public var commentCount: Int
 
+    /// Emojis the *current viewer* (logged-in user) has applied to this story.
+    /// Empty when the viewer hasn't reacted, or when the payload is from an
+    /// anonymous read. Source of truth: gateway `PostFeedService.getStories`
+    /// enrichment — see `packages/shared/types/post.ts` `currentUserReactions`.
+    public var currentUserReactions: [String]
+
+    /// True when the *current viewer* has personally reacted to this story.
+    /// Drives "is my heart active" UI affordances (sidebar, mini-status).
+    /// Distinct from `reactionCount > 0`, which counts ANY reaction by anyone.
+    public var currentUserHasReacted: Bool { !currentUserReactions.isEmpty }
+
     public var timeAgo: String {
         let seconds = Int(-createdAt.timeIntervalSinceNow)
         if seconds < 60 { return "now" }
@@ -1454,7 +1475,8 @@ public struct StoryItem: Identifiable, Codable, Sendable {
                 originalRepostOfId: String? = nil, repostAuthorName: String? = nil,
                 visibility: String? = nil, audioUrl: String? = nil,
                 isViewed: Bool = false, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil,
-                reactionCount: Int = 0, commentCount: Int = 0) {
+                reactionCount: Int = 0, commentCount: Int = 0,
+                currentUserReactions: [String] = []) {
         self.id = id; self.content = content; self.media = media; self.storyEffects = storyEffects
         self.createdAt = createdAt; self.expiresAt = expiresAt; self.repostOfId = repostOfId
         self.originalRepostOfId = originalRepostOfId
@@ -1463,6 +1485,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         self.isViewed = isViewed
         self.translations = translations; self.backgroundAudio = backgroundAudio
         self.reactionCount = reactionCount; self.commentCount = commentCount
+        self.currentUserReactions = currentUserReactions
     }
 
     /// A5 — returns `true` when the story has aged past its visibility window.
@@ -1745,7 +1768,35 @@ extension StoryItem {
     public func toRenderableSlide(preferredLanguages: [String]) -> StorySlide {
         let resolvedContent = self.resolvedContent(preferredLanguage: preferredLanguages.first)
                               ?? self.content
-        let effects = self.storyEffects ?? StoryEffects()
+        var effects = self.storyEffects ?? StoryEffects()
+
+        // Hydrate media durations depuis `self.media` (FeedMedia côté API)
+        // vers `StoryMediaObject.duration` quand celle-ci est nil. Sans
+        // ça, `StorySlide.computedTotalDuration()` ne voit pas la durée
+        // réelle du media bg pour les stories venues du backend (le
+        // composer remplit `StoryMediaObject.duration` localement mais
+        // le payload backend ne le réécrit pas — la durée vit dans
+        // `FeedMedia` côté API). Fix user-reporté 2026-05-28 « il n'y a
+        // plus le respect de la durée des média dynamique ».
+        if var medias = effects.mediaObjects, !medias.isEmpty {
+            for i in medias.indices where medias[i].duration == nil {
+                if let feed = self.media.first(where: { $0.id == medias[i].postMediaId }),
+                   let dur = feed.duration, dur > 0 {
+                    medias[i].duration = Double(dur)
+                }
+            }
+            effects.mediaObjects = medias
+        }
+        if var audios = effects.audioPlayerObjects, !audios.isEmpty {
+            for i in audios.indices where audios[i].duration == nil {
+                if let feed = self.media.first(where: { $0.id == audios[i].postMediaId }),
+                   let dur = feed.duration, dur > 0 {
+                    audios[i].duration = Float(dur)
+                }
+            }
+            effects.audioPlayerObjects = audios
+        }
+
         let legacyMediaURL: String? = effects.mediaObjects?.isEmpty == false
             ? nil
             : self.media.first?.url

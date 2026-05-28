@@ -1962,9 +1962,15 @@ public final class StoryCanvasUIView: UIView {
 
     /// RC4.5 — deterministic teardown when SwiftUI detaches the canvas view
     /// (viewer dismissed, slide swiped away) without waiting for ARC `deinit`.
+    /// On coupe TOUTES les sources audio/vidéo (background video, foreground
+    /// AVPlayers, audio mixer) pour éviter que les media de la slide quittée
+    /// continuent à jouer pendant que SwiftUI monte la suivante. Bug user
+    /// 2026-05-27 « les média semblent jouent en double ou s'entrevauche ».
     public override func willMove(toWindow newWindow: UIWindow?) {
         super.willMove(toWindow: newWindow)
         guard newWindow == nil else { return }
+        backgroundLayer.isPlaybackActive = false
+        forEachAVPlayer { $0.pause() }
         audioMixer.stop()
         releasePlaybackSessionIfNeeded()
     }

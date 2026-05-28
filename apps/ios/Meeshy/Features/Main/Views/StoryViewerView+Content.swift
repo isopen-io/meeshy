@@ -551,11 +551,6 @@ extension StoryViewerView {
         storyReactionCount = currentStory?.reactionCount ?? 0
         updateStoryDuration()
         let duration = computedStoryDuration
-        // Fade-out audio 2 s avant la fin — borné à 50 % de la slide minimum
-        // pour que la slide par défaut 6 s laisse 3 s de lecture franche avant
-        // d'amorcer la fade (sans borne inférieure, 1 - 2/6 = 33 % → fade dès
-        // 2 s, perçu comme prématuré).
-        let fadeOutThreshold = max(0.5, 1.0 - (2.0 / duration))
         // Seuil d'amorçage du prefetch de la slide suivante : 5 secondes avant
         // la fin de la slide en cours, borné à 50 % minimum. Sur une slide 6 s
         // ce ratio donne 50 % (≈ 3 s avant la fin) au lieu de 17 % (≈ 5 s avant
@@ -565,68 +560,59 @@ extension StoryViewerView {
         // 2ᵉ moitié de la slide » quelle que soit la durée.
         let nextPrefetchThreshold = max(0.5, 1.0 - (5.0 / duration))
 
-        // PROGRESS BAR = WALL-CLOCK aligné sur `computedStoryDuration` —
-        // user feedback 2026-05-27 « il suffit d'aligner la progress bar
-        // avec la timeline configurée ou par défaut de la story ».
-        // Ancien design : lisait `lastPlaybackTime` émis par le canvas →
-        // gelé tant que `contentReadyFired` du canvas était false → progress
-        // bar scintillait avec le loader overlay. Nouveau design :
-        // accumulator wall-clock indépendant du canvas, monotonic via
-        // CACurrentMediaTime. Le canvas garde sa playback (vidéo BG, audio
-        // mixer) mais ne pilote PLUS la progress bar.
+        // PROGRESS BAR = wall-clock aligné sur `computedStoryDuration`,
+        // mais gated sur `lastPlaybackTime > 0` qui ne devient non-zéro
+        // qu'après que le canvas a fait fire `contentReadyFired` et que
+        // sa playback (vidéo BG / audio mixer) a commencé. Ça garantit le
+        // requirement user 2026-05-27 « la progression ne doit pas
+        // commencer AVANT que la story ne s'affiche ou sans que le
+        // son/vidéo ne commence à jouer » — `isContentReady` est le gate
+        // visuel, `lastPlaybackTime > 0` le gate playback réel.
         //
-        // Pause = on suspend l'accumulation (shouldPauseTimer ∪ {sheets,
-        // composer engaged, long-press}). Resume = la prochaine tick
-        // reprend le delta-time à partir de l'horloge courante. Pas de
-        // gate sur isContentReady — la progress bar tourne dès l'ouverture
-        // de la slide, le loader overlay vit en parallèle si le contenu
-        // doit encore charger.
+        // Quand le canvas pause (buffering, perte de window), son tick se
+        // stoppe → `lastPlaybackTime` reste stable → on resync l'accumulator
+        // dessus pour ne pas dériver en avance. Une fois aligné, le
+        // wall-clock CACurrentMediaTime continue à 60 Hz lisse.
         let lastCommitted = StoryProgressDisplayLinkProxy.MutableDouble(0)
         let elapsedAccumulator = StoryProgressDisplayLinkProxy.MutableDouble(0)
         let lastTickTime = StoryProgressDisplayLinkProxy.MutableDouble(0)
-        // Guard one-shot pour `goToNext()` — sans ça le proxy continue de
-        // ticker entre l'appel à goToNext et le cancel via timerCancellable,
-        // chaque tick re-firant goToNext qui skip une slide de plus →
-        // l'utilisateur traverse tout le groupe en quelques frames (bug
-        // user-reporté 2026-05-27 « ça ne s'arrête jamais jusqu'à la fin
-        // des stories du groupe »). Encodé en MutableDouble 0/1 pour
-        // capture-by-reference dans la closure proxy.
+        let lastCanvasTime = StoryProgressDisplayLinkProxy.MutableDouble(0)
         let hasFiredGoToNext = StoryProgressDisplayLinkProxy.MutableDouble(0)
         let proxy = StoryProgressDisplayLinkProxy { [self] in
-            // Skip définitif après le premier goToNext — empêche le
-            // multi-fire pendant la fenêtre tick∽cancel (< 16 ms typique).
             guard hasFiredGoToNext.value == 0 else { return }
             let now = CACurrentMediaTime()
             let dt: Double = lastTickTime.value > 0 ? (now - lastTickTime.value) : 0
             lastTickTime.value = now
-            // Pause UI active OU contenu pas encore prêt : on n'accumule pas.
-            // User feedback 2026-05-27 « les vidéos sont arrêtées en plein
-            // milieu sans finir » — sans le gate `isContentReady`, le
-            // timer wall-clock démarrait dès l'ouverture du slide même si
-            // la vidéo BG mettait 1-2 s à se lancer. Résultat : la slide
-            // avançait après `duration` secondes wall-clock alors que la
-            // vidéo n'avait joué que `duration - latency`, coupant la fin.
-            // En gateant sur isContentReady on garantit que le compteur ne
-            // démarre qu'au moment où le media commence vraiment à jouer →
-            // la vidéo finit son cycle (loop ou one-shot) exactement quand
-            // la slide expire.
-            guard !shouldPauseTimer, isContentReady else { return }
-            elapsedAccumulator.value += dt
+            // Double-gate : visuel ET playback réel. lastPlaybackTime > 0
+            // signifie que le canvas a fait fire son premier displayLinkTick,
+            // ce qui n'arrive qu'après contentReadyFired + startAudioPlayback.
+            guard !shouldPauseTimer, isContentReady, lastPlaybackTime > 0 else { return }
+
+            // Resync accumulator sur la pendule canvas quand elle bouge —
+            // élimine la dérive si le canvas a pausé pendant un buffering.
+            if lastPlaybackTime != lastCanvasTime.value {
+                elapsedAccumulator.value = lastPlaybackTime
+                lastCanvasTime.value = lastPlaybackTime
+            } else {
+                // Canvas n'a pas avancé ce frame — wall-clock dt rolls on
+                // mais on n'excède jamais (lastCanvasTime + tolerance) pour
+                // éviter qu'on coure devant le media réel pendant un freeze.
+                let tolerance = 0.1  // 100ms de lead max
+                if elapsedAccumulator.value < lastCanvasTime.value + tolerance {
+                    elapsedAccumulator.value += dt
+                }
+            }
+
             let elapsed = elapsedAccumulator.value
             let raw = min(1.0, CGFloat(elapsed / duration))
             if abs(raw - CGFloat(lastCommitted.value)) >= 1.0 / 300.0 || raw >= 1.0 {
                 lastCommitted.value = Double(raw)
                 progress = raw
             }
-            // Fade-out audio retiré 2026-05-27 — user feedback « le son
-            // baisse à un moment, ne plus baisser le son quelque part ».
-            // L'auto-advance gère déjà le passage de slide ; pas besoin
-            // d'attenuer le son artificiellement avant la fin.
             if raw >= nextPrefetchThreshold && !hasFiredNextPrefetch {
                 hasFiredNextPrefetch = true
                 _ = prefetchStory(at: currentStoryIndex + 1)
             }
-            // Auto-advance à la fin de la durée configurée (computedStoryDuration).
             if elapsed >= duration {
                 hasFiredGoToNext.value = 1
                 goToNext()
