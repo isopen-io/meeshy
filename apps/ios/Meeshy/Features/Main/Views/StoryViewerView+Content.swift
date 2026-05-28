@@ -682,7 +682,12 @@ extension StoryViewerView {
             computedStoryDuration = Self.defaultSlideDuration
             return
         }
-        let renderable = story.toRenderableSlide(preferredLanguages: resolvedViewerLanguageChain)
+        // `preferredLanguages: []` — la résolution de langue n'affecte
+        // pas la durée (computedTotalDuration ne consulte plus le texte
+        // résolu depuis sa simplification single-source-of-truth).
+        // Évite la dépendance sur `resolvedViewerLanguageChain` (private
+        // dans StoryViewerView.swift, inaccessible depuis cette extension).
+        let renderable = story.toRenderableSlide(preferredLanguages: [])
         computedStoryDuration = renderable.computedTotalDuration()
     }
 
