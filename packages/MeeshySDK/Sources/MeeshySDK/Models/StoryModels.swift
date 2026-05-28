@@ -896,29 +896,36 @@ public struct StorySlide: Identifiable, Codable, Sendable {
 
 extension StorySlide {
     /// SINGLE SOURCE OF TRUTH pour la durée d'un slide story.
-    /// User spec 2026-05-27 :
-    /// - Slide statique (texte / image foreground / pas de media bg) → 6 s
-    /// - Slide avec vidéo OU audio bg → durée du media :
-    ///     - media_duration >= 6 s → on prend la durée exacte du media
-    ///     - media_duration < 6 s → on loop jusqu'à atteindre >= 6 s
-    ///       (= `ceil(6 / dur) × dur`)
+    /// User spec 2026-05-28 : « rassembler les choses dans un seul lieu,
+    /// respecter les 6s pour les statics (sauf si trop de long texte) ».
     ///
-    /// `effects.slideDuration` configuré par l'auteur PRIME sur ces règles
-    /// quand > 0 — il permet de pinner explicitement une durée (ex: slide
-    /// texte volontairement plus long que 6 s).
+    /// PRIORITÉ (calculée from scratch — IGNORE `effects.slideDuration`
+    /// persisté car les anciennes stories backend portent des valeurs
+    /// arbitraires (12 s, etc.) issues du composer qui écrivait
+    /// `slides[i].effects.slideDuration = Float(slides[i].duration)` à
+    /// chaque publish, contournant cette source de vérité) :
     ///
-    /// Pas d'extension par foreground media / audio / texte long / fadeOut
-    /// d'élément — supprimés 2026-05-27 (« on doit avoir un seul point pour
-    /// changer », « le son baisse à un moment »). Les médias foreground
-    /// loop/clip naturellement dans la fenêtre de durée du slide.
+    /// 1. Background vidéo OU audio présent → durée du media :
+    ///    - media ≥ 6 s → exact
+    ///    - media < 6 s → loop jusqu'à ≥ 6 s (`ceil(6 / dur) × dur`)
+    ///
+    /// 2. Texte long (cumul mots > 30) → 6 s + (mots − 30) / 6 secondes
+    ///    (1 s par tranche de 6 mots au-delà de 30) pour donner au
+    ///    lecteur le temps de lire.
+    ///
+    /// 3. Slide statique sans long texte → 6 s strict.
+    ///
+    /// Cette fonction est l'UNIQUE point d'autorité. Utilisée par le
+    /// canvas displayLink (auto-advance), le viewer wall-clock (progress
+    /// bar) et l'exporter (composition AVFoundation). Personne ne lit
+    /// `effects.slideDuration` directement.
     static let defaultStaticDuration: TimeInterval = 6.0
+    static let longTextThresholdWords: Int = 30
+    static let longTextSecondsPerWord: Double = 1.0 / 6.0
 
     public func computedTotalDuration() -> TimeInterval {
-        // 1. Auteur a explicitement pinné une durée → respecter
-        if let authored = effects.slideDuration, authored > 0 {
-            return TimeInterval(authored)
-        }
-        // 2. Background video ou audio → durée du media (loopé si < 6 s)
+        // 1. Background vidéo/audio prime — un media bg authore la durée
+        //    naturelle de la slide.
         let bgVideoDur = effects.mediaObjects?
             .first(where: { $0.isBackground && $0.kind == .video })?
             .duration
@@ -928,11 +935,22 @@ extension StorySlide {
         let mediaDur = bgVideoDur ?? bgAudioDur.map { Double($0) }
         if let m = mediaDur, m > 0 {
             if m >= Self.defaultStaticDuration { return m }
-            // Loop pour atteindre >= 6 s
             let loops = ceil(Self.defaultStaticDuration / m)
             return loops * m
         }
-        // 3. Slide statique → 6 s
+
+        // 2. Texte long — cumul des mots de TOUS les textObjects.
+        //    Au-delà de 30 mots : +1 s par 6 mots supplémentaires.
+        let totalWords = effects.textObjects.reduce(0) { acc, text in
+            acc + text.text.split(separator: " ").count
+        }
+        if totalWords > Self.longTextThresholdWords {
+            let extraWords = totalWords - Self.longTextThresholdWords
+            return Self.defaultStaticDuration
+                + Double(extraWords) * Self.longTextSecondsPerWord
+        }
+
+        // 3. Slide statique → 6 s strict.
         return Self.defaultStaticDuration
     }
 

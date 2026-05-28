@@ -1605,7 +1605,12 @@ public struct StoryComposerView: View {
             audioPlayerObjects: current.audioPlayerObjects,
             backgroundAudioVariants: current.backgroundAudioVariants,
             backgroundTransform: bgTransform.isIdentity ? nil : bgTransform,
-            slideDuration: Float(viewModel.currentSlideDuration)
+            // `slideDuration: nil` — la durée n'est plus stockée dans
+            // `effects`. Le viewer la recalcule from-scratch via
+            // `StorySlide.computedTotalDuration()` (cf. centralisation
+            // 2026-05-28). Évite que les vieilles valeurs persistées
+            // (12 s, etc.) écrasent le défaut 6 s pour les statics.
+            slideDuration: nil
         )
     }
 
@@ -1827,12 +1832,16 @@ public struct StoryComposerView: View {
         if idx < slides.count {
             slides[idx].effects = buildEffects()
         }
-        // Propage la duree authoritative de chaque slide vers effects.slideDuration —
-        // sinon les slides jamais activees (donc jamais passees par buildEffects)
-        // gardent un slideDuration nil et le viewer retombe sur le minimum 5s.
-        for i in slides.indices {
-            slides[i].effects.slideDuration = Float(slides[i].duration)
-        }
+        // NB : on n'écrit plus `effects.slideDuration` à chaque publish
+        // depuis la centralisation 2026-05-28. La durée est entièrement
+        // dérivée from-scratch côté lecteur par
+        // `StorySlide.computedTotalDuration()` (bg media duration loop /
+        // texte long / défaut 6s). Le champ `effects.slideDuration` reste
+        // dans le schema pour compat backend mais le viewer ne le lit
+        // plus — il est ignoré. Si un jour on veut une vraie surcharge
+        // explicite par l'auteur, ce sera un champ dédié (ex:
+        // `effects.authorPinnedDuration`) lu en priorité dans
+        // `computedTotalDuration`.
         // ThumbHash composite par slide (bg + texte + média + stickers) — sync.
         for i in slides.indices {
             let bgImage = viewModel.slideImages[slides[i].id]
