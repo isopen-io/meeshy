@@ -1434,15 +1434,15 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     public var commentCount: Int
 
     /// Emojis the *current viewer* (logged-in user) has applied to this story.
-    /// Empty when the viewer hasn't reacted, or when the payload is from an
-    /// anonymous read. Source of truth: gateway `PostFeedService.getStories`
-    /// enrichment — see `packages/shared/types/post.ts` `currentUserReactions`.
-    public var currentUserReactions: [String]
+    /// `nil` for anonymous reads or for legacy payloads / caches that predate
+    /// the enrichment. Source of truth: gateway `PostFeedService.getStories`
+    /// — see `packages/shared/types/post.ts` `currentUserReactions`.
+    public var currentUserReactions: [String]?
 
     /// True when the *current viewer* has personally reacted to this story.
     /// Drives "is my heart active" UI affordances (sidebar, mini-status).
     /// Distinct from `reactionCount > 0`, which counts ANY reaction by anyone.
-    public var currentUserHasReacted: Bool { !currentUserReactions.isEmpty }
+    public var currentUserHasReacted: Bool { !(currentUserReactions ?? []).isEmpty }
 
     public var timeAgo: String {
         let seconds = Int(-createdAt.timeIntervalSinceNow)
@@ -1476,7 +1476,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
                 visibility: String? = nil, audioUrl: String? = nil,
                 isViewed: Bool = false, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil,
                 reactionCount: Int = 0, commentCount: Int = 0,
-                currentUserReactions: [String] = []) {
+                currentUserReactions: [String]? = nil) {
         self.id = id; self.content = content; self.media = media; self.storyEffects = storyEffects
         self.createdAt = createdAt; self.expiresAt = expiresAt; self.repostOfId = repostOfId
         self.originalRepostOfId = originalRepostOfId
@@ -1609,7 +1609,8 @@ extension Array where Element == APIPost {
                                  audioUrl: post.audioUrl,
                                  isViewed: post.isViewedByMe ?? false,
                                  translations: storyTranslations,
-                                 reactionCount: totalReactions, commentCount: post.commentCount ?? 0)
+                                 reactionCount: totalReactions, commentCount: post.commentCount ?? 0,
+                                 currentUserReactions: post.currentUserReactions)
             if var existing = grouped[authorId] {
                 existing.stories.append(item); grouped[authorId] = existing
             } else {

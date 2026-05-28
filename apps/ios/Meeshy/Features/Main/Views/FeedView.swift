@@ -183,9 +183,8 @@ struct FeedView: View {
             do {
                 // A6 — hard timeout so the heart-in-flight set never leaks
                 // if SocialSocketManager hangs (no server reply, dead
-                // socket, etc.). 12s matches the typical APIClient
-                // requestTimeout while leaving slack for socket round-trip.
-                try await withTaskTimeout(seconds: 12) {
+                // socket, etc.). Budget owned by TaskTimeoutDefaults.
+                try await withTaskTimeout(seconds: TaskTimeoutDefaults.socialReaction) {
                     if wasLiked {
                         _ = try await SocialSocketManager.shared.removePostReaction(
                             postId: postId, emoji: StoryViewerView.heartEmoji

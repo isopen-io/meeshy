@@ -1432,10 +1432,10 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         let hasTransitions = !p.clipTransitions.isEmpty
         // `TimelineViewModel.init` seeds `slideDuration = 0` until
         // `bootstrap(project:)` runs, so a fresh composer would otherwise
-        // report `hasNonDefaultDuration == true` (|0 - 12| > 0.01) before
+        // report `hasNonDefaultDuration == true` (|0 - 6| > 0.01) before
         // any actual user customization. Treat the un-bootstrapped 0 as
         // the default value, not as a customization.
-        let hasNonDefaultDuration = p.slideDuration > 0 && abs(p.slideDuration - 12.0) > 0.01
+        let hasNonDefaultDuration = p.slideDuration > 0 && abs(p.slideDuration - 6.0) > 0.01
         return hasKeyframes || hasTransitions || hasNonDefaultDuration
     }
 
@@ -1606,14 +1606,14 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
 
         // Convert StoryItem → StorySlide (composer's internal type). Lossy conversion:
         // we keep the first media URL, the content and the effects ; defaults for
-        // duration (12 s default for static reposts) and order (0).
+        // duration (6 s default for static reposts) and order (0).
         var cloned = StorySlide(
             id: UUID().uuidString,
             mediaURL: story.media.first?.url,
             mediaData: nil,
             content: story.content,
             effects: story.storyEffects ?? StoryEffects(),
-            duration: 12,
+            duration: 6,
             order: 0
         )
 

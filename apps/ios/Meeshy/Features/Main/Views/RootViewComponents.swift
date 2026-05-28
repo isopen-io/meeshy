@@ -212,7 +212,7 @@ struct ThemedFeedOverlay: View {
                 postLikeDelta[postId, default: 0] += 1
             }
             do {
-                try await withTaskTimeout(seconds: 12) {
+                try await withTaskTimeout(seconds: TaskTimeoutDefaults.socialReaction) {
                     if wasLiked {
                         _ = try await SocialSocketManager.shared.removePostReaction(
                             postId: postId, emoji: StoryViewerView.heartEmoji

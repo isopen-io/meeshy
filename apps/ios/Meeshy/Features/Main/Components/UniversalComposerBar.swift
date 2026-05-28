@@ -764,14 +764,20 @@ struct UniversalComposerBar: View {
     // MARK: - Action Button: Mic / Send
     // ========================================================================
 
+    /// Always renders `sendButton` so the user sees the affordance even before
+    /// typing — composer bars that hide the send button until content lands
+    /// leave the right-side HStack slot empty and feel visually unfinished
+    /// (bug 2026-05-28: « on ne voit pas le bouton envoyer »). When idle the
+    /// button stays in-place but is faded and non-tappable; it lights up the
+    /// moment `hasContent || effectiveIsRecording` flips.
     @ViewBuilder
     var actionButton: some View {
-        if effectiveIsRecording || hasContent {
-            sendButton
-                .transition(.scale.combined(with: .opacity))
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: hasContent)
-                .animation(.spring(response: 0.25, dampingFraction: 0.5), value: sendBounce)
-        }
+        let isReady = effectiveIsRecording || hasContent
+        sendButton
+            .opacity(isReady ? 1.0 : 0.4)
+            .allowsHitTesting(isReady)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: hasContent)
+            .animation(.spring(response: 0.25, dampingFraction: 0.5), value: sendBounce)
     }
 
     // See UniversalComposerBar+Recording.swift for textInputField

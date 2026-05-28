@@ -19,6 +19,10 @@ import MeeshyUI
 struct StoryActionSidebarView: View {
     let isOwnStory: Bool
     let storyReactionCount: Int
+    /// True only when the *current viewer* has personally reacted to this
+    /// story — drives the heart's indigo active state. Decoupled from
+    /// `storyReactionCount > 0`, which is the global count (anyone).
+    let storyCurrentUserHasReacted: Bool
     /// Ticks on every reaction sent (any path). `.onChange` drives `bounceHeart()`.
     let heartBouncePulse: Int
     let quickEmojis: [String]
@@ -91,7 +95,7 @@ struct StoryActionSidebarView: View {
                 StoryActionButton(
                     icon: "heart.fill",
                     label: storyReactionCount > 0 ? "\(storyReactionCount)" : "React",
-                    isActive: showEmojiStrip || storyReactionCount > 0,
+                    isActive: showEmojiStrip || storyCurrentUserHasReacted,
                     activeColor: MeeshyColors.indigo500,
                     activeGlow: MeeshyColors.indigo500
                 ) {
@@ -461,6 +465,11 @@ struct StoryHeaderView: View {
                                     .allowsHitTesting(false)
                             }
 
+                            // Pas de bordure gradient autour de l'avatar dans la
+                            // slide : on est déjà dans la story de l'utilisateur,
+                            // l'anneau « story dispo » serait redondant (cf. user
+                            // request 2026-05-27). Le contexte `.storyViewer` suffit
+                            // déjà à masquer l'anneau via `showsStoryRing == false`.
                             MeeshyAvatar(
                                 name: group.username,
                                 context: .storyViewer,
@@ -472,23 +481,6 @@ struct StoryHeaderView: View {
                                         selectedProfileUser = .from(storyGroup: group)
                                     }
                                 ]
-                            )
-                            .overlay(
-                                Circle()
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [MeeshyColors.indigo500, MeeshyColors.indigo400],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: avatarLongPressGlow ? 3 : 2
-                                    )
-                                    .frame(width: 44, height: 44)
-                                    .shadow(
-                                        color: avatarLongPressGlow ? MeeshyColors.indigo500.opacity(0.6) : .clear,
-                                        radius: 12,
-                                        y: 0
-                                    )
                             )
                             .scaleEffect(avatarLongPressGlow ? 1.05 : 1.0)
                         }

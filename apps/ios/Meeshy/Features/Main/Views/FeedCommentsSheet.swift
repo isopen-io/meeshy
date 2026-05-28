@@ -406,7 +406,7 @@ struct CommentsSheetView: View {
             // A6 — hard timeout: protects against a hung SocialSocketManager
             // leaving the heart button locked forever (commentId stuck in
             // heartInFlightIds because defer only fires on Task completion).
-            try await withTaskTimeout(seconds: 12) {
+            try await withTaskTimeout(seconds: TaskTimeoutDefaults.socialReaction) {
                 if wasLiked {
                     _ = try await SocialSocketManager.shared.removeCommentReaction(
                         commentId: commentId, postId: post.id, emoji: StoryViewerView.heartEmoji

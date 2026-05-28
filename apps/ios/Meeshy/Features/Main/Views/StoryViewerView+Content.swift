@@ -549,6 +549,7 @@ extension StoryViewerView {
         storyCommentLoadingReplies = []
         loadStoryCommentCount()
         storyReactionCount = currentStory?.reactionCount ?? 0
+        storyCurrentUserReactions = currentStory?.currentUserReactions ?? []
         updateStoryDuration()
         let duration = computedStoryDuration
         // Seuil d'amorçage du prefetch de la slide suivante : 5 secondes avant
@@ -560,49 +561,23 @@ extension StoryViewerView {
         // 2ᵉ moitié de la slide » quelle que soit la durée.
         let nextPrefetchThreshold = max(0.5, 1.0 - (5.0 / duration))
 
-        // PROGRESS BAR = wall-clock aligné sur `computedStoryDuration`,
-        // mais gated sur `lastPlaybackTime > 0` qui ne devient non-zéro
-        // qu'après que le canvas a fait fire `contentReadyFired` et que
-        // sa playback (vidéo BG / audio mixer) a commencé. Ça garantit le
-        // requirement user 2026-05-27 « la progression ne doit pas
-        // commencer AVANT que la story ne s'affiche ou sans que le
-        // son/vidéo ne commence à jouer » — `isContentReady` est le gate
-        // visuel, `lastPlaybackTime > 0` le gate playback réel.
-        //
-        // Quand le canvas pause (buffering, perte de window), son tick se
-        // stoppe → `lastPlaybackTime` reste stable → on resync l'accumulator
-        // dessus pour ne pas dériver en avance. Une fois aligné, le
-        // wall-clock CACurrentMediaTime continue à 60 Hz lisse.
+        // PROGRESS BAR = wall-clock CACurrentMediaTime accumulator aligné sur
+        // `computedStoryDuration`. Gate `isContentReady` empêche le timer de
+        // démarrer avant que le canvas n'ait fait fire `onContentReady`
+        // (bg image / video / color settled, fg vidéos en .readyToPlay).
+        // Une fois armé, le wall-clock roule indépendamment du canvas tick
+        // — il est l'autorité de la durée slide.
         let lastCommitted = StoryProgressDisplayLinkProxy.MutableDouble(0)
         let elapsedAccumulator = StoryProgressDisplayLinkProxy.MutableDouble(0)
         let lastTickTime = StoryProgressDisplayLinkProxy.MutableDouble(0)
-        let lastCanvasTime = StoryProgressDisplayLinkProxy.MutableDouble(0)
         let hasFiredGoToNext = StoryProgressDisplayLinkProxy.MutableDouble(0)
         let proxy = StoryProgressDisplayLinkProxy { [self] in
             guard hasFiredGoToNext.value == 0 else { return }
             let now = CACurrentMediaTime()
             let dt: Double = lastTickTime.value > 0 ? (now - lastTickTime.value) : 0
             lastTickTime.value = now
-            // Double-gate : visuel ET playback réel. lastPlaybackTime > 0
-            // signifie que le canvas a fait fire son premier displayLinkTick,
-            // ce qui n'arrive qu'après contentReadyFired + startAudioPlayback.
-            guard !shouldPauseTimer, isContentReady, lastPlaybackTime > 0 else { return }
-
-            // Resync accumulator sur la pendule canvas quand elle bouge —
-            // élimine la dérive si le canvas a pausé pendant un buffering.
-            if lastPlaybackTime != lastCanvasTime.value {
-                elapsedAccumulator.value = lastPlaybackTime
-                lastCanvasTime.value = lastPlaybackTime
-            } else {
-                // Canvas n'a pas avancé ce frame — wall-clock dt rolls on
-                // mais on n'excède jamais (lastCanvasTime + tolerance) pour
-                // éviter qu'on coure devant le media réel pendant un freeze.
-                let tolerance = 0.1  // 100ms de lead max
-                if elapsedAccumulator.value < lastCanvasTime.value + tolerance {
-                    elapsedAccumulator.value += dt
-                }
-            }
-
+            guard !shouldPauseTimer, isContentReady else { return }
+            elapsedAccumulator.value += dt
             let elapsed = elapsedAccumulator.value
             let raw = min(1.0, CGFloat(elapsed / duration))
             if abs(raw - CGFloat(lastCommitted.value)) >= 1.0 / 300.0 || raw >= 1.0 {
@@ -1122,6 +1097,11 @@ struct StoryCommentsOverlayView: View {
     @Binding var commentEffects: MessageEffects
     @Binding var commentBlurEnabled: Bool
 
+    /// Drives the dynamic max-height of the comment list — with keyboard the
+    /// list expands toward the top, without it the list caps at ~50 % of the
+    /// screen so the underlying story stays manipulable above the list.
+    @ObservedObject var keyboard: KeyboardObserver
+
     let makeStoryCommentRow: (FeedComment, String) -> StoryCommentRowView
     let toggleStoryCommentThread: (String) async -> Void
     let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?) -> Void
@@ -1130,166 +1110,174 @@ struct StoryCommentsOverlayView: View {
         storyComments.filter { $0.parentId == nil }
     }
 
+    /// Instagram-style top fade — older comments dissolve toward the middle
+    /// of the screen as the user scrolls up. Bottom stays solid so the row
+    /// touching the composer is fully legible.
+    private var listFadeMask: LinearGradient {
+        LinearGradient(
+            stops: [
+                .init(color: .clear, location: 0.0),
+                .init(color: .black.opacity(0.4), location: 0.12),
+                .init(color: .black, location: 0.30),
+                .init(color: .black, location: 1.0)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
+    /// Cap the comment list to ~half the screen when the keyboard is hidden
+    /// so the rest of the story (head, mid-frame) stays visible and tappable.
+    /// When the keyboard rises the list can grow into the space the keyboard
+    /// uncovered.
+    private var listMaxHeight: CGFloat {
+        let screen = UIScreen.main.bounds.height
+        return keyboard.isVisible ? screen * 0.62 : screen * 0.42
+    }
+
+    /// Instagram-style overlay: comments float above the composer with a top
+    /// fade, the story behind stays visible AND interactable (no opaque
+    /// background catching taps). Composer alone wears a subtle glass strip so
+    /// the input is legible against any background.
     var body: some View {
         VStack(spacing: 0) {
-            // Tap-to-dismiss upper half
-            Color.black.opacity(0.3)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showCommentsOverlay = false
-                        replyingToStoryComment = nil
-                    }
-                }
-                .frame(maxHeight: .infinity)
+            Spacer(minLength: 0)
+            commentsList
+                .frame(maxHeight: listMaxHeight)
+                .mask(listFadeMask)
+            composerStrip
+        }
+        .animation(.easeInOut(duration: 0.25), value: keyboard.isVisible)
+    }
 
-            // Comment panel — bottom half
-            VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Text(String(localized: "story.viewer.commentsCount", defaultValue: "\(storyCommentCount) commentaire\(storyCommentCount > 1 ? "s" : "")", bundle: .main))
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white)
+    // MARK: - Comments List
 
-                    Spacer()
+    private var commentsList: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVStack(alignment: .leading, spacing: 8) {
+                    ForEach(topLevelComments) { comment in
+                        makeStoryCommentRow(comment, userLang)
+                            .id(comment.id)
 
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            showCommentsOverlay = false
-                            replyingToStoryComment = nil
+                        let replies = storyCommentRepliesMap[comment.id] ?? []
+                        let autoPreview = Array(replies.prefix(2))
+                        if !autoPreview.isEmpty && !storyCommentExpandedThreads.contains(comment.id) {
+                            ForEach(autoPreview) { reply in
+                                makeStoryCommentRow(reply, userLang)
+                                    .padding(.leading, 32)
+                                    .id(reply.id)
+                            }
                         }
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white.opacity(0.6))
-                            .frame(width: 28, height: 28)
-                            .background(Circle().fill(Color.white.opacity(0.1)))
+
+                        if comment.replies > 2 {
+                            Button {
+                                HapticFeedback.light()
+                                Task { await toggleStoryCommentThread(comment.id) }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: storyCommentExpandedThreads.contains(comment.id) ? "chevron.up" : "chevron.down")
+                                        .font(.system(size: 9, weight: .bold))
+                                    let remaining = max(0, comment.replies - 2)
+                                    Text(storyCommentExpandedThreads.contains(comment.id)
+                                         ? "Masquer"
+                                         : "Voir \(remaining) autre\(remaining > 1 ? "s" : "") r\u{00E9}ponse\(remaining > 1 ? "s" : "")")
+                                        .font(.system(size: 11, weight: .semibold))
+                                }
+                                .foregroundColor(Color(hex: comment.authorColor))
+                                .padding(.leading, 40)
+                                .padding(.vertical, 4)
+                            }
+                        }
+
+                        if storyCommentExpandedThreads.contains(comment.id) {
+                            if storyCommentLoadingReplies.contains(comment.id) && replies.isEmpty {
+                                HStack {
+                                    Spacer()
+                                    ProgressView().tint(.white.opacity(0.5)).scaleEffect(0.7)
+                                    Spacer()
+                                }
+                                .padding(.leading, 32)
+                                .padding(.vertical, 4)
+                            }
+
+                            ForEach(replies) { reply in
+                                makeStoryCommentRow(reply, userLang)
+                                    .padding(.leading, 32)
+                                    .id(reply.id)
+                            }
+                        }
+                    }
+
+                    if isLoadingComments {
+                        HStack {
+                            Spacer()
+                            ProgressView().tint(.white.opacity(0.6))
+                            Spacer()
+                        }
+                        .padding(.vertical, 8)
+                    }
+
+                    if topLevelComments.isEmpty && !isLoadingComments {
+                        emptyPlaceholder
                     }
                 }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-
-                Divider()
-                    .background(Color.white.opacity(0.1))
-
-                // Scrollable comments
-                ScrollViewReader { proxy in
-                    ScrollView(.vertical, showsIndicators: false) {
-                        LazyVStack(alignment: .leading, spacing: 6) {
-                            ForEach(topLevelComments) { comment in
-                                makeStoryCommentRow(comment, userLang)
-                                    .id(comment.id)
-
-                                let replies = storyCommentRepliesMap[comment.id] ?? []
-                                let autoPreview = Array(replies.prefix(2))
-                                if !autoPreview.isEmpty && !storyCommentExpandedThreads.contains(comment.id) {
-                                    ForEach(autoPreview) { reply in
-                                        makeStoryCommentRow(reply, userLang)
-                                            .padding(.leading, 32)
-                                            .id(reply.id)
-                                    }
-                                }
-
-                                if comment.replies > 2 {
-                                    Button {
-                                        HapticFeedback.light()
-                                        Task { await toggleStoryCommentThread(comment.id) }
-                                    } label: {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: storyCommentExpandedThreads.contains(comment.id) ? "chevron.up" : "chevron.down")
-                                                .font(.system(size: 9, weight: .bold))
-                                            let remaining = max(0, comment.replies - 2)
-                                            Text(storyCommentExpandedThreads.contains(comment.id)
-                                                 ? "Masquer"
-                                                 : "Voir \(remaining) autre\(remaining > 1 ? "s" : "") r\u{00E9}ponse\(remaining > 1 ? "s" : "")")
-                                                .font(.system(size: 11, weight: .semibold))
-                                        }
-                                        .foregroundColor(Color(hex: comment.authorColor))
-                                        .padding(.leading, 40)
-                                        .padding(.vertical, 4)
-                                    }
-                                }
-
-                                if storyCommentExpandedThreads.contains(comment.id) {
-                                    if storyCommentLoadingReplies.contains(comment.id) && replies.isEmpty {
-                                        HStack {
-                                            Spacer()
-                                            ProgressView().tint(.white.opacity(0.5)).scaleEffect(0.7)
-                                            Spacer()
-                                        }
-                                        .padding(.leading, 32)
-                                        .padding(.vertical, 4)
-                                    }
-
-                                    ForEach(replies) { reply in
-                                        makeStoryCommentRow(reply, userLang)
-                                            .padding(.leading, 32)
-                                            .id(reply.id)
-                                    }
-                                }
-                            }
-
-                            if isLoadingComments {
-                                HStack {
-                                    Spacer()
-                                    ProgressView()
-                                        .tint(.white.opacity(0.6))
-                                    Spacer()
-                                }
-                                .padding(.vertical, 8)
-                            }
-
-                            if topLevelComments.isEmpty && !isLoadingComments {
-                                VStack(spacing: 8) {
-                                    Image(systemName: "bubble.left.and.bubble.right")
-                                        .font(.system(size: 28))
-                                        .foregroundColor(.white.opacity(0.3))
-                                    Text(String(localized: "story.viewer.comments.empty", defaultValue: "Pas encore de commentaires", bundle: .main))
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundColor(.white.opacity(0.5))
-                                    Text(String(localized: "story.viewer.comments.beFirst", defaultValue: "Soyez le premier \u{00E0} commenter !", bundle: .main))
-                                        .font(.system(size: 11))
-                                        .foregroundColor(.white.opacity(0.3))
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 32)
-                            }
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.top, 8)
-                        .padding(.bottom, 12)
-                    }
-                    .adaptiveOnChange(of: storyComments.count) { _, _ in
-                        if let last = storyComments.last {
-                            withAnimation(.easeOut(duration: 0.3)) {
-                                proxy.scrollTo(last.id, anchor: .bottom)
-                            }
-                        }
-                    }
-                    .adaptiveOnChange(of: replyingToStoryComment?.id) { _, newId in
-                        // Bring the target into view so the user sees what they're
-                        // replying to even if it was off-screen.
-                        guard let id = newId else { return }
-                        withAnimation(.easeOut(duration: 0.3)) {
-                            proxy.scrollTo(id, anchor: .center)
-                        }
+                .padding(.top, 24)
+                .padding(.bottom, 12)
+            }
+            .adaptiveOnChange(of: storyComments.count) { _, _ in
+                if let last = storyComments.last {
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        proxy.scrollTo(last.id, anchor: .bottom)
                     }
                 }
-
-                // Inline composer for story comments (reply banner attached inside)
-                storyCommentComposerBar
             }
-            .frame(maxHeight: min(UIScreen.main.bounds.height * 0.5, 520))
+            .adaptiveOnChange(of: replyingToStoryComment?.id) { _, newId in
+                // Bring the target into view so the user sees what they're
+                // replying to even if it was off-screen.
+                guard let id = newId else { return }
+                withAnimation(.easeOut(duration: 0.3)) {
+                    proxy.scrollTo(id, anchor: .center)
+                }
+            }
+        }
+    }
+
+    // MARK: - Composer Strip
+
+    private var composerStrip: some View {
+        storyCommentComposerBar
             .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                Rectangle()
                     .fill(.ultraThinMaterial)
+                    .opacity(0.85)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(Color.black.opacity(0.6))
+                        Rectangle()
+                            .fill(Color.white.opacity(0.08))
+                            .frame(height: 0.5),
+                        alignment: .top
                     )
                     .ignoresSafeArea(edges: .bottom)
             )
+    }
+
+    // MARK: - Empty State
+
+    private var emptyPlaceholder: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 28))
+                .foregroundColor(.white.opacity(0.5))
+            Text(String(localized: "story.viewer.comments.empty", defaultValue: "Pas encore de commentaires", bundle: .main))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white.opacity(0.7))
+            Text(String(localized: "story.viewer.comments.beFirst", defaultValue: "Soyez le premier \u{00E0} commenter !", bundle: .main))
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.5))
         }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 32)
     }
 
     // MARK: - Story Comment Composer
@@ -1363,7 +1351,11 @@ struct StoryCommentsOverlayView: View {
             isBlurEnabled: $commentBlurEnabled,
             pendingEffects: $commentEffects
         )
-        .padding(.horizontal, 8)
+        // 28pt clears the iPhone Pro bottom rounded corners (see canvas-side
+        // composer wrapping). The sheet composer used to sit at 8pt and the
+        // (+) / send buttons landed inside the corner curvature → visually
+        // half-cut.
+        .padding(.horizontal, 28)
         .padding(.bottom, 4)
     }
 }
@@ -1545,6 +1537,15 @@ extension StoryViewerView {
         } catch {}
     }
 
+    /// Seeds `storyCommentCount` for the slide that just became visible.
+    ///
+    /// Uses the count baked into the story payload as the authoritative number
+    /// (the gateway feed pipeline writes it on every read), then opportunistically
+    /// reconciles with the local comments cache if one exists. **Never** hits
+    /// the network here — fetching the comment list at every slide change just
+    /// to recompute a counter was an `O(N stories)` cost on swipe and is exactly
+    /// what `loadStoryComments()` already covers when the user opens the panel
+    /// (bug 2026-05-28).
     func loadStoryCommentCount() {
         guard let story = currentStory else {
             storyCommentCount = 0
@@ -1558,27 +1559,13 @@ extension StoryViewerView {
             let cacheKey = "post-\(story.id)"
             let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
             switch cached {
-            case .fresh(let comments, _):
-                let top = comments.filter { $0.parentId == nil }
-                let total = top.count + top.reduce(0) { $0 + $1.replies }
-                if total != storyCommentCount { storyCommentCount = total }
-                return
-            case .stale(let comments, _):
+            case .fresh(let comments, _), .stale(let comments, _):
                 let top = comments.filter { $0.parentId == nil }
                 let total = top.count + top.reduce(0) { $0 + $1.replies }
                 if total != storyCommentCount { storyCommentCount = total }
             case .expired, .empty:
                 break
             }
-            do {
-                let response = try await PostService.shared.getComments(postId: story.id, cursor: nil, limit: 50)
-                if response.success {
-                    let top = response.data.filter { $0.parentId == nil }
-                    let totalReplies = top.reduce(0) { $0 + ($1.replyCount ?? 0) }
-                    let total = top.count + totalReplies
-                    if total != storyCommentCount { storyCommentCount = total }
-                }
-            } catch {}
         }
     }
 }

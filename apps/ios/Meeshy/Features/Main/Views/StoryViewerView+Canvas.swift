@@ -1019,13 +1019,15 @@ struct StoryCardView: View {
                             sendComment(text, effectFlags, nil)
                         }
                     )
-                        // 20pt clears the iPhone Pro bottom-rounded-corners
+                        // Clears the iPhone Pro bottom-rounded-corners
                         // (~55pt radius). Root viewer uses `.ignoresSafeArea()`
                         // so we can't rely on the SwiftUI safe-area inset to
                         // pad us — without this the (+) and send buttons land
                         // inside the screen's curvature and get visually clipped
                         // (bug 2026-05-28: send button half-cut off the right).
-                        .padding(.horizontal, 20)
+                        // Iterated: 14 → 20 still clipped → 28 to give the 44pt
+                        // round buttons real breathing room over the corner arc.
+                        .padding(.horizontal, 28)
                         .simultaneousGesture(
                             DragGesture(minimumDistance: 20, coordinateSpace: .local)
                                 .onEnded { value in

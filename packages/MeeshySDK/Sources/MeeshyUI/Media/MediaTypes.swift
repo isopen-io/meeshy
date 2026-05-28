@@ -67,7 +67,7 @@ public enum ComposerMode: Equatable {
 
     public var showAttachment: Bool {
         switch self {
-        case .message, .post: return true
+        case .message, .post, .comment: return true
         default: return false
         }
     }
