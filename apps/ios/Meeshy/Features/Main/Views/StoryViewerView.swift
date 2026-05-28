@@ -434,26 +434,10 @@ struct StoryViewerView: View {
             transitionPostRoom(from: previousStory, to: currentStory)
         }
         .onReceive(SocialSocketManager.shared.commentReactionAdded.receive(on: DispatchQueue.main)) { event in
-            guard showCommentsOverlay else { return }
-            guard event.postId == currentStory?.id else { return }
-            guard event.emoji == Self.heartEmoji else { return }
-            let currentUserId = AuthManager.shared.currentUser?.id
-            if event.userId == currentUserId {
-                storyCommentLikedIds.insert(event.commentId)
-            } else {
-                storyCommentLikeDelta[event.commentId] = (storyCommentLikeDelta[event.commentId] ?? 0) + 1
-            }
+            applyCommentReactionEvent(event)
         }
         .onReceive(SocialSocketManager.shared.commentReactionRemoved.receive(on: DispatchQueue.main)) { event in
-            guard showCommentsOverlay else { return }
-            guard event.postId == currentStory?.id else { return }
-            guard event.emoji == Self.heartEmoji else { return }
-            let currentUserId = AuthManager.shared.currentUser?.id
-            if event.userId == currentUserId {
-                storyCommentLikedIds.remove(event.commentId)
-            } else {
-                storyCommentLikeDelta[event.commentId] = (storyCommentLikeDelta[event.commentId] ?? 0) - 1
-            }
+            applyCommentReactionEvent(event)
         }
     }
 

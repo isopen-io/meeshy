@@ -1395,6 +1395,58 @@ extension StoryViewerView {
 
     // MARK: - Story Comment Reactions
 
+    /// Applique un événement socket `comment:reaction-added` ou
+    /// `comment:reaction-removed` en utilisant l'agrégation server-authoritative
+    /// (`event.aggregation.count` + `event.aggregation.hasCurrentUser`).
+    ///
+    /// Avant 2026-05-28, le code maintenait deux états locaux séparés —
+    /// `storyCommentLikedIds` (set d'ids likés par l'utilisateur) et
+    /// `storyCommentLikeDelta` (offset depuis le count serveur) — et appliquait
+    /// l'événement socket en patchant le delta selon `event.userId ==
+    /// currentUserId`. Ce design dérivait facilement :
+    ///   - Si `currentUserId` était nil ou mal formaté, l'événement propre était
+    ///     traité comme « autre utilisateur » → delta double-comptait.
+    ///   - Si le serveur émettait un `comment:reaction-removed` parasite (ex :
+    ///     idempotence côté gateway), le delta repassait à 0 et le count
+    ///     « disparaissait » à l'écran (bug user 2026-05-28).
+    ///
+    /// La solution : faire confiance à `event.aggregation` qui porte le state
+    /// global (count total + flag `hasCurrentUser`) après application de
+    /// l'événement. On met à jour `storyComments[i].likes` à ce count, on
+    /// réinitialise le delta à 0, et on synchronise `storyCommentLikedIds`
+    /// depuis `hasCurrentUser`. Le résultat affiché — `comment.likes + delta`
+    /// — converge vers la vérité serveur sans flicker.
+    func applyCommentReactionEvent(_ event: SocketCommentReactionUpdateEvent) {
+        guard showCommentsOverlay else { return }
+        guard event.postId == currentStory?.id else { return }
+        guard event.emoji == Self.heartEmoji else { return }
+
+        let commentId = event.commentId
+        let serverCount = event.aggregation.count
+        let userHasReacted = event.aggregation.hasCurrentUser
+
+        // Mise à jour de likedIds depuis l'agrégat (source de vérité) — peu
+        // importe que ce soit l'événement de l'utilisateur courant ou d'un
+        // autre, l'agrégat décrit l'état global.
+        if userHasReacted {
+            storyCommentLikedIds.insert(commentId)
+        } else {
+            storyCommentLikedIds.remove(commentId)
+        }
+
+        // Reset du delta et propagation du count serveur dans la liste pour
+        // que la prochaine reaction parte d'une baseline propre.
+        storyCommentLikeDelta[commentId] = 0
+        if let idx = storyComments.firstIndex(where: { $0.id == commentId }) {
+            storyComments[idx].likes = serverCount
+        } else if let parentId = storyComments.first(where: { storyCommentRepliesMap[$0.id]?.contains(where: { $0.id == commentId }) == true })?.id,
+                  var replies = storyCommentRepliesMap[parentId],
+                  let replyIdx = replies.firstIndex(where: { $0.id == commentId }) {
+            replies[replyIdx].likes = serverCount
+            storyCommentRepliesMap[parentId] = replies
+        }
+    }
+
     func toggleStoryCommentLike(_ comment: FeedComment) async {
         let id = comment.id
         guard !heartInFlightIds.contains(id) else { return }

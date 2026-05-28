@@ -1024,7 +1024,12 @@ struct StoryCardView: View {
                     loadStoryComments: loadStoryComments
                 )
                     .frame(maxHeight: sidebarMaxHeight)
-                    .padding(.trailing, 6)
+                    // 16pt clears the iPhone Pro rounded-corner radius at the
+                    // sidebar's vertical position (mid-screen). 6pt was
+                    // visibly too tight — button labels « React », « Répondre »,
+                    // « Envoyer », « Son » were clipped on the right
+                    // (bug user 2026-05-28 « les elements sortent du viewport »).
+                    .padding(.trailing, 16)
             }
             .padding(.top, topReserved)
             .padding(.bottom, bottomReserved)
