@@ -1240,7 +1240,17 @@ struct StoryCommentsOverlayView: View {
         ScrollViewReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
                 LazyVStack(alignment: .leading, spacing: 8) {
-                    ForEach(topLevelComments) { comment in
+                    ForEach(Array(topLevelComments.enumerated()), id: \.element.id) { idx, comment in
+                        // Separator between top-level comments — `Divider()`
+                        // SwiftUI natif (1pt, white opacity ~15%) au lieu de la
+                        // RoundedRectangle box autour de chaque row (user spec
+                        // 2026-05-28 : « alignés et séparés par des ---- »).
+                        if idx > 0 {
+                            Divider()
+                                .overlay(Color.white.opacity(0.18))
+                                .padding(.vertical, 4)
+                        }
+
                         makeStoryCommentRow(comment, userLang)
                             .id(comment.id)
 
@@ -1665,16 +1675,21 @@ struct StoryCommentRowView: View, Equatable {
 
     private var bubbleColor: Color { Color(hex: comment.authorColor) }
 
-    /// Fond sombre transparent garanti lisible quelle que soit la slide
-    /// derrière (vidéo claire, photo blanche, fond pastel, dark/light theme).
-    /// Pas de dérive sur la couleur d'auteur (`bubbleColor.opacity(0.18)`)
-    /// qui — superposée au scrim et à des slides clair-sur-sombre — donnait
-    /// un fond illisible et créait des artefacts visuels (bug user 2026-05-28
-    /// « les commentaires sont illisibles »). L'identité couleur de l'auteur
-    /// est conservée via le sliver vertical à gauche + la couleur du nom
-    /// dans le headerRow.
+    /// Flat row sans box : sliver vertical coloré à gauche (identité auteur)
+    /// + avatar + VStack {header, contenu, actions}. Pas de RoundedRectangle
+    /// background, pas de strokeBorder — les rows sont séparées par un
+    /// `Divider()` côté `StoryCommentsOverlayView.commentsList`
+    /// (user spec 2026-05-28 : « les commentaires ne doivent pas être dans
+    /// des box mais alignés et séparés par des ---- uniquement »).
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
+            // Sliver vertical d'accent : identité couleur de l'auteur,
+            /// extrait du background pour ne pas avoir à wrapper la row.
+            Capsule(style: .continuous)
+                .fill(bubbleColor)
+                .frame(width: 3)
+                .padding(.vertical, 6)
+
             avatar
 
             VStack(alignment: .leading, spacing: 4) {
@@ -1686,23 +1701,7 @@ struct StoryCommentRowView: View, Equatable {
             Spacer(minLength: 0)
         }
         .padding(.vertical, 8)
-        .padding(.leading, 12)
         .padding(.trailing, 12)
-        .background(
-            ZStack(alignment: .leading) {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color.black.opacity(0.55))
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 0.5)
-                // Sliver vertical d'accent : conserve l'identité couleur de
-                // l'auteur sans empoisonner toute la surface du fond.
-                Capsule(style: .continuous)
-                    .fill(bubbleColor)
-                    .frame(width: 3)
-                    .padding(.vertical, 6)
-                    .padding(.leading, 4)
-            }
-        )
     }
 
     @ViewBuilder
