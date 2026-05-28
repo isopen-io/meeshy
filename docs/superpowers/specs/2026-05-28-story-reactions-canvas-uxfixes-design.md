@@ -132,6 +132,7 @@ Supprimer le `DispatchQueue.asyncAfter(0.5) { showEmojiStrip = false }` ligne 10
 1. Reproduire en RUNNING + identifier l'hypothèse correcte
 2. Si H1 : appliquer un `CATransform3DScale` live sur le `StoryTextLayer` (sans rebuild complet) — pattern déjà utilisé pour le BG (StoryCanvasUIView.swift:2333-2347). Commit la mutation modèle à `.ended` uniquement.
 3. Si H2/H3 : retirer le batching pour les éléments texte ou aligner sur le pattern bg.
+4. Si AUCUNE des trois ne se vérifie : documenter H4 (la nouvelle hypothèse trouvée) + valider avec @jcnm avant d'écrire du code.
 
 **Fichiers touchés** :
 - `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView.swift` (handlePinch.changed + helpers texte live transform)
@@ -146,7 +147,7 @@ Supprimer le `DispatchQueue.asyncAfter(0.5) { showEmojiStrip = false }` ligne 10
 Le bouclage natif est déjà géré par `AVPlayerLooper` (`StoryBackgroundLayer.swift:612`). C'est seulement la **durée nominale de la slide** qui doit s'ajuster.
 
 **Fix** :
-- Centraliser la règle dans `StoryDurationPolicy` (nouveau fichier SDK pur, sans dépendance UIKit) :
+- Centraliser la règle dans `StoryDurationPolicy` (nouveau fichier sous `MeeshyUI/Story/Canvas/`, code pur sans dépendance UIKit — testable depuis `MeeshyUITests`) :
   ```swift
   public enum StoryDurationPolicy {
       public static let minimumLoopAccumulation: TimeInterval = 6.0
@@ -189,6 +190,7 @@ Le bouclage natif est déjà géré par `AVPlayerLooper` (`StoryBackgroundLayer.
 1. Vérifier dans `rebuildLayers()` (StoryCanvasUIView.swift:1286) que `backdropProvider` est appelé en mode `.play`. Si gaté à `.edit`, débloquer.
 2. Vérifier que `StoryGlassBackdropLayer.init()` initialise `backgroundColor = clear` (pas opaque noir).
 3. S'assurer que `setBackdropTexture()` est ré-appelé après chaque `rebuildLayers()` en `.play` mode.
+4. Si AUCUNE de ces causes ne se vérifie : documenter la nouvelle cause + valider l'angle de fix avec @jcnm avant impl.
 
 **Fichiers touchés** :
 - `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Layers/StoryGlassBackdropLayer.swift` (init + defaults)
