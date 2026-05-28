@@ -941,19 +941,45 @@ public struct AudioPlayerView: View {
         return false
     }
 
+    /// Pure routing decision used by `handlePlayTap`. Extracted as a
+    /// `nonisolated static` helper so it can be unit-tested without a
+    /// SwiftUI render lifecycle. Returns `true` iff the play tap should be
+    /// delegated to `onPlayRequest` instead of touching the locally
+    /// resolved `player`.
+    nonisolated internal static func shouldDelegateToParent(
+        usesExternalPlayer: Bool,
+        playerAttachmentId: String?,
+        bubbleAttachmentId: String
+    ) -> Bool {
+        if !usesExternalPlayer { return true }
+        return playerAttachmentId != bubbleAttachmentId
+    }
+
     private func handlePlayTap() {
         // External-engine interception: when the parent injected an
-        // `onPlayRequest` handler AND the shared engine is not currently
-        // loaded with THIS attachment, defer to the parent so it can set up
-        // the queue / active-context BEFORE asking the engine to play.
-        // Without this gate, tapping play on a bubble while the coordinator
-        // is mid-playback of a different audio would call
-        // `engine.togglePlayPause()` and either pause that other audio
-        // (busy engine) or be a no-op (idle engine) — neither of which is
-        // what the user asked for. Once the engine IS loaded with this
-        // attachment, fall through to `togglePlayPause()` so subsequent
-        // play/pause taps are instantaneous and never rebuild the queue.
-        if let onPlayRequest, player.attachmentId != attachment.id {
+        // `onPlayRequest` handler, defer to it so the parent can set up the
+        // queue / active-context BEFORE asking the engine to play. Two
+        // cases short-circuit to the parent:
+        //  1. The bubble is INACTIVE (`!usesExternalPlayer`) — its
+        //     `ownedPlayer` is a dummy that must never produce sound. Even
+        //     though `onAppear` writes `player.attachmentId = attachment.id`
+        //     on the owned dummy (so other readers can introspect it), that
+        //     local match must NOT be used to gate the routing — otherwise
+        //     the first tap on every fresh bubble bypasses the coordinator
+        //     and plays via the dummy local engine, leaving `activeContext`
+        //     nil. That broke the mini-player + background continuation
+        //     (cf. 2026-05-28 bug report).
+        //  2. The bubble is ACTIVE but the shared engine is loaded with a
+        //     DIFFERENT attachment (`player.attachmentId != attachment.id`)
+        //     — the parent must rebuild the queue around this audio.
+        // Once the external engine IS loaded with this attachment, fall
+        // through to `togglePlayPause()` so subsequent play/pause taps are
+        // instantaneous and never rebuild the queue.
+        if let onPlayRequest, Self.shouldDelegateToParent(
+            usesExternalPlayer: usesExternalPlayer,
+            playerAttachmentId: player.attachmentId,
+            bubbleAttachmentId: attachment.id
+        ) {
             onPlayRequest()
             HapticFeedback.light()
             return

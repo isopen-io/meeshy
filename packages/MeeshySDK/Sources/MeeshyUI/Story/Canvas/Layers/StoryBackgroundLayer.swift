@@ -227,7 +227,8 @@ extension StoryBackgroundLayer {
                           geometry: CanvasGeometry,
                           resolver: ((String) -> URL?)?,
                           imageCache: ImageCacheReader?,
-                          letterboxColor: UIColor? = nil) {
+                          letterboxColor: UIColor? = nil,
+                          slidePreviewThumbHash: String? = nil) {
         // FAST PATH ANTI-FLASH :
         // `configure(...)` est appelé à CHAQUE `rebuildLayers()` du canvas
         // (i.e. à chaque slide.didSet, drop d'un élément foreground, lancement
@@ -343,6 +344,15 @@ extension StoryBackgroundLayer {
         switch kind {
         case .solidColor(let color):
             backgroundColor = color.cgColor
+            // Overlay the slide-level thumbHash ON TOP of the solid color so
+            // the preview image is visible during loading AND after (until
+            // foreground media stamps a real bitmap). User request 2026-05-28:
+            // « Je veux le thumbHash ou le thumbnail de la story par dessus
+            // la couleur unie et non en dessous ». Without this, color-only
+            // stories with a published thumbHash showed only the flat colour
+            // and the preview was confined to the letterbox bands via
+            // `storyBlurredBackdrop`.
+            stampSlidePreviewThumbHashLayerIfAvailable(slidePreviewThumbHash)
         case .gradient(let colors, let direction):
             backgroundColor = nil
             let g = CAGradientLayer()
@@ -358,6 +368,8 @@ extension StoryBackgroundLayer {
             }
             addSublayer(g)
             contentLayer = g
+            // Same overlay logic as solidColor — gradient bg + thumbHash on top.
+            stampSlidePreviewThumbHashLayerIfAvailable(slidePreviewThumbHash)
         case .image(let postMediaId, let thumbHash):
             let img = CALayer()
             img.frame = bounds
@@ -543,6 +555,26 @@ extension StoryBackgroundLayer {
 
         // Transform appliqué au CONTENT — voir `applyContentTransform`.
         applyContentTransform(transform.caTransform())
+    }
+
+    /// Stamps the slide-level thumbHash as a sublayer ON TOP of the current
+    /// solid color / gradient bg. Used by the `.solidColor` and `.gradient`
+    /// cases of `configure(...)` so color-only stories that ship a published
+    /// preview show that preview rather than just the flat tint
+    /// (user spec 2026-05-28 « thumbnail par dessus la couleur unie »).
+    /// No-op when the hash is nil, empty, or fails to decode.
+    private func stampSlidePreviewThumbHashLayerIfAvailable(_ thumbHash: String?) {
+        guard let hash = thumbHash, !hash.isEmpty,
+              let placeholderImage = ThumbHashDecoder.decodeIfAvailable(hash)?.cgImage else {
+            return
+        }
+        let preview = CALayer()
+        preview.frame = bounds
+        preview.contents = placeholderImage
+        preview.contentsGravity = .resizeAspectFill
+        preview.masksToBounds = true
+        addSublayer(preview)
+        contentLayer = preview
     }
 
     /// Identité visuelle du `Kind`, utilisée par le fast-path de `configure()`

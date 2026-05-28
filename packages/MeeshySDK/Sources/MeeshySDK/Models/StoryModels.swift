@@ -1433,6 +1433,18 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     public var reactionCount: Int
     public var commentCount: Int
 
+    /// Count of forwards / external shares (Envoyer button label).
+    /// `nil` when the gateway payload pre-dates the enrichment.
+    public var shareCount: Int?
+
+    /// Count of viewers who opened this story (author-only "Vues" label).
+    /// `nil` for anonymous reads or legacy payloads.
+    public var viewCount: Int?
+
+    /// Count of reposts that pointed back to this story (Partager label).
+    /// `nil` when not yet enriched.
+    public var repostCount: Int?
+
     /// Emojis the *current viewer* (logged-in user) has applied to this story.
     /// `nil` for anonymous reads or for legacy payloads / caches that predate
     /// the enrichment. Source of truth: gateway `PostFeedService.getStories`
@@ -1476,6 +1488,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
                 visibility: String? = nil, audioUrl: String? = nil,
                 isViewed: Bool = false, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil,
                 reactionCount: Int = 0, commentCount: Int = 0,
+                shareCount: Int? = nil, viewCount: Int? = nil, repostCount: Int? = nil,
                 currentUserReactions: [String]? = nil) {
         self.id = id; self.content = content; self.media = media; self.storyEffects = storyEffects
         self.createdAt = createdAt; self.expiresAt = expiresAt; self.repostOfId = repostOfId
@@ -1485,6 +1498,7 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         self.isViewed = isViewed
         self.translations = translations; self.backgroundAudio = backgroundAudio
         self.reactionCount = reactionCount; self.commentCount = commentCount
+        self.shareCount = shareCount; self.viewCount = viewCount; self.repostCount = repostCount
         self.currentUserReactions = currentUserReactions
     }
 
@@ -1610,6 +1624,9 @@ extension Array where Element == APIPost {
                                  isViewed: post.isViewedByMe ?? false,
                                  translations: storyTranslations,
                                  reactionCount: totalReactions, commentCount: post.commentCount ?? 0,
+                                 shareCount: post.shareCount,
+                                 viewCount: post.viewCount,
+                                 repostCount: post.repostCount,
                                  currentUserReactions: post.currentUserReactions)
             if var existing = grouped[authorId] {
                 existing.stories.append(item); grouped[authorId] = existing

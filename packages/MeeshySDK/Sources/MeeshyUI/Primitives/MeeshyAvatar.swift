@@ -156,13 +156,13 @@ public enum AvatarContext: Sendable {
         }
     }
     public var badgeSize: CGFloat {
-        // storyTray — user request 2026-05-28 « augmente un peu l'icone
-        // de mood de x1.5 ». Précédent 0.85 (commité 2026-05-27 dans
-        // 3682aac76 sous label « x2 ») × 1.5 ≈ 1.275. Le mood emoji du
-        // tray passe de 49pt (= 75 × 0.65) à 73pt (= 112 × 0.65),
-        // proportion plus visible vs l'avatar 88pt.
+        // storyTray — user request 2026-05-28 « emoji mood = x0.8 du
+        // bouton (+) d'ajout de story ». Le (+) fait 40pt (cf.
+        // StoryTrayView), donc badge = 32pt fixes. S'applique au mood
+        // placeholder ET à l'emoji animé pour garder la parité visuelle
+        // entre les deux états (avant/après set du mood).
         switch self {
-        case .storyTray: return size * 1.275
+        case .storyTray: return 32
         default: return size * 0.42
         }
     }

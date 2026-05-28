@@ -328,9 +328,13 @@ private struct MyStoryButton: View {
                             onAddStatus?()
                             HapticFeedback.medium()
                         } label: {
+                            // user request 2026-05-28 — placeholder = x0.8 du
+                            // bouton (+) (40pt) → 32pt frame, glyph à 0.65×
+                            // pour garder la parité avec l'emoji mood animé
+                            // (cf. MeeshyAvatar.badgeSize .storyTray).
                             Text("\u{1F4AD}")
-                                .font(.system(size: 14))
-                                .frame(width: 20, height: 20)
+                                .font(.system(size: 20))
+                                .frame(width: 32, height: 32)
                                 .background(Circle().fill(theme.backgroundPrimary))
                         }
                         .buttonStyle(.plain)

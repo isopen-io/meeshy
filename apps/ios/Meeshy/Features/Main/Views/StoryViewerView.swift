@@ -323,9 +323,7 @@ struct StoryViewerView: View {
             slideProgress: slideProgress,
             dragProgress: dragProgress,
             isPresented: $isPresented,
-            showCommentsOverlay: $showCommentsOverlay,
-            makeStoryCard: { geometry in storyCard(geometry: geometry) },
-            makeCommentsOverlay: { storyCommentsOverlay() }
+            makeStoryCard: { geometry in storyCard(geometry: geometry) }
         )
         .background(Color.black)
         .preferredColorScheme(.dark)
@@ -911,6 +909,9 @@ struct StoryViewerView: View {
             storyReactionCount: storyReactionCount,
             storyCurrentUserHasReacted: !storyCurrentUserReactions.isEmpty,
             storyCommentCount: storyCommentCount,
+            storyShareCount: currentStory?.shareCount ?? 0,
+            storyViewCount: currentStory?.viewCount ?? 0,
+            storyRepostCount: currentStory?.repostCount ?? 0,
             isStoryCommentsEmpty: storyComments.isEmpty,
             storyHasAudibleSound: storyHasAudibleSound,
             storyHasTranslatableContent: storyHasTranslatableContent,
@@ -977,7 +978,8 @@ struct StoryViewerView: View {
             reportStory: { storyId, reportType, reason in
                 try await ReportService.shared.reportStory(storyId: storyId, reportType: reportType, reason: reason)
             },
-            composerBottomPadding: { composerBottomPadding(geometry: $0) }
+            composerBottomPadding: { composerBottomPadding(geometry: $0) },
+            makeCommentsOverlay: { storyCommentsOverlay() }
         )
     }
 
@@ -1092,24 +1094,49 @@ struct StoryViewerView: View {
     /// `storyHasAudibleSound`, so the sound button never appears for a clip that
     /// turns out silent. A probe failure (unreachable URL, decode error) is
     /// treated as "no audio" — conservative, matching the no-false-button intent.
+    /// Backstop probe when `prefetchAllMedia` couldn't pre-resolve the audio
+    /// track presence (cold start on first slide, race after a rapid skip).
+    /// Merges into `videoAudioTrackPresence` instead of replacing — the dict
+    /// is shared across stories and entries seeded by `preProbeVideoAudio`
+    /// must not be wiped on slide change (regression 2026-05-28 « bouton son
+    /// apparait après affichage »).
     @MainActor
     private func refreshVideoAudioTrackPresence() async {
         let videos = StoryAudioAvailability.videosNeedingAudioProbe(effects: currentStory?.storyEffects)
-        guard let story = currentStory, !videos.isEmpty else {
-            videoAudioTrackPresence = [:]
-            return
-        }
-        var presence: [String: Bool] = [:]
+        guard let story = currentStory, !videos.isEmpty else { return }
         for video in videos {
+            // Already resolved (pre-probed during prefetch) — keep it.
+            if videoAudioTrackPresence[video.id] != nil { continue }
             guard let url = resolveVideoURL(for: video, in: story) else {
-                presence[video.id] = false
+                videoAudioTrackPresence[video.id] = false
                 continue
             }
             let tracks = try? await AVURLAsset(url: url).loadTracks(withMediaType: .audio)
-            presence[video.id] = (tracks?.isEmpty == false)
+            if Task.isCancelled { return }
+            videoAudioTrackPresence[video.id] = (tracks?.isEmpty == false)
         }
-        guard !Task.isCancelled else { return }
-        videoAudioTrackPresence = presence
+    }
+
+    /// Probes each foreground video of `story` for an audio track and merges
+    /// the result into `videoAudioTrackPresence`. Called from
+    /// `prefetchAllMedia` (in `+Content.swift`) so the sound-button
+    /// visibility is already settled by the time the slide becomes the
+    /// active `currentStory`. Idempotent — entries that are already resolved
+    /// are skipped, so re-prefetching the same story is cheap.
+    @MainActor
+    func preProbeVideoAudio(for story: StoryItem) async {
+        let videos = StoryAudioAvailability.videosNeedingAudioProbe(effects: story.storyEffects)
+        guard !videos.isEmpty else { return }
+        for video in videos {
+            if videoAudioTrackPresence[video.id] != nil { continue }
+            guard let url = resolveVideoURL(for: video, in: story) else {
+                videoAudioTrackPresence[video.id] = false
+                continue
+            }
+            let tracks = try? await AVURLAsset(url: url).loadTracks(withMediaType: .audio)
+            if Task.isCancelled { return }
+            videoAudioTrackPresence[video.id] = (tracks?.isEmpty == false)
+        }
     }
 
     /// Resolves the playable URL for a foreground video — mirrors the order used

@@ -30,6 +30,14 @@ struct StoryActionSidebarView: View {
     let currentStory: StoryItem?
     let currentGroup: StoryGroup?
     let storyCommentCount: Int
+    /// Forward / external-share count for the Envoyer button label (user spec
+    /// 2026-05-28: non-author sees counts on Réact + Comments + Envoyer).
+    let storyShareCount: Int
+    /// Author-only viewers count for the Vues button label.
+    let storyViewCount: Int
+    /// Repost-of-this-story count for the Partager button label (non-author
+    /// + public stories only).
+    let storyRepostCount: Int
     let isStoryCommentsEmpty: Bool
     let storyHasAudibleSound: Bool
     let storyHasTranslatableContent: Bool
@@ -165,10 +173,12 @@ struct StoryActionSidebarView: View {
                 }
             }
 
-            // 3. Forward (send to someone)
+            // 3. Forward (send to someone) — label = count when > 0
+            // (user spec 2026-05-28: « Compteur des react et des commentaires,
+            // envoyer uniquement » pour le non-auteur).
             StoryActionButton(
                 icon: "paperplane.fill",
-                label: "Envoyer"
+                label: storyShareCount > 0 ? "\(storyShareCount)" : "Envoyer"
             ) {
                 HapticFeedback.light()
                 pauseTimer()
@@ -183,7 +193,7 @@ struct StoryActionSidebarView: View {
             if !isOwnStory, currentStory?.isPublic == true {
                 StoryActionButton(
                     icon: "arrow.2.squarepath",
-                    label: "Partager"
+                    label: storyRepostCount > 0 ? "\(storyRepostCount)" : "Partager"
                 ) {
                     HapticFeedback.light()
                     pauseTimer()
@@ -197,7 +207,7 @@ struct StoryActionSidebarView: View {
             } else if isOwnStory {
                 StoryActionButton(
                     icon: "eye.fill",
-                    label: "Vues"
+                    label: storyViewCount > 0 ? "\(storyViewCount)" : "Vues"
                 ) {
                     HapticFeedback.light()
                     pauseTimer()
@@ -247,7 +257,11 @@ struct StoryActionSidebarView: View {
                 )
             }
 
-            // 5. Comments toggle
+            // 5. Comments toggle — visible only when count > 0. Below the
+            // sidebar the composer pill already gives an obvious affordance
+            // to write the first comment, so an extra empty button would just
+            // be visual noise (user spec 2026-05-28: « Inutile d'afficher à
+            // 0 […] la zone d'écriture en bas permet déjà de commenter »).
             if storyCommentCount > 0 {
                 StoryActionButton(
                     icon: "bubble.left.fill",

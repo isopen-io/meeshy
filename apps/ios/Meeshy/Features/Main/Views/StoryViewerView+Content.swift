@@ -520,6 +520,11 @@ extension StoryViewerView {
     /// Internal car lu depuis `StoryViewerView.swift` (cross-file extension) :
     /// le helper `storyCard(geometry:)` passe cette valeur à `StoryCardView`
     /// pour propager la pause au canvas via `StoryReaderRepresentable.isPaused`.
+    /// Composers + pickers + transitions pause the slide timer. Comments
+    /// overlay does NOT (the user wants to read comments while the story
+    /// keeps playing/looping behind). Focus on the comment composer engages
+    /// `isComposerEngaged` which DOES pause — that's the intended trigger,
+    /// not the overlay visibility alone (user spec 2026-05-28).
     var shouldPauseTimer: Bool {
         isPaused
         || isLongPressPaused
@@ -530,7 +535,6 @@ extension StoryViewerView {
         || showTextEmojiPicker
         || showLanguageOptions
         || showFullLanguagePicker
-        || showCommentsOverlay
         || isTransitioning
         || isDismissing
     }
@@ -896,6 +900,15 @@ extension StoryViewerView {
                     _ = await imageStore.image(for: urlString)
                 }
             }
+            // Pre-probe foreground video audio tracks so `storyHasAudibleSound`
+            // resolves to its final value before the slide is rendered —
+            // without this, the sound button « apparait après quelques 100 ms »
+            // when the story carries a video with audio (user bug 2026-05-28
+            // « le calcul pour savoir si on affiche le bouton son doit se
+            // faire avant qu'on affiche la story »). The probe lives in
+            // `StoryViewerView.swift` so it can touch the private @State /
+            // private resolveVideoURL helpers directly.
+            await self.preProbeVideoAudio(for: story)
         }
     }
 
@@ -1139,15 +1152,40 @@ struct StoryCommentsOverlayView: View {
     /// fade, the story behind stays visible AND interactable (no opaque
     /// background catching taps). Composer alone wears a subtle glass strip so
     /// the input is legible against any background.
+    ///
+    /// A dark scrim gradient (transparent at top → opaque at bottom) sits
+    /// BEHIND the comments list so white-on-bright-background (video stories,
+    /// pale photos) comments stay readable without making the whole overlay
+    /// feel heavy — the gradient fades to nothing at the top so the user can
+    /// still see the story above the comments.
     var body: some View {
         VStack(spacing: 0) {
             Spacer(minLength: 0)
             commentsList
                 .frame(maxHeight: listMaxHeight)
+                .background(commentsScrim)
                 .mask(listFadeMask)
             composerStrip
         }
         .animation(.easeInOut(duration: 0.25), value: keyboard.isVisible)
+    }
+
+    /// Scrim derrière la liste : transparent en haut, opacity ~0.55 en bas.
+    /// Sans ce fond, du texte clair sur fond clair (photo / vidéo très
+    /// lumineuse) est illisible (bug 2026-05-28 « les commentaires incrustés
+    /// sont illisibles dans la vidéo »). Le mask `listFadeMask` est ensuite
+    /// appliqué PAR-DESSUS pour dissoudre simultanément le scrim et les rows
+    /// au scroll vers le haut — les deux disparaissent ensemble.
+    private var commentsScrim: LinearGradient {
+        LinearGradient(
+            stops: [
+                .init(color: .clear, location: 0.0),
+                .init(color: .black.opacity(0.25), location: 0.3),
+                .init(color: .black.opacity(0.55), location: 1.0)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
     }
 
     // MARK: - Comments List

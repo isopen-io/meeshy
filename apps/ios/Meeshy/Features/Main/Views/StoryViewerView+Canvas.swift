@@ -450,6 +450,9 @@ struct StoryCardView: View {
     let storyReactionCount: Int
     let storyCurrentUserHasReacted: Bool
     let storyCommentCount: Int
+    let storyShareCount: Int
+    let storyViewCount: Int
+    let storyRepostCount: Int
     let isStoryCommentsEmpty: Bool
     let storyHasAudibleSound: Bool
     let storyHasTranslatableContent: Bool
@@ -557,6 +560,14 @@ struct StoryCardView: View {
     let dismissViewer: () -> Void
     let reportStory: (_ storyId: String, _ reportType: String, _ reason: String?) async throws -> Void
     let composerBottomPadding: (GeometryProxy) -> CGFloat
+
+    /// Builds the Instagram-style floating comments overlay. Conditional on
+    /// `showCommentsOverlay`. Placed in the ZStack BEFORE the controls
+    /// (sidebar / header / composer) so it renders BEHIND them — user can
+    /// still tap React / Reply / Settings even with comments visible
+    /// (user spec 2026-05-28 « le layer de commentaire doit apparaitre en
+    /// dessous des layer des controles de la story »).
+    let makeCommentsOverlay: () -> StoryCommentsOverlayView
 
     private var topInset: CGFloat {
         max(geometry.safeAreaInsets.top, 59)
@@ -892,6 +903,17 @@ struct StoryCardView: View {
             .allowsHitTesting(chromeVisible)
             .animation(.spring(response: 0.32, dampingFraction: 0.78), value: chromeVisible)
 
+            // === Layer 7.5: Floating comments overlay (Instagram-style) ===
+            // Rendered BEFORE the sidebar / composer / bigReaction blocks so
+            // SwiftUI ZStack z-orders it BENEATH the story controls — user
+            // can still tap React / Reply / mute / settings while comments
+            // are visible. Background story stays interactable (tap to pause,
+            // long-press) through the overlay's transparent surface.
+            if showCommentsOverlay {
+                makeCommentsOverlay()
+                    .transition(.opacity)
+            }
+
             // === Layer 8: Right action sidebar — centered vertically, right side ===
             // The sidebar is bounded between the header strip (top) and the
             // composer strip (bottom) so its action buttons never slide
@@ -914,6 +936,9 @@ struct StoryCardView: View {
                     currentStory: currentStory,
                     currentGroup: currentGroup,
                     storyCommentCount: storyCommentCount,
+                    storyShareCount: storyShareCount,
+                    storyViewCount: storyViewCount,
+                    storyRepostCount: storyRepostCount,
                     isStoryCommentsEmpty: isStoryCommentsEmpty,
                     storyHasAudibleSound: storyHasAudibleSound,
                     storyHasTranslatableContent: storyHasTranslatableContent,
@@ -1271,20 +1296,9 @@ struct StoryViewerContentView: View {
 
     @Binding var isPresented: Bool
 
-    /// Drives the conditional render of the floating comments overlay. Kept at
-    /// this level (sibling of `makeStoryCard`) so the overlay does not inherit
-    /// the card's drag offset / scale / 3D rotation.
-    @Binding var showCommentsOverlay: Bool
-
     /// Builds the story card for the supplied geometry. The closure is owned by
     /// `StoryViewerView` so the card receives the view's `@State` bindings.
     let makeStoryCard: (GeometryProxy) -> StoryCardView
-
-    /// Builds the Instagram-style floating comments overlay. The closure is
-    /// owned by `StoryViewerView` so the overlay receives the same `@State`
-    /// bindings as the card without us re-plumbing every parameter through
-    /// this struct.
-    let makeCommentsOverlay: () -> StoryCommentsOverlayView
 
     var body: some View {
         ZStack {
@@ -1344,17 +1358,6 @@ struct StoryViewerContentView: View {
                         }
                     }
 
-                    // Floating comments overlay — sibling of `makeStoryCard`
-                    // so the card's offset / scale / 3D rotation never reach
-                    // the comments list or the sheet composer. The overlay
-                    // owns its own transparent layout (story behind stays
-                    // visible AND interactable).
-                    if showCommentsOverlay {
-                        makeCommentsOverlay()
-                            .frame(width: geometry.size.width, height: geometry.size.height)
-                            .transition(.opacity)
-                            .zIndex(50)
-                    }
                 }
             }
         }

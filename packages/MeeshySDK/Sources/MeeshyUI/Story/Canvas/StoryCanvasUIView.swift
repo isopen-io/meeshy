@@ -1236,7 +1236,11 @@ public final class StoryCanvasUIView: UIView {
             geometry: geometry,
             resolver: readerContext.postMediaURLResolver,
             imageCache: readerContext.imageCache,
-            letterboxColor: letterboxColor
+            letterboxColor: letterboxColor,
+            // Slide-level thumbHash flows through so `.solidColor` and
+            // `.gradient` cases can stamp the preview ON TOP of the flat tint
+            // (user spec 2026-05-28: thumbnail visible above color, not below).
+            slidePreviewThumbHash: slide.effects.thumbHash
         )
 
         // Items — détache les sublayers existants AVANT de les ré-attacher.
@@ -1488,7 +1492,8 @@ public final class StoryCanvasUIView: UIView {
             geometry: geometry,
             resolver: readerContext.postMediaURLResolver,
             imageCache: readerContext.imageCache,
-            letterboxColor: captureLetterbox
+            letterboxColor: captureLetterbox,
+            slidePreviewThumbHash: slide.effects.thumbHash
         )
         host.addSublayer(captureBackground)
 
