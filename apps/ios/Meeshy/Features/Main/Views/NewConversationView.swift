@@ -393,5 +393,4 @@ struct SearchedUser: Decodable, Identifiable {
 
 extension Notification.Name {
     static let navigateToConversation = Notification.Name("navigateToConversation")
-    static let handlePushNotification = Notification.Name("handlePushNotification")
 }

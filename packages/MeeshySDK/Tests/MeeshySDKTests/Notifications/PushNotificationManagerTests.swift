@@ -112,6 +112,44 @@ final class PushNotificationManagerTests: XCTestCase {
         XCTAssertTrue(received.isEmpty)
     }
 
+    // MARK: - handleNotification / clearPendingNotification (navigation intent)
+
+    /// The root views consume push-tap navigation by observing
+    /// `$pendingNotificationPayload` directly (no NotificationCenter hop), so
+    /// `handleNotification` MUST set the published payload with the parsed
+    /// conversationId intact — that published value is what survives a cold
+    /// launch and is replayed to the root view when it mounts after the splash.
+    @MainActor
+    func test_handleNotification_setsPendingPayloadWithConversationId() {
+        let (sut, defaults, _, suite) = makePushManagerSUT()
+        defer { tearDownDefaults(defaults, suiteName: suite) }
+
+        sut.handleNotification(userInfo: [
+            "type": "new_message",
+            "conversationId": "conv-42",
+            "messageId": "msg-7"
+        ])
+
+        XCTAssertEqual(sut.pendingNotificationPayload?.conversationId, "conv-42")
+        XCTAssertEqual(sut.pendingNotificationPayload?.messageId, "msg-7")
+        XCTAssertEqual(sut.pendingNotificationPayload?.type, "new_message")
+    }
+
+    /// After the root view navigates it calls `clearPendingNotification()` so
+    /// the same intent is not re-consumed by a later subscriber (e.g. an
+    /// iPhone↔iPad size-class flip that re-mounts the root view).
+    @MainActor
+    func test_clearPendingNotification_resetsPayloadToNil() {
+        let (sut, defaults, _, suite) = makePushManagerSUT()
+        defer { tearDownDefaults(defaults, suiteName: suite) }
+
+        sut.handleNotification(userInfo: ["type": "new_message", "conversationId": "conv-1"])
+        XCTAssertNotNil(sut.pendingNotificationPayload)
+
+        sut.clearPendingNotification()
+        XCTAssertNil(sut.pendingNotificationPayload)
+    }
+
     // MARK: - registerDeviceToken (P1.3 — APNs registration chain)
 
     /// Tests against an isolated `UserDefaults` suite rather than
