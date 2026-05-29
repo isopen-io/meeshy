@@ -1541,10 +1541,11 @@ extension StoryViewerView {
         let cacheKey = "post-\(story.id)"
 
         let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
-        // Stale-write guard: if the viewer swiped to another slide while the
-        // cache read was in flight, drop the result so we never paint slide A's
-        // comments onto slide B's overlay.
-        guard currentStory?.id == story.id else { return }
+        // Stale-write guard: drop the result ONLY if the viewer has CLEARLY
+        // swiped to a different known story. A transient `currentStory == nil`
+        // (group/index race during socket updates) must NOT drop the response
+        // — otherwise the overlay stays empty for a story that has comments.
+        if let now = currentStory?.id, now != story.id { return }
         switch cached {
         case .fresh(let comments, _):
             storyComments = comments
@@ -1567,9 +1568,9 @@ extension StoryViewerView {
         let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
         do {
             let response = try await PostService.shared.getComments(postId: story.id, cursor: nil, limit: 50)
-            // Stale-write guard: viewer may have swiped to another slide while
-            // the network request was in flight.
-            guard currentStory?.id == story.id else { return }
+            // Stale-write guard: drop ONLY if user has clearly swiped to a
+            // different known story (tolerate transient nil reads).
+            if let now = currentStory?.id, now != story.id { return }
             let comments = response.data.map { c -> FeedComment in
                 let translated: String? = {
                     guard let dict = c.translations else { return nil }
@@ -1623,7 +1624,7 @@ extension StoryViewerView {
         Task {
             let cacheKey = "post-\(story.id)"
             let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
-            guard currentStory?.id == story.id else { return }
+            if let now = currentStory?.id, now != story.id { return }
             switch cached {
             case .fresh(let comments, _), .stale(let comments, _):
                 let top = comments.filter { $0.parentId == nil }
