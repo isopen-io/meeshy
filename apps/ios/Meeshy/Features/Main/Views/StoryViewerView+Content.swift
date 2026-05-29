@@ -1401,7 +1401,8 @@ extension StoryViewerView {
                     content: c.content, timestamp: c.createdAt,
                     likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                     parentId: commentId,
-                    originalLanguage: c.originalLanguage, translatedContent: translated
+                    originalLanguage: c.originalLanguage, translatedContent: translated,
+                    currentUserReactions: c.currentUserReactions
                 )
             }
             storyCommentRepliesMap[commentId] = replies
@@ -1532,6 +1533,17 @@ extension StoryViewerView {
         )
     }
 
+    /// Overload pour le chemin cache : `FeedComment` (déjà mappé) porte maintenant
+    /// `currentUserReactions` (cf. `FeedModels.swift`). Permet de restaurer
+    /// `storyCommentLikedIds` au cold start sans round-trip réseau.
+    static func computeLikedIds(fromCachedComments comments: [FeedComment]) -> Set<String> {
+        return Set(
+            comments
+                .filter { $0.currentUserReactions?.contains(StoryViewerView.heartEmoji) == true }
+                .map { $0.id }
+        )
+    }
+
     func loadStoryComments() {
         guard let story = currentStory, !isLoadingComments else { return }
         Task { await loadStoryCommentsAsync(story: story) }
@@ -1549,11 +1561,13 @@ extension StoryViewerView {
         switch cached {
         case .fresh(let comments, _):
             storyComments = comments
+            storyCommentLikedIds = Self.computeLikedIds(fromCachedComments: comments)
             let topAll = comments.filter { $0.parentId == nil }
             storyCommentCount = topAll.count + topAll.reduce(0) { $0 + $1.replies }
             return
         case .stale(let comments, _):
             storyComments = comments
+            storyCommentLikedIds = Self.computeLikedIds(fromCachedComments: comments)
             let topAll = comments.filter { $0.parentId == nil }
             storyCommentCount = topAll.count + topAll.reduce(0) { $0 + $1.replies }
         case .expired, .empty:
@@ -1585,7 +1599,8 @@ extension StoryViewerView {
                     content: c.content, timestamp: c.createdAt,
                     likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                     parentId: c.parentId,
-                    originalLanguage: c.originalLanguage, translatedContent: translated
+                    originalLanguage: c.originalLanguage, translatedContent: translated,
+                    currentUserReactions: c.currentUserReactions
                 )
             }
             storyComments = comments
