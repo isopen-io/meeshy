@@ -22,17 +22,25 @@ import Foundation
 public enum StoryDurationPolicy {
 
     /// Seuil minimum (secondes) — durée totale cumulée minimum pour BG court.
-    public static let minimumLoopAccumulation: TimeInterval = 6.0
+    ///
+    /// `nonisolated` explicite pour permettre la lecture depuis n'importe quel
+    /// actor (MeeshyUI utilise `defaultIsolation: MainActor`, donc sans cette
+    /// annotation le static serait MainActor-isolé et les tests `XCTestCase`
+    /// non-MainActor ne pourraient pas y accéder synchronement).
+    nonisolated public static let minimumLoopAccumulation: TimeInterval = 6.0
 
     /// Calcule la durée effective de la slide à partir de la durée intrinsèque
     /// (texte, photo, etc.) et de la durée du média background (optionnelle).
+    ///
+    /// `nonisolated` : pure math, pas de side-effect, peut tourner sur n'importe
+    /// quel thread. Voir `StoryDurationPolicyTests` non-MainActor pour la raison.
     ///
     /// - Parameters:
     ///   - intrinsic: durée qu'aurait la slide sans la règle de loop (texte, photo, durée explicite, etc.)
     ///   - backgroundMediaDuration: durée du media BG en secondes
     ///     (`nil` si pas de média BG, `0` ou négatif si non résolu — traité comme nil)
     /// - Returns: la durée finale appliquée. Toujours `>= intrinsic`.
-    public static func adjustedDuration(
+    nonisolated public static func adjustedDuration(
         intrinsic: TimeInterval,
         backgroundMediaDuration: TimeInterval?
     ) -> TimeInterval {
