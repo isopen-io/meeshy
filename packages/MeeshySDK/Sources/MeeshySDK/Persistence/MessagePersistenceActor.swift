@@ -1245,6 +1245,23 @@ public actor MessagePersistenceActor {
                     // refresh enrichi.
                     existing.replyToJson = replyToJson ?? existing.replyToJson
                     existing.forwardedFromJson = forwardedFromJson
+                    // Backfill forwarded-from IDs (bug user 2026-05-29) :
+                    // l'optimistic row inséré localement quand le user appuie
+                    // sur "Transférer" ne portait pas ces champs (cf.
+                    // `ForwardPickerSheet` qui POST /messages avec
+                    // `forwardedFromId` mais MessageStore append l'optimistic
+                    // avant la confirmation serveur). Sans ce backfill, le
+                    // check `BubbleContentBuilder.isForwarded =
+                    // message.forwardedFromId != nil` reste false sur le
+                    // forward de l'auteur lui-même → badge "Transferred"
+                    // jamais affiché. Coalescing : on garde la valeur
+                    // existante si l'API n'en renvoie pas (payload partiel).
+                    existing.forwardedFromId = api.forwardedFromId ?? existing.forwardedFromId
+                    existing.forwardedFromConversationId = api.forwardedFromConversationId ?? existing.forwardedFromConversationId
+                    // Symétrie pour replyToId — évite que les optimistic
+                    // replies perdent leur référence au msg cité au upsert.
+                    existing.replyToId = api.replyToId ?? existing.replyToId
+                    existing.storyReplyToId = api.storyReplyToId ?? existing.storyReplyToId
                     existing.mentionedUsersJson = mentionedUsersJson
                     existing.effectFlags = effectFlags
                     existing.updatedAt = api.updatedAt ?? Date()

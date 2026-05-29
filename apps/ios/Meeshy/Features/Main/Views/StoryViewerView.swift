@@ -1004,6 +1004,16 @@ struct StoryViewerView: View {
     private func triggerStoryReaction(_ emoji: String) {
         HapticFeedback.medium()
 
+        // Full picker covers ENTIRE screen → must dismiss immediately so the
+        // big-reaction animation (`bigReactionEmoji`) is visible. Strip is a
+        // partial overlay → keep its 0.5s dismissal delay below (deliberate
+        // visual echo of the chosen emoji before the strip disappears).
+        if showFullEmojiPicker {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showFullEmojiPicker = false
+            }
+        }
+
         // Big floating emoji — dramatic 3-phase animation
         bigReactionEmoji = emoji
         bigReactionPhase = 0

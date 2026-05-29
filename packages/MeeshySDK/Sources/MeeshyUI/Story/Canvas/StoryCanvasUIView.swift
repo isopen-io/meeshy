@@ -1217,12 +1217,16 @@ public final class StoryCanvasUIView: UIView {
         // `backgroundTransform` (n'est pas une coord géométrique).
         let bgTransform: BackgroundTransform = {
             let videoFitMode = slide.effects.backgroundTransform?.videoFitMode
-            if let bg = slide.effects.mediaObjects?.first(where: { $0.isBackground }),
-               // Détection « le user a touché bg via les gestures unifiés » :
-               // si une seule valeur diverge du défaut, on prend la source
-               // mediaObjects. Sinon (toutes au défaut), on peut être sur une
-               // story legacy → fallback backgroundTransform.
-               (bg.scale != 1.0 || bg.x != 0.5 || bg.y != 0.5 || bg.rotation != 0) {
+            // Source unique : `mediaObjects[bg]` est TOUJOURS la source de
+            // vérité dès qu'il existe — y compris quand toutes ses valeurs
+            // sont aux défauts (scale=1.0, x=y=0.5, rotation=0). L'ancienne
+            // garde de transition (scale != 1.0 || x != 0.5 || ...) basculait
+            // sur `backgroundTransform` legacy quand le user dezoomait
+            // exactement à 1.0, provoquant un saut visible entre les deux
+            // sources si la legacy avait un scale différent (bug 2026-05-29).
+            // `backgroundTransform` n'est utilisée qu'en pur fallback quand
+            // `mediaObjects[bg]` n'existe pas (stories pré-unification).
+            if let bg = slide.effects.mediaObjects?.first(where: { $0.isBackground }) {
                 return BackgroundTransform(
                     scale: bg.scale,
                     offsetX: (bg.x - 0.5) * Double(geometry.renderSize.width),
@@ -1501,12 +1505,16 @@ public final class StoryCanvasUIView: UIView {
         // `backgroundTransform` (n'est pas une coord géométrique).
         let bgTransform: BackgroundTransform = {
             let videoFitMode = slide.effects.backgroundTransform?.videoFitMode
-            if let bg = slide.effects.mediaObjects?.first(where: { $0.isBackground }),
-               // Détection « le user a touché bg via les gestures unifiés » :
-               // si une seule valeur diverge du défaut, on prend la source
-               // mediaObjects. Sinon (toutes au défaut), on peut être sur une
-               // story legacy → fallback backgroundTransform.
-               (bg.scale != 1.0 || bg.x != 0.5 || bg.y != 0.5 || bg.rotation != 0) {
+            // Source unique : `mediaObjects[bg]` est TOUJOURS la source de
+            // vérité dès qu'il existe — y compris quand toutes ses valeurs
+            // sont aux défauts (scale=1.0, x=y=0.5, rotation=0). L'ancienne
+            // garde de transition (scale != 1.0 || x != 0.5 || ...) basculait
+            // sur `backgroundTransform` legacy quand le user dezoomait
+            // exactement à 1.0, provoquant un saut visible entre les deux
+            // sources si la legacy avait un scale différent (bug 2026-05-29).
+            // `backgroundTransform` n'est utilisée qu'en pur fallback quand
+            // `mediaObjects[bg]` n'existe pas (stories pré-unification).
+            if let bg = slide.effects.mediaObjects?.first(where: { $0.isBackground }) {
                 return BackgroundTransform(
                     scale: bg.scale,
                     offsetX: (bg.x - 0.5) * Double(geometry.renderSize.width),

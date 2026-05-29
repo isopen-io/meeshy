@@ -233,6 +233,11 @@ public struct FeedComment: Identifiable, Sendable {
     public var effectFlags: Int
     public var originalLanguage: String?
     public var translatedContent: String?
+    /// Emojis avec lesquels l'utilisateur courant a réagi sur ce commentaire.
+    /// Hydraté depuis `APIPostComment.currentUserReactions` au mapping.
+    /// Persisté dans le cache GRDB iOS via le Codable manuel ci-dessous —
+    /// permet de restaurer l'état "liké par moi" au cold start sans API call.
+    public var currentUserReactions: [String]?
 
     public var displayContent: String { translatedContent ?? content }
 
@@ -244,13 +249,15 @@ public struct FeedComment: Identifiable, Sendable {
                 authorAvatarURL: String? = nil,
                 content: String, timestamp: Date = Date(), likes: Int = 0, replies: Int = 0,
                 parentId: String? = nil, effectFlags: Int = 0,
-                originalLanguage: String? = nil, translatedContent: String? = nil) {
+                originalLanguage: String? = nil, translatedContent: String? = nil,
+                currentUserReactions: [String]? = nil) {
         self.id = id; self.author = author; self.authorId = authorId; self.authorUsername = authorUsername
         self.authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
         self.authorAvatarURL = authorAvatarURL; self.parentId = parentId
         self.content = content; self.timestamp = timestamp; self.likes = likes; self.replies = replies
         self.effectFlags = effectFlags
         self.originalLanguage = originalLanguage; self.translatedContent = translatedContent
+        self.currentUserReactions = currentUserReactions
     }
 }
 
@@ -259,7 +266,7 @@ extension FeedComment: CacheIdentifiable {}
 extension FeedComment: Codable {
     enum CodingKeys: String, CodingKey {
         case id, author, authorId, authorUsername, authorAvatarURL, parentId, content, timestamp, likes, replies
-        case effectFlags, originalLanguage, translatedContent
+        case effectFlags, originalLanguage, translatedContent, currentUserReactions
     }
 
     public init(from decoder: Decoder) throws {
@@ -277,6 +284,7 @@ extension FeedComment: Codable {
         effectFlags = try c.decodeIfPresent(Int.self, forKey: .effectFlags) ?? 0
         originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage)
         translatedContent = try c.decodeIfPresent(String.self, forKey: .translatedContent)
+        currentUserReactions = try c.decodeIfPresent([String].self, forKey: .currentUserReactions)
         authorColor = DynamicColorGenerator.colorForName(authorId.isEmpty ? author : authorId)
     }
 
@@ -295,6 +303,7 @@ extension FeedComment: Codable {
         try c.encode(effectFlags, forKey: .effectFlags)
         try c.encodeIfPresent(originalLanguage, forKey: .originalLanguage)
         try c.encodeIfPresent(translatedContent, forKey: .translatedContent)
+        try c.encodeIfPresent(currentUserReactions, forKey: .currentUserReactions)
     }
 }
 
