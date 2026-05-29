@@ -1455,7 +1455,11 @@ extension StoryViewerView {
     /// depuis `hasCurrentUser`. Le résultat affiché — `comment.likes + delta`
     /// — converge vers la vérité serveur sans flicker.
     func applyCommentReactionEvent(_ event: SocketCommentReactionUpdateEvent) {
-        guard showCommentsOverlay else { return }
+        // 2026-05-29 : on ne gate plus sur `showCommentsOverlay` — l'état doit
+        // rester aligné sur le serveur même quand l'overlay est fermé.
+        // Si `storyComments` est vide (overlay jamais ouvert), `firstIndex(where:)`
+        // plus bas retourne nil et on skip silencieusement ; on se ré-aligne
+        // au prochain load via `computeLikedIds(fromCachedComments:)` (Task 3).
         guard event.postId == currentStory?.id else { return }
         guard event.emoji == Self.heartEmoji else { return }
 
