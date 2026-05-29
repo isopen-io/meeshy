@@ -315,25 +315,22 @@ public final class StoryCanvasUIView: UIView {
     private var baseScale: Double = 1.0
     private var baseRotation: Double = 0.0
 
-    /// Cache the id of the background media (resolved in `slide.didSet`). Used
-    /// by `handlePan` to branch into the live-drag path for the bg without
-    /// going through `updatePosition` (which would clamp + commit immediately).
+    /// Cache the id of the background media (resolved in `slide.didSet`).
+    /// Used by handlers to skip foreground-only behaviors (snap guides,
+    /// bring-to-front) and by `updateManipulatedItemLayer` to route the
+    /// live CALayer transform towards `backgroundLayer` instead of looking
+    /// for the layer in `itemsContainer` (where the bg never lives).
+    ///
+    /// Unification BG/FG (2026-05-29) : depuis le refactor, le bg media
+    /// utilise les MÊMES fonctions de gesture que les items foreground
+    /// (`updateScale`/`updatePosition`/`updateRotation` mutent
+    /// `mediaObjects[bg]`). La seule différence est le routing de l'apply
+    /// CALayer live qui passe par `backgroundLayer.applyContentTransform`.
     private var backgroundMediaObjectId: String?
-    /// Drag-start snapshot of the background transform (path α — model
-    /// untouched during gesture, committed at `.ended`).
-    private var dragStartBgScale: Double = 1.0
-    private var dragStartBgOffsetX: Double = 0
-    private var dragStartBgOffsetY: Double = 0
-    private var dragStartBgRotation: Double = 0
-    private var dragStartBgFitMode: String?
-    /// Live transform applied during the current bg drag, committed to the
-    /// slide model on `.ended` (along with `onBackgroundTransformChanged`).
-    private var liveBackgroundTransformDuringDrag: BackgroundTransform?
 
-    /// Fires when the background transform is committed at gesture end (path
-    /// α). Parent composer uses this to mirror the value into its viewModel
-    /// cache so the persisted `slide.effects.backgroundTransform` round-trips
-    /// through save/restore.
+    /// Fires when the background transform is committed (currently only by
+    /// the double-tap fit mode cycle, which is bg-specific). Parent composer
+    /// uses this to mirror the value into its viewModel cache.
     public var onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)?
 
     /// `true` quand le composer affiche son `DrawingOverlayView` (PKCanvasView
@@ -1212,13 +1209,37 @@ public final class StoryCanvasUIView: UIView {
         // Background layer
         let bgKind = StoryRenderer.renderBackground(slide: slide,
                                                     languages: readerContext.preferredLanguages)
+        // BG transform : priorité à `mediaObjects[bg]` (source de vérité
+        // unifiée avec les items FG depuis 2026-05-29). Fallback sur le
+        // champ legacy `slide.effects.backgroundTransform.scale/offset/rotation`
+        // pour les stories publiées AVANT l'unification (les valeurs y sont
+        // gelées mais valides). `videoFitMode` reste toujours sur
+        // `backgroundTransform` (n'est pas une coord géométrique).
         let bgTransform: BackgroundTransform = {
-            guard let t = slide.effects.backgroundTransform else { return .identity }
-            return BackgroundTransform(scale: Double(t.scale ?? 1),
-                                       offsetX: Double(t.offsetX ?? 0),
-                                       offsetY: Double(t.offsetY ?? 0),
-                                       rotation: t.rotation ?? 0,
-                                       videoFitMode: t.videoFitMode)
+            let videoFitMode = slide.effects.backgroundTransform?.videoFitMode
+            if let bg = slide.effects.mediaObjects?.first(where: { $0.isBackground }),
+               // Détection « le user a touché bg via les gestures unifiés » :
+               // si une seule valeur diverge du défaut, on prend la source
+               // mediaObjects. Sinon (toutes au défaut), on peut être sur une
+               // story legacy → fallback backgroundTransform.
+               (bg.scale != 1.0 || bg.x != 0.5 || bg.y != 0.5 || bg.rotation != 0) {
+                return BackgroundTransform(
+                    scale: bg.scale,
+                    offsetX: (bg.x - 0.5) * Double(geometry.renderSize.width),
+                    offsetY: (bg.y - 0.5) * Double(geometry.renderSize.height),
+                    rotation: bg.rotation,
+                    videoFitMode: videoFitMode
+                )
+            }
+            if let t = slide.effects.backgroundTransform {
+                return BackgroundTransform(scale: Double(t.scale ?? 1),
+                                           offsetX: Double(t.offsetX ?? 0),
+                                           offsetY: Double(t.offsetY ?? 0),
+                                           rotation: t.rotation ?? 0,
+                                           videoFitMode: videoFitMode)
+            }
+            return BackgroundTransform(scale: 1, offsetX: 0, offsetY: 0,
+                                       rotation: 0, videoFitMode: videoFitMode)
         }()
         backgroundLayer.frame = CGRect(origin: .zero, size: geometry.renderSize)
         // Letterbox fill : pour les vidéos/images bg en aspect (paysage), les
@@ -1472,13 +1493,37 @@ public final class StoryCanvasUIView: UIView {
 
         let bgKind = StoryRenderer.renderBackground(slide: slide,
                                                     languages: readerContext.preferredLanguages)
+        // BG transform : priorité à `mediaObjects[bg]` (source de vérité
+        // unifiée avec les items FG depuis 2026-05-29). Fallback sur le
+        // champ legacy `slide.effects.backgroundTransform.scale/offset/rotation`
+        // pour les stories publiées AVANT l'unification (les valeurs y sont
+        // gelées mais valides). `videoFitMode` reste toujours sur
+        // `backgroundTransform` (n'est pas une coord géométrique).
         let bgTransform: BackgroundTransform = {
-            guard let t = slide.effects.backgroundTransform else { return .identity }
-            return BackgroundTransform(scale: Double(t.scale ?? 1),
-                                       offsetX: Double(t.offsetX ?? 0),
-                                       offsetY: Double(t.offsetY ?? 0),
-                                       rotation: t.rotation ?? 0,
-                                       videoFitMode: t.videoFitMode)
+            let videoFitMode = slide.effects.backgroundTransform?.videoFitMode
+            if let bg = slide.effects.mediaObjects?.first(where: { $0.isBackground }),
+               // Détection « le user a touché bg via les gestures unifiés » :
+               // si une seule valeur diverge du défaut, on prend la source
+               // mediaObjects. Sinon (toutes au défaut), on peut être sur une
+               // story legacy → fallback backgroundTransform.
+               (bg.scale != 1.0 || bg.x != 0.5 || bg.y != 0.5 || bg.rotation != 0) {
+                return BackgroundTransform(
+                    scale: bg.scale,
+                    offsetX: (bg.x - 0.5) * Double(geometry.renderSize.width),
+                    offsetY: (bg.y - 0.5) * Double(geometry.renderSize.height),
+                    rotation: bg.rotation,
+                    videoFitMode: videoFitMode
+                )
+            }
+            if let t = slide.effects.backgroundTransform {
+                return BackgroundTransform(scale: Double(t.scale ?? 1),
+                                           offsetX: Double(t.offsetX ?? 0),
+                                           offsetY: Double(t.offsetY ?? 0),
+                                           rotation: t.rotation ?? 0,
+                                           videoFitMode: videoFitMode)
+            }
+            return BackgroundTransform(scale: 1, offsetX: 0, offsetY: 0,
+                                       rotation: 0, videoFitMode: videoFitMode)
         }()
         let captureBackground = StoryBackgroundLayer()
         captureBackground.frame = CGRect(origin: .zero, size: renderSize)
@@ -2303,82 +2348,33 @@ public final class StoryCanvasUIView: UIView {
             // Routage par couche : `.canvas` absorbe (recognizer cancelled),
             // `.background` cible le bg media, `.foreground` hit-teste les fg
             // (avec fallback bg si le doigt ne touche aucun foreground).
+            //
+            // Unification BG ↔ FG (2026-05-29) : le bg media est dans
+            // `mediaObjects[]` avec `isBackground: true`, donc `currentScale`
+            // / `updateScale` fonctionnent déjà pour lui. On utilise donc
+            // EXACTEMENT le même flow que les items foreground (mute
+            // mediaObjects[bg].scale via updateScale, le mini-preview et le
+            // reader voient le changement live via @Binding/slide.didSet,
+            // updateManipulatedItemLayer route le bg vers backgroundLayer
+            // pour le rendu live sur le canvas principal).
             guard let id = resolveManipulationTarget(at: recognizer.location(in: self)) else {
                 recognizer.state = .cancelled
                 return
             }
             manipulatedItemId = id
-
-            // Background pinch (path α — same architecture as handlePan):
-            // snapshot the bg transform at .began, live-update the CALayer
-            // transform during .changed without mutating the model, commit
-            // backgroundTransform at .ended. The bg is NOT in mediaObjects
-            // routing — `updateScale` would mute `mediaObjects[bg].scale`
-            // (visible on mini-preview only) but the canvas itself reads
-            // `slide.effects.backgroundTransform.scale` via the bgTransform
-            // converter → user-perceived bug "pinch bg reacts on mini but
-            // not on main canvas" (report 2026-05-27).
-            if id == backgroundMediaObjectId {
-                let current = slide.effects.backgroundTransform
-                dragStartBgScale = Double(current?.scale ?? 1)
-                dragStartBgOffsetX = Double(current?.offsetX ?? 0)
-                dragStartBgOffsetY = Double(current?.offsetY ?? 0)
-                dragStartBgRotation = current?.rotation ?? 0
-                dragStartBgFitMode = current?.videoFitMode
-                liveBackgroundTransformDuringDrag = nil
-            } else {
-                baseScale = currentScale(forId: id) ?? 1.0
+            baseScale = currentScale(forId: id) ?? 1.0
+            if id != backgroundMediaObjectId {
                 bringForegroundToFront(id: id)
             }
         case .changed:
             guard let id = manipulatedItemId else { return }
-            if id == backgroundMediaObjectId {
-                let newScale = max(0.3, min(4.0, dragStartBgScale * Double(recognizer.scale)))
-                let live = BackgroundTransform(
-                    scale: newScale,
-                    offsetX: dragStartBgOffsetX,
-                    offsetY: dragStartBgOffsetY,
-                    rotation: dragStartBgRotation,
-                    videoFitMode: dragStartBgFitMode
-                )
-                backgroundLayer.applyContentTransform(live.caTransform())
-                liveBackgroundTransformDuringDrag = live
-                return
-            }
             let newScale = max(0.3, min(4.0, baseScale * Double(recognizer.scale)))
             slide = updateScale(slideId: id, scale: newScale)
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
-            let wasBackgroundDrag = (manipulatedItemId == backgroundMediaObjectId)
             manipulatedItemId = nil
-            if wasBackgroundDrag, let live = liveBackgroundTransformDuringDrag {
-                // Sync le MODÈLE du layer AVANT slide = updated : le rebuild
-                // déclenché par slide.didSet appelle configure() qui détecte
-                // alors `nothingChanged` (transform3D == bgTransform) et skip
-                // la reconfiguration des contentLayer frames — sans ça le
-                // chemin reuse-content reset `contentLayer.frame = bounds` sur
-                // un sublayer encore transformé, produisant le glitch visuel
-                // "bg grossit puis ne se place pas correctement" reporté
-                // 2026-05-27.
-                backgroundLayer.commitLiveTransform(live)
-
-                var updated = slide
-                let persisted = StoryBackgroundTransform(
-                    scale: live.scale != 1.0 ? CGFloat(live.scale) : nil,
-                    offsetX: live.offsetX != 0 ? CGFloat(live.offsetX) : nil,
-                    offsetY: live.offsetY != 0 ? CGFloat(live.offsetY) : nil,
-                    rotation: live.rotation != 0 ? live.rotation : nil,
-                    videoFitMode: live.videoFitMode
-                )
-                updated.effects.backgroundTransform = persisted.isIdentity ? nil : persisted
-                slide = updated
-                onItemModified?(slide)
-                onBackgroundTransformChanged?(persisted)
-                liveBackgroundTransformDuringDrag = nil
-            } else {
-                slideContentRevision &+= 1
-                rebuildLayers()
-            }
+            slideContentRevision &+= 1
+            rebuildLayers()
         default:
             break
         }
@@ -2444,55 +2440,36 @@ public final class StoryCanvasUIView: UIView {
             dragStartSlideX = sx
             dragStartSlideY = sy
 
-            // Background drag (path α): snapshot the current bg transform so
-            // `.changed` can interpolate against it without rebuilding the
-            // slide model on every tick. Commit happens in `.ended`.
-            if id == backgroundMediaObjectId {
-                let current = slide.effects.backgroundTransform
-                dragStartBgScale = Double(current?.scale ?? 1)
-                dragStartBgOffsetX = Double(current?.offsetX ?? 0)
-                dragStartBgOffsetY = Double(current?.offsetY ?? 0)
-                dragStartBgRotation = current?.rotation ?? 0
-                dragStartBgFitMode = current?.videoFitMode
-                liveBackgroundTransformDuringDrag = nil
+            // Bring-to-front au touch : couvre tap simple ET début de drag.
+            // Skip pour le background media (toujours derrière les fg) — le
+            // helper filtre déjà mais on est explicite ici pour la lisibilité.
+            if id != backgroundMediaObjectId {
+                bringForegroundToFront(id: id)
             }
-
-            // Bring-to-front au touch : l'élément touché passe immédiatement
-            // devant les autres. Couvre tap simple ET début de drag (le pan
-            // recognizer émet .began sur le touch initial même sans translation).
-            // Skip pour le background media (toujours derrière les fg) et pour
-            // les éléments déjà au sommet (no-op via swap-with-self filtré).
-            bringForegroundToFront(id: id)
         case .changed:
             guard let id = manipulatedItemId, bounds.size != .zero else { return }
             let translation = recognizer.translation(in: self)
             // Projection écran → normalisé alignée sur la projection design→render
             // utilisée par `StoryRenderer.renderItem` (cf. `updateManipulatedItemLayer`).
             // - x reste linéaire sur la largeur du canvas
-            // - y est mappé sur `1920 * scaleFactor` (et non `bounds.height`)
-            //   pour rester cohérent quand le canvas n'a pas un ratio exactement
-            //   9:16 — sinon le drag accumulait un offset Y au release.
+            // - y est mappé sur `1920 * scaleFactor` pour rester cohérent quand
+            //   le canvas n'a pas un ratio exactement 9:16.
             let geo = CanvasGeometry(renderSize: bounds.size)
             let renderHeightFor1920 = geo.render(CanvasGeometry.designHeight)
             let dxNorm = Double(translation.x / bounds.width)
             let dyNorm = Double(translation.y / renderHeightFor1920)
 
-            // Branche dédiée background (path α): live update du layer.transform
-            // SANS muter le modèle. Le commit dans le modèle + le callback
-            // viennent dans `.ended`. Évite l'aller-retour
-            // `updatePosition` → `slide.didSet` → `rebuildLayers` → `configure()`
-            // qui passait par `mediaObjects.x/y` au lieu de
-            // `backgroundTransform` et causait le bug "drag bg invisible".
+            // Unification BG/FG (2026-05-29) : pour le bg, on ne snap pas
+            // (le bg media n'a pas de "position" sémantique sur les rails
+            // 0.18/0.25/0.5/0.75/0.82 — il est centré et se zoom/pan dans
+            // ses propres bounds). updatePosition mute mediaObjects[bg].x/y
+            // qui est lu par le converter bgTransform de rebuildLayers et
+            // appliqué via applyContentTransform sur le contentLayer du bg.
             if id == backgroundMediaObjectId {
-                let live = BackgroundTransform(
-                    scale: dragStartBgScale,
-                    offsetX: dragStartBgOffsetX + dxNorm * Double(bounds.width),
-                    offsetY: dragStartBgOffsetY + dyNorm * Double(bounds.height),
-                    rotation: dragStartBgRotation,
-                    videoFitMode: dragStartBgFitMode
-                )
-                backgroundLayer.applyContentTransform(live.caTransform())
-                liveBackgroundTransformDuringDrag = live
+                let rawX = clamp(dragStartSlideX + dxNorm)
+                let rawY = clamp(dragStartSlideY + dyNorm)
+                slide = updatePosition(slideId: id, x: rawX, y: rawY)
+                onItemModified?(slide)
                 return
             }
 
@@ -2505,43 +2482,10 @@ public final class StoryCanvasUIView: UIView {
             slide = updatePosition(slideId: id, x: snappedX, y: snappedY)
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
-            let wasBackgroundDrag = (manipulatedItemId == backgroundMediaObjectId)
             manipulatedItemId = nil
             hideSnapGuides()
-
-            if wasBackgroundDrag, let live = liveBackgroundTransformDuringDrag {
-                // Sync MODEL du layer AVANT `slide = updated` : sans ça le
-                // rebuild post slide.didSet rentre dans le chemin reuse-content
-                // de `StoryBackgroundLayer.configure` qui reset
-                // `contentLayer.frame = bounds` sur un sublayer encore
-                // transformé — produit le glitch user "bg grossit puis ne se
-                // place pas correctement" au release (bug 2026-05-27).
-                // Après commit, `transform3D == bgTransform reconstruit du
-                // slide` → `nothingChanged = true` → configure() skip.
-                backgroundLayer.commitLiveTransform(live)
-
-                // Commit live transform into the slide model + notify parents:
-                // - `onItemModified` syncs the SwiftUI @Binding (parity with
-                //   other gesture branches).
-                // - `onBackgroundTransformChanged` provides the typed value
-                //   so the composer viewModel can update its bg cache.
-                var updated = slide
-                let persisted = StoryBackgroundTransform(
-                    scale: live.scale != 1.0 ? CGFloat(live.scale) : nil,
-                    offsetX: live.offsetX != 0 ? CGFloat(live.offsetX) : nil,
-                    offsetY: live.offsetY != 0 ? CGFloat(live.offsetY) : nil,
-                    rotation: live.rotation != 0 ? live.rotation : nil,
-                    videoFitMode: live.videoFitMode
-                )
-                updated.effects.backgroundTransform = persisted.isIdentity ? nil : persisted
-                slide = updated
-                onItemModified?(slide)
-                onBackgroundTransformChanged?(persisted)
-                liveBackgroundTransformDuringDrag = nil
-            } else {
-                slideContentRevision &+= 1
-                rebuildLayers()
-            }
+            slideContentRevision &+= 1
+            rebuildLayers()
         default:
             break
         }
@@ -2621,9 +2565,32 @@ public final class StoryCanvasUIView: UIView {
     /// drag/resize fluid even with many layers on canvas.
     private func updateManipulatedItemLayer() {
         guard let id = manipulatedItemId else { return }
-        guard let layer = itemsContainer.sublayers?.first(where: { $0.name == id }) else { return }
         let bounds = self.bounds
         guard bounds.size != .zero else { return }
+
+        // Background media : pas dans itemsContainer mais dans
+        // `backgroundLayer`. On apply le transform au contentLayer interne
+        // via `applyContentTransform`, miroir exact du chemin que prend le
+        // converter `bgTransform` lors d'un rebuildLayers complet.
+        //
+        // Unification BG/FG (2026-05-29) : le bg passe par les mêmes
+        // updateScale/updatePosition/updateRotation que les items FG (qui
+        // mutent `mediaObjects[bg]`), donc les valeurs lues ici viennent de
+        // la même source de vérité que le mini-preview et le reader.
+        if id == backgroundMediaObjectId,
+           let bg = slide.effects.mediaObjects?.first(where: { $0.id == id }) {
+            let live = BackgroundTransform(
+                scale: bg.scale,
+                offsetX: (bg.x - 0.5) * Double(bounds.width),
+                offsetY: (bg.y - 0.5) * Double(bounds.height),
+                rotation: bg.rotation,
+                videoFitMode: slide.effects.backgroundTransform?.videoFitMode
+            )
+            backgroundLayer.applyContentTransform(live.caTransform())
+            return
+        }
+
+        guard let layer = itemsContainer.sublayers?.first(where: { $0.name == id }) else { return }
 
         // Position dans le même référentiel que `StoryRenderer.renderItem` :
         // - x  est mappé en `media.x * renderWidth` (linéaire sur la largeur)
@@ -3276,32 +3243,10 @@ extension StoryCanvasUIView: UIPointerInteractionDelegate {
     }
 
     #if DEBUG
-    /// Test seam: drives `handlePan`-equivalent live drag of the background as
-    /// if the user dragged with normalized delta `(dxNorm, dyNorm)`. Mirrors
-    /// the real `handlePan.changed` code path for `id == backgroundMediaObjectId`
-    /// so canvas observable state matches a real gesture. Does NOT commit to
-    /// the model — the real `.ended` branch handles that.
-    internal func simulatePanForTesting(targetId: String, dxNorm: Double, dyNorm: Double) {
-        guard targetId == backgroundMediaObjectId else { return }
-        let currentTransform = slide.effects.backgroundTransform
-        dragStartBgScale = Double(currentTransform?.scale ?? 1)
-        dragStartBgOffsetX = Double(currentTransform?.offsetX ?? 0)
-        dragStartBgOffsetY = Double(currentTransform?.offsetY ?? 0)
-        dragStartBgRotation = currentTransform?.rotation ?? 0
-        dragStartBgFitMode = currentTransform?.videoFitMode
-        let live = BackgroundTransform(
-            scale: dragStartBgScale,
-            offsetX: dragStartBgOffsetX + dxNorm * Double(bounds.width),
-            offsetY: dragStartBgOffsetY + dyNorm * Double(bounds.height),
-            rotation: dragStartBgRotation,
-            videoFitMode: dragStartBgFitMode
-        )
-        backgroundLayer.applyContentTransform(live.caTransform())
-        liveBackgroundTransformDuringDrag = live
-    }
-
     /// Test seam mirroring `handleDoubleTap` cycle (auto → fit → fill → auto)
     /// for the background. Commits to the model + fires the callback.
+    /// The double-tap is bg-specific (toggle fit mode override) and not part
+    /// of the unified BG/FG gesture flow, so it keeps its dedicated test seam.
     internal func performDoubleTapForTesting(targetId: String) {
         guard targetId == backgroundMediaObjectId else { return }
         let current = slide.effects.backgroundTransform?.videoFitMode

@@ -69,7 +69,18 @@ final class CanvasBackgroundIntegrationTests: XCTestCase {
         XCTAssertNil(canvas.slide.effects.backgroundTransform?.videoFitMode)
     }
 
-    func test_handlePan_bgDrag_updatesLayerTransformLiveBeforeCommit() throws {
+    func test_bgScale_mutation_routesContentLayerTransform() throws {
+        // Depuis l'unification BG/FG (2026-05-29) : le bg utilise les mêmes
+        // updateScale/updatePosition/updateRotation que les items FG, qui
+        // mutent `mediaObjects[bg]`. Le canvas observe la mutation via
+        // `slide.didSet` qui appelle `updateManipulatedItemLayer` qui route
+        // le bg vers `backgroundLayer.applyContentTransform` sur le content
+        // sublayer (au lieu de chercher dans itemsContainer où le bg n'est
+        // pas).
+        //
+        // Ce test vérifie le bout-à-bout du chemin unifié : muter le slide
+        // bg → contentLayer.transform reflète le changement (alignement
+        // strict avec le pattern FG qui mute le slide → CALayer reflète).
         let bgMedia = StoryMediaObject(
             id: "bg-1",
             postMediaId: "bg-1",
@@ -85,20 +96,27 @@ final class CanvasBackgroundIntegrationTests: XCTestCase {
         canvas.frame = CGRect(x: 0, y: 0, width: 412, height: 732)
         canvas.layoutIfNeeded()
 
-        // Le transform est appliqué au CONTENT sublayer (image/video) plutôt
-        // qu'au backgroundLayer entier (depuis le fix "zoom inside bg",
-        // 2026-05-27). Le test doit vérifier l'endroit où la transformation
-        // visuelle a réellement lieu, sinon il faux-passe.
         let contentLayer = canvas.backgroundLayer.contentLayer
         XCTAssertNotNil(contentLayer, "Image bg should have created contentLayer in configure()")
         let initialTransform = contentLayer?.transform ?? CATransform3DIdentity
-        canvas.simulatePanForTesting(targetId: "bg-1", dxNorm: 0.1, dyNorm: 0)
-        let liveTransform = contentLayer?.transform ?? CATransform3DIdentity
 
-        XCTAssertFalse(CATransform3DEqualToTransform(initialTransform, liveTransform),
-                      "bg content sublayer transform must be updated live during drag")
-        XCTAssertNil(canvas.slide.effects.backgroundTransform,
-                     "Model must not be committed until gesture .ended")
+        // Simuler ce que `handlePinch.changed` fait : mute mediaObjects[bg].scale.
+        // En vrai, ça passe par `updateScale` → slide.didSet → rebuildLayers
+        // (sans gesture actif puisque le test n'enchaîne pas un gesture).
+        var updatedSlide = canvas.slide
+        if var medias = updatedSlide.effects.mediaObjects,
+           let idx = medias.firstIndex(where: { $0.id == "bg-1" }) {
+            medias[idx].scale = 2.0
+            updatedSlide.effects.mediaObjects = medias
+        }
+        canvas.slide = updatedSlide
+        canvas.layoutIfNeeded()
+
+        let newTransform = contentLayer?.transform ?? CATransform3DIdentity
+        XCTAssertFalse(CATransform3DEqualToTransform(initialTransform, newTransform),
+                      "bg content sublayer transform must reflect mediaObjects[bg].scale change")
+        XCTAssertEqual(newTransform.m11, 2.0, accuracy: 1e-9,
+                      "scale 2.0 mutated on mediaObjects[bg] should appear on contentLayer.transform.m11")
     }
 
     private func findBackgroundLayer(in root: CALayer) -> StoryBackgroundLayer? {
