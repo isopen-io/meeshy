@@ -1,4 +1,5 @@
 import Foundation
+import os
 import GRDB
 #if canImport(UIKit)
 import UIKit
@@ -37,7 +38,7 @@ public final class StoryDraftStore: @unchecked Sendable {
         if let disk = try? DatabaseQueue(path: path) {
             return disk
         }
-        print("[StoryDraftStore] Disk queue unavailable at \(path), falling back to in-memory")
+        Logger.cache.warning("[StoryDraftStore] Disk queue unavailable at \(path), falling back to in-memory")
         return (try? DatabaseQueue()) ?? {
             // Last-resort path; `DatabaseQueue()` is trivially constructible.
             try! DatabaseQueue()  // swiftlint:disable:this force_try
@@ -108,7 +109,7 @@ public final class StoryDraftStore: @unchecked Sendable {
                 )
             }
         } catch {
-            print("[StoryDraftStore] Erreur save: \(error)")
+            Logger.cache.error("[StoryDraftStore] Erreur save: \(error.localizedDescription)")
         }
     }
 
@@ -128,7 +129,7 @@ public final class StoryDraftStore: @unchecked Sendable {
                 try db.execute(sql: "DELETE FROM story_draft_media")
             }
         } catch {
-            print("[StoryDraftStore] Erreur clearing media table: \(error)")
+            Logger.cache.error("[StoryDraftStore] Erreur clearing media table: \(error.localizedDescription)")
             return
         }
 
@@ -171,7 +172,7 @@ public final class StoryDraftStore: @unchecked Sendable {
                 }
             }
         } catch {
-            print("[StoryDraftStore] Erreur saveMedia: \(error)")
+            Logger.cache.error("[StoryDraftStore] Erreur saveMedia: \(error.localizedDescription)")
         }
     }
     #endif
@@ -235,7 +236,7 @@ public final class StoryDraftStore: @unchecked Sendable {
                 }
             }
         } catch {
-            print("[StoryDraftStore] Erreur loadMedia: \(error)")
+            Logger.cache.error("[StoryDraftStore] Erreur loadMedia: \(error.localizedDescription)")
         }
 
         return LoadMediaResult(
@@ -274,7 +275,7 @@ public final class StoryDraftStore: @unchecked Sendable {
                 }
             }
         } catch {
-            print("[StoryDraftStore] Erreur loadMediaReferences: \(error)")
+            Logger.cache.error("[StoryDraftStore] Erreur loadMediaReferences: \(error.localizedDescription)")
         }
         return refs
     }
@@ -294,7 +295,7 @@ public final class StoryDraftStore: @unchecked Sendable {
                 }
             }
         } catch {
-            print("[StoryDraftStore] Erreur purgeLostMedia: \(error)")
+            Logger.cache.error("[StoryDraftStore] Erreur purgeLostMedia: \(error.localizedDescription)")
         }
     }
     #endif
@@ -328,7 +329,7 @@ public final class StoryDraftStore: @unchecked Sendable {
 
             return (slides: slides, visibility: visibility)
         } catch {
-            print("[StoryDraftStore] Erreur load: \(error)")
+            Logger.cache.error("[StoryDraftStore] Erreur load: \(error.localizedDescription)")
             return nil
         }
     }
@@ -344,7 +345,7 @@ public final class StoryDraftStore: @unchecked Sendable {
                 try db.execute(sql: "DELETE FROM story_draft_media")
             }
         } catch {
-            print("[StoryDraftStore] Erreur clear: \(error)")
+            Logger.cache.error("[StoryDraftStore] Erreur clear: \(error.localizedDescription)")
         }
     }
 
