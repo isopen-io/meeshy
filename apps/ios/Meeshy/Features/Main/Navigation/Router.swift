@@ -109,7 +109,7 @@ extension Route {
 final class Router: ObservableObject {
     @Published var path: [Route] = [] {
         didSet {
-            print("[DIAG] Router.path didSet count=\(path.count) last=\(String(describing: path.last))")
+            Logger.messages.debug("[DIAG] Router.path didSet count=\(path.count) last=\(String(describing: path.last))")
             AnalyticsManager.shared.trackRoute(path.last)
         }
     }
