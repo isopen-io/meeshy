@@ -35,6 +35,13 @@ export interface MagicLinkValidation {
   requestContext: RequestContext;
 }
 
+export interface IssueLoginTokenOptions {
+  /** Token lifetime in minutes. Defaults to 24h (1440 min) for proactively-sent links. */
+  ttlMinutes?: number;
+}
+
+const DIGEST_TOKEN_TTL_MINUTES = 24 * 60; // 24h — proactive email, opened with delay
+
 export class MagicLinkService {
   constructor(
     private prisma: PrismaClient,
@@ -146,6 +153,49 @@ export class MagicLinkService {
       console.error('[MagicLink] Error requesting magic link:', error);
       // Return success to prevent info leakage
       return { success: true, message: 'If an account exists, a login link has been sent.', expiresInSeconds: TOKEN_EXPIRY_MINUTES * 60 };
+    }
+  }
+
+  /**
+   * Issue a passwordless-login token for an ALREADY-KNOWN user, without sending
+   * an email. Used by flows that already resolved the user and already own the
+   * delivery channel (e.g. the notification digest email embeds the link itself).
+   *
+   * Reuses the same hashed-token storage, single-use semantics and revocation as
+   * requestMagicLink — only the email send + email-enumeration guard are skipped.
+   * Returns the RAW token (to embed in a URL), or null on failure so the caller
+   * can gracefully fall back to an unauthenticated link.
+   */
+  async issueLoginTokenForUser(
+    userId: string,
+    options?: IssueLoginTokenOptions
+  ): Promise<string | null> {
+    try {
+      // Revoke any existing unused tokens for this user (mirror requestMagicLink)
+      await this.prisma.magicLinkToken.updateMany({
+        where: { userId, usedAt: null, isRevoked: false },
+        data: { isRevoked: true, revokedReason: 'NEW_REQUEST' }
+      });
+
+      const rawToken = crypto.randomBytes(32).toString('base64url');
+      const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+      const ttlMinutes = options?.ttlMinutes ?? DIGEST_TOKEN_TTL_MINUTES;
+      const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000);
+
+      await this.prisma.magicLinkToken.create({
+        data: {
+          userId,
+          tokenHash,
+          expiresAt,
+          rememberDevice: false
+        }
+      });
+
+      return rawToken;
+    } catch (error) {
+      console.error('[MagicLink] Error issuing login token for user:', error);
+      return null;
     }
   }
 

@@ -119,14 +119,18 @@ export interface NotificationDigestEmailData {
   name: string;
   language: string;
   unreadCount: number;
-  notifications: Array<{
-    type: string;
-    actorName: string;
-    content: string;
-    createdAt: string;
-  }>;
-  markAllReadUrl: string;
+  /**
+   * One-click magic-login URL that authenticates the user and deep-links into
+   * the app (see MagicLinkService.issueLoginTokenForUser + the digest job).
+   * This is the sole CTA — the teaser intentionally reveals counts only.
+   */
+  magicUrl: string;
   settingsUrl: string;
+  /**
+   * Number of distinct conversations involved (for the teaser copy).
+   * Falls back to unreadCount when not provided.
+   */
+  conversationCount?: number;
 }
 
 export interface BroadcastEmailData {
@@ -1658,18 +1662,18 @@ export class EmailService {
     const lang = data.language || 'en';
     const t = this.getDigestTranslations(lang);
 
-    const notifListHtml = data.notifications.map(n => {
-      const timeAgo = this.formatTimeAgo(n.createdAt, lang);
-      return `<tr>
-        <td style="padding:12px 0;border-bottom:1px solid #e5e7eb">
-          <strong class="link-text">${this.escapeHtml(n.actorName)}</strong>
-          <span style="color:#6b7280"> ${this.escapeHtml(n.content)}</span>
-          <br><span style="font-size:12px;color:#9ca3af">${timeAgo}</span>
-        </td>
-      </tr>`;
-    }).join('');
+    // Re-engagement teaser: reveal aggregate counts ONLY (no actor names, no
+    // message previews) to create curiosity and avoid leaking content if the
+    // email is forwarded. The single CTA is a one-click magic-login link.
+    const convCount = (data.conversationCount && data.conversationCount > 0)
+      ? data.conversationCount
+      : data.unreadCount;
 
-    const countText = t.unreadTitle.replace('{count}', data.unreadCount.toString());
+    const fill = (s: string) => s
+      .replace('{count}', data.unreadCount.toString())
+      .replace('{conversations}', convCount.toString());
+
+    const countText = fill(t.unreadTitle);
 
     const html = `<!DOCTYPE html>
 <html lang="${lang}">
@@ -1678,7 +1682,7 @@ export class EmailService {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
   <meta name="supported-color-schemes" content="light dark">
-  <title>${t.subject.replace('{count}', data.unreadCount.toString())}</title>
+  <title>${fill(t.subject)}</title>
   <style>${this.getBaseStyles()}</style>
 </head>
 <body>
@@ -1693,18 +1697,13 @@ export class EmailService {
 
     <div class="content" style="padding:40px 30px;border-radius:0 0 12px 12px">
       <p>${t.greeting} <strong class="link-text">${this.escapeHtml(data.name)}</strong>,</p>
-      <p>${t.intro.replace('{count}', data.unreadCount.toString())}</p>
+      <p>${fill(t.teaserIntro)}</p>
 
-      <table style="width:100%;border-collapse:collapse;margin:20px 0">
-        ${notifListHtml}
-      </table>
-
-      ${data.unreadCount > data.notifications.length ? `<p style="font-size:13px;color:#9ca3af;text-align:center">${t.andMore.replace('{count}', (data.unreadCount - data.notifications.length).toString())}</p>` : ''}
-
-      <div style="text-align:center;margin:30px 0">
-        <a href="${data.markAllReadUrl}" class="button" style="font-size:18px;padding:16px 40px">
+      <div style="text-align:center;margin:32px 0">
+        <a href="${data.magicUrl}" class="button" style="font-size:18px;padding:16px 40px">
           ${t.buttonText}
         </a>
+        <p style="font-size:12px;color:#9ca3af;margin:14px 0 0">${t.linkValidity}</p>
       </div>
 
       <p style="font-size:14px;margin-top:20px">${t.footer}</p>
@@ -1724,12 +1723,11 @@ export class EmailService {
 </body>
 </html>`;
 
-    const notifListText = data.notifications.map(n => `- ${n.actorName}: ${n.content}`).join('\n');
-    const text = `${countText}\n\n${t.greeting} ${data.name},\n\n${t.intro.replace('{count}', data.unreadCount.toString())}\n\n${notifListText}\n\n${t.buttonText}: ${data.markAllReadUrl}\n\n${t.managePrefs}: ${data.settingsUrl}\n\n${t.footer}\n\n${this.getFooterContentText(lang)}`;
+    const text = `${countText}\n\n${t.greeting} ${data.name},\n\n${fill(t.teaserIntro)}\n\n${t.buttonText}: ${data.magicUrl}\n${t.linkValidity}\n\n${t.managePrefs}: ${data.settingsUrl}\n\n${t.footer}\n\n${this.getFooterContentText(lang)}`;
 
     return this.sendEmail({
       to: data.to,
-      subject: t.subject.replace('{count}', data.unreadCount.toString()),
+      subject: fill(t.subject),
       html,
       text,
       trackingType: 'notification_digest',
@@ -1741,40 +1739,16 @@ export class EmailService {
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  private formatTimeAgo(dateStr: string, lang: string): string {
-    const now = new Date();
-    const date = new Date(dateStr);
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-
-    const labels: Record<string, { min: string; hour: string; day: string; days: string }> = {
-      fr: { min: 'min', hour: 'h', day: 'jour', days: 'jours' },
-      en: { min: 'min', hour: 'h', day: 'day', days: 'days' },
-      es: { min: 'min', hour: 'h', day: 'dia', days: 'dias' },
-      pt: { min: 'min', hour: 'h', day: 'dia', days: 'dias' },
-      it: { min: 'min', hour: 'h', day: 'giorno', days: 'giorni' },
-      de: { min: 'Min', hour: 'Std', day: 'Tag', days: 'Tage' },
-    };
-    const l = labels[lang] || labels['en'];
-
-    if (diffMins < 60) return `${diffMins} ${l.min}`;
-    if (diffHours < 24) return `${diffHours} ${l.hour}`;
-    if (diffDays === 1) return `1 ${l.day}`;
-    return `${diffDays} ${l.days}`;
-  }
-
   private getDigestTranslations(language: string): Record<string, string> {
     const translations: Record<string, Record<string, string>> = {
       fr: {
         subject: 'Vous avez {count} notifications non lues - Meeshy',
         unreadTitle: 'Vous avez {count} notifications non lues',
-        subtitle: 'Voici un resume de votre activite',
+        subtitle: 'Quelque chose vous attend',
         greeting: 'Bonjour',
-        intro: 'Vous avez {count} notifications en attente sur Meeshy. Voici les plus recentes :',
-        andMore: '... et {count} autres notifications',
-        buttonText: 'Voir mes notifications',
+        teaserIntro: 'Il y a quelques heures, {conversations} conversation(s) se sont animees. Revenez voir ce que vous manquez — un seul clic, sans mot de passe.',
+        buttonText: 'Ouvrir Meeshy',
+        linkValidity: 'Ce lien de connexion est valable 24 h.',
         footer: "L'equipe Meeshy",
         managePrefs: 'Gerer mes preferences email',
         privacy: 'Confidentialite',
@@ -1782,11 +1756,11 @@ export class EmailService {
       en: {
         subject: 'You have {count} unread notifications - Meeshy',
         unreadTitle: 'You have {count} unread notifications',
-        subtitle: "Here's a summary of your activity",
+        subtitle: 'Something is waiting for you',
         greeting: 'Hello',
-        intro: 'You have {count} pending notifications on Meeshy. Here are the most recent:',
-        andMore: '... and {count} more notifications',
-        buttonText: 'View my notifications',
+        teaserIntro: 'A few hours ago, {conversations} conversation(s) came alive. Come see what you are missing — one click, no password needed.',
+        buttonText: 'Open Meeshy',
+        linkValidity: 'This login link is valid for 24h.',
         footer: 'The Meeshy Team',
         managePrefs: 'Manage email preferences',
         privacy: 'Privacy',
@@ -1794,11 +1768,11 @@ export class EmailService {
       es: {
         subject: 'Tienes {count} notificaciones sin leer - Meeshy',
         unreadTitle: 'Tienes {count} notificaciones sin leer',
-        subtitle: 'Aqui tienes un resumen de tu actividad',
+        subtitle: 'Algo te esta esperando',
         greeting: 'Hola',
-        intro: 'Tienes {count} notificaciones pendientes en Meeshy. Aqui estan las mas recientes:',
-        andMore: '... y {count} notificaciones mas',
-        buttonText: 'Ver mis notificaciones',
+        teaserIntro: 'Hace unas horas, {conversations} conversacion(es) cobraron vida. Ven a ver lo que te estas perdiendo — un clic, sin contrasena.',
+        buttonText: 'Abrir Meeshy',
+        linkValidity: 'Este enlace de acceso es valido durante 24 h.',
         footer: 'El equipo de Meeshy',
         managePrefs: 'Gestionar preferencias de correo',
         privacy: 'Privacidad',
@@ -1806,11 +1780,11 @@ export class EmailService {
       pt: {
         subject: 'Voce tem {count} notificacoes nao lidas - Meeshy',
         unreadTitle: 'Voce tem {count} notificacoes nao lidas',
-        subtitle: 'Aqui esta um resumo da sua atividade',
+        subtitle: 'Algo esta esperando por voce',
         greeting: 'Ola',
-        intro: 'Voce tem {count} notificacoes pendentes no Meeshy. Aqui estao as mais recentes:',
-        andMore: '... e mais {count} notificacoes',
-        buttonText: 'Ver minhas notificacoes',
+        teaserIntro: 'Ha algumas horas, {conversations} conversa(s) ganharam vida. Venha ver o que esta perdendo — um clique, sem senha.',
+        buttonText: 'Abrir Meeshy',
+        linkValidity: 'Este link de acesso e valido por 24 h.',
         footer: 'A equipe Meeshy',
         managePrefs: 'Gerenciar preferencias de email',
         privacy: 'Privacidade',
@@ -1818,11 +1792,11 @@ export class EmailService {
       it: {
         subject: 'Hai {count} notifiche non lette - Meeshy',
         unreadTitle: 'Hai {count} notifiche non lette',
-        subtitle: 'Ecco un riepilogo della tua attivita',
+        subtitle: 'Qualcosa ti aspetta',
         greeting: 'Ciao',
-        intro: 'Hai {count} notifiche in sospeso su Meeshy. Ecco le piu recenti:',
-        andMore: '... e altre {count} notifiche',
-        buttonText: 'Vedi le mie notifiche',
+        teaserIntro: 'Qualche ora fa, {conversations} conversazione/i si sono animate. Torna a vedere cosa ti stai perdendo — un clic, senza password.',
+        buttonText: 'Apri Meeshy',
+        linkValidity: 'Questo link di accesso e valido per 24 h.',
         footer: 'Il team Meeshy',
         managePrefs: 'Gestisci preferenze email',
         privacy: 'Privacy',
@@ -1830,11 +1804,11 @@ export class EmailService {
       de: {
         subject: 'Du hast {count} ungelesene Benachrichtigungen - Meeshy',
         unreadTitle: 'Du hast {count} ungelesene Benachrichtigungen',
-        subtitle: 'Hier ist eine Zusammenfassung deiner Aktivitat',
+        subtitle: 'Etwas wartet auf dich',
         greeting: 'Hallo',
-        intro: 'Du hast {count} ausstehende Benachrichtigungen auf Meeshy. Hier sind die neuesten:',
-        andMore: '... und {count} weitere Benachrichtigungen',
-        buttonText: 'Meine Benachrichtigungen ansehen',
+        teaserIntro: 'Vor ein paar Stunden wurden {conversations} Unterhaltung(en) lebendig. Schau, was du verpasst — ein Klick, ohne Passwort.',
+        buttonText: 'Meeshy offnen',
+        linkValidity: 'Dieser Login-Link ist 24 Std. gultig.',
         footer: 'Das Meeshy-Team',
         managePrefs: 'E-Mail-Einstellungen verwalten',
         privacy: 'Datenschutz',

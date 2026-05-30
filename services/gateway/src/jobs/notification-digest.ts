@@ -1,11 +1,15 @@
 /**
  * Notification Digest Job
- * Sends daily email digest at 18h UTC to users with unread notifications.
- * Marks processed notifications with delivery.emailSent = true.
+ * Sends a daily re-engagement email at 18h UTC to users with unread
+ * notifications. The email is a teaser (counts only — no actor/content) whose
+ * single CTA is a one-click magic-login link (MagicLinkService) deep-linking
+ * into the most-recent conversation. Marks processed notifications with
+ * delivery.emailSent = true.
  */
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { EmailService, NotificationDigestEmailData } from '../services/EmailService';
+import { MagicLinkService } from '../services/MagicLinkService';
 import { enhancedLogger } from '../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'NotificationDigestJob' });
@@ -13,57 +17,38 @@ const logger = enhancedLogger.child({ module: 'NotificationDigestJob' });
 const TARGET_HOUR_UTC = 18;
 const BATCH_SIZE = 50;
 const BATCH_DELAY_MS = 1000;
-const MAX_NOTIFICATIONS_IN_EMAIL = 5;
 
-const SYSTEM_NOTIFICATION_LABELS: Record<string, Record<string, { actor: string; content: (meta: Record<string, string> | null) => string }>> = {
-  login_new_device: {
-    fr: {
-      actor: 'Securite',
-      content: (meta) => {
-        const parts = [meta?.deviceName, meta?.deviceOS].filter(Boolean).join(' - ');
-        const loc = meta?.location || '';
-        return parts && loc ? `Nouvelle connexion depuis ${parts} (${loc})` : parts ? `Nouvelle connexion depuis ${parts}` : loc ? `Nouvelle connexion depuis ${loc}` : 'Nouvelle connexion detectee';
-      },
-    },
-    en: {
-      actor: 'Security',
-      content: (meta) => {
-        const parts = [meta?.deviceName, meta?.deviceOS].filter(Boolean).join(' - ');
-        const loc = meta?.location || '';
-        return parts && loc ? `New login from ${parts} (${loc})` : parts ? `New login from ${parts}` : loc ? `New login from ${loc}` : 'New login detected';
-      },
-    },
-  },
-  password_changed: {
-    fr: { actor: 'Securite', content: () => 'Votre mot de passe a ete modifie' },
-    en: { actor: 'Security', content: () => 'Your password was changed' },
-  },
-  two_factor_enabled: {
-    fr: { actor: 'Securite', content: () => 'Double authentification activee' },
-    en: { actor: 'Security', content: () => 'Two-factor authentication enabled' },
-  },
-  two_factor_disabled: {
-    fr: { actor: 'Securite', content: () => 'Double authentification desactivee' },
-    en: { actor: 'Security', content: () => 'Two-factor authentication disabled' },
-  },
-};
+type PendingNotification = { context?: unknown };
 
-function resolveDigestEntry(
-  type: string,
-  actor: Record<string, string> | null,
-  meta: Record<string, string> | null,
-  rawContent: string | null,
-  lang: string,
-): { actorName: string; content: string } {
-  const systemLabel = SYSTEM_NOTIFICATION_LABELS[type];
-  if (systemLabel) {
-    const l = systemLabel[lang] || systemLabel['en'] || Object.values(systemLabel)[0];
-    return { actorName: l.actor, content: l.content(meta) };
+function conversationIdOf(n: PendingNotification): string | null {
+  const ctx = n.context as { conversationId?: unknown } | null;
+  const id = ctx?.conversationId;
+  return typeof id === 'string' && id.length > 0 ? id : null;
+}
+
+/** Internal deep-link path: most-recent notification's conversation, else list. */
+function resolveDeepLinkPath(pending: PendingNotification[]): string {
+  const convId = pending.map(conversationIdOf).find((id): id is string => id !== null);
+  return convId ? `/conversations/${convId}` : '/conversations';
+}
+
+function countDistinctConversations(pending: PendingNotification[]): number {
+  const ids = new Set(pending.map(conversationIdOf).filter((id): id is string => id !== null));
+  return ids.size;
+}
+
+/**
+ * Build the CTA URL targeting the existing magic-link validate page, which
+ * reads `token` and clamps `returnUrl` to an internal path (open-redirect safe).
+ * When token issuance failed, we omit the token and fall back to a plain
+ * deep-link (the user lands on login, then the internal redirect still applies).
+ */
+function buildMagicUrl(frontendUrl: string, returnPath: string, token: string | null): string {
+  const returnUrl = encodeURIComponent(returnPath);
+  if (!token) {
+    return `${frontendUrl}/auth/magic-link/validate?returnUrl=${returnUrl}`;
   }
-  return {
-    actorName: actor?.displayName || actor?.username || 'Meeshy',
-    content: rawContent || '',
-  };
+  return `${frontendUrl}/auth/magic-link/validate?token=${encodeURIComponent(token)}&returnUrl=${returnUrl}`;
 }
 
 function getMillisecondsUntilNextRun(targetHourUTC: number): number {
@@ -99,6 +84,7 @@ export class NotificationDigestJob {
   constructor(
     private prisma: PrismaClient,
     private emailService: EmailService,
+    private magicLinkService: MagicLinkService,
   ) {}
 
   start(): void {
@@ -214,36 +200,38 @@ export class NotificationDigestJob {
     const allUnread = await this.prisma.notification.findMany({
       where: { userId, isRead: false },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, type: true, actor: true, content: true, metadata: true, createdAt: true, delivery: true },
+      select: { id: true, context: true, createdAt: true, delivery: true },
     });
 
     // Filter out already emailed in app code
     const pending = allUnread.filter(n => isNotYetEmailed(n.delivery));
     if (pending.length === 0) return false;
 
-    const recentNotifs = pending.slice(0, MAX_NOTIFICATIONS_IN_EMAIL);
     const pendingIds = pending.map(n => n.id);
 
     const frontendUrl = process.env.FRONTEND_URL || 'https://meeshy.me';
-
     const lang = user.systemLanguage || 'en';
+
+    // Deep-link target: most-recent notification's conversation (notifications
+    // are ordered desc), else the conversations list.
+    const returnPath = resolveDeepLinkPath(pending);
+
+    // Distinct conversations touched — used by the teaser ("{conversations} conversation(s)").
+    const conversationCount = countDistinctConversations(pending);
+
+    // One-click magic-login token (reuses MagicLinkService — single source of
+    // truth). On failure we still send, falling back to a plain (unauthenticated)
+    // deep-link rather than dropping the re-engagement email entirely.
+    const token = await this.magicLinkService.issueLoginTokenForUser(userId);
+    const magicUrl = buildMagicUrl(frontendUrl, returnPath, token);
+
     const digestData: NotificationDigestEmailData = {
       to: user.email,
       name: user.displayName || user.username || 'there',
       language: lang,
       unreadCount: pending.length,
-      notifications: recentNotifs.map(n => {
-        const actor = n.actor as Record<string, string> | null;
-        const meta = n.metadata as Record<string, string> | null;
-        const { actorName, content } = resolveDigestEntry(n.type, actor, meta, n.content, lang);
-        return {
-          type: n.type,
-          actorName,
-          content,
-          createdAt: n.createdAt.toISOString(),
-        };
-      }),
-      markAllReadUrl: `${frontendUrl}/notifications?markAllRead=true`,
+      conversationCount,
+      magicUrl,
       settingsUrl: `${frontendUrl}/settings#notifications`,
     };
 

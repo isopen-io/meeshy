@@ -1,50 +1,53 @@
-# Tâche — Spec e-mail digest → réengagement magic-login (2026-05-30)
+# Tâche — Digest e-mail → réengagement magic-login (2026-05-30)
 
-**Statut** : spec rédigée, EN ATTENTE de validation utilisateur avant tout code.
-**Décision produit actée** : magic-login **1 clic** + **écrire la spec d'abord** (pas d'implémentation).
+**Branche** : `claude/message-sync-notifications-LYtcU`
+**Statut** : IMPLÉMENTÉ (TDD) — tests verts, tsc 0 erreur.
+**Spec** : `docs/superpowers/specs/2026-05-30-email-digest-reengagement-magic-login-design.md`
 
-## Livrable
-- `docs/superpowers/specs/2026-05-30-email-digest-reengagement-magic-login-design.md`
+## ⚠️ RE-PLAN majeur (cohérence) — la spec d'origine planifiait un DOUBLON
 
-## Résumé
-Migrer le digest e-mail du soir (18:00 UTC, `jobs/notification-digest.ts` →
-`EmailService.sendNotificationDigestEmail`) d'un digest passif (qui dévoile
-acteur+aperçu, CTA `/notifications` non authentifié) vers un e-mail de
-réengagement **teaser** + **CTA magic-login 1 clic** qui reconnecte (JWT 7 j)
-et deep-link vers la conversation.
+Pendant l'implémentation, vérification du code réel : un magic-login COMPLET
+existe déjà. La spec proposait de tout reconstruire (MagicLoginToken,
+AuthService.consume/generate, endpoint /auth/magic, page web) → abandonné au
+profit de la réutilisation (Single Source of Truth).
 
-Cœur technique : jeton magic-login mirror du password-reset MAIS **hashé**
-(`magicLoginTokenHash`/`magicLoginExpires`/`magicLoginUsedAt`), TTL 24 h, usage
-unique atomique, endpoint `POST /api/v1/auth/magic` (no-leak, rate-limit,
-sanitizeRedirect anti-open-redirect), page web POST (anti-préchargement mail),
-List-Unsubscribe RFC 8058, UTM.
+Existant réutilisé :
+- `MagicLinkService.requestMagicLink()` / `validateMagicLink()` — émet déjà
+  JWT 24h + session + device tracking + security events
+- Modèle `MagicLinkToken` (schema.prisma:1974) — SHA-256, usedAt, isRevoked
+- Endpoints `/api/v1/auth/magic-link/request|validate` (GET+POST)
+- Page web `apps/web/app/auth/magic-link/validate/page.tsx` — lit `?token` +
+  `?returnUrl`, clamp open-redirect via `safeInternalPath(returnUrl,'/dashboard')`
 
-## Corrections vs brief initial (ancré sur le vrai code, vérifié verbatim)
-- ❌ Pas de faille XSS `userName`/`actorName` : `escapeHtml` est DÉJÀ appliqué
-  (EmailService.ts:1665-1695).
-- Vrais noms : `sendNotificationDigestEmail`, `jobs/notification-digest.ts`.
-- ❌ Le password-reset n'est PAS des champs sur `User` : c'est une **table
-  dédiée hashée `PasswordResetToken`** (`tokenHash`/`expiresAt`/`usedAt`/
-  `isRevoked` + métadonnées) + job `cleanup-expired-tokens.ts`. → la spec
-  recommande désormais un **modèle dédié `MagicLoginToken`** (mirror exact),
-  PAS 3 champs sur User. TTL reset = 15 min (pas 1 h).
-- ❌ `send()` ne supporte PAS `headers` custom (Brevo/SendGrid/Mailgun figés
-  via axios) → List-Unsubscribe EXIGE d'étendre `EmailData.headers` + les 3
-  transports. Corrigé dans la spec.
-- Web = Next.js **App Router** ; mirror = `apps/web/app/reset-password/page.tsx`
-  (`useSearchParams` + `buildApiUrl` + `passwordResetService`). Page cible :
-  `apps/web/app/auth/magic/page.tsx` + `magicLoginService`.
-- Rate-limit = limiters Redis maison en `preHandler` (mirror login.ts), pas
-  `@fastify/rate-limit` direct.
+## Décisions actées (utilisateur)
+- TTL du lien digest : **24 h** · Intégration : **étendre MagicLinkService** ·
+  Teaser : **compteurs seuls** (pas d'acteur/aperçu)
 
-## Points ouverts (cf. §11 de la spec)
-1. Routeur web (App vs Pages) + page reset-password à mirrorer — reco Phase 0.
-2. Transfert d'e-mail = accès session : accepter 1 clic ou page de confirmation ?
-3. Token de désinscription dédié vs scoppé.
-4. TTL 24 h vs 12 h.
-5. Suppression totale de la liste vs teaser partiel.
+## Implémentation (TDD RED→GREEN)
+- [x] **Phase A** — `MagicLinkService.issueLoginTokenForUser(userId, {ttlMinutes})` :
+  frappe un token pour un user connu, réutilise révocation+hash+create, TTL 24h
+  défaut, SANS e-mail, renvoie token brut ou null. (+9 tests)
+- [x] **Phase B** — `EmailService.sendNotificationDigestEmail` : champ `magicUrl`
+  (remplace `markAllReadUrl`/`notifications`), copy teaser compteurs-seuls,
+  clés i18n `teaserIntro`/`linkValidity`/`buttonText` (fr/en/es/pt/it/de).
+  Suppression liste acteur+aperçu. (+8 tests). Dead code retiré : `formatTimeAgo`.
+- [x] **Phase C** — `notification-digest.ts` : injecte MagicLinkService, issue le
+  token, calcule returnUrl (conversation la + récente via `context.conversationId`)
+  + conversationCount distinct, construit
+  `${frontendUrl}/auth/magic-link/validate?token=…&returnUrl=…`. Fallback gracieux
+  sans token si échec. Idempotence inchangée. (+7 tests). Dead code retiré :
+  `SYSTEM_NOTIFICATION_LABELS`, `resolveDigestEntry`, `MAX_NOTIFICATIONS_IN_EMAIL`.
+  Wiring `jobs/index.ts` (construit MagicLinkService via getCacheStore+GeoIPService).
+- [x] **Phase D** — Web : AUCUN changement requis (returnUrl + safeInternalPath
+  déjà en place). Vérifié.
 
-## Prochaine étape
-Attendre l'arbitrage utilisateur sur les points ouverts, puis implémenter en
-TDD selon le plan §9 (Phase 0 reco → 1 schema/service → 2 endpoint → 3 page →
-4 e-mail → 5 job → 6 désinscription → 7 mesure/rollout).
+## Vérification
+- [x] `MagicLinkService|EmailService|notification-digest` : 103/103 verts
+- [x] Suite gateway complète : 3263 passed ; 6 échecs PRÉ-EXISTANTS
+  (`PostFeedService`, `mark-conversation-status`) confirmés sur base via stash —
+  non liés à ce changement.
+- [x] `tsc --noEmit` gateway : 0 erreur (après build de @meeshy/shared)
+
+## Hors périmètre (non fait, cf. spec §7/§8)
+- List-Unsubscribe RFC 8058 (exigerait d'étendre EmailData.headers + 3 transports)
+- UTM / events de mesure · rollout graduel
