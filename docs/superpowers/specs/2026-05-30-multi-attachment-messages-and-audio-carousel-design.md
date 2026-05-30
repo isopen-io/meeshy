@@ -47,7 +47,7 @@ Aucun composant UI neuf : `pendingAttachmentsPreview` affiche déjà N tuiles au
 Décisions figées :
 
 1. **Ordre des groupes** = ordre d'ajout au composer (la première pièce de chaque type détermine la position du groupe).
-2. **Texte** = message **séparé**, envoyé **après** les pièces jointes (en dernier). Ex. « légende + 3 vocaux (ajoutés en 1er) + 2 photos » → ① message audio (3 pistes), ② message photos (2), ③ message texte.
+2. **Texte = message séparé, TOUJOURS, partout** (envoyé en **dernier**, après les pièces). Dès qu'au moins une pièce est jointe, le texte du composer part comme son propre message sans attachment. Ex. « légende + 3 vocaux (ajoutés en 1er) + 2 photos » → ① message audio (3 pistes), ② message photos (2), ③ message texte. **Inclut le cas 1 pièce + texte** : 1 vocal + légende → 2 messages (vocal, puis texte), pas de caption inline. Décision utilisateur informée 2026-05-30 (cf. *Réconciliation post-merge* ci-dessous).
 3. **Reply/forward reference** : posée sur le **premier** message envoyé uniquement (jamais dupliquée).
 4. **Optimistic insert** : un `insertOptimisticMediaMessage` par groupe (chacun son `cid`/`tempId`), pour affichage instantané.
 5. **`messageType`** : calculé par groupe (`.audio` pour le groupe audio, `.image`/`.video` pour le visuel).
@@ -80,7 +80,7 @@ Décisions figées :
 2. **Swipe** = changer la piste affichée **et** la jouer depuis 0 (la piste précédente s'arrête ; reset à 0 à chaque arrivée).
 3. **Transcription absente** (enrichissement Whisper en cours) : **masquer** la zone karaoké (zéro footprint) ; elle apparaît au delta socket `message:attachment-updated`.
 
-**Wiring `BubbleStandardLayout`** : la boucle `ForEach(audioAttachments)` (qui empile aujourd'hui) devient, quand `audioAttachments.count > 1`, un seul `AudioCarouselView(attachments:)`. Si `count == 1`, conserver le chemin `AudioMediaView` actuel (zéro régression mono-audio).
+**Wiring `BubbleStandardLayout`** (post-merge `4e3b6fbb8`) : la boucle `ForEach(audioAttachments)` (`BubbleStandardLayout.swift:562`, qui empile aujourd'hui avec `mediaStandaloneView(..., injectFooter:, embedsCaption:)`) devient, quand `audioAttachments.count > 1`, un seul `AudioCarouselView(attachments:)`. Si `count == 1`, conserver le chemin `mediaStandaloneView` → `AudioMediaView` actuel (zéro régression mono-audio). Le carrousel reprend la logique footer existante (`shouldInjectFooter` = `audioIsSoleContent || audioHostsReply || audioHostsCaption`) appliquée à la **piste courante**, et conserve le slot caption (`embedsCaptionInWidget`) au-dessus du footer pour les messages **entrants** multi-audio + texte (autres clients MIMI) — même si le composer iOS ne produit jamais ce cas (texte toujours séparé, cf. A2).
 
 **Réutilisation `allAudioItems`** : le param existant `allAudioItems: [ConversationViewModel.AudioItem]` de `AudioMediaView` alimente la file du manager partagé.
 
@@ -105,6 +105,14 @@ Le pan horizontal du carrousel (audio comme visuel) **consomme** le geste tant q
 - Mécanique exacte (UIKit gesture dependency / `failure relationship` vs SwiftUI `highPriorityGesture` + seuil de translation, ou rebond de bord du `ScrollView` paginé) à arrêter au plan d'implémentation.
 
 ---
+
+## Réconciliation post-merge (2026-05-30)
+
+Après validation du brainstorming, `origin/main` a été mergé dans la branche (merge `739762867`, sans conflit). Le merge a apporté `4e3b6fbb8 feat(bubble): audio + caption pattern SOTA (MIMI-aligned)` qui interagit avec A2 et A4 :
+
+- **Pattern caption MIMI** : un message portant à la fois `content` (texte) ET un attachment rend le texte **comme caption inline** dans la bulle de l'attachment (flag `embedsCaptionInWidget`, computed `audioHostsCaption`, `BubbleStandardLayout.swift:242`), jamais en bulle texte séparée. Réf. `draft-ietf-mimi-content-08`.
+- **Décision A2 (texte toujours séparé)** : choix utilisateur informé 2026-05-30. Le **composer iOS** ne produit donc jamais de message mêlant texte + attachment → `audioHostsCaption` reste faux pour les envois composer. C'est un **override assumé** du pattern caption pour le chemin composer (1 vocal + légende → 2 bulles, et non plus la bulle unifiée introduite par `4e3b6fbb8`).
+- **Capacité de rendu préservée** : on ne supprime **pas** le rendu caption de `4e3b6fbb8`. Les messages **entrants** (web, autres clients MIMI qui bundlent texte + attachment) continuent de s'afficher en bulle unifiée. A4 conserve donc le slot caption dans le carrousel pour ces cas.
 
 ## Stratégie de test (TDD)
 
