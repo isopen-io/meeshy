@@ -41,9 +41,9 @@ struct StrokeCaptureLayer: UIViewRepresentable {
                         designSize: CGSize = CanvasGeometry.designSize) -> CaptureEvent {
         guard let pkStroke = drawing.strokes.last else { return .none }
 
-        let scale = projectionScale(bounds: bounds, designSize: designSize)
+        let (scaleX, scaleY) = projectionScale(bounds: bounds, designSize: designSize)
         let designPoints: [CGPoint] = Array(pkStroke.path).map { point in
-            CGPoint(x: point.location.x * scale, y: point.location.y * scale)
+            CGPoint(x: point.location.x * scaleX, y: point.location.y * scaleY)
         }
         guard !designPoints.isEmpty else { return .none }
 
@@ -61,11 +61,14 @@ struct StrokeCaptureLayer: UIViewRepresentable {
         return .stroke(stroke)
     }
 
-    /// Échelle bounds→design (uniforme, `min` pour préserver le ratio quel que soit
-    /// le device). Même projection que le rendu (design 1080×1920 portable cross-device).
-    static func projectionScale(bounds: CGRect, designSize: CGSize) -> CGFloat {
-        guard bounds.width > 0, bounds.height > 0 else { return 1 }
-        return min(designSize.width / bounds.width, designSize.height / bounds.height)
+    /// Échelle bounds→design **non-uniforme** (axes X/Y séparés). Doit matcher le
+    /// rendu : `StoryRenderer` étire l'image design 1080×1920 sur la `renderSize` du
+    /// canvas via `CALayer` resize (stretch non-uniforme), et `MeeshyStrokeCanvas`
+    /// applique la même mise à l'échelle. Une projection uniforme (`min`) ici
+    /// désaligne le trait figé par rapport au doigt quand le canvas n'est pas 9:16.
+    static func projectionScale(bounds: CGRect, designSize: CGSize) -> (x: CGFloat, y: CGFloat) {
+        guard bounds.width > 0, bounds.height > 0 else { return (1, 1) }
+        return (designSize.width / bounds.width, designSize.height / bounds.height)
     }
 
     // MARK: - UIViewRepresentable

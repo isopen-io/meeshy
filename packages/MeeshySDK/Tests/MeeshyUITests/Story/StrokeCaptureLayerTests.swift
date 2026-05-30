@@ -66,17 +66,29 @@ final class StrokeCaptureLayerTests: XCTestCase {
         XCTAssertEqual(points.first?.y ?? 0, 100, accuracy: 1.0)
     }
 
-    func test_projectionScale_uniformMinRatio() {
-        // Wide bounds: design/bounds → min(1080/1080, 1920/640)= min(1, 3)=1.
-        let scale = StrokeCaptureLayer.projectionScale(
-            bounds: CGRect(x: 0, y: 0, width: 1080, height: 640),
+    func test_projectionScale_nonUniformAxes() {
+        // Canvas non-9:16 (plein écran 393×852) → axes X/Y distincts pour matcher
+        // le stretch non-uniforme de StoryRenderer / MeeshyStrokeCanvas.
+        let s = StrokeCaptureLayer.projectionScale(
+            bounds: CGRect(x: 0, y: 0, width: 393, height: 852),
             designSize: CanvasGeometry.designSize)
-        XCTAssertEqual(scale, 1.0, accuracy: 0.001)
+        XCTAssertEqual(s.x, 1080.0 / 393.0, accuracy: 0.001)
+        XCTAssertEqual(s.y, 1920.0 / 852.0, accuracy: 0.001)
+        XCTAssertNotEqual(s.x, s.y, accuracy: 0.001)
+    }
+
+    func test_projectionScale_nineSixteenBounds_axesEqual() {
+        let s = StrokeCaptureLayer.projectionScale(
+            bounds: CGRect(x: 0, y: 0, width: 540, height: 960),
+            designSize: CanvasGeometry.designSize)
+        XCTAssertEqual(s.x, 2.0, accuracy: 0.001)
+        XCTAssertEqual(s.y, 2.0, accuracy: 0.001)
     }
 
     func test_projectionScale_zeroBounds_returnsOne() {
-        let scale = StrokeCaptureLayer.projectionScale(
+        let s = StrokeCaptureLayer.projectionScale(
             bounds: .zero, designSize: CanvasGeometry.designSize)
-        XCTAssertEqual(scale, 1.0)
+        XCTAssertEqual(s.x, 1.0)
+        XCTAssertEqual(s.y, 1.0)
     }
 }

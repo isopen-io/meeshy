@@ -10,7 +10,6 @@ public enum DrawingEditTool: String, CaseIterable, Sendable, Equatable {
     case color      // couleur du pinceau / du trait sélectionné
     case thickness  // épaisseur
     case smoothing  // lissage : raw / curve / line
-    case layers     // liste des traits (sélection, suppression)
 
     var sfSymbol: String {
         switch self {
@@ -18,7 +17,6 @@ public enum DrawingEditTool: String, CaseIterable, Sendable, Equatable {
         case .color:     return "paintpalette.fill"
         case .thickness: return "lineweight"
         case .smoothing: return "scribble.variable"
-        case .layers:    return "square.stack.3d.up"
         }
     }
 
@@ -28,7 +26,6 @@ public enum DrawingEditTool: String, CaseIterable, Sendable, Equatable {
         case .color:     return "Couleur du trait"
         case .thickness: return "Épaisseur du trait"
         case .smoothing: return "Lissage du trait"
-        case .layers:    return "Liste des traits"
         }
     }
 }

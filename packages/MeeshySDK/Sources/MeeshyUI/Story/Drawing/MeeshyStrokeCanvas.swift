@@ -24,9 +24,13 @@ struct MeeshyStrokeCanvas: View, Equatable {
 
     var body: some View {
         Canvas { context, size in
-            guard designSize.width > 0 else { return }
-            let scale = size.width / designSize.width
-            context.scaleBy(x: scale, y: scale)
+            guard designSize.width > 0, designSize.height > 0 else { return }
+            // Stretch non-uniforme design→bounds, identique à `StoryRenderer`
+            // (CALayer resize) et à la projection de capture (`StrokeCaptureLayer`).
+            // Garantit que le trait figé s'affiche exactement là où l'utilisateur a
+            // dessiné, et à l'identique entre aperçu live, bake et reader.
+            context.scaleBy(x: size.width / designSize.width,
+                            y: size.height / designSize.height)
 
             for stroke in strokes where stroke.tool != .eraser && !stroke.points.isEmpty {
                 paint(stroke, in: &context)

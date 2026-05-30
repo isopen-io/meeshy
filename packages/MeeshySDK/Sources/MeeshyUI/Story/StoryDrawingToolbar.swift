@@ -31,6 +31,8 @@ struct StoryDrawingToolbar: View {
                             viewModel.exitDrawingEditingMode()
                         }
                     )
+                    // Liste permanente des traits sous les bulles (sélection + suppression).
+                    DrawingStrokeListStrip(viewModel: viewModel)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
