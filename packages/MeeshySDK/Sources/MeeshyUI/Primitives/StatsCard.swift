@@ -12,7 +12,11 @@ public struct StatsCard: View {
     private let label: String
     private let value: String
     private let accentColor: String
-    @ObservedObject private var theme = ThemeManager.shared
+    // Leaf primitive — access the ThemeManager singleton without observing it.
+    // `colorScheme` preserves theme-flip reactivity (its change re-renders the
+    // view, recomputing the derived `theme` colors) without a subscription.
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemeManager { ThemeManager.shared }
 
     public init(icon: String, label: String, value: String, accentColor: String) {
         self.icon = icon

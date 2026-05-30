@@ -105,7 +105,11 @@ public struct UserIdentityBar: View {
     public let trailingSecondary: [IdentityBarElement]
     public let tintColor: Color?
 
-    @ObservedObject private var theme = ThemeManager.shared
+    // Leaf primitive — access the ThemeManager singleton without observing it.
+    // `colorScheme` preserves theme-flip reactivity (its change re-renders the
+    // view, recomputing the derived `theme` colors) without a subscription.
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemeManager { ThemeManager.shared }
 
     public init(
         avatar: AvatarConfig? = nil,

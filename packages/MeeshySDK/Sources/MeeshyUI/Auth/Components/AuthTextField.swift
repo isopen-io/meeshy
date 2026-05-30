@@ -14,7 +14,11 @@ public struct AuthTextField: View {
     @State private var isShowingPassword = false
     @State private var validationError: String?
     @FocusState private var isFocused: Bool
-    @StateObject private var theme = ThemeManager.shared
+    // Leaf field — do not observe the ThemeManager singleton. `colorScheme`
+    // keeps theme-flip reactivity; `theme` is accessed non-observingly for its
+    // derived input colors.
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemeManager { ThemeManager.shared }
 
     public init(title: String, icon: String, text: Binding<String>,
                 isSecure: Bool = false, keyboardType: UIKeyboardType = .default,
