@@ -317,6 +317,106 @@ describe('EmailService', () => {
   });
 
   // ==============================================
+  // NOTIFICATION DIGEST (re-engagement teaser) TESTS
+  // ==============================================
+
+  describe('sendNotificationDigestEmail', () => {
+    const baseDigest = {
+      to: 'user@example.com',
+      name: 'Alice',
+      language: 'fr',
+      unreadCount: 4,
+      notifications: [
+        { type: 'message', actorName: 'Bob Sender', content: 'Secret preview text', createdAt: new Date().toISOString() }
+      ],
+      magicUrl: 'https://meeshy.me/auth/magic-link/validate?token=RAWTOKEN&returnUrl=%2Fconversations%2Fabc',
+      settingsUrl: 'https://meeshy.me/settings#notifications'
+    };
+
+    it('should send the digest and succeed', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'k' });
+      const service = new EmailService();
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({ messageId: 'm' }));
+
+      const result = await service.sendNotificationDigestEmail(baseDigest);
+
+      expect(result.success).toBe(true);
+      expect(result.provider).toBe('brevo');
+    });
+
+    it('should use the magic login URL as the CTA href', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'k' });
+      const service = new EmailService();
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({}));
+
+      await service.sendNotificationDigestEmail(baseDigest);
+
+      const payload = mockAxiosPost.mock.calls[0][1] as any;
+      expect(payload.htmlContent).toContain(`href="${baseDigest.magicUrl}"`);
+    });
+
+    it('should NOT leak the legacy unauthenticated /notifications?markAllRead link', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'k' });
+      const service = new EmailService();
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({}));
+
+      await service.sendNotificationDigestEmail(baseDigest);
+
+      const payload = mockAxiosPost.mock.calls[0][1] as any;
+      expect(payload.htmlContent).not.toContain('markAllRead');
+    });
+
+    it('should NOT reveal actor names or message content (teaser = counts only)', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'k' });
+      const service = new EmailService();
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({}));
+
+      await service.sendNotificationDigestEmail(baseDigest);
+
+      const payload = mockAxiosPost.mock.calls[0][1] as any;
+      expect(payload.htmlContent).not.toContain('Bob Sender');
+      expect(payload.htmlContent).not.toContain('Secret preview text');
+      expect(payload.textContent).not.toContain('Bob Sender');
+      expect(payload.textContent).not.toContain('Secret preview text');
+    });
+
+    it('should still show the unread count', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'k' });
+      const service = new EmailService();
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({}));
+
+      await service.sendNotificationDigestEmail(baseDigest);
+
+      const payload = mockAxiosPost.mock.calls[0][1] as any;
+      expect(payload.htmlContent).toContain('4');
+    });
+
+    it('should localize the subject (fr)', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'k' });
+      const service = new EmailService();
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({}));
+
+      await service.sendNotificationDigestEmail(baseDigest);
+
+      const payload = mockAxiosPost.mock.calls[0][1] as any;
+      expect(payload.subject).toBeTruthy();
+      expect(payload.subject.toLowerCase()).toContain('meeshy');
+    });
+
+    it('should escape HTML in the user name', async () => {
+      const { EmailService } = await getEmailServiceWithEnv({ BREVO_API_KEY: 'k' });
+      const service = new EmailService();
+      mockAxiosPost.mockReturnValueOnce(createSuccessResponse({}));
+
+      await service.sendNotificationDigestEmail({ ...baseDigest, name: '<script>x</script>' });
+
+      const payload = mockAxiosPost.mock.calls[0][1] as any;
+      expect(payload.htmlContent).not.toContain('<script>x</script>');
+      expect(payload.htmlContent).toContain('&lt;script&gt;');
+    });
+  });
+
+  // ==============================================
   // PROVIDER FALLBACK TESTS
   // ==============================================
 

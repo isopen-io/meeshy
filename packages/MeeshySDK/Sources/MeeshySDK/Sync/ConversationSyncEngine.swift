@@ -20,7 +20,15 @@ public protocol ConversationSyncEngineProviding: AnyObject, Sendable {
     func fullSync() async -> Bool
     @discardableResult
     func syncSinceLastCheckpoint() async -> Bool
-    func ensureMessages(for conversationId: String) async
+    /// Ensure the conversation's recent messages are in cache.
+    ///
+    /// `force == false` respects the cache freshness TTL (a `.fresh` cache
+    /// short-circuits — used by background prefetch where we have no signal
+    /// that anything changed). `force == true` bypasses the TTL and always
+    /// hits the network: a push notification is authoritative evidence that
+    /// a new message exists, so the freshness clock is the wrong heuristic —
+    /// we KNOW the cache is behind regardless of how recently it was loaded.
+    func ensureMessages(for conversationId: String, force: Bool) async
     func fetchOlderMessages(for conversationId: String, before messageId: String) async
     func cleanupRetentionIfNeeded() async
     func startSocketRelay() async
@@ -42,6 +50,14 @@ public protocol ConversationSyncEngineProviding: AnyObject, Sendable {
     ///      user was looking at it.
     /// Pass `nil` (on view disappear) to restore pass-through behaviour.
     func setCurrentlyOpenConversation(_ conversationId: String?)
+}
+
+public extension ConversationSyncEngineProviding {
+    /// TTL-respecting convenience (`force: false`). Used where there is no
+    /// external signal that the cache is stale — e.g. background prefetch.
+    func ensureMessages(for conversationId: String) async {
+        await ensureMessages(for: conversationId, force: false)
+    }
 }
 
 // MARK: - Implementation
@@ -459,13 +475,15 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     // MARK: - Messages
 
-    public func ensureMessages(for conversationId: String) async {
-        let cached = await cache.messages.load(for: conversationId)
-        switch cached {
-        case .fresh:
-            return
-        case .stale, .expired, .empty:
-            break
+    public func ensureMessages(for conversationId: String, force: Bool) async {
+        if !force {
+            let cached = await cache.messages.load(for: conversationId)
+            switch cached {
+            case .fresh:
+                return
+            case .stale, .expired, .empty:
+                break
+            }
         }
 
         do {
