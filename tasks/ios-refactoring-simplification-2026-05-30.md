@@ -93,6 +93,16 @@ Top : `CacheCoordinator` (247), `ThemeManager` (179), `AuthManager` (175), `APIC
 
 **Ordre** : commencer par les leaf views (gain perf + faible risque), puis les VMs sans protocole.
 
+### Avancement L1 (PR #307)
+Pattern appliqué = celui de l'audit **P1-16** (`IncomingCallView`) : `@ObservedObject private var theme = ThemeManager.shared` → `@Environment(\.colorScheme) private var colorScheme` + `private var theme: ThemeManager { ThemeManager.shared }` (accès non-observant). La réactivité dark/light reste assurée par `.preferredColorScheme` posé à la racine de l'app → `\.colorScheme` → re-render → recalcul des couleurs `theme.*`. Zéro changement de call-site, zéro perte de feature.
+
+Premiers leaf primitives migrés :
+- `Primitives/AchievementBadge.swift` — `@ObservedObject theme` **mort** (jamais utilisé) → supprimé.
+- `Primitives/ChatBubble.swift` — `isDark` dérivé de `colorScheme` ; `theme.textPrimary` via accès non-observant.
+- `Primitives/ProfileCompletionRing.swift`, `Primitives/StatsCard.swift`, `Primitives/UserIdentityBar.swift` — accès non-observant + `colorScheme` pour la réactivité.
+
+Reste à traiter (même pattern, par PR) : autres `@ObservedObject … = ThemeManager.shared` en vues **leaf** (cf. `grep`), en distinguant containers (où l'observation est légitime) des cellules. Vérif build : macOS.
+
 ---
 
 ## 5. Dette de logging (28 `print`)

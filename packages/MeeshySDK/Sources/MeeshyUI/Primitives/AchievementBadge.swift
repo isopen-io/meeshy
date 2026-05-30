@@ -12,7 +12,6 @@ import MeeshySDK
 /// - Animation pulse pour unlocked
 public struct AchievementBadge: View {
     private let achievement: Achievement
-    @ObservedObject private var theme = ThemeManager.shared
 
     public init(achievement: Achievement) {
         self.achievement = achievement

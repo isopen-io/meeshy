@@ -11,9 +11,14 @@ public struct ChatBubble: View {
 
     @State private var isVisible = false
     @State private var isPressed = false
-    @ObservedObject private var theme = ThemeManager.shared
+    // Leaf cell — do not observe the ThemeManager singleton (every published
+    // change would re-render every bubble). Dark/light is read reactively from
+    // the environment (driven by the app-root `.preferredColorScheme`), and the
+    // singleton is accessed non-observingly for its derived colors.
+    @Environment(\.colorScheme) private var colorScheme
 
-    private var isDark: Bool { theme.mode.isDark }
+    private var theme: ThemeManager { ThemeManager.shared }
+    private var isDark: Bool { colorScheme == .dark }
 
     public init(text: String, isMe: Bool, index: Int = 0, animateEntrance: Bool = true, contactColor: String = "FF2E63") {
         self.text = text; self.isMe = isMe; self.index = index; self.animateEntrance = animateEntrance; self.contactColor = contactColor
