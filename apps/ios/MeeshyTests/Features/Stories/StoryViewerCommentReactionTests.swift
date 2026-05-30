@@ -131,4 +131,40 @@ final class StoryViewerCommentReactionTests: XCTestCase {
         XCTAssertTrue(inFlightIds.contains(commentA), "Comment A should be locked")
         XCTAssertFalse(inFlightIds.contains(commentB), "Comment B should be independent — not locked")
     }
+
+    // MARK: - computeLikedIds(fromCachedComments:) — cache path
+
+    private func makeCachedComment(id: String, currentUserReactions: [String]?) -> FeedComment {
+        return FeedComment(
+            id: id,
+            author: "Alice",
+            authorId: "a1",
+            content: "stub",
+            currentUserReactions: currentUserReactions
+        )
+    }
+
+    func test_computeLikedIds_fromCachedComments_extractsHeartReactions() {
+        let comments: [FeedComment] = [
+            makeCachedComment(id: "c1", currentUserReactions: ["\u{2764}\u{FE0F}"]),
+            makeCachedComment(id: "c2", currentUserReactions: ["\u{1F525}"]),
+            makeCachedComment(id: "c3", currentUserReactions: nil),
+            makeCachedComment(id: "c4", currentUserReactions: ["\u{2764}\u{FE0F}", "\u{1F525}"]),
+        ]
+        let result = StoryViewerView.computeLikedIds(fromCachedComments: comments)
+        XCTAssertEqual(result, ["c1", "c4"])
+    }
+
+    func test_computeLikedIds_fromCachedComments_emptyInput_returnsEmptySet() {
+        let result = StoryViewerView.computeLikedIds(fromCachedComments: [])
+        XCTAssertEqual(result, Set<String>())
+    }
+
+    func test_computeLikedIds_fromCachedComments_emptyReactionsArray_excludesId() {
+        let comments: [FeedComment] = [
+            makeCachedComment(id: "c1", currentUserReactions: [])
+        ]
+        let result = StoryViewerView.computeLikedIds(fromCachedComments: comments)
+        XCTAssertTrue(result.isEmpty)
+    }
 }

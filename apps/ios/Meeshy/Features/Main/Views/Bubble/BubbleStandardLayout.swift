@@ -223,6 +223,31 @@ struct BubbleStandardLayout: View {
             && !audioAttachments.isEmpty
     }
 
+    /// True when the bubble carries an audio attachment AND text content
+    /// (the message body), without visual attachments competing for layout.
+    /// In that case the text is rendered as a CAPTION INSIDE the audio
+    /// widget's playerBackground — single unified bubble (caption pattern,
+    /// SOTA aligned with WhatsApp/Telegram/MIMI MultiPart processAll +
+    /// disposition inline). The legacy path rendered audio + textBubble as
+    /// two adjacent bubbles which broke visual atomicity (user feedback
+    /// 2026-05-29).
+    ///
+    /// Excludes :
+    /// - `audioHostsReply` : the reply citation already hosts the bottomSlot
+    ///   contract differently — caption + reply combo is rare and the existing
+    ///   topSlot reply UX takes priority for the moment.
+    /// - `visualGrid` slides : when an image/video is also present, the text
+    ///   becomes the visual grid caption (existing visualHostsReply path),
+    ///   not the audio's caption.
+    private var audioHostsCaption: Bool {
+        !audioAttachments.isEmpty
+            && !content.audioHostsReply
+            && !content.visualHostsReply
+            && content.hasTextOrNonMediaContent
+            && content.reply == nil
+            && visualAttachments.isEmpty
+    }
+
     /// Whether the bubble's inner content stack (non-media attachments,
     /// expandable text, link preview, inline translation panel) has anything
     /// to render. Gates the padded VStack so a quote-only bubble never draws
@@ -527,19 +552,24 @@ struct BubbleStandardLayout: View {
                 }
             }
 
-            // Audio standalone. Si `audioHostsReply`, la citation est rendue
-            // dans le topSlot du widget audio (pas de chat bubble englobante).
-            // Si `audioIsSoleContent` OU `audioHostsReply`, le footer est
-            // injecté en bottomSlot — un unique BubbleFooter intégré, jamais
-            // de meta-row dupliquée sous le widget.
+            // Audio standalone. Trois cas où le footer + caption sont
+            // injectés DANS le widget audio (single unified bubble) :
+            //   - `audioIsSoleContent` : audio seul, footer dans widget
+            //   - `audioHostsReply` : audio + reply, citation dans topSlot
+            //   - `audioHostsCaption` (NEW 2026-05-29) : audio + texte, le
+            //     texte devient le caption rendu DANS playerBackground via
+            //     `embedsCaptionInWidget` au lieu d'une bulle texte séparée.
             ForEach(audioAttachments) { attachment in
                 let isLastAudio = attachment.id == audioAttachments.last?.id
-                let shouldInjectFooter = (audioIsSoleContent && isLastAudio) || content.audioHostsReply
+                let shouldInjectFooter = (audioIsSoleContent && isLastAudio)
+                    || content.audioHostsReply
+                    || (audioHostsCaption && isLastAudio)
                 mediaStandaloneView(
                     attachment,
                     injectFooter: shouldInjectFooter,
                     replyReference: content.audioHostsReply ? content.reply?.reference : nil,
-                    replyIsStory: content.audioHostsReply ? (content.reply?.isStory ?? false) : false
+                    replyIsStory: content.audioHostsReply ? (content.reply?.isStory ?? false) : false,
+                    embedsCaption: audioHostsCaption && isLastAudio
                 )
             }
 
@@ -550,12 +580,14 @@ struct BubbleStandardLayout: View {
             // (see `bubbleInnerContent`).
             if isEmojiOnly && content.reply == nil {
                 emojiOnlyContent
-            } else if content.hasTextOrNonMediaContent
-                || (content.reply != nil && !content.audioHostsReply && !content.visualHostsReply) {
+            } else if (content.hasTextOrNonMediaContent
+                || (content.reply != nil && !content.audioHostsReply && !content.visualHostsReply))
+                && !audioHostsCaption {
                 textBubbleContent
             }
-            // Audio-only / visual-only reply : leur citation est hébergée par
-            // le widget média lui-même — `textBubbleContent` est intentionnellement
+            // Audio-only / visual-only reply / audio caption pattern : la
+            // citation et/ou le texte sont hébergés par le widget média
+            // lui-même — `textBubbleContent` est intentionnellement
             // suppressed pour eviter la chat bubble parasite.
         }
         .blur(radius: shouldBlur ? 20 : 0)
@@ -943,7 +975,8 @@ struct BubbleStandardLayout: View {
         _ attachment: MessageAttachment,
         injectFooter: Bool = false,
         replyReference: ReplyReference? = nil,
-        replyIsStory: Bool = false
+        replyIsStory: Bool = false,
+        embedsCaption: Bool = false
     ) -> some View {
         let isMe = content.isMe
         // Audio-only messages host the bubble footer inside the audio widget;
@@ -984,7 +1017,8 @@ struct BubbleStandardLayout: View {
                 parentIsMe: isMe,
                 onReplyTap: onReplyTap,
                 onStoryReplyTap: onStoryReplyTap,
-                onPlayAudio: onPlayAudio
+                onPlayAudio: onPlayAudio,
+                embedsCaptionInWidget: embedsCaption
             )
             .equatable()
 

@@ -27,6 +27,15 @@ struct TextEditToolOptions: View {
             }
         }
         .frame(maxWidth: .infinity)
+        .onAppear {
+            if tool == .border {
+                var local = textObject
+                Self.initializeBorderDefaultsIfNeutral(on: &local)
+                if local.borderColor != textObject.borderColor || local.borderWidth != textObject.borderWidth {
+                    textObject = local
+                }
+            }
+        }
     }
 
     // MARK: - Style
@@ -208,21 +217,56 @@ struct TextEditToolOptions: View {
 
     // MARK: - Border
 
+    /// Initialise les défauts de bordure si l'utilisateur n'en a jamais défini.
+    /// Posé à l'ouverture du tool border par le parent (`StoryTextEditToolbar`)
+    /// pour offrir un retour visuel immédiat : trait blanc 4pt sur le texte.
+    static func initializeBorderDefaultsIfNeutral(on obj: inout StoryTextObject) {
+        if obj.borderColor == nil && obj.borderWidth == nil {
+            obj.borderColor = "FFFFFF"
+            obj.borderWidth = 4
+        }
+    }
+
     private var borderOptions: some View {
         VStack(spacing: 10) {
-            HStack(spacing: 8) {
-                borderWidthChip(label: "Aucun", width: nil)
-                borderWidthChip(label: "Fin", width: 2)
-                borderWidthChip(label: "Moyen", width: 4)
-                borderWidthChip(label: "Épais", width: 8)
+            // Slider continu 0...12pt, défaut 4pt (cf. `initializeBorderDefaultsIfNeutral`).
+            // Slider à 0 ⇒ aucun trait rendu (guard `widthPx > 0` dans `StoryTextLayer`).
+            // Couleur conservée → utilisateur peut remonter le slider sans re-choisir une couleur.
+            HStack(spacing: 10) {
+                Image(systemName: "textformat.size.smaller")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+                Slider(
+                    value: Binding(
+                        get: { textObject.borderWidth ?? 0 },
+                        set: { newValue in
+                            textObject.borderWidth = newValue
+                            if textObject.borderColor == nil { textObject.borderColor = "FFFFFF" }
+                        }
+                    ),
+                    in: 0...12,
+                    step: 0.5
+                )
+                .tint(MeeshyColors.brandPrimary)
+                Image(systemName: "bold")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(.secondary)
+                Text(String(format: "%.1f", textObject.borderWidth ?? 0))
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 34)
             }
+            // Palette de couleurs — TOUJOURS active (suppression `.disabled` + `.opacity`).
+            // Tap sur une couleur quand `borderWidth == 0` re-active 4pt automatiquement.
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     ForEach(StoryTextColors.palette, id: \.self) { hex in
                         let isSel = textObject.borderColor?.caseInsensitiveCompare(hex) == .orderedSame
                         Button {
                             textObject.borderColor = hex
-                            if textObject.borderWidth == nil { textObject.borderWidth = 4 }
+                            if textObject.borderWidth == nil || textObject.borderWidth == 0 {
+                                textObject.borderWidth = 4
+                            }
                             HapticFeedback.light()
                         } label: {
                             colorDot(hex: hex, selected: isSel, size: 28)
@@ -232,38 +276,7 @@ struct TextEditToolOptions: View {
                 }
                 .padding(4)   // marge pour le `scaleEffect` des pastilles sélectionnées
             }
-            .opacity(textObject.borderColor == nil ? 0.4 : 1)
-            .disabled(textObject.borderColor == nil)
         }
-    }
-
-    private func borderWidthChip(label: String, width: Double?) -> some View {
-        let isSel: Bool = {
-            if let width { return textObject.borderColor != nil && textObject.borderWidth == width }
-            return textObject.borderColor == nil
-        }()
-        return Button {
-            if let width {
-                textObject.borderWidth = width
-                if textObject.borderColor == nil { textObject.borderColor = "FFFFFF" }
-            } else {
-                textObject.borderColor = nil
-                textObject.borderWidth = nil
-            }
-            HapticFeedback.light()
-        } label: {
-            Text(label)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(isSel ? Color.white : Color.primary)
-                .frame(maxWidth: .infinity)
-                .frame(height: 36)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(isSel ? AnyShapeStyle(MeeshyColors.brandGradient)
-                                    : AnyShapeStyle(Color.gray.opacity(0.18)))
-                )
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Shared

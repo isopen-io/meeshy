@@ -71,12 +71,7 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
         // taille de police design donne un pourcentage indépendant de la
         // résolution ET de l'échelle (le contour garde la même épaisseur design
         // quel que soit `text.scale`).
-        var strokeAttrs: [NSAttributedString.Key: Any] = [:]
-        if let borderHex = text.borderColor, let borderColor = parseHexColor(borderHex) {
-            let widthPx = CGFloat(text.borderWidth ?? 3.0)
-            strokeAttrs[.strokeColor] = borderColor.cgColor
-            strokeAttrs[.strokeWidth] = -(widthPx / max(designFontSize, 1)) * 100.0
-        }
+        let strokeAttrs = Self.strokeAttributes(for: text, designFontSize: designFontSize)
 
         // Measure in design space.
         let designAttr = NSAttributedString(string: text.text, attributes: [
@@ -215,6 +210,31 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
 
     // MARK: - Helpers
 
+    /// Calcule les attributs de stroke (`strokeColor`, `strokeWidth`) pour un
+    /// `StoryTextObject`. Retourne un dictionnaire VIDE si aucun stroke ne doit
+    /// être rendu :
+    /// - `borderColor == nil` → pas de couleur définie
+    /// - couleur invalide (hex non parsable) → on skip
+    /// - `borderWidth == nil` OU `borderWidth == 0` → 0 pixel ⇒ rien à dessiner
+    ///
+    /// Extracted as `nonisolated static` pour permettre tests unitaires sans
+    /// instancier de `StoryTextLayer` (qui requiert un context UIKit/CATransaction).
+    nonisolated static func strokeAttributes(
+        for text: StoryTextObject,
+        designFontSize: CGFloat
+    ) -> [NSAttributedString.Key: Any] {
+        var attrs: [NSAttributedString.Key: Any] = [:]
+        guard
+            let borderHex = text.borderColor,
+            let borderColor = parseHexColorNonisolated(borderHex)
+        else { return attrs }
+        let widthPx = CGFloat(text.borderWidth ?? 0)
+        guard widthPx > 0 else { return attrs }
+        attrs[.strokeColor] = borderColor.cgColor
+        attrs[.strokeWidth] = -(widthPx / max(designFontSize, 1)) * 100.0
+        return attrs
+    }
+
     @MainActor
     private func resolveFont(family: String, size: CGFloat) -> UIFont {
         if family == "system" {
@@ -254,6 +274,12 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
 
     @MainActor
     private func parseHexColor(_ hex: String?) -> UIColor? {
+        return Self.parseHexColorNonisolated(hex)
+    }
+
+    /// Variante `nonisolated` du parser hex pour usage depuis les statics testables.
+    /// Logique identique à l'ancien `parseHexColor` MainActor.
+    nonisolated static func parseHexColorNonisolated(_ hex: String?) -> UIColor? {
         guard let hex else { return nil }
         var trimmed = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.hasPrefix("#") { trimmed.removeFirst() }

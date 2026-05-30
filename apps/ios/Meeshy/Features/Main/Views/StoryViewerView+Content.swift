@@ -1401,7 +1401,8 @@ extension StoryViewerView {
                     content: c.content, timestamp: c.createdAt,
                     likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                     parentId: commentId,
-                    originalLanguage: c.originalLanguage, translatedContent: translated
+                    originalLanguage: c.originalLanguage, translatedContent: translated,
+                    currentUserReactions: c.currentUserReactions
                 )
             }
             storyCommentRepliesMap[commentId] = replies
@@ -1454,7 +1455,11 @@ extension StoryViewerView {
     /// depuis `hasCurrentUser`. Le résultat affiché — `comment.likes + delta`
     /// — converge vers la vérité serveur sans flicker.
     func applyCommentReactionEvent(_ event: SocketCommentReactionUpdateEvent) {
-        guard showCommentsOverlay else { return }
+        // 2026-05-29 : on ne gate plus sur `showCommentsOverlay` — l'état doit
+        // rester aligné sur le serveur même quand l'overlay est fermé.
+        // Si `storyComments` est vide (overlay jamais ouvert), `firstIndex(where:)`
+        // plus bas retourne nil et on skip silencieusement ; on se ré-aligne
+        // au prochain load via `computeLikedIds(fromCachedComments:)` (Task 3).
         guard event.postId == currentStory?.id else { return }
         guard event.emoji == Self.heartEmoji else { return }
 
@@ -1532,6 +1537,17 @@ extension StoryViewerView {
         )
     }
 
+    /// Overload pour le chemin cache : `FeedComment` (déjà mappé) porte maintenant
+    /// `currentUserReactions` (cf. `FeedModels.swift`). Permet de restaurer
+    /// `storyCommentLikedIds` au cold start sans round-trip réseau.
+    static func computeLikedIds(fromCachedComments comments: [FeedComment]) -> Set<String> {
+        return Set(
+            comments
+                .filter { $0.currentUserReactions?.contains(StoryViewerView.heartEmoji) == true }
+                .map { $0.id }
+        )
+    }
+
     func loadStoryComments() {
         guard let story = currentStory, !isLoadingComments else { return }
         Task { await loadStoryCommentsAsync(story: story) }
@@ -1549,11 +1565,13 @@ extension StoryViewerView {
         switch cached {
         case .fresh(let comments, _):
             storyComments = comments
+            storyCommentLikedIds = Self.computeLikedIds(fromCachedComments: comments)
             let topAll = comments.filter { $0.parentId == nil }
             storyCommentCount = topAll.count + topAll.reduce(0) { $0 + $1.replies }
             return
         case .stale(let comments, _):
             storyComments = comments
+            storyCommentLikedIds = Self.computeLikedIds(fromCachedComments: comments)
             let topAll = comments.filter { $0.parentId == nil }
             storyCommentCount = topAll.count + topAll.reduce(0) { $0 + $1.replies }
         case .expired, .empty:
@@ -1585,7 +1603,8 @@ extension StoryViewerView {
                     content: c.content, timestamp: c.createdAt,
                     likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                     parentId: c.parentId,
-                    originalLanguage: c.originalLanguage, translatedContent: translated
+                    originalLanguage: c.originalLanguage, translatedContent: translated,
+                    currentUserReactions: c.currentUserReactions
                 )
             }
             storyComments = comments
