@@ -10,18 +10,25 @@ struct StoryDrawingToolbar: View {
     @ObservedObject var viewModel: StoryComposerViewModel
 
     var body: some View {
-        if case .active(_, let expandedTool) = viewModel.drawingEditingMode {
+        if case .active(let selectedStrokeId, let expandedTool) = viewModel.drawingEditingMode {
             VStack(spacing: 0) {
                 Spacer(minLength: 0)
                 VStack(spacing: 10) {
-                    if let tool = expandedTool {
+                    // Panneau d'options du PINCEAU actif (nouveaux traits). Affiché
+                    // seulement quand aucun trait n'est sélectionné — sinon l'édition
+                    // par-trait se fait inline dans la liste verticale ci-dessous.
+                    if let tool = expandedTool, selectedStrokeId == nil {
                         DrawingEditToolOptions(tool: tool, viewModel: viewModel)
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                     DrawingEditFloatingBubbles(
-                        expandedTool: expandedTool,
+                        expandedTool: selectedStrokeId == nil ? expandedTool : nil,
                         onSelectTool: { tool in
-                            viewModel.setExpandedDrawingTool(expandedTool == tool ? nil : tool)
+                            // Les bulles règlent le pinceau actif → on désélectionne
+                            // tout trait avant de déplier l'outil.
+                            viewModel.selectStroke(nil)
+                            viewModel.setExpandedDrawingTool(
+                                (selectedStrokeId == nil && expandedTool == tool) ? nil : tool)
                             HapticFeedback.light()
                         },
                         onDismiss: {
@@ -31,8 +38,9 @@ struct StoryDrawingToolbar: View {
                             viewModel.exitDrawingEditingMode()
                         }
                     )
-                    // Liste permanente des traits sous les bulles (sélection + suppression).
-                    DrawingStrokeListStrip(viewModel: viewModel)
+                    // Liste verticale des traits : édition inline par-trait
+                    // (couleur, style, épaisseur, suppression).
+                    DrawingStrokeList(viewModel: viewModel)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
