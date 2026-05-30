@@ -9,7 +9,6 @@ public struct FullscreenImageView: View {
     public let fallbackText: String
     public let accentColor: String
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var theme = ThemeManager.shared
 
     @State private var scale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
