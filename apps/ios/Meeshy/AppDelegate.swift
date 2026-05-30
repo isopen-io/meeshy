@@ -173,7 +173,11 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                         )
                     }
                     group.addTask {
-                        await ConversationSyncEngine.shared.ensureMessages(for: convId)
+                        // A silent push is authoritative evidence a new
+                        // message exists — bypass the cache TTL so a recently
+                        // loaded (still `.fresh`) cache doesn't suppress the
+                        // fetch and leave the conversation missing the message.
+                        await ConversationSyncEngine.shared.ensureMessages(for: convId, force: true)
                     }
                 }
             }
@@ -470,7 +474,11 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
             if let convId {
                 await withTaskGroup(of: Void.self) { group in
                     group.addTask {
-                        await ConversationSyncEngine.shared.ensureMessages(for: convId)
+                        // Foreground banner = a message just landed; force the
+                        // fetch past the cache TTL so the open (or about-to-
+                        // open) conversation reflects it even if the socket
+                        // lagged or the push arrived via a different path.
+                        await ConversationSyncEngine.shared.ensureMessages(for: convId, force: true)
                     }
                     group.addTask {
                         await PushDeliveryReceiptService.shared.ack(

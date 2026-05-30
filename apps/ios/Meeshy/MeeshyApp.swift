@@ -453,9 +453,12 @@ struct MeeshyApp: App {
                             }
                         }
                         Task { await SessionManager.shared.migrateKeychainIfNeeded() }
-                        if let pending = pushManager.pendingNotificationPayload {
-                            handlePushNavigation(payload: pending)
-                        }
+                        // A push tapped from the login screen leaves a pending
+                        // payload on `PushNotificationManager`; the root view
+                        // mounted by this login transition consumes it directly
+                        // via its `$pendingNotificationPayload` subscription
+                        // (the published value is replayed to that late
+                        // subscriber), so no manual hop is needed here.
                     } else {
                         NotificationToastManager.shared.reset()
                         NotificationCoordinator.shared.reset()
@@ -478,10 +481,6 @@ struct MeeshyApp: App {
                         MessageSocketManager.shared.disconnect()
                         SocialSocketManager.shared.disconnect()
                     }
-                }
-                .onReceive(pushManager.$pendingNotificationPayload) { payload in
-                    guard let payload else { return }
-                    handlePushNavigation(payload: payload)
                 }
                 .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink) { _, link in
                     handleGuestDeepLink(link)
@@ -548,18 +547,6 @@ struct MeeshyApp: App {
         } else {
             UIApplication.shared.registerForRemoteNotifications()
         }
-    }
-
-    private func handlePushNavigation(payload: NotificationPayload) {
-        guard authManager.isAuthenticated else {
-            return
-        }
-
-        NotificationCenter.default.post(
-            name: .handlePushNotification,
-            object: payload
-        )
-        pushManager.clearPendingNotification()
     }
 
     // MARK: - Crash Diagnostics Surfacing

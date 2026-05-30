@@ -176,6 +176,30 @@ final class ConversationSyncEngineTests: XCTestCase {
         await fulfillment(of: [expectation], timeout: 2.0)
     }
 
+    func test_ensureMessages_force_alwaysRefetchesAcrossConsecutiveCalls() async {
+        // A non-forced ensure has a `.fresh` short-circuit: a second call on a
+        // cache the first call just populated would normally NOT refetch. The
+        // forced path (push-driven) must bypass that short-circuit, so two
+        // consecutive `force: true` calls BOTH hit the network — proving the
+        // bypass without coupling to mergeUpdate's exact freshness timing.
+        let apiMsg = TestFactories.makeAPIMessage(conversationId: "conv-force")
+        let response = MessagesAPIResponse(
+            success: true, data: [apiMsg], pagination: nil,
+            cursorPagination: nil, hasNewer: nil, meta: nil
+        )
+        mockMsgService.listResult = .success(response)
+        await CacheCoordinator.shared.messages.invalidate(for: "conv-force")
+
+        let before = mockMsgService.listCallCount
+        await engine.ensureMessages(for: "conv-force", force: true)
+        await engine.ensureMessages(for: "conv-force", force: true)
+
+        XCTAssertEqual(
+            mockMsgService.listCallCount, before + 2,
+            "force:true must bypass the fresh-cache short-circuit and refetch every time"
+        )
+    }
+
     // MARK: - Socket relay
 
     func test_startSocketRelay_subscribesToMessageEvents() async {

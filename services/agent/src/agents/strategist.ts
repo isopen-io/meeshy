@@ -323,6 +323,8 @@ function buildStrategistPrompt(
 
   // Replace safe (config/numeric) placeholders FIRST, then user-content placeholders LAST
   // to prevent template injection from user messages containing {placeholder} strings.
+  // The fresh-topic block is appended LAST so it sits at the bottom of the prompt
+  // and dominates the LLM's decision when activated.
   return STRATEGIST_SYSTEM_PROMPT
     .replace('{activityScore}', String(state.activityScore))
     .replace('{minResponses}', String(minResponses))
