@@ -126,11 +126,6 @@ export interface NotificationDigestEmailData {
    */
   magicUrl: string;
   settingsUrl: string;
-  /**
-   * Number of distinct conversations involved (for the teaser copy).
-   * Falls back to unreadCount when not provided.
-   */
-  conversationCount?: number;
 }
 
 export interface BroadcastEmailData {
@@ -1662,16 +1657,10 @@ export class EmailService {
     const lang = data.language || 'en';
     const t = this.getDigestTranslations(lang);
 
-    // Re-engagement teaser: reveal aggregate counts ONLY (no actor names, no
-    // message previews) to create curiosity and avoid leaking content if the
-    // email is forwarded. The single CTA is a one-click magic-login link.
-    const convCount = (data.conversationCount && data.conversationCount > 0)
-      ? data.conversationCount
-      : data.unreadCount;
-
-    const fill = (s: string) => s
-      .replace('{count}', data.unreadCount.toString())
-      .replace('{conversations}', convCount.toString());
+    // Re-engagement teaser: reveal the aggregate unread count ONLY (no actor
+    // names, no message previews) to create curiosity and avoid leaking content
+    // if the email is forwarded. The single CTA is a one-click magic-login link.
+    const fill = (s: string) => s.replace('{count}', data.unreadCount.toString());
 
     const countText = fill(t.unreadTitle);
 
@@ -1746,7 +1735,7 @@ export class EmailService {
         unreadTitle: 'Vous avez {count} notifications non lues',
         subtitle: 'Quelque chose vous attend',
         greeting: 'Bonjour',
-        teaserIntro: 'Il y a quelques heures, {conversations} conversation(s) se sont animees. Revenez voir ce que vous manquez — un seul clic, sans mot de passe.',
+        teaserIntro: 'Vous avez {count} notification(s) en attente sur Meeshy. Revenez voir ce que vous manquez — un seul clic, sans mot de passe.',
         buttonText: 'Ouvrir Meeshy',
         linkValidity: 'Ce lien de connexion est valable 24 h.',
         footer: "L'equipe Meeshy",
@@ -1758,7 +1747,7 @@ export class EmailService {
         unreadTitle: 'You have {count} unread notifications',
         subtitle: 'Something is waiting for you',
         greeting: 'Hello',
-        teaserIntro: 'A few hours ago, {conversations} conversation(s) came alive. Come see what you are missing — one click, no password needed.',
+        teaserIntro: 'You have {count} notification(s) waiting on Meeshy. Come see what you are missing — one click, no password needed.',
         buttonText: 'Open Meeshy',
         linkValidity: 'This login link is valid for 24h.',
         footer: 'The Meeshy Team',
@@ -1770,7 +1759,7 @@ export class EmailService {
         unreadTitle: 'Tienes {count} notificaciones sin leer',
         subtitle: 'Algo te esta esperando',
         greeting: 'Hola',
-        teaserIntro: 'Hace unas horas, {conversations} conversacion(es) cobraron vida. Ven a ver lo que te estas perdiendo — un clic, sin contrasena.',
+        teaserIntro: 'Tienes {count} notificacion(es) pendientes en Meeshy. Ven a ver lo que te estas perdiendo — un clic, sin contrasena.',
         buttonText: 'Abrir Meeshy',
         linkValidity: 'Este enlace de acceso es valido durante 24 h.',
         footer: 'El equipo de Meeshy',
@@ -1782,7 +1771,7 @@ export class EmailService {
         unreadTitle: 'Voce tem {count} notificacoes nao lidas',
         subtitle: 'Algo esta esperando por voce',
         greeting: 'Ola',
-        teaserIntro: 'Ha algumas horas, {conversations} conversa(s) ganharam vida. Venha ver o que esta perdendo — um clique, sem senha.',
+        teaserIntro: 'Voce tem {count} notificacao(oes) pendentes no Meeshy. Venha ver o que esta perdendo — um clique, sem senha.',
         buttonText: 'Abrir Meeshy',
         linkValidity: 'Este link de acesso e valido por 24 h.',
         footer: 'A equipe Meeshy',
@@ -1794,7 +1783,7 @@ export class EmailService {
         unreadTitle: 'Hai {count} notifiche non lette',
         subtitle: 'Qualcosa ti aspetta',
         greeting: 'Ciao',
-        teaserIntro: 'Qualche ora fa, {conversations} conversazione/i si sono animate. Torna a vedere cosa ti stai perdendo — un clic, senza password.',
+        teaserIntro: 'Hai {count} notifica/e in sospeso su Meeshy. Torna a vedere cosa ti stai perdendo — un clic, senza password.',
         buttonText: 'Apri Meeshy',
         linkValidity: 'Questo link di accesso e valido per 24 h.',
         footer: 'Il team Meeshy',
@@ -1806,7 +1795,7 @@ export class EmailService {
         unreadTitle: 'Du hast {count} ungelesene Benachrichtigungen',
         subtitle: 'Etwas wartet auf dich',
         greeting: 'Hallo',
-        teaserIntro: 'Vor ein paar Stunden wurden {conversations} Unterhaltung(en) lebendig. Schau, was du verpasst — ein Klick, ohne Passwort.',
+        teaserIntro: 'Du hast {count} Benachrichtigung(en) auf Meeshy. Schau, was du verpasst — ein Klick, ohne Passwort.',
         buttonText: 'Meeshy offnen',
         linkValidity: 'Dieser Login-Link ist 24 Std. gultig.',
         footer: 'Das Meeshy-Team',

@@ -32,22 +32,19 @@ function resolveDeepLinkPath(pending: PendingNotification[]): string {
   return convId ? `/conversations/${convId}` : '/conversations';
 }
 
-function countDistinctConversations(pending: PendingNotification[]): number {
-  const ids = new Set(pending.map(conversationIdOf).filter((id): id is string => id !== null));
-  return ids.size;
-}
-
 /**
- * Build the CTA URL targeting the existing magic-link validate page, which
- * reads `token` and clamps `returnUrl` to an internal path (open-redirect safe).
- * When token issuance failed, we omit the token and fall back to a plain
- * deep-link (the user lands on login, then the internal redirect still applies).
+ * Build the CTA URL. With a token, target the magic-link validate page (reads
+ * `token`, clamps `returnUrl` to an internal path — open-redirect safe).
+ * When token issuance failed, fall back to the plain in-app deep-link: the
+ * validate page treats a missing token as a hard error, so we must NOT send the
+ * user there tokenless — landing directly on the destination lets the normal
+ * auth flow take over while preserving the target.
  */
 function buildMagicUrl(frontendUrl: string, returnPath: string, token: string | null): string {
-  const returnUrl = encodeURIComponent(returnPath);
   if (!token) {
-    return `${frontendUrl}/auth/magic-link/validate?returnUrl=${returnUrl}`;
+    return `${frontendUrl}${returnPath}`;
   }
+  const returnUrl = encodeURIComponent(returnPath);
   return `${frontendUrl}/auth/magic-link/validate?token=${encodeURIComponent(token)}&returnUrl=${returnUrl}`;
 }
 
@@ -191,10 +188,11 @@ export class NotificationDigestJob {
     // Get user info
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { email: true, displayName: true, username: true, systemLanguage: true },
+      select: { email: true, displayName: true, username: true, systemLanguage: true, isActive: true },
     });
 
-    if (!user?.email) return false;
+    // Never re-engage a deactivated/banned account (don't email it, don't mint a token).
+    if (!user?.email || !user.isActive) return false;
 
     // Get recent unread notifications not yet emailed
     const allUnread = await this.prisma.notification.findMany({
@@ -216,9 +214,6 @@ export class NotificationDigestJob {
     // are ordered desc), else the conversations list.
     const returnPath = resolveDeepLinkPath(pending);
 
-    // Distinct conversations touched — used by the teaser ("{conversations} conversation(s)").
-    const conversationCount = countDistinctConversations(pending);
-
     // One-click magic-login token (reuses MagicLinkService — single source of
     // truth). On failure we still send, falling back to a plain (unauthenticated)
     // deep-link rather than dropping the re-engagement email entirely.
@@ -230,7 +225,6 @@ export class NotificationDigestJob {
       name: user.displayName || user.username || 'there',
       language: lang,
       unreadCount: pending.length,
-      conversationCount,
       magicUrl,
       settingsUrl: `${frontendUrl}/settings#notifications`,
     };

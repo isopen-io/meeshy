@@ -161,21 +161,21 @@ export class MagicLinkService {
    * an email. Used by flows that already resolved the user and already own the
    * delivery channel (e.g. the notification digest email embeds the link itself).
    *
-   * Reuses the same hashed-token storage, single-use semantics and revocation as
+   * Reuses the same hashed-token storage and single-use semantics as
    * requestMagicLink — only the email send + email-enumeration guard are skipped.
    * Returns the RAW token (to embed in a URL), or null on failure so the caller
    * can gracefully fall back to an unauthenticated link.
+   *
+   * Unlike requestMagicLink it does NOT revoke the user's other unused tokens:
+   * the interactive and digest flows share one token pool, and revoking here
+   * would silently invalidate a login link the user explicitly requested. The
+   * short (24h) TTL bounds accumulation; each token stays single-use.
    */
   async issueLoginTokenForUser(
     userId: string,
     options?: IssueLoginTokenOptions
   ): Promise<string | null> {
     try {
-      // Revoke any existing unused tokens for this user (mirror requestMagicLink)
-      await this.prisma.magicLinkToken.updateMany({
-        where: { userId, usedAt: null, isRevoked: false },
-        data: { isRevoked: true, revokedReason: 'NEW_REQUEST' }
-      });
 
       const rawToken = crypto.randomBytes(32).toString('base64url');
       const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
@@ -282,6 +282,18 @@ export class MagicLinkService {
       }
 
       const user = magicLinkToken.user;
+
+      // Reject deactivated/banned accounts. requestMagicLink filters isActive at
+      // issuance, but tokens can outlive that check (especially the 24h digest
+      // token), so re-verify here — the single gate covering every magic-link
+      // path (interactive + proactive digest).
+      if (!user.isActive) {
+        console.warn('[MagicLink] Token for inactive user:', magicLinkToken.id);
+        await this.logSecurityEvent(magicLinkToken.userId, 'MAGIC_LINK_REUSE_ATTEMPT', 'MEDIUM', {
+          ipAddress: requestContext.ip
+        });
+        return { success: false, error: 'This link is no longer valid. Please request a new one.' };
+      }
 
       // 7. Mark token as used
       await this.prisma.magicLinkToken.update({

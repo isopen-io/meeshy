@@ -522,6 +522,21 @@ describe('MagicLinkService', () => {
       });
     });
 
+    describe('Inactive User', () => {
+      it('should reject a valid token when the user is deactivated', async () => {
+        mockPrisma.magicLinkToken.findUnique.mockResolvedValue({
+          ...mockMagicLinkToken,
+          user: { ...mockUser, isActive: false }
+        });
+
+        const result = await service.validateMagicLink(validValidation);
+
+        expect(result.success).toBe(false);
+        expect(result.token).toBeUndefined();
+        expect(mockPrisma.magicLinkToken.update).not.toHaveBeenCalled();
+      });
+    });
+
     describe('Token Expired', () => {
       it('should return error when token is expired', async () => {
         mockPrisma.magicLinkToken.findUnique.mockResolvedValue({
@@ -715,13 +730,10 @@ describe('MagicLinkService', () => {
       expect(mockEmailService.sendMagicLinkEmail).not.toHaveBeenCalled();
     });
 
-    it('should revoke existing unused tokens before creating a new one', async () => {
+    it('should NOT revoke other unused tokens (interactive + digest share one pool)', async () => {
       await service.issueLoginTokenForUser('user-123');
 
-      expect(mockPrisma.magicLinkToken.updateMany).toHaveBeenCalledWith({
-        where: { userId: 'user-123', usedAt: null, isRevoked: false },
-        data: { isRevoked: true, revokedReason: 'NEW_REQUEST' }
-      });
+      expect(mockPrisma.magicLinkToken.updateMany).not.toHaveBeenCalled();
     });
 
     it('should store a SHA-256 hash of the token (never the raw token)', async () => {

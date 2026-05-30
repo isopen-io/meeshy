@@ -4,7 +4,7 @@
  * Verifies the digest job:
  * - issues a one-click magic-login token per user (via MagicLinkService)
  * - builds a magicUrl deep-linking to the most-recent conversation (returnUrl)
- * - passes conversationCount (distinct conversations) to the teaser email
+ * - skips deactivated users (no token, no email)
  * - respects email preference opt-out and idempotency (delivery.emailSent)
  *
  * @jest-environment node
@@ -65,7 +65,7 @@ describe('NotificationDigestJob — magic-login re-engagement', () => {
     });
     prisma.userPreferences.findFirst.mockResolvedValue({ notification: { emailEnabled: true } });
     prisma.user.findUnique.mockResolvedValue({
-      email: 'alice@example.com', displayName: 'Alice', username: 'alice', systemLanguage: 'fr',
+      email: 'alice@example.com', displayName: 'Alice', username: 'alice', systemLanguage: 'fr', isActive: true,
     });
     prisma.notification.updateMany.mockResolvedValue({ count: 2 });
 
@@ -89,12 +89,6 @@ describe('NotificationDigestJob — magic-login re-engagement', () => {
     expect(data.magicUrl).toContain(encodeURIComponent('/conversations/conv-abc'));
   });
 
-  it('passes the distinct conversation count to the teaser', async () => {
-    await job.runNow();
-    const data = emailService.sendNotificationDigestEmail.mock.calls[0][0];
-    expect(data.conversationCount).toBe(2); // conv-abc + conv-xyz
-  });
-
   it('does NOT pass actor/content (teaser reveals counts only)', async () => {
     await job.runNow();
     const data = emailService.sendNotificationDigestEmail.mock.calls[0][0];
@@ -109,6 +103,15 @@ describe('NotificationDigestJob — magic-login re-engagement', () => {
     );
   });
 
+  it('skips deactivated users (no token minted, no email sent)', async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      email: 'alice@example.com', displayName: 'Alice', username: 'alice', systemLanguage: 'fr', isActive: false,
+    });
+    await job.runNow();
+    expect(emailService.sendNotificationDigestEmail).not.toHaveBeenCalled();
+    expect(magicLinkService.issueLoginTokenForUser).not.toHaveBeenCalled();
+  });
+
   it('skips users who disabled email notifications', async () => {
     prisma.userPreferences.findFirst.mockResolvedValue({ notification: { emailEnabled: false } });
     await job.runNow();
@@ -116,12 +119,14 @@ describe('NotificationDigestJob — magic-login re-engagement', () => {
     expect(magicLinkService.issueLoginTokenForUser).not.toHaveBeenCalled();
   });
 
-  it('still sends (unauthenticated fallback link) when token issuance fails', async () => {
+  it('falls back to a plain in-app deep-link (not the dead-end validate page) when token issuance fails', async () => {
     magicLinkService.issueLoginTokenForUser.mockResolvedValue(null);
     await job.runNow();
     const data = emailService.sendNotificationDigestEmail.mock.calls[0][0];
     expect(data.magicUrl).not.toContain('token=');
-    expect(data.magicUrl).toContain(encodeURIComponent('/conversations/conv-abc'));
+    // No tokenless /validate URL — that page shows a hard error and drops returnUrl.
+    expect(data.magicUrl).not.toContain('/auth/magic-link/validate');
+    expect(data.magicUrl).toMatch(/\/conversations\/conv-abc$/);
     expect(emailService.sendNotificationDigestEmail).toHaveBeenCalled();
   });
 });
