@@ -24,7 +24,7 @@
 | Footer | `${appUrl}/settings/notifications` |
 | Sécurité HTML | `escapeHtml()` **est déjà appliqué** à `actorName`, `content`, `userName`. ⚠️ Contrairement au brief initial, **il n'y a PAS de faille XSS** sur ces champs aujourd'hui — ne pas « corriger » un bug inexistant. |
 | Tracking | pixel `${frontendUrl}/l/meeshy-emails?...` injecté par `send()` |
-| Transport | `send({ to, subject, html, headers? , ... })` → Brevo → SendGrid → Mailgun. **`headers` est déjà supporté** (utile pour `List-Unsubscribe`) |
+| Transport | `sendEmail({ to, subject, html, text, trackingType?, trackingLang? })` → Brevo → SendGrid → Mailgun (fallback). ⚠️ **PAS** de headers custom : `EmailData` n'a pas de champ `headers` et les 3 `sendVia*` figent leurs payloads axios → `List-Unsubscribe` exige d'étendre le transport (cf. §7) |
 
 ### 1.2 Problème produit
 
@@ -197,15 +197,19 @@ function sanitizeRedirect(r?: string): string {
 
 ### 3.3 Page web de consommation
 
-L'e-mail pointe vers une page web `/(auth)/magic` qui fait un **POST** (jamais la consommation au simple GET — voir §6 préchargement), stocke le JWT, puis `window.location = redirect`.
+L'e-mail pointe vers une page web `apps/web/app/auth/magic/page.tsx` qui fait un **POST** (jamais la consommation au simple GET — voir §6 préchargement), stocke le JWT, puis `window.location = redirect`.
 
-> ⚠️ À confirmer pendant l'implémentation : **type de routeur Next.js** d'`apps/web` (App Router `app/` vs Pages Router `pages/`) et **chemin exact de la page reset-password** existante à mirrorer. La page magic doit reprendre le même mécanisme de lecture de query param + appel `fetch` au gateway que la page reset-password actuelle. (Lookup non finalisé dans cette session — étape 0 de l'implémentation.)
+**Mirror confirmé** (vérifié) : `apps/web` est en **Next.js App Router**. La page à mirrorer est `apps/web/app/reset-password/page.tsx` :
+- lecture du token via `useSearchParams().get('token')` (`next/navigation`) ;
+- appel gateway via un service dédié (`passwordResetService` → `fetch(buildApiUrl('/auth/...'), …)`).
+La page magic crée un `magicLoginService` analogue ciblant `POST /auth/magic`.
 
 Pseudo-page :
 
 ```tsx
-// lit ?token & ?redirect → POST /api/v1/auth/magic → stocke data.token → redirect
-// états : "Connexion en cours…" / "Lien expiré" (avec lien vers /login)
+// useSearchParams().get('token') → magicLoginService.consume(token)
+//   → POST /api/v1/auth/magic → stocke data.token (JWT) → window.location = data.redirect
+// états : "Connexion en cours…" / "Lien expiré" (lien vers /login)
 ```
 
 ---
