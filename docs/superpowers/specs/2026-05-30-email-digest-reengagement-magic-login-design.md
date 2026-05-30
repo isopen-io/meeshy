@@ -13,15 +13,15 @@
 
 | Élément | Fichier / valeur réelle |
 |---|---|
-| Planificateur | `services/gateway/src/jobs/notification-digest.ts` — `setTimeout`+`setInterval`, `TARGET_HOUR_UTC = 18`, batch 50, 1 s entre lots |
-| Sélection users | `processAllUsers()` → `notification.groupBy` sur `isRead:false, emailSent:false` |
-| Envoi par user | `sendUserDigest(userId)` — respecte `userPreferences.notification.emailEnabled === false`, top 5 notifs, `countUnread`, `markNotificationsEmailed` (idempotence via `emailSent`/`emailSentAt`) |
-| Rendu HTML | `EmailService.sendNotificationDigestEmail(params)` (`EmailService.ts` ~L1247) — HTML inline |
-| i18n | `getDigestTranslations(lang)` — **déjà** fr/en/es/pt/it/de ; `lang` résolu depuis `user.systemLanguage` (`resolveLang`) |
+| Planificateur | Classe `NotificationDigestJob` (`services/gateway/src/jobs/notification-digest.ts`) — `start()` pose `setTimeout`→`setInterval(24h)`, `TARGET_HOUR_UTC = 18`, `BATCH_SIZE = 50`, `BATCH_DELAY_MS = 1000`, `MAX_NOTIFICATIONS_IN_EMAIL = 5` |
+| Sélection users | `doWork()` → `prisma.notification.findMany({ where: { isRead: false }, select: { userId, delivery } })` puis **filtrage applicatif** `isNotYetEmailed(delivery)` (lit `delivery.emailSent` du JSON) → `Map<userId, count>`. PAS de `groupBy` SQL. |
+| Envoi par user | `processUser(userId, unreadCount)` — skip si `userPreferences.notification.emailEnabled === false` ; `findMany` notifs `isRead:false`, re-filtre `isNotYetEmailed`, `slice(0, MAX_NOTIFICATIONS_IN_EMAIL)` ; après succès, `notification.updateMany({ data: { delivery: { emailSent:true, emailSentAt, pushSent:false } } })` (idempotence via le JSON `delivery`) |
+| Rendu HTML | `EmailService.sendNotificationDigestEmail(data: NotificationDigestEmailData)` (`EmailService.ts:1657`) — HTML inline |
+| i18n | `getDigestTranslations(lang)` (`EmailService.ts:1768`) — **déjà** fr/en/es/pt/it/de ; `lang = user.systemLanguage \|\| 'en'` (résolu dans le job) |
 | Sujet (fr) | `Vous avez {count} notifications non lues - Meeshy` |
-| Contenu | Liste top 5 : `actorName` + `content` + temps relatif (révèle tout) |
-| **CTA actuel** | `<a href="${appUrl}/notifications">` — **lien nu, aucune auth**, `appUrl = this.frontendUrl = process.env.FRONTEND_URL \|\| 'https://meeshy.me'` |
-| Footer | `${appUrl}/settings/notifications` |
+| Contenu | Liste top 5 : `actorName` + `content` + `formatTimeAgo` (révèle tout) |
+| **CTA actuel** | `<a href="${data.markAllReadUrl}">` = `${frontendUrl}/notifications?markAllRead=true` — **lien nu, aucune auth**. `frontendUrl = process.env.FRONTEND_URL \|\| 'https://meeshy.me'` (`EmailService.ts:727`) |
+| Footer | `data.settingsUrl` = `${frontendUrl}/settings#notifications` |
 | Sécurité HTML | `escapeHtml()` **est déjà appliqué** à `actorName`, `content`, `userName`. ⚠️ Contrairement au brief initial, **il n'y a PAS de faille XSS** sur ces champs aujourd'hui — ne pas « corriger » un bug inexistant. |
 | Tracking | pixel `${frontendUrl}/l/meeshy-emails?...` injecté par `send()` |
 | Transport | `sendEmail({ to, subject, html, text, trackingType?, trackingLang? })` → Brevo → SendGrid → Mailgun (fallback). ⚠️ **PAS** de headers custom : `EmailData` n'a pas de champ `headers` et les 3 `sendVia*` figent leurs payloads axios → `List-Unsubscribe` exige d'étendre le transport (cf. §7) |
@@ -170,7 +170,7 @@ fastify.post<{ Body: { token: string } }>(
     });
     return sendSuccess(reply, {
       token: result.jwt,                       // JWT 7 j (generateToken existant)
-      user: formatUserResponse(result.user),   // helper existant (cf. login.ts)
+      user: formatUserResponse(result.user, permissions), // helper existant (routes/auth/types.ts) — résoudre `permissions` comme login.ts
       redirect: sanitizeRedirect(result.redirect), // borné chemins internes (§3.1)
     });
   },
@@ -246,11 +246,13 @@ Garder le branding indigo (`linear-gradient(135deg,#6366F1,#4338CA)`).
 
 ### 5.1 Variantes de sujet (A/B via `utm_content`)
 
-| Code | Sujet FR |
-|---|---|
-| `fomo` | `📲 {actor} t'a écrit sur Meeshy` |
-| `count` | `⏰ {count} personnes attendent ta réponse` |
-| `social` | `🎉 Ça bouge sur Meeshy — un coup d'œil ?` |
+| Code | Sujet FR | Révèle l'expéditeur ? |
+|---|---|---|
+| `fomo` | `📲 {actor} t'a écrit sur Meeshy` | **Oui** (nom dans l'objet) |
+| `count` | `⏰ {count} personnes attendent ta réponse` | Non |
+| `social` | `🎉 Ça bouge sur Meeshy — un coup d'œil ?` | Non |
+
+⚠️ **Tension à arbitrer (cf. §11.6)** : la variante `fomo` met le nom de l'expéditeur **dans l'objet de l'e-mail** — donc visible sans ouvrir, et lu par les passerelles. Cela contredit en partie l'objectif « réduire le contenu révélé » (§1.3) et le risque « transfert d'e-mail » (§6). Le nom seul (sans contenu) est un compromis courant et souvent le plus performant en CTR, mais c'est un choix produit explicite — à ne pas mélanger avec les variantes neutres `count`/`social` dans le même bucket A/B sans le décider.
 
 ### 5.2 Corps (teaser, FR)
 
@@ -276,11 +278,11 @@ On **n'affiche plus** la liste détaillée acteur+aperçu : seulement des compte
 | **Transfert d'e-mail** (A→B) | B pourrait se connecter comme A. **Assumé** pour du réengagement : le teaser ne révèle plus de contenu sensible (juste des compteurs). À documenter dans la décision produit. |
 | **Fuite DB** | Token **hashé** (SHA-256) en base ; le token brut n'existe que dans l'e-mail. |
 | **Rejeu / double-conso** | `MagicLoginToken.usedAt` + CAS atomique `updateMany` (count must be 1). |
-| **Brute-force** | 256 bits d'entropie + rate-limit 10/15 min + expiration 24 h. |
+| **Brute-force** | 256 bits d'entropie + rate-limiter Redis maison + expiration 24 h. |
 | **Open redirect post-login** | `sanitizeRedirect` (chemins internes uniquement). |
 | **Leak du motif d'échec** | Réponse 400 unique. |
 | **XSS e-mail** | Déjà couvert (`escapeHtml` sur `name`/`actor`/`content`). Maintenir lors du refactor. |
-| **Révocation** | Le token est purgé (`null`) au `DELETE user` / logout global ; expiration 24 h plafonne l'exposition. |
+| **Révocation** | `MagicLoginToken` supprimé en cascade au `DELETE user` (relation `onDelete: Cascade`) ; purge proactive possible via `deleteMany({ userId })` au logout global ; expiration 24 h plafonne l'exposition. |
 
 > Si l'analyse de risque ultérieure juge le transfert d'e-mail trop sensible, bascule possible vers « page de confirmation intermédiaire » (1 clic de plus) **sans changer le modèle de token** — c'est purement la page web qui ajoute un bouton « Confirmer ».
 
@@ -315,7 +317,7 @@ Puis :
 
 > Le repo impose TDD (RED→GREEN→REFACTOR). Chaque phase : tests d'abord.
 
-**Phase 0 — Reco** : confirmer le routeur Next.js d'`apps/web` + chemin page reset-password (mirror cible).
+**Phase 0 — Reco** ✅ (fait) : `apps/web` = Next.js App Router ; mirror = `apps/web/app/reset-password/page.tsx` (`useSearchParams` + `passwordResetService` + `buildApiUrl`).
 
 **Phase 1 — Schema `MagicLoginToken` + AuthService** (déployable seul, non-breaking)
 - RED : tests `AuthService` (génère token 64 hex ; persiste un **hash** ≠ token ; `expiresAt` ~24 h ; `consume` renvoie JWT+user+redirect ; rejette invalide/expiré ; **usage unique** ; CAS atomique sur double-appel concurrent).
@@ -363,8 +365,9 @@ Puis :
 
 ## 11. Points ouverts à valider
 
-1. **Routeur web** (App vs Pages) + chemin reset-password à mirrorer — Phase 0.
+1. ~~**Routeur web** (App vs Pages) + chemin reset-password à mirrorer~~ — ✅ résolu (App Router, `app/reset-password/page.tsx`).
 2. **Transfert d'e-mail = accès session** : accepter le 1 clic tel quel, ou prévoir dès v1 la page de confirmation intermédiaire ?
 3. **Token de désinscription** : dédié (recommandé) vs réutilisation scoppée du magic token.
 4. **TTL 24 h** : OK, ou réduire (ex. 12 h) pour limiter l'exposition ?
 5. **Suppression totale** de la liste détaillée vs **teaser partiel** (1 nom max sans aperçu) — arbitrage produit (curiosité vs clarté).
+6. **Variante de sujet `fomo`** (nom de l'expéditeur dans l'objet) : l'inclure dans l'A/B ou s'en tenir aux sujets neutres `count`/`social` ? (Cohérence avec « contenu réduit » + risque transfert d'e-mail — cf. §5.1.)
