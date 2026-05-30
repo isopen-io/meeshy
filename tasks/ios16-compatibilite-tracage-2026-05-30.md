@@ -93,9 +93,9 @@ Pièges fréquents tranchés une fois pour toutes :
 
 > Ces points ne plantent pas mais dégradent l'UX sur iOS 16. À router par `/Compatibility`.
 
-| # | Fichier:ligne | Problème iOS 16 | Sévérité | Fix proposé |
+| # | Fichier:ligne | Problème iOS 16 | Sévérité | Fix |
 |---|---|---|---|---|
-| R1 | `Location/LocationFullscreenView.swift:216-228` (`FullscreenMapView16`) | `Map(coordinateRegion: .constant(region))` → binding **constant** : la caméra ne suit pas le pan/zoom utilisateur. Et `isHybrid` est reçu mais jamais appliqué (`.mapStyle` est 17+) → le bouton hybride/standard du header est silencieusement inopérant. | WRONG-BEHAVIOR | Passer `region` en `@State` (modèle de `LegacyInteractiveMap` dans `AdaptiveMap.swift`). Pour l'hybride : désactiver/masquer le toggle sur iOS 16 via `Platform.isIOS17OrLater`, ou documenter. |
+| R1 | `Location/LocationFullscreenView.swift` (`FullscreenMapView16`) | `Map(coordinateRegion: .constant(region))` → binding **constant** : la caméra ne suit pas le pan/zoom utilisateur. Et `isHybrid` est reçu mais jamais appliqué (`.mapStyle` est 17+) → le bouton hybride/standard du header est silencieusement inopérant. | WRONG-BEHAVIOR | ✅ **FAIT (PR #307)** : `region` passé en `@State` (carte interactive sur iOS 16) ; `annotationItems` stockés en `init` (id stable, pas de flicker du pin au pan) ; param `isHybrid` mort retiré ; toggle hybride masqué sur iOS 16 via `Platform.isIOS17OrLater`. Iso-feature : l'hybride n'a jamais marché sur 16 ; le pan/zoom est désormais restauré. Vérif build : macOS. |
 | R2 | `Compatibility/AdaptivePagingScroll.swift:61-69` | Le fallback `TabView(.page)` **instancie toutes les pages** (pas de lazy-loading comme `LazyHStack`). | PERF (borné) | Acceptable pour les sets média bornés ; documenter le plafond. Si galeries larges → envisager pagination manuelle. |
 | R3 | `Compatibility/AdaptiveMap.swift` (LegacyInteractiveMap) | iOS 16 : `onMapCameraChange(.onEnd)` remplacé par `onChange` région → se déclenche **en continu** pendant le pan ; pas de `MapCompass`. | WRONG-BEHAVIOR (absorbé par le debounce 300 ms du `LocationPickerModel`) | OK en l'état ; garder le debounce côté appelant. |
 
