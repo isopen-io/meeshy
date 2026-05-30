@@ -19,12 +19,23 @@ unique atomique, endpoint `POST /api/v1/auth/magic` (no-leak, rate-limit,
 sanitizeRedirect anti-open-redirect), page web POST (anti-préchargement mail),
 List-Unsubscribe RFC 8058, UTM.
 
-## Corrections vs brief initial (ancré sur le vrai code)
-- ❌ Pas de faille XSS `userName`/`actorName` : `escapeHtml` est DÉJÀ appliqué.
-- Vrais noms : `sendNotificationDigestEmail`, `jobs/notification-digest.ts`,
-  champs `passwordResetToken`/`passwordResetExpires` (en clair → on hashe le
-  magic token, on ne s'aligne pas vers le moins-disant).
-- `send()` supporte déjà `headers` (→ List-Unsubscribe sans refacto transport).
+## Corrections vs brief initial (ancré sur le vrai code, vérifié verbatim)
+- ❌ Pas de faille XSS `userName`/`actorName` : `escapeHtml` est DÉJÀ appliqué
+  (EmailService.ts:1665-1695).
+- Vrais noms : `sendNotificationDigestEmail`, `jobs/notification-digest.ts`.
+- ❌ Le password-reset n'est PAS des champs sur `User` : c'est une **table
+  dédiée hashée `PasswordResetToken`** (`tokenHash`/`expiresAt`/`usedAt`/
+  `isRevoked` + métadonnées) + job `cleanup-expired-tokens.ts`. → la spec
+  recommande désormais un **modèle dédié `MagicLoginToken`** (mirror exact),
+  PAS 3 champs sur User. TTL reset = 15 min (pas 1 h).
+- ❌ `send()` ne supporte PAS `headers` custom (Brevo/SendGrid/Mailgun figés
+  via axios) → List-Unsubscribe EXIGE d'étendre `EmailData.headers` + les 3
+  transports. Corrigé dans la spec.
+- Web = Next.js **App Router** ; mirror = `apps/web/app/reset-password/page.tsx`
+  (`useSearchParams` + `buildApiUrl` + `passwordResetService`). Page cible :
+  `apps/web/app/auth/magic/page.tsx` + `magicLoginService`.
+- Rate-limit = limiters Redis maison en `preHandler` (mirror login.ts), pas
+  `@fastify/rate-limit` direct.
 
 ## Points ouverts (cf. §11 de la spec)
 1. Routeur web (App vs Pages) + page reset-password à mirrorer — reco Phase 0.

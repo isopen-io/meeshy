@@ -46,28 +46,51 @@ Transformer le digest **passif** en e-mail de **réengagement teaser** :
 
 ## 2. Cœur technique — jeton magic-login
 
-### 2.1 Choix de stockage : champs sur `User` (mirror du password-reset)
+### 2.1 Choix de stockage : table dédiée `MagicLoginToken` (mirror exact du password-reset)
 
-Le repo a déjà la convention `{purpose}Token: String?` + `{purpose}Expires: DateTime?` (`passwordResetToken`/`passwordResetExpires`, `emailVerifyToken`/`emailVerifyExpires`), tokens **en clair**, remis à `null` à la consommation.
-
-**Décision** : mirror exact de cette convention **mais avec token hashé** (amélioration sécurité justifiée car ce token donne un accès de session complet, pas juste un reset de mot de passe).
+**Correction (post-vérification du code réel)** : contrairement à l'hypothèse initiale, le repo **ne** stocke **pas** les tokens de reset sur le modèle `User`. Il utilise une **table dédiée hashée** `PasswordResetToken` (`packages/shared/prisma/schema.prisma`) :
 
 ```prisma
-// packages/shared/prisma/schema.prisma — model User
-magicLoginTokenHash  String?    // SHA-256 du token (jamais le token brut)
-magicLoginExpires    DateTime?  // expiration
-magicLoginUsedAt     DateTime?  // null = neuf ; non-null = consommé (usage unique)
+model PasswordResetToken {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String    @db.ObjectId
+  tokenHash     String    @unique   // SHA-256 (JAMAIS le token brut)
+  expiresAt     DateTime            // 15 min
+  usedAt        DateTime?           // null = inutilisé
+  isRevoked     Boolean   @default(false)
+  revokedReason String?
+  ipAddress     String?
+  userAgent     String?
+  // … metadata anomalie
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId]) @@index([expiresAt])
+}
 ```
 
-Justification des écarts vs password-reset :
-- **Hashé** : une fuite de la collection `users` ne doit pas livrer des sessions actives. (Le password-reset stocke en clair ; on ne l'aligne PAS vers le moins-disant.)
-- **`magicLoginUsedAt`** explicite : usage unique sans purger immédiatement, pour pouvoir distinguer « déjà utilisé » de « expiré » côté télémétrie interne (sans le révéler au client, cf. §3).
+Sur `User` : seulement la relation (`passwordResetTokens PasswordResetToken[]`). Un **job de purge** existe déjà (`services/gateway/src/jobs/cleanup-expired-tokens.ts`).
 
-> Alternative écartée : table dédiée `MagicLoginToken`. Plus propre pour multi-tokens concurrents, mais le digest n'émet **qu'un token par user et par run** ; la simplicité des 3 champs l'emporte. À réévaluer si on veut un token distinct par conversation/CTA.
+**Décision** : mirror **exact** de cette convention → nouveau modèle dédié `MagicLoginToken` (et NON des champs sur `User`). C'est la convention maison et ça gère nativement le multi-token (plusieurs envois sans écraser un token encore valide).
+
+```prisma
+model MagicLoginToken {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String    @db.ObjectId
+  tokenHash  String    @unique   // SHA-256 du token brut
+  redirect   String?             // deep-link interne validé (cf. §3.1)
+  expiresAt  DateTime            // +24 h (cf. §2.2)
+  usedAt     DateTime?           // null = neuf ; non-null = consommé (usage unique)
+  ipAddress  String?             // IP de consommation (anomalie)
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId]) @@index([expiresAt])
+}
+```
++ relation `magicLoginTokens MagicLoginToken[]` sur `User`, + étendre `cleanup-expired-tokens.ts` pour purger aussi cette table.
 
 ### 2.2 Durée de vie : **24 h**
 
-L'e-mail part à 18:00 UTC ; un utilisateur peut l'ouvrir le lendemain matin. 24 h couvre l'usage décalé sans laisser un lien de session traîner indéfiniment. (Le password-reset est à 1 h car plus sensible et déclenché à la demande ; ici c'est un envoi proactif consommé en différé.)
+L'e-mail part à 18:00 UTC ; un utilisateur peut l'ouvrir le lendemain matin. 24 h couvre l'usage décalé sans laisser un lien de session traîner indéfiniment. (Le password-reset est à **15 min** car plus sensible et déclenché à la demande ; ici c'est un envoi proactif consommé en différé — d'où le TTL plus long. Voir point ouvert §11.4 si on veut réduire à 12 h.)
 
 ### 2.3 Génération & consommation — `AuthService`
 
@@ -79,62 +102,64 @@ private static hashMagic(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
-/** Génère un magic token, stocke son hash, renvoie le token EN CLAIR (pour l'URL). */
-async generateMagicLoginToken(userId: string): Promise<string> {
+/** Génère un magic token, persiste son hash dans MagicLoginToken, renvoie le token EN CLAIR. */
+async generateMagicLoginToken(userId: string, redirect?: string): Promise<string> {
   const token = crypto.randomBytes(32).toString('hex'); // 256 bits
-  await this.prisma.user.update({
-    where: { id: userId },
+  await this.prisma.magicLoginToken.create({
     data: {
-      magicLoginTokenHash: AuthService.hashMagic(token),
-      magicLoginExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
-      magicLoginUsedAt: null,
+      userId,
+      tokenHash: AuthService.hashMagic(token),
+      redirect: redirect ?? null,
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     },
   });
   return token;
 }
 
 /** Valide + consomme (usage unique). Renvoie null sur tout échec (pas de leak de la raison). */
-async consumeMagicLoginToken(token: string): Promise<{ jwt: string; user: User } | null> {
+async consumeMagicLoginToken(token: string, ctx?: { ip?: string; ua?: string })
+  : Promise<{ jwt: string; user: User; redirect: string | null } | null> {
   if (!/^[a-f0-9]{64}$/.test(token)) return null;
   const hash = AuthService.hashMagic(token);
-  const user = await this.prisma.user.findFirst({
-    where: {
-      magicLoginTokenHash: hash,
-      magicLoginExpires: { gt: new Date() },
-      magicLoginUsedAt: null,
-    },
+  // Consommation atomique : ne marquer usedAt que si encore non-utilisé ET non-expiré.
+  const claimed = await this.prisma.magicLoginToken.updateMany({
+    where: { tokenHash: hash, usedAt: null, expiresAt: { gt: new Date() } },
+    data: { usedAt: new Date(), ipAddress: ctx?.ip ?? null, userAgent: ctx?.ua ?? null },
   });
-  if (!user) return null;
-  // Consommation atomique : ne consommer que si toujours non-utilisé.
-  const claimed = await this.prisma.user.updateMany({
-    where: { id: user.id, magicLoginUsedAt: null },
-    data: { magicLoginUsedAt: new Date() },
+  if (claimed.count !== 1) return null; // invalide / expiré / déjà consommé (course perdue)
+  const record = await this.prisma.magicLoginToken.findUnique({
+    where: { tokenHash: hash }, include: { user: true },
   });
-  if (claimed.count !== 1) return null; // course perdue → déjà consommé
-  return { jwt: this.generateToken(user.id), user }; // generateToken existant, JWT 7 j
+  if (!record?.user) return null;
+  return { jwt: this.generateToken(record.user.id), user: record.user, redirect: record.redirect };
 }
 ```
 
 Notes :
-- Le `findFirst` par `magicLoginTokenHash` est une comparaison d'égalité indexée ; le secret n'est jamais comparé en clair côté app (le risque timing porte sur un hash, pas sur le token). Un index sur `magicLoginTokenHash` est recommandé.
-- L'usage unique est garanti par `updateMany … where magicLoginUsedAt: null` (CAS atomique) — protège contre la double-consommation concurrente (préchargement client mail + clic réel).
+- `tokenHash` est `@unique` indexé → lookup O(1). Le secret n'est jamais comparé en clair côté app (le risque timing porte sur un hash, pas sur le token).
+- **Usage unique atomique** : `updateMany … where { usedAt: null, expiresAt: { gt: now } }` est le CAS — il échoue (count 0) si le token est déjà consommé/expiré, protégeant contre la double-consommation concurrente (préchargement client mail + clic réel).
+- Le `redirect` validé est stocké **avec le token** (et non passé en query par l'e-mail) : ça referme la surface open-redirect côté génération plutôt que côté consommation. Le query param `redirect` de l'URL devient alors redondant/optionnel — décider en impl (cf. §3.1).
 
 ---
 
 ## 3. Endpoint de consommation — `POST /api/v1/auth/magic`
 
-Ajouté dans le routeur auth (préfixe `/api/v1/auth`, helpers `sendSuccess`/`sendError`, rate-limit `@fastify/rate-limit` Redis déjà en place).
+Ajouté dans le routeur auth (préfixe `/api/v1/auth`). Le repo utilise des **rate-limiters Redis maison** appliqués en `preHandler` (cf. `createLoginRateLimiter`, `createAuthGlobalRateLimiter` dans `routes/auth/login.ts` / `password-reset.ts`) — mirrorer ce pattern, pas `@fastify/rate-limit` directement. Réponses via `sendSuccess`/`sendError` (`utils/response.ts`).
 
 ```ts
-fastify.post<{ Body: { token: string; redirect?: string } }>(
+fastify.post<{ Body: { token: string } }>(
   '/magic',
-  { config: { rateLimit: { max: 10, timeWindow: '15 minutes' } } },
+  { preHandler: [magicLoginRateLimiter.middleware(), authGlobalRateLimiter.middleware()] },
   async (request, reply) => {
-    const { token, redirect } = request.body ?? {};
+    const { token } = request.body ?? {};
     if (!token || typeof token !== 'string') {
       return sendError(reply, 'INVALID_INPUT', 'Token requis', 400);
     }
-    const result = await authService.consumeMagicLoginToken(token);
+    // redirect provient du token (validé à la génération), pas du body → pas d'open-redirect ici.
+    const result = await authService.consumeMagicLoginToken(token, {
+      ip: request.ip,
+      ua: request.headers['user-agent'],
+    });
     if (!result) {
       // Réponse UNIQUE quel que soit le motif (invalide / expiré / déjà utilisé) — pas de leak.
       return sendError(reply, 'INVALID_TOKEN', 'Lien invalide ou expiré', 400);
@@ -144,9 +169,9 @@ fastify.post<{ Body: { token: string; redirect?: string } }>(
       data: { lastSeen: new Date(), isOnline: true },
     });
     return sendSuccess(reply, {
-      token: result.jwt,
-      user: sanitizeUser(result.user),
-      redirect: sanitizeRedirect(redirect), // cf. §3.1
+      token: result.jwt,                       // JWT 7 j (generateToken existant)
+      user: formatUserResponse(result.user),   // helper existant (cf. login.ts)
+      redirect: sanitizeRedirect(result.redirect), // borné chemins internes (§3.1)
     });
   },
 );
@@ -165,10 +190,10 @@ function sanitizeRedirect(r?: string): string {
 
 ### 3.2 Validations sécurité (récap)
 - Format token `^[a-f0-9]{64}$` (rejet précoce).
-- Rate-limit IP 10 / 15 min (mirror des autres routes auth).
+- Rate-limit Redis maison en `preHandler` (mirror des autres routes auth).
 - Réponse d'échec **indifférenciée** (pas de distinction invalide/expiré/utilisé).
-- Usage unique atomique (`updateMany … magicLoginUsedAt: null`).
-- `redirect` borné aux chemins internes.
+- Usage unique atomique (`magicLoginToken.updateMany … where { usedAt: null, expiresAt: { gt: now } }`).
+- `redirect` validé à la génération + re-borné aux chemins internes à la consommation.
 
 ### 3.3 Page web de consommation
 
@@ -195,19 +220,19 @@ ${appUrl}/auth/magic?token={TOKEN}&redirect=/conversations/{conversationId}
 ```
 
 - `token` : magic token en clair (64 hex).
-- `redirect` : deep-link interne (conversation la plus récente, sinon `/conversations`).
+- `redirect` : **stocké côté token** (cf. §2.3). Le query param `redirect` de l'URL est donc optionnel/cosmétique ; la source de vérité est `MagicLoginToken.redirect`, ce qui ferme l'open-redirect à la source.
 - UTM : mesure du réengagement (cf. §8).
 
-### 4.2 Un seul token par e-mail
+### 4.2 Un seul token par e-mail (v1)
 
-`sendUserDigest` génère **un** magic token (un login = un token) ; tous les CTA de l'e-mail le réutilisent. Le premier clic le consomme ; les CTA suivants retombent gracieusement sur la page « lien expiré » → l'utilisateur déjà connecté navigue normalement. (Si on veut plusieurs CTA indépendamment cliquables après coup, passer à une table de tokens — hors périmètre v1.)
+`processUser` génère **un** magic token (un login = un token), avec un `redirect` = conversation la plus récente (sinon `/conversations`) ; tous les CTA de l'e-mail le réutilisent. Le premier clic le consomme ; les CTA suivants retombent sur la page « lien expiré » → mais l'utilisateur est déjà connecté, donc il navigue normalement. (Pour des CTA par-conversation indépendamment cliquables après coup, émettre **un `MagicLoginToken` par conversation** — trivial avec la table dédiée, mais hors périmètre v1.)
 
 ### 4.3 Modification `EmailService.sendNotificationDigestEmail`
 
-- Nouveau param `magicUrl: string` (construit par le job, qui seul connaît `redirect`).
-- Remplacer `href="${appUrl}/notifications"` par `href="${magicUrl}"`.
-- Conserver `escapeHtml` sur les champs user (déjà en place).
-- Ajouter l'en-tête `List-Unsubscribe` via `headers` de `send()` (cf. §7).
+- Nouveau champ `magicUrl: string` dans `NotificationDigestEmailData` (construit par le job, qui seul connaît le `redirect`).
+- Remplacer `href="${data.markAllReadUrl}"` (actuellement `${frontendUrl}/notifications?markAllRead=true`) par `href="${data.magicUrl}"`.
+- Conserver `escapeHtml` sur `actorName`/`content`/`name` (déjà en place — pas de bug XSS à « corriger »).
+- Ajouter l'en-tête `List-Unsubscribe` — **nécessite d'étendre le transport** (cf. §7 ; `sendEmail`/`sendViaBrevo/SendGrid/Mailgun` ne propagent PAS de headers custom aujourd'hui).
 
 ---
 
@@ -246,7 +271,7 @@ On **n'affiche plus** la liste détaillée acteur+aperçu : seulement des compte
 | **Préchargement du lien par le client mail** (Gmail/Outlook scannent) consommerait le token | La page `/auth/magic` consomme via **POST** déclenché par JS au chargement, pas au GET. Un scan GET de l'URL **n'atteint pas** l'endpoint POST `/api/v1/auth/magic`. |
 | **Transfert d'e-mail** (A→B) | B pourrait se connecter comme A. **Assumé** pour du réengagement : le teaser ne révèle plus de contenu sensible (juste des compteurs). À documenter dans la décision produit. |
 | **Fuite DB** | Token **hashé** (SHA-256) en base ; le token brut n'existe que dans l'e-mail. |
-| **Rejeu / double-conso** | `magicLoginUsedAt` + CAS atomique `updateMany`. |
+| **Rejeu / double-conso** | `MagicLoginToken.usedAt` + CAS atomique `updateMany` (count must be 1). |
 | **Brute-force** | 256 bits d'entropie + rate-limit 10/15 min + expiration 24 h. |
 | **Open redirect post-login** | `sanitizeRedirect` (chemins internes uniquement). |
 | **Leak du motif d'échec** | Réponse 400 unique. |
@@ -259,10 +284,17 @@ On **n'affiche plus** la liste détaillée acteur+aperçu : seulement des compte
 
 ## 7. Désinscription & délivrabilité (RFC 8058)
 
-- Ajouter l'en-tête **`List-Unsubscribe`** + **`List-Unsubscribe-Post: List-Unsubscribe=One-Click`** via le param `headers` de `send()` (déjà supporté côté transport).
-- URL : `${appUrl}/api/v1/email/unsubscribe?token=...` (token de désinscription distinct, non-authentifiant, ou réutilise le magic token avec scope limité — **préférer un token dédié non-session**).
-- Le contrôle existant `userPreferences.notification.emailEnabled === false` reste la source de vérité ; l'endpoint one-click bascule ce flag.
-- Bénéfice : meilleur placement boîte de réception, conformité Gmail/Yahoo 2024.
+⚠️ **Correction** : contrairement à l'hypothèse initiale, le transport **ne propage PAS** de headers custom. `EmailData` (`{ to, subject, html, text, trackingType?, trackingLang? }`) n'a pas de champ `headers`, et `sendViaBrevo` / `sendViaSendGrid` / `sendViaMailgun` construisent des payloads axios figés. Ajouter `List-Unsubscribe` **exige donc d'étendre** :
+- `EmailData` → champ `headers?: Record<string, string>`.
+- `sendViaBrevo` → propriété `headers` du payload Brevo.
+- `sendViaSendGrid` → tableau `headers` de la personalization / du body.
+- `sendViaMailgun` → champs `h:List-Unsubscribe` (convention Mailgun).
+
+Puis :
+- En-têtes **`List-Unsubscribe: <https://…/api/v1/email/unsubscribe?token=…>, <mailto:unsub@meeshy.me>`** + **`List-Unsubscribe-Post: List-Unsubscribe=One-Click`**.
+- URL : `${frontendUrl}/api/v1/email/unsubscribe?token=...` — **token dédié non-authentifiant** (NE PAS réutiliser le magic token de session). Peut être un `MagicLoginToken`-like dédié ou un HMAC `userId|purpose` vérifiable sans DB.
+- Source de vérité du flag : `userPreferences.notification.emailEnabled` (déjà lu par `processUser`) ; l'endpoint one-click le bascule à `false`.
+- Bénéfice : meilleur placement inbox, conformité exigences Gmail/Yahoo 2024.
 
 ---
 
@@ -281,27 +313,28 @@ On **n'affiche plus** la liste détaillée acteur+aperçu : seulement des compte
 
 **Phase 0 — Reco** : confirmer le routeur Next.js d'`apps/web` + chemin page reset-password (mirror cible).
 
-**Phase 1 — Schema + AuthService** (déployable seul, non-breaking)
-- RED : tests `AuthService` (génère token 64 hex ; stocke un **hash** ≠ token ; expiration ~24 h ; `consume` renvoie JWT+user ; rejette invalide/expiré ; **usage unique** ; CAS atomique sur double-appel).
-- Schema Prisma : `magicLoginTokenHash`, `magicLoginExpires`, `magicLoginUsedAt` (+ index sur le hash).
-- GREEN : `generateMagicLoginToken` / `consumeMagicLoginToken`.
+**Phase 1 — Schema `MagicLoginToken` + AuthService** (déployable seul, non-breaking)
+- RED : tests `AuthService` (génère token 64 hex ; persiste un **hash** ≠ token ; `expiresAt` ~24 h ; `consume` renvoie JWT+user+redirect ; rejette invalide/expiré ; **usage unique** ; CAS atomique sur double-appel concurrent).
+- Schema Prisma : nouveau modèle `MagicLoginToken` (table dédiée hashée) + relation sur `User` + index `tokenHash`/`expiresAt`.
+- Étendre `cleanup-expired-tokens.ts` pour purger `MagicLoginToken`.
+- GREEN : `generateMagicLoginToken(userId, redirect?)` / `consumeMagicLoginToken(token, ctx?)`.
 
 **Phase 2 — Endpoint** `POST /api/v1/auth/magic`
-- RED : 200+JWT sur token valide ; 400 sur invalide/expiré/utilisé (réponse identique) ; rate-limit 429 ; `sanitizeRedirect` rejette `//` et URLs absolues.
-- GREEN : route + helpers existants.
+- RED : 200+JWT sur token valide ; 400 sur invalide/expiré/utilisé (réponse identique) ; 429 via rate-limiter maison ; `sanitizeRedirect` rejette `//` et URLs absolues.
+- GREEN : route + `formatUserResponse`/`sendSuccess`/`sendError` existants.
 
-**Phase 3 — Page web** `/auth/magic` (mirror reset-password)
-- POST au chargement, stockage JWT, redirect interne, état « lien expiré ».
+**Phase 3 — Page web** `apps/web/app/auth/magic/page.tsx` (mirror `reset-password/page.tsx`)
+- `useSearchParams().get('token')` → `magicLoginService` → `fetch(buildApiUrl('/auth/magic'), POST)` → stockage JWT → redirect interne ; état « lien expiré ».
 
 **Phase 4 — EmailService teaser + CTA tokenisé**
-- RED : l'e-mail contient `auth/magic?token=` + `redirect=/conversations` ; `escapeHtml` préservé ; sujet/teaser par locale ; **pas** de liste détaillée acteur+aperçu (assertion d'absence).
-- GREEN : nouveau param `magicUrl`, copy teaser, clés i18n.
+- RED : l'e-mail contient `auth/magic?token=` ; `escapeHtml` préservé ; sujet/teaser par locale ; **pas** de liste détaillée acteur+aperçu (assertion d'absence).
+- GREEN : champ `magicUrl` dans `NotificationDigestEmailData`, copy teaser, clés i18n étendues dans `getDigestTranslations`.
 
 **Phase 5 — Job** `notification-digest.ts`
-- `sendUserDigest` génère le token (`authService.generateMagicLoginToken`), calcule le `redirect` (conversation la plus récente), passe `magicUrl` + variante UTM à `sendNotificationDigestEmail`. Idempotence/`emailSent` inchangés.
+- `processUser` génère le token (`authService.generateMagicLoginToken(userId, redirect)`), calcule le `redirect` (conversation la plus récente), passe `magicUrl` + variante UTM à `sendNotificationDigestEmail`. Idempotence/`emailSent` inchangés.
 
 **Phase 6 — Désinscription RFC 8058**
-- Endpoint `POST /api/v1/email/unsubscribe` + en-têtes `List-Unsubscribe(-Post)` ; bascule `emailEnabled=false`.
+- **Étendre le transport** (`EmailData.headers`, propagation Brevo/SendGrid/Mailgun) ; endpoint `POST /api/v1/email/unsubscribe` (token dédié non-session) ; en-têtes `List-Unsubscribe(-Post)` ; bascule `notification.emailEnabled=false`.
 
 **Phase 7 — Mesure + rollout graduel**
 - UTM + events ; feature-flag / rollout 10 %→100 % selon CTR et taux de désinscription.
@@ -312,14 +345,15 @@ On **n'affiche plus** la liste détaillée acteur+aperçu : seulement des compte
 
 | Fichier | Changement | Phase |
 |---|---|---|
-| `packages/shared/prisma/schema.prisma` | `magicLoginTokenHash`, `magicLoginExpires`, `magicLoginUsedAt` (+ index hash) sur `User` | 1 |
-| `services/gateway/src/services/AuthService.ts` | `generateMagicLoginToken`, `consumeMagicLoginToken`, `hashMagic` | 1 |
-| `services/gateway/src/routes/auth.ts` (routeur auth) | `POST /magic` (rate-limit, no-leak, `sanitizeRedirect`) | 2 |
-| `apps/web` (`/auth/magic`, mirror reset-password) | page de consommation POST → JWT → redirect | 3 |
-| `services/gateway/src/services/EmailService.ts` | `sendNotificationDigestEmail` : param `magicUrl`, CTA tokenisé, copy teaser, clés i18n, en-têtes `List-Unsubscribe` | 4, 6 |
+| `packages/shared/prisma/schema.prisma` | **Nouveau modèle `MagicLoginToken`** (table dédiée hashée, mirror `PasswordResetToken`) + relation sur `User` | 1 |
+| `services/gateway/src/services/AuthService.ts` | `generateMagicLoginToken(userId, redirect?)`, `consumeMagicLoginToken(token, ctx?)`, `hashMagic` | 1 |
+| `services/gateway/src/jobs/cleanup-expired-tokens.ts` | purger aussi `MagicLoginToken` | 1 |
+| routeur auth (`routes/auth/…`, mirror `login.ts`/`password-reset.ts`) | `POST /magic` (rate-limiter maison, no-leak, `sanitizeRedirect`) | 2 |
+| `apps/web/app/auth/magic/page.tsx` (+ `magicLoginService`, mirror `reset-password`) | page de consommation POST → JWT → redirect | 3 |
+| `services/gateway/src/services/EmailService.ts` | `NotificationDigestEmailData.magicUrl`, CTA tokenisé, copy teaser, clés i18n ; **+ `EmailData.headers` + propagation Brevo/SendGrid/Mailgun** | 4, 6 |
 | `services/gateway/src/jobs/notification-digest.ts` | génère token + `redirect` + UTM, passe `magicUrl` | 5 |
-| `services/gateway/src/routes/email.ts` (nouveau) | `POST /email/unsubscribe` one-click | 6 |
-| Tests gateway (`__tests__`) | AuthService, endpoint magic, EmailService, unsubscribe | 1–6 |
+| `services/gateway/src/routes/email.ts` (nouveau) | `POST /email/unsubscribe` one-click (token dédié non-session) | 6 |
+| Tests gateway (`__tests__`) | AuthService, endpoint magic, EmailService (+ headers), unsubscribe | 1–6 |
 
 ---
 
