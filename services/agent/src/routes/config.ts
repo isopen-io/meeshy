@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
-
 import type { ConfigCache } from '../config/config-cache';
 
 const cacheInvalidateSchema = z.object({

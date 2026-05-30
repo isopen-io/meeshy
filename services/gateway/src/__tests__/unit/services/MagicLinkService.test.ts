@@ -522,6 +522,21 @@ describe('MagicLinkService', () => {
       });
     });
 
+    describe('Inactive User', () => {
+      it('should reject a valid token when the user is deactivated', async () => {
+        mockPrisma.magicLinkToken.findUnique.mockResolvedValue({
+          ...mockMagicLinkToken,
+          user: { ...mockUser, isActive: false }
+        });
+
+        const result = await service.validateMagicLink(validValidation);
+
+        expect(result.success).toBe(false);
+        expect(result.token).toBeUndefined();
+        expect(mockPrisma.magicLinkToken.update).not.toHaveBeenCalled();
+      });
+    });
+
     describe('Token Expired', () => {
       it('should return error when token is expired', async () => {
         mockPrisma.magicLinkToken.findUnique.mockResolvedValue({
@@ -688,6 +703,91 @@ describe('MagicLinkService', () => {
         expect(result.success).toBe(false);
         expect(result.error).toBe('An error occurred. Please try again.');
       });
+    });
+  });
+
+  // =========================================
+  // issueLoginTokenForUser Tests (digest re-engagement)
+  // =========================================
+
+  describe('issueLoginTokenForUser', () => {
+    it('should return a raw token string for a known user', async () => {
+      const token = await service.issueLoginTokenForUser('user-123');
+
+      expect(typeof token).toBe('string');
+      expect((token as string).length).toBeGreaterThan(0);
+    });
+
+    it('should NOT look up the user by email (userId already known)', async () => {
+      await service.issueLoginTokenForUser('user-123');
+
+      expect(mockPrisma.user.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('should NOT send any email (the digest IS the email)', async () => {
+      await service.issueLoginTokenForUser('user-123');
+
+      expect(mockEmailService.sendMagicLinkEmail).not.toHaveBeenCalled();
+    });
+
+    it('should NOT revoke other unused tokens (interactive + digest share one pool)', async () => {
+      await service.issueLoginTokenForUser('user-123');
+
+      expect(mockPrisma.magicLinkToken.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('should store a SHA-256 hash of the token (never the raw token)', async () => {
+      const token = await service.issueLoginTokenForUser('user-123');
+
+      const createCall = mockPrisma.magicLinkToken.create.mock.calls[0][0];
+      expect(createCall.data.tokenHash).toMatch(/^[a-f0-9]{64}$/);
+      expect(createCall.data.tokenHash).not.toBe(token);
+    });
+
+    it('should default to a 24h TTL', async () => {
+      const before = Date.now();
+      await service.issueLoginTokenForUser('user-123');
+      const after = Date.now();
+
+      const createCall = mockPrisma.magicLinkToken.create.mock.calls[0][0];
+      const expiresAt = new Date(createCall.data.expiresAt).getTime();
+      const dayMs = 24 * 60 * 60 * 1000;
+
+      expect(expiresAt).toBeGreaterThanOrEqual(before + dayMs - 1000);
+      expect(expiresAt).toBeLessThanOrEqual(after + dayMs + 1000);
+    });
+
+    it('should honor a custom ttlMinutes option', async () => {
+      const before = Date.now();
+      await service.issueLoginTokenForUser('user-123', { ttlMinutes: 60 });
+      const after = Date.now();
+
+      const createCall = mockPrisma.magicLinkToken.create.mock.calls[0][0];
+      const expiresAt = new Date(createCall.data.expiresAt).getTime();
+      const hourMs = 60 * 60 * 1000;
+
+      expect(expiresAt).toBeGreaterThanOrEqual(before + hourMs - 1000);
+      expect(expiresAt).toBeLessThanOrEqual(after + hourMs + 1000);
+    });
+
+    it('should create the token bound to the given userId', async () => {
+      await service.issueLoginTokenForUser('user-123');
+
+      expect(mockPrisma.magicLinkToken.create).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          userId: 'user-123',
+          tokenHash: expect.any(String),
+          expiresAt: expect.any(Date)
+        })
+      });
+    });
+
+    it('should return null on database error (caller skips the link gracefully)', async () => {
+      mockPrisma.magicLinkToken.create.mockRejectedValueOnce(new Error('DB down'));
+
+      const token = await service.issueLoginTokenForUser('user-123');
+
+      expect(token).toBeNull();
     });
   });
 

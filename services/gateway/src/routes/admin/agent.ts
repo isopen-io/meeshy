@@ -593,10 +593,15 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         }
       }
 
-      const cache = getCacheStore();
-      await cache.publish('agent:config-invalidated', JSON.stringify({ conversationId }));
+      const invalidationStatus = await broadcastInvalidation({ conversationId });
+      if (!invalidationStatus.anyChannelSucceeded) {
+        fastify.log.warn(
+          { conversationId, invalidationStatus },
+          '[AgentConfig] Cache invalidation failed on both Redis pub/sub AND direct HTTP; agent service may serve stale config for up to 5 min',
+        );
+      }
 
-      return reply.send({ success: true, data: config });
+      return reply.send({ success: true, data: config, cacheInvalidation: invalidationStatus });
     } catch (error) {
       logError(fastify.log, 'Error upserting agent config:', error);
       return reply.status(500).send({ success: false, message: 'Erreur serveur' });
@@ -1726,10 +1731,15 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         config = await fastify.prisma.agentGlobalConfig.create({ data: parsed.data });
       }
 
-      const cache = getCacheStore();
-      await cache.publish('agent:config-invalidated', JSON.stringify({ global: true }));
+      const invalidationStatus = await broadcastInvalidation({ global: true });
+      if (!invalidationStatus.anyChannelSucceeded) {
+        fastify.log.warn(
+          { invalidationStatus },
+          '[AgentGlobalConfig] Cache invalidation failed on both Redis pub/sub AND direct HTTP; agent service may serve stale config for up to 10 min',
+        );
+      }
 
-      return reply.send({ success: true, data: config });
+      return reply.send({ success: true, data: config, cacheInvalidation: invalidationStatus });
     } catch (error) {
       logError(fastify.log, 'Error upserting global agent config:', error);
       return reply.status(500).send({ success: false, message: 'Erreur serveur' });

@@ -54,8 +54,10 @@ final class MockConversationSyncEngine: ConversationSyncEngineProviding, @unchec
         return syncSinceLastCheckpointResult
     }
 
-    func ensureMessages(for conversationId: String) async {
+    var lastEnsureMessagesForce: Bool?
+    func ensureMessages(for conversationId: String, force: Bool) async {
         ensureMessagesCallCount += 1
+        lastEnsureMessagesForce = force
     }
 
     func fetchOlderMessages(for conversationId: String, before messageId: String) async {
@@ -112,6 +114,7 @@ final class MockConversationSyncEngine: ConversationSyncEngineProviding, @unchec
         fullSyncCallCount = 0
         syncSinceLastCheckpointCallCount = 0
         ensureMessagesCallCount = 0
+        lastEnsureMessagesForce = nil
         fetchOlderMessagesCallCount = 0
         cleanupRetentionCallCount = 0
         startSocketRelayCallCount = 0

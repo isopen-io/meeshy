@@ -1,7 +1,7 @@
 import { apiService } from './api.service';
 import type { ApiResponse, AgentType } from '@meeshy/shared/types';
 
-function unwrapResponse<T>(response: ApiResponse<unknown>): ApiResponse<T> {
+function unwrapResponse<T>(response: ApiResponse<unknown>): ApiResponse<T> & { cacheInvalidation?: { redisPublishOk: boolean; redisSubscribersNotified: number; httpInvalidateOk: boolean; anyChannelSucceeded: boolean } } {
   if (!response.success || !response.data) return response as ApiResponse<T>;
   const raw = response.data as Record<string, unknown>;
   if (typeof raw === 'object' && raw !== null && 'success' in raw && 'data' in raw) {
@@ -9,6 +9,9 @@ function unwrapResponse<T>(response: ApiResponse<unknown>): ApiResponse<T> {
       ...response,
       data: raw.data as T,
       pagination: (raw as { pagination?: ApiResponse<T>['pagination'] }).pagination ?? response.pagination,
+      // Preserve the agent cache-invalidation status so the dialog can warn
+      // when a config save did not propagate to the agent service in real time.
+      cacheInvalidation: (raw as { cacheInvalidation?: { redisPublishOk: boolean; redisSubscribersNotified: number; httpInvalidateOk: boolean; anyChannelSucceeded: boolean } }).cacheInvalidation,
     };
   }
   return response as ApiResponse<T>;
@@ -93,6 +96,8 @@ export type AgentConfigData = {
   maxDelayMinutes: number;
   spreadOverDayEnabled: boolean;
   maxMessagesPerUserPer10Min: number;
+  freshTopicProbability: number;
+  freshTopicCategoryHints: string[];
   analytics: AnalyticsData | null;
   createdAt: string;
   updatedAt: string;

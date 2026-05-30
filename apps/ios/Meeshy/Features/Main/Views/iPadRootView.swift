@@ -135,10 +135,14 @@ struct iPadRootView: View {
                     openConversation(conversation)
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .handlePushNotification)) { notification in
-                if let payload = notification.object as? NotificationPayload {
-                    handlePushNotificationTap(payload)
-                }
+            // Drive push-tap navigation straight off the published intent
+            // (replayed to late subscribers) rather than a NotificationCenter
+            // post that a cold launch could drop before this view mounts.
+            // Clearing AFTER navigation makes this the single consumption point.
+            .onReceive(PushNotificationManager.shared.$pendingNotificationPayload) { payload in
+                guard let payload, AuthManager.shared.isAuthenticated else { return }
+                handlePushNotificationTap(payload)
+                PushNotificationManager.shared.clearPendingNotification()
             }
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("sendMessageToUser"))) { notification in
                 handleSendMessageToUser(notification)

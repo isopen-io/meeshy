@@ -11,6 +11,9 @@ import { DeliveryQueueCleanupJob } from './delivery-queue-cleanup';
 import { MutationLogCleanupJob } from './mutation-log-cleanup';
 import { EmailService } from '../services/EmailService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
+import { MagicLinkService } from '../services/MagicLinkService';
+import { getCacheStore } from '../services/CacheStore';
+import { GeoIPService } from '../services/GeoIPService';
 
 export class BackgroundJobsManager {
   private cleanupTokensJob: CleanupExpiredTokens;
@@ -23,7 +26,10 @@ export class BackgroundJobsManager {
   constructor(private prisma: PrismaClient, emailService: EmailService, deliveryQueue?: RedisDeliveryQueue) {
     this.cleanupTokensJob = new CleanupExpiredTokens(prisma);
     this.unlockAccountsJob = new UnlockAccountsJob(prisma);
-    this.notificationDigestJob = new NotificationDigestJob(prisma, emailService);
+    // Reuse the existing passwordless-login mechanism for the digest CTA
+    // (single source of truth — no duplicate token model/service).
+    const magicLinkService = new MagicLinkService(prisma, getCacheStore(), emailService, new GeoIPService());
+    this.notificationDigestJob = new NotificationDigestJob(prisma, emailService, magicLinkService);
     this.deliveryQueueCleanupJob = new DeliveryQueueCleanupJob(deliveryQueue ?? new RedisDeliveryQueue({ getNativeClient: () => null } as any));
     this.mutationLogCleanupJob = new MutationLogCleanupJob(prisma);
   }

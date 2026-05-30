@@ -80,7 +80,13 @@ export function AgentGlobalConfigTab() {
     try {
       const res = await agentAdminService.updateGlobalConfig(form);
       if (res.success) {
-        toast.success('Configuration globale mise à jour');
+        const invalidation = (res as unknown as { cacheInvalidation?: { anyChannelSucceeded?: boolean } })
+          .cacheInvalidation;
+        if (invalidation && invalidation.anyChannelSucceeded === false) {
+          toast.warning('Config globale sauvegardée — propagation au service agent en attente (cache stale possible quelques minutes)');
+        } else {
+          toast.success('Configuration globale mise à jour');
+        }
       } else {
         toast.error('Erreur lors de la mise à jour');
       }

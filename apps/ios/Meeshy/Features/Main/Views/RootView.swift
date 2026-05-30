@@ -361,16 +361,6 @@ struct RootView: View {
             await statusViewModel.loadStatuses()
             await conversationViewModel.loadConversations()
             await notificationManager.refreshUnreadCount()
-
-            // Cold-start recovery: when the app is launched from a terminated
-            // state by tapping a push, the `.handlePushNotification`
-            // NotificationCenter post may fire before RootView finishes
-            // mounting. Check the pending payload once we're on screen so the
-            // user never lands on the list instead of the target conversation.
-            if let pending = PushNotificationManager.shared.pendingNotificationPayload {
-                handlePushNotificationTap(pending)
-                PushNotificationManager.shared.clearPendingNotification()
-            }
         }
         .fullScreenCover(item: $storyViewerCoordinator.pendingRequest) { request in
             StoryViewerContainer(
@@ -459,10 +449,18 @@ struct RootView: View {
                 router.navigateToConversation(conversation)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .handlePushNotification)) { notification in
-            if let payload = notification.object as? NotificationPayload {
-                handlePushNotificationTap(payload)
-            }
+        // Drive push-tap navigation straight off the published intent instead
+        // of a NotificationCenter post. `@Published` replays its current value
+        // to late subscribers, so a cold launch (tap from a terminated app)
+        // where this view mounts AFTER the splash + payload was set still
+        // receives it — the previous post-then-clear hop in MeeshyApp dropped
+        // the intent when no view was mounted to hear the post, and the user
+        // landed on the list instead of the conversation. Clearing AFTER we
+        // navigate makes this the single consumption point.
+        .onReceive(PushNotificationManager.shared.$pendingNotificationPayload) { payload in
+            guard let payload, AuthManager.shared.isAuthenticated else { return }
+            handlePushNotificationTap(payload)
+            PushNotificationManager.shared.clearPendingNotification()
         }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("sendMessageToUser"))) { notification in
             guard let targetUserId = notification.object as? String else { return }
