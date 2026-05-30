@@ -377,6 +377,15 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     }
     @Published var drawingColor: Color = .white
     @Published var drawingWidth: CGFloat = 5
+    /// Pinceau actif pour la capture en mode dessin flottant (`StrokeCaptureLayer`).
+    /// La couleur et la largeur du pinceau réutilisent `drawingColor`/`drawingWidth`.
+    @Published var activeBrushTool: StrokeTool = .pen
+    @Published var activeBrushSmoothing: StrokeSmoothing = .raw
+    /// Mode d'édition de dessin flottant — contrôleurs posés sur `.ultraThinMaterial`
+    /// au-dessus du canvas. Orthogonal à `BandStateMachine`, mirror de `textEditingMode`.
+    /// Les traits éditables sont `drawingStrokes` (calculé sur `currentEffects`, cf.
+    /// `StoryComposerViewModel+DrawingEditing.swift`).
+    @Published var drawingEditingMode: DrawingEditingMode = .inactive
     var isDrawingActive: Bool { activeTool == .drawing }
 
     // MARK: - Background
@@ -1543,6 +1552,9 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         drawingData = nil
         drawingColor = .white
         drawingWidth = 5
+        activeBrushTool = .pen
+        activeBrushSmoothing = .raw
+        drawingEditingMode = .inactive
         backgroundColor = "#\(StoryBackgroundPalette.randomBackgroundColor())"
         loadedImages = [:]
         loadedVideoURLs = [:]

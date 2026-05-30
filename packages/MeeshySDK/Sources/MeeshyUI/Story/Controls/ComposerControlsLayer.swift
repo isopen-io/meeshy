@@ -1,7 +1,6 @@
 import SwiftUI
 import UIKit
 import PhotosUI
-import PencilKit
 import MeeshySDK
 
 public struct ComposerControlsLayer: View {
@@ -11,8 +10,6 @@ public struct ComposerControlsLayer: View {
     @Binding var bandStateMachine: BandStateMachine
     @Binding var areFabsVisible: Bool
 
-    @Binding var drawingCanvas: PKCanvasView
-    @Binding var drawingTool: DrawingTool
     @Binding var selectedFilter: StoryFilter?
     @Binding var fgMediaItem: PhotosPickerItem?
     @Binding var showAudioDocumentPicker: Bool
@@ -27,8 +24,6 @@ public struct ComposerControlsLayer: View {
         viewModel: StoryComposerViewModel,
         bandStateMachine: Binding<BandStateMachine>,
         areFabsVisible: Binding<Bool>,
-        drawingCanvas: Binding<PKCanvasView>,
-        drawingTool: Binding<DrawingTool>,
         selectedFilter: Binding<StoryFilter?>,
         fgMediaItem: Binding<PhotosPickerItem?>,
         showAudioDocumentPicker: Binding<Bool>,
@@ -38,8 +33,6 @@ public struct ComposerControlsLayer: View {
         self.viewModel = viewModel
         self._bandStateMachine = bandStateMachine
         self._areFabsVisible = areFabsVisible
-        self._drawingCanvas = drawingCanvas
-        self._drawingTool = drawingTool
         self._selectedFilter = selectedFilter
         self._fgMediaItem = fgMediaItem
         self._showAudioDocumentPicker = showAudioDocumentPicker
@@ -84,8 +77,6 @@ public struct ComposerControlsLayer: View {
                 ComposerBottomBand(
                     state: bandStateMachine.state,
                     viewModel: viewModel,
-                    drawingCanvas: $drawingCanvas,
-                    drawingTool: $drawingTool,
                     selectedFilter: $selectedFilter,
                     fgMediaItem: $fgMediaItem,
                     showAudioDocumentPicker: $showAudioDocumentPicker,

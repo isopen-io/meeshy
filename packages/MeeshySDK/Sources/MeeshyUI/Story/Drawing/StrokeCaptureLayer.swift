@@ -1,0 +1,149 @@
+import SwiftUI
+import PencilKit
+import MeeshySDK
+
+// MARK: - StrokeCaptureLayer
+
+/// Capture d'un trait à la fois via `PKCanvasView` (Apple Pencil + palm rejection
+/// natifs préservés), puis extraction immédiate en `StoryDrawingStroke` à chaque
+/// lift-up et clear du canvas. C'est l'Option A "hybride" du plan : PencilKit gère
+/// l'entrée bas-niveau, le modèle éditable `[StoryDrawingStroke]` reste la vérité.
+///
+/// Les points capturés (espace bounds du canvas visible) sont projetés en espace
+/// design 1080×1920 — portable cross-device, aligné sur le rendu (`StrokePathBuilder`,
+/// `StoryStrokeRasterizer`). En mode gomme, aucun trait n'est commité : les points du
+/// geste sont émis pour que le parent supprime les traits qu'il croise.
+struct StrokeCaptureLayer: UIViewRepresentable {
+    var activeTool: StrokeTool
+    var activeColorHex: String
+    var activeWidth: Double
+    var activeSmoothing: StrokeSmoothing
+    var onStrokeCommitted: (StoryDrawingStroke) -> Void
+    var onEraseGesture: ([CGPoint]) -> Void
+
+    // MARK: - Capture event (pure, testable)
+
+    enum CaptureEvent: Equatable {
+        case stroke(StoryDrawingStroke)
+        case erase([CGPoint])
+        case none
+    }
+
+    /// Extrait un évènement de capture du `drawing` PencilKit (espace bounds) projeté
+    /// en espace design. Pure-function : aucune dépendance UIKit live, testable en
+    /// isolant la projection et la construction du trait.
+    static func extract(from drawing: PKDrawing,
+                        bounds: CGRect,
+                        tool: StrokeTool,
+                        colorHex: String,
+                        width: Double,
+                        smoothing: StrokeSmoothing,
+                        designSize: CGSize = CanvasGeometry.designSize) -> CaptureEvent {
+        guard let pkStroke = drawing.strokes.last else { return .none }
+
+        let scale = projectionScale(bounds: bounds, designSize: designSize)
+        let designPoints: [CGPoint] = Array(pkStroke.path).map { point in
+            CGPoint(x: point.location.x * scale, y: point.location.y * scale)
+        }
+        guard !designPoints.isEmpty else { return .none }
+
+        if tool == .eraser {
+            return .erase(designPoints)
+        }
+
+        let stroke = StoryDrawingStroke(
+            points: designPoints.map { StoryDrawingStrokePoint(x: $0.x, y: $0.y) },
+            colorHex: colorHex,
+            width: width,
+            tool: tool,
+            smoothing: smoothing
+        )
+        return .stroke(stroke)
+    }
+
+    /// Échelle bounds→design (uniforme, `min` pour préserver le ratio quel que soit
+    /// le device). Même projection que le rendu (design 1080×1920 portable cross-device).
+    static func projectionScale(bounds: CGRect, designSize: CGSize) -> CGFloat {
+        guard bounds.width > 0, bounds.height > 0 else { return 1 }
+        return min(designSize.width / bounds.width, designSize.height / bounds.height)
+    }
+
+    // MARK: - UIViewRepresentable
+
+    func makeUIView(context: Context) -> PKCanvasView {
+        let canvas = PKCanvasView()
+        canvas.backgroundColor = .clear
+        canvas.isOpaque = false
+        canvas.drawingPolicy = .anyInput
+        canvas.delegate = context.coordinator
+        applyTool(to: canvas)
+        context.coordinator.lastToolKey = toolKey
+        return canvas
+    }
+
+    func updateUIView(_ uiView: PKCanvasView, context: Context) {
+        context.coordinator.parent = self
+        if context.coordinator.lastToolKey != toolKey {
+            applyTool(to: uiView)
+            context.coordinator.lastToolKey = toolKey
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
+
+    /// Le tool PencilKit ne sert qu'au rendu transitoire pendant le geste ; on
+    /// extrait toujours les points bruts à la fin. La gomme dessine quand même un
+    /// trait (effacé au commit) pour donner un retour visuel pendant le geste.
+    private func applyTool(to canvas: PKCanvasView) {
+        let inkColor = UIColor(Color(hex: activeColorHex))
+        switch activeTool {
+        case .pen:
+            canvas.tool = PKInkingTool(.pen, color: inkColor, width: CGFloat(activeWidth))
+        case .marker:
+            canvas.tool = PKInkingTool(.marker, color: inkColor, width: CGFloat(activeWidth) * 2)
+        case .eraser:
+            canvas.tool = PKInkingTool(.pen, color: UIColor.systemGray.withAlphaComponent(0.4),
+                                       width: CGFloat(activeWidth) * 2)
+        }
+    }
+
+    private var toolKey: String {
+        "\(activeTool.rawValue)|\(activeColorHex)|\(activeWidth)"
+    }
+
+    // MARK: - Coordinator
+
+    final class Coordinator: NSObject, PKCanvasViewDelegate {
+        var parent: StrokeCaptureLayer
+        var lastToolKey: String = ""
+        private var isClearing = false
+
+        init(parent: StrokeCaptureLayer) {
+            self.parent = parent
+        }
+
+        func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+            guard !isClearing else { return }
+            guard !canvasView.drawing.strokes.isEmpty else { return }
+
+            let event = StrokeCaptureLayer.extract(
+                from: canvasView.drawing,
+                bounds: canvasView.bounds,
+                tool: parent.activeTool,
+                colorHex: parent.activeColorHex,
+                width: parent.activeWidth,
+                smoothing: parent.activeSmoothing
+            )
+
+            switch event {
+            case .stroke(let stroke): parent.onStrokeCommitted(stroke)
+            case .erase(let points):  parent.onEraseGesture(points)
+            case .none:               break
+            }
+
+            isClearing = true
+            canvasView.drawing = PKDrawing()
+            isClearing = false
+        }
+    }
+}

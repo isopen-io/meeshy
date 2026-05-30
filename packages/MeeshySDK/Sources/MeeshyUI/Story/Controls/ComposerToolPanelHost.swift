@@ -1,13 +1,10 @@
 import SwiftUI
 import PhotosUI
-import PencilKit
 import MeeshySDK
 
 struct ComposerToolPanelHost: View {
     let tool: StoryToolMode
     @ObservedObject var viewModel: StoryComposerViewModel
-    @Binding var drawingCanvas: PKCanvasView
-    @Binding var drawingTool: DrawingTool
     @Binding var selectedFilter: StoryFilter?
     @Binding var fgMediaItem: PhotosPickerItem?
     @Binding var showAudioDocumentPicker: Bool
@@ -428,27 +425,13 @@ struct ComposerToolPanelHost: View {
         .accessibilityLabel(tip)
     }
 
+    /// Refonte dessin (2026-05-30) : les contrôles de dessin sont désormais des
+    /// contrôleurs flottants (`StoryDrawingToolbar`) posés au-dessus du canvas, plus
+    /// dans le band inférieur. Le band est masqué pendant l'édition de dessin
+    /// (`isFloatingEditorActive`), donc ce panneau n'est jamais affiché — il reste
+    /// `EmptyView` pour satisfaire le `switch` exhaustif sur `StoryToolMode`.
     private var drawingPanel: some View {
-        DrawingToolbarPanel(
-            toolColor: $viewModel.drawingColor,
-            toolWidth: $viewModel.drawingWidth,
-            toolType: $drawingTool,
-            onUndo: {
-                drawingCanvas.undoManager?.undo()
-                viewModel.drawingData = drawingCanvas.drawing.dataRepresentation()
-                HapticFeedback.light()
-            },
-            onRedo: {
-                drawingCanvas.undoManager?.redo()
-                viewModel.drawingData = drawingCanvas.drawing.dataRepresentation()
-                HapticFeedback.light()
-            },
-            onClear: {
-                drawingCanvas.drawing = PKDrawing()
-                viewModel.drawingData = nil
-                HapticFeedback.medium()
-            }
-        )
+        EmptyView()
     }
 
     @ViewBuilder

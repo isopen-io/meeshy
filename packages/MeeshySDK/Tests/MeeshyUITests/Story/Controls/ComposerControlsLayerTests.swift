@@ -69,8 +69,6 @@ final class ComposerControlsLayerTests: XCTestCase {
             viewModel: vm,
             bandStateMachine: .constant(BandStateMachine()),
             areFabsVisible: .constant(true),
-            drawingCanvas: .constant(.init()),
-            drawingTool: .constant(.pen),
             selectedFilter: .constant(nil),
             fgMediaItem: .constant(nil),
             showAudioDocumentPicker: .constant(false),

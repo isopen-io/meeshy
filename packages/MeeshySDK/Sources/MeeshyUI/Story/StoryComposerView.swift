@@ -1,7 +1,6 @@
 import SwiftUI
 import UIKit
 import PhotosUI
-import PencilKit
 import UniformTypeIdentifiers
 import AVFoundation
 import MeeshySDK
@@ -80,10 +79,8 @@ public struct StoryComposerView: View {
 
     @Environment(\.colorScheme) private var colorScheme
 
-    // MARK: - Canvas-local state (PKCanvasView must be @State)
+    // MARK: - Canvas-local state
 
-    @State private var drawingCanvas = PKCanvasView()
-    @State private var drawingTool: DrawingTool = .pen
     @State private var selectedFilter: StoryFilter?
     @State private var selectedImage: UIImage?
     @State private var stickerObjects: [StorySticker] = []
@@ -294,16 +291,28 @@ public struct StoryComposerView: View {
             // a tool is selected OR a slide has any content.
             // Hidden (non-interactive) while the floating text editor is open.
             bottomRegion
-                .opacity(viewModel.textEditingMode == .inactive ? 1 : 0)
-                .allowsHitTesting(viewModel.textEditingMode == .inactive)
+                .opacity(isFloatingEditorActive ? 0 : 1)
+                .allowsHitTesting(!isFloatingEditorActive)
 
             // Floating text edit overlay — sits above every composer control.
             // Empty view when `textEditingMode == .inactive`.
             StoryTextEditToolbar(viewModel: viewModel)
                 .padding(.bottom, keyboardHeight)
+
+            // Floating drawing controls — mirror du toolbar texte. Vide quand
+            // `drawingEditingMode == .inactive`.
+            StoryDrawingToolbar(viewModel: viewModel)
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.85),
                    value: viewModel.textEditingMode)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85),
+                   value: viewModel.drawingEditingMode)
+        .adaptiveOnChange(of: viewModel.activeTool) { _, newTool in
+            // Le mode dessin flottant suit l'outil actif : entrer expose les
+            // contrôleurs flottants, quitter les masque.
+            if newTool == .drawing { viewModel.enterDrawingEditingMode() }
+            else { viewModel.exitDrawingEditingMode() }
+        }
         .statusBarHidden()
         .ignoresSafeArea(.keyboard)
         .onAppear {
@@ -611,8 +620,6 @@ public struct StoryComposerView: View {
                     viewModel: viewModel,
                     bandStateMachine: $bandStateMachine,
                     areFabsVisible: $areFabsVisible,
-                    drawingCanvas: $drawingCanvas,
-                    drawingTool: $drawingTool,
                     selectedFilter: $selectedFilter,
                     fgMediaItem: $fgMediaItem,
                     showAudioDocumentPicker: $showAudioDocumentPicker,
@@ -863,6 +870,12 @@ public struct StoryComposerView: View {
     /// set therefore tells us nothing about user intent — only explicit
     /// content additions (text / media / sticker / drawing) flip the slide
     /// out of empty state.
+    /// Un éditeur flottant (texte OU dessin) occupe le bas de l'écran — le band
+    /// compact est alors masqué et non-interactif.
+    private var isFloatingEditorActive: Bool {
+        viewModel.textEditingMode != .inactive || viewModel.drawingEditingMode.isActive
+    }
+
     private var isComposerEmpty: Bool {
         let slidesEmpty = viewModel.slides.allSatisfy { slide in
             slide.content == nil
@@ -871,10 +884,12 @@ public struct StoryComposerView: View {
                 && (slide.effects.mediaObjects ?? []).isEmpty
                 && (slide.effects.stickerObjects ?? []).isEmpty
                 && slide.effects.drawingData == nil
+                && (slide.effects.drawingStrokes ?? []).isEmpty
         }
         return slidesEmpty
             && stickerObjects.isEmpty
             && viewModel.drawingData == nil
+            && viewModel.drawingStrokes.isEmpty
     }
 
     private var shouldShowEmptyStateLargePicker: Bool {
@@ -1311,14 +1326,29 @@ public struct StoryComposerView: View {
         .allowsHitTesting(!viewModel.isDrawingActive)
         .overlay {
             if viewModel.isDrawingActive {
-                DrawingOverlayView(
-                    drawingData: $viewModel.drawingData,
-                    isActive: .constant(true),
-                    canvasView: $drawingCanvas,
-                    toolColor: $viewModel.drawingColor,
-                    toolWidth: $viewModel.drawingWidth,
-                    toolType: $drawingTool
-                )
+                // Refonte dessin (2026-05-30) : capture single-stroke (PencilKit) +
+                // rendu live des traits éditables (avec halo sélection). Le canvas
+                // sous-jacent suppress son propre drawingLayer pendant ce temps
+                // (`suppressDrawingOverlay`), donc pas de double rendu.
+                ZStack {
+                    MeeshyStrokeCanvas(
+                        strokes: viewModel.drawingStrokes,
+                        selectedId: viewModel.drawingEditingMode.selectedStrokeId
+                    )
+                    .equatable()
+                    StrokeCaptureLayer(
+                        activeTool: viewModel.activeBrushTool,
+                        activeColorHex: DrawingEditToolOptions.hex(of: viewModel.drawingColor),
+                        activeWidth: Double(viewModel.drawingWidth),
+                        activeSmoothing: viewModel.activeBrushSmoothing,
+                        onStrokeCommitted: { stroke in
+                            viewModel.drawingStrokes.append(stroke)
+                        },
+                        onEraseGesture: { points in
+                            eraseStrokes(near: points)
+                        }
+                    )
+                }
             }
         }
         .overlay { audioForegroundOverlay }
@@ -1513,8 +1543,6 @@ public struct StoryComposerView: View {
         selectedFilter = nil
         selectedImage = nil
         stickerObjects = []
-        drawingCanvas = PKCanvasView()
-        drawingTool = .pen
 
         // Transitions (read by buildEffects)
         openingEffect = nil
@@ -1552,10 +1580,10 @@ public struct StoryComposerView: View {
         audioVolume = e.backgroundAudioVolume ?? 0.7
         audioTrimStart = e.backgroundAudioStart ?? 0
         audioTrimEnd = e.backgroundAudioEnd ?? 0
-        drawingCanvas = PKCanvasView()
-        if let data = e.drawingData, let drawing = try? PKDrawing(data: data) {
-            drawingCanvas.drawing = drawing
-        }
+        // Refonte dessin (2026-05-30) : le dessin est porté par `currentEffects`
+        // (`drawingStrokes` moderne + `drawingData` legacy decode-only). Le composer
+        // ne maintient plus de `PKCanvasView` local — la capture passe par
+        // `StrokeCaptureLayer` et le rendu par `MeeshyStrokeCanvas` / `StoryRenderer`.
         viewModel.drawingData = e.drawingData
         if let bt = e.backgroundTransform {
             viewModel.backgroundTransform = StoryComposerViewModel.BackgroundTransform(
@@ -1565,6 +1593,29 @@ public struct StoryComposerView: View {
             )
         } else {
             viewModel.backgroundTransform = StoryComposerViewModel.BackgroundTransform()
+        }
+    }
+
+    /// Gomme par hit-test : supprime tout trait dont un point de rendu (espace
+    /// design) tombe dans le rayon du geste de gomme. Pas d'effacement pixel-par-pixel
+    /// (le modèle est vectoriel) — on supprime le trait entier croisé, UX acceptable
+    /// (cf. Risque #2 du plan).
+    private func eraseStrokes(near erasePoints: [CGPoint]) {
+        guard !erasePoints.isEmpty else { return }
+        let eraseRadius: CGFloat = 28  // design px
+        let survivors = viewModel.drawingStrokes.filter { stroke in
+            let reach = CGFloat(stroke.width) / 2 + eraseRadius
+            let points = StrokePathBuilder.renderPoints(for: stroke)
+            for sp in points {
+                for ep in erasePoints where hypot(sp.x - ep.x, sp.y - ep.y) <= reach {
+                    return false
+                }
+            }
+            return true
+        }
+        if survivors.count != viewModel.drawingStrokes.count {
+            viewModel.drawingStrokes = survivors
+            HapticFeedback.light()
         }
     }
 
@@ -1592,6 +1643,10 @@ public struct StoryComposerView: View {
             stickers: stickerObjects.isEmpty ? nil : stickerObjects.map(\.emoji),
             stickerObjects: stickerObjects.isEmpty ? nil : stickerObjects,
             drawingData: viewModel.drawingData,
+            // Refonte dessin (2026-05-30) : `drawingStrokes` est la source de vérité
+            // moderne. `buildEffects` reconstruit l'effet from scratch, donc on doit
+            // ré-émettre les traits sinon ils sont effacés à chaque sync de slide.
+            drawingStrokes: viewModel.drawingStrokes.isEmpty ? nil : viewModel.drawingStrokes,
             backgroundAudioId: selectedAudioId,
             backgroundAudioVolume: selectedAudioId != nil ? audioVolume : nil,
             backgroundAudioStart: selectedAudioId != nil ? audioTrimStart : nil,
@@ -1918,7 +1973,8 @@ public struct StoryComposerView: View {
                 || slide.effects.background != nil
                 || !slide.effects.textObjects.isEmpty
                 || !(slide.effects.mediaObjects ?? []).isEmpty
-        } || !stickerObjects.isEmpty || viewModel.drawingData != nil
+                || !(slide.effects.drawingStrokes ?? []).isEmpty
+        } || !stickerObjects.isEmpty || viewModel.drawingData != nil || !viewModel.drawingStrokes.isEmpty
 
         if hasContent { showDiscardAlert = true }
         else { publishTask?.cancel(); publishTask = nil; clearAllDrafts(); onDismiss() }

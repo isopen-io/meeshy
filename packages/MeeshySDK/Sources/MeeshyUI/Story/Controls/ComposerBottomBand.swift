@@ -1,14 +1,11 @@
 import SwiftUI
 import PhotosUI
-import PencilKit
 import MeeshySDK
 
 struct ComposerBottomBand: View {
     let state: BandState
     @ObservedObject var viewModel: StoryComposerViewModel
 
-    @Binding var drawingCanvas: PKCanvasView
-    @Binding var drawingTool: DrawingTool
     @Binding var selectedFilter: StoryFilter?
     @Binding var fgMediaItem: PhotosPickerItem?
     @Binding var showAudioDocumentPicker: Bool
@@ -89,8 +86,6 @@ struct ComposerBottomBand: View {
                     ComposerToolPanelHost(
                         tool: tool,
                         viewModel: viewModel,
-                        drawingCanvas: $drawingCanvas,
-                        drawingTool: $drawingTool,
                         selectedFilter: $selectedFilter,
                         fgMediaItem: $fgMediaItem,
                         showAudioDocumentPicker: $showAudioDocumentPicker,

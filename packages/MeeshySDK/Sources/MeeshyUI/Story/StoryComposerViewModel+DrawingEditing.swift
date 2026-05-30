@@ -1,0 +1,139 @@
+import Foundation
+import MeeshySDK
+
+// MARK: - DrawingEditTool
+
+/// Les 5 contrôles de dessin exposés en mode édition flottante. L'ordre des `case`
+/// fixe l'ordre d'affichage des bulles dans la rangée (mirror de `TextEditTool`).
+public enum DrawingEditTool: String, CaseIterable, Sendable, Equatable {
+    case tool       // pinceau : pen / marker / eraser
+    case color      // couleur du pinceau / du trait sélectionné
+    case thickness  // épaisseur
+    case smoothing  // lissage : raw / curve / line
+    case layers     // liste des traits (sélection, suppression)
+
+    var sfSymbol: String {
+        switch self {
+        case .tool:      return "pencil.tip"
+        case .color:     return "paintpalette.fill"
+        case .thickness: return "lineweight"
+        case .smoothing: return "scribble.variable"
+        case .layers:    return "square.stack.3d.up"
+        }
+    }
+
+    var accessibilityLabel: String {
+        switch self {
+        case .tool:      return "Pinceau"
+        case .color:     return "Couleur du trait"
+        case .thickness: return "Épaisseur du trait"
+        case .smoothing: return "Lissage du trait"
+        case .layers:    return "Liste des traits"
+        }
+    }
+}
+
+// MARK: - DrawingEditingMode
+
+/// État du mode d'édition de dessin flottant. Orthogonal à `BandStateMachine`.
+/// `strokeId` = trait sélectionné pour l'édition par-trait (`nil` = aucun, on édite
+/// alors le pinceau actif). `expandedTool` = panneau d'options déplié.
+public enum DrawingEditingMode: Equatable, Sendable {
+    case inactive
+    case active(strokeId: String?, expandedTool: DrawingEditTool?)
+
+    public var isActive: Bool {
+        if case .active = self { return true }
+        return false
+    }
+
+    public var selectedStrokeId: String? {
+        if case .active(let id, _) = self { return id }
+        return nil
+    }
+
+    public var expandedTool: DrawingEditTool? {
+        if case .active(_, let tool) = self { return tool }
+        return nil
+    }
+}
+
+// MARK: - StoryComposerViewModel : drawing strokes + transitions
+
+extension StoryComposerViewModel {
+
+    /// Traits éditables du slide courant. Source de vérité = `currentEffects.drawingStrokes`
+    /// (pas de cache `@Published` séparé : l'observation SwiftUI passe par `slides`, ce qui
+    /// évite la staleness du double-cache dont souffre `drawingData`). Un tableau vide
+    /// remet `currentEffects.drawingStrokes` à `nil` (le rendu retombe alors sur le legacy
+    /// `drawingData` s'il existe).
+    var drawingStrokes: [StoryDrawingStroke] {
+        get { currentEffects.drawingStrokes ?? [] }
+        set {
+            var effects = currentEffects
+            effects.drawingStrokes = newValue.isEmpty ? nil : newValue
+            currentEffects = effects
+        }
+    }
+
+    // MARK: Mode transitions
+
+    /// Entre en mode édition de dessin flottant. Aucun trait présélectionné, aucun
+    /// panneau déplié. Idempotent si déjà actif (préserve la sélection/le panneau).
+    func enterDrawingEditingMode() {
+        if drawingEditingMode.isActive { return }
+        drawingEditingMode = .active(strokeId: nil, expandedTool: nil)
+    }
+
+    /// Sort du mode édition de dessin.
+    func exitDrawingEditingMode() {
+        drawingEditingMode = .inactive
+    }
+
+    /// Déplie / replie le panneau d'options d'un outil. No-op si pas en édition.
+    func setExpandedDrawingTool(_ tool: DrawingEditTool?) {
+        guard case .active(let strokeId, _) = drawingEditingMode else { return }
+        drawingEditingMode = .active(strokeId: strokeId, expandedTool: tool)
+    }
+
+    // MARK: Per-stroke editing
+
+    /// Sélectionne un trait pour l'édition par-trait. `nil` désélectionne. Un id
+    /// inexistant est ignoré (no-op). No-op si pas en mode édition.
+    func selectStroke(_ id: String?) {
+        guard case .active(_, let expandedTool) = drawingEditingMode else { return }
+        if let id, !drawingStrokes.contains(where: { $0.id == id }) { return }
+        drawingEditingMode = .active(strokeId: id, expandedTool: expandedTool)
+    }
+
+    /// Supprime un trait. Si c'était le trait sélectionné, la sélection est levée.
+    func deleteStroke(_ id: String) {
+        drawingStrokes.removeAll { $0.id == id }
+        if drawingEditingMode.selectedStrokeId == id {
+            selectStroke(nil)
+        }
+    }
+
+    /// Recolore le trait sélectionné. No-op si aucun trait sélectionné.
+    func updateSelectedStrokeColor(_ colorHex: String) {
+        mutateSelectedStroke { $0.colorHex = colorHex }
+    }
+
+    /// Change l'épaisseur du trait sélectionné. No-op si aucun trait sélectionné.
+    func updateSelectedStrokeWidth(_ width: Double) {
+        mutateSelectedStroke { $0.width = width }
+    }
+
+    /// Change le lissage du trait sélectionné. No-op si aucun trait sélectionné.
+    func updateSelectedStrokeSmoothing(_ smoothing: StrokeSmoothing) {
+        mutateSelectedStroke { $0.smoothing = smoothing }
+    }
+
+    private func mutateSelectedStroke(_ transform: (inout StoryDrawingStroke) -> Void) {
+        guard let id = drawingEditingMode.selectedStrokeId,
+              let index = drawingStrokes.firstIndex(where: { $0.id == id }) else { return }
+        var strokes = drawingStrokes
+        transform(&strokes[index])
+        drawingStrokes = strokes
+    }
+}
