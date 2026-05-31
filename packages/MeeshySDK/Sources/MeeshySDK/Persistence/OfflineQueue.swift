@@ -39,6 +39,12 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
     /// Boot recovery (`OfflineQueue.bootRecovery`) detects records whose
     /// referenced file is missing and marks them `.failed`.
     public let localAudioPath: String?
+    /// Relative paths to N pending audio files for a MULTI-TRACK audio message,
+    /// stored under `Documents/pending-audio/<clientMessageId>/<index>.m4a`.
+    /// `nil` for non-audio and for legacy single-audio messages (which use
+    /// `localAudioPath`). Decoded with `decodeIfPresent` so on-disk rows
+    /// written before this field existed keep decoding without migration.
+    public let localAudioPaths: [String]?
     public let createdAt: Date
 
     public init(
@@ -51,7 +57,8 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         forwardedFromConversationId: String? = nil,
         attachmentIds: [String]? = nil,
         attachmentKinds: [String]? = nil,
-        localAudioPath: String? = nil
+        localAudioPath: String? = nil,
+        localAudioPaths: [String]? = nil
     ) {
         self.id = UUID().uuidString
         self.clientMessageId = clientMessageId ?? ClientMessageId.generate()
@@ -64,6 +71,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.attachmentIds = attachmentIds
         self.attachmentKinds = attachmentKinds
         self.localAudioPath = localAudioPath
+        self.localAudioPaths = localAudioPaths
         self.createdAt = Date()
     }
 
@@ -81,6 +89,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         attachmentIds: [String]?,
         attachmentKinds: [String]? = nil,
         localAudioPath: String?,
+        localAudioPaths: [String]? = nil,
         createdAt: Date
     ) {
         self.id = id
@@ -94,7 +103,58 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.attachmentIds = attachmentIds
         self.attachmentKinds = attachmentKinds
         self.localAudioPath = localAudioPath
+        self.localAudioPaths = localAudioPaths
         self.createdAt = createdAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case clientMessageId
+        case conversationId
+        case content
+        case originalLanguage
+        case replyToId
+        case forwardedFromId
+        case forwardedFromConversationId
+        case attachmentIds
+        case attachmentKinds
+        case localAudioPath
+        case localAudioPaths
+        case createdAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(String.self, forKey: .id)
+        self.clientMessageId = try c.decode(String.self, forKey: .clientMessageId)
+        self.conversationId = try c.decode(String.self, forKey: .conversationId)
+        self.content = try c.decode(String.self, forKey: .content)
+        self.originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage) ?? nil
+        self.replyToId = try c.decodeIfPresent(String.self, forKey: .replyToId) ?? nil
+        self.forwardedFromId = try c.decodeIfPresent(String.self, forKey: .forwardedFromId) ?? nil
+        self.forwardedFromConversationId = try c.decodeIfPresent(String.self, forKey: .forwardedFromConversationId) ?? nil
+        self.attachmentIds = try c.decodeIfPresent([String].self, forKey: .attachmentIds) ?? nil
+        self.attachmentKinds = try c.decodeIfPresent([String].self, forKey: .attachmentKinds) ?? nil
+        self.localAudioPath = try c.decodeIfPresent(String.self, forKey: .localAudioPath) ?? nil
+        self.localAudioPaths = try c.decodeIfPresent([String].self, forKey: .localAudioPaths) ?? nil
+        self.createdAt = try c.decode(Date.self, forKey: .createdAt)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(clientMessageId, forKey: .clientMessageId)
+        try c.encode(conversationId, forKey: .conversationId)
+        try c.encode(content, forKey: .content)
+        try c.encodeIfPresent(originalLanguage, forKey: .originalLanguage)
+        try c.encodeIfPresent(replyToId, forKey: .replyToId)
+        try c.encodeIfPresent(forwardedFromId, forKey: .forwardedFromId)
+        try c.encodeIfPresent(forwardedFromConversationId, forKey: .forwardedFromConversationId)
+        try c.encodeIfPresent(attachmentIds, forKey: .attachmentIds)
+        try c.encodeIfPresent(attachmentKinds, forKey: .attachmentKinds)
+        try c.encodeIfPresent(localAudioPath, forKey: .localAudioPath)
+        try c.encodeIfPresent(localAudioPaths, forKey: .localAudioPaths)
+        try c.encode(createdAt, forKey: .createdAt)
     }
 }
 
@@ -922,6 +982,15 @@ public actor OfflineQueue {
         public let localAudioPath: String
     }
 
+    /// Result of an `enqueueAudios` call (multi-track). `localAudioPaths`
+    /// holds the N stable relative paths (under
+    /// `Documents/pending-audio/<clientMessageId>/<index>.m4a`) the caller
+    /// can use to reference the persisted tracks in its optimistic UI.
+    public struct EnqueueAudiosResult: Sendable {
+        public let outboxId: String
+        public let localAudioPaths: [String]
+    }
+
     /// Phase 4 §6.3 audio offline write-ahead. Atomicity between the SQLite
     /// outbox row and the on-disk audio file is impossible (two persistence
     /// systems), so we do it in two ordered phases :
@@ -951,10 +1020,52 @@ public actor OfflineQueue {
         forwardedFromId: String? = nil,
         forwardedFromConversationId: String? = nil
     ) async throws -> EnqueueAudioResult {
+        // Single-track audio is a degenerate multi-track message. Routing it
+        // through `enqueueAudios([url], …)` keeps the write-ahead invariants
+        // (outbox row first, files second, `.failed` on copy error) in one
+        // place. The stored path lives under the per-message subdir
+        // (`pending-audio/<cid>/0.m4a`) — `absoluteAudioPath(forStored:)`
+        // resolves it identically, so existing readers keep working.
+        let result = try await enqueueAudios(
+            sourceAudioURLs: [sourceAudioURL],
+            conversationId: conversationId,
+            content: content,
+            clientMessageId: clientMessageId,
+            originalLanguage: originalLanguage,
+            replyToId: replyToId,
+            forwardedFromId: forwardedFromId,
+            forwardedFromConversationId: forwardedFromConversationId
+        )
+        return EnqueueAudioResult(
+            outboxId: result.outboxId,
+            localAudioPath: result.localAudioPaths.first ?? ""
+        )
+    }
+
+    /// Multi-track variant of `enqueueAudio`: persists N audio files as a
+    /// SINGLE `OutboxRecord` (one logical message carrying N audio tracks).
+    /// Same write-ahead ordering as the single-file path — the outbox row is
+    /// inserted first (Phase A), then each source URL is copied into
+    /// `Documents/pending-audio/<clientMessageId>/<index>.m4a` (Phase B). A
+    /// copy failure on any track flips the row to `.failed` so the flusher
+    /// never replays against a missing file. Boot recovery handles a crash
+    /// between phases.
+    @discardableResult
+    public func enqueueAudios(
+        sourceAudioURLs: [URL],
+        conversationId: String,
+        content: String?,
+        clientMessageId: String,
+        originalLanguage: String? = nil,
+        replyToId: String? = nil,
+        forwardedFromId: String? = nil,
+        forwardedFromConversationId: String? = nil
+    ) async throws -> EnqueueAudiosResult {
         guard let pool = outboxPool else { throw EnqueueAudioError.poolNotConfigured }
 
-        let relativePath = try Self.pendingAudioRelativePath(for: clientMessageId)
-        let absolutePath = Self.absoluteAudioPath(forStored: relativePath)
+        let relativePaths: [String] = try sourceAudioURLs.indices.map { index in
+            try Self.pendingAudioRelativePath(for: clientMessageId, index: index)
+        }
         let outboxId = "ofq_\(UUID().uuidString)"
         let now = Date()
 
@@ -968,7 +1079,9 @@ public actor OfflineQueue {
             forwardedFromId: forwardedFromId,
             forwardedFromConversationId: forwardedFromConversationId,
             attachmentIds: nil,
-            localAudioPath: relativePath,
+            attachmentKinds: Array(repeating: AttachmentKind.audio.rawValue, count: sourceAudioURLs.count),
+            localAudioPath: nil,
+            localAudioPaths: relativePaths,
             createdAt: now
         )
 
@@ -979,7 +1092,7 @@ public actor OfflineQueue {
             throw EnqueueAudioError.outboxWriteFailed(underlying: error)
         }
 
-        // Phase A — INSERT outbox row first. If this throws, the file is
+        // Phase A — INSERT outbox row first. If this throws, the files are
         // still untouched on disk and the caller can retry.
         do {
             try await pool.write { db in
@@ -998,15 +1111,18 @@ public actor OfflineQueue {
             throw EnqueueAudioError.outboxWriteFailed(underlying: error)
         }
 
-        // Phase B — copy the audio into the pending directory. On failure,
-        // mark the row `.failed` so the flusher does not retry against a
-        // missing file. We must NOT throw before that update lands.
+        // Phase B — copy each audio into the per-message pending subdir. On
+        // any failure, mark the row `.failed` so the flusher does not retry
+        // against a missing file. We must NOT throw before that update lands.
         do {
-            let dst = URL(fileURLWithPath: absolutePath)
-            if FileManager.default.fileExists(atPath: absolutePath) {
-                try FileManager.default.removeItem(at: dst)
+            for (source, relativePath) in zip(sourceAudioURLs, relativePaths) {
+                let absolutePath = Self.absoluteAudioPath(forStored: relativePath)
+                let dst = URL(fileURLWithPath: absolutePath)
+                if FileManager.default.fileExists(atPath: absolutePath) {
+                    try FileManager.default.removeItem(at: dst)
+                }
+                try FileManager.default.copyItem(at: source, to: dst)
             }
-            try FileManager.default.copyItem(at: sourceAudioURL, to: dst)
         } catch {
             do {
                 try await pool.write { db in
@@ -1027,10 +1143,12 @@ public actor OfflineQueue {
             throw EnqueueAudioError.audioCopyFailed(underlying: error)
         }
 
-        // Phase C — best-effort cleanup of the original tmp file. A failure
-        // here is benign: the file lives in `tmp/` and the OS will reclaim
-        // it on its own schedule.
-        try? FileManager.default.removeItem(at: sourceAudioURL)
+        // Phase C — best-effort cleanup of the original tmp files. A failure
+        // here is benign: the files live in `tmp/` and the OS reclaims them
+        // on its own schedule.
+        for source in sourceAudioURLs {
+            try? FileManager.default.removeItem(at: source)
+        }
 
         // Mirror the new item into the in-memory queue so the hot retry
         // path picks it up on the next reconnect without re-reading the
@@ -1039,10 +1157,10 @@ public actor OfflineQueue {
             items.removeFirst()
         }
         items.append(item)
-        logger.info("Enqueued audio for conversation \(conversationId, privacy: .public), path \(relativePath, privacy: .public)")
+        logger.info("Enqueued \(sourceAudioURLs.count) audio track(s) for conversation \(conversationId, privacy: .public), message \(clientMessageId, privacy: .public)")
         await refreshPendingCount()
 
-        return EnqueueAudioResult(outboxId: outboxId, localAudioPath: relativePath)
+        return EnqueueAudiosResult(outboxId: outboxId, localAudioPaths: relativePaths)
     }
 
     /// Persists an `editMessage` request, applying the coalescing rules from
@@ -1102,7 +1220,9 @@ public actor OfflineQueue {
                         forwardedFromId: item.forwardedFromId,
                         forwardedFromConversationId: item.forwardedFromConversationId,
                         attachmentIds: item.attachmentIds,
+                        attachmentKinds: item.attachmentKinds,
                         localAudioPath: item.localAudioPath,
+                        localAudioPaths: item.localAudioPaths,
                         createdAt: item.createdAt
                     )
                     let mergedPayload = (try? enc.encode(merged)) ?? send.payload
@@ -1541,10 +1661,15 @@ public actor OfflineQueue {
                     .fetchAll(db)
                 let fm = FileManager.default
                 for record in pendingSends {
-                    guard let item = try? dec.decode(OfflineQueueItem.self, from: record.payload),
-                          let path = item.localAudioPath, !path.isEmpty else { continue }
-                    let absolute = Self.absoluteAudioPath(forStored: path)
-                    if !fm.fileExists(atPath: absolute) {
+                    guard let item = try? dec.decode(OfflineQueueItem.self, from: record.payload) else { continue }
+                    // Single-track legacy path + multi-track paths are both
+                    // checked: any referenced file missing on disk means the
+                    // pre-crash copy never landed → mark the whole row failed.
+                    let referencedPaths = ([item.localAudioPath].compactMap { $0 } + (item.localAudioPaths ?? []))
+                        .filter { !$0.isEmpty }
+                    guard !referencedPaths.isEmpty else { continue }
+                    let anyMissing = referencedPaths.contains { !fm.fileExists(atPath: Self.absoluteAudioPath(forStored: $0)) }
+                    if anyMissing {
                         try db.execute(sql: """
                             UPDATE outbox
                             SET status = ?, lastError = ?, updatedAt = ?
@@ -1597,6 +1722,23 @@ public actor OfflineQueue {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         }
         return "\(pendingAudioDirectoryName)/\(clientMessageId).m4a"
+    }
+
+    /// Builds the canonical relative path under
+    /// `Documents/pending-audio/<clientMessageId>/<index>.m4a` for a single
+    /// track of a multi-track audio message. Creates the per-message
+    /// subdirectory if needed so the subsequent `copyItem` finds a destination
+    /// directory. Resolves to the right absolute file via
+    /// `absoluteAudioPath(forStored:)` (which simply prepends `Documents/`).
+    public static func pendingAudioRelativePath(for clientMessageId: String, index: Int) throws -> String {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let dir = documents
+            .appendingPathComponent(pendingAudioDirectoryName, isDirectory: true)
+            .appendingPathComponent(clientMessageId, isDirectory: true)
+        if !FileManager.default.fileExists(atPath: dir.path) {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        return "\(pendingAudioDirectoryName)/\(clientMessageId)/\(index).m4a"
     }
 
     // MARK: - Retry Logic
@@ -1819,6 +1961,13 @@ public actor OfflineQueue {
     /// observe the resulting snapshot.
     public func refreshForTesting() async {
         await refreshPendingCount()
+    }
+
+    /// Exposes the configured outbox pool so tests can read back the persisted
+    /// `OutboxRecord` rows (and decode their payloads) without reaching into
+    /// the actor's private state.
+    public var outboxPoolForTesting: (any DatabaseWriter)? {
+        outboxPool
     }
 
     /// Deletes every outbox row whose `clientMessageId` matches `cmid`,

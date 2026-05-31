@@ -258,4 +258,103 @@ final class OfflineQueueTests: XCTestCase {
             XCTAssertEqual(item.conversationId, "conv-\(index + 1)")
         }
     }
+
+    // MARK: - Audio enqueue (A3 — multi-track + single wrapper)
+
+    /// Writes a throwaway `.m4a` payload into `tmp/` and returns its URL.
+    /// Mirrors the volatile recording path the audio composer hands to the
+    /// queue at enqueue time.
+    private func makeTempAudioFile() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("rec_\(UUID().uuidString).m4a")
+        try Data(repeating: 0xAB, count: 16).write(to: url)
+        return url
+    }
+
+    /// Reads back the single persisted `OfflineQueueItem` for a given
+    /// `clientMessageId` by decoding the matching `OutboxRecord` payloads.
+    private func readBackItems(forClientMessageId cmid: String) async throws -> [OfflineQueueItem] {
+        let maybePool = await queue.outboxPoolForTesting
+        let pool = try XCTUnwrap(maybePool)
+        let records: [OutboxRecord] = try await pool.read { db in
+            try OutboxRecord
+                .filter(Column("clientMessageId") == cmid)
+                .fetchAll(db)
+        }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try records.map { try decoder.decode(OfflineQueueItem.self, from: $0.payload) }
+    }
+
+    func test_enqueueAudios_persistsAllPaths_inSingleRecord() async throws {
+        let cid = "cid_\(UUID().uuidString.lowercased())"
+        let url1 = try makeTempAudioFile()
+        let url2 = try makeTempAudioFile()
+
+        let result = try await queue.enqueueAudios(
+            sourceAudioURLs: [url1, url2],
+            conversationId: "conv-1",
+            content: nil,
+            clientMessageId: cid,
+            originalLanguage: "fr"
+        )
+
+        XCTAssertEqual(result.localAudioPaths.count, 2)
+        for path in result.localAudioPaths {
+            XCTAssertTrue(path.contains(cid), "Each stored path must live under the per-message subdir")
+            XCTAssertTrue(FileManager.default.fileExists(
+                atPath: OfflineQueue.absoluteAudioPath(forStored: path)),
+                "Each audio file must have been copied to disk")
+        }
+
+        let items = try await readBackItems(forClientMessageId: cid)
+        XCTAssertEqual(items.count, 1, "Multi-track audio persists as exactly ONE OutboxRecord")
+        let item = try XCTUnwrap(items.first)
+        XCTAssertEqual(item.localAudioPaths?.count, 2)
+        XCTAssertNil(item.localAudioPath)
+        XCTAssertNil(item.attachmentIds)
+        XCTAssertEqual(item.attachmentKinds, ["audio", "audio"])
+        for path in try XCTUnwrap(item.localAudioPaths) {
+            XCTAssertTrue(path.contains(cid))
+        }
+    }
+
+    func test_enqueueAudio_single_stillWorks_viaWrapper() async throws {
+        let cid = "cid_\(UUID().uuidString.lowercased())"
+        let url = try makeTempAudioFile()
+
+        let result = try await queue.enqueueAudio(
+            sourceAudioURL: url,
+            conversationId: "conv-1",
+            content: nil,
+            clientMessageId: cid,
+            originalLanguage: "fr"
+        )
+
+        XCTAssertFalse(result.localAudioPath.isEmpty)
+        XCTAssertTrue(result.localAudioPath.contains(cid))
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: OfflineQueue.absoluteAudioPath(forStored: result.localAudioPath)))
+
+        let items = try await readBackItems(forClientMessageId: cid)
+        XCTAssertEqual(items.count, 1)
+        let item = try XCTUnwrap(items.first)
+        XCTAssertEqual(item.localAudioPaths?.count, 1)
+        XCTAssertEqual(item.localAudioPaths?.first, result.localAudioPath)
+    }
+
+    func test_item_backwardCompatible_decodesWithoutLocalAudioPaths() throws {
+        // Legacy persisted payloads predate `localAudioPaths` — they must still
+        // decode (the key is absent) with the new field defaulting to nil.
+        let legacyJSON = """
+        {"id":"x","clientMessageId":"cid_legacy","conversationId":"c1",
+         "content":"hi","createdAt":"2026-05-30T00:00:00Z"}
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let item = try decoder.decode(OfflineQueueItem.self, from: Data(legacyJSON.utf8))
+        XCTAssertNil(item.localAudioPaths)
+        XCTAssertNil(item.localAudioPath)
+        XCTAssertEqual(item.content, "hi")
+    }
 }
