@@ -153,6 +153,8 @@
 		AA3000000000002FA3 /* MediaCompressor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA3000000000001FA3 /* MediaCompressor.swift */; };
 		AA5000000000002FA5 /* VideoPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5000000000001FA5 /* VideoPreviewView.swift */; };
 		AA6000000000002FA6 /* AttachmentSendService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA6000000000001FA6 /* AttachmentSendService.swift */; };
+		A2865F6E1A1E4E36BC9FD24A /* MultiAttachmentSendPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A27F2AB5AC64E0CA5724730 /* MultiAttachmentSendPlanner.swift */; };
+		4C0EC0CEF9C548759E9BDEA2 /* MultiAttachmentSendPlannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F36B09C9B8644F8B375AA65 /* MultiAttachmentSendPlannerTests.swift */; };
 		AABB001100220033 /* MeeshySDK in Frameworks */ = {isa = PBXBuildFile; productRef = AABB001100220066 /* MeeshySDK */; };
 		AABB001100220044 /* MeeshyUI in Frameworks */ = {isa = PBXBuildFile; productRef = AABB001100220077 /* MeeshyUI */; };
 		AABB00110022FF01 /* PresenceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB00110022EE01 /* PresenceManager.swift */; };
@@ -738,6 +740,8 @@
 		AA5000000000001FA5 /* VideoPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPreviewView.swift; sourceTree = "<group>"; };
 		AA5D13830922E297A0AF6C50 /* VideoFilterPipeline.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoFilterPipeline.swift; sourceTree = "<group>"; };
 		AA6000000000001FA6 /* AttachmentSendService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentSendService.swift; sourceTree = "<group>"; };
+		7A27F2AB5AC64E0CA5724730 /* MultiAttachmentSendPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiAttachmentSendPlanner.swift; sourceTree = "<group>"; };
+		7F36B09C9B8644F8B375AA65 /* MultiAttachmentSendPlannerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MultiAttachmentSendPlannerTests.swift; sourceTree = "<group>"; };
 		AA7E08B0D1609D24446F93BE /* AnonymousSessionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymousSessionStoreTests.swift; sourceTree = "<group>"; };
 		AABB00110022EE01 /* PresenceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresenceManager.swift; sourceTree = "<group>"; };
 		AABB00110023EE01 /* PresenceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresenceService.swift; sourceTree = "<group>"; };
@@ -1526,6 +1530,7 @@
 				APREPS01000000000000F001 /* AttachmentPreparationService.swift */,
 				OAA0000000000001F01 /* OptimisticAttachmentAdopter.swift */,
 				AA6000000000001FA6 /* AttachmentSendService.swift */,
+				7A27F2AB5AC64E0CA5724730 /* MultiAttachmentSendPlanner.swift */,
 				PQ7000000000001FPQ /* PendingStatusQueue.swift */,
 				CC2400000000001F24 /* ConversationLockManager.swift */,
 				TM2800000000001F28 /* FeedbackToastManager.swift */,
@@ -2115,6 +2120,7 @@
 				CDPF000000001F01 /* CodecPreferencesTests.swift */,
 				ATUT00100000000001F00 /* AttachmentUploaderTests.swift */,
 				APREPT01000000000000F001 /* AttachmentPreparationServiceTests.swift */,
+				7F36B09C9B8644F8B375AA65 /* MultiAttachmentSendPlannerTests.swift */,
 				4955C8F3EA2744580E65FF10 /* ConversationCreatorTests.swift */,
 				A6004F67A016838BA122ED6E /* ReplyThreadLoaderTests.swift */,
 				A97823C39C2E89910B2CBD31 /* StoryInteractionServiceTests.swift */,
@@ -2434,6 +2440,7 @@
 				OAA0000000000002F01 /* OptimisticAttachmentAdopter.swift in Sources */,
 				AA5000000000002FA5 /* VideoPreviewView.swift in Sources */,
 				AA6000000000002FA6 /* AttachmentSendService.swift in Sources */,
+				A2865F6E1A1E4E36BC9FD24A /* MultiAttachmentSendPlanner.swift in Sources */,
 				PQ7000000000002FPQ /* PendingStatusQueue.swift in Sources */,
 				AABB00110022FF01 /* PresenceManager.swift in Sources */,
 				AABB00110023FF01 /* PresenceService.swift in Sources */,
@@ -2835,6 +2842,7 @@
 				320813BE4021B286D9F68C98 /* ConversationOptionsViewModelTests.swift in Sources */,
 				ATUT00200000000001F00 /* AttachmentUploaderTests.swift in Sources */,
 				APREPT02000000000000F002 /* AttachmentPreparationServiceTests.swift in Sources */,
+				4C0EC0CEF9C548759E9BDEA2 /* MultiAttachmentSendPlannerTests.swift in Sources */,
 				MATU00200000000001F00 /* MockAttachmentUploader.swift in Sources */,
 				MEPD00200000000001F00 /* MockEditProfileDoubles.swift in Sources */,
 				EPVT00200000000001F00 /* EditProfileViewModelTests.swift in Sources */,
@@ -2892,7 +2900,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyWidgets/MeeshyWidgets.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 454;
+				CURRENT_PROJECT_VERSION = 455;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -2999,7 +3007,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 454;
+				CURRENT_PROJECT_VERSION = 455;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Meeshy/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Meeshy Dev";
@@ -3096,7 +3104,7 @@
 				CODE_SIGN_ENTITLEMENTS = Meeshy/Meeshy.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 454;
+				CURRENT_PROJECT_VERSION = 455;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Meeshy/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Meeshy;
@@ -3128,7 +3136,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 454;
+				CURRENT_PROJECT_VERSION = 455;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -3165,7 +3173,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 454;
+				CURRENT_PROJECT_VERSION = 455;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -3204,7 +3212,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyWidgets/MeeshyWidgets.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 454;
+				CURRENT_PROJECT_VERSION = 455;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
