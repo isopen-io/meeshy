@@ -996,16 +996,20 @@ public actor OfflineQueue {
     /// systems), so we do it in two ordered phases :
     ///
     /// 1. Phase A — INSERT `OutboxRecord` referencing
-    ///    `Documents/pending-audio/<clientMessageId>.m4a`. The record is
-    ///    `.pending` and the file does NOT exist yet.
+    ///    `Documents/pending-audio/<clientMessageId>/0.m4a` (single-track is a
+    ///    degenerate multi-track message routed through `enqueueAudios`, which
+    ///    stores under the per-message subdir and records the path in
+    ///    `localAudioPaths`). The record is `.pending` and the file does NOT
+    ///    exist yet.
     /// 2. Phase B — `FileManager.copyItem` the source audio into that
     ///    pending path. On failure we UPDATE the outbox row to `.failed`
     ///    so the flusher does not retry against a missing file.
     /// 3. Phase C — best-effort delete the original `tmp/` source.
     ///
     /// Crash recovery between Phase A and Phase B is handled by
-    /// `bootRecovery()` which sweeps `.pending` records whose
-    /// `localAudioPath` does not exist on disk and marks them `.failed`.
+    /// `bootRecovery()` which sweeps `.pending` records whose referenced audio
+    /// paths (`localAudioPath` and/or `localAudioPaths`) do not exist on disk
+    /// and marks them `.failed`.
     /// The `clientMessageId` end-to-end dedup contract guarantees that an
     /// audio that actually reached the server before the crash will not
     /// produce a duplicate when the flusher replays whatever survived.
