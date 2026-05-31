@@ -1090,7 +1090,7 @@ class ConversationViewModel: ObservableObject {
         // « Échec · Réessayer · Supprimer » au lieu d'un spinner figé.
         await messagePersistence.reconcileFailedFromOutbox(conversationId: conversationId)
 
-        Logger.messages.debug("[DIAG] loadMessages start conv=\(conversationId) storeAtStart=\(messageStore.messages.count)")
+        Logger.messages.debug("[DIAG] loadMessages start conv=\(self.conversationId) storeAtStart=\(self.messageStore.messages.count)")
         let cached = await CacheCoordinator.shared.messages.load(for: conversationId)
         switch cached {
         case .fresh:
@@ -1170,7 +1170,7 @@ class ConversationViewModel: ObservableObject {
         // subscription setup blocking the first render.
         socketHandler?.armSocketSubscriptions()
 
-        Logger.messages.debug("[DIAG] loadMessages done conv=\(conversationId) messages=\(messages.count) storeMessages=\(messageStore.messages.count)")
+        Logger.messages.debug("[DIAG] loadMessages done conv=\(self.conversationId) messages=\(self.messages.count) storeMessages=\(self.messageStore.messages.count)")
         // Mark conversation as read + received (fire-and-forget)
         markAsRead()
         markAsReceived()

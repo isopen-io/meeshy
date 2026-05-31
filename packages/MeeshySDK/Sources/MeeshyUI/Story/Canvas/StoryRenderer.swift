@@ -180,16 +180,17 @@ public enum StoryRenderer {
         // Symptôme user-reporté 2026-05-27 : "écrit en double sur le canvas
         // et c'est la version miniature (= persistée) qui est préservée, pas
         // là où j'ai écrit (= live overlay)".
+        // Bridge dessin (refonte 2026-05-30) : on privilégie le format moderne
+        // `drawingStrokes` (traits éditables) rasterisé par `StoryStrokeRasterizer`,
+        // et on retombe sur le legacy `drawingData` (PKDrawing) seulement quand aucun
+        // trait moderne n'est présent (stories publiées avant la refonte non encore
+        // migrées en base — la migration au decode peuple `drawingStrokes`, donc ce
+        // fallback ne sert qu'aux payloads jamais re-décodés côté client).
         if !suppressDrawingOverlay,
-           let drawingData = slide.effects.drawingData,
-           let drawing = try? PKDrawing(data: drawingData) {
+           let drawingImage = bakedDrawingImage(for: slide.effects, scale: contentsScale) {
             let drawingLayer = CALayer()
             drawingLayer.frame = CGRect(origin: .zero, size: geometry.renderSize)
-            let img = drawing.image(
-                from: CGRect(origin: .zero, size: CanvasGeometry.designSize),
-                scale: contentsScale
-            )
-            drawingLayer.contents = img.cgImage
+            drawingLayer.contents = drawingImage.cgImage
             drawingLayer.contentsScale = contentsScale
             drawingLayer.zPosition = 9999
             root.addSublayer(drawingLayer)
@@ -199,6 +200,24 @@ public enum StoryRenderer {
     }
 
     // MARK: - Private
+
+    /// Bake du dessin d'un slide en image (espace design 1080×1920). Privilégie
+    /// `drawingStrokes` (moderne, rasterisé) ; fallback `drawingData` (legacy PKDrawing).
+    /// Retourne `nil` si le slide n'a aucun dessin.
+    private static func bakedDrawingImage(for effects: StoryEffects, scale: CGFloat) -> UIImage? {
+        if let strokes = effects.drawingStrokes, !strokes.isEmpty {
+            return StoryStrokeRasterizer.image(strokes: strokes,
+                                               designSize: CanvasGeometry.designSize,
+                                               scale: scale)
+        }
+        if let data = effects.drawingData, let drawing = try? PKDrawing(data: data) {
+            return drawing.image(
+                from: CGRect(origin: .zero, size: CanvasGeometry.designSize),
+                scale: scale
+            )
+        }
+        return nil
+    }
 
     private static func collectItems(from slide: StorySlide) -> [any RenderableItem] {
         var items: [any RenderableItem] = []

@@ -1280,7 +1280,15 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     private func insertOrAppendStoryItem(_ item: StoryItem, forAuthor author: APIAuthor) {
         if let idx = storyGroups.firstIndex(where: { $0.id == author.id }) {
             var updated = storyGroups[idx].stories
-            updated.append(item)
+            // Déduplication par id : un insert optimiste suivi de l'écho serveur /
+            // socket (ou d'un 2e chemin de publish) ne doit JAMAIS produire deux
+            // entrées identiques dans le groupe — sinon le viewer affiche la même
+            // story deux fois (2 segments de progression identiques).
+            if let existing = updated.firstIndex(where: { $0.id == item.id }) {
+                updated[existing] = item
+            } else {
+                updated.append(item)
+            }
             storyGroups[idx] = storyGroups[idx].with(stories: updated)
         } else {
             storyGroups.insert(StoryGroup(

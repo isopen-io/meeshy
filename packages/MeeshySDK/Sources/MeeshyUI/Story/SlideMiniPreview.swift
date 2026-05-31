@@ -136,9 +136,14 @@ struct SlideMiniPreview: View {
 
     @ViewBuilder
     private var drawingLayer: some View {
-        if let data = drawingData,
-           let drawing = try? PKDrawing(data: data),
-           !drawing.bounds.isEmpty {
+        // Bridge dessin (2026-05-30) : format moderne `drawingStrokes` rendu via
+        // `MeeshyStrokeCanvas` (positionnement design-space exact dans le cadre 9:16),
+        // fallback legacy `drawingData` (PKDrawing croppé) sinon.
+        if let strokes = effects.drawingStrokes, !strokes.isEmpty {
+            MeeshyStrokeCanvas(strokes: strokes, selectedId: nil)
+        } else if let data = drawingData,
+                  let drawing = try? PKDrawing(data: data),
+                  !drawing.bounds.isEmpty {
             Image(uiImage: drawing.image(from: drawing.bounds, scale: 1.0))
                 .resizable()
                 .scaledToFill()

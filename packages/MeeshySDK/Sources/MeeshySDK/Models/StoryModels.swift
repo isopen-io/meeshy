@@ -1051,7 +1051,14 @@ public struct StoryEffects: Codable, Sendable {
     public var textOffsetY: CGFloat?
     public var stickerObjects: [StorySticker]?
     public var textPositionPoint: StoryTextPosition?
+    /// Legacy PencilKit `PKDrawing.dataRepresentation()` — conservé pour decode-only
+    /// (rétro-compat des stories publiées avant la refonte 2026-05-30). Le nouveau
+    /// format `drawingStrokes` est privilégié à la lecture comme à l'écriture.
     public var drawingData: Data?
+    /// Nouveau format de dessin : traits individuels éditables (couleur, épaisseur,
+    /// lissage) par le composer. Migration best-effort des `drawingData` legacy
+    /// effectuée à `init(from:)` quand seule l'ancienne clé est présente.
+    public var drawingStrokes: [StoryDrawingStroke]?
     // Background audio (bibliothèque ou enregistrement)
     public var backgroundAudioId: String?
     public var backgroundAudioVolume: Float?
@@ -1096,6 +1103,7 @@ public struct StoryEffects: Codable, Sendable {
                 textAlign: String? = nil, textSize: CGFloat? = nil, textBg: String? = nil, textOffsetY: CGFloat? = nil,
                 stickerObjects: [StorySticker]? = nil, textPositionPoint: StoryTextPosition? = nil,
                 drawingData: Data? = nil,
+                drawingStrokes: [StoryDrawingStroke]? = nil,
                 backgroundAudioId: String? = nil, backgroundAudioVolume: Float? = nil,
                 backgroundAudioStart: TimeInterval? = nil, backgroundAudioEnd: TimeInterval? = nil,
                 voiceAttachmentId: String? = nil, voiceTranscriptions: [StoryVoiceTranscription]? = nil,
@@ -1112,6 +1120,7 @@ public struct StoryEffects: Codable, Sendable {
         self.textAlign = textAlign; self.textSize = textSize; self.textBg = textBg; self.textOffsetY = textOffsetY
         self.stickerObjects = stickerObjects; self.textPositionPoint = textPositionPoint
         self.drawingData = drawingData
+        self.drawingStrokes = drawingStrokes
         self.backgroundAudioId = backgroundAudioId
         self.backgroundAudioVolume = backgroundAudioVolume
         self.backgroundAudioStart = backgroundAudioStart
@@ -1134,7 +1143,7 @@ public struct StoryEffects: Codable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case background, textStyle, textColor, textPosition, filter, filterIntensity
         case stickers, textAlign, textSize, textBg, textOffsetY
-        case stickerObjects, textPositionPoint, drawingData
+        case stickerObjects, textPositionPoint, drawingData, drawingStrokes
         case backgroundAudioId, backgroundAudioVolume, backgroundAudioStart, backgroundAudioEnd
         case voiceAttachmentId, voiceTranscriptions
         case opening, closing
@@ -1159,6 +1168,16 @@ public struct StoryEffects: Codable, Sendable {
         stickerObjects = try c.decodeIfPresent([StorySticker].self, forKey: .stickerObjects)
         textPositionPoint = try c.decodeIfPresent(StoryTextPosition.self, forKey: .textPositionPoint)
         drawingData = try c.decodeIfPresent(Data.self, forKey: .drawingData)
+        // Prisme migration : si le nouveau format est absent mais l'ancien existe,
+        // on convertit best-effort à la lecture. Les écritures futures émettront
+        // uniquement `drawingStrokes` (le composer remet `drawingData = nil`).
+        if let strokes = try c.decodeIfPresent([StoryDrawingStroke].self, forKey: .drawingStrokes) {
+            drawingStrokes = strokes
+        } else if let legacy = drawingData, !legacy.isEmpty {
+            drawingStrokes = StoryDrawingStroke.fromLegacyPKDrawing(legacy)
+        } else {
+            drawingStrokes = nil
+        }
         backgroundAudioId = try c.decodeIfPresent(String.self, forKey: .backgroundAudioId)
         backgroundAudioVolume = try c.decodeIfPresent(Float.self, forKey: .backgroundAudioVolume)
         backgroundAudioStart = try c.decodeIfPresent(TimeInterval.self, forKey: .backgroundAudioStart)
@@ -1196,6 +1215,7 @@ public struct StoryEffects: Codable, Sendable {
         try c.encodeIfPresent(stickerObjects, forKey: .stickerObjects)
         try c.encodeIfPresent(textPositionPoint, forKey: .textPositionPoint)
         try c.encodeIfPresent(drawingData, forKey: .drawingData)
+        try c.encodeIfPresent(drawingStrokes, forKey: .drawingStrokes)
         try c.encodeIfPresent(backgroundAudioId, forKey: .backgroundAudioId)
         try c.encodeIfPresent(backgroundAudioVolume, forKey: .backgroundAudioVolume)
         try c.encodeIfPresent(backgroundAudioStart, forKey: .backgroundAudioStart)
