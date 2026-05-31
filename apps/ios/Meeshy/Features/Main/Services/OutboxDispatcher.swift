@@ -532,26 +532,24 @@ struct OutboxDispatcher: OutboxDispatching {
                 return
             }
 
-            // Phase 4 §6.3 audio offline write-ahead replay path. If the item
-            // carries a `localAudioPath`, the audio bytes were preserved at
-            // enqueue time under `Documents/pending-audio/<cid>.m4a`. The
-            // dispatcher uploads them via TUS first (REST does NOT trigger
-            // the gateway audio pipeline — only `message:send-with-attachments`
-            // over the socket does), then sends through `sendWithAttachmentsAsync`
-            // so the gateway runs Whisper transcription + NLLB translation +
-            // Chatterbox TTS like an online send. The local file is deleted
-            // after the ACK lands.
-            if let localAudioPath = item.localAudioPath, !localAudioPath.isEmpty {
-                let absolutePath = OfflineQueue.absoluteAudioPath(forStored: localAudioPath)
-                guard FileManager.default.fileExists(atPath: absolutePath) else {
-                    logger.error("Audio file missing on dispatch for record \(record.id, privacy: .public), path=\(localAudioPath, privacy: .public)")
-                    throw NSError(
-                        domain: "OutboxDispatcher",
-                        code: 404,
-                        userInfo: [NSLocalizedDescriptionKey: "Audio file missing for offline send: \(localAudioPath)"]
-                    )
-                }
+            // A3 — multi-track audio offline write-ahead replay path.
+            // Task 4 routes single-audio enqueues through `enqueueAudios`, so
+            // the canonical field is `localAudioPaths` (array). Legacy rows
+            // written before Task 4 may still carry only `localAudioPath`
+            // (scalar). Both are resolved here so the dispatcher handles every
+            // row shape. Each track is uploaded via TUS independently; any
+            // track whose file is missing or whose upload throws is skipped
+            // (best-effort). All successfully-uploaded ids are sent in a
+            // single `message:send-with-attachments` socket event so the
+            // gateway runs Whisper transcription + NLLB translation +
+            // Chatterbox TTS exactly like an online multi-track send.
+            let pendingAudioPaths: [String] = {
+                if let many = item.localAudioPaths, !many.isEmpty { return many }
+                if let one = item.localAudioPath, !one.isEmpty { return [one] }
+                return []
+            }()
 
+            if !pendingAudioPaths.isEmpty {
                 let serverOrigin = MeeshyConfig.shared.serverOrigin
                 guard let baseURL = URL(string: serverOrigin),
                       let token = APIClient.shared.authToken else {
@@ -563,17 +561,40 @@ struct OutboxDispatcher: OutboxDispatching {
                 }
 
                 let uploader = TusUploadManager(baseURL: baseURL)
-                let audioFileURL = URL(fileURLWithPath: absolutePath)
-                let tusResult = try await uploader.uploadFile(
-                    fileURL: audioFileURL,
-                    mimeType: "audio/mp4",
-                    token: token
-                )
+                var uploadedIds: [String] = []
+                var uploadedPaths: [String] = []
+
+                for stored in pendingAudioPaths {
+                    let absolutePath = OfflineQueue.absoluteAudioPath(forStored: stored)
+                    guard FileManager.default.fileExists(atPath: absolutePath) else {
+                        logger.error("Audio file missing on dispatch, path=\(stored, privacy: .public)")
+                        continue
+                    }
+                    do {
+                        let tusResult = try await uploader.uploadFile(
+                            fileURL: URL(fileURLWithPath: absolutePath),
+                            mimeType: "audio/mp4",
+                            token: token
+                        )
+                        uploadedIds.append(tusResult.id)
+                        uploadedPaths.append(absolutePath)
+                    } catch {
+                        logger.error("Audio track TUS upload failed (best-effort skip): \(error.localizedDescription, privacy: .public)")
+                    }
+                }
+
+                guard !uploadedIds.isEmpty else {
+                    throw NSError(
+                        domain: "OutboxDispatcher",
+                        code: 502,
+                        userInfo: [NSLocalizedDescriptionKey: "No audio track uploaded for offline audio dispatch"]
+                    )
+                }
 
                 let ack = await MessageSocketManager.shared.sendWithAttachmentsAsync(
                     conversationId: item.conversationId,
                     content: item.content.isEmpty ? nil : item.content,
-                    attachmentIds: [tusResult.id],
+                    attachmentIds: uploadedIds,
                     replyToId: item.replyToId,
                     storyReplyToId: nil,
                     originalLanguage: item.originalLanguage,
@@ -587,10 +608,10 @@ struct OutboxDispatcher: OutboxDispatching {
                     )
                 }
 
-                // Best-effort cleanup of the persisted audio. Failure here is
-                // benign — the file is harmless extra bytes and a future
-                // `OfflineQueue.cleanupOrphanFiles()` sweep will reclaim it.
-                try? FileManager.default.removeItem(atPath: absolutePath)
+                // Best-effort cleanup of uploaded tracks. Failure here is
+                // benign — files are harmless extra bytes and a future
+                // `OfflineQueue.cleanupOrphanFiles()` sweep will reclaim them.
+                for path in uploadedPaths { try? FileManager.default.removeItem(atPath: path) }
 
                 await reconcileSuccessfulMessageSend(
                     clientMessageId: item.clientMessageId,
