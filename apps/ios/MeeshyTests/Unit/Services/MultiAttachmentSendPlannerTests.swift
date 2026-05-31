@@ -63,4 +63,9 @@ final class MultiAttachmentSendPlannerTests: XCTestCase {
         XCTAssertEqual(plan[0].text, "hello")
         XCTAssertTrue(plan[0].carriesReply)
     }
+
+    func test_plan_emptyInput_returnsEmptyPlan() {
+        let plan = MultiAttachmentSendPlanner.plan(attachments: [], text: "", hasReply: false)
+        XCTAssertTrue(plan.isEmpty)
+    }
 }

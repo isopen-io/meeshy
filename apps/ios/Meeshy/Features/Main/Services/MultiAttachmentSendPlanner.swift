@@ -28,7 +28,10 @@ enum MultiAttachmentSendPlanner {
     }
 
     private static func bucket(for type: MeeshyMessageAttachment.AttachmentType) -> Kind {
-        type == .audio ? .audio : .visual
+        switch type {
+        case .audio: return .audio
+        case .image, .video, .file, .location: return .visual
+        }
     }
 
     static func plan(
@@ -42,10 +45,9 @@ enum MultiAttachmentSendPlanner {
         for att in attachments {
             let b = bucket(for: att.type)
             if grouped[b] == nil {
-                grouped[b] = []
                 orderedBuckets.append(b)
             }
-            grouped[b]?.append(att)
+            grouped[b, default: []].append(att)
         }
 
         var planned: [PlannedMessage] = orderedBuckets.map { b in
