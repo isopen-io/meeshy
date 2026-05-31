@@ -117,7 +117,6 @@ struct ConversationComposerState {
     
     // Attachment state
     var pendingAttachments: [MessageAttachment] = []
-    var pendingAudioURL: URL? = nil
     var pendingMediaFiles: [String: URL] = [:]
     var pendingThumbnails: [String: UIImage] = [:]
     var isLoadingMedia = false
@@ -168,9 +167,8 @@ extension ConversationComposerState {
     /// the caller can delete it from disk.
     @discardableResult
     mutating func applyEditedAudio(attachmentId: String, editedURL: URL, durationMs: Int) -> URL? {
-        let staleURL = pendingAudioURL
+        let staleURL = pendingMediaFiles[attachmentId]
         let duration = max(durationMs, 500)
-        pendingAudioURL = editedURL
         pendingMediaFiles[attachmentId] = editedURL
         if let index = pendingAttachments.firstIndex(where: { $0.id == attachmentId }) {
             pendingAttachments[index] = MessageAttachment(
