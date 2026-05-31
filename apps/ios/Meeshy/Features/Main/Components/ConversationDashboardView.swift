@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import os
 import Charts
 import NaturalLanguage
 import MeeshySDK
@@ -885,7 +886,7 @@ struct ConversationDashboardView: View {
                 conversationId: conversationId
             )
         } catch {
-            print("[ConversationDashboard] Analysis load failed: \(error)")
+            Logger.network.error("[ConversationDashboard] Analysis load failed: \(error.localizedDescription)")
         }
     }
 
@@ -896,7 +897,7 @@ struct ConversationDashboardView: View {
                 conversationId: conversationId
             )
         } catch {
-            print("[ConversationDashboard] Stats load failed: \(error)")
+            Logger.network.error("[ConversationDashboard] Stats load failed: \(error.localizedDescription)")
         }
     }
 

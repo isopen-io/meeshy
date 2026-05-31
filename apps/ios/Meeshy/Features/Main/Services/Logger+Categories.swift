@@ -7,4 +7,5 @@ extension Logger {
     nonisolated static let crash = Logger(subsystem: "me.meeshy.app", category: "crash")
     nonisolated static let network = Logger(subsystem: "me.meeshy.app", category: "network")
     nonisolated static let stories = Logger(subsystem: "me.meeshy.app", category: "stories")
+    nonisolated static let navigation = Logger(subsystem: "me.meeshy.app", category: "navigation")
 }

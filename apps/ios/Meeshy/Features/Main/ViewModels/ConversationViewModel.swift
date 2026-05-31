@@ -1084,7 +1084,7 @@ class ConversationViewModel: ObservableObject {
         // « Échec · Réessayer · Supprimer » au lieu d'un spinner figé.
         await messagePersistence.reconcileFailedFromOutbox(conversationId: conversationId)
 
-        print("[DIAG] loadMessages start conv=\(conversationId) storeAtStart=\(messageStore.messages.count)")
+        Logger.messages.debug("[DIAG] loadMessages start conv=\(conversationId) storeAtStart=\(messageStore.messages.count)")
         let cached = await CacheCoordinator.shared.messages.load(for: conversationId)
         switch cached {
         case .fresh:
@@ -1164,7 +1164,7 @@ class ConversationViewModel: ObservableObject {
         // subscription setup blocking the first render.
         socketHandler?.armSocketSubscriptions()
 
-        print("[DIAG] loadMessages done conv=\(conversationId) messages=\(messages.count) storeMessages=\(messageStore.messages.count)")
+        Logger.messages.debug("[DIAG] loadMessages done conv=\(conversationId) messages=\(messages.count) storeMessages=\(messageStore.messages.count)")
         // Mark conversation as read + received (fire-and-forget)
         markAsRead()
         markAsReceived()
@@ -1853,9 +1853,9 @@ class ConversationViewModel: ObservableObject {
             )
             do {
                 try await persistence.insertOptimistic(optimisticRecord)
-                print("[SendFlow] insertOptimistic OK tempId=\(tempId) state=.sending convId=\(conversationId)")
+                Logger.messages.debug("[SendFlow] insertOptimistic OK tempId=\(tempId) state=.sending convId=\(conversationId)")
             } catch {
-                print("[SendFlow] insertOptimistic FAILED tempId=\(tempId) error=\(error.localizedDescription)")
+                Logger.messages.error("[SendFlow] insertOptimistic FAILED tempId=\(tempId) error=\(error.localizedDescription)")
             }
         }
 
@@ -1906,13 +1906,13 @@ class ConversationViewModel: ObservableObject {
             // investigation 2026-05-17). REST is direct (~25 ms server-side).
             // Re-enable the WebSocket-first path once the Socket.IO channel
             // is repaired and the `message:send` ACK round-trip is verified.
-            print("[SendFlow] POST /messages tempId=\(tempId) — awaiting response")
+            Logger.messages.debug("[SendFlow] POST /messages tempId=\(tempId) — awaiting response")
             let responseData = try await messageService.send(
                 conversationId: conversationId, request: body
             )
             let serverId = responseData.id
             let serverCreatedAt = responseData.createdAt
-            print("[SendFlow] POST OK tempId=\(tempId) serverId=\(responseData.id) createdAt=\(responseData.createdAt)")
+            Logger.messages.debug("[SendFlow] POST OK tempId=\(tempId) serverId=\(responseData.id) createdAt=\(String(describing: responseData.createdAt))")
 
             // Register tempId → serverId mapping so the socket handler can reconcile
             // the `message:new` broadcast without creating a duplicate row.
@@ -1928,7 +1928,7 @@ class ConversationViewModel: ObservableObject {
                 localId: tempId,
                 event: .serverAck(serverId: serverId, at: serverCreatedAt)
             )
-            print("[SendFlow] applyEvent serverAck tempId=\(tempId) → resultState=\(ackResult.map { String(describing: $0) } ?? "nil")")
+            Logger.messages.debug("[SendFlow] applyEvent serverAck tempId=\(tempId) → resultState=\(ackResult.map { String(describing: $0) } ?? "nil")")
             let ackElapsedMs = Int(Date().timeIntervalSince(sendStartedAt) * 1000)
             Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(serverId, privacy: .public) transport=rest durationMs=\(ackElapsedMs, privacy: .public)")
 
@@ -2188,9 +2188,9 @@ class ConversationViewModel: ObservableObject {
         Task.detached(priority: .userInitiated) {
             do {
                 try await persistence.insertOptimistic(record)
-                print("[SendFlow] insertOptimisticMedia OK tempId=\(tempId) state=.sending convId=\(record.conversationId) attachments=\(attachments.count)")
+                Logger.messages.debug("[SendFlow] insertOptimisticMedia OK tempId=\(tempId) state=.sending convId=\(record.conversationId) attachments=\(attachments.count)")
             } catch {
-                print("[SendFlow] insertOptimisticMedia FAILED tempId=\(tempId) error=\(error.localizedDescription)")
+                Logger.messages.error("[SendFlow] insertOptimisticMedia FAILED tempId=\(tempId) error=\(error.localizedDescription)")
             }
         }
     }

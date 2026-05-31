@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import os
 import MeeshySDK
 
 public struct CategoryPickerView: View {
@@ -92,7 +93,7 @@ public struct CategoryPickerView: View {
         do {
             categories = try await PreferenceService.shared.getCategories()
         } catch {
-            print("[CategoryPickerView] Failed to load categories: \(error)")
+            Logger.network.error("[CategoryPickerView] Failed to load categories: \(error.localizedDescription)")
         }
     }
 

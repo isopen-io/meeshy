@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import os
 import MeeshySDK
 
 public struct CommunityListView: View {
@@ -385,7 +386,7 @@ final class CommunityListViewModel: ObservableObject {
             hasLoaded = true
         } catch {
             if !Task.isCancelled {
-                print("[CommunityListVM] Error loading: \(error)")
+                Logger.network.error("[CommunityListVM] Error loading: \(error.localizedDescription)")
             }
         }
     }

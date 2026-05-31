@@ -114,7 +114,7 @@ final class ConversationSocketHandler {
     }
 
     deinit {
-        print("[DIAG] ConversationSocketHandler deinit conv=\(conversationId)")
+        Logger.socket.debug("[DIAG] ConversationSocketHandler deinit conv=\(conversationId)")
         leaveRoom()
         Task { @MainActor in
             NotificationManager.shared.onConversationClosed()
