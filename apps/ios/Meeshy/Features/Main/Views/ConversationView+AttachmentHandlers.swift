@@ -223,6 +223,18 @@ extension ConversationView {
                             default:
                                 await CacheCoordinator.shared.video.store(fileData, for: renderKey)
                             }
+                            // Seed server-returned thumbnail so the confirmed
+                            // bubble renders from cache (no network flash on
+                            // optimistic→server URL reconciliation). Only for
+                            // non-audio groups which carry a thumbnailUrl.
+                            if effectiveType != .audio,
+                               let thumbUrl = result.thumbnailUrl,
+                               let thumbImage = thumbnails[att.id],
+                               let thumbData = thumbImage.jpegData(compressionQuality: 0.8) {
+                                let thumbKey = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString ?? thumbUrl
+                                await CacheCoordinator.shared.thumbnails.store(thumbData, for: thumbKey)
+                                DiskCacheStore.cacheImageForPreview(thumbImage, key: thumbKey)
+                            }
                         }
                         localAttachments.append(result.toMessageAttachment(uploadedBy: currentUserId))
                     }
@@ -269,7 +281,12 @@ extension ConversationView {
                         for url in audioURLs { try? FileManager.default.removeItem(at: url) }
                     }
                 }
-                if anySuccess { HapticFeedback.success() } else { HapticFeedback.error() }
+                if anySuccess {
+                    HapticFeedback.success()
+                } else {
+                    HapticFeedback.error()
+                    FeedbackToastManager.shared.showError("Échec de l'envoi de la pièce jointe")
+                }
             }
         }
     }
