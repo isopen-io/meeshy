@@ -192,6 +192,33 @@ extension ConversationView {
             // Upload media groups — same iteration order as the optimistic phase,
             // using the precomputed tempId for each (Issue 1 fix: no tempIdx desync).
             for send in mediaGroupSends {
+                // A3 — Audio offline write-ahead: short-circuit to OfflineQueue
+                // when the device is offline, instead of attempting a TUS upload
+                // that will fail immediately.
+                if send.group.kind == .audio, NetworkMonitor.shared.isOffline {
+                    let urls = send.group.attachments.compactMap { mediaFiles[$0.id] }
+                    if !urls.isEmpty {
+                        do {
+                            _ = try await OfflineQueue.shared.enqueueAudios(
+                                sourceAudioURLs: urls,
+                                conversationId: viewModel.conversationId,
+                                content: nil,
+                                clientMessageId: send.tempId,
+                                originalLanguage: lang,
+                                replyToId: send.group.carriesReply ? replyId : nil
+                            )
+                            anySuccess = true
+                            Logger.messages.info("Audio group queued offline for \(send.tempId)")
+                        } catch {
+                            Logger.messages.error("Audio offline enqueue failed: \(error.localizedDescription)")
+                            await MainActor.run {
+                                FeedbackToastManager.shared.showError("Échec de la mise en file du message vocal")
+                            }
+                        }
+                        continue   // skip the online TUS path for this group
+                    }
+                }
+
                 do {
                     var uploadedIds: [String] = []
                     var localAttachments: [MeeshyMessageAttachment] = []
