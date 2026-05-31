@@ -586,7 +586,7 @@ struct OutboxDispatcher: OutboxDispatching {
                 guard !uploadedIds.isEmpty else {
                     throw NSError(
                         domain: "OutboxDispatcher",
-                        code: 502,
+                        code: 503,
                         userInfo: [NSLocalizedDescriptionKey: "No audio track uploaded for offline audio dispatch"]
                     )
                 }
@@ -609,8 +609,10 @@ struct OutboxDispatcher: OutboxDispatching {
                 }
 
                 // Best-effort cleanup of uploaded tracks. Failure here is
-                // benign — files are harmless extra bytes and a future
-                // `OfflineQueue.cleanupOrphanFiles()` sweep will reclaim them.
+                // benign — skipped (failed-but-present) track files are
+                // reclaimed by `OutboxFlusher.cleanupLocalFiles(for:)` when
+                // the outbox record terminates (applied or exhausted), which
+                // now sweeps both `localAudioPath` and `localAudioPaths`.
                 for path in uploadedPaths { try? FileManager.default.removeItem(atPath: path) }
 
                 await reconcileSuccessfulMessageSend(

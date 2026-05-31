@@ -32,23 +32,36 @@ internal func reactionContext(for record: OutboxRecord) -> OfflineRetrySuccess.R
 /// accumulate orphan `.m4a` files indefinitely for messages that never made
 /// it to the server.
 ///
-/// Currently covers `sendMessage` payloads (the one kind that carries a
-/// `localAudioPath`). Other kinds either don't reference local files, or
-/// their files (TUS upload checkpoints) are managed by their own GC path.
+/// Covers `sendMessage` payloads carrying either a scalar `localAudioPath`
+/// (single-track rows) or an array `localAudioPaths` (multi-track rows).
+/// Both fields are swept; the now-empty per-message subdirectory is removed
+/// as a best-effort final step. Other payload kinds either don't reference
+/// local files, or their files (TUS upload checkpoints) are managed by
+/// their own GC path.
 @inline(__always)
 internal func cleanupLocalFiles(for record: OutboxRecord) {
     guard record.kind == .sendMessage else { return }
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
-    guard let item = try? decoder.decode(OfflineQueueItem.self, from: record.payload),
-          let relativePath = item.localAudioPath, !relativePath.isEmpty else {
-        return
+    guard let item = try? decoder.decode(OfflineQueueItem.self, from: record.payload) else { return }
+    let relativePaths: [String] = ([item.localAudioPath].compactMap { $0 } + (item.localAudioPaths ?? []))
+        .filter { !$0.isEmpty }
+    guard !relativePaths.isEmpty else { return }
+    var parentDirs = Set<String>()
+    for rel in relativePaths {
+        let abs = OfflineQueue.absoluteAudioPath(forStored: rel)
+        // Silent: it's normal for the file to already be gone (cancelled send,
+        // adoption already moved it, another sweep ran first). The whole point
+        // is to plug the leak, not to gate on file existence.
+        try? FileManager.default.removeItem(atPath: abs)
+        parentDirs.insert((abs as NSString).deletingLastPathComponent)
     }
-    let absolutePath = OfflineQueue.absoluteAudioPath(forStored: relativePath)
-    // Silent: it's normal for the file to already be gone (cancelled send,
-    // adoption already moved it, another sweep ran first). The whole point
-    // is to plug the leak, not to gate on file existence.
-    try? FileManager.default.removeItem(atPath: absolutePath)
+    // Best-effort: remove the now-empty per-message subdir (pending-audio/<cid>/).
+    for dir in parentDirs {
+        if let contents = try? FileManager.default.contentsOfDirectory(atPath: dir), contents.isEmpty {
+            try? FileManager.default.removeItem(atPath: dir)
+        }
+    }
 }
 
 /// Drains the `outbox` table FIFO, dispatching each pending item via the
