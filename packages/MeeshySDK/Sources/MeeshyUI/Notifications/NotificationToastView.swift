@@ -6,7 +6,11 @@ public struct NotificationToastView: View {
     public let event: SocketNotificationEvent
     public var onTap: (() -> Void)?
 
-    @ObservedObject private var theme = ThemeManager.shared
+    // Transient leaf toast — do not observe the ThemeManager singleton.
+    // `colorScheme` keeps theme-flip reactivity; `theme` is accessed
+    // non-observingly for its derived text colors.
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemeManager { ThemeManager.shared }
 
     private var notifType: MeeshyNotificationType { event.notificationType }
     private var accentColor: Color { Color(hex: notifType.accentHex) }

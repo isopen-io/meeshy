@@ -10,6 +10,7 @@ final class ClientInfoProviderTests: XCTestCase {
         "X-Meeshy-Device",
         "X-Meeshy-OS",
         "X-Meeshy-Locale",
+        "X-Device-Locale",
         "X-Meeshy-Timezone"
     ]
 

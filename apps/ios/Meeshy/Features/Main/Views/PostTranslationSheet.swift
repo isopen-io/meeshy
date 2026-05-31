@@ -216,7 +216,7 @@ struct PostTranslationSheet: View {
                                     onRequestTranslation?(post.id, lang)
                                 } catch {
                                     requestingLanguages.remove(lang)
-                                    ToastManager.shared.showError(String(localized: "feed.post.translation.error", defaultValue: "Erreur de traduction", bundle: .main))
+                                    FeedbackToastManager.shared.showError(String(localized: "feed.post.translation.error", defaultValue: "Erreur de traduction", bundle: .main))
                                 }
                             }
                         } label: {

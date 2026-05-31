@@ -1514,7 +1514,7 @@ class ConversationListViewModel: ObservableObject {
                     }
                 }
 
-                try? await CacheCoordinator.shared.stories.save(storyGroups, for: "recent_tray")
+                try? await CacheCoordinator.shared.stories.save(storyGroups, for: StoryViewModel.storiesCacheKey)
                 Logger.messages.info("[ConversationListVM] Stories prefetched: \(storyGroups.count) groups, \(uniqueImageURLs.count) images, \(uniqueVideoURLs.count) videos")
             } catch {
                 Logger.messages.error("[ConversationListVM] Story prefetch failed: \(error.localizedDescription)")
@@ -1530,7 +1530,7 @@ class ConversationListViewModel: ObservableObject {
     func handleForegroundReturn() {
         guard isCacheValid else { return }
         Task {
-            let cached = await CacheCoordinator.shared.stories.load(for: "recent_tray")
+            let cached = await CacheCoordinator.shared.stories.load(for: StoryViewModel.storiesCacheKey)
             switch cached {
             case .stale, .expired, .empty:
                 prefetchRecentStories()

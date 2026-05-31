@@ -799,7 +799,7 @@ struct ProfileView: View {
                     payload: payload
                 )
                 Task { await SettingsActionQueue.shared.enqueue(action) }
-                ToastManager.shared.showSuccess(String(
+                FeedbackToastManager.shared.showSuccess(String(
                     localized: "Modifications enregistrees — seront synchronisees au retour en ligne",
                     defaultValue: "Modifications enregistrees — seront synchronisees au retour en ligne"
                 ))
@@ -832,10 +832,10 @@ struct ProfileView: View {
                 let updatedUser = try await UserService.shared.updateAvatar(url: uploadedURL)
                 authManager.currentUser = updatedUser
                 HapticFeedback.success()
-                ToastManager.shared.showSuccess(String(localized: "profile.avatar.updated", defaultValue: "Avatar mis a jour", bundle: .main))
+                FeedbackToastManager.shared.showSuccess(String(localized: "profile.avatar.updated", defaultValue: "Avatar mis a jour", bundle: .main))
             } catch {
                 HapticFeedback.error()
-                ToastManager.shared.showError(String(localized: "profile.avatar.error", defaultValue: "Erreur lors du changement d'avatar", bundle: .main))
+                FeedbackToastManager.shared.showError(String(localized: "profile.avatar.error", defaultValue: "Erreur lors du changement d'avatar", bundle: .main))
                 withAnimation { errorMessage = String(localized: "profile.avatar.error", defaultValue: "Erreur lors du changement d'avatar", bundle: .main) }
             }
             isUploadingAvatar = false
@@ -852,10 +852,10 @@ struct ProfileView: View {
                 let updatedUser = try await UserService.shared.updateBanner(url: uploadedURL)
                 authManager.currentUser = updatedUser
                 HapticFeedback.success()
-                ToastManager.shared.showSuccess(String(localized: "profile.banner.updated", defaultValue: "Banniere mise a jour", bundle: .main))
+                FeedbackToastManager.shared.showSuccess(String(localized: "profile.banner.updated", defaultValue: "Banniere mise a jour", bundle: .main))
             } catch {
                 HapticFeedback.error()
-                ToastManager.shared.showError(String(localized: "profile.banner.error", defaultValue: "Erreur lors du changement de banniere", bundle: .main))
+                FeedbackToastManager.shared.showError(String(localized: "profile.banner.error", defaultValue: "Erreur lors du changement de banniere", bundle: .main))
                 withAnimation { errorMessage = String(localized: "profile.banner.error", defaultValue: "Erreur lors du changement de banniere", bundle: .main) }
             }
             isUploadingBanner = false

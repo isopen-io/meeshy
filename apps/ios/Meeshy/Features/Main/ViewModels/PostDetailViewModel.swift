@@ -184,7 +184,7 @@ class PostDetailViewModel: ObservableObject {
             }
         } catch {
             if comments.isEmpty {
-                ToastManager.shared.showError("Erreur lors du chargement des commentaires")
+                FeedbackToastManager.shared.showError("Erreur lors du chargement des commentaires")
             }
         }
     }
@@ -257,7 +257,7 @@ class PostDetailViewModel: ObservableObject {
             current.isLiked = !nowLiked
             current.likes += nowLiked ? -1 : 1
             post = current
-            ToastManager.shared.showError("Erreur lors du like")
+            FeedbackToastManager.shared.showError("Erreur lors du like")
         }
     }
 
@@ -274,10 +274,10 @@ class PostDetailViewModel: ObservableObject {
         do {
             let updated = try await postService.update(postId: snapshot.id, content: content, visibility: nil, moodEmoji: nil)
             self.post = updated.toFeedPost(preferredLanguages: preferredLanguages)
-            ToastManager.shared.showSuccess(String(localized: "Post modifie", defaultValue: "Post modifie"))
+            FeedbackToastManager.shared.showSuccess(String(localized: "Post modifie", defaultValue: "Post modifie"))
         } catch {
             self.post = snapshot
-            ToastManager.shared.showError(String(localized: "Erreur lors de la modification", defaultValue: "Erreur lors de la modification"))
+            FeedbackToastManager.shared.showError(String(localized: "Erreur lors de la modification", defaultValue: "Erreur lors de la modification"))
         }
     }
 
@@ -286,9 +286,9 @@ class PostDetailViewModel: ObservableObject {
     func reportPost(_ postId: String) async {
         do {
             try await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
-            ToastManager.shared.showSuccess(String(localized: "Signalement envoye", defaultValue: "Signalement envoye"))
+            FeedbackToastManager.shared.showSuccess(String(localized: "Signalement envoye", defaultValue: "Signalement envoye"))
         } catch {
-            ToastManager.shared.showError(String(localized: "Erreur lors du signalement", defaultValue: "Erreur lors du signalement"))
+            FeedbackToastManager.shared.showError(String(localized: "Erreur lors du signalement", defaultValue: "Erreur lors du signalement"))
         }
     }
 
@@ -329,7 +329,7 @@ class PostDetailViewModel: ObservableObject {
         } catch {
             comments = snapshot
             self.post?.commentCount = snapshotCount
-            ToastManager.shared.showError("Erreur lors de l'envoi du commentaire")
+            FeedbackToastManager.shared.showError("Erreur lors de l'envoi du commentaire")
         }
     }
 
@@ -367,7 +367,7 @@ class PostDetailViewModel: ObservableObject {
                 }
             }
         } catch {
-            ToastManager.shared.showError("Erreur lors de l'envoi de la r\u{00E9}ponse")
+            FeedbackToastManager.shared.showError("Erreur lors de l'envoi de la r\u{00E9}ponse")
         }
     }
 

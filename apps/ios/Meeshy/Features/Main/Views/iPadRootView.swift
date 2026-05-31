@@ -24,7 +24,7 @@ import MeeshyUI
 
 struct iPadRootView: View {
     @StateObject var theme = ThemeManager.shared
-    @StateObject var toastManager = ToastManager.shared
+    @StateObject var toastManager = FeedbackToastManager.shared
     @StateObject var storyViewModel = StoryViewModel()
     @StateObject var statusViewModel = StatusViewModel()
     @StateObject var conversationViewModel = ConversationListViewModel()
@@ -38,7 +38,7 @@ struct iPadRootView: View {
     @StateObject var storyViewerCoordinator = StoryViewerCoordinator()
     @ObservedObject var callManager = CallManager.shared
     @ObservedObject var networkMonitor = NetworkMonitor.shared
-    @ObservedObject var notificationManager = NotificationManager.shared
+    @ObservedObject var notificationManager = NotificationToastManager.shared
     @EnvironmentObject var deepLinkRouter: DeepLinkRouter
     @Environment(\.colorScheme) var systemColorScheme
 
@@ -80,6 +80,10 @@ struct iPadRootView: View {
             .environmentObject(statusViewModel)
             .environmentObject(conversationViewModel)
             .environmentObject(storyViewerCoordinator)
+            // Propagate story viewer presentation state — same role as
+            // RootView (cf. ConnectionBanner sync pill chevauchement fix
+            // 2026-05-27).
+            .environment(\.isStoryViewerPresenting, storyViewerCoordinator.pendingRequest != nil)
             .onAppear {
                 router.onRouteRequested = { route in
                     if case .conversation(let conv) = route {

@@ -27,19 +27,20 @@ Ordre de resolution pour le contenu (messages, transcriptions) — identique par
 1. `systemLanguage` — langue primaire configuree dans l'app (priorite la plus haute)
 2. `regionalLanguage` — langue secondaire configuree dans l'app
 3. `customDestinationLanguage` — langue de destination personnalisee
-4. Fallback : `'fr'`
+4. `deviceLocale` — locale appareil (`Locale.current` iOS, `Accept-Language` web), 4e priorité 2026-05-26
+5. Fallback : `'fr'`
 
 Source de verite : `resolveUserLanguage()` dans `packages/shared/utils/conversation-helpers.ts`
 iOS : `MeeshyUser.preferredContentLanguages` dans `packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthModels.swift`
 
-**La locale appareil (`Locale.current`) ne doit JAMAIS etre utilisee pour la resolution de contenu.** C'est la langue d'interface (UI), pas la langue de contenu. Un utilisateur francophone avec un iPhone en anglais veut lire ses messages en francais, pas en anglais.
+**La locale appareil intervient en 4e priorité — jamais en remplacement des préférences in-app.** Un utilisateur francophone avec un iPhone en anglais voit toujours ses messages en français (priorité 1) ; la locale anglaise n'intervient que si aucune traduction française n'est disponible ET qu'une traduction anglaise existe. Source de vérité : `resolveUserLanguage()` dans `packages/shared/utils/conversation-helpers.ts` accepte `{ deviceLocale }` en 2e argument.
 
 Source de verite gateway : `packages/shared/utils/conversation-helpers.ts` → `resolveUserLanguage()`
 Source de verite iOS : `ConversationViewModel.preferredLanguages` + `preferredTranslation(for:)`
 
 ### Regles critiques du Prisme
 1. **Si aucune traduction ne matche la langue preferee, afficher le contenu original (retourner `nil`).** Ne JAMAIS tomber sur `translations.first` comme fallback — l'absence de traduction vers la langue preferee signifie que le contenu est deja dans cette langue.
-2. **Ne JAMAIS ajouter la locale appareil dans les langues preferees de contenu.** Seules `systemLanguage` et `regionalLanguage` (configurees in-app) determinent les langues de contenu.
+2. **La locale appareil entre en 4e priorité (Prisme étendu 2026-05-26)** — après `systemLanguage`, `regionalLanguage`, `customDestinationLanguage`. Elle ne les supplante jamais. iOS l'injecte via header `X-Device-Locale` ; gateway la persiste opportunément dans `User.deviceLocale`.
 
 ## Architecture
 

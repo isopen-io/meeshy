@@ -98,9 +98,9 @@ extension iPadRootView {
                 default:
                     message = error.errorDescription ?? String(localized: "Impossible d'ouvrir le lien", defaultValue: "Impossible d'ouvrir le lien")
                 }
-                ToastManager.shared.showError(message)
+                FeedbackToastManager.shared.showError(message)
             } catch {
-                ToastManager.shared.showError(
+                FeedbackToastManager.shared.showError(
                     String(localized: "Impossible d'ouvrir le lien", defaultValue: "Impossible d'ouvrir le lien")
                 )
             }
@@ -128,7 +128,7 @@ extension iPadRootView {
                 let conv = apiConv.toConversation(currentUserId: currentUserId)
                 openConversation(conv)
             } catch {
-                ToastManager.shared.showError("Impossible de creer la conversation")
+                FeedbackToastManager.shared.showError("Impossible de creer la conversation")
             }
         }
     }
@@ -454,7 +454,7 @@ extension iPadRootView {
             }
             let underlying = (lastError as? LocalizedError)?.errorDescription ?? lastError?.localizedDescription
             let detail = underlying.map { " (\($0))" } ?? ""
-            ToastManager.shared.showError("Impossible d'ouvrir la conversation" + detail)
+            FeedbackToastManager.shared.showError("Impossible d'ouvrir la conversation" + detail)
         }
     }
 

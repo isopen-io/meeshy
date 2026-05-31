@@ -511,6 +511,14 @@ export class NotificationService {
     priority: NotificationPriority;
     content: string;
     title?: string;
+    /**
+     * Explicit subtitle override. When set, it bypasses `buildPushHeader`'s
+     * type-based subtitle derivation (which only emits a subtitle for
+     * `new_message` group/global conversations). Used by reactions / comments
+     * / mentions to surface contextual info (e.g. comment preview, story
+     * author) under the actor's name in the iOS rich banner.
+     */
+    subtitle?: string;
     actor?: NotificationActor;
     context: NotificationContext;
     metadata: NotificationMetadata;
@@ -591,7 +599,7 @@ export class NotificationService {
       // `notification:new` when socket is foreground-connected) needs the same
       // `title`/`subtitle` framing as the native iOS banner so the user sees
       // "<sender> · <conversation>" + body details consistently on both paths.
-      const { title: pushTitle, subtitle: pushSubtitle } = buildPushHeader({
+      const { title: pushTitle, subtitle: derivedSubtitle } = buildPushHeader({
         type: params.type,
         customTitle: params.title,
         actor: params.actor,
@@ -600,6 +608,12 @@ export class NotificationService {
           conversationTitle: params.context.conversationTitle,
         },
       });
+      // Explicit subtitle (e.g. comment preview for reactions) overrides the
+      // type-based derivation. Trim to keep the iOS banner readable —
+      // anything past ~120 chars on a 3-line banner gets cut anyway.
+      const pushSubtitle = (params.subtitle && params.subtitle.trim() !== '')
+        ? params.subtitle.trim().slice(0, 120)
+        : derivedSubtitle;
 
       // Socket.IO payload carries `title`/`subtitle` so the iOS in-app toast
       // can render sender + conversation context without having to re-derive
@@ -1150,6 +1164,12 @@ export class NotificationService {
     commentId: string;
     postId: string;
     reactionEmoji: string;
+    /** Truncated comment content (≤ 80 chars) to inject into the body. */
+    commentPreview?: string;
+    /** Display name (fallback: username) of the post/story author. */
+    postAuthorName?: string;
+    /** True when the parent post is a story (vs a regular feed post). */
+    isStory?: boolean;
   }): Promise<void> {
     if (params.commentAuthorId === params.reactorUserId) return;
 
@@ -1165,11 +1185,35 @@ export class NotificationService {
 
     if (!reactor) return;
 
+    // Body verbeux (spec user 2026-05-28) : "[reactor] a réagi [emoji] à votre
+    // commentaire sur la story de [story_author]". Le précédent body
+    // ne contenait QUE `reactionEmoji` (e.g. "❤️"), trop sommaire — le
+    // destinataire ne savait pas QUI avait réagi NI sur QUEL commentaire /
+    // QUELLE story.
+    const reactorName = reactor.displayName?.trim()
+      || reactor.username?.trim()
+      || 'Quelqu’un';
+    const contextSuffix = params.postAuthorName
+      ? (params.isStory
+          ? ` sur la story de ${params.postAuthorName}`
+          : ` sur le post de ${params.postAuthorName}`)
+      : '';
+    const body = `${reactorName} a réagi ${params.reactionEmoji} à votre commentaire${contextSuffix}`;
+
+    // Subtitle (rendu sous le title côté iOS — banner riche) : un aperçu du
+    // commentaire qui a reçu la réaction. Permet au destinataire de savoir
+    // *quel* de ses commentaires reçoit l'engagement sans avoir à ouvrir la
+    // notification.
+    const subtitle = params.commentPreview && params.commentPreview.trim() !== ''
+      ? `« ${params.commentPreview.trim()} »`
+      : undefined;
+
     await this.createNotification({
       userId: params.commentAuthorId,
       type: 'comment_reaction',
       priority: 'low',
-      content: params.reactionEmoji,
+      content: body,
+      subtitle,
 
       actor: {
         id: params.reactorUserId,

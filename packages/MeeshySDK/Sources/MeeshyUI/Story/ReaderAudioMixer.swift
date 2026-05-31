@@ -31,6 +31,38 @@ public final class ReaderAudioMixer {
 
     private let logger = Logger(subsystem: "me.meeshy.app", category: "media")
     private let engine = AVAudioEngine()
+
+    /// Format canonique de mixage — 48 kHz stereo Float32 (standard broadcast,
+    /// natif AAC LC, natif iPhone speaker + AirPods). Avant ce fix, chaque
+    /// fichier était connecté au mainMixer avec son `file.processingFormat`
+    /// natif (souvent 44.1 kHz pour les voice-over locaux, 22 kHz pour le TTS
+    /// Chatterbox, 48 kHz pour les vidéos importées). Le mixer faisait alors
+    /// un sample-rate conversion implicite à QUALITÉ MEDIUM (Apple default),
+    /// audible sous forme de crackle / artefacts d'aliasing sur les transitions
+    /// audio rapides. Connecter explicitement avec ce format force AVAudioEngine
+    /// à insérer un AVAudioConverter haute qualité dès la connexion, et le
+    /// mainMixer travaille en interne sur un seul format → moins de SRC
+    /// imbriqués, signal propre.
+    /// Returned via accessor instead of stored `let` initialiser — `AVAudioFormat`
+    /// init can theoretically fail under restricted audio sessions (locked
+    /// AirPlay, simulator with audio disabled). We fall back through three
+    /// safer constructors before giving up to the engine's natural mixer format
+    /// (which is guaranteed non-nil because the engine is live).
+    private static func resolveCanonicalFormat(mixer: AVAudioMixerNode) -> AVAudioFormat {
+        if let std = AVAudioFormat(standardFormatWithSampleRate: 48_000, channels: 2) {
+            return std
+        }
+        if let pcm = AVAudioFormat(commonFormat: .pcmFormatFloat32,
+                                   sampleRate: 48_000,
+                                   channels: 2,
+                                   interleaved: false) {
+            return pcm
+        }
+        // Ultimate fallback: mixer's natural output format — already valid by
+        // virtue of the engine being live. Sample rate may differ from 48kHz
+        // but the format is guaranteed coherent across all attached nodes.
+        return mixer.outputFormat(forBus: 0)
+    }
     /// One entry per configured clip, keyed by audio object id.
     private var entries: [String: Entry] = [:]
     /// Wall-clock origin for the current playback pass — set on `play()` and
@@ -92,7 +124,13 @@ public final class ReaderAudioMixer {
                 let file = try AVAudioFile(forReading: url)
                 let node = AVAudioPlayerNode()
                 engine.attach(node)
-                engine.connect(node, to: engine.mainMixerNode, format: file.processingFormat)
+                // Connect via canonical format — AVAudioEngine inserts a
+                // high-quality `AVAudioConverter` between this node and the
+                // mainMixer when `file.processingFormat` differs (samplerate or
+                // channel count). Cf. `canonicalFormat` docstring.
+                engine.connect(node,
+                               to: engine.mainMixerNode,
+                               format: Self.resolveCanonicalFormat(mixer: engine.mainMixerNode))
                 let initialVolume = audio.fadeIn ?? 0 > 0 ? 0 : audio.volume
                 node.volume = isMuted ? 0 : initialVolume
                 entries[audio.id] = Entry(
@@ -515,7 +553,10 @@ extension ReaderAudioMixer {
         let file = try AVAudioFile(forReading: url)
         let player = AVAudioPlayerNode()
         engine.attach(player)
-        engine.connect(player, to: engine.mainMixerNode, format: file.processingFormat)
+        // Connect via canonical format — cf. foreground branch above.
+        engine.connect(player,
+                       to: engine.mainMixerNode,
+                       format: Self.resolveCanonicalFormat(mixer: engine.mainMixerNode))
 
         let startOffset = Double(audio.startTime ?? 0)
         let resolvedDuration = audio.duration

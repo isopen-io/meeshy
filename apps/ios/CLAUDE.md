@@ -207,7 +207,7 @@ ConversationViewModel
 ThemedMessageBubble
   ├── effectiveContent → Affiche toujours la traduction preferee (ou original si aucune)
   ├── isDisplayingTranslation → true quand preferredTranslation existe
-  ├── translationFlagStrip → Drapeaux de langue (original + systeme + regional/custom, max 3)
+  ├── translationFlagStrip → Drapeaux de langue (original + systeme + regional/custom + deviceLocale, max 4)
   ├── flagButton → Drapeau cliquable avec underline colore et animation
   ├── secondaryLanguageCode → Code langue du contenu secondaire affiche (nil = rien)
   ├── secondaryContent → Contenu traduit/original pour la langue secondaire selectionnee
@@ -220,10 +220,19 @@ MessageDetailSheet (onglet Language)
   └── Bouton retraduire (arrow.clockwise)
 ```
 
+### Helper de normalisation locale appareil
+
+Trois sites maintiennent un helper identique pour normaliser un identifier de langue vers ISO 639-1 (2 lettres lowercase) :
+- `packages/shared/utils/language-normalize.ts` — source de vérité
+- `MeeshyUser.normalizeLanguageCode` (SDK Swift)
+- `ConversationLanguagePreferences.normalize` (app iOS)
+
+Toute évolution de la logique de normalisation doit toucher les **trois** sites pour préserver la symétrie cross-platform.
+
 ### UX Translation Flow
 - **Affichage par defaut** : `effectiveContent` retourne toujours `preferredTranslation.translatedContent` si disponible, sinon `message.content`
 - **Indicateur discret** : Icone `translate` dans le meta row quand des traductions existent
-- **Drapeaux** : Bande de drapeaux en bas du texte (original + systeme + regional/custom, max 3, dedupliques)
+- **Drapeaux** : Bande de drapeaux en bas du texte (original + systeme + regional/custom + deviceLocale, max 4, dedupliques)
 - **Tap drapeau** : Affiche le contenu secondaire inline (fond pastel couleur langue, separateur colore)
 - **Tap meme drapeau** : Masque le contenu secondaire avec animation
 - **Long press** : Ouvre le MessageDetailSheet sur l'onglet Language (previews, langues, retraduction)
@@ -357,6 +366,36 @@ Views rendered in loops (ThemedMessageBubble, MeeshyAvatar, ThemedConversationRo
 MUST NOT have `@ObservedObject` on global singletons.
 Pass `isDark: Bool`, `accentColor: String` as `let` parameters.
 Alternative: `@Environment(\.colorScheme)` for simple dark/light checks.
+
+## Notifications In-App — Architecture a deux etages (NON NEGOTIABLE)
+
+Meeshy a **deux** systemes de toasts in-app, separes par **source d'evenement**. Ils ne doivent JAMAIS s'afficher en meme temps pour le meme evenement.
+
+### Les deux systemes
+
+| Systeme | Role | Source | Lieu | Visuel |
+|---|---|---|---|---|
+| **`FeedbackToastManager`** (app) | Feedbacks LOCAUX sur operations utilisateur (publication story OK, like, erreurs API d'actions) | Code app (ViewModel apres async call) | `apps/ios/Meeshy/Features/Main/Services/FeedbackToastManager.swift` | Pill 1-ligne (icone + texte), tap optionnel pour ouvrir le resultat (story publiee, post cree) |
+| **`NotificationToastManager`** (SDK) | Alertes BACKEND -> client : push APN en foreground, evenements socket `notification:new` (message recu, etc.) | Reseau (socket / APNs) | `packages/MeeshySDK/Sources/MeeshySDK/Notifications/NotificationToastManager.swift` | Card riche : avatar + nom expediteur + titre conv, tap = deep link vers conv |
+
+### Regles (imperatif)
+
+1. Toute notification **issue d'un evenement reseau** (socket entrant, push APNs en foreground, callKit) -> `NotificationToastManager.shared`. JAMAIS via `FeedbackToastManager`.
+2. Tout feedback **resultat d'une action utilisateur locale** (login OK, erreur reseau au like, story publiee, etc.) -> `FeedbackToastManager.shared.showSuccess/.showError/.show`. JAMAIS via `NotificationToastManager`.
+3. Les deux ne **doivent jamais** s'afficher en meme temps pour le meme evenement. Si un evenement declenche les deux, c'est une violation des regles 1 ou 2.
+4. **Aucun appel cross-domain** : un ViewModel n'appelle JAMAIS `NotificationToastManager`, un socket listener n'appelle JAMAIS `FeedbackToastManager`.
+
+### Ce qui N'est PAS de ce perimetre (gestion de l'entite Notification)
+
+Les composants suivants gerent l'**entite** Notification (CRUD, listing, preferences) — distincts du toast in-app. A ne pas confondre :
+
+- `NotificationModels`, `NotificationContext`, `APINotification`, `SocketNotificationEvent` (types)
+- `NotificationCoordinator` (unread count global, badge, widget)
+- `PushNotificationManager` (APN/Firebase plumbing)
+- `NotificationService` (REST CRUD)
+- `NotificationListView`, `NotificationRowView`, `NotificationSettingsView` (UI listing/prefs)
+- `UserNotificationPreferences+Filter`
+- `apps/ios/.../Features/Stories/Notifications/*` (independant story-specific)
 
 ## App Extensions
 - MeeshyNotificationExtension (rich push)

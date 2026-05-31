@@ -840,7 +840,7 @@ struct ConversationView: View {
                 // surface a toast so the user knows why.
                 print("[DIAG] accessRevoked.onChange revoked=\(revoked)")
                 guard revoked else { return }
-                ToastManager.shared.showError(viewModel.error ?? "Vous n'avez plus acces a cette conversation")
+                FeedbackToastManager.shared.showError(viewModel.error ?? "Vous n'avez plus acces a cette conversation")
                 dismiss()
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
@@ -926,7 +926,7 @@ struct ConversationView: View {
                             scrollState.scrollToMessageTrigger += 1
                         case .notFound:
                             HapticFeedback.error()
-                            ToastManager.shared.show("Message introuvable", type: .info)
+                            FeedbackToastManager.shared.show("Message introuvable", type: .info)
                         }
                     }
                 },

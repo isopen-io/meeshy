@@ -115,8 +115,18 @@ public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
     /// commit a60f636b5 / 2026-05-20).
     @MainActor public private(set) var hasFinalContentStamped: Bool = false
 
-    public override nonisolated init() { super.init() }
-    public override nonisolated init(layer: Any) { super.init(layer: layer) }
+    public override nonisolated init() {
+        super.init()
+        // Clip le contenu interne aux bounds du backgroundLayer pour le
+        // pinch/pan "INSIDE the bg" (style Instagram) — sinon scaler le
+        // content fait déborder l'image / vidéo au-delà du canvas et le user
+        // perçoit "tout le canvas zoom" (bug reporté 2026-05-27).
+        self.masksToBounds = true
+    }
+    public override nonisolated init(layer: Any) {
+        super.init(layer: layer)
+        self.masksToBounds = true
+    }
 
     @available(*, unavailable)
     public required nonisolated init?(coder: NSCoder) {
@@ -138,6 +148,61 @@ extension StoryBackgroundLayer {
         CATransaction.setDisableActions(true)
         block()
         CATransaction.commit()
+    }
+
+    /// Applies a user transform to the bg CONTENT (image/video/gradient/color
+    /// sublayer) instead of to `self`. The backgroundLayer itself always
+    /// covers the full canvas — scaling its content while the layer stays
+    /// fixed gives the "zoom inside the bg" UX (Instagram-style), with
+    /// `masksToBounds = true` clipping anything that overflows.
+    ///
+    /// Why not scale `self.transform` ? Because that scales the WHOLE
+    /// backgroundLayer relative to the rootLayer parent — the bg overflows
+    /// the canvas and the user perceives "everything is zooming" (bug
+    /// reported 2026-05-27 in `.background` manipulation layer). Items in
+    /// `itemsContainer` (sibling of backgroundLayer) stay in place because
+    /// they're not affected by `backgroundLayer.transform`, but the bg
+    /// growing past its bounds is what the user sees.
+    @MainActor
+    public func applyContentTransform(_ t: CATransform3D) {
+        Self.withDisabledCAActions {
+            // Apply to whichever content sublayer is active. For image and
+            // video we scale the content sublayer so the backgroundLayer
+            // itself stays put (clipped to canvas bounds via masksToBounds).
+            // For solid color (no content sublayer) we fall back to scaling
+            // self — visually a no-op because a uniform color fill doesn't
+            // change under any affine transform, but it preserves the
+            // contract that "applyContentTransform always applies somewhere".
+            if let img = contentLayer {
+                img.transform = t
+                return
+            }
+            if let pl = avPlayerLayer {
+                pl.transform = t
+                return
+            }
+            self.transform = t
+        }
+    }
+
+    /// Commit le live transform appliqué pendant un geste (pan / pinch /
+    /// rotation sur le background) au MODÈLE `transform3D` du layer. Appelé
+    /// par `StoryCanvasUIView.handle*.ended` AVANT `slide = updated` pour que
+    /// le `configure()` qui suit (déclenché par `slide.didSet → rebuildLayers`)
+    /// détecte `nothingChanged` (transform3D == bgTransform construit depuis
+    /// le slide mis à jour) et SKIP la reconfiguration des contentLayer
+    /// frames — sinon le `contentLayer?.frame = bounds` du chemin reuse-content
+    /// sur un sublayer encore transformé produit un glitch visuel au release
+    /// ("bg grandi momentanément puis se replace incorrectement", bug
+    /// 2026-05-27).
+    @MainActor
+    public func commitLiveTransform(_ transform: BackgroundTransform) {
+        self.transform3D = transform
+        // Idempotent : le drag avait déjà posé `img.transform = t` via
+        // `applyContentTransform`. Réappliquer ici garantit la cohérence
+        // si un caller appelle `commitLiveTransform` sans `applyContentTransform`
+        // préalable (ex. tests).
+        applyContentTransform(transform.caTransform())
     }
 
     /// Loads a UIImage from a URL, supporting both `file://` (sync read) and
@@ -162,7 +227,8 @@ extension StoryBackgroundLayer {
                           geometry: CanvasGeometry,
                           resolver: ((String) -> URL?)?,
                           imageCache: ImageCacheReader?,
-                          letterboxColor: UIColor? = nil) {
+                          letterboxColor: UIColor? = nil,
+                          slidePreviewThumbHash: String? = nil) {
         // FAST PATH ANTI-FLASH :
         // `configure(...)` est appelé à CHAQUE `rebuildLayers()` du canvas
         // (i.e. à chaque slide.didSet, drop d'un élément foreground, lancement
@@ -228,7 +294,10 @@ extension StoryBackgroundLayer {
             // (changement de videoFitMode via double-tap, sans rebuild).
             contentLayer?.frame = bounds
             avPlayerLayer?.frame = bounds
-            self.transform = transform.caTransform()
+            // Transform appliqué au CONTENT, pas à self : le backgroundLayer
+            // reste fixe (couvre tout le canvas) et seul son contenu zoom /
+            // pan dedans (Instagram-style "zoom inside bg").
+            applyContentTransform(transform.caTransform())
 
             // Refresh gravity for the new videoFitMode override. Auto cases
             // (override nil) need the naturalSize to compute — for video,
@@ -275,6 +344,15 @@ extension StoryBackgroundLayer {
         switch kind {
         case .solidColor(let color):
             backgroundColor = color.cgColor
+            // Overlay the slide-level thumbHash ON TOP of the solid color so
+            // the preview image is visible during loading AND after (until
+            // foreground media stamps a real bitmap). User request 2026-05-28:
+            // « Je veux le thumbHash ou le thumbnail de la story par dessus
+            // la couleur unie et non en dessous ». Without this, color-only
+            // stories with a published thumbHash showed only the flat colour
+            // and the preview was confined to the letterbox bands via
+            // `storyBlurredBackdrop`.
+            stampSlidePreviewThumbHashLayerIfAvailable(slidePreviewThumbHash)
         case .gradient(let colors, let direction):
             backgroundColor = nil
             let g = CAGradientLayer()
@@ -290,6 +368,8 @@ extension StoryBackgroundLayer {
             }
             addSublayer(g)
             contentLayer = g
+            // Same overlay logic as solidColor — gradient bg + thumbHash on top.
+            stampSlidePreviewThumbHashLayerIfAvailable(slidePreviewThumbHash)
         case .image(let postMediaId, let thumbHash):
             let img = CALayer()
             img.frame = bounds
@@ -473,7 +553,28 @@ extension StoryBackgroundLayer {
             }
         }
 
-        self.transform = transform.caTransform()
+        // Transform appliqué au CONTENT — voir `applyContentTransform`.
+        applyContentTransform(transform.caTransform())
+    }
+
+    /// Stamps the slide-level thumbHash as a sublayer ON TOP of the current
+    /// solid color / gradient bg. Used by the `.solidColor` and `.gradient`
+    /// cases of `configure(...)` so color-only stories that ship a published
+    /// preview show that preview rather than just the flat tint
+    /// (user spec 2026-05-28 « thumbnail par dessus la couleur unie »).
+    /// No-op when the hash is nil, empty, or fails to decode.
+    private func stampSlidePreviewThumbHashLayerIfAvailable(_ thumbHash: String?) {
+        guard let hash = thumbHash, !hash.isEmpty,
+              let placeholderImage = ThumbHashDecoder.decodeIfAvailable(hash)?.cgImage else {
+            return
+        }
+        let preview = CALayer()
+        preview.frame = bounds
+        preview.contents = placeholderImage
+        preview.contentsGravity = .resizeAspectFill
+        preview.masksToBounds = true
+        addSublayer(preview)
+        contentLayer = preview
     }
 
     /// Identité visuelle du `Kind`, utilisée par le fast-path de `configure()`

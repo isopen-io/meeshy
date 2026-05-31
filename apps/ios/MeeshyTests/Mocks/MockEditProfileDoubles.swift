@@ -66,10 +66,10 @@ final class TestSleeper: Sleeping, @unchecked Sendable {
     }
 }
 
-// MARK: - MockToast
+// MARK: - MockFeedbackToast
 
 @MainActor
-final class MockToast: ToastSurfacing {
+final class MockFeedbackToast: FeedbackToastSurfacing {
     var successMessages: [String] = []
     var errorMessages: [String] = []
 

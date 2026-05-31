@@ -2,6 +2,57 @@ import SwiftUI
 import PencilKit
 import MeeshySDK
 
+/// Approximation des filtres `StoryFilter` via les modifiers SwiftUI natifs.
+/// Le main canvas n'applique que `vintage` + `bwContrast` via Metal kernel ;
+/// les 6 autres filtres exposés par la grille n'ont actuellement aucun
+/// effet sur le rendu Metal. Cette approximation ne cherche PAS la parité
+/// pixel-perfect — elle vise un retour visuel cohérent à l'utilisateur sur
+/// le mini canvas dès qu'un filtre est sélectionné. `intensity` (0…1)
+/// module l'amplitude de chaque modifier autour de l'identité.
+private struct StoryMiniFilterModifier: ViewModifier {
+    let filter: String?
+    let intensity: Float
+
+    func body(content: Content) -> some View {
+        let i = Double(max(0, min(1, intensity)))
+        switch filter {
+        case "vintage":
+            return AnyView(content
+                .saturation(1.0 + 0.5 * i)
+                .colorMultiply(Color(red: 0.95, green: 0.85, blue: 0.70).opacity(0.6 + 0.4 * i)))
+        case "bw":
+            return AnyView(content.grayscale(i))
+        case "warm":
+            return AnyView(content
+                .hueRotation(.degrees(10 * i))
+                .saturation(1.0 + 0.2 * i)
+                .colorMultiply(Color(red: 1.0, green: 0.9, blue: 0.75).opacity(0.4 + 0.5 * i)))
+        case "cool":
+            return AnyView(content
+                .hueRotation(.degrees(-10 * i))
+                .saturation(1.0 + 0.15 * i)
+                .colorMultiply(Color(red: 0.80, green: 0.92, blue: 1.0).opacity(0.4 + 0.5 * i)))
+        case "dramatic":
+            return AnyView(content
+                .contrast(1.0 + 0.6 * i)
+                .brightness(-0.05 * i))
+        case "vivid":
+            return AnyView(content.saturation(1.0 + 0.8 * i))
+        case "fade":
+            return AnyView(content
+                .saturation(1.0 - 0.4 * i)
+                .brightness(0.08 * i)
+                .contrast(1.0 - 0.2 * i))
+        case "chrome":
+            return AnyView(content
+                .saturation(1.0 - 0.15 * i)
+                .contrast(1.0 + 0.15 * i))
+        case .some, .none:
+            return AnyView(content)
+        }
+    }
+}
+
 /// Mini composite preview of a slide's canvas at t=0.
 /// Renders all layers (background, drawing, foreground media, text, stickers)
 /// preserving normalized position, scale, and rotation of each element.
@@ -20,6 +71,18 @@ struct SlideMiniPreview: View {
                 foregroundMediaLayer(in: geo.size)
                 textLayer(in: geo.size)
                 stickerLayer(in: geo.size)
+            }
+            // Approximation des filtres `slide.effects.filter` via les
+            // modifiers SwiftUI natifs (GPU, ~0 cost à cette taille). Le main
+            // canvas n'applique que `vintage` + `bwContrast` via Metal — mais
+            // la grille de sélection propose 8 filtres, donc on en map tous
+            // les 8 ici pour que la sélection ait au moins un retour visuel
+            // sur le mini canvas (bug 2026-05-27 : « les effets doivent être
+            // visibles sur le canvas et le mini canvas »). Les badges
+            // (index / dot bg) restent au-dessus, non filtrés.
+            .modifier(StoryMiniFilterModifier(filter: effects.filter,
+                                              intensity: Float(effects.filterIntensity ?? 1.0)))
+            ZStack {
                 indexBadge
                 bgColorDot(in: geo.size)
             }

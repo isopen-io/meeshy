@@ -313,9 +313,18 @@ enum StoryGestureDecisions {
 
 // MARK: - Story Composer Bar
 
-/// Bottom comment composer used by the non-owner story viewer flow.
-/// Extracted from `StoryViewerView.storyComposerBar` so the
-/// `UniversalComposerBar` wiring is its own type-metadata unit.
+/// **UNIQUE composer** du story viewer (réutilisé en mode story-reply ET
+/// en mode comment-reply). Extrait de `StoryViewerView.storyComposerBar`
+/// pour que le wiring `UniversalComposerBar` soit son propre type-metadata
+/// unit.
+///
+/// Spec user 2026-05-28 : « Il faut avoir qu'une seule zone de saisie de
+/// commentaire ». L'overlay commentaires affiche uniquement la LISTE +
+/// actions reply/like ; le composer reste celui-ci, toujours présent en bas
+/// de l'écran. Quand l'utilisateur tape « Répondre » sur un commentaire,
+/// `replyingToStoryComment` est set → une banner « Réponse à X » apparaît
+/// au-dessus de la rangée de saisie de CE composer (pas dans un second
+/// composer).
 struct StoryComposerBarView: View {
     let accentColor: String
     let storyId: String?
@@ -329,14 +338,18 @@ struct StoryComposerBarView: View {
     @Binding var emojiToInject: String
     @Binding var composerFocusTrigger: Bool
     @Binding var storyDrafts: [String: StoryDraft]
+    @Binding var replyingToStoryComment: FeedComment?
 
-    let sendComment: (_ text: String, _ effectFlags: Int?) -> Void
+    /// `parentId` non-nil quand l'utilisateur répond à un commentaire (via
+    /// `replyingToStoryComment` set par l'overlay). Sinon nil → commentaire
+    /// top-level sur la story.
+    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?) -> Void
 
     var body: some View {
         UniversalComposerBar(
             style: .dark,
             mode: .comment,
-            accentColor: accentColor,
+            accentColor: replyingToStoryComment?.authorColor ?? accentColor,
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
             onSend: { text in
@@ -346,7 +359,11 @@ struct StoryComposerBarView: View {
                 commentBlurEnabled = false
                 let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
                 let effectFlags = flags > 0 ? Int(flags) : nil
-                sendComment(text, effectFlags)
+                // Capture le parentId AVANT de clear le reply context, sinon
+                // la closure async perd la référence et envoie nil.
+                let parentId = replyingToStoryComment?.id
+                replyingToStoryComment = nil
+                sendComment(text, effectFlags, parentId)
             },
             onFocusChange: { focused in
                 if focused {
@@ -363,6 +380,53 @@ struct StoryComposerBarView: View {
                         isComposerEngaged = false
                     }
                 }
+            },
+            replyBanner: replyingToStoryComment.map { reply in
+                AnyView(
+                    HStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color(hex: reply.authorColor))
+                            .frame(width: 3, height: 30)
+
+                        VStack(alignment: .leading, spacing: 1) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrowshape.turn.up.left.fill")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundColor(Color(hex: reply.authorColor))
+                                Text(String(localized: "story.viewer.replyTo", defaultValue: "R\u{00E9}ponse \u{00E0} \(reply.author)", bundle: .main))
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(Color(hex: reply.authorColor))
+                            }
+                            Text(reply.displayContent)
+                                .font(.system(size: 11))
+                                .foregroundColor(.white.opacity(0.6))
+                                .lineLimit(1)
+                        }
+
+                        Spacer()
+
+                        Button {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                replyingToStoryComment = nil
+                            }
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.white.opacity(0.6))
+                                .frame(width: 22, height: 22)
+                                .background(Circle().fill(Color.white.opacity(0.12)))
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color(hex: reply.authorColor).opacity(0.18))
+                    .overlay(
+                        Rectangle()
+                            .fill(Color(hex: reply.authorColor).opacity(0.35))
+                            .frame(height: 0.5),
+                        alignment: .bottom
+                    )
+                )
             },
             onRequestTextEmoji: {
                 isComposerEngaged = true
@@ -448,7 +512,11 @@ struct StoryCardView: View {
 
     // Sidebar inputs
     let storyReactionCount: Int
+    let storyCurrentUserHasReacted: Bool
     let storyCommentCount: Int
+    let storyShareCount: Int
+    let storyViewCount: Int
+    let storyRepostCount: Int
     let isStoryCommentsEmpty: Bool
     let storyHasAudibleSound: Bool
     let storyHasTranslatableContent: Bool
@@ -512,6 +580,17 @@ struct StoryCardView: View {
     /// uniquement sur ses transitions — pas sur celles de `isPaused`.
     @Binding var isLongPressPaused: Bool
 
+    /// Position de lecture (secondes) émise par le canvas — pilote la progress
+    /// bar et l'auto-advance du timer parent. Bound pour que le viewer parent
+    /// puisse la lire dans `startTimer()`.
+    @Binding var lastPlaybackTime: Double
+
+    /// Reflète `shouldPauseTimer` du parent (aggrégation des pauses UI : sheets,
+    /// composer, drag, long-press, transition). Propagée au canvas via
+    /// `StoryReaderRepresentable.isPaused` pour que la timeline canvas (vidéo,
+    /// audio, displayLink) gèle EN PHASE avec la progress bar du viewer.
+    let isCanvasPlaybackPaused: Bool
+
     @ObservedObject var keyboard: KeyboardObserver
 
     /// Fraction `[0, 1]` de contenu de la slide active disponible localement.
@@ -546,8 +625,32 @@ struct StoryCardView: View {
     let reportStory: (_ storyId: String, _ reportType: String, _ reason: String?) async throws -> Void
     let composerBottomPadding: (GeometryProxy) -> CGFloat
 
+    /// Builds the Instagram-style floating comments overlay. Conditional on
+    /// `showCommentsOverlay`. Placed in the ZStack BEFORE the controls
+    /// (sidebar / header / composer) so it renders BEHIND them — user can
+    /// still tap React / Reply / Settings even with comments visible
+    /// (user spec 2026-05-28 « le layer de commentaire doit apparaitre en
+    /// dessous des layer des controles de la story »).
+    let makeCommentsOverlay: () -> StoryCommentsOverlayView
+
     private var topInset: CGFloat {
         max(geometry.safeAreaInsets.top, 59)
+    }
+
+    /// Dimensions strictes 9:16 du canvas dans la géométrie courante.
+    /// `.aspectRatio(.fit) + .frame(maxWidth/Height)` ne contraint pas
+    /// correctement le `StoryReaderRepresentable` (UIViewRepresentable) sur
+    /// iPhone 16 Pro (402×874pt) — le canvas se retrouvait à 491×754pt
+    /// (height-fit avec width qui déborde) au lieu de 402×715pt (width-fit
+    /// attendu). La sidebar droite tombait alors hors écran à x=389+w=46
+    /// → out of 402 (bug 2026-05-27). On force ici les dimensions explicites
+    /// par calcul direct du fit ratio.
+    private var canvasFitSize: CGSize {
+        let w = geometry.size.width
+        let h = geometry.size.height
+        let ratio: CGFloat = 9.0 / 16.0
+        let widthBound = min(w, h * ratio)
+        return CGSize(width: widthBound, height: widthBound / ratio)
     }
 
     var body: some View {
@@ -556,15 +659,56 @@ struct StoryCardView: View {
             // Color/gradient fallback (always present)
             storyBackground
 
+            // === Layer 1.5: Blurred backdrop derived from the slide ThumbHash ===
+            // Le canvas réel est contraint à 9:16 (fidélité au design composer).
+            // Sur un iPhone "plus haut que 9:16" (iPhone 16 Pro = 0.461 vs 9/16 = 0.5625),
+            // ~150pt restent libres au-dessus et en dessous ; on les habille
+            // d'un blur du contenu story (ThumbHash upscaled + flou + scale) pour
+            // une transition douce entre les letterbox et le canvas net.
+            //
+            // SINGLE BACKDROP : un seul `storyBlurredBackdrop(for: currentStory)`
+            // avec une `.id(currentStory?.id)` pour que SwiftUI swap natif
+            // (transition.opacity de defaut, gérée par `withAnimation` du
+            // `crossFadeStory`). Le pattern précédent (deux backdrops avec
+            // `outgoingOpacity` ET `contentOpacity` additifs) produisait un pic
+            // de luminosité au milieu de la transition car les deux blurs
+            // semi-transparents s'additionnaient dans le ZStack.
+            storyBlurredBackdrop(for: currentStory)
+                .id(currentStory?.id ?? "no-story")
+                .transition(.opacity)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+
             // === Outgoing canvas (cross-dissolve pixel-perfect) ===
             if let outgoing = outgoingStory, outgoingOpacity > 0 {
+                // `isOutgoing: true` force le canvas en `.edit` mode dès
+                // makeUIView — ses bg/FG AVPlayer + audio mixer ne démarrent
+                // PAS, supprimant le bleed audio/vidéo 350-400 ms pendant le
+                // cross-fade (bug user 2026-05-28 « médias jouent en double »).
+                // Visuellement, le slide reste rendu (image bg + textes), seule
+                // l'animation vidéo est gelée — invisible à l'œil pendant une
+                // sortie en opacity sur 350 ms.
                 StoryReaderRepresentable(story: outgoing, preferredLanguage: resolvedViewerLanguage,
                                       preferredContentLanguages: resolvedViewerLanguageChain,
                                       preloadedImages: preloadedImages,
                                       preloadedVideoURLs: preloadedVideoURLs,
-                                      preloadedAudioURLs: preloadedAudioURLs)
+                                      preloadedAudioURLs: preloadedAudioURLs,
+                                      isOutgoing: true)
                     .id("out-\(outgoing.id)")
-                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    // Strict 9:16-fit (parité avec UnifiedPostComposer:324).
+                    // Sans contrainte, le reader s'étirait à la hauteur écran et
+                    // la projection design→render (scaleFactor = width/1080)
+                    // décalait visuellement les textes/stickers de ~77pt vers le
+                    // haut sur iPhone 16 Pro (bug audit 2026-05-27).
+                    // Dimensions explicites 9:16 — cf. `canvasFitSize`. Le
+                    // duo `.aspectRatio(.fit) + .frame(maxWidth/Height)`
+                    // ne contraint pas correctement le UIViewRepresentable
+                    // sur iPhone 16 Pro et le canvas débordait en largeur
+                    // (sidebar droite hors écran).
+                    .frame(width: canvasFitSize.width,
+                           height: canvasFitSize.height)
+                    .clipped()
                     .opacity(outgoingOpacity)
                     .scaleEffect(closingScale)
                     .allowsHitTesting(false)
@@ -578,14 +722,39 @@ struct StoryCardView: View {
                                       preloadedImages: preloadedImages,
                                       preloadedVideoURLs: preloadedVideoURLs,
                                       preloadedAudioURLs: preloadedAudioURLs,
+                                      isPaused: isCanvasPlaybackPaused,
                                       onContentReady: { isContentReady = true },
-                                      onContentProgress: { p in slideContentProgress = p })
+                                      onContentProgress: { p in
+                                          // Latch monotone : une fois le contenu prêt
+                                          // (≥ 0.95), on ne redescend JAMAIS. Sans ça
+                                          // chaque `scheduleContentReadyEvaluation`
+                                          // (déclenché par les didSet slide cumulés)
+                                          // remettait `contentReadyFired=false` →
+                                          // `recomputeContentProgress` émettait 0 →
+                                          // loader overlay réapparaissait → scintillement
+                                          // (user-reporté 2026-05-27 « la story scintille
+                                          // seulement »). Le reset à 0 se fait UNIQUEMENT
+                                          // sur slide-change (cf. `.task(id:)` plus bas).
+                                          if slideContentProgress >= 0.95 && p < slideContentProgress {
+                                              return
+                                          }
+                                          slideContentProgress = p
+                                      },
+                                      onPlaybackTime: { t in lastPlaybackTime = t })
                     .id(story.id)
-                    // Force the reader to the canvas size — UIViewRepresentable
-                    // can otherwise report an intrinsic size that drifts with
-                    // foreground media natural dimensions and pushes the
-                    // sidebar/composer beyond the viewport.
-                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    // Strict 9:16-fit (parité avec UnifiedPostComposer:324).
+                    // Sans contrainte, `geometry.size.height` étirait le canvas
+                    // hors ratio design et décalait visuellement le contenu.
+                    // Le letterbox au-dessus/en dessous est habillé par le
+                    // `storyBlurredBackdrop` (Layer 1.5).
+                    // Dimensions explicites 9:16 — cf. `canvasFitSize`. Le
+                    // duo `.aspectRatio(.fit) + .frame(maxWidth/Height)`
+                    // ne contraint pas correctement le UIViewRepresentable
+                    // sur iPhone 16 Pro et le canvas débordait en largeur
+                    // (sidebar droite hors écran).
+                    .frame(width: canvasFitSize.width,
+                           height: canvasFitSize.height)
+                    .clipped()
                     .opacity(contentOpacity)
                     .offset(y: textSlideOffset)
                     .scaleEffect(openingScale)
@@ -614,11 +783,15 @@ struct StoryCardView: View {
                     // it: the loader hosts a thumbhash Image + .blur() whose
                     // intrinsic/halo size could otherwise inflate the parent
                     // ZStack and push the sidebar/composer beyond the viewport.
-                    // Note: pas de `.ignoresSafeArea()` ici — le parent
-                    // `StoryViewerView` l'applique déjà au scope racine, en
-                    // rajouter localement après `.frame()` ré-étend l'overlay
-                    // horizontalement (~89pt) et casse à nouveau la sidebar.
-                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    // Aligné sur le canvas 9:16 (et non plein écran) pour ne pas
+                    // recouvrir le `storyBlurredBackdrop` en bandes letterbox.
+                    // Dimensions explicites 9:16 — cf. `canvasFitSize`. Le
+                    // duo `.aspectRatio(.fit) + .frame(maxWidth/Height)`
+                    // ne contraint pas correctement le UIViewRepresentable
+                    // sur iPhone 16 Pro et le canvas débordait en largeur
+                    // (sidebar droite hors écran).
+                    .frame(width: canvasFitSize.width,
+                           height: canvasFitSize.height)
                     .clipped()
                     .allowsHitTesting(false)
                     .transition(.opacity)
@@ -679,15 +852,23 @@ struct StoryCardView: View {
                 )
                 .frame(height: topInset + 110)
                 Spacer()
+                // Scrim bottom plus opaque + plus haut — assure que le caption
+                // texte d'une slide (rendu par le canvas à y≈0.95 en design
+                // coords) ne déborde plus visuellement sur la zone composer
+                // « Commenter... ». Le canvas du reader est positionné au
+                // centre du geometry (9:16 fit-to-width), donc un text
+                // positioné bas du slide tombe juste au-dessus du composer.
+                // Sans ce scrim fort, les deux se superposent — symptôme
+                // user-reporté 2026-05-27.
                 LinearGradient(
                     stops: [
                         .init(color: .black.opacity(0.0), location: 0),
-                        .init(color: .black.opacity(0.35), location: 0.5),
-                        .init(color: .black.opacity(0.65), location: 1)
+                        .init(color: .black.opacity(0.55), location: 0.45),
+                        .init(color: .black.opacity(0.92), location: 1)
                     ],
                     startPoint: .top, endPoint: .bottom
                 )
-                .frame(height: 180)
+                .frame(height: 240)
             }
             .ignoresSafeArea()
             .allowsHitTesting(false)
@@ -770,6 +951,12 @@ struct StoryCardView: View {
 
                 Spacer()
             }
+            // Width strict — même rationale que le sidebar Layer 8 : le
+            // UIViewRepresentable du canvas expanse le ZStack parent ce qui
+            // fait sortir le bouton « Fermer » (xmark) du header hors écran
+            // (mesuré x=391 r=427 sur viewport 402pt avant ce fix, 2026-05-27).
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
+            .clipped()
             // Glissement vers le HAUT à la disparition + fondu. Le `.offset`
             // négatif fait sortir progress bars + header de l'écran ; on
             // ajoute une opacity 0 pour que l'élément reste totalement
@@ -779,6 +966,17 @@ struct StoryCardView: View {
             .opacity(chromeVisible ? 1 : 0)
             .allowsHitTesting(chromeVisible)
             .animation(.spring(response: 0.32, dampingFraction: 0.78), value: chromeVisible)
+
+            // === Layer 7.5: Floating comments overlay (Instagram-style) ===
+            // Rendered BEFORE the sidebar / composer / bigReaction blocks so
+            // SwiftUI ZStack z-orders it BENEATH the story controls — user
+            // can still tap React / Reply / mute / settings while comments
+            // are visible. Background story stays interactable (tap to pause,
+            // long-press) through the overlay's transparent surface.
+            if showCommentsOverlay {
+                makeCommentsOverlay()
+                    .transition(.opacity)
+            }
 
             // === Layer 8: Right action sidebar — centered vertically, right side ===
             // The sidebar is bounded between the header strip (top) and the
@@ -795,12 +993,16 @@ struct StoryCardView: View {
                 StoryActionSidebarView(
                     isOwnStory: isOwnStory,
                     storyReactionCount: storyReactionCount,
+                    storyCurrentUserHasReacted: storyCurrentUserHasReacted,
                     heartBouncePulse: heartBouncePulse,
                     quickEmojis: quickEmojis,
                     onReplyToStory: onReplyToStory,
                     currentStory: currentStory,
                     currentGroup: currentGroup,
                     storyCommentCount: storyCommentCount,
+                    storyShareCount: storyShareCount,
+                    storyViewCount: storyViewCount,
+                    storyRepostCount: storyRepostCount,
                     isStoryCommentsEmpty: isStoryCommentsEmpty,
                     storyHasAudibleSound: storyHasAudibleSound,
                     storyHasTranslatableContent: storyHasTranslatableContent,
@@ -822,11 +1024,24 @@ struct StoryCardView: View {
                     loadStoryComments: loadStoryComments
                 )
                     .frame(maxHeight: sidebarMaxHeight)
-                    .padding(.trailing, 6)
+                    // 16pt clears the iPhone Pro rounded-corner radius at the
+                    // sidebar's vertical position (mid-screen). 6pt was
+                    // visibly too tight — button labels « React », « Répondre »,
+                    // « Envoyer », « Son » were clipped on the right
+                    // (bug user 2026-05-28 « les elements sortent du viewport »).
+                    .padding(.trailing, 16)
             }
             .padding(.top, topReserved)
             .padding(.bottom, bottomReserved)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+            // Width strict + clipped — sur iPhone 16 Pro le UIViewRepresentable
+            // du canvas expanse le ZStack parent à ~491pt (cf. canvasFitSize
+            // doc). Le sidebar à right edge tombait alors hors écran. Cap
+            // dur du HStack à `geometry.size.width` + clip pour empêcher
+            // tout débordement (bug 2026-05-27). Le Spacer + l'alignement
+            // .trailing dans le HStack interne suffisent pour pousser le
+            // sidebar VStack au bord droit visible.
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .trailing)
+            .clipped()
             // Glissement vers la DROITE à la disparition + fondu. L'offset
             // de 110pt couvre largement la largeur du chip (max 48pt) + son
             // padding-trailing (6pt) + un peu de marge pour les écrans sans
@@ -849,34 +1064,23 @@ struct StoryCardView: View {
                     .accessibilityHidden(true)
             }
 
-            // === Layer 10: Live comments overlay (Instagram-style) ===
-            if showCommentsOverlay {
-                StoryCommentsOverlayView(
-                    storyComments: storyComments,
-                    storyCommentCount: storyCommentCount,
-                    storyCommentRepliesMap: storyCommentRepliesMap,
-                    storyCommentExpandedThreads: storyCommentExpandedThreads,
-                    storyCommentLoadingReplies: storyCommentLoadingReplies,
-                    isLoadingComments: isLoadingComments,
-                    userLang: commentsUserLang,
-                    composerAccentColor: composerAccentColor,
-                    showCommentsOverlay: $showCommentsOverlay,
-                    replyingToStoryComment: $replyingToStoryComment,
-                    composerLanguage: $composerLanguage,
-                    commentEffects: $commentEffects,
-                    commentBlurEnabled: $commentBlurEnabled,
-                    makeStoryCommentRow: makeStoryCommentRow,
-                    toggleStoryCommentThread: toggleStoryCommentThread,
-                    sendComment: sendComment
-                )
-                    .transition(.opacity)
-                    .allowsHitTesting(true)
-            }
+            // NOTE: Live comments overlay (Instagram-style) is rendered by
+            // `StoryViewerContentView` as a sibling of the card transform
+            // stack — see this file's `StoryViewerContentView.body`.
+            // Keeping it inside the card meant it inherited the card's
+            // `.offset(x: totalSlideX)`, scale and rotation3D, and shifted
+            // left during drag / scale / 3D transitions (bug 2026-05-28).
 
             // Bottom area: composer + emoji panel / keyboard space
             VStack(spacing: 0) {
                 Spacer()
 
+                // **Toujours visible** quand l'utilisateur n'est pas l'auteur
+                // de la story (un seul composer pour la story-reply ET la
+                // comment-reply — spec user 2026-05-28). Quand l'overlay
+                // commentaires est ouvert et qu'on tape « Répondre » sur un
+                // commentaire, la reply banner apparaît au-dessus de CETTE
+                // rangée de saisie via le binding `replyingToStoryComment`.
                 if !isOwnStory {
                     StoryComposerBarView(
                         accentColor: currentGroup?.avatarColor ?? "6366F1",
@@ -890,11 +1094,18 @@ struct StoryCardView: View {
                         emojiToInject: $emojiToInject,
                         composerFocusTrigger: $composerFocusTrigger,
                         storyDrafts: $storyDrafts,
-                        sendComment: { text, effectFlags in
-                            sendComment(text, effectFlags, nil)
-                        }
+                        replyingToStoryComment: $replyingToStoryComment,
+                        sendComment: sendComment
                     )
-                        .padding(.horizontal, 14)
+                        // Clears the iPhone Pro bottom-rounded-corners
+                        // (~55pt radius). Root viewer uses `.ignoresSafeArea()`
+                        // so we can't rely on the SwiftUI safe-area inset to
+                        // pad us — without this the (+) and send buttons land
+                        // inside the screen's curvature and get visually clipped
+                        // (bug 2026-05-28: send button half-cut off the right).
+                        // Iterated: 14 → 20 still clipped → 28 to give the 44pt
+                        // round buttons real breathing room over the corner arc.
+                        .padding(.horizontal, 28)
                         .simultaneousGesture(
                             DragGesture(minimumDistance: 20, coordinateSpace: .local)
                                 .onEnded { value in
@@ -918,6 +1129,16 @@ struct StoryCardView: View {
                     }
                 }
             }
+            // **CRITIQUE** : `maxHeight: .infinity, alignment: .bottom` force la
+            // VStack à remplir la hauteur du canvas ZStack. Sans cela, le
+            // `Spacer()` au top collapse à minLength: 0 et la VStack prend sa
+            // hauteur intrinsèque (~150pt = composer + emoji panel). Le canvas
+            // ZStack parent utilisant `alignment: .center` (line 1192), une
+            // VStack courte se faisait CENTRER verticalement dans le canvas
+            // 874pt → composer apparaissait à y≈360pt au lieu de y≈760pt en
+            // bas (bug user 2026-05-28 « le composeur est rogné au lieu d'être
+            // bien aligné, le composant sort du viewport »).
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             .padding(.bottom, composerBottomPadding(geometry))
             .animation(.easeInOut(duration: 0.25), value: keyboard.height)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showTextEmojiPicker)
@@ -1024,6 +1245,64 @@ struct StoryCardView: View {
         }
         .ignoresSafeArea()
         .accessibilityHidden(true)
+    }
+
+    // MARK: - Blurred backdrop (letterbox au-dessus/en dessous du canvas 9:16)
+
+    /// Habille les bandes letterbox d'un blur du contenu story.
+    /// Cascade de sources (priorité descendante) :
+    ///   1. `slide.effects.thumbHash` — thumbHash explicite côté slide
+    ///   2. `media[backgroundId].thumbHash` — thumbHash du média de fond
+    ///      (couvre les vidéos uploadées qui portent leur thumbHash côté
+    ///      `FeedMedia` plutôt que sur le slide composite)
+    ///   3. Color.clear → le `storyBackground` gradient indigo se voit dans
+    ///      les bandes (fallback graceful, jamais de rectangle noir)
+    ///
+    /// Décodage ThumbHash < 0.5 ms (16×16 → upscaled), blur GPU SwiftUI < 1 ms.
+    @ViewBuilder
+    private func storyBlurredBackdrop(for story: StoryItem?) -> some View {
+        if let img = resolvedBackdropImage(for: story) {
+            Image(uiImage: img)
+                .resizable()
+                .scaledToFill()
+                .blur(radius: 60)
+                .scaleEffect(1.18)
+                .opacity(0.85)
+        } else {
+            Color.clear
+        }
+    }
+
+    /// Résout l'image-source du backdrop selon la cascade documentée plus haut.
+    /// Retourne `nil` si aucune source exploitable n'existe (Color.clear path).
+    private func resolvedBackdropImage(for story: StoryItem?) -> UIImage? {
+        guard let story else { return nil }
+        let slide = story.toRenderableSlide(preferredLanguages: resolvedViewerLanguageChain)
+        // (1) thumbHash slide-level
+        if let hash = slide.effects.thumbHash,
+           !hash.isEmpty,
+           let img = UIImage.fromThumbHash(hash) {
+            return img
+        }
+        // (2) thumbHash du media de fond — typique pour vidéo uploadée
+        let bgMediaId: String? = {
+            if let bg = slide.effects.resolvedBackgroundMedia {
+                return bg.postMediaId
+            }
+            // Fallback historique : premier média si pas de canvas mediaObjects
+            if (slide.effects.mediaObjects ?? []).isEmpty {
+                return story.media.first?.id
+            }
+            return nil
+        }()
+        if let bgMediaId,
+           let media = story.media.first(where: { $0.id == bgMediaId }),
+           let mediaHash = media.thumbHash,
+           !mediaHash.isEmpty,
+           let img = UIImage.fromThumbHash(mediaHash) {
+            return img
+        }
+        return nil
     }
 
     // MARK: - Background Audio Badge
@@ -1158,6 +1437,7 @@ struct StoryViewerContentView: View {
                             Spacer()
                         }
                     }
+
                 }
             }
         }

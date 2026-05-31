@@ -63,6 +63,8 @@ extension iPadRootView {
                 .environmentObject(router)
                 .environmentObject(statusViewModel)
                 .environmentObject(conversationViewModel)
+                // Cf. fix sync pill chevauchement 2026-05-27 dans RootView.
+                .environment(\.isStoryViewerPresenting, true)
             }
             // Coordinator-driven viewer cover used by
             // `StoryNotificationTargetScreen` → `StoryActiveBridge`. Mirrors
@@ -91,6 +93,8 @@ extension iPadRootView {
                 .environmentObject(router)
                 .environmentObject(statusViewModel)
                 .environmentObject(conversationViewModel)
+                // Cf. fix sync pill chevauchement 2026-05-27 dans RootView.
+                .environment(\.isStoryViewerPresenting, true)
             }
             // Mirror RootView's split call presentation: `.fullScreen`
             // mode → cover; `.pip` mode → overlay pill. Swiping the cover

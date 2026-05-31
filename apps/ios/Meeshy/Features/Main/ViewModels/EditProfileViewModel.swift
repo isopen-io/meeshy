@@ -33,7 +33,7 @@ final class EditProfileViewModel: ObservableObject {
     private let attachmentUploader: AttachmentUploading
     private let profileCache: ProfileCacheWriting
     private let sleeper: Sleeping
-    private let toast: ToastSurfacing
+    private let toast: FeedbackToastSurfacing
     private let haptics: HapticSurfacing
 
     // MARK: - Init
@@ -44,7 +44,7 @@ final class EditProfileViewModel: ObservableObject {
         attachmentUploader: AttachmentUploading = AttachmentUploader.shared,
         profileCache: ProfileCacheWriting = CacheCoordinator.shared,
         sleeper: Sleeping = SystemSleeper.shared,
-        toast: ToastSurfacing = ToastManager.shared,
+        toast: FeedbackToastSurfacing = FeedbackToastManager.shared,
         haptics: HapticSurfacing = HapticBridge.shared
     ) {
         self.authManager = authManager

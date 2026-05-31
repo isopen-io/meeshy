@@ -10,7 +10,7 @@ nonisolated private let logger = Logger(subsystem: "me.meeshy.app", category: "f
 /// Example: the user goes Settings → Focus → Work → Add Filter → Meeshy, picks
 /// "Direct messages only" and "Mute reactions". While Work is active iOS passes
 /// the saved selection to the app via the filter, and the app stores it in the
-/// App Group so `NotificationManager.handleNewNotification` can consult it
+/// App Group so `NotificationToastManager.handleNewNotification` can consult it
 /// before surfacing a toast.
 @available(iOS 16.0, *)
 struct MeeshyFocusFilter: SetFocusFilterIntent {
@@ -108,7 +108,7 @@ public struct MeeshyFocusSnapshot: Codable, Sendable, Equatable {
         isActive: false
     )
 
-    /// Convert to the SDK-visible shape that `NotificationManager` consumes.
+    /// Convert to the SDK-visible shape that `NotificationToastManager` consumes.
     public func toSDKSnapshot() -> FocusFilterSnapshot {
         FocusFilterSnapshot(
             allowDirectMessages: allowDirectMessages,

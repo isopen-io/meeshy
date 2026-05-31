@@ -222,6 +222,15 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     public let customDestinationLanguage: String?
     public let autoTranslateEnabled: Bool?
 
+    /// Locale appareil propagée par le client (iOS `Locale.current.identifier`,
+    /// web `Accept-Language`) et persistée serveur dans `User.deviceLocale`.
+    ///
+    /// 4e priorité Prisme Linguistique (`packages/shared/utils/conversation-helpers.ts`
+    /// → `resolveUserLanguagesOrdered`). Optionnel — `nil` = client legacy
+    /// n'ayant pas encore envoyé `X-Device-Locale`, l'app retombe alors sur les
+    /// 3 préférences in-app + fallback `"fr"`.
+    public let deviceLocale: String?
+
     // Profile enrichment
     public let timezone: String?
     public let registrationCountry: String?
@@ -243,6 +252,7 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         emailVerifiedAt: String? = nil, phoneVerifiedAt: String? = nil,
         customDestinationLanguage: String? = nil,
         autoTranslateEnabled: Bool? = nil,
+        deviceLocale: String? = nil,
         timezone: String? = nil,
         registrationCountry: String? = nil,
         profileCompletionRate: Int? = nil,
@@ -276,6 +286,7 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         self.phoneVerifiedAt = phoneVerifiedAt
         self.customDestinationLanguage = customDestinationLanguage
         self.autoTranslateEnabled = autoTranslateEnabled
+        self.deviceLocale = deviceLocale
         self.timezone = timezone
         self.registrationCountry = registrationCountry
         self.profileCompletionRate = profileCompletionRate
@@ -314,6 +325,7 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
             emailVerifiedAt: emailVerifiedAt, phoneVerifiedAt: phoneVerifiedAt,
             customDestinationLanguage: customDestinationLanguage,
             autoTranslateEnabled: autoTranslateEnabled,
+            deviceLocale: deviceLocale,
             timezone: timezone,
             registrationCountry: registrationCountry,
             profileCompletionRate: profileCompletionRate,
@@ -322,23 +334,58 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     }
 
     /// Ordered list of preferred content languages for the Prisme Linguistique.
-    /// Resolution order: systemLanguage → regionalLanguage → customDestinationLanguage → "fr"
-    /// Device locale (Locale.current) is NEVER included — it is the UI language, not content.
+    /// Resolution order (extended 2026-05-26):
+    /// 1. `systemLanguage`             — primary in-app preference
+    /// 2. `regionalLanguage`           — secondary in-app preference
+    /// 3. `customDestinationLanguage`  — per-conversation override
+    /// 4. `deviceLocale`               — OS-level locale (4th priority)
+    /// 5. `"fr"`                       — ultimate fallback when everything is `nil`
+    ///
+    /// System / regional / custom languages preserve their original casing so
+    /// downstream consumers that match against language tags case-sensitively
+    /// keep working. `deviceLocale` is normalised via `normalizeLanguageCode`
+    /// because it arrives as `"fr_FR"` / `"zh-Hant-HK"` and needs to collapse
+    /// to ISO 639-1 for NLLB-200 matching. Dedup is case-insensitive so a
+    /// device locale that resolves to an already-listed code is dropped.
     public var preferredContentLanguages: [String] {
         var preferred: [String] = []
-        if let sys = systemLanguage {
-            preferred.append(sys)
+        let appendIfDistinct: (String?) -> Void = { code in
+            guard let code, !code.isEmpty else { return }
+            if preferred.contains(where: { $0.caseInsensitiveCompare(code) == .orderedSame }) {
+                return
+            }
+            preferred.append(code)
         }
-        if let reg = regionalLanguage, !preferred.contains(where: { $0.caseInsensitiveCompare(reg) == .orderedSame }) {
-            preferred.append(reg)
-        }
-        if let custom = customDestinationLanguage, !preferred.contains(where: { $0.caseInsensitiveCompare(custom) == .orderedSame }) {
-            preferred.append(custom)
-        }
+        appendIfDistinct(systemLanguage)
+        appendIfDistinct(regionalLanguage)
+        appendIfDistinct(customDestinationLanguage)
+        appendIfDistinct(Self.normalizeLanguageCode(deviceLocale))
         if preferred.isEmpty {
             preferred.append("fr")
         }
         return preferred
+    }
+
+    /// Normalise un identifier de langue vers ISO 639-1 (2 lettres lowercase).
+    ///
+    /// Miroir Swift de `normalizeLanguageCode` :
+    /// - `packages/shared/utils/language-normalize.ts` (source de vérité TS)
+    /// - `ConversationLanguagePreferences.normalize` (app iOS)
+    ///
+    /// Toute évolution de la logique de normalisation DOIT toucher les trois
+    /// sites pour préserver la symétrie cross-platform.
+    public static func normalizeLanguageCode(_ input: String?) -> String? {
+        guard let raw = input?.trimmingCharacters(in: .whitespacesAndNewlines),
+              raw.count >= 2 else { return nil }
+        let primary = raw
+            .split(whereSeparator: { $0 == "-" || $0 == "_" })
+            .first?
+            .lowercased() ?? ""
+        guard primary.count >= 2,
+              primary.allSatisfy({ $0.isLetter && $0.isASCII }) else {
+            return nil
+        }
+        return String(primary.prefix(2))
     }
 }
 

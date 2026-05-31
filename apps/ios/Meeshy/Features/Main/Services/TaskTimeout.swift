@@ -24,6 +24,18 @@ public struct TaskTimeoutError: Error, Equatable {
     }
 }
 
+/// Shared upper-bounds for `withTaskTimeout`. Keep magic numbers out of
+/// call sites so a single change here ripples through every flow that
+/// relies on the same SLA.
+public enum TaskTimeoutDefaults {
+    /// Hard timeout for socket-backed optimistic actions
+    /// (post / comment reactions via `SocialSocketManager`).
+    ///
+    /// Long enough for a slow round-trip, short enough to free the
+    /// `*HeartInFlightIds` guard before the user gives up retrying.
+    public static let socialReaction: TimeInterval = 12
+}
+
 @inlinable
 public func withTaskTimeout<T: Sendable>(
     seconds: TimeInterval,

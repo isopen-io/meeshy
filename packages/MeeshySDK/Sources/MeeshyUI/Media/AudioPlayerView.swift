@@ -243,14 +243,38 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     }
 
     // MARK: - Timer
+    //
+    // Perf budget (2026-05-28): the previous 20 Hz tick (0.05 s) was the
+    // single biggest CPU drain during sustained audio playback because
+    // every wakeup re-published `currentTime` + `progress` through the
+    // coordinator cascade → invalidated every `@ObservedObject coordinator`
+    // observer (mini-player, etc.) at 20 Hz. Dropping to 10 Hz halves the
+    // wakeups and is visually indistinguishable on the waveform / progress
+    // chip (both round to 0.01-resolution display anyway). Additionally,
+    // we skip writes whose delta is below a perceptible threshold to
+    // collapse the Combine downstream into ~5 Hz of distinct values.
+    private static let progressTickInterval: TimeInterval = 0.1
+    /// `currentTime` is exposed in seconds with 100ms display granularity
+    /// (`formatMediaDuration` truncates below that). Any smaller delta is
+    /// invisible to the user and only generates wasted re-renders.
+    private static let currentTimeWriteThresholdSeconds: TimeInterval = 0.05
+    /// `progress` drives a 200-ish-pixel waveform; sub-half-pixel deltas
+    /// yield no visible change. 0.002 (=0.2%) is a comfortable cutoff.
+    private static let progressWriteThreshold: Double = 0.002
+
     private func startProgressTimer() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: Self.progressTickInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self = self, let player = self.player else { return }
-                if player.isPlaying {
-                    self.currentTime = player.currentTime
-                    self.progress = player.duration > 0 ? player.currentTime / player.duration : 0
+                guard player.isPlaying else { return }
+                let newTime = player.currentTime
+                let newProgress = player.duration > 0 ? newTime / player.duration : 0
+                if abs(newTime - self.currentTime) >= Self.currentTimeWriteThresholdSeconds {
+                    self.currentTime = newTime
+                }
+                if abs(newProgress - self.progress) >= Self.progressWriteThreshold {
+                    self.progress = newProgress
                 }
             }
         }
@@ -941,19 +965,45 @@ public struct AudioPlayerView: View {
         return false
     }
 
+    /// Pure routing decision used by `handlePlayTap`. Extracted as a
+    /// `nonisolated static` helper so it can be unit-tested without a
+    /// SwiftUI render lifecycle. Returns `true` iff the play tap should be
+    /// delegated to `onPlayRequest` instead of touching the locally
+    /// resolved `player`.
+    nonisolated internal static func shouldDelegateToParent(
+        usesExternalPlayer: Bool,
+        playerAttachmentId: String?,
+        bubbleAttachmentId: String
+    ) -> Bool {
+        if !usesExternalPlayer { return true }
+        return playerAttachmentId != bubbleAttachmentId
+    }
+
     private func handlePlayTap() {
         // External-engine interception: when the parent injected an
-        // `onPlayRequest` handler AND the shared engine is not currently
-        // loaded with THIS attachment, defer to the parent so it can set up
-        // the queue / active-context BEFORE asking the engine to play.
-        // Without this gate, tapping play on a bubble while the coordinator
-        // is mid-playback of a different audio would call
-        // `engine.togglePlayPause()` and either pause that other audio
-        // (busy engine) or be a no-op (idle engine) — neither of which is
-        // what the user asked for. Once the engine IS loaded with this
-        // attachment, fall through to `togglePlayPause()` so subsequent
-        // play/pause taps are instantaneous and never rebuild the queue.
-        if let onPlayRequest, player.attachmentId != attachment.id {
+        // `onPlayRequest` handler, defer to it so the parent can set up the
+        // queue / active-context BEFORE asking the engine to play. Two
+        // cases short-circuit to the parent:
+        //  1. The bubble is INACTIVE (`!usesExternalPlayer`) — its
+        //     `ownedPlayer` is a dummy that must never produce sound. Even
+        //     though `onAppear` writes `player.attachmentId = attachment.id`
+        //     on the owned dummy (so other readers can introspect it), that
+        //     local match must NOT be used to gate the routing — otherwise
+        //     the first tap on every fresh bubble bypasses the coordinator
+        //     and plays via the dummy local engine, leaving `activeContext`
+        //     nil. That broke the mini-player + background continuation
+        //     (cf. 2026-05-28 bug report).
+        //  2. The bubble is ACTIVE but the shared engine is loaded with a
+        //     DIFFERENT attachment (`player.attachmentId != attachment.id`)
+        //     — the parent must rebuild the queue around this audio.
+        // Once the external engine IS loaded with this attachment, fall
+        // through to `togglePlayPause()` so subsequent play/pause taps are
+        // instantaneous and never rebuild the queue.
+        if let onPlayRequest, Self.shouldDelegateToParent(
+            usesExternalPlayer: usesExternalPlayer,
+            playerAttachmentId: player.attachmentId,
+            bubbleAttachmentId: attachment.id
+        ) {
             onPlayRequest()
             HapticFeedback.light()
             return

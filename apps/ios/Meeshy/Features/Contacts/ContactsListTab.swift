@@ -45,7 +45,7 @@ struct ContactsListTab: View {
 
         return Button {
             if isPlaceholder {
-                ToastManager.shared.show(String(localized: "common.coming-soon", defaultValue: "Bientot disponible", bundle: .main), type: .success)
+                FeedbackToastManager.shared.show(String(localized: "common.coming-soon", defaultValue: "Bientot disponible", bundle: .main), type: .success)
                 HapticFeedback.light()
             } else {
                 viewModel.setFilter(filter)

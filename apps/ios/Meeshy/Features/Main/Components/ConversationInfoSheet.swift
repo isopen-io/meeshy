@@ -1075,7 +1075,7 @@ struct ConversationInfoSheet: View {
                 }
             }
         } catch {
-            ToastManager.shared.showError(String(localized: "conversation.info.share.error", defaultValue: "Erreur lors de la creation du lien", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "conversation.info.share.error", defaultValue: "Erreur lors de la creation du lien", bundle: .main))
         }
     }
 
@@ -1084,7 +1084,7 @@ struct ConversationInfoSheet: View {
             try await ConversationService.shared.leave(conversationId: conversation.id)
             dismiss()
         } catch {
-            ToastManager.shared.showError(String(localized: "conversation.info.leave.error", defaultValue: "Erreur lors du depart de la conversation", bundle: .main))
+            FeedbackToastManager.shared.showError(String(localized: "conversation.info.leave.error", defaultValue: "Erreur lors du depart de la conversation", bundle: .main))
         }
     }
 
@@ -1245,11 +1245,11 @@ struct ConversationInfoSheet: View {
             do {
                 try await blockService?.blockUser(userId: userId)
                 HapticFeedback.success()
-                ToastManager.shared.showSuccess(String(localized: "conversation.info.block.success", defaultValue: "Utilisateur bloque", bundle: .main))
+                FeedbackToastManager.shared.showSuccess(String(localized: "conversation.info.block.success", defaultValue: "Utilisateur bloque", bundle: .main))
                 dismiss()
             } catch {
                 HapticFeedback.error()
-                ToastManager.shared.showError(String(localized: "conversation.info.block.error", defaultValue: "Erreur lors du blocage", bundle: .main))
+                FeedbackToastManager.shared.showError(String(localized: "conversation.info.block.error", defaultValue: "Erreur lors du blocage", bundle: .main))
                 Self.logger.error("Failed to block user: \(error.localizedDescription)")
             }
             isBlocking = false

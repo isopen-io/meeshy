@@ -24,6 +24,7 @@ import type { AttachmentTranscription, AttachmentTranslations, AttachmentTransla
 import { toSocketIOTranslation } from '@meeshy/shared/types/attachment-audio';
 import { createTranslationJSON, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { PostAudioService } from '../posts/PostAudioService';
+import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
 
@@ -643,17 +644,23 @@ export class MessageTranslationService extends EventEmitter {
 
       for (const participant of participants) {
         if (participant.type === 'user' && participant.user) {
+          const u = participant.user;
           logger.info(
-            `   [LANG-TRACE] Registered: ${participant.user.username} (${participant.user.id}) | ` +
-            `systemLang=${participant.user.systemLanguage} | regionalLang=${participant.user.regionalLanguage}`
+            `   [LANG-TRACE] Registered: ${u.username} (${u.id}) | ` +
+            `systemLang=${u.systemLanguage} | regionalLang=${u.regionalLanguage} | ` +
+            `customDest=${u.customDestinationLanguage ?? '-'} | deviceLocale=${u.deviceLocale ?? '-'}`
           );
 
-          // autoTranslate ON → systemLanguage (toujours) + regionalLanguage (si configurée)
-          if (participant.user.systemLanguage) {
-            languages.add(participant.user.systemLanguage);
-          }
-          if (participant.user.regionalLanguage) {
-            languages.add(participant.user.regionalLanguage);
+          // Resolve via the shared 4-level priority helper:
+          //   systemLanguage > regionalLanguage > customDestinationLanguage > deviceLocale
+          // The helper deduplicates lowercase codes so two participants
+          // sharing the same locale only contribute once. deviceLocale is
+          // normalised via normalizeLanguageCode (`fr-FR` → `fr`).
+          const codes = resolveUserLanguagesOrdered(u, {
+            deviceLocale: u.deviceLocale ?? undefined,
+          });
+          for (const code of codes) {
+            languages.add(code);
           }
         } else {
           // Anonymous or bot participant — use participant.language

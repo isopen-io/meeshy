@@ -1,5 +1,28 @@
 import SwiftUI
+import UIKit
 import MeeshySDK
+
+/// Pont entre les bitmaps édités/foreground du composer (`viewModel.loadedImages`
+/// keyés par `media.id`) et l'`ImageCacheReader` consommé par `StoryMediaLayer`.
+///
+/// Le composer mute `loadedImages[id] = edited` dans son `MeeshyImageEditorView`
+/// onAccept. Sans ce pont, le `StoryCanvasUIView` ne voyait que `media.mediaURL`
+/// (URL inchangée → `ImageLoader` cache servait l'ancien bitmap) et le canvas
+/// principal restait stale après édition. Le mini canvas marchait déjà car
+/// `SlideMiniPreview` lit `loadedImages` direct.
+///
+/// `version` est un cookie monotone que le composer bump à chaque mutation
+/// utile pour permettre au `Coordinator` de SwiftUI de déclencher un rebuild
+/// canvas — comparer deux dictionnaires `[String: UIImage]` étant impossible
+/// (UIImage non Equatable, dict hashable seulement via clés).
+struct ComposerImageCacheReader: ImageCacheReader {
+    let images: [String: UIImage]
+    let version: UInt64
+
+    func cachedImage(for key: String) async -> UIImage? {
+        images[key]
+    }
+}
 
 /// SwiftUI wrapper around `StoryCanvasUIView` for embedded composer use.
 ///
@@ -29,6 +52,21 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// via `onItemModified` → `@Binding`, ce callback est complémentaire et
     /// fournit la valeur structurée sans avoir à re-parser le slide.
     public var onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)?
+    /// Miroir de `viewModel.isDrawingActive` du composer. Quand `true`, le
+    /// canvas supprime son drawingLayer persisté pour éviter le double rendu
+    /// avec le PKCanvasView SwiftUI overlay (bug "écrit en double", 2026-05-27).
+    public var isDrawingOverlayActive: Bool = false
+    /// Side-cache des bitmaps édités/foreground du composer keyé par `media.id`.
+    /// Wired vers `StoryCanvasUIView.readerContext.imageCache` via le pont
+    /// `ComposerImageCacheReader` pour que le canvas principal reflète les
+    /// éditions image (bug 2026-05-27 : main canvas stale après image edit).
+    public var loadedImages: [String: UIImage] = [:]
+    /// Cookie monotone à bumper côté composer à chaque mutation utile de
+    /// `loadedImages` (typiquement l'`onAccept` du `MeeshyImageEditorView`).
+    /// Le `Coordinator` compare la valeur reçue à `lastVersionSeen` pour
+    /// décider si un rebuild canvas est nécessaire (les dicts UIImage ne sont
+    /// pas Equatable).
+    public var loadedImagesVersion: UInt64 = 0
 
     public init(slide: Binding<StorySlide>,
                 onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
@@ -40,7 +78,10 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)? = nil,
                 onCanvasZoomScaleChanged: ((CGFloat, UIGestureRecognizer.State) -> Void)? = nil,
                 onBackgroundTapped: (() -> Void)? = nil,
-                onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)? = nil) {
+                onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)? = nil,
+                isDrawingOverlayActive: Bool = false,
+                loadedImages: [String: UIImage] = [:],
+                loadedImagesVersion: UInt64 = 0) {
         self._slide = slide
         self.onItemTapped = onItemTapped
         self.onItemDoubleTapped = onItemDoubleTapped
@@ -52,7 +93,16 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         self.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         self.onBackgroundTapped = onBackgroundTapped
         self.onBackgroundTransformChanged = onBackgroundTransformChanged
+        self.isDrawingOverlayActive = isDrawingOverlayActive
+        self.loadedImages = loadedImages
+        self.loadedImagesVersion = loadedImagesVersion
     }
+
+    public final class Coordinator {
+        var lastLoadedImagesVersion: UInt64?
+    }
+
+    public func makeCoordinator() -> Coordinator { Coordinator() }
 
     public func makeUIView(context: Context) -> StoryCanvasUIView {
         let view = StoryCanvasUIView(slide: slide, mode: .edit)
@@ -68,6 +118,14 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         view.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         view.onBackgroundTapped = onBackgroundTapped
         view.onBackgroundTransformChanged = onBackgroundTransformChanged
+        view.isDrawingOverlayActive = isDrawingOverlayActive
+        // Wire le pont ImageCacheReader dès la première frame pour que le
+        // `StoryRenderer.render(...)` initial (déclenché par le slide.didSet
+        // du init StoryCanvasUIView) puisse déjà résoudre les bitmaps
+        // foreground via `loadedImages[media.id]`.
+        let reader = ComposerImageCacheReader(images: loadedImages, version: loadedImagesVersion)
+        view.setReaderContext(StoryReaderContext(imageCache: reader))
+        context.coordinator.lastLoadedImagesVersion = loadedImagesVersion
         // Bootstrap : la couche initiale calculée par `init` n'a pas pu être
         // poussée au callback (nil à ce moment). On force l'émission après
         // une frame pour que le chip indicator reflète bien la couche
@@ -89,6 +147,27 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         uiView.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         uiView.onBackgroundTapped = onBackgroundTapped
         uiView.onBackgroundTransformChanged = onBackgroundTransformChanged
+        uiView.isDrawingOverlayActive = isDrawingOverlayActive
+
+        // Bridge des bitmaps édités/foreground du composer vers
+        // `StoryCanvasUIView.readerContext.imageCache`. On reconstruit le
+        // reader UNIQUEMENT quand `loadedImagesVersion` change pour éviter
+        // un rebuild par body eval (updateUIView est appelé fréquemment).
+        // Le bump de version est piloté par le composer (cf.
+        // `MeeshyImageEditorView` onAccept → `viewModel.loadedImagesVersion &+= 1`).
+        //
+        // `invalidateImageCache()` bump la révision pour forcer le re-stamp
+        // des layers du `StoryRendererCache` — cet appel EST réservé au
+        // composer ; le reader passe par `setReaderContext` direct qui ne
+        // bump plus (sinon ça gèle la progress bar et le canvas reader, cf.
+        // régression 2026-05-27).
+        if context.coordinator.lastLoadedImagesVersion != loadedImagesVersion {
+            context.coordinator.lastLoadedImagesVersion = loadedImagesVersion
+            let reader = ComposerImageCacheReader(images: loadedImages, version: loadedImagesVersion)
+            uiView.setReaderContext(StoryReaderContext(imageCache: reader))
+            uiView.invalidateImageCache()
+        }
+
         // Re-emit la couche courante après chaque body eval (deferred via
         // async pour ne pas muter le @State pendant la phase d'update
         // SwiftUI). SwiftUI dédupe les writes égaux côté @State, donc le

@@ -471,6 +471,13 @@ public struct StoryComposerView: View {
                 context: .story,
                 onAccept: { edited in
                     viewModel.loadedImages[item.elementId] = edited
+                    // Bump version pour signaler au `StoryComposerCanvasView`
+                    // qu'un bitmap intra-clé a muté. SwiftUI ne peut pas
+                    // détecter ce genre de mutation sur un `[String: UIImage]`
+                    // (UIImage non Equatable). Sans ce bump, le main canvas
+                    // ne re-stampait jamais l'image éditée et restait stale
+                    // (bug 2026-05-27). Cf. `StoryComposerCanvasView.Coordinator`.
+                    viewModel.loadedImagesVersion &+= 1
                     editingElementImage = nil
                 },
                 onCancel: { editingElementImage = nil }
@@ -515,7 +522,13 @@ public struct StoryComposerView: View {
                     //    courante du clip édité (utilisée par le composer
                     //    tray, l'export et le placeholder).
                     let thumbnail = Self.generateVideoThumbnail(url: cachedURL)
-                    if let thumbnail { viewModel.loadedImages[item.elementId] = thumbnail }
+                    if let thumbnail {
+                        viewModel.loadedImages[item.elementId] = thumbnail
+                        // Bump version : même rationale que le bloc image
+                        // editor — la vignette vidéo est une mutation
+                        // intra-clé non détectable par SwiftUI.
+                        viewModel.loadedImagesVersion &+= 1
+                    }
 
                     // 3. Si l'utilisateur a transcrit la piste audio, on
                     //    propage les sous-titres comme **metadata** de la
@@ -552,7 +565,11 @@ public struct StoryComposerView: View {
         } message: {
             Text(String(localized: "story.composer.unpublishedDraft", defaultValue: "Vous avez un brouillon non publie.", bundle: .module))
         }
-        .alert(String(localized: "story.composer.quitWithoutPublishing", defaultValue: "Quitter sans publier ?", bundle: .module), isPresented: $showDiscardAlert) {
+        .confirmationDialog(
+            String(localized: "story.composer.quitWithoutPublishing", defaultValue: "Quitter sans publier ?", bundle: .module),
+            isPresented: $showDiscardAlert,
+            titleVisibility: .visible
+        ) {
             Button(String(localized: "story.composer.save", defaultValue: "Sauvegarder", bundle: .module)) { saveDraftAndDismiss() }
             Button(String(localized: "story.composer.quit", defaultValue: "Quitter", bundle: .module), role: .destructive) { cancelAndDismiss() }
             Button(String(localized: "story.composer.cancelAction", defaultValue: "Annuler", bundle: .module), role: .cancel) { }
@@ -1276,7 +1293,20 @@ public struct StoryComposerView: View {
                     videoFitMode: transform.videoFitMode
                 )
                 viewModel.saveBackgroundTransform()
-            }
+            },
+            // Quand le drawing overlay est actif, le canvas doit supprimer
+            // son drawingLayer persisté — sinon double rendu (ancien drawing
+            // au mauvais endroit dans le design space + nouveau drawing live
+            // du PKCanvasView en bounds space). Bug "écrit en double", 2026-05-27.
+            isDrawingOverlayActive: viewModel.isDrawingActive,
+            // Pont vers `StoryCanvasUIView.readerContext.imageCache` —
+            // `StoryMediaLayer.configureImage` consulte d'abord ce cache
+            // (clé = media.id) avant le file:// path, donc le main canvas
+            // reflète immédiatement les éditions image (bug 2026-05-27).
+            // La version sert de cookie au Coordinator pour ne déclencher
+            // un rebuild qu'aux mutations utiles.
+            loadedImages: viewModel.loadedImages,
+            loadedImagesVersion: viewModel.loadedImagesVersion
         )
         .allowsHitTesting(!viewModel.isDrawingActive)
         .overlay {
@@ -1575,7 +1605,12 @@ public struct StoryComposerView: View {
             audioPlayerObjects: current.audioPlayerObjects,
             backgroundAudioVariants: current.backgroundAudioVariants,
             backgroundTransform: bgTransform.isIdentity ? nil : bgTransform,
-            slideDuration: Float(viewModel.currentSlideDuration)
+            // `slideDuration: nil` — la durée n'est plus stockée dans
+            // `effects`. Le viewer la recalcule from-scratch via
+            // `StorySlide.computedTotalDuration()` (cf. centralisation
+            // 2026-05-28). Évite que les vieilles valeurs persistées
+            // (12 s, etc.) écrasent le défaut 6 s pour les statics.
+            slideDuration: nil
         )
     }
 
@@ -1797,12 +1832,16 @@ public struct StoryComposerView: View {
         if idx < slides.count {
             slides[idx].effects = buildEffects()
         }
-        // Propage la duree authoritative de chaque slide vers effects.slideDuration —
-        // sinon les slides jamais activees (donc jamais passees par buildEffects)
-        // gardent un slideDuration nil et le viewer retombe sur le minimum 5s.
-        for i in slides.indices {
-            slides[i].effects.slideDuration = Float(slides[i].duration)
-        }
+        // NB : on n'écrit plus `effects.slideDuration` à chaque publish
+        // depuis la centralisation 2026-05-28. La durée est entièrement
+        // dérivée from-scratch côté lecteur par
+        // `StorySlide.computedTotalDuration()` (bg media duration loop /
+        // texte long / défaut 6s). Le champ `effects.slideDuration` reste
+        // dans le schema pour compat backend mais le viewer ne le lit
+        // plus — il est ignoré. Si un jour on veut une vraie surcharge
+        // explicite par l'auteur, ce sera un champ dédié (ex:
+        // `effects.authorPinnedDuration`) lu en priorité dans
+        // `computedTotalDuration`.
         // ThumbHash composite par slide (bg + texte + média + stickers) — sync.
         for i in slides.indices {
             let bgImage = viewModel.slideImages[slides[i].id]

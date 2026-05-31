@@ -96,4 +96,56 @@ final class MiniAudioPlayerBarTests: XCTestCase {
         coord.test_setActiveContext(attachmentId: "a1")
         XCTAssertEqual(bar.displayedContextForTesting?.attachmentId, "a1")
     }
+
+    // MARK: - Route-aware visibility (2026-05-28 fix)
+    //
+    // The mini-player must hide whenever the user is already inside the
+    // conversation that's driving playback — the in-place audio bubble
+    // owns the controls there, the bar would overlap redundantly.
+
+    func test_visibility_hiddenWhenInsidePlayingConversation() {
+        let (coord, _) = makeCoord()
+        coord.test_setActiveContext(attachmentId: "a1", conversationId: "conv-A")
+        let bar = MiniAudioPlayerBar(
+            coordinatorForTesting: coord,
+            currentConversationId: { "conv-A" }
+        )
+        XCTAssertFalse(bar.shouldDisplayForTesting,
+            "Bar must hide when the user is inside the conversation playing the audio")
+        XCTAssertNil(bar.displayedContextForTesting)
+    }
+
+    func test_visibility_visibleWhenInsideOtherConversation() {
+        let (coord, _) = makeCoord()
+        coord.test_setActiveContext(attachmentId: "a1", conversationId: "conv-A")
+        let bar = MiniAudioPlayerBar(
+            coordinatorForTesting: coord,
+            currentConversationId: { "conv-B" }
+        )
+        XCTAssertTrue(bar.shouldDisplayForTesting,
+            "Bar must remain visible when the user is inside a different conversation")
+        XCTAssertEqual(bar.displayedContextForTesting?.attachmentId, "a1")
+    }
+
+    func test_visibility_visibleWhenOutsideAnyConversation() {
+        let (coord, _) = makeCoord()
+        coord.test_setActiveContext(attachmentId: "a1", conversationId: "conv-A")
+        // closure returns nil → user is on a hub route (settings, profile,
+        // list, etc.) — bar must surface playback affordance.
+        let bar = MiniAudioPlayerBar(
+            coordinatorForTesting: coord,
+            currentConversationId: { nil }
+        )
+        XCTAssertTrue(bar.shouldDisplayForTesting)
+        XCTAssertEqual(bar.displayedContextForTesting?.attachmentId, "a1")
+    }
+
+    func test_visibility_defaultClosureKeepsBarVisible() {
+        // Backward-compat: callers that don't pass `currentConversationId`
+        // get the default `{ nil }` closure, preserving the historical
+        // "always visible when playback is active" behavior.
+        let (coord, _) = makeCoord(activeAttachment: "a1")
+        let bar = MiniAudioPlayerBar(coordinatorForTesting: coord)
+        XCTAssertTrue(bar.shouldDisplayForTesting)
+    }
 }

@@ -80,7 +80,7 @@ extension MessageRecord {
             // regress to .sent (single check) and the user would never
             // see the double check (✓✓). Same goes for `state == .read`.
             switch state {
-            case .sending: return .sending
+            case .sending, .queued: return .sending
             case .failed: return .failed
             case .delivered: return .delivered
             case .read: return .read

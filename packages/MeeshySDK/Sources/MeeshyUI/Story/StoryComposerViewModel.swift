@@ -124,6 +124,10 @@ protocol StoryComposerProviding: AnyObject {
     var loadedImages: [String: UIImage] { get set }
     var loadedVideoURLs: [String: URL] { get set }
     var loadedAudioURLs: [String: URL] { get set }
+    /// Cookie monotone à bumper après chaque édition utile d'un bitmap déjà
+    /// présent dans `loadedImages`. Lu par le `StoryComposerCanvasView` pour
+    /// déclencher un rebuild canvas. Cf. impl pour le rationale détaillé.
+    var loadedImagesVersion: UInt64 { get set }
     /// Captions de transcription (vidéo) produites par `MeeshyVideoEditorView`
     /// au confirm. Keyed par `StoryMediaObject.id`. Metadata render-time —
     /// pas persistée dans le slide model (cf. doc dans l'impl).
@@ -353,7 +357,24 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
 
     // MARK: - Drawing
 
-    @Published var drawingData: Data?
+    /// Données du dessin courant en design-coords (1080×1920) — écrites par le
+    /// délégué `PKCanvasView`. La source de vérité historique pour le rendu
+    /// canvas reste `currentSlide.effects.drawingData` (lu par `StoryRenderer`).
+    /// Le `didSet` ci-dessous propage chaque write vers la slide courante
+    /// sinon le canvas redessine la version persistée stale dès que l'overlay
+    /// PKCanvasView disparaît — bug "garde un des dessins non correspondant"
+    /// reporté 2026-05-27.
+    @Published var drawingData: Data? {
+        didSet {
+            guard oldValue != drawingData else { return }
+            guard slides.indices.contains(currentSlideIndex) else { return }
+            if currentEffects.drawingData != drawingData {
+                var effects = currentEffects
+                effects.drawingData = drawingData
+                currentEffects = effects
+            }
+        }
+    }
     @Published var drawingColor: Color = .white
     @Published var drawingWidth: CGFloat = 5
     var isDrawingActive: Bool { activeTool == .drawing }
@@ -396,6 +417,16 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     @Published var loadedImages: [String: UIImage] = [:]
     @Published var loadedVideoURLs: [String: URL] = [:]
     @Published var loadedAudioURLs: [String: URL] = [:]
+
+    /// Cookie monotone bumpé à chaque édition d'un bitmap déjà présent dans
+    /// `loadedImages` (typiquement `MeeshyImageEditorView` onAccept qui
+    /// remplace la valeur sous une clé inchangée). Le `Coordinator` du
+    /// `StoryComposerCanvasView` compare ce cookie à `lastLoadedImagesVersion`
+    /// pour déclencher un rebuild des media layers — sans ça le canvas
+    /// principal restait stale après image edit (les dicts UIImage ne sont
+    /// pas Equatable et SwiftUI ne peut donc pas détecter une mutation
+    /// de valeur intra-clé). Cf. `ComposerImageCacheReader.version`.
+    @Published var loadedImagesVersion: UInt64 = 0
 
     /// Captions / transcription metadata produced by `MeeshyVideoEditorView`
     /// when the user transcribes a foreground video then taps « Terminer ».
@@ -990,7 +1021,14 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
             scale: 1.0,
             rotation: 0,
             volume: 1.0,
+            // Bg media loops by default so a short video/asset covers the
+            // full slide duration. Without this, `StoryMediaObject.loop`
+            // defaults to false → `bgVideo.loop ?? true` in StoryRenderer
+            // never falls back to true → AVPlayerLooper never armed → video
+            // stops at its native end while the slide progress bar continues
+            // (user report 2026-05-27).
             isBackground: shouldBeBackground,
+            loop: shouldBeBackground,
             sourceLanguage: detectedKeyboardLanguage
         )
         var medias = targetEffects.mediaObjects ?? []
@@ -1394,10 +1432,10 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         let hasTransitions = !p.clipTransitions.isEmpty
         // `TimelineViewModel.init` seeds `slideDuration = 0` until
         // `bootstrap(project:)` runs, so a fresh composer would otherwise
-        // report `hasNonDefaultDuration == true` (|0 - 12| > 0.01) before
+        // report `hasNonDefaultDuration == true` (|0 - 6| > 0.01) before
         // any actual user customization. Treat the un-bootstrapped 0 as
         // the default value, not as a customization.
-        let hasNonDefaultDuration = p.slideDuration > 0 && abs(p.slideDuration - 12.0) > 0.01
+        let hasNonDefaultDuration = p.slideDuration > 0 && abs(p.slideDuration - 6.0) > 0.01
         return hasKeyframes || hasTransitions || hasNonDefaultDuration
     }
 
@@ -1568,14 +1606,14 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
 
         // Convert StoryItem → StorySlide (composer's internal type). Lossy conversion:
         // we keep the first media URL, the content and the effects ; defaults for
-        // duration (12 s default for static reposts) and order (0).
+        // duration (6 s default for static reposts) and order (0).
         var cloned = StorySlide(
             id: UUID().uuidString,
             mediaURL: story.media.first?.url,
             mediaData: nil,
             content: story.content,
             effects: story.storyEffects ?? StoryEffects(),
-            duration: 12,
+            duration: 6,
             order: 0
         )
 

@@ -25,6 +25,12 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
     public let forwardedFromId: String?
     public let forwardedFromConversationId: String?
     public let attachmentIds: [String]?
+    /// Raw values of `AttachmentKind` aligned with `attachmentIds` by index.
+    /// `nil` when the queue item was created before this field existed (old
+    /// on-disk rows decoded after a SDK upgrade) — the mapper falls back to
+    /// `.image` per spec §4.2 in that case. Optional so the synthesized
+    /// `Decodable` keeps reading legacy payloads without migration.
+    public let attachmentKinds: [String]?
     /// Local filesystem path to a pending audio file kept under
     /// `Documents/pending-audio/<clientMessageId>.m4a` while the message
     /// waits for upload. `nil` for non-audio messages. The pattern is
@@ -44,6 +50,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         forwardedFromId: String? = nil,
         forwardedFromConversationId: String? = nil,
         attachmentIds: [String]? = nil,
+        attachmentKinds: [String]? = nil,
         localAudioPath: String? = nil
     ) {
         self.id = UUID().uuidString
@@ -55,6 +62,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.forwardedFromId = forwardedFromId
         self.forwardedFromConversationId = forwardedFromConversationId
         self.attachmentIds = attachmentIds
+        self.attachmentKinds = attachmentKinds
         self.localAudioPath = localAudioPath
         self.createdAt = Date()
     }
@@ -71,6 +79,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         forwardedFromId: String?,
         forwardedFromConversationId: String?,
         attachmentIds: [String]?,
+        attachmentKinds: [String]? = nil,
         localAudioPath: String?,
         createdAt: Date
     ) {
@@ -83,6 +92,7 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.forwardedFromId = forwardedFromId
         self.forwardedFromConversationId = forwardedFromConversationId
         self.attachmentIds = attachmentIds
+        self.attachmentKinds = attachmentKinds
         self.localAudioPath = localAudioPath
         self.createdAt = createdAt
     }
@@ -319,6 +329,18 @@ public protocol OfflineQueueing: Sendable {
 
 extension OfflineQueue: OfflineQueueing {}
 
+/// Test seam for the message-centric `enqueue(_:)` path used by
+/// `ConversationViewModel.sendMessage`. Naming avoids collision with
+/// `OfflineQueueProviding` (story-specific) and `OfflineQueueing` (generic
+/// non-message payload). Conforming types own the `OfflineQueueItem`
+/// coalescing semantics so callers can `await` the persistence write before
+/// reporting success to the user.
+public protocol OfflineMessageQueueing: Sendable {
+    func enqueue(_ item: OfflineQueueItem) async throws
+}
+
+extension OfflineQueue: OfflineMessageQueueing {}
+
 // MARK: - Offline Queue
 
 public actor OfflineQueue {
@@ -346,6 +368,29 @@ public actor OfflineQueue {
     /// on first connect.
     public nonisolated var pendingCountPublisher: AnyPublisher<Int, Never> {
         pendingCountSubject.publisher
+    }
+
+    /// Backing subject for `pendingUIItemsPublisher`. Mirrors the
+    /// `.pending`/`.inflight`/`.failed` outbox rows as `OutboxUIItem` snapshots
+    /// for the `SyncPill` UI. Kept `nonisolated` so SwiftUI bodies can read it
+    /// without hopping into the actor.
+    private nonisolated let pendingUIItemsSubject = SendableCurrentValueSubject<[OutboxUIItem]>([])
+
+    /// Cap on the number of `OutboxUIItem` snapshots surfaced through the
+    /// publisher. The pill UI only renders the head of the queue; an unbounded
+    /// fetch on a large backlog would burn memory and decode time for rows the
+    /// user can never see.
+    private static let pendingUIItemsLimit = 50
+
+    /// Publishes the current pending outbox UI snapshot and every subsequent
+    /// change. Rows are ordered by `createdAt` ascending and filtered to
+    /// `.pending` / `.inflight` / `.failed` statuses (drained rows are deleted
+    /// from the table — there is no `.applied` status to exclude). Emits the
+    /// latest value immediately on subscription.
+    public nonisolated var pendingUIItemsPublisher: AnyPublisher<[OutboxUIItem], Never> {
+        pendingUIItemsSubject.publisher
+            .removeDuplicates()
+            .eraseToAnyPublisher()
     }
 
     private static let maxQueueSize = 100
@@ -527,9 +572,12 @@ public actor OfflineQueue {
     /// Counts rows currently in `.pending` or `.inflight` state and updates
     /// `pendingCountSubject`. Called after every enqueue/dequeue/retryItem
     /// touchpoint. Falls back to the in-memory mirror if no pool is wired.
+    /// Also refreshes the `pendingUIItemsSubject` snapshot so the SyncPill UI
+    /// re-renders on the same touchpoints.
     private func refreshPendingCount() async {
         guard let pool = outboxPool else {
             pendingCountSubject.send(items.count)
+            pendingUIItemsSubject.send([])
             return
         }
         // Seules les opérations qui justifient l'indicateur « Synchronisation… »
@@ -546,6 +594,33 @@ public actor OfflineQueue {
                 .fetchCount(db)
         }) ?? items.count
         pendingCountSubject.send(count)
+        await refreshPendingUIItems()
+    }
+
+    /// Reads the head of the outbox table (rows in `.pending`, `.inflight` or
+    /// `.failed` ordered by `createdAt` ascending, capped at
+    /// `pendingUIItemsLimit`) and pushes the corresponding `OutboxUIItem`
+    /// snapshots onto `pendingUIItemsSubject`. Decoding cost is paid once on
+    /// each outbox mutation, never on the SwiftUI render path.
+    private func refreshPendingUIItems() async {
+        guard let pool = outboxPool else {
+            pendingUIItemsSubject.send([])
+            return
+        }
+        let limit = Self.pendingUIItemsLimit
+        let records: [OutboxRecord] = (try? await pool.read { db in
+            try OutboxRecord
+                .filter([
+                    OutboxStatus.pending.rawValue,
+                    OutboxStatus.inflight.rawValue,
+                    OutboxStatus.failed.rawValue
+                ].contains(Column("status")))
+                .order(Column("createdAt").asc)
+                .limit(limit)
+                .fetchAll(db)
+        }) ?? []
+        let items = records.map(OutboxUIItem.from(record:))
+        pendingUIItemsSubject.send(items)
     }
 
     // MARK: - Queue Operations
@@ -743,9 +818,30 @@ public actor OfflineQueue {
         let outboxId = "ofqm_\(cmid)"
         let anchor = conversationId ?? Self.globalConversationSentinel
         let now = Date()
+        let shouldCoalesce = Self.coalescesByAnchor(kind: kind)
 
         do {
             try await pool.write { db in
+                if shouldCoalesce {
+                    // Latest-state-wins kinds (e.g. `markAsRead`): drop every
+                    // earlier `.pending` / `.failed` row for the same anchor
+                    // before writing the new one. The newer payload always
+                    // supersedes (reading up to msg N also covers 1..N-1) —
+                    // so letting them pile up burns bandwidth and inflates
+                    // the SyncPill rotation with 17 duplicates for 4 convs.
+                    let stale: [OutboxRecord] = try OutboxRecord
+                        .filter(Column("kind") == kind.rawValue)
+                        .filter(Column("conversationId") == anchor)
+                        .filter([OutboxStatus.pending.rawValue, OutboxStatus.failed.rawValue]
+                            .contains(Column("status")))
+                        .fetchAll(db)
+                    if !stale.isEmpty {
+                        let staleIds = stale.map(\.id)
+                        try OutboxRecord
+                            .filter(staleIds.contains(Column("id")))
+                            .deleteAll(db)
+                    }
+                }
                 try OutboxRecord(
                     id: outboxId,
                     kind: kind,
@@ -765,6 +861,30 @@ public actor OfflineQueue {
         logger.info("Enqueued \(kind.rawValue, privacy: .public) outbox row \(outboxId, privacy: .public)")
         await refreshPendingCount()
         return outboxId
+    }
+
+    /// Whether the given `OutboxKind` should coalesce-on-enqueue: every new
+    /// row for the same conversationId anchor supersedes earlier
+    /// `.pending` / `.failed` rows of the same kind. Reserved for kinds
+    /// whose payload is **monotonically idempotent** — applying only the
+    /// latest one alone is equivalent to applying every intermediate one
+    /// in sequence.
+    ///
+    /// Currently includes only `.markAsRead`: reading up to message N
+    /// implicitly marks 1..N-1 as well, so a busy group conversation that
+    /// fires `markAsRead` on every inbound message can collapse 17 stacked
+    /// rows into a single one carrying the highest `upToMessageId` with
+    /// no observable difference server-side. Other latest-state kinds
+    /// (profile / settings / conversation updates) might be added later,
+    /// but each needs a case-by-case audit to confirm intermediate states
+    /// can be safely dropped.
+    private static func coalescesByAnchor(kind: OutboxKind) -> Bool {
+        switch kind {
+        case .markAsRead:
+            return true
+        default:
+            return false
+        }
     }
 
     /// Reads the top-level `clientMutationId` field from a JSON-encoded
@@ -1684,4 +1804,56 @@ public actor OfflineQueue {
             try? FileManager.default.removeItem(at: url)
         }
     }
+
+#if DEBUG
+    // MARK: - Test Seams
+    //
+    // Narrow helpers used by the publisher refresh tests. They short-circuit
+    // the production drain paths (`OutboxFlusher`, `retryAll()`) which would
+    // require a far heavier test rig for what we only need: prove the
+    // publisher reacts when outbox rows are deleted or flipped to `.failed`.
+
+    /// Forces a refresh of both `pendingCountSubject` and
+    /// `pendingUIItemsSubject` from the current outbox table state. Used by
+    /// tests that mutate the table directly (bypassing `enqueue`) and need to
+    /// observe the resulting snapshot.
+    public func refreshForTesting() async {
+        await refreshPendingCount()
+    }
+
+    /// Deletes every outbox row whose `clientMessageId` matches `cmid`,
+    /// simulating a successful drain (the production drain path in
+    /// `OutboxFlusher` and `retryAll()` also deletes the row outright since
+    /// `OutboxStatus` has no `.applied` case).
+    public func deleteForTesting(clientMessageId cmid: String) async throws {
+        guard let pool = outboxPool else { throw OfflineQueueError.poolNotConfigured }
+        try await pool.write { db in
+            try OutboxRecord
+                .filter(Column("clientMessageId") == cmid)
+                .deleteAll(db)
+        }
+        await refreshPendingCount()
+    }
+
+    /// Flips every outbox row whose `clientMessageId` matches `cmid` to
+    /// `.failed`, stamping `lastError` with `reason`. Mirrors what
+    /// `OutboxFlusher` does after exceeding the retry budget without
+    /// requiring a full flusher setup in the test.
+    public func markFailedForTesting(clientMessageId cmid: String, reason: String) async throws {
+        guard let pool = outboxPool else { throw OfflineQueueError.poolNotConfigured }
+        try await pool.write { db in
+            try db.execute(sql: """
+                UPDATE outbox
+                SET status = ?, lastError = ?, updatedAt = ?
+                WHERE clientMessageId = ?
+                """, arguments: [
+                    OutboxStatus.failed.rawValue,
+                    reason,
+                    Date(),
+                    cmid
+                ])
+        }
+        await refreshPendingCount()
+    }
+#endif
 }

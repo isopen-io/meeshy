@@ -48,7 +48,7 @@ public struct LocationFullscreenView: View {
         if #available(iOS 17.0, *) {
             FullscreenMapView17(coordinate: coordinate, region: region, accentColor: accentColor, placeName: placeName, isHybrid: isHybridMap)
         } else {
-            FullscreenMapView16(coordinate: coordinate, region: region, accentColor: accentColor, isHybrid: isHybridMap)
+            FullscreenMapView16(coordinate: coordinate, region: region, accentColor: accentColor)
         }
     }
 
@@ -66,16 +66,21 @@ public struct LocationFullscreenView: View {
 
             Spacer()
 
-            Button {
-                withAnimation {
-                    isHybridMap.toggle()
+            // `.mapStyle` (hybrid/standard) is iOS 17+, so the toggle is only
+            // surfaced where it actually does something. On iOS 16 the map is
+            // standard-only — showing a dead control would mislead the user.
+            if Platform.isIOS17OrLater {
+                Button {
+                    withAnimation {
+                        isHybridMap.toggle()
+                    }
+                } label: {
+                    Image(systemName: isHybridMap ? "map" : "map.fill")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(Color.black.opacity(0.5)))
                 }
-            } label: {
-                Image(systemName: isHybridMap ? "map" : "map.fill")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(Color.black.opacity(0.5)))
             }
         }
         .padding(.horizontal, 16)
@@ -215,12 +220,29 @@ private struct FullscreenMapView17: View {
 
 private struct FullscreenMapView16: View {
     let coordinate: CLLocationCoordinate2D
-    let region: MKCoordinateRegion
     let accentColor: String
-    let isHybrid: Bool
+
+    // Interactive region: bound to `@State` so the user can pan/zoom on iOS 16
+    // (the deprecated `Map(coordinateRegion:)` API tracks the binding). A
+    // `.constant` binding would freeze the camera. `isHybrid` is intentionally
+    // dropped here: `.mapStyle` is iOS 17+, so a hybrid toggle is inapplicable
+    // on iOS 16 — the parent hides the control on this OS.
+    @State private var region: MKCoordinateRegion
+
+    // Built once so the single pin keeps a stable identity across pan-driven
+    // body re-evaluations (`LocationAnnotationItem.id` is a fresh `UUID`, so a
+    // recomputed array would re-add the annotation on every frame).
+    private let annotationItems: [LocationAnnotationItem]
+
+    init(coordinate: CLLocationCoordinate2D, region: MKCoordinateRegion, accentColor: String) {
+        self.coordinate = coordinate
+        self.accentColor = accentColor
+        _region = State(initialValue: region)
+        self.annotationItems = [LocationAnnotationItem(coordinate: coordinate)]
+    }
 
     var body: some View {
-        Map(coordinateRegion: .constant(region), interactionModes: .all, annotationItems: [LocationAnnotationItem(coordinate: coordinate)]) { item in
+        Map(coordinateRegion: $region, interactionModes: .all, annotationItems: annotationItems) { item in
             MapAnnotation(coordinate: item.coordinate) {
                 LocationPinView(accentColor: accentColor, size: .large)
             }

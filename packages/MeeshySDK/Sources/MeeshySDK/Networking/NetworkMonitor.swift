@@ -14,6 +14,19 @@ import os
 public protocol NetworkMonitorProviding: AnyObject, Sendable {
     /// `true` when at least one usable network interface is available.
     var isOnline: Bool { get }
+
+    /// Debounced offline-state publisher (500 ms) with duplicate suppression.
+    /// Suitable for driving UI affordances that must not flicker on transient
+    /// path-update bursts (e.g. sync pills, offline banners).
+    var isOfflinePublisher: AnyPublisher<Bool, Never> { get }
+}
+
+extension NetworkMonitorProviding {
+    /// Default no-op publisher for conformers (typically test doubles) that do
+    /// not model offline transitions. Real implementations override this.
+    public var isOfflinePublisher: AnyPublisher<Bool, Never> {
+        Empty<Bool, Never>(completeImmediately: false).eraseToAnyPublisher()
+    }
 }
 
 // MARK: - Network Monitor
@@ -38,7 +51,16 @@ public final class NetworkMonitor: ObservableObject, @unchecked Sendable, Networ
     private let monitorQueue = DispatchQueue(label: "com.meeshy.networkmonitor", qos: .utility)
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "network")
 
-    private init() {
+    fileprivate let isOfflineSubject = SendableCurrentValueSubject<Bool>(false)
+
+    public nonisolated var isOfflinePublisher: AnyPublisher<Bool, Never> {
+        isOfflineSubject.publisher
+            .removeDuplicates()
+            .debounce(for: .milliseconds(500), scheduler: DispatchQueue.global(qos: .utility))
+            .eraseToAnyPublisher()
+    }
+
+    internal init() {
         monitor = NWPathMonitor()
 
         monitor.pathUpdateHandler = { [weak self] path in
@@ -55,6 +77,7 @@ public final class NetworkMonitor: ObservableObject, @unchecked Sendable, Networ
             DispatchQueue.main.async {
                 self.isOffline = offline
                 self.connectionType = type
+                self.isOfflineSubject.send(offline)
             }
 
             if offline {
@@ -71,3 +94,28 @@ public final class NetworkMonitor: ObservableObject, @unchecked Sendable, Networ
         monitor.cancel()
     }
 }
+
+#if DEBUG
+extension NetworkMonitor {
+    /// Bypasses the `.shared` singleton to produce an isolated instance for tests.
+    /// Each instance starts its own `NWPathMonitor`; remember to drop the reference
+    /// at the end of the test so the monitor cancels via `deinit`.
+    public static func makeForTesting() -> NetworkMonitor {
+        NetworkMonitor()
+    }
+
+    public func simulateOffline() {
+        DispatchQueue.main.async {
+            self.isOffline = true
+            self.isOfflineSubject.send(true)
+        }
+    }
+
+    public func simulateOnline() {
+        DispatchQueue.main.async {
+            self.isOffline = false
+            self.isOfflineSubject.send(false)
+        }
+    }
+}
+#endif

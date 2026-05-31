@@ -92,7 +92,7 @@ final class ConversationSocketHandler {
         // Defer side-effects (socket join + notification updates) off the
         // current runloop tick. These calls mutate @Published state on
         // shared singletons (NotificationCoordinator.conversationUnreadCounts,
-        // NotificationManager.unreadCount). When ConversationSocketHandler
+        // NotificationToastManager.unreadCount). When ConversationSocketHandler
         // is created inside ConversationViewModel.init — which itself runs
         // during ConversationView's body evaluation as @StateObject is
         // bootstrapped — those synchronous @Published mutations trip
@@ -102,7 +102,7 @@ final class ConversationSocketHandler {
         let convId = conversationId
         DispatchQueue.main.async { [messageSocket] in
             messageSocket.joinConversation(convId)
-            NotificationManager.shared.onConversationOpened(convId)
+            NotificationToastManager.shared.onConversationOpened(convId)
             NotificationCoordinator.shared.markConversationRead(convId)
         }
     }
@@ -114,10 +114,10 @@ final class ConversationSocketHandler {
     }
 
     deinit {
-        print("[DIAG] ConversationSocketHandler deinit conv=\(conversationId)")
+        Logger.messages.debug("[DIAG] ConversationSocketHandler deinit conv=\(conversationId)")
         leaveRoom()
         Task { @MainActor in
-            NotificationManager.shared.onConversationClosed()
+            NotificationToastManager.shared.onConversationClosed()
         }
         typingTimer?.invalidate()
         typingIdleTimer?.invalidate()

@@ -10,7 +10,7 @@ struct MeeshyApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     private let dependencies = DependencyContainer.shared
     @StateObject private var authManager = AuthManager.shared
-    @StateObject private var toastManager = ToastManager.shared
+    @StateObject private var toastManager = FeedbackToastManager.shared
     @StateObject private var pushManager = PushNotificationManager.shared
     @StateObject private var deepLinkRouter = DeepLinkRouter.shared
     @StateObject private var theme = ThemeManager.shared
@@ -93,7 +93,7 @@ struct MeeshyApp: App {
                 }
                 .overlay(alignment: .top) {
                     if let toast = toastManager.currentToast {
-                        ToastView(toast: toast)
+                        FeedbackToastView(toast: toast)
                             .transition(.move(edge: .top).combined(with: .opacity))
                             .padding(.top, MeeshySpacing.xxl)
                             .onTapGesture {
@@ -106,18 +106,6 @@ struct MeeshyApp: App {
                     }
                 }
                 .animation(MeeshyAnimation.springDefault, value: toastManager.currentToast)
-                .onReceive(SocialSocketManager.shared.inAppNotification) { payload in
-                    // In-app toast for `notification:new`. The tap action
-                    // builds a custom-scheme Meeshy URL (`meeshy://c/<id>`,
-                    // mapped by DeepLinkRouter) so the toast lands on the
-                    // right conversation regardless of stack depth.
-                    let conversationId = payload.context?.conversationId
-                    let tap: (() -> Void)? = conversationId.flatMap { id in
-                        guard let url = URL(string: "meeshy://c/\(id)") else { return nil }
-                        return { _ = deepLinkRouter.handle(url: url) }
-                    }
-                    _ = toastManager.showInAppNotification(payload, tapAction: tap)
-                }
                 .sheet(isPresented: $showCrashSheet) {
                     CrashReportSheet(reports: crashReportsToShow)
                 }
@@ -153,7 +141,7 @@ struct MeeshyApp: App {
                     MeeshyConfig.shared.restoreEnvironment()
                     // Bridge iOS Focus filter selection into the SDK so in-app
                     // toasts respect the currently-active Focus filter.
-                    NotificationManager.shared.focusFilterProvider = {
+                    NotificationToastManager.shared.focusFilterProvider = {
                         MeeshyFocusStore.shared.current.toSDKSnapshot()
                     }
                     await CacheCoordinator.shared.start()
@@ -295,45 +283,63 @@ struct MeeshyApp: App {
                     async let sessionCheck: () = authManager.checkExistingSession()
                     _ = await (friendshipHydration, sessionCheck)
                     hasCheckedSession = true
-                    if authManager.isAuthenticated {
-                        // Splash : preload the conversations list cache so
-                        // ConversationListView lands on hydrated data when the
-                        // splash dismisses. `.load(...)` is a SQLite read —
-                        // instantaneous on hot disk, returns `.empty` on a
-                        // first install. Either way it never blocks the
-                        // network, so the splash duration stays bounded.
-                        _ = await CacheCoordinator.shared.conversations.load(for: "list")
+                    // Splash gating : trois bornes temporelles concurrentes
+                    //   floor   1.2s — l'animation logo/title/subtitle joue
+                    //                    intégralement (sinon flash pénible).
+                    //   socket  3.0s — fenêtre pour que MessageSocket ET
+                    //                    SocialSocket aient échangé leur 1er
+                    //                    handshake auth + reçu leur snapshot.
+                    //   ceiling 5.0s — hard cap : si le réseau est down,
+                    //                    on dismiss quand même pour ne JAMAIS
+                    //                    bloquer l'utilisateur derrière un
+                    //                    splash infini.
+                    let minSplashDuration: Duration = .milliseconds(1200)
+                    let socketTimeout: Duration = .seconds(3)
+                    let maxSplashDuration: Duration = .seconds(5)
 
-                        // Le splash NE DOIT PAS attendre les appels réseau
-                        // (push permission, VoIP register, unread count,
-                        // notif sync). Sur un réseau dégradé, chacun de ces
-                        // appels HTTP peut timeout 60s — un cold start
-                        // observé a déjà tenu le splash 86s parce que
-                        // `refreshUnreadCount` + `syncNow` ont chacun
-                        // timeouté avant retry. Détacher tout ce post-cache
-                        // work garantit que le splash dismiss dès que la
-                        // liste de conversations en cache est hydratée.
-                        // ConversationListView et ses dépendances font
-                        // leurs propres `.onAppear` sync — ce qu'on
-                        // détache ici n'est que le bootstrap (push token,
-                        // badge initial) qui peut tomber en background.
+                    if authManager.isAuthenticated {
+                        // Précharge le cache liste — SQLite read instantané,
+                        // retourne `.empty` au tout premier install.
+                        let cacheResult = await CacheCoordinator.shared.conversations.load(for: "list")
+                        let hasCachedContent = cacheResult.snapshot() != nil
+
+                        // Détacher TOUS les bootstraps réseau (push, VoIP,
+                        // unread, sync). Sur un réseau dégradé, chacun peut
+                        // timeout 60s — un cold start observé a déjà tenu
+                        // le splash 86s. Ces tâches tournent en parallèle
+                        // du reste du splash et finalisent imperceptiblement
+                        // après que la vue principale soit affichée.
                         Task { [authManager] in
                             _ = authManager  // capture explicite (lint)
                             await requestPushPermissionIfNeeded()
                             VoIPPushManager.shared.register()
-                            await NotificationManager.shared.refreshUnreadCount()
+                            await NotificationToastManager.shared.refreshUnreadCount()
                             await NotificationCoordinator.shared.syncNow()
+                        }
+
+                        // Si on a déjà du contenu en cache, attendre que LES
+                        // DEUX sockets (Message + Social) aient confirmé leur
+                        // connexion avant de dismiss → la liste s'affiche
+                        // avec présences + unreads "frais" sans flash post-
+                        // splash. Bounded par maxSplashDuration depuis
+                        // splashStart pour ne jamais bloquer.
+                        //
+                        // Si cache vide (premier lancement, cold-start total),
+                        // on NE bloque PAS : ConversationListView a son
+                        // skeleton (`loadState == .loading`) qui prend le
+                        // relais et anime le chargement initial.
+                        if hasCachedContent {
+                            let remaining = maxSplashDuration - splashStart.duration(to: .now)
+                            let bounded = min(socketTimeout, remaining)
+                            if bounded > .zero {
+                                await Self.awaitBothSocketsConnected(timeout: bounded)
+                            }
                         }
                     } else {
                         handleGuestDeepLink(deepLinkRouter.pendingDeepLink)
                     }
 
-                    // Splash : enforce a 1.2s minimum elapsed time so the
-                    // logo/title/subtitle animation runs through, then
-                    // dismiss. Any work that lands *after* the splash hides
-                    // (push permission grant flow, retention purge, etc.) is
-                    // already scheduled below or in detached tasks.
-                    let minSplashDuration: Duration = .milliseconds(1200)
+                    // Floor 1.2s : enforce que l'animation joue intégralement.
                     let elapsed = splashStart.duration(to: .now)
                     if elapsed < minSplashDuration {
                         try? await Task.sleep(for: minSplashDuration - elapsed)
@@ -430,7 +436,7 @@ struct MeeshyApp: App {
                         MessageSocketManager.shared.forceReconnect()
                         SocialSocketManager.shared.forceReconnect()
                         Task { await requestPushPermissionIfNeeded() }
-                        Task { await NotificationManager.shared.refreshUnreadCount() }
+                        Task { await NotificationToastManager.shared.refreshUnreadCount() }
                         pushManager.reRegisterTokenIfNeeded()
                         // Force a PushKit re-registration on every login so the
                         // gateway UPSERT-by-(userId,token,type) flips back to
@@ -454,7 +460,7 @@ struct MeeshyApp: App {
                         // (the published value is replayed to that late
                         // subscriber), so no manual hop is needed here.
                     } else {
-                        NotificationManager.shared.reset()
+                        NotificationToastManager.shared.reset()
                         NotificationCoordinator.shared.reset()
                         // Clear the in-memory friendship graph BEFORE the
                         // cache purge so any view that re-renders during the
@@ -490,6 +496,34 @@ struct MeeshyApp: App {
     /// when the conversation audio coordinator is actively playing we do NOT
     /// tear down the shared `AVAudioSession`, so iOS keeps streaming the
     /// engine in background under the `UIBackgroundModes: audio` declaration.
+    // MARK: - Splash gating
+
+    /// Bloque jusqu'à ce que `MessageSocketManager.isConnected` ET
+    /// `SocialSocketManager.isConnected` soient simultanément `true`, ou
+    /// jusqu'à expiration de `timeout` — celui des deux qui arrive en
+    /// premier. Aucune erreur ni Throwable : en cas de timeout réseau, on
+    /// retourne silencieusement pour laisser le splash dismiss.
+    ///
+    /// Polling 100ms : empreinte mémoire négligeable, < 50 cycles sur le
+    /// timeout 3-5s typique, et évite la complexité d'un `withCheckedContinuation`
+    /// qui leak si annulé pendant l'attente Combine.
+    @MainActor
+    fileprivate static func awaitBothSocketsConnected(timeout: Duration) async {
+        // Already connected: pas d'attente nécessaire
+        if MessageSocketManager.shared.isConnected && SocialSocketManager.shared.isConnected {
+            return
+        }
+        let pollInterval: Duration = .milliseconds(100)
+        let deadline = ContinuousClock.now.advanced(by: timeout)
+        while ContinuousClock.now < deadline {
+            if MessageSocketManager.shared.isConnected && SocialSocketManager.shared.isConnected {
+                return
+            }
+            try? await Task.sleep(for: pollInterval)
+            if Task.isCancelled { return }
+        }
+    }
+
     static func handleScenePhaseForTesting(_ newPhase: ScenePhase) async {
         switch newPhase {
         case .background:
@@ -750,26 +784,26 @@ struct SplashScreen: View {
                         .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundColor(theme.textMuted.opacity(0.7))
 
-                    Text(String(localized: "splash.madeWith", defaultValue: "Made with ❤️", bundle: .main))
-                        .font(.system(size: 11, weight: .regular, design: .rounded))
-                        .foregroundColor(theme.textMuted.opacity(0.6))
-
-                    Text(String(localized: "splash.byServicesCEO", defaultValue: "by Services CEO", bundle: .main))
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundColor(theme.textMuted.opacity(0.8))
+                    Text(String(localized: "splash.madeWithLove", defaultValue: "Made with ❤️ by Services CEO", bundle: .main))
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundColor(theme.textMuted.opacity(0.7))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
 
                     Image("AppIconFooter")
+                        .renderingMode(.template)
                         .resizable()
                         .scaledToFit()
-                        .frame(width: 28, height: 28)
-                        .opacity(0.85)
+                        .frame(width: 21, height: 21)
+                        .foregroundColor(MeeshyColors.error)
+                        .opacity(0.9)
                         .padding(.top, 2)
                         .accessibilityHidden(true)
                 }
                 .opacity(showSubtitle ? 1 : 0)
                 .padding(.bottom, 24)
                 .accessibilityElement(children: .combine)
-                .accessibilityLabel(Text("Meeshy version \(appVersion), build \(buildNumber). Made with love by Services CEO"))
+                .accessibilityLabel(Text("Meeshy version \(appVersion), build \(buildNumber). Made with love by Services CEO."))
             }
         }
         .onAppear {

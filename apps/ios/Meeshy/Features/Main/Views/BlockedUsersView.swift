@@ -239,14 +239,14 @@ struct BlockedUsersView: View {
             do {
                 try await blockService?.unblockUser(userId: user.id)
                 HapticFeedback.success()
-                ToastManager.shared.showSuccess(String(localized: "blocked.users.unblock.success", defaultValue: "Utilisateur debloque", bundle: .main))
+                FeedbackToastManager.shared.showSuccess(String(localized: "blocked.users.unblock.success", defaultValue: "Utilisateur debloque", bundle: .main))
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     blockedUsers.removeAll { $0.id == user.id }
                 }
                 Self.logger.info("Unblocked user \(user.id)")
             } catch {
                 HapticFeedback.error()
-                ToastManager.shared.showError(String(localized: "blocked.users.unblock.error", defaultValue: "Erreur lors du deblocage", bundle: .main))
+                FeedbackToastManager.shared.showError(String(localized: "blocked.users.unblock.error", defaultValue: "Erreur lors du deblocage", bundle: .main))
                 Self.logger.error("Failed to unblock user: \(error.localizedDescription)")
             }
             isUnblocking = false

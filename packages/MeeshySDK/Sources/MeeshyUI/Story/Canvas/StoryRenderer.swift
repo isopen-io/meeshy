@@ -111,7 +111,8 @@ public enum StoryRenderer {
                               imageCache: ImageCacheReader? = nil,
                               cache: StoryRendererCache? = nil,
                               backdropProvider: BackdropProvider? = nil,
-                              contentsScale: CGFloat = UIScreen.main.scale) -> CALayer {
+                              contentsScale: CGFloat = UIScreen.main.scale,
+                              suppressDrawingOverlay: Bool = false) -> CALayer {
         let root = CALayer()
         root.frame = CGRect(origin: .zero, size: geometry.renderSize)
         root.anchorPoint = CGPoint(x: 0, y: 0)
@@ -170,7 +171,17 @@ public enum StoryRenderer {
         // layer above the items (zPosition 9999). The drawing is authored on
         // the design canvas (1080×1920) and projected to the render size by
         // PKDrawing.image(from:scale:).
-        if let drawingData = slide.effects.drawingData,
+        //
+        // `suppressDrawingOverlay` est levé par le composer quand le
+        // `DrawingOverlayView` (PKCanvasView SwiftUI) est actif : sinon on
+        // rend DEUX dessins simultanément — celui du modèle persisté ici, et
+        // celui live du PKCanvasView au-dessus, désalignés car dans des
+        // coordinate spaces différents (bounds SwiftUI vs design 1080x1920).
+        // Symptôme user-reporté 2026-05-27 : "écrit en double sur le canvas
+        // et c'est la version miniature (= persistée) qui est préservée, pas
+        // là où j'ai écrit (= live overlay)".
+        if !suppressDrawingOverlay,
+           let drawingData = slide.effects.drawingData,
            let drawing = try? PKDrawing(data: drawingData) {
             let drawingLayer = CALayer()
             drawingLayer.frame = CGRect(origin: .zero, size: geometry.renderSize)

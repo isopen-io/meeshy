@@ -143,7 +143,7 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         self.media = media
 
         // Design-space frame (1080-référentiel) → render-space via geometry.
-        let baseDesignSize = baseMediaDesignSize(aspectRatio: media.aspectRatio)
+        let baseDesignSize = Self.baseMediaDesignSize(aspectRatio: media.aspectRatio)
         let scaledDesignSize = CGSize(
             width: baseDesignSize.width * CGFloat(media.scale),
             height: baseDesignSize.height * CGFloat(media.scale)
@@ -194,7 +194,14 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
 
     /// Base design size (in 1080-référentiel pixels) of a media before user `scale`
     /// is layered on. Envelope is 65 % of the short canvas side, fitted to aspect.
-    private nonisolated func baseMediaDesignSize(aspectRatio: Double) -> CGSize {
+    ///
+    /// Exposé `internal static` pour que `StoryCanvasUIView.updateManipulatedItemLayer`
+    /// puisse appliquer la MÊME convention que `configure` (bounds = base ×
+    /// scale, transform = rotation only) — sinon le lightweight gesture
+    /// update double-scale en posant `transform = scale × rotation` sur des
+    /// bounds déjà × scale (bug "media grossit après rotation puis pan",
+    /// 2026-05-27). Aligne avec le pattern déjà appliqué au text scale.
+    internal static func baseMediaDesignSize(aspectRatio: Double) -> CGSize {
         let target: CGFloat = CanvasGeometry.designWidth * 0.65   // 702
         let ratio = max(0.1, min(10.0, CGFloat(aspectRatio)))
         if abs(ratio - 1.0) < 0.05 {
@@ -262,6 +269,26 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         masksToBounds = true
 
         let resolvedURL = resolvedMediaURL(for: media, resolver: resolver)
+        // Cache key : pour les médias publiés on a un `postMediaId` serveur ;
+        // pour les médias composer (PhotosPicker → tmp file) postMediaId reste
+        // vide, donc on retombe sur `media.id` (UUID local) qui est exactement
+        // la clé utilisée par `viewModel.loadedImages` côté composer. Sans
+        // ce fallback, `MeeshyImageEditorView` onAccept écrivait
+        // `loadedImages[media.id] = edited` et le `ComposerImageCacheReader`
+        // était bien câblé, mais la lookup ici utilisait `""` → cache miss →
+        // chemin file:// servait l'ancien bitmap (bug 2026-05-27).
+        let cacheKey: String = media.postMediaId.isEmpty ? media.id : media.postMediaId
+
+        // Composer fast-path : si un bitmap in-memory est dans le reader
+        // (typiquement après `MeeshyImageEditorView` onAccept), il prime sur
+        // le chemin file:// — la version éditée n'a pas été ré-écrite dans
+        // le fichier tmp et le file:// servirait l'original obsolète.
+        if let imageCache,
+           let synchronousReader = imageCache as? ComposerImageCacheReader,
+           let cached = synchronousReader.images[cacheKey]?.cgImage {
+            contents = cached
+            return
+        }
 
         // Local file:// URLs stay on the synchronous path — they are not
         // blocking in any meaningful sense (no DNS / TCP / TLS) and the
@@ -277,7 +304,6 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         }
 
         let loader = imageLoader
-        let postMediaId = media.postMediaId
         // Strong capture de `self` dans la Task. `[weak self]` faisait que la
         // layer se désallouait entre le `await` et le stamp `contents` —
         // `rebuildLayers()` à 60 Hz détache la layer du parent et, à chaque
@@ -289,7 +315,7 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         currentLoadTask = Task { @MainActor in
             // (1) Fast-path image cache (composer preview / disk-backed reader).
             if let imageCache,
-               let cached = await imageCache.cachedImage(for: postMediaId)?.cgImage {
+               let cached = await imageCache.cachedImage(for: cacheKey)?.cgImage {
                 guard !Task.isCancelled else { return }
                 self.contents = cached
                 return

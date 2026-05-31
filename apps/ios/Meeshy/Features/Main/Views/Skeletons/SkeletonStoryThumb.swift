@@ -16,9 +16,9 @@ struct SkeletonStoryThumb: View {
     @Environment(\.colorScheme) private var colorScheme
 
     init(
-        avatarDiameter: CGFloat = 44,
-        ringDiameter: CGFloat = 50,
-        labelWidth: CGFloat = 36
+        avatarDiameter: CGFloat = 88,
+        ringDiameter: CGFloat = 96,
+        labelWidth: CGFloat = 72
     ) {
         self.avatarDiameter = avatarDiameter
         self.ringDiameter = ringDiameter

@@ -64,11 +64,11 @@ final class BlockedViewModel: ObservableObject {
         HapticFeedback.medium()
         do {
             try await blockService.unblockUser(userId: userId)
-            ToastManager.shared.showSuccess("Utilisateur debloque")
+            FeedbackToastManager.shared.showSuccess("Utilisateur debloque")
         } catch {
             blockedUsers = snapshot
             HapticFeedback.error()
-            ToastManager.shared.showError("Impossible de debloquer")
+            FeedbackToastManager.shared.showError("Impossible de debloquer")
         }
     }
 }

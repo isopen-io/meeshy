@@ -212,7 +212,7 @@ struct ThemedFeedOverlay: View {
                 postLikeDelta[postId, default: 0] += 1
             }
             do {
-                try await withTaskTimeout(seconds: 12) {
+                try await withTaskTimeout(seconds: TaskTimeoutDefaults.socialReaction) {
                     if wasLiked {
                         _ = try await SocialSocketManager.shared.removePostReaction(
                             postId: postId, emoji: StoryViewerView.heartEmoji
@@ -337,12 +337,12 @@ struct ThemedFeedOverlay: View {
                         try? await CacheCoordinator.shared.feed.save(snap, for: "bookmarks")
                     }
                 }
-                ToastManager.shared.showError(String(localized: "Erreur lors de l'enregistrement", defaultValue: "Erreur lors de l'enregistrement"))
+                FeedbackToastManager.shared.showError(String(localized: "Erreur lors de l'enregistrement", defaultValue: "Erreur lors de l'enregistrement"))
             } else {
                 if wasBookmarked {
                     await pruneBookmarkFromCache(postId: postId)
                 }
-                ToastManager.shared.showSuccess(wasBookmarked
+                FeedbackToastManager.shared.showSuccess(wasBookmarked
                     ? String(localized: "Retire des favoris", defaultValue: "Retire des favoris")
                     : String(localized: "Ajoute aux favoris", defaultValue: "Ajoute aux favoris"))
             }
@@ -376,11 +376,11 @@ struct ThemedFeedOverlay: View {
                     content: nil,
                     isQuote: false
                 )
-                ToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
+                FeedbackToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
             } catch {
                 postRepostedIds.remove(postId)
                 postRepostDelta[postId, default: 0] -= 1
-                ToastManager.shared.showError(String(localized: "Erreur lors du repost", defaultValue: "Erreur lors du repost"))
+                FeedbackToastManager.shared.showError(String(localized: "Erreur lors du repost", defaultValue: "Erreur lors du repost"))
             }
         }
     }

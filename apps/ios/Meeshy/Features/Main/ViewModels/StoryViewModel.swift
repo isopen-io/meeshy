@@ -7,6 +7,17 @@ import MeeshyUI
 
 @MainActor
 class StoryViewModel: ObservableObject, StoryPublishExecutor {
+    /// Versioned cache key for the home tray story list. Bump the suffix
+    /// whenever `StoryItem` / `StoryGroup` gains a non-optional field or a
+    /// formerly-dropped enrichment becomes load-bearing — the previous
+    /// version's serialized JSON would deserialize with that field missing.
+    /// One-shot invalidation, no perma-refetch noise.
+    /// `_v2` (2026-05-28): forces a re-fetch so `visibility`, `shareCount`,
+    /// `viewCount`, `repostCount`, `currentUserReactions` reach clients that
+    /// cached stories before `toStoryGroups` started propagating them
+    /// (Partager button stayed hidden on PUBLIC stories until this).
+    static let storiesCacheKey = "recent_tray_v2"
+
     @Published var storyGroups: [StoryGroup] = []
     @Published var isLoading = false
     @Published var isPublishing = false
@@ -196,7 +207,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             return
         }
 
-        let cached = await CacheCoordinator.shared.stories.load(for: "recent_tray")
+        let cached = await CacheCoordinator.shared.stories.load(for: Self.storiesCacheKey)
         switch cached {
         case .fresh(let data, _):
             storyGroups = data
@@ -236,7 +247,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 }
 
                 storyGroups = groups
-                try? await CacheCoordinator.shared.stories.save(groups, for: "recent_tray")
+                try? await CacheCoordinator.shared.stories.save(groups, for: Self.storiesCacheKey)
                 prefetchAllStoryMedia(groups)
             }
         } catch {
@@ -431,10 +442,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                                      storyEffects: effects, createdAt: post.createdAt, isViewed: true)
             insertOrAppendStoryItem(newItem, forAuthor: post.author)
             showStoryComposer = false
-            ToastManager.shared.showSuccess("Story publiee")
+            FeedbackToastManager.shared.showSuccess("Story publiee")
         } catch {
             publishError = "Failed to publish story"
-            ToastManager.shared.showError("Echec de la publication de la story")
+            FeedbackToastManager.shared.showError("Echec de la publication de la story")
         }
 
         isPublishing = false
@@ -660,7 +671,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         guard let payload = try? encoder.encode(slides) else {
-            ToastManager.shared.showError(String(
+            FeedbackToastManager.shared.showError(String(
                 localized: "story.publish.queue.encodeError",
                 defaultValue: "Impossible d'enregistrer la story pour publication différée"
             ))
@@ -681,7 +692,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         // 5. User feedback. The PendingStoryBanner mounted in RootView
         //    reflects the new pending count via StoryPublishService.
         HapticFeedback.success()
-        ToastManager.shared.showSuccess(String(
+        FeedbackToastManager.shared.showSuccess(String(
             localized: "story.publish.queue.enqueued",
             defaultValue: "Story enregistrée — publication au retour en ligne"
         ))
@@ -714,11 +725,11 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 self.activeUpload = nil
                 self.uploadTask = nil
                 HapticFeedback.success()
-                ToastManager.shared.showSuccess("Story publiee")
+                FeedbackToastManager.shared.showSuccess("Story publiee")
             } catch {
                 if !Task.isCancelled {
                     self.activeUpload?.phase = .failed(error.localizedDescription)
-                    ToastManager.shared.showError("Echec de la publication de la story")
+                    FeedbackToastManager.shared.showError("Echec de la publication de la story")
                     // Don't cleanup temp files on failure — retry may need them
                 }
             }
@@ -1150,7 +1161,105 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 }
             }
             .store(in: &cancellables)
+
+        // === Real-time counter sync (user spec 2026-05-28) ===
+        // When anyone comments / reacts to a story we already have in the
+        // tray, update its denormalized counters in place. Without these
+        // sinks the sidebar `storyCommentCount` / `storyReactionCount`
+        // reset to the cached `StoryItem` value on every slide change —
+        // the « brayan a commenté Belva mais on voit comments=0 »
+        // symptom.
+
+        socialSocket.commentAdded
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] data in
+                self?.applyStoryCommentCountDelta(postId: data.postId, newCount: data.commentCount)
+            }
+            .store(in: &cancellables)
+
+        socialSocket.commentDeleted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] data in
+                guard let self else { return }
+                self.mutateStoryItem(byPostId: data.postId) { item in
+                    item.commentCount = max(0, item.commentCount - 1)
+                }
+            }
+            .store(in: &cancellables)
+
+        socialSocket.postReactionSync
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] sync in
+                guard let self else { return }
+                self.mutateStoryItem(byPostId: sync.postId) { item in
+                    item.reactionCount = sync.totalCount
+                    item.currentUserReactions = sync.userReactions
+                }
+            }
+            .store(in: &cancellables)
+
+        // Optimistic deltas — the SDK ack already mutates the post, but
+        // peers don't get a sync event; the *-added/*-removed broadcast is
+        // their only signal. We use totalCount when present, otherwise we
+        // step the counter ±1 around the user's currentUserReactions.
+        socialSocket.postReactionAdded
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.applyPostReactionDelta(event: event, delta: +1)
+            }
+            .store(in: &cancellables)
+
+        socialSocket.postReactionRemoved
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.applyPostReactionDelta(event: event, delta: -1)
+            }
+            .store(in: &cancellables)
     }
+
+    /// Apply an authoritative `commentCount` snapshot to the matching story.
+    /// Called by `comment:added` sinks — the gateway already incremented
+    /// the denormalized counter and broadcast the new total.
+    private func applyStoryCommentCountDelta(postId: String, newCount: Int) {
+        mutateStoryItem(byPostId: postId) { item in
+            item.commentCount = newCount
+        }
+    }
+
+    /// Increment or decrement the story's `reactionCount` and toggle the
+    /// current viewer's emoji presence in `currentUserReactions` if the
+    /// event was triggered by this device.
+    private func applyPostReactionDelta(event: SocketPostReactionUpdateEvent, delta: Int) {
+        let myId = AuthManager.shared.currentUser?.id
+        mutateStoryItem(byPostId: event.postId) { item in
+            item.reactionCount = max(0, item.reactionCount + delta)
+            if let myId, event.userId == myId {
+                var mine = item.currentUserReactions ?? []
+                if delta > 0 {
+                    if !mine.contains(event.emoji) { mine.append(event.emoji) }
+                } else {
+                    mine.removeAll { $0 == event.emoji }
+                }
+                item.currentUserReactions = mine
+            }
+        }
+    }
+
+    /// Locates the `StoryItem` carrying `postId` in any group and applies
+    /// `mutation` in place. Persists the cache so the next cold start
+    /// reflects the live counter. No-op when the story isn't in the tray
+    /// (e.g. the user's own post that never feeds back into `getStories`).
+    private func mutateStoryItem(byPostId postId: String, _ mutation: (inout StoryItem) -> Void) {
+        for i in storyGroups.indices {
+            guard let j = storyGroups[i].stories.firstIndex(where: { $0.id == postId }) else { continue }
+            var stories = storyGroups[i].stories
+            mutation(&stories[j])
+            storyGroups[i] = storyGroups[i].with(stories: stories)
+            persistStoryCache()
+            return
+        }
+    }
+
 
     // MARK: - Helpers
 
@@ -1187,6 +1296,6 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
     private func persistStoryCache() {
         let snapshot = storyGroups
-        Task { try? await CacheCoordinator.shared.stories.save(snapshot, for: "recent_tray") }
+        Task { try? await CacheCoordinator.shared.stories.save(snapshot, for: Self.storiesCacheKey) }
     }
 }
