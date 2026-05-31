@@ -84,23 +84,23 @@ extension ConversationView {
         composerState.isUploading = true
         HapticFeedback.light()
 
-        // --- Optimistic media insert: one bubble per non-text planned group ---
-        // Persist via GRDB (insertOptimisticMediaMessage) so the row survives
-        // the next MessageStore observation refresh. A direct
-        // `viewModel.messages.append` would only live in memory and be wiped
-        // the moment any other GRDB write fires `messagesDidChange`.
+        // --- Precompute sendable media groups: each paired with a stable tempId ---
+        // Both the optimistic phase and the upload phase iterate this SAME list
+        // so that tempIds never desync (Issue 1: empty-locals groups must be
+        // excluded from BOTH phases, not just the optimistic insert).
+        struct MediaGroupSend {
+            let group: MultiAttachmentSendPlanner.PlannedMessage
+            let tempId: String
+            let locals: [MeeshyMessageAttachment]   // non-empty; already cache-seeded
+        }
+
         let currentUserId = AuthManager.shared.currentUser?.id ?? ""
         let senderName = AuthManager.shared.currentUser?.displayName
         let senderColor = DynamicColorGenerator.colorForName(senderName ?? "?")
         let thumbnails = composerState.pendingThumbnails
 
-        var groupTempIds: [String] = []
-        for group in plan where group.kind != .text {
-            // Phase 4 §6.2 — `cid_<uuid v4 lowercase>` so the gateway accepts
-            // the value as `clientMessageId` (the legacy `temp_<UUID>` prefix
-            // fails the strict wire regex).
-            let tempId = ClientMessageId.generate()
-            groupTempIds.append(tempId)
+        // Build the list once. Side effects (image cache seeding) happen here.
+        let mediaGroupSends: [MediaGroupSend] = plan.filter { $0.kind != .text }.compactMap { group in
             let locals: [MeeshyMessageAttachment] = group.attachments.compactMap { att in
                 guard let fileURL = mediaFiles[att.id] else { return nil }
                 let isImage = att.mimeType.hasPrefix("image/")
@@ -129,18 +129,30 @@ extension ConversationView {
                     thumbnailColor: senderColor
                 )
             }
-            guard !locals.isEmpty else { continue }
-            let msgType: Message.MessageType = group.kind == .audio
+            guard !locals.isEmpty else { return nil }
+            // Phase 4 §6.2 — `cid_<uuid v4 lowercase>` so the gateway accepts
+            // the value as `clientMessageId` (the legacy `temp_<UUID>` prefix
+            // fails the strict wire regex).
+            return MediaGroupSend(group: group, tempId: ClientMessageId.generate(), locals: locals)
+        }
+
+        // --- Optimistic media insert: one bubble per sendable group ---
+        // Persist via GRDB (insertOptimisticMediaMessage) so the row survives
+        // the next MessageStore observation refresh. A direct
+        // `viewModel.messages.append` would only live in memory and be wiped
+        // the moment any other GRDB write fires `messagesDidChange`.
+        for send in mediaGroupSends {
+            let msgType: Message.MessageType = send.group.kind == .audio
                 ? .audio
-                : (locals.first?.mimeType.hasPrefix("video/") == true ? .video : .image)
+                : (send.locals.first?.mimeType.hasPrefix("video/") == true ? .video : .image)
             viewModel.insertOptimisticMediaMessage(
-                tempId: tempId,
+                tempId: send.tempId,
                 content: "",
-                attachments: locals,
+                attachments: send.locals,
                 messageType: msgType,
-                replyToId: group.carriesReply ? replyId : nil,
-                storyReplyToId: group.carriesReply ? storyReplyId : nil,
-                replyReference: group.carriesReply ? storyRef : nil,
+                replyToId: send.group.carriesReply ? replyId : nil,
+                storyReplyToId: send.group.carriesReply ? storyReplyId : nil,
+                replyReference: send.group.carriesReply ? storyRef : nil,
                 originalLanguage: lang
             )
         }
@@ -160,7 +172,10 @@ extension ConversationView {
             let serverOrigin = MeeshyConfig.shared.serverOrigin
             guard let baseURL = URL(string: serverOrigin),
                   let token = APIClient.shared.authToken else {
-                await MainActor.run { composerState.isUploading = false }
+                await MainActor.run {
+                    composerState.isUploading = false
+                    FeedbackToastManager.shared.showError("Échec de l'envoi de la pièce jointe")
+                }
                 return
             }
             let uploader = TusUploadManager(baseURL: baseURL)
@@ -173,29 +188,18 @@ extension ConversationView {
                 }
 
             var anySuccess = false
-            var tempIdx = 0
-            for group in plan {
-                if group.kind == .text {
-                    let ok = await viewModel.sendMessage(
-                        content: group.text ?? "",
-                        replyToId: group.carriesReply ? replyId : nil,
-                        storyReplyToId: group.carriesReply ? storyReplyId : nil,
-                        storyReplyReference: group.carriesReply ? storyRef : nil,
-                        originalLanguage: lang
-                    )
-                    anySuccess = anySuccess || ok
-                    continue
-                }
-                let tempId = tempIdx < groupTempIds.count ? groupTempIds[tempIdx] : ClientMessageId.generate()
-                tempIdx += 1
+
+            // Upload media groups — same iteration order as the optimistic phase,
+            // using the precomputed tempId for each (Issue 1 fix: no tempIdx desync).
+            for send in mediaGroupSends {
                 do {
                     var uploadedIds: [String] = []
                     var localAttachments: [MeeshyMessageAttachment] = []
-                    for att in group.attachments {
+                    for att in send.group.attachments {
                         guard let fileURL = mediaFiles[att.id] else { continue }
                         let fileData = try? Data(contentsOf: fileURL)
                         let thumbHash = thumbnails[att.id]?.toThumbHash()
-                        let mime = group.kind == .audio ? "audio/mp4" : att.mimeType
+                        let mime = send.group.kind == .audio ? "audio/mp4" : att.mimeType
                         let result = try await uploader.uploadFile(
                             fileURL: fileURL, mimeType: mime, token: token, thumbHash: thumbHash
                         )
@@ -206,7 +210,7 @@ extension ConversationView {
                             // server URL) reads a hot cache and never
                             // re-downloads our own upload. See RC3.3.
                             let renderKey = MeeshyConfig.resolveMediaURL(result.fileUrl)?.absoluteString ?? result.fileUrl
-                            let effectiveType: MeeshyMessageAttachment.AttachmentType = group.kind == .audio ? .audio : att.type
+                            let effectiveType: MeeshyMessageAttachment.AttachmentType = send.group.kind == .audio ? .audio : att.type
                             switch effectiveType {
                             case .audio:
                                 await CacheCoordinator.shared.audio.store(fileData, for: renderKey)
@@ -224,19 +228,32 @@ extension ConversationView {
                     }
                     let ok = await viewModel.sendMessage(
                         content: "",
-                        replyToId: group.carriesReply ? replyId : nil,
-                        storyReplyToId: group.carriesReply ? storyReplyId : nil,
-                        storyReplyReference: group.carriesReply ? storyRef : nil,
+                        replyToId: send.group.carriesReply ? replyId : nil,
+                        storyReplyToId: send.group.carriesReply ? storyReplyId : nil,
+                        storyReplyReference: send.group.carriesReply ? storyRef : nil,
                         attachmentIds: uploadedIds.isEmpty ? nil : uploadedIds,
                         localAttachments: localAttachments.isEmpty ? nil : localAttachments,
                         originalLanguage: lang,
-                        existingTempId: tempId
+                        existingTempId: send.tempId
                     )
                     anySuccess = anySuccess || ok
                 } catch {
-                    Logger.messages.error("Group upload failed (\(String(describing: group.kind))): \(error.localizedDescription)")
+                    Logger.messages.error("Group upload failed (\(String(describing: send.group.kind))): \(error.localizedDescription)")
                 }
             }
+
+            // Send text group last (preserves original planner ordering intent).
+            if let textGroup = plan.first(where: { $0.kind == .text }) {
+                let ok = await viewModel.sendMessage(
+                    content: textGroup.text ?? "",
+                    replyToId: textGroup.carriesReply ? replyId : nil,
+                    storyReplyToId: textGroup.carriesReply ? storyReplyId : nil,
+                    storyReplyReference: textGroup.carriesReply ? storyRef : nil,
+                    originalLanguage: lang
+                )
+                anySuccess = anySuccess || ok
+            }
+
             progressCancellable?.cancel()
 
             // Clean up local files. Audio: defer disk deletion — the optimistic
@@ -252,8 +269,7 @@ extension ConversationView {
                         for url in audioURLs { try? FileManager.default.removeItem(at: url) }
                     }
                 }
-                HapticFeedback.success()
-                if !anySuccess { HapticFeedback.error() }
+                if anySuccess { HapticFeedback.success() } else { HapticFeedback.error() }
             }
         }
     }
