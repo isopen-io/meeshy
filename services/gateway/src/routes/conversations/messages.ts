@@ -730,7 +730,10 @@ export function registerMessagesRoutes(
         : 'fr';
 
       // DEBUG: Log détaillé pour vérifier les transcriptions audio
-      if (messages.length > 0) {
+      // Diagnostic audio verbeux (par message + par attachment) : coûteux sur ce
+      // hot-path (GET messages). Gardé derrière LOG_AUDIO_DIAG=true — OFF par
+      // défaut en prod. La boucle entière est court-circuitée quand désactivé.
+      if (process.env.LOG_AUDIO_DIAG === 'true' && messages.length > 0) {
         logger.info(`🔍 [CONVERSATIONS] Chargement de ${messages.length} messages pour conversation ${conversationId}`);
 
         // Compter les messages avec attachments audio
