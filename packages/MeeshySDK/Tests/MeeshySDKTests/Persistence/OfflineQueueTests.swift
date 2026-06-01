@@ -264,6 +264,50 @@ final class OfflineQueueTests: XCTestCase {
     /// Writes a throwaway `.m4a` payload into `tmp/` and returns its URL.
     /// Mirrors the volatile recording path the audio composer hands to the
     /// queue at enqueue time.
+    // MARK: - S7b — enqueueMedia durable write-ahead (visual media)
+
+    func test_enqueueMedia_persistsLocalMediaPaths_andRelocatesFiles_preservingExtension() async throws {
+        let cid = "cid_\(UUID().uuidString.lowercased())"
+        let url1 = try makeTempMediaFile(ext: "jpg")
+        let url2 = try makeTempMediaFile(ext: "mp4")
+
+        let result = try await queue.enqueueMedia(
+            sourceMediaURLs: [url1, url2],
+            kinds: [AttachmentKind.image.rawValue, AttachmentKind.video.rawValue],
+            conversationId: "conv-1",
+            content: nil,
+            clientMessageId: cid,
+            originalLanguage: "fr"
+        )
+
+        XCTAssertEqual(result.localMediaPaths.count, 2)
+        XCTAssertTrue(result.localMediaPaths[0].hasSuffix(".jpg"),
+            "the source extension must be preserved so the dispatcher can derive the MIME")
+        XCTAssertTrue(result.localMediaPaths[1].hasSuffix(".mp4"))
+        for path in result.localMediaPaths {
+            XCTAssertTrue(path.contains(cid), "stored under the per-message subdir")
+            XCTAssertTrue(FileManager.default.fileExists(
+                atPath: OfflineQueue.absoluteMediaPath(forStored: path)),
+                "each media file must be relocated under Documents/pending-media/")
+        }
+
+        let items = try await readBackItems(forClientMessageId: cid)
+        XCTAssertEqual(items.count, 1, "media persists as exactly ONE OutboxRecord")
+        let item = try XCTUnwrap(items.first)
+        XCTAssertEqual(item.localMediaPaths?.count, 2)
+        XCTAssertNil(item.localAudioPaths, "media rows must not set the audio field")
+        XCTAssertNil(item.attachmentIds)
+        XCTAssertEqual(item.attachmentKinds,
+            [AttachmentKind.image.rawValue, AttachmentKind.video.rawValue])
+    }
+
+    private func makeTempMediaFile(ext: String) throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("media_\(UUID().uuidString).\(ext)")
+        try Data(repeating: 0xCD, count: 16).write(to: url)
+        return url
+    }
+
     private func makeTempAudioFile() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("rec_\(UUID().uuidString).m4a")
