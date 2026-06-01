@@ -4,7 +4,7 @@ import Combine
 enum MockSocialSocketError: Error { case notImplemented }
 
 final class MockSocialSocket: SocialSocketProviding, @unchecked Sendable {
-    let postCreated = PassthroughSubject<APIPost, Never>()
+    let postCreated = PassthroughSubject<SocketPostCreatedData, Never>()
     let postUpdated = PassthroughSubject<APIPost, Never>()
     let postDeleted = PassthroughSubject<String, Never>()
     let postLiked = PassthroughSubject<SocketPostLikedData, Never>()

@@ -7,6 +7,15 @@ import os
 
 public struct SocketPostCreatedData: Decodable, Sendable {
     public let post: APIPost
+    /// U1 — echoed from the createPost request's cmid so an offline author can
+    /// reconcile its optimistic temp post (id == cmid) with this server post
+    /// instead of rendering a duplicate. Absent for posts created without a cmid.
+    public let clientMutationId: String?
+
+    public init(post: APIPost, clientMutationId: String?) {
+        self.post = post
+        self.clientMutationId = clientMutationId
+    }
 }
 
 public struct SocketPostUpdatedData: Decodable, Sendable {
@@ -193,7 +202,7 @@ public struct SocketCommentTranslationUpdatedData: Decodable, Sendable {
 // MARK: - Protocol
 
 public protocol SocialSocketProviding: Sendable {
-    var postCreated: PassthroughSubject<APIPost, Never> { get }
+    var postCreated: PassthroughSubject<SocketPostCreatedData, Never> { get }
     var postUpdated: PassthroughSubject<APIPost, Never> { get }
     var postDeleted: PassthroughSubject<String, Never> { get }
     var postLiked: PassthroughSubject<SocketPostLikedData, Never> { get }
@@ -251,7 +260,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     public static let shared = SocialSocketManager()
 
     // Combine publishers for ViewModels to subscribe to
-    public let postCreated = PassthroughSubject<APIPost, Never>()
+    public let postCreated = PassthroughSubject<SocketPostCreatedData, Never>()
     public let postUpdated = PassthroughSubject<APIPost, Never>()
     public let postDeleted = PassthroughSubject<String, Never>()
     public let postLiked = PassthroughSubject<SocketPostLikedData, Never>()
@@ -764,7 +773,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         socket.on("post:created") { [weak self] data, _ in
             guard let self else { return }
             self.decode(SocketPostCreatedData.self, from: data) { [weak self] payload in
-                self?.postCreated.send(payload.post)
+                self?.postCreated.send(payload)
             }
         }
 

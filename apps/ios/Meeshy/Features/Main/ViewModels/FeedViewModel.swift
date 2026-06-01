@@ -696,9 +696,22 @@ class FeedViewModel: ObservableObject {
         // --- post:created ---
         socialSocket.postCreated
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] apiPost in
+            .sink { [weak self] payload in
                 guard let self else { return }
-                let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
+                let feedPost = payload.post.toFeedPost(preferredLanguages: preferredLanguages)
+                // U1 — reconcile an offline-created optimistic post: it was
+                // inserted with the cmid as its id (U1 ST3), so the server echo
+                // (carrying that cmid) replaces it in place — swapping cmid →
+                // server id — instead of inserting a duplicate. Preserve local-
+                // only state (isLiked) across the swap, like postUpdated.
+                if let cmid = payload.clientMutationId,
+                   let idx = self.posts.firstIndex(where: { $0.id == cmid }) {
+                    var merged = feedPost
+                    merged.isLiked = self.posts[idx].isLiked
+                    self.posts[idx] = merged
+                    self.debouncedCacheSave()
+                    return
+                }
                 if !self.posts.contains(where: { $0.id == feedPost.id }) {
                     self.posts.insert(feedPost, at: 0)
                     self.newPostsCount += 1

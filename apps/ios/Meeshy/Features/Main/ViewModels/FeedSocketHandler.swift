@@ -27,8 +27,8 @@ final class FeedSocketHandler {
     func arm() {
         // Post events
         socialSocket.postCreated
-            .sink { [weak self] post in
-                Task { await self?.handlePostUpsert(post) }
+            .sink { [weak self] payload in
+                Task { await self?.handlePostUpsert(payload.post) }
             }
             .store(in: &cancellables)
 

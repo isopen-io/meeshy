@@ -778,6 +778,49 @@ final class FeedViewModelTests: XCTestCase {
         sut.unsubscribeFromSocketEvents()
     }
 
+    // MARK: - Socket.IO: post:created — U1 reconcile-by-cmid
+
+    func test_socketPostCreated_withMatchingCmid_reconcilesOptimisticPostInPlace() async {
+        let (sut, _, socket, _) = makeSUT()
+        // The offline author's optimistic post was inserted with the cmid as its
+        // id (U1 ST3). isLiked is local-only state that must survive the swap.
+        let cmid = "cmid_offline_1"
+        let optimistic = Self.makeFeedPost(id: cmid, content: "Offline draft", isLiked: true)
+        sut.posts = [optimistic]
+
+        sut.subscribeToSocketEvents()
+
+        let serverPost = Self.makeAPIPost(id: "server-1", content: "Offline draft")
+        socket.simulatePostCreated(serverPost, clientMutationId: cmid)
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(sut.posts.count, 1, "the echo must replace the optimistic post in place — no duplicate")
+        XCTAssertEqual(sut.posts[0].id, "server-1", "the cmid id is swapped to the authoritative server id")
+        XCTAssertTrue(sut.posts[0].isLiked, "local-only isLiked is preserved across the cmid→server-id swap")
+        XCTAssertEqual(sut.newPostsCount, 0, "reconciling the author's own post must not bump the new-posts counter")
+
+        sut.unsubscribeFromSocketEvents()
+    }
+
+    func test_socketPostCreated_withCmidButNoMatchingOptimistic_insertsNormally() async {
+        let (sut, _, socket, _) = makeSUT()
+        sut.subscribeToSocketEvents()
+
+        // A cmid arrives but no optimistic post with that id exists locally
+        // (e.g. the author created it on another device) → insert as fresh.
+        let serverPost = Self.makeAPIPost(id: "server-2", content: "From another device")
+        socket.simulatePostCreated(serverPost, clientMutationId: "cmid_unknown")
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(sut.posts.count, 1)
+        XCTAssertEqual(sut.posts[0].id, "server-2")
+        XCTAssertEqual(sut.newPostsCount, 1, "a non-reconciling create still counts as a new remote post")
+
+        sut.unsubscribeFromSocketEvents()
+    }
+
     // MARK: - Socket.IO: post:deleted
 
     func test_socketPostDeleted_removesPostFromList() async {
