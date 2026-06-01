@@ -397,6 +397,12 @@ extension OfflineQueue: OfflineQueueing {}
 /// reporting success to the user.
 public protocol OfflineMessageQueueing: Sendable {
     func enqueue(_ item: OfflineQueueItem) async throws
+    /// Durable offline message EDIT (T11). Coalesces with a pending send/edit
+    /// for the same `clientMessageId` (see `enqueueEdit` impl).
+    func enqueueEdit(_ payload: OfflineEditPayload) async throws
+    /// Durable offline message DELETE (T11). Cancels a pending send / supersedes
+    /// a pending edit for the same `clientMessageId` (see `enqueueDelete` impl).
+    func enqueueDelete(_ payload: OfflineDeletePayload) async throws
 }
 
 extension OfflineQueue: OfflineMessageQueueing {}

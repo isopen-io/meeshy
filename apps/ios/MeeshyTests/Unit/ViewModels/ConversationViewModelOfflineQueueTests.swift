@@ -299,6 +299,41 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
         let contents = await fx.offlineQueue.enqueuedContents
         XCTAssertEqual(contents, ["online-then-retry"])
     }
+
+    // MARK: - T11 — offline edit / delete route through the outbox
+
+    /// Editing a message while offline must enqueue a durable `.editMessage`
+    /// outbox row (flushed on reconnect via T10), NOT hit the REST edit
+    /// directly and lose the change on failure.
+    func test_editMessage_offline_enqueuesEditThroughOutbox() async throws {
+        let fx = try await makeFixture(isOnline: false)
+
+        await fx.sut.editMessage(messageId: "m_edit", newContent: "edited text")
+
+        let edits = await fx.offlineQueue.enqueuedEdits
+        XCTAssertEqual(edits.count, 1, "offline edit must be queued in the outbox, not lost")
+        XCTAssertEqual(edits.first?.content, "edited text")
+        XCTAssertEqual(edits.first?.clientMessageId, "m_edit",
+            "coalescing key = the message's local id (its cid while a send is still pending)")
+        XCTAssertEqual(edits.first?.conversationId, fx.conversationId)
+        XCTAssertEqual(fx.messageService.editCallCount, 0,
+            "the offline path must NOT call the REST edit directly")
+    }
+
+    /// Deleting a message (for everyone) while offline must enqueue a durable
+    /// `.deleteMessage` outbox row, NOT hit the REST delete directly.
+    func test_deleteMessage_offline_enqueuesDeleteThroughOutbox() async throws {
+        let fx = try await makeFixture(isOnline: false)
+
+        await fx.sut.deleteMessage(messageId: "m_del", mode: .everyone)
+
+        let deletes = await fx.offlineQueue.enqueuedDeletes
+        XCTAssertEqual(deletes.count, 1, "offline delete must be queued in the outbox, not lost")
+        XCTAssertEqual(deletes.first?.clientMessageId, "m_del")
+        XCTAssertEqual(deletes.first?.conversationId, fx.conversationId)
+        XCTAssertEqual(fx.messageService.deleteCallCount, 0,
+            "the offline path must NOT call the REST delete directly")
+    }
 }
 
 // MARK: - Test helpers on FakeOfflineMessageQueue

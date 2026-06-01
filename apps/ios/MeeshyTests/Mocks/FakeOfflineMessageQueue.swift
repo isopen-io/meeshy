@@ -12,6 +12,8 @@ actor FakeOfflineMessageQueue: OfflineMessageQueueing {
 
     private(set) var enqueueCount = 0
     private(set) var enqueuedItems: [OfflineQueueItem] = []
+    private(set) var enqueuedEdits: [OfflineEditPayload] = []
+    private(set) var enqueuedDeletes: [OfflineDeletePayload] = []
 
     // MARK: - Stubbing
 
@@ -36,6 +38,18 @@ actor FakeOfflineMessageQueue: OfflineMessageQueueing {
         }
         enqueueCount += 1
         enqueuedItems.append(item)
+    }
+
+    func enqueueEdit(_ payload: OfflineEditPayload) async throws {
+        if let delay { try? await Task.sleep(for: delay) }
+        if shouldThrow { throw errorToThrow }
+        enqueuedEdits.append(payload)
+    }
+
+    func enqueueDelete(_ payload: OfflineDeletePayload) async throws {
+        if let delay { try? await Task.sleep(for: delay) }
+        if shouldThrow { throw errorToThrow }
+        enqueuedDeletes.append(payload)
     }
 
     // MARK: - Read-only views (convenience for tests)

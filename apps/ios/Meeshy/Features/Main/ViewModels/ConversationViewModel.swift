@@ -2461,6 +2461,19 @@ class ConversationViewModel: ObservableObject {
         case .everyone:
             // Optimistic: mark as deleted locally + blank content
             try? await messagePersistence.markDeleted(localId: messageId, deletedAt: Date())
+            // Offline: route the delete through the durable outbox (flushed on
+            // reconnect, T10) instead of losing it. `clientMessageId` is the
+            // message's local id so deleting a still-unsent offline message
+            // cancels its pending send (no wasted roundtrip). The delete sticks
+            // locally and reconciles when online — no rollback on the offline path.
+            if !networkMonitor.isOnline {
+                try? await offlineQueue.enqueueDelete(OfflineDeletePayload(
+                    messageId: serverId(for: messageId),
+                    clientMessageId: messageId,
+                    conversationId: conversationId
+                ))
+                return
+            }
             do {
                 try await messageService.delete(conversationId: conversationId, messageId: serverId(for: messageId))
             } catch {
@@ -2590,6 +2603,21 @@ class ConversationViewModel: ObservableObject {
         // observation surfaces the change without a direct messages mutation.
         let editedAt = Date()
         try? await messagePersistence.markEdited(localId: messageId, newContent: trimmed, editedAt: editedAt)
+
+        // Offline: route the edit through the durable outbox (flushed on
+        // reconnect, T10) instead of losing it on the failed REST call.
+        // `clientMessageId` is the message's local id so an edit of a
+        // still-unsent offline message merges into its pending send. The
+        // optimistic content + recorded history stay applied (no rollback).
+        if !networkMonitor.isOnline {
+            try? await offlineQueue.enqueueEdit(OfflineEditPayload(
+                messageId: serverId(for: messageId),
+                clientMessageId: messageId,
+                content: trimmed,
+                conversationId: conversationId
+            ))
+            return
+        }
 
         editInProgress.insert(messageId)
         defer { editInProgress.remove(messageId) }
