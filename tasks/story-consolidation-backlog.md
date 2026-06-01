@@ -456,3 +456,19 @@ PLAN DE CORRECTIF (incrément focalisé, TDD) :
 3. ⚠️ Propager au @State `storyReactionCount` du StoryViewerView SI la story touchée == currentStory
    (le @State est une copie dérivée au slide change, StoryViewerView+Content:570 — vérifier le chemin VM→View).
 4. Tests : décode socket story:unreacted (SDK) + delta StoryViewModel (app).
+
+## it.23 IMPLÉMENTÉ — realtime story reactions branché (1a9433d77)
+- [x] SDK : `SocketStoryUnreactedData` (+ init public) + publisher/protocol `storyUnreacted` +
+      `socket.on("story:unreacted")` (miroir story:reacted). 2 mocks (SDK + app) à jour.
+- [x] StoryViewModel : sinks `storyReacted` (+1) / `storyUnreacted` (-1) → `applyStoryReactionDelta`
+      → `mutateStoryItem` reactionCount ±delta (+ currentUserReactions si action propre). Réaction propre
+      fire-and-forget (pas d'optimiste) → l'écho propre fournit le delta sans double-compte.
+- [x] StoryViewerView : `onChange(of: currentStory?.reactionCount)` re-dérive le @State sidebar →
+      compteur live pendant le visionnage. Prod câble via `subscribeToSocketEvents()` (RootView:335 etc.).
+- [x] Tests : 2 SDK (decode + publisher) + 4 VM (±delta, clamp-0, câblage socket) verts.
+→ Story reactions désormais en temps réel pour les viewers (parité avec post:liked/unliked).
+
+## REPLENISHED backlog — post it.23
+- [ ] Surfaces story non encore auditées : ops multi-slides (add/delete/reorder/duplicate), viewer gestes.
+- [ ] Vérif visuelle (login frais) : glass committé + rognage timeline + compteur réactions live.
+- [ ] CanvasAudioLifecycle ×5 (gate contentReadyFired, domaine audio-owner) + doublon mémoire CALayer.
