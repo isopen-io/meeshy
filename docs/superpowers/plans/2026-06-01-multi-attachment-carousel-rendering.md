@@ -63,7 +63,17 @@ This plan assumes **R1** unless the user picks R2 at review. (A4 audio always us
 
 ---
 
-## Task A4.0 — Verify coordinator queue API + add finished→advance subscription point
+## UPDATE (A4.0 done, 2026-06-01): A4.1 ELIMINATED
+
+A4.0 verification found that **`ConversationViewModel.playAudio(attachmentId:)` already does the entire job**: it builds `current` from the attachment and `tail` via the existing `AudioQueueBuilder.build(from:startingAfterAttachmentId:currentUserId:listenedAttachmentIds:)`, then calls `coordinator.play(current:tail:…)`. Because a multi-audio message's tracks are attachments of the SAME message, `startingAfterAttachmentId: trackN.id` already yields the carousel's later tracks THEN the subsequent thread audios — exactly the validated auto-advance. `coordinator.play(...)` is safe to call repeatedly on each swipe (full queue reset, no thrash beyond the intended engine stop/start). The bubble already exposes `onPlayAudio: ((String) -> Void)?` wired to `playAudio`.
+
+**Consequences:** Task **A4.1 (AudioCarouselQueueBuilder) is DROPPED** — no new builder. The carousel "activate track" = call the existing `onPlayAudio(track.id)`. Known acceptable edge (consistent with existing queue semantics): `AudioQueueBuilder` excludes self-authored + already-listened audios from the *tail*, so auto-advance through one's OWN multi-audio message may skip later own-tracks; the tapped/swiped track itself always plays (current is unfiltered). Not worth a special builder.
+
+`QueuedAudio` (for reference): `init(attachmentId messageId conversationId fileUrl durationMs senderName senderAvatarURL receivedAt)` — all required except `senderAvatarURL?`. But the carousel does NOT construct it directly; it routes through `onPlayAudio`.
+
+---
+
+## Task A4.0 — Verify coordinator queue API + add finished→advance subscription point — DONE
 
 **Files:** read-only verification (+ note any tiny SDK gap).
 
