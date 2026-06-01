@@ -146,8 +146,8 @@ struct BubbleStandardLayout: View {
 
     private var audioAttachments: [MessageAttachment] {
         switch content.attachments {
-        case .audio(let att): return [att]
-        case .mixed(_, let audio, _): return audio.map { [$0] } ?? []
+        case .audio(let atts): return atts
+        case .mixed(_, let audio, _): return audio
         case .none, .visualGrid, .nonMedia: return []
         }
     }
@@ -559,18 +559,51 @@ struct BubbleStandardLayout: View {
             //   - `audioHostsCaption` (NEW 2026-05-29) : audio + texte, le
             //     texte devient le caption rendu DANS playerBackground via
             //     `embedsCaptionInWidget` au lieu d'une bulle texte séparée.
-            ForEach(audioAttachments) { attachment in
-                let isLastAudio = attachment.id == audioAttachments.last?.id
-                let shouldInjectFooter = (audioIsSoleContent && isLastAudio)
-                    || content.audioHostsReply
-                    || (audioHostsCaption && isLastAudio)
-                mediaStandaloneView(
-                    attachment,
-                    injectFooter: shouldInjectFooter,
-                    replyReference: content.audioHostsReply ? content.reply?.reference : nil,
-                    replyIsStory: content.audioHostsReply ? (content.reply?.isStory ?? false) : false,
-                    embedsCaption: audioHostsCaption && isLastAudio
+            if audioAttachments.count > 1 {
+                // Multi-track audio message → horizontal carousel (one page per
+                // track) with one shared footer. All tracks belong to the SAME
+                // message, so the footer model is constant across pages. The
+                // composer always sends multi-audio as a sole-content audio
+                // message (text/reply are separate messages, per Plan 1), so
+                // the message-level footer is always shown here.
+                let footer = resolvedFooter(includesTranslationControls: true)
+                AudioCarouselView(
+                    items: audioAttachments,
+                    message: message,
+                    contactColor: content.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
+                    isDark: isDark,
+                    accentColor: content.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
+                    transcriptions: transcription.map { [$0.attachmentId: $0] } ?? [:],
+                    translatedAudios: Dictionary(grouping: translatedAudios, by: { $0.attachmentId }),
+                    textTranslations: textTranslations,
+                    allAudioItems: allAudioItems,
+                    mentionDisplayNames: mentionDisplayNames,
+                    footerModel: footer.0,
+                    footerActions: footer.1,
+                    activeAudioLanguage: activeAudioLanguage,
+                    onScrollToMessage: onScrollToMessage,
+                    onShareFile: { url in
+                        shareURL = url
+                        showShareSheet = true
+                    },
+                    onShowTranslationDetail: onShowTranslationDetail,
+                    onRequestTranslation: onRequestTranslation,
+                    onPlayAudio: onPlayAudio
                 )
+            } else {
+                ForEach(audioAttachments) { attachment in
+                    let isLastAudio = attachment.id == audioAttachments.last?.id
+                    let shouldInjectFooter = (audioIsSoleContent && isLastAudio)
+                        || content.audioHostsReply
+                        || (audioHostsCaption && isLastAudio)
+                    mediaStandaloneView(
+                        attachment,
+                        injectFooter: shouldInjectFooter,
+                        replyReference: content.audioHostsReply ? content.reply?.reference : nil,
+                        replyIsStory: content.audioHostsReply ? (content.reply?.isStory ?? false) : false,
+                        embedsCaption: audioHostsCaption && isLastAudio
+                    )
+                }
             }
 
             // Emoji-only WITHOUT a reply: large emoji free-floating, no bubble.

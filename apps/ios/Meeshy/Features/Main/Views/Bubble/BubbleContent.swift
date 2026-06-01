@@ -16,13 +16,17 @@ struct BubbleContent: Equatable {
     enum Attachments: Equatable {
         case none
         case visualGrid([MeeshyMessageAttachment])    // images + videos
-        case audio(MeeshyMessageAttachment)
+        /// One OR MORE audio tracks of the SAME message. A single track renders
+        /// as the existing audio widget; two or more render as a horizontal
+        /// `AudioCarouselView` (multi-track carousel — spec lot A4).
+        case audio([MeeshyMessageAttachment])
         case nonMedia([MeeshyMessageAttachment])      // file + location
         /// Mixed content: any combination of visual + non-media + audio
         /// when more than one category is present. Mirrors legacy bubble
         /// rendering which composed visualMediaGrid + audio standalone +
-        /// non-media attachments inside a single bubble.
-        case mixed(visual: [MeeshyMessageAttachment], audio: MeeshyMessageAttachment?, nonMedia: [MeeshyMessageAttachment])
+        /// non-media attachments inside a single bubble. `audio` carries all
+        /// audio tracks of the message (empty when the mix has no audio).
+        case mixed(visual: [MeeshyMessageAttachment], audio: [MeeshyMessageAttachment], nonMedia: [MeeshyMessageAttachment])
 
         // TODO(Task14): expand equality to cover mutation-prone fields (thumbnailUrl,
         // isBlurred, viewOnceCount, width/height, duration, fileUrl) — id-only comparison
@@ -34,12 +38,12 @@ struct BubbleContent: Equatable {
             case (.visualGrid(let a), .visualGrid(let b)):
                 return a.map(\.id) == b.map(\.id)
             case (.audio(let a), .audio(let b)):
-                return a.id == b.id
+                return a.map(\.id) == b.map(\.id)
             case (.nonMedia(let a), .nonMedia(let b)):
                 return a.map(\.id) == b.map(\.id)
             case (.mixed(let av, let aa, let an), .mixed(let bv, let ba, let bn)):
                 return av.map(\.id) == bv.map(\.id)
-                    && aa?.id == ba?.id
+                    && aa.map(\.id) == ba.map(\.id)
                     && an.map(\.id) == bn.map(\.id)
             default:
                 return false

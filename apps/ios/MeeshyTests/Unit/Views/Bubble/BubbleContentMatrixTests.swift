@@ -116,7 +116,7 @@ final class BubbleContentMatrixTests: XCTestCase {
             return XCTFail("expected .mixed, got \(content.attachments)")
         }
         XCTAssertEqual(visual.map(\.id), [img.id])
-        XCTAssertEqual(audioAtt?.id, audio.id)
+        XCTAssertEqual(audioAtt.map(\.id), [audio.id])
         XCTAssertTrue(nonMedia.isEmpty)
     }
 
@@ -131,7 +131,7 @@ final class BubbleContentMatrixTests: XCTestCase {
             return XCTFail("expected .mixed, got \(content.attachments)")
         }
         XCTAssertEqual(visual.map(\.id), [img.id])
-        XCTAssertEqual(audioAtt?.id, audio.id)
+        XCTAssertEqual(audioAtt.map(\.id), [audio.id])
         XCTAssertEqual(nonMedia.map(\.id), [file.id])
     }
 
@@ -164,7 +164,7 @@ final class BubbleContentMatrixTests: XCTestCase {
             return XCTFail("expected .mixed, got \(content.attachments)")
         }
         XCTAssertTrue(visual.isEmpty)
-        XCTAssertEqual(audioAtt?.id, audio.id)
+        XCTAssertEqual(audioAtt.map(\.id), [audio.id])
         XCTAssertEqual(nonMedia.map(\.id), [file.id])
     }
 
