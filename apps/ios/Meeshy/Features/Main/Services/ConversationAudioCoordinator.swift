@@ -110,6 +110,16 @@ public final class ConversationAudioCoordinator: ObservableObject {
 
     public init(engine: AudioPlaybackEngineDriving = AudioPlaybackManager()) {
         self.engine = engine
+        // BUG A (round 4) — wire the app-side CallKit policy into the raw
+        // engine the bubbles talk to directly (`engineForBubble`). The bubble
+        // tap (and the lock-screen remote command) resolve to this concrete
+        // `AudioPlaybackManager` and call `togglePlayPause()` / `play()`
+        // straight on it, routing around the coordinator's own guards. Setting
+        // an opaque predicate on the engine closes that gap WITHOUT the SDK
+        // ever depending on `CallManager`.
+        if let manager = engine as? AudioPlaybackManager {
+            manager.playbackPermissionGuard = { !CallManager.shared.isCallActiveForAudioGuard }
+        }
         wireEngineForwarding()
         wireAuthLogoutHook()
         wireSocketLifecycleHooks()

@@ -71,7 +71,11 @@ struct ConversationMediaGalleryView: View {
             if oldIdx != newIdx {
                 let oldAtt = allAttachments[oldIdx]
                 if oldAtt.type == .video && videoManager.activeURL == oldAtt.fileUrl {
-                    videoManager.pause()
+                    // BUG B (round 4) — `release(urlString:)` (URL-gated) clears
+                    // `activeURL` so the underlying conversation bubble's footer
+                    // reappears once the gallery closes. Bare `pause()` left
+                    // `activeURL` set → `hasPlayingInlineVideo` stayed true.
+                    videoManager.release(urlString: oldAtt.fileUrl)
                 }
                 HapticFeedback.light()
             }
@@ -356,7 +360,14 @@ struct ConversationMediaGalleryView: View {
         guard currentIndex < allAttachments.count else { return }
         let att = allAttachments[currentIndex]
         guard att.type == .video, videoManager.activeURL == att.fileUrl else { return }
-        videoManager.pause()
+        // BUG B (round 4) — `release(urlString:)` (URL-gated, safe no-op if
+        // another bubble took over) clears `activeURL` so the conversation
+        // bubble's footer (timestamp/delivery) reappears after the gallery
+        // closes via X-close or image vertical-dismiss. Bare `pause()` left
+        // `activeURL` set, keeping `hasPlayingInlineVideo` true and the footer
+        // hidden until re-mount. The swipe-down PIP path is unaffected: it
+        // calls `startPip()` and never reaches here.
+        videoManager.release(urlString: att.fileUrl)
     }
 
     private func cacheAttachment(_ attachment: MessageAttachment?) {

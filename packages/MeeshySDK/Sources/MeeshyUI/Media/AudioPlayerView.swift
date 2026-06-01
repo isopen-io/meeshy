@@ -16,6 +16,17 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     @Published public var isLoading = false
 
     public var onPlaybackFinished: (() -> Void)?
+
+    /// BUG A (round 4) — opaque permission predicate consulted BEFORE any
+    /// branch that *starts* or *resumes* playback (`play(urlString:)`,
+    /// `playLocal(url:)`, the resume branch of `togglePlayPause()`). The SDK
+    /// stays agnostic: it never imports app-side policy (e.g. `CallManager`).
+    /// The app wires this to its CallKit guard so resuming a paused voice note
+    /// during an active call — via the bubble tap, the lock-screen remote
+    /// command, or any direct engine path — cannot steal the VoIP audio
+    /// session. `nil` (default) means "always allowed". Returning `false`
+    /// blocks ONLY start/resume; stop/pause are never gated.
+    public var playbackPermissionGuard: (() -> Bool)?
     /// B3 fix — `@Published` so that observers (notably `AudioPlayerView` in
     /// the external-engine path) re-evaluate `handlePlayTap` gating logic
     /// the moment the coordinator swaps the loaded attachment. Without this,
@@ -67,6 +78,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
 
     // MARK: - Play from remote URL (through cache)
     public func play(urlString: String) {
+        if let guardClosure = playbackPermissionGuard, !guardClosure() { return }
         PlaybackCoordinator.shared.willStartPlaying(audio: self)
         resetState()
         guard !urlString.isEmpty else { return }
@@ -103,6 +115,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
 
     // MARK: - Play from local file
     public func playLocal(url: URL) {
+        if let guardClosure = playbackPermissionGuard, !guardClosure() { return }
         PlaybackCoordinator.shared.willStartPlaying(audio: self)
         resetState()
         currentUrl = url.absoluteString
@@ -182,6 +195,9 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             timer?.invalidate()
             reportListenProgress(complete: false)
         } else {
+            // BUG A (round 4) — gate ONLY the resume branch. Pausing is always
+            // allowed; resuming during a call must not steal the VoIP session.
+            if let guardClosure = playbackPermissionGuard, !guardClosure() { return }
             PlaybackCoordinator.shared.willStartPlaying(audio: self)
             player.rate = Float(speed.rawValue)
             player.play()
