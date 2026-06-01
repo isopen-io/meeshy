@@ -929,4 +929,53 @@ final class StoryViewModelTests: XCTestCase {
 
         await StoryPublishQueue.shared.clearAll()
     }
+
+    // MARK: - Realtime story reactions (it.23 — story:reacted/unreacted wiring)
+
+    func test_applyStoryReactionDelta_reacted_incrementsCount() {
+        var item = makeStoryItem(id: "react-me")
+        item.reactionCount = 2
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [item])]
+
+        sut.applyStoryReactionDelta(storyId: "react-me", userId: "other", emoji: "❤️", delta: +1)
+        XCTAssertEqual(sut.storyGroups[0].stories[0].reactionCount, 3,
+                       "story:reacted doit +1 le compteur en temps réel")
+    }
+
+    func test_applyStoryReactionDelta_unreacted_decrementsCount() {
+        var item = makeStoryItem(id: "react-me")
+        item.reactionCount = 2
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [item])]
+
+        sut.applyStoryReactionDelta(storyId: "react-me", userId: "other", emoji: "❤️", delta: -1)
+        XCTAssertEqual(sut.storyGroups[0].stories[0].reactionCount, 1,
+                       "story:unreacted doit -1 le compteur en temps réel")
+    }
+
+    func test_applyStoryReactionDelta_clampsAtZero() {
+        var item = makeStoryItem(id: "react-me")
+        item.reactionCount = 0
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [item])]
+
+        sut.applyStoryReactionDelta(storyId: "react-me", userId: "other", emoji: "❤️", delta: -1)
+        XCTAssertEqual(sut.storyGroups[0].stories[0].reactionCount, 0,
+                       "le compteur ne descend jamais sous 0")
+    }
+
+    func test_storyUnreacted_socketEvent_decrementsCount() {
+        var item = makeStoryItem(id: "react-me")
+        item.reactionCount = 3
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [item])]
+        sut.subscribeToSocketEvents()  // câble les sinks (la View l'appelle au onAppear)
+
+        // Vérifie le câblage complet : sink `storyUnreacted` → applyStoryReactionDelta.
+        let exp = expectation(description: "story:unreacted applied")
+        mockSocket.storyUnreacted.send(
+            SocketStoryUnreactedData(storyId: "react-me", userId: "other", emoji: "❤️"))
+        DispatchQueue.main.async { exp.fulfill() }  // après le hop receive(on:.main) du sink
+        wait(for: [exp], timeout: 1.0)
+
+        XCTAssertEqual(sut.storyGroups[0].stories[0].reactionCount, 2,
+                       "le sink story:unreacted doit décrémenter via applyStoryReactionDelta")
+    }
 }

@@ -14,6 +14,7 @@ final class MockSocialSocket: SocialSocketProviding, @unchecked Sendable {
     let storyCreated = PassthroughSubject<APIPost, Never>()
     let storyViewed = PassthroughSubject<SocketStoryViewedData, Never>()
     let storyReacted = PassthroughSubject<SocketStoryReactedData, Never>()
+    let storyUnreacted = PassthroughSubject<SocketStoryUnreactedData, Never>()
     let statusCreated = PassthroughSubject<APIPost, Never>()
     let statusDeleted = PassthroughSubject<String, Never>()
     let statusUpdated = PassthroughSubject<APIPost, Never>()

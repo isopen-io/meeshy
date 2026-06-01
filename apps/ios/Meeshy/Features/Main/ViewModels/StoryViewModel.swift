@@ -1248,6 +1248,27 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 self?.applyPostReactionDelta(event: event, delta: -1)
             }
             .store(in: &cancellables)
+
+        // Realtime story reactions : le gateway émet `story:reacted`/`story:unreacted`
+        // À LA STORY ROOM (viewers) — fan-out distinct des events POST (cf.
+        // routes/posts/interactions.ts). Sans ces sinks, le compteur de réactions
+        // d'une story en cours de visionnage ne bougeait pas en temps réel quand un
+        // autre utilisateur réagissait/dé-réagissait (bug it.23, callback non branché).
+        socialSocket.storyReacted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.applyStoryReactionDelta(storyId: event.storyId, userId: event.userId,
+                                              emoji: event.emoji, delta: +1)
+            }
+            .store(in: &cancellables)
+
+        socialSocket.storyUnreacted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.applyStoryReactionDelta(storyId: event.storyId, userId: event.userId,
+                                              emoji: event.emoji, delta: -1)
+            }
+            .store(in: &cancellables)
     }
 
     /// Apply an authoritative `commentCount` snapshot to the matching story.
@@ -1272,6 +1293,26 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     if !mine.contains(event.emoji) { mine.append(event.emoji) }
                 } else {
                     mine.removeAll { $0 == event.emoji }
+                }
+                item.currentUserReactions = mine
+            }
+        }
+    }
+
+    /// Realtime delta for a STORY reaction (`story:reacted`/`story:unreacted` — fan-out
+    /// distinct des events POST). La réaction propre est fire-and-forget (`sendReaction`
+    /// n'incrémente pas en optimiste), donc l'écho de sa propre action fournit le +1 sans
+    /// double-compte. Non-`private` pour permettre la vérification unitaire.
+    func applyStoryReactionDelta(storyId: String, userId: String, emoji: String, delta: Int) {
+        let myId = AuthManager.shared.currentUser?.id
+        mutateStoryItem(byPostId: storyId) { item in
+            item.reactionCount = max(0, item.reactionCount + delta)
+            if let myId, userId == myId {
+                var mine = item.currentUserReactions ?? []
+                if delta > 0 {
+                    if !mine.contains(emoji) { mine.append(emoji) }
+                } else {
+                    mine.removeAll { $0 == emoji }
                 }
                 item.currentUserReactions = mine
             }

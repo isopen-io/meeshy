@@ -457,6 +457,14 @@ struct StoryViewerView: View {
         .onReceive(SocialSocketManager.shared.commentReactionRemoved.receive(on: DispatchQueue.main)) { event in
             applyCommentReactionEvent(event)
         }
+        // Realtime story reactions (it.23) : le `StoryViewModel` applique le delta
+        // `story:reacted`/`story:unreacted` sur l'item (`storyGroups` @Published). On
+        // re-dérive ici le @State affiché par la sidebar dès que le compteur de la story
+        // COURANTE change — sinon une réaction d'un autre viewer ne se voyait pas en direct.
+        .adaptiveOnChange(of: currentStory?.reactionCount) { _, newCount in
+            storyReactionCount = newCount ?? 0
+            storyCurrentUserReactions = currentStory?.currentUserReactions ?? []
+        }
     }
 
     var body: some View {
