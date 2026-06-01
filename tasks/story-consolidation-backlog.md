@@ -434,3 +434,25 @@ undo/redo/gomme/aspectRatio. Bugs réels trouvés+corrigés : it.8/9/10/14/16/15
 (durée source-de-vérité)/19(currentSlideDuration no-op + avatar stale). Reste : surfaces non encore
 auditées (realtime, ops multi-slides, viewer gestes) + vérif VISUELLE (proven par tests ; login flaky
 — utiliser le compte DEMO jcharlesnm via « Autre compte » si besoin) + CanvasAudio ×5 (audio-owner).
+
+## it.23 — BUG RÉEL trouvé (realtime story reactions non branché iOS) — diagnostic + plan
+SOURCE prouvée :
+- Gateway : `POST/DELETE /posts/:id/like` fan-out PAR TYPE (routes/posts/interactions.ts:70-96) :
+  STORY → `broadcastStoryReacted`/`broadcastStoryUnreacted` → émet `story:reacted`/`story:unreacted`
+  À LA STORY ROOM (SocialEventsHandler:222-232 `io.to(ROOMS.post(storyId)).emit`). Donc les VIEWERS
+  doivent recevoir le delta en realtime (intent backend confirmé).
+- iOS SDK : `socket.on("story:reacted")` existe (SocialSocketManager:816) → publie `storyReacted`,
+  MAIS ce publisher n'a AUCUN abonné. `story:unreacted` : NI listener NI publisher.
+- iOS StoryViewModel : s'abonne uniquement aux events POST (`postReactionAdded/Removed/Sync`,
+  StoryViewModel:1223-1250) — que les stories N'ÉMETTENT PAS (le fan-out story passe par story:reacted).
+→ CONSÉQUENCE : une réaction/dé-réaction d'un AUTRE user sur une story en cours de visionnage n'est PAS
+  reflétée en realtime (compteur figé jusqu'au refetch). Seuls l'action propre (optimiste) + le load initial
+  mettent à jour `storyReactionCount`.
+
+PLAN DE CORRECTIF (incrément focalisé, TDD) :
+1. SDK SocialSocketManager : ajouter `SocketStoryUnreactedData {storyId,userId,emoji}` (miroir reacted) +
+   `storyUnreacted` PassthroughSubject (publisher+protocol) + `socket.on("story:unreacted")` (miroir 816).
+2. App StoryViewModel.setupSubscriptions : sink `storyReacted` (+1) + `storyUnreacted` (-1) → `mutateStoryItem(byPostId: data.storyId)` reactionCount ±delta + currentUserReactions (miroir `applyPostReactionDelta`).
+3. ⚠️ Propager au @State `storyReactionCount` du StoryViewerView SI la story touchée == currentStory
+   (le @State est une copie dérivée au slide change, StoryViewerView+Content:570 — vérifier le chemin VM→View).
+4. Tests : décode socket story:unreacted (SDK) + delta StoryViewModel (app).
