@@ -97,6 +97,39 @@ extension StoryComposerViewModel {
         drawingEditingMode = .active(strokeId: strokeId, expandedTool: tool)
     }
 
+    // MARK: Undo / redo (retour arrière / avant)
+
+    /// `true` s'il reste au moins un trait à annuler.
+    var canUndoStroke: Bool { !drawingStrokes.isEmpty }
+    /// `true` s'il reste au moins un trait annulé à rétablir.
+    var canRedoStroke: Bool { !drawingRedoStack.isEmpty }
+
+    /// Valide un trait fraîchement dessiné : l'ajoute ET invalide la pile de redo
+    /// (un nouveau trait rend le « rétablir » caduc). À utiliser à la place d'un
+    /// `drawingStrokes.append` direct depuis la capture.
+    func commitStroke(_ stroke: StoryDrawingStroke) {
+        drawingStrokes.append(stroke)
+        if !drawingRedoStack.isEmpty { drawingRedoStack.removeAll() }
+    }
+
+    /// Annule le dernier trait (le déplace vers la pile de redo). Lève la sélection
+    /// si le trait annulé était sélectionné. No-op si aucun trait.
+    func undoLastStroke() {
+        guard !drawingStrokes.isEmpty else { return }
+        var strokes = drawingStrokes
+        let removed = strokes.removeLast()
+        drawingStrokes = strokes
+        drawingRedoStack.append(removed)
+        if drawingEditingMode.selectedStrokeId == removed.id { selectStroke(nil) }
+    }
+
+    /// Rétablit le dernier trait annulé. No-op si la pile de redo est vide.
+    func redoLastStroke() {
+        guard !drawingRedoStack.isEmpty else { return }
+        let stroke = drawingRedoStack.removeLast()
+        drawingStrokes.append(stroke)
+    }
+
     // MARK: Per-stroke editing
 
     /// Sélectionne un trait pour l'édition par-trait. `nil` désélectionne. Un id
@@ -108,8 +141,10 @@ extension StoryComposerViewModel {
     }
 
     /// Supprime un trait. Si c'était le trait sélectionné, la sélection est levée.
+    /// Invalide aussi la pile de redo (mutation manuelle = nouvelle action).
     func deleteStroke(_ id: String) {
         drawingStrokes.removeAll { $0.id == id }
+        if !drawingRedoStack.isEmpty { drawingRedoStack.removeAll() }
         if drawingEditingMode.selectedStrokeId == id {
             selectStroke(nil)
         }

@@ -388,6 +388,14 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     @Published var drawingEditingMode: DrawingEditingMode = .inactive
     var isDrawingActive: Bool { activeTool == .drawing }
 
+    /// Pile de rétablissement (redo) du dessin. Les traits annulés via
+    /// `undoLastStroke()` y sont empilés et réappliqués par `redoLastStroke()`.
+    /// Vidée dès qu'un nouveau trait est dessiné (`commitStroke`) ou supprimé
+    /// manuellement (`deleteStroke`) — sémantique undo/redo standard. Stockée ici
+    /// (et non dans l'extension) car Swift interdit les propriétés stockées en
+    /// extension. Voir `StoryComposerViewModel+DrawingEditing.swift`.
+    @Published var drawingRedoStack: [StoryDrawingStroke] = []
+
     // MARK: - Background
 
     @Published var backgroundColor: String = "#\(StoryBackgroundPalette.randomBackgroundColor())"

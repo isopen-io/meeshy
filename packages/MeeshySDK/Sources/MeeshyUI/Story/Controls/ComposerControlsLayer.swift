@@ -40,11 +40,28 @@ public struct ComposerControlsLayer: View {
         self.onOpenMediaCrop = onOpenMediaCrop
     }
 
+    /// État effectif du band : le dessin utilise le band PARTAGÉ comme tous les
+    /// outils (`drawingPanel` = liste éditable des traits). On force donc l'affichage
+    /// du panneau dessin dès que l'outil dessin est actif, même si la machine d'état
+    /// est restée `.hidden` (chemin d'entrée FAB, état restauré…). Sans ça le band
+    /// partagé ne s'affichait pas pour le dessin (bug user 2026-06-01 « dessin devrait
+    /// afficher le ComposerBottomBand aussi »).
+    private var effectiveBandState: BandState {
+        // On se cale sur `drawingEditingMode.isActive` (et non `activeTool`) car
+        // c'est lui qui pilote l'affichage des contrôleurs flottants : tant que les
+        // bulles de dessin sont à l'écran, le band partagé doit l'être aussi —
+        // les deux états peuvent diverger selon le chemin d'entrée.
+        if viewModel.drawingEditingMode.isActive, bandStateMachine.state == .hidden {
+            return .toolPanel(.drawing)
+        }
+        return bandStateMachine.state
+    }
+
     /// FABs are visible when the band is hidden; when a band panel is open,
     /// FABs hide to free space. Swiping down on the band dismisses it and
     /// restores FABs.
     private var shouldShowFABs: Bool {
-        areFabsVisible && bandStateMachine.state == .hidden
+        areFabsVisible && effectiveBandState == .hidden
     }
 
     public var body: some View {
@@ -73,9 +90,9 @@ public struct ComposerControlsLayer: View {
             }
 
             // Band — with swipe-down to dismiss
-            if bandStateMachine.state != .hidden {
+            if effectiveBandState != .hidden {
                 ComposerBottomBand(
-                    state: bandStateMachine.state,
+                    state: effectiveBandState,
                     viewModel: viewModel,
                     selectedFilter: $selectedFilter,
                     fgMediaItem: $fgMediaItem,

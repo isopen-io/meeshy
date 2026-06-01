@@ -169,7 +169,7 @@ struct ComposerToolPanelHost: View {
         switch tool {
         case .media:    return 220
         case .audio:    return 220
-        case .drawing:  return 140
+        case .drawing:  return 280   // héberge la liste éditable des traits (DrawingStrokeList)
         case .text:     return 280
         case .texture:  return 160
         case .filters:  return 180
@@ -429,8 +429,13 @@ struct ComposerToolPanelHost: View {
     /// redimensionnable dédiée (`DrawingBand`, pilotée par `StoryComposerView`),
     /// affichée uniquement quand au moins un trait existe. Ici on reste `EmptyView`
     /// pour satisfaire le `switch` exhaustif sur `StoryToolMode`.
+    /// Panneau DESSIN du band partagé : la liste éditable des traits (sélection /
+    /// suppression / recoloration par-trait). Le band `ComposerBottomBand` est
+    /// utilisé par TOUS les outils — le dessin l'affiche aussi (plus de 2ᵉ bande
+    /// dédiée `DrawingBand` qui doublonnait, bug user 2026-06-01). Les contrôleurs
+    /// de pinceau restent flottants sur le canvas (`StoryDrawingToolbar`).
     private var drawingPanel: some View {
-        EmptyView()
+        DrawingStrokeList(viewModel: viewModel, maxListHeight: .infinity)
     }
 
     @ViewBuilder

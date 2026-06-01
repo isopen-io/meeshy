@@ -40,7 +40,11 @@ struct StoryDrawingToolbar: View {
                             // de capture est gaté dessus) ET sort du mode édition.
                             viewModel.activeTool = nil
                             viewModel.exitDrawingEditingMode()
-                        }
+                        },
+                        canUndo: viewModel.canUndoStroke,
+                        canRedo: viewModel.canRedoStroke,
+                        onUndo: { viewModel.undoLastStroke() },
+                        onRedo: { viewModel.redoLastStroke() }
                     )
                 }
                 .padding(.horizontal, 16)
