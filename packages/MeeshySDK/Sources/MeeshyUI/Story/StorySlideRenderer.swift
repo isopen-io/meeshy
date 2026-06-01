@@ -121,9 +121,12 @@ public enum StorySlideRenderer {
             .paragraphStyle: style,
         ]
 
-        // Text background
-        if let bgHex = textObj.textBg {
-            attrs[.backgroundColor] = UIColor(hex: bgHex)?.withAlphaComponent(0.7)
+        // Fond du texte — dérivé de `resolvedBackgroundStyle` (et NON du seul champ
+        // legacy `textBg`). Le contrôle « Fond du texte » écrit aujourd'hui
+        // `backgroundStyle = .solid/.glass` avec `textBg = nil`, donc lire `textBg`
+        // seul ratait la boîte → thumbHash sans le fond du texte (bug 2026-06-01).
+        if let bg = compositeBackgroundColor(for: textObj) {
+            attrs[.backgroundColor] = bg
         }
 
         let textWidth = size.width * 0.85
@@ -137,6 +140,23 @@ public enum StorySlideRenderer {
         )
 
         (textObj.text as NSString).draw(in: textRect, withAttributes: attrs)
+    }
+
+    /// Couleur de fond composite (thumbHash) d'un texte, dérivée du
+    /// `resolvedBackgroundStyle` — source de vérité partagée avec le canvas
+    /// (`StoryTextLayer`) — et NON du seul champ legacy `textBg`. Retourne `nil`
+    /// pour `.none`. `.solid` rend la couleur hex (opaque comme sur le canvas) ;
+    /// `.glass` est approximé par un blanc translucide (le blur GPU n'existe pas
+    /// dans le composite raster). Extrait `static` (testable via `@MainActor`).
+    static func compositeBackgroundColor(for text: StoryTextObject) -> UIColor? {
+        switch text.resolvedBackgroundStyle {
+        case .none:
+            return nil
+        case .solid(let hex):
+            return UIColor(hex: hex)
+        case .glass:
+            return UIColor.white.withAlphaComponent(0.25)
+        }
     }
 
     private static func drawMediaObject(_ obj: StoryMediaObject, image: UIImage, in size: CGSize, ctx: CGContext) {

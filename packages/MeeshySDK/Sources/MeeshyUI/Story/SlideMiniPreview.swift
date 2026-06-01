@@ -212,10 +212,35 @@ struct SlideMiniPreview: View {
             .font(.system(size: fontSize, weight: .medium))
             .foregroundColor(Color(hex: text.textColor ?? "FFFFFF"))
             .lineLimit(1)
+            // Fond du texte — parité avec le canvas (`StoryTextLayer`) et le
+            // composite ThumbHash. Sans ça la mini-preview montrait les glyphes nus
+            // (souvent illisibles sur un fond de slide clair) alors que le canvas
+            // affiche la boîte colorée — incohérence strip ↔ canvas (bug 2026-06-01).
+            .padding(.horizontal, max(0.5, fontSize * 0.16))
+            .padding(.vertical, max(0.5, fontSize * 0.08))
+            .background(miniTextBackground(for: text, fontSize: fontSize))
             .scaleEffect(CGFloat(text.scale))
             .rotationEffect(.degrees(text.rotation))
             .position(x: CGFloat(text.x) * size.width,
                       y: CGFloat(text.y) * size.height)
+    }
+
+    /// Fond de la boîte de texte dans la mini-preview, dérivé du
+    /// `resolvedBackgroundStyle` (source de vérité partagée avec le canvas) — et
+    /// NON du seul champ legacy `textBg`. `.glass` est approximé par un material.
+    @ViewBuilder
+    private func miniTextBackground(for text: StoryTextObject, fontSize: CGFloat) -> some View {
+        let radius = max(1, (fontSize + 2) * 0.18)
+        switch text.resolvedBackgroundStyle {
+        case .none:
+            Color.clear
+        case .solid(let hex):
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .fill(Color(hex: hex))
+        case .glass:
+            RoundedRectangle(cornerRadius: radius, style: .continuous)
+                .fill(.ultraThinMaterial)
+        }
     }
 
     // MARK: - Sticker Layer
