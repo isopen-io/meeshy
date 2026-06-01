@@ -113,9 +113,13 @@ final class DependencyContainer {
 
     /// Pattern calqué sur `ConversationAudioCoordinator.wireAuthLogoutHook` :
     /// observe la transition `isAuthenticated true→false`, stop le retry
-    /// engine PUIS purge la table outbox. Ordre strict (D-13 du design doc) :
-    /// stopper le RetryEngine empêche un flush concurrent avec le delete
-    /// (sinon race entre `outbox SELECT` et `outbox DELETE`).
+    /// engine PUIS purge TOUTES les tables messages on-device (outbox +
+    /// `messages` autoritaire + translations/transcriptions/audio/attachments/
+    /// pending_ids via `clearAllMessagesForLogout`). Sans la purge de `messages`,
+    /// user B verrait le contenu de user A au prochain login (table non
+    /// namespacée par userId, lue par `MessageStore.loadInitialSnapshot`).
+    /// Ordre strict (D-13 du design doc) : stopper le RetryEngine empêche un
+    /// flush concurrent avec le delete (sinon race entre `SELECT` et `DELETE`).
     private func wireOutboxLogoutHook() {
         let engine = retryEngine
         let persistence = messagePersistence
@@ -128,9 +132,9 @@ final class DependencyContainer {
                 Task {
                     await engine.stop()
                     do {
-                        try await persistence.clearOutbox()
+                        try await persistence.clearAllMessagesForLogout()
                     } catch {
-                        containerLogger.error("Q3 outbox purge failed at logout: \(error.localizedDescription, privacy: .public)")
+                        containerLogger.error("Q3 logout message purge failed: \(error.localizedDescription, privacy: .public)")
                     }
                 }
             }

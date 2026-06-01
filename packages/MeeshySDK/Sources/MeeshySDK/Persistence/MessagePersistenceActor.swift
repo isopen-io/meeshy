@@ -107,6 +107,29 @@ public actor MessagePersistenceActor {
         }
     }
 
+    /// Full purge of every on-device message table at logout. The persistence
+    /// DB has **no userId column** on any table (cf. `MessageDatabaseMigrations`)
+    /// and the file is shared across accounts, so the only safe-by-construction
+    /// boundary is to drop everything. Without this, the authoritative
+    /// `messages` table (received + optimistic bodies, read first by
+    /// `MessageStore.loadInitialSnapshot`) would render user A's content to
+    /// user B after a logout+login on the same device — the cache `msg`
+    /// namespace purged by `CacheCoordinator.reset()` is a SEPARATE store.
+    /// Atomic single transaction; child tables carry no FK constraints so order
+    /// is irrelevant. Supersedes `clearOutbox()` on the logout path. Wired from
+    /// `DependencyContainer.wireOutboxLogoutHook`.
+    public func clearAllMessagesForLogout() async throws {
+        try await dbWriter.write { db in
+            try db.execute(sql: "DELETE FROM message_translations")
+            try db.execute(sql: "DELETE FROM message_transcriptions")
+            try db.execute(sql: "DELETE FROM message_audio_translations")
+            try db.execute(sql: "DELETE FROM local_attachments")
+            try db.execute(sql: "DELETE FROM pending_ids")
+            try db.execute(sql: "DELETE FROM messages")
+            try db.execute(sql: "DELETE FROM outbox")
+        }
+    }
+
     /// Call after init to start the background write processor.
     public func start() {
         guard processorTask == nil else { return }
