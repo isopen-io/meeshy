@@ -55,3 +55,15 @@ keyboard-avoidance (canvasEditShift). Verify on simulator after each increment.
 Status: parallel-sheet experiment reverted per "avoid duplication". Tree back to original
 drawing UX; Part 1 coordination fix intact. NB: a parallel agent edits apps/ios/.../Bubble/*
 (AudioCarousel) in the same worktree -> intermittent app-target build breakage is from there.
+
+---
+## Progress update (03:12)
+- Increment 1 (drawing in band) + Increment 2 (canvas scaled above the open band): DONE & verified on simulator.
+  - drawingPanel = DrawingStrokeList in the standard band; band header (back + switch chips) reused = "comme les autres".
+  - Floating brush bubbles kept on canvas (bottomInset lifts them above the band).
+  - Canvas fits 9:16 into the region above the band (bottomPanelHeight reserved); stays 9:16 → coordination preserved.
+  - isFloatingEditorActive excludes drawing; band shown during drawing; activeTool<->band synced (both onChange handlers, idempotent).
+  - Verified: drawing on the scaled canvas works (stroke captured, band "1 trait"->"2 traits"); header + switch chips present.
+  - Tests 16/16 green (CanvasGeometry + DrawingEditing).
+- Tuning constants: ComposerToolPanelHost.panelHeight(.drawing)=120 (peek), StoryComposerView.drawingBandReservedHeight=215.
+- REMAINING: Increment 3 (multi-height resizable band via grabber drag — user said "Oui") ; Increment 4 (generalize canvas-scaling + resize to other tools).

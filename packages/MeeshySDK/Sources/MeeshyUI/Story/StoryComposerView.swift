@@ -304,17 +304,41 @@ public struct StoryComposerView: View {
             // épaisseur/lissage) restent flottantes sur le canvas ; la liste des
             // traits éditable vit, elle, dans la bande standard (`ComposerToolPanelHost`
             // → `drawingPanel`), comme tous les autres outils.
-            StoryDrawingToolbar(viewModel: viewModel)
+            StoryDrawingToolbar(viewModel: viewModel, bottomInset: bottomPanelHeight)
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.85),
                    value: viewModel.textEditingMode)
         .animation(.spring(response: 0.3, dampingFraction: 0.85),
                    value: viewModel.drawingEditingMode)
-        .adaptiveOnChange(of: viewModel.activeTool) { _, newTool in
-            // Le mode dessin flottant suit l'outil actif : entrer expose les
-            // contrôleurs flottants, quitter les masque.
-            if newTool == .drawing { viewModel.enterDrawingEditingMode() }
-            else { viewModel.exitDrawingEditingMode() }
+        .adaptiveOnChange(of: viewModel.activeTool) { oldTool, newTool in
+            // Le mode dessin suit l'outil actif : entrer expose les bulles
+            // flottantes (pinceau) ET ouvre le panneau dessin dans la bande
+            // standard (liste des traits, header retour + switch — comme les
+            // autres outils) ; quitter masque l'un et l'autre.
+            if newTool == .drawing {
+                viewModel.enterDrawingEditingMode()
+                bandStateMachine.tapTile(.drawing)
+            } else {
+                viewModel.exitDrawingEditingMode()
+                // Si on sortait du dessin, referme la bande dessin et restaure
+                // les FABs (l'X des bulles pose `activeTool = nil`).
+                if oldTool == .drawing, case .toolPanel(.drawing) = bandStateMachine.state {
+                    bandStateMachine.reset()
+                    areFabsVisible = true
+                }
+            }
+        }
+        .adaptiveOnChange(of: bandStateMachine.state) { _, newState in
+            // Synchronise l'outil actif quand la bande ouvre/ferme le panneau
+            // dessin par un chemin qui ne passe pas par `selectTool` (tap FAB
+            // dessin depuis la bande masquée → `tapFAB` seul). Idempotent +
+            // gardé pour éviter toute boucle avec le `onChange(activeTool)`.
+            let bandWantsDrawing = (newState == .toolPanel(.drawing))
+            if bandWantsDrawing && viewModel.activeTool != .drawing {
+                viewModel.selectTool(.drawing)
+            } else if !bandWantsDrawing && viewModel.activeTool == .drawing {
+                viewModel.activeTool = nil
+            }
         }
         .statusBarHidden()
         .ignoresSafeArea(.keyboard)
@@ -873,10 +897,13 @@ public struct StoryComposerView: View {
     /// set therefore tells us nothing about user intent — only explicit
     /// content additions (text / media / sticker / drawing) flip the slide
     /// out of empty state.
-    /// Un éditeur flottant (texte OU dessin) occupe le bas de l'écran — le band
-    /// compact est alors masqué et non-interactif.
+    /// L'éditeur de TEXTE flottant occupe le bas de l'écran — le band compact est
+    /// alors masqué et non-interactif. Le mode DESSIN, lui, n'est plus exclu :
+    /// depuis 2026-06-01 la liste des traits s'affiche dans la bande standard
+    /// (comme les autres outils) et le canvas est scalé au-dessus, donc la bande
+    /// doit rester visible pendant le dessin (seules les bulles pinceau flottent).
     private var isFloatingEditorActive: Bool {
-        viewModel.textEditingMode != .inactive || viewModel.drawingEditingMode.isActive
+        viewModel.textEditingMode != .inactive
     }
 
 
@@ -1227,13 +1254,33 @@ public struct StoryComposerView: View {
                             }
                     }
                 )
-                // Centre le canvas 9:16 dans la zone disponible.
-                .frame(width: proxy.size.width, height: proxy.size.height)
+                // Centre le canvas 9:16 dans la zone au-dessus du panneau, puis
+                // épingle cette zone en haut (l'espace réservé est donc en bas,
+                // là où s'affiche la bande d'outils).
+                .frame(width: proxy.size.width, height: regionHeight, alignment: .center)
+                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
                 .offset(y: -canvasEditShift)
                 .animation(.spring(response: 0.32, dampingFraction: 0.85), value: canvasEditShift)
+                .animation(.spring(response: 0.32, dampingFraction: 0.85), value: bottomPanelHeight)
         }
         .ignoresSafeArea()
     }
+
+    /// Hauteur réservée en bas par un panneau d'outil ouvert, pour scaler le canvas
+    /// au-dessus (spec 2026-06-01). Drawing-first : seul le mode dessin réserve
+    /// l'espace pour l'instant ; l'extension aux autres outils suivra. La hauteur
+    /// correspond à la bande dessin (`panelHeight(.drawing)` + chrome header/handle/
+    /// paddings + safe area), approchée ici et affinée visuellement.
+    private var bottomPanelHeight: CGFloat {
+        guard viewModel.activeTool == .drawing else { return 0 }
+        return Self.drawingBandReservedHeight
+    }
+
+    /// Hauteur totale réservée par la bande dessin au repos (peek) : panel 120
+    /// (`panelHeight(.drawing)`) + chrome handle/header/paddings/safe-area ~ 95.
+    /// Garde le canvas large par défaut ; l'agrandissement de la bande (multi-
+    /// hauteurs, incrément 3) réduira d'autant le canvas.
+    static let drawingBandReservedHeight: CGFloat = 215
 
     @ViewBuilder
     private var canvasCore: some View {

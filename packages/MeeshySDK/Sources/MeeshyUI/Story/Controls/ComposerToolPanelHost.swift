@@ -169,7 +169,7 @@ struct ComposerToolPanelHost: View {
         switch tool {
         case .media:    return 220
         case .audio:    return 220
-        case .drawing:  return 300
+        case .drawing:  return 120
         case .text:     return 280
         case .texture:  return 160
         case .filters:  return 180
