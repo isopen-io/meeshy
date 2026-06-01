@@ -225,6 +225,45 @@ extension ConversationView {
                     continue   // skip the online TUS path for this group
                 }
 
+                // S7b ST2 — visual-media (photo/video/file) offline write-ahead:
+                // short-circuit to enqueueMedia (durable — survives an app kill
+                // and auto-resends on flush via the ST3 dispatcher branch)
+                // instead of the TUS path that throws offline. Mirrors the audio
+                // branch; the optimistic bubble stays durably `.sending`.
+                if send.group.kind == .visual, NetworkMonitor.shared.isOffline {
+                    let pairs: [(url: URL, kind: String)] = send.group.attachments.compactMap { att in
+                        guard let url = mediaFiles[att.id] else { return nil }
+                        let kind = AttachmentKind(mimeType: MimeTypeResolver.mimeType(forURL: url)).rawValue
+                        return (url, kind)
+                    }
+                    guard !pairs.isEmpty else {
+                        Logger.messages.warning("Visual group offline but no source URLs — skipping \(send.tempId)")
+                        continue
+                    }
+                    do {
+                        _ = try await OfflineQueue.shared.enqueueMedia(
+                            sourceMediaURLs: pairs.map { $0.url },
+                            kinds: pairs.map { $0.kind },
+                            conversationId: viewModel.conversationId,
+                            content: nil,
+                            clientMessageId: send.tempId,
+                            originalLanguage: lang,
+                            replyToId: send.group.carriesReply ? replyId : nil
+                        )
+                        anySuccess = true
+                        Logger.messages.info("Visual group queued offline for \(send.tempId)")
+                    } catch {
+                        // enqueueMedia's copy-error path already flips the bubble
+                        // (emits retryExhausted) + marks the row terminal; surface
+                        // a toast too. Mirrors the audio offline branch.
+                        Logger.messages.error("Visual offline enqueue failed: \(error.localizedDescription)")
+                        await MainActor.run {
+                            FeedbackToastManager.shared.showError("Échec de la mise en file du média")
+                        }
+                    }
+                    continue   // skip the online TUS path for this group
+                }
+
                 do {
                     var uploadedIds: [String] = []
                     var localAttachments: [MeeshyMessageAttachment] = []
