@@ -18,8 +18,8 @@ Demande utilisateur :
 - **Structure** : un seul spec + plan, 3 lots livrables par incréments testés.
 - **Plein écran animé** : **reader uniquement**.
 - **Pression** : **force Apple Pencil** (iPad) **+ vitesse au doigt** (iPhone). Driver normalisé `[0,1]` orienté « haut = épais ». **Aucune régression sur les dessins existants** (cf. C2).
-- **Sheets** : **redimensionnement** généralisé à tous les outils ; **repli-tiroir** réservé aux outils ayant un contrôleur flottant sur le canvas (cf. Lot B).
-- **Composer (sheet ouvert)** : canvas **rétréci au-dessus du sheet** (jamais couvert).
+- **Sheets** : **redimensionnement** ET **repli-tiroir (peek)** généralisés à **tous** les outils du band (cf. Lot B). `.timeline` exclu.
+- **Composer (sheet ouvert)** : canvas **TOUJOURS cardé au-dessus du sheet — jamais derrière/couvert**, **uniforme pour tous les outils, Dessin compris** (remplace « Option A »). **Couplage inverse** : sheet ↕ → canvas ↕ (sheet grandit → canvas rétrécit ; sheet se replie → canvas plein).
 - **Reader** : **carte à inserts symétriques** (taille de carte identique pour ses stories et celles des autres → parité 9:16 préservée).
 
 ### Technique transversale (clé de voûte) — transform de conteneur, pas d'animation de frame
@@ -44,12 +44,14 @@ Conséquence : la projection est **toujours uniforme** (bounds 9:16, `scaleX == 
 
 ## 2. Lot A — Canvas « carte arrondie » + plein écran reader
 
-### A1 — Composer : carte rétrécie au-dessus du sheet (transform de conteneur)
-Introduire `canvasIsCarded = (BandState != .hidden) || drawingEditingMode.isActive || (textEditingMode != .inactive)`.
-Quand `canvasIsCarded` : le **conteneur** du canvas applique `scaleEffect`+`offset`+`clipShape(RoundedRectangle(22))` pour placer le canvas (bounds intrinsèques 9:16 plein) **entièrement dans la région `[bas du header … haut du sheet]`** — jamais couvert. Sans carte : scale `1`, coins `0` (plein), comportement actuel.
-- **Plafonner la hauteur du sheet** quand le canvas est cardé : borne haute du band réduite (ex. ≤ `min(540, hauteurEcran * 0.42)`) pour garder un canvas exploitable au-dessus.
-- `canvasNaturalFrame` doit refléter la **frame présentée** (post-scale) ; recalculer `canvasEditShift` **à la fin** de l'animation (settle), pas par frame, pour éviter le saut de l'éditeur inline (`StoryComposerView.swift:1272-1280,1615-1618`).
-- Abandonne explicitement « Option A » pour les sheets non-dessin (assumé) : le canvas se réduit désormais au-dessus du panneau.
+### A1 — Composer : carte rétrécie au-dessus du sheet, UNIFORME pour TOUS les outils (transform de conteneur)
+`canvasIsCarded = (BandState != .hidden) || drawingEditingMode.isActive || (textEditingMode != .inactive)`.
+Quand `canvasIsCarded` : le **conteneur** du canvas applique `scaleEffect`+`offset`+`clipShape(RoundedRectangle(22))` pour placer le canvas (bounds intrinsèques 9:16 plein) **entièrement dans la région `[bas du header … haut du sheet]`**, **toujours AU-DESSUS du sheet, jamais derrière/couvert**. Sans carte : scale `1`, coins `0` (plein).
+- **Comportement unifié — Dessin compris.** On **abandonne la décision « Option A »** (`StoryComposerView.swift:1233-1314` : canvas plein, drawer flottant par-dessus, « il ne le rétrécit plus »). **Bug constaté** : aujourd'hui le sheet se redimensionne correctement mais **flotte par-dessus le canvas (canvas derrière, plein)**. Désormais, pour **chaque** outil, sheet et canvas **ne se chevauchent plus** : le sheet occupe le bas, le canvas est cardé dans la région au-dessus.
+- **Couplage inverse** : région canvas = `[bas header … haut du sheet]`. Sheet **grandit** → canvas **rétrécit** (scale ↓) ; sheet **rétrécit/se replie** → canvas **grandit** (plein écran si replié). Le `scale` du conteneur suit la hauteur (animée) du sheet — **sans** animer la frame du canvas.
+- **Layout** : remplacer le chevauchement ZStack actuel (canvas + band siblings, `:280-310`) par un canvas **borné au-dessus** de la zone réservée par le sheet en bas (plus d'overlap).
+- **Plafonner la hauteur du sheet** : borne haute réduite (ex. ≤ `min(540, hauteurEcran * 0.42)`) pour garder un canvas exploitable.
+- `canvasNaturalFrame` reflète la frame **présentée** (post-scale) ; recalcul de `canvasEditShift` au **settle** (`StoryComposerView.swift:1272-1280,1615-1618`).
 
 ### A2 — Reader : carte à inserts symétriques (transform de conteneur)
 Le canvas garde ses bounds 9:16 plein-viewport ; un conteneur le place en carte (`scaleEffect`+`offset`+`clipShape(22)`) dans la région `[bas de StoryHeaderView … haut de la zone de composition]`.
@@ -70,11 +72,11 @@ Type pur calculant, depuis `CanvasGeometry.aspectFitSize` + insets de région, l
 ### B1 — Redimensionnement universel
 La poignée du `ComposerBottomBand` expose **toujours** `resizableHeight` (clamp `[160, plafond]`, plafond réduit quand canvas cardé, cf. A1) pour **tous** les outils du band (texte/couleur/taille/align/fond/bordure, média, audio, fond/texture, filtres). Remplacer le gate `isBandResizable = activeCategory == .drawing` (`ComposerControlsLayer.swift:62`) par « band présent ». **Hauteur mémorisée par catégorie** (état du band par outil).
 
-### B2 — Repli-tiroir ciblé (pas universel)
-Le **repli en tiroir gardant l'outil actif + canvas plein** n'a de sens que pour les outils avec un **contrôleur flottant sur le canvas** : **Dessin** (oui, `StoryDrawingToolbar`), **Texte** (optionnel, via `StoryTextEditToolbar`). Pour média/audio/filtres/texture, le panneau **EST** l'UI de l'outil → le « repli » = simple fermeture (pas de tiroir persistant). **`.timeline` exclu** (sheet plein écran). Le spec n'impose donc pas un repli-tiroir incohérent ; il généralise le **resize** et limite le **repli** aux cas cohérents.
+### B2 — Repli-tiroir universel (peek du canvas plein)
+Le repli (glisser la poignée à fond / sous le seuil) **minimise le sheet à sa poignée** pour **tous** les outils du band, **l'outil restant sélectionné** : par couplage inverse (A1) le canvas remonte alors au **plein écran** — un « peek » du canvas. Re-déplier restaure le sheet et le canvas cardé. C'est un **peek de visualisation** (pas une sémantique « continuer à éditer sur canvas plein ») — cohérent pour couleur/texte/média/audio/filtres/texture/dessin. **`.timeline` exclu** (sheet plein écran hors band).
 
 ### B3 — Refactor (périmètre réel)
-Remplacer l'état drawing-only (`composerBandHeight`, `drawingDrawerCollapsed`, `drawingDrawerGrabberHeight`) par un **état du band** (hauteur par-catégorie + replié) consommé par `ComposerControlsLayer` + `ComposerToolPanelHost` + `ComposerBottomBand`. Inclut la **ré-arbitrage des gestes** du band (swipe-down/horizontal aujourd'hui désarmés seulement pour dessin, `ComposerControlsLayer.swift:197-216`). `canvasIsCarded` (A1) suit l'état du band : panneau ouvert → carte ; tiroir replié (cas Dessin/Texte) → canvas plein.
+Remplacer l'état drawing-only (`composerBandHeight`, `drawingDrawerCollapsed`, `drawingDrawerGrabberHeight`) par un **état du band** (hauteur par-catégorie + replié) consommé par `ComposerControlsLayer` + `ComposerToolPanelHost` + `ComposerBottomBand`. Inclut la **ré-arbitrage des gestes** du band (swipe-down/horizontal aujourd'hui désarmés seulement pour dessin, `ComposerControlsLayer.swift:197-216`) → généralisée à tous les outils. `canvasIsCarded` (A1) suit l'état du band : panneau ouvert → canvas cardé au-dessus ; tiroir replié (**tout outil**) → canvas plein.
 
 ## 4. Lot C — Épaisseur fidèle + pression
 
@@ -105,7 +107,7 @@ Au rendu, **uniquement si la stroke porte une pression réelle** (`captureVersio
 SDK : scheme `MeeshySDK-Package`, iPhone 16 Pro, `-derivedDataPath apps/ios/Build/DerivedData`. Helpers purs **`nonisolated`**, tests **non-`@MainActor`**, builder partagé en **core**.
 
 **Fonctions pures (unitaires) :**
-- **A** : helper de cadrage A4 → scale/offset/cornerRadius pour `free`/`carded`/`immersive` (3 états) ; insets symétriques reader (taille constante own vs others) ; `aspectFitSize` entrée dégénérée (`CanvasGeometry.swift:58`) ; **table de vérité `canvasIsCarded`** (toutes combinaisons band/draw/text).
+- **A** : helper de cadrage A4 → scale/offset/cornerRadius pour `free`/`carded`/`immersive` (3 états) ; insets symétriques reader (taille constante own vs others) ; `aspectFitSize` entrée dégénérée (`CanvasGeometry.swift:58`) ; **table de vérité `canvasIsCarded`** (toutes combinaisons band/draw/text) ; **couplage inverse** : pour une hauteur de header + hauteur de sheet, `region = [header … sheetTop]`, `scale` qui rentre le canvas dans `region`, **monotone décroissant** quand la hauteur du sheet augmente, et `scale == 1` (plein) quand le sheet est replié ; **invariant no-overlap** : `bas du canvas cardé ≤ haut du sheet`.
 - **B** : clamp band `[160, plafond]` généralisé ; hauteur mémorisée par catégorie ; collapse/expand idempotents pour les outils éligibles ; non-éligibilité timeline.
 - **C** : dérivation vitesse depuis `timeOffset` (Δt=0, 1er point) ; lissage fenêtre ; orientation driver Pencil (`force/max`) vs doigt (`1−vitesse`) → « haut = épais » ; bornes clamp (`pressure=0→0.5×base≥1` ; `=1→1.6×base≤2.5×base`) ; `base = width×toolMultiplier` ; **non-régression legacy** (`captureVersion` absent → constant) ; projection largeur par `scaleFactor` ; **lissage qui conserve la largeur** (Catmull-Rom/RDP en lockstep) ; **parité largeur effective par-point live==baked** (même builder).
 
