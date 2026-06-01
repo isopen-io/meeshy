@@ -380,3 +380,9 @@ Sweep large relancé après recompilation (NotificationCoordinator de l'agent pa
 - [ ] CanvasAudioLifecycleTests ×5 (cf. diagnostic ci-dessus) — propriétaire audio.
 - [ ] Vérif visuelle (session fraîche) : glass committé + rognage timeline dans le viewer.
 - [ ] Doublon mémoire CALayer-sublayer — fusionner.
+
+## it.19 CONFIRMÉ (sweep final) — bundle MeeshyUITests vert sauf le cluster audio déféré
+Sweep large (snapshot exclu) : SEUL `CanvasAudioLifecycleTests` ×5 rouge (déféré, domaine audio
+agent parallèle, diagnostic ci-dessus). Aucune erreur de build, aucune nouvelle régression. Les
+12 tests durée stale + les 5 export d'origine + les 5 avatar sont désormais VERTS. Le fix
+source-de-vérité durée (timeline autoritaire) est livré, intégré et vérifié de bout en bout.
