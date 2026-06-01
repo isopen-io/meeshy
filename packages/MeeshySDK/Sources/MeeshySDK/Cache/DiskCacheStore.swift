@@ -226,7 +226,7 @@ public actor DiskCacheStore: ReadableCacheStore {
     public func data(for urlString: String) async throws -> Data {
         // 1. Check cache (memory + disk)
         let result = await load(for: urlString)
-        if let data = result.value?.first { return data }
+        if let data = result.snapshot()?.first { return data }
 
         // 2. Deduplicate in-flight downloads for same URL
         let fileKey = Self.fileKey(for: urlString)
@@ -435,7 +435,7 @@ public actor DiskCacheStore: ReadableCacheStore {
         }
 
         let result = await load(for: urlString)
-        if let data = result.value?.first, let image = Self.downsampledImage(data: data, maxPixelSize: maxPixelSize) {
+        if let data = result.snapshot()?.first, let image = Self.downsampledImage(data: data, maxPixelSize: maxPixelSize) {
             Self.cacheIfWithinBudget(image, key: fileKey)
             return image
         }
