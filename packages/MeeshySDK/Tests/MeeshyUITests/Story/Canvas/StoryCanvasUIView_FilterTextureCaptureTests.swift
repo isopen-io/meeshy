@@ -27,6 +27,10 @@ final class StoryCanvasUIView_FilterTextureCaptureTests: XCTestCase {
     /// test suite. Matches the iPhone composer surface.
     private let canvasSize = CGSize(width: 412, height: 732)
 
+    /// `filter` must be a **`StoryFilter` rawValue** ("vintage", "bw", …) — that's
+    /// what the grid persists into `effects.filter`. Passing a Metal function name
+    /// ("vintageFilter") would NOT attach a layer (the canvas bridges via
+    /// `Kind(storyFilter:)`), which is exactly the mismatch that left filters dead.
     private func makeView(filter: String?, intensity: Double? = 0.5) -> StoryCanvasUIView {
         var effects = StoryEffects()
         effects.filter = filter
@@ -43,7 +47,7 @@ final class StoryCanvasUIView_FilterTextureCaptureTests: XCTestCase {
     // MARK: - sourceTexture assignment
 
     func test_updateFilterLayer_assignsNonNilSourceTexture() throws {
-        let view = makeView(filter: "vintageFilter", intensity: 0.7)
+        let view = makeView(filter: "vintage", intensity: 0.7)
 
         let filtered = try XCTUnwrap(view._filteredLayerForTesting,
                                      "Filter overlay must be attached when slide.effects.filter is set")
@@ -55,7 +59,7 @@ final class StoryCanvasUIView_FilterTextureCaptureTests: XCTestCase {
     }
 
     func test_updateFilterLayer_textureDimensionsMatchCanvasSize() throws {
-        let view = makeView(filter: "bwContrastFilter")
+        let view = makeView(filter: "bw")
 
         let filtered = try XCTUnwrap(view._filteredLayerForTesting)
         let source = try XCTUnwrap(filtered.sourceTexture)
@@ -79,7 +83,7 @@ final class StoryCanvasUIView_FilterTextureCaptureTests: XCTestCase {
     func test_updateFilterLayer_clearsSourceTextureCacheWhenFilterRemoved() throws {
         // Start with a filter attached so the cache fields are populated.
         var effects = StoryEffects()
-        effects.filter = "vintageFilter"
+        effects.filter = "vintage"
         effects.filterIntensity = 0.5
         let slide = StorySlide(id: "swap-slide", effects: effects, duration: 5)
         let view = StoryCanvasUIView(slide: slide, mode: .edit)
@@ -100,7 +104,7 @@ final class StoryCanvasUIView_FilterTextureCaptureTests: XCTestCase {
     // MARK: - Capture seam
 
     func test_captureFilterSourceForTesting_returnsTextureWithRequestedDimensions() throws {
-        let view = makeView(filter: "vintageFilter")
+        let view = makeView(filter: "vintage")
         let texture = try XCTUnwrap(view._captureFilterSourceForTesting(renderSize: canvasSize),
                                     "Capture helper must produce an MTLTexture for a non-empty render size")
 
@@ -111,7 +115,7 @@ final class StoryCanvasUIView_FilterTextureCaptureTests: XCTestCase {
     }
 
     func test_captureFilterSourceForTesting_returnsNilForZeroSize() {
-        let view = makeView(filter: "vintageFilter")
+        let view = makeView(filter: "vintage")
         let texture = view._captureFilterSourceForTesting(renderSize: .zero)
         XCTAssertNil(texture, "Zero render size must be rejected before allocating a Metal texture")
     }
@@ -143,7 +147,7 @@ final class StoryCanvasUIView_FilterTextureCaptureTests: XCTestCase {
         // Force the slide to have a recognisable solid-colour background so
         // the captured texture is guaranteed non-empty when read back.
         var effects = StoryEffects()
-        effects.filter = "vintageFilter"
+        effects.filter = "vintage"
         effects.filterIntensity = 1.0
         effects.background = "#FF0000"   // pure red
         let slide = StorySlide(id: "kernel-slide", effects: effects, duration: 5)

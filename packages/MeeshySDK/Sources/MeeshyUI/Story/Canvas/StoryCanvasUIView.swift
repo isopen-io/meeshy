@@ -1400,8 +1400,11 @@ public final class StoryCanvasUIView: UIView {
     /// the slide. Gesture-driven edits in `.edit` mode bump the revision
     /// through `slide.didSet`, triggering a fresh capture.
     private func updateFilterLayer() {
-        guard let raw = slide.effects.filter,
-              let kind = StoryFilteredLayer.Kind(rawValue: raw) else {
+        // `effects.filter` holds the `StoryFilter` rawValue ("vintage", "bw", …),
+        // NOT the Metal function name. Bridge via `Kind(storyFilter:)` — using
+        // `Kind(rawValue:)` directly always returned nil (the kernel function names
+        // are "vintageFilter"/"bwContrastFilter"), so filters never rendered.
+        guard let kind = StoryFilteredLayer.Kind(storyFilter: slide.effects.filter) else {
             filteredLayer?.removeFromSuperlayer()
             filteredLayer = nil
             lastCapturedRevision = nil
