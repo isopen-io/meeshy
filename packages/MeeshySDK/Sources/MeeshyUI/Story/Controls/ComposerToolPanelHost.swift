@@ -21,6 +21,10 @@ struct ComposerToolPanelHost: View {
     /// fermeture (flicker visible).
     var onDeleteText: ((String) -> Void)? = nil
     var onShowInTimeline: (() -> Void)? = nil
+    /// Hauteur redimensionnable du panneau DESSIN (drag du grabber). Non-nil →
+    /// remplace la hauteur fixe `panelHeight` du dessin (mécanisme éprouvé
+    /// `.frame(height: panelHeight - 50)`), donc le band suit le grabber.
+    var drawingPanelHeightOverride: CGFloat? = nil
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -169,7 +173,7 @@ struct ComposerToolPanelHost: View {
         switch tool {
         case .media:    return 220
         case .audio:    return 220
-        case .drawing:  return 280   // héberge la liste éditable des traits (DrawingStrokeList)
+        case .drawing:  return drawingPanelHeightOverride ?? 280   // liste des traits ; redimensionnable via le grabber
         case .text:     return 280
         case .texture:  return 160
         case .filters:  return 180
@@ -435,7 +439,13 @@ struct ComposerToolPanelHost: View {
     /// dédiée `DrawingBand` qui doublonnait, bug user 2026-06-01). Les contrôleurs
     /// de pinceau restent flottants sur le canvas (`StoryDrawingToolbar`).
     private var drawingPanel: some View {
-        DrawingStrokeList(viewModel: viewModel, maxListHeight: .infinity)
+        // `Spacer` : quand la liste est vide, `DrawingStrokeList` rend un `EmptyView`
+        // dont SwiftUI ignore le `.frame(height:)` → le band collapserait à la barre
+        // de chips. Le `Spacer` (vue concrète) remplit la hauteur du panneau.
+        VStack(spacing: 0) {
+            DrawingStrokeList(viewModel: viewModel, maxListHeight: .infinity)
+            Spacer(minLength: 0)
+        }
     }
 
     @ViewBuilder

@@ -19,6 +19,15 @@ struct ComposerBottomBand: View {
     var onDeleteText: ((String) -> Void)? = nil
     var onShowInTimeline: (() -> Void)? = nil
 
+    /// Non-nil (mode dessin) → le grabber devient un handle de RESIZE : drag vertical
+    /// ajuste cette hauteur de panneau (clampée), pilotée via `panelHeight`. Le canvas
+    /// est scalé au-dessus côté `StoryComposerView`. `nil` → grabber décoratif (swipe-down
+    /// géré par le parent).
+    var resizableHeight: Binding<CGFloat>? = nil
+    var minHeight: CGFloat = 160
+    var maxHeight: CGFloat = 540
+    @State private var dragStartHeight: CGFloat?
+
     @Environment(\.colorScheme) private var colorScheme
 
     /// Theme-aware tint for the swipe-down drag handle (visible on both light
@@ -64,17 +73,7 @@ struct ComposerBottomBand: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Drag handle for swipe-down affordance.
-            // - Color adapts to colorScheme so it stays visible on light AND dark slides
-            // - Tap-target zone is enlarged via padding so the handle is more discoverable
-            RoundedRectangle(cornerRadius: 2.5)
-                .fill(dragHandleColor)
-                .frame(width: 42, height: 5)
-                .padding(.top, 10)
-                .padding(.bottom, 6)
-                .accessibilityLabel("Poignée de la barre d'outils")
-                .accessibilityHint("Faites glisser vers le bas pour réduire ou fermer.")
-                .accessibilityAddTraits(.isButton)
+            grabber
 
             // Panel content — keyed by state so the old panel slides
             // down and the new one slides up from the bottom.
@@ -104,7 +103,8 @@ struct ComposerBottomBand: View {
                         onEditMedia: onEditMedia,
                         onEditText: onEditText,
                         onDeleteText: onDeleteText,
-                        onShowInTimeline: onShowInTimeline
+                        onShowInTimeline: onShowInTimeline,
+                        drawingPanelHeightOverride: resizableHeight?.wrappedValue
                     )
                 case .formatPanel(.text, let elementId):
                     if let binding = textObjectBinding(for: elementId) {
@@ -175,5 +175,39 @@ struct ComposerBottomBand: View {
         )
         .shadow(color: .black.opacity(0.25), radius: 14, y: -6)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: stateKey)
+    }
+
+    /// Poignée du band. En mode redimensionnable (dessin), drag vertical = RESIZE :
+    /// tirer vers le haut agrandit le panneau (et rétrécit le canvas scalé au-dessus),
+    /// vers le bas l'inverse — clampé `[minHeight, maxHeight]`. Sinon décoratif
+    /// (le swipe-down/fermeture est géré par le parent `ComposerControlsLayer`).
+    @ViewBuilder
+    private var grabber: some View {
+        let handle = RoundedRectangle(cornerRadius: 2.5)
+            .fill(dragHandleColor)
+            .frame(width: 42, height: 5)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
+            .frame(maxWidth: .infinity)        // hit-area sur toute la largeur
+            .contentShape(Rectangle())
+            .accessibilityLabel("Poignée de la barre d'outils")
+            .accessibilityAddTraits(.isButton)
+
+        if let height = resizableHeight {
+            handle
+                .accessibilityHint("Faites glisser vers le haut pour agrandir, vers le bas pour réduire.")
+                .gesture(
+                    DragGesture(minimumDistance: 2)
+                        .onChanged { value in
+                            if dragStartHeight == nil { dragStartHeight = height.wrappedValue }
+                            let base = dragStartHeight ?? height.wrappedValue
+                            height.wrappedValue = max(minHeight, min(maxHeight, base - value.translation.height))
+                        }
+                        .onEnded { _ in dragStartHeight = nil }
+                )
+        } else {
+            handle
+                .accessibilityHint("Faites glisser vers le bas pour réduire ou fermer.")
+        }
     }
 }

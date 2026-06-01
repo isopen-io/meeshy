@@ -15,6 +15,12 @@ public struct ComposerControlsLayer: View {
     @Binding var showAudioDocumentPicker: Bool
     @Binding var showVoiceRecorderSheet: Bool
 
+    /// Hauteur redimensionnable du panneau DESSIN (drag du grabber → pilote aussi le
+    /// scale du canvas au-dessus côté `StoryComposerView`).
+    @Binding var resizableBandHeight: CGFloat
+    let bandMinHeight: CGFloat
+    let bandMaxHeight: CGFloat
+
     /// Ouvre l'éditeur d'image plein écran pour un média (recadrage/filtres/
     /// ajustements). Seul point d'entrée d'édition média — il n'y a plus de
     /// panneau de contrôles média redondant dans le composer.
@@ -28,6 +34,9 @@ public struct ComposerControlsLayer: View {
         fgMediaItem: Binding<PhotosPickerItem?>,
         showAudioDocumentPicker: Binding<Bool>,
         showVoiceRecorderSheet: Binding<Bool>,
+        resizableBandHeight: Binding<CGFloat>,
+        bandMinHeight: CGFloat,
+        bandMaxHeight: CGFloat,
         onOpenMediaCrop: @escaping (String) -> Void
     ) {
         self.viewModel = viewModel
@@ -37,8 +46,14 @@ public struct ComposerControlsLayer: View {
         self._fgMediaItem = fgMediaItem
         self._showAudioDocumentPicker = showAudioDocumentPicker
         self._showVoiceRecorderSheet = showVoiceRecorderSheet
+        self._resizableBandHeight = resizableBandHeight
+        self.bandMinHeight = bandMinHeight
+        self.bandMaxHeight = bandMaxHeight
         self.onOpenMediaCrop = onOpenMediaCrop
     }
+
+    /// Le grabber redimensionne le band dès qu'il affiche le panneau DESSIN.
+    private var isBandResizable: Bool { effectiveBandState.activeCategory == .drawing }
 
     /// État effectif du band : le dessin utilise le band PARTAGÉ comme tous les
     /// outils (`drawingPanel` = liste éditable des traits). On force donc l'affichage
@@ -141,10 +156,16 @@ public struct ComposerControlsLayer: View {
                     },
                     onShowInTimeline: {
                         viewModel.isTimelineVisible = true
-                    }
+                    },
+                    resizableHeight: isBandResizable ? $resizableBandHeight : nil,
+                    minHeight: bandMinHeight,
+                    maxHeight: bandMaxHeight
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
+                // En mode dessin le grabber pilote le RESIZE — on désarme le
+                // swipe-down/latéral du band entier pour ne pas le concurrencer.
                 .gesture(
+                    isBandResizable ? nil :
                     DragGesture(minimumDistance: 30)
                         .onEnded { value in
                             // Swipe down: dismiss band → show FABs

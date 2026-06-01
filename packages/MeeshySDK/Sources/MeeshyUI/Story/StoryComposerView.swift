@@ -190,6 +190,11 @@ public struct StoryComposerView: View {
     @State private var areFabsVisible: Bool = true
     @State private var bandStateMachine: BandStateMachine = BandStateMachine()
 
+    /// Hauteur (redimensionnable) du panneau DESSIN du band partagé, pilotée par le
+    /// drag du grabber (`ComposerBottomBand`). Tirer vers le haut agrandit le panneau
+    /// (liste des traits) et rétrécit le canvas scalé au-dessus ; vers le bas l'inverse.
+    @State private var composerBandHeight: CGFloat = 280
+
     @State private var showDiscardAlert = false
     @State private var showRestoreDraftAlert = false
     @State private var isLoadingMedia = false
@@ -648,6 +653,9 @@ public struct StoryComposerView: View {
                     fgMediaItem: $fgMediaItem,
                     showAudioDocumentPicker: $showAudioDocumentPicker,
                     showVoiceRecorderSheet: $showVoiceRecorderSheet,
+                    resizableBandHeight: $composerBandHeight,
+                    bandMinHeight: Self.composerBandMinHeight,
+                    bandMaxHeight: Self.composerBandMaxHeight,
                     onOpenMediaCrop: { id in openMediaEditor(elementId: id) }
                 )
             }
@@ -1279,15 +1287,17 @@ public struct StoryComposerView: View {
     /// du band. Constante alignée sur la hauteur du band en mode dessin
     /// (grabber + `drawingPanel`). Le dessin n'a plus de bande dédiée `DrawingBand`.
     private var bottomPanelHeight: CGFloat {
-        // Calé sur `drawingEditingMode.isActive` (même gate que les bulles +
-        // `effectiveBandState`) : tant que les contrôleurs de dessin sont à
-        // l'écran, on réserve la hauteur du band partagé pour scaler le canvas
-        // au-dessus ET lever les bulles au-dessus du band (sinon les bulles, au
-        // ras du bas, occultent le `ComposerBottomBand`).
-        viewModel.drawingEditingMode.isActive ? Self.drawingBandReserve : 0
+        // Le band affiche le panneau DESSIN dès que les contrôleurs sont actifs OU
+        // que la machine d'état pointe sur le dessin. On réserve alors la hauteur
+        // (redimensionnable) du panneau + le chrome du band (grabber + header +
+        // paddings ≈ 40) pour scaler le canvas au-dessus ET lever les bulles.
+        let bandShowsDrawing = viewModel.drawingEditingMode.isActive
+            || bandStateMachine.state.activeCategory == .drawing
+        return bandShowsDrawing ? composerBandHeight + 40 : 0
     }
 
-    static let drawingBandReserve: CGFloat = 320
+    static let composerBandMinHeight: CGFloat = 160
+    static let composerBandMaxHeight: CGFloat = 540
 
     @ViewBuilder
     private var canvasCore: some View {
