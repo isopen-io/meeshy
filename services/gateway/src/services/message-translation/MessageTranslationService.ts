@@ -949,11 +949,14 @@ export class MessageTranslationService extends EventEmitter {
       // handler progressif _processTranslationEvent sur le même attachment.
       const newTranslationEntries: AttachmentTranslations = {};
 
+      // Dossier de sortie commun : calculé + créé UNE seule fois (pas par langue).
+      const translatedDir = path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated');
+      let translatedDirEnsured = false;
+
       for (const translatedAudio of data.translatedAudios) {
         // Toujours générer le path et l'URL au format gateway (même sans binaire)
         const ext = translatedAudio.audioMimeType?.replace('audio/', '') || 'mp3';
         const expectedFilename = `${data.attachmentId}_${translatedAudio.targetLanguage}.${ext}`;
-        const translatedDir = path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated');
         let localAudioPath = path.resolve(translatedDir, expectedFilename);
         let localAudioUrl = `/api/v1/attachments/file/translated/${expectedFilename}`;
 
@@ -966,7 +969,10 @@ export class MessageTranslationService extends EventEmitter {
 
         if (audioBinary || audioBase64) {
           try {
-            await fs.mkdir(translatedDir, { recursive: true });
+            if (!translatedDirEnsured) {
+              await fs.mkdir(translatedDir, { recursive: true });
+              translatedDirEnsured = true;
+            }
 
             // Sauvegarder directement le buffer (multipart) ou décoder base64 (legacy)
             const audioBuffer = audioBinary || Buffer.from(audioBase64!, 'base64');
@@ -1856,10 +1862,13 @@ export class MessageTranslationService extends EventEmitter {
         // incluse). Merge avec l'existant + update faits SOUS MUTEX plus bas.
         const newTranslationEntries: AttachmentTranslations = {};
 
+        // Dossier de sortie commun : calculé + créé UNE seule fois (pas par langue).
+        const translatedDir = path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated');
+        let translatedDirEnsured = false;
+
         for (const translation of data.result.translations) {
           // TOUJOURS générer le path et l'URL au format gateway (même sans binaire)
           // Cela garantit que l'URL du translator (/outputs/audio/translated/) n'est jamais exposée
-          const translatedDir = path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated');
           const filename = `${jobMetadata.attachmentId}_${translation.targetLanguage}.mp3`;
           const localAudioPath = path.resolve(translatedDir, filename);
           const localAudioUrl = `/api/v1/attachments/file/translated/${filename}`;
@@ -1871,7 +1880,10 @@ export class MessageTranslationService extends EventEmitter {
 
           if (audioBinary || audioBase64) {
             try {
-              await fs.mkdir(translatedDir, { recursive: true });
+              if (!translatedDirEnsured) {
+                await fs.mkdir(translatedDir, { recursive: true });
+                translatedDirEnsured = true;
+              }
 
               // Sauvegarder directement le buffer (multipart) ou décoder base64 (legacy)
               const audioBuffer = audioBinary || Buffer.from(audioBase64!, 'base64');
