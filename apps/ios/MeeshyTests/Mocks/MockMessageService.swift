@@ -16,6 +16,16 @@ final class MockMessageService: MessageServiceProviding {
         {"success":true,"data":[],"pagination":null,"cursorPagination":null,"hasNewer":null}
         """)
     )
+    var listAfterResult: Result<MessagesAPIResponse, Error> = .success(
+        JSONStub.decode("""
+        {"success":true,"data":[],"pagination":null,"cursorPagination":null,"hasNewer":null}
+        """)
+    )
+    /// FIFO queue of per-call responses for `listAfter`, consumed before
+    /// falling back to `listAfterResult`. Lets a test drive multi-page forward
+    /// backfill (e.g. a full page then a partial page) to prove the watermark
+    /// loop keeps paging past the first `limit` messages.
+    var listAfterResults: [MessagesAPIResponse] = []
     var listAroundResult: Result<MessagesAPIResponse, Error> = .success(
         JSONStub.decode("""
         {"success":true,"data":[],"pagination":null,"cursorPagination":null,"hasNewer":null}
@@ -62,6 +72,11 @@ final class MockMessageService: MessageServiceProviding {
     var listBeforeCallCount = 0
     var lastListBeforeConversationId: String?
     var lastListBeforeCursor: String?
+
+    var listAfterCallCount = 0
+    var lastListAfterConversationId: String?
+    var lastListAfterAfter: Date?
+    var lastListAfterLimit: Int?
 
     var listAroundCallCount = 0
     var lastListAroundConversationId: String?
@@ -122,6 +137,17 @@ final class MockMessageService: MessageServiceProviding {
             lastListBeforeCursor = before
         }
         return try await MainActor.run { try listBeforeResult.get() }
+    }
+
+    nonisolated func listAfter(conversationId: String, after: Date, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse {
+        try await MainActor.run {
+            listAfterCallCount += 1
+            lastListAfterConversationId = conversationId
+            lastListAfterAfter = after
+            lastListAfterLimit = limit
+            if !listAfterResults.isEmpty { return listAfterResults.removeFirst() }
+            return try listAfterResult.get()
+        }
     }
 
     nonisolated func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse {
@@ -219,6 +245,11 @@ final class MockMessageService: MessageServiceProviding {
         listBeforeCallCount = 0
         lastListBeforeConversationId = nil
         lastListBeforeCursor = nil
+        listAfterCallCount = 0
+        lastListAfterConversationId = nil
+        lastListAfterAfter = nil
+        lastListAfterLimit = nil
+        listAfterResults = []
         listAroundCallCount = 0
         lastListAroundConversationId = nil
         lastListAroundMessageId = nil

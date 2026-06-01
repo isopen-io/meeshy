@@ -538,6 +538,10 @@ private final class MockMessageService: MessageServiceProviding, @unchecked Send
         return try listBeforeResult.get()
     }
 
+    func listAfter(conversationId: String, after: Date, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse {
+        return MessagesAPIResponse(success: true, data: [], pagination: nil, cursorPagination: nil, hasNewer: nil, meta: nil)
+    }
+
     func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse { fatalError("Not used in tests") }
     func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData { fatalError("Not used in tests") }
     func edit(messageId: String, content: String) async throws -> APIMessage { fatalError("Not used in tests") }

@@ -114,6 +114,36 @@ final class MessageServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "GET")
     }
 
+    // MARK: - listAfter
+
+    func testListAfterCallsWithCorrectEndpoint() async throws {
+        let expected = makeMessagesResponse()
+        mock.stub("/conversations/\(convId)/messages", result: expected)
+
+        let watermark = Date(timeIntervalSince1970: 1_750_000_000.5)
+        let result = try await service.listAfter(conversationId: convId, after: watermark)
+
+        XCTAssertEqual(result.data.count, 1)
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/conversations/\(convId)/messages")
+        XCTAssertEqual(mock.lastRequest?.method, "GET")
+
+        let queryItems = try XCTUnwrap(mock.lastRequest?.queryItems)
+        let afterItem = try XCTUnwrap(
+            queryItems.first { $0.name == "after" },
+            "listAfter must forward the forward watermark as an `after` query item; got \(queryItems)"
+        )
+        let afterValue = try XCTUnwrap(afterItem.value)
+        // The watermark must keep its fractional seconds so a millisecond-precise
+        // high-water mark survives the round trip (gateway compares strict `>`).
+        XCTAssertTrue(afterValue.contains("."), "after watermark must carry fractional seconds; got \(afterValue)")
+
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let parsed = try XCTUnwrap(parser.date(from: afterValue))
+        XCTAssertEqual(parsed.timeIntervalSince1970, watermark.timeIntervalSince1970, accuracy: 0.001)
+    }
+
     // MARK: - listAround
 
     func testListAroundCallsWithCorrectEndpoint() async throws {

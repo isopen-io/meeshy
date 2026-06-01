@@ -2688,20 +2688,55 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Reconnection Sync (called by ConversationSocketHandler)
 
     func syncMissedMessages() async {
-        guard !messages.isEmpty else { return }
+        // The high-water mark is the newest message we already hold. With no
+        // local messages there is nothing to backfill *from* — a full load
+        // happens on conversation open instead, so no-op rather than refetch
+        // from the top. `.max()` is order-independent (doesn't assume the
+        // store sort).
+        guard let newestLocal = messages.map(\.createdAt).max() else { return }
+
+        // Page size and total cap mirror the contiguous-backfill contract: a
+        // missed-message gap of any size is filled by paging forward, not just
+        // the most recent `limit` messages (the bug in the old offset:0 fetch,
+        // which could never recover a gap larger than one page).
+        let pageSize = 100
+        let maxTotal = 1000
+
+        // Back the watermark off by a sub-millisecond so a missed message that
+        // shares the newest local message's exact instant is not excluded by
+        // the gateway's strict `createdAt > after`; the boundary message simply
+        // re-surfaces and is deduped by id on merge.
+        var cursor = newestLocal.addingTimeInterval(-0.001)
+        var collected: [APIMessage] = []
 
         do {
-            let response = try await messageService.list(
-                conversationId: conversationId, offset: 0, limit: 30, includeReplies: true
-            )
+            while collected.count < maxTotal {
+                let response = try await messageService.listAfter(
+                    conversationId: conversationId, after: cursor, limit: pageSize,
+                    includeReplies: true, includeTranslations: true
+                )
+                let page = response.data  // ascending (oldest-after-watermark first), per gateway contract
+                guard !page.isEmpty else { break }
 
-            // Upsert missed messages to GRDB; store observation surfaces them automatically.
-            try? await messagePersistence.upsertFromAPIMessages(response.data)
-            extractAttachmentTranscriptions(from: response.data)
-            extractTextTranslations(from: response.data)
+                collected.append(contentsOf: page)
+
+                // Advance the watermark to the newest instant in this page.
+                guard let pageNewest = page.compactMap(\.createdAt).max() else { break }
+                cursor = pageNewest
+
+                if page.count < pageSize { break }  // last (partial) page → gap filled
+            }
+
+            guard !collected.isEmpty else { return }
+
+            // Upsert backfilled messages to GRDB; store observation surfaces them automatically.
+            try? await messagePersistence.upsertFromAPIMessages(collected)
+            extractAttachmentTranscriptions(from: collected)
+            extractTextTranslations(from: collected)
 
             let userId = currentUserId
-            let fetchedMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId, currentUsername: self.currentUsername) }
+            // `listAfter` already returns ascending — no reversal needed (unlike the old DESC `list`).
+            let fetchedMessages = collected.map { $0.toMessage(currentUserId: userId, currentUsername: self.currentUsername) }
             let newMessages = fetchedMessages.filter { !self.containsMessage(id: $0.id) }
 
             if !newMessages.isEmpty {
@@ -2715,7 +2750,7 @@ class ConversationViewModel: ObservableObject {
                         return (cached + newOnly).sorted { $0.createdAt < $1.createdAt }
                     }
                 }
-                Logger.socket.info("Synced \(newMessages.count) missed message(s) for conversation \(self.conversationId)")
+                Logger.socket.info("Backfilled \(newMessages.count) missed message(s) via watermark for conversation \(self.conversationId)")
             }
         } catch {
             Logger.socket.error("Failed to sync missed messages: \(error)")

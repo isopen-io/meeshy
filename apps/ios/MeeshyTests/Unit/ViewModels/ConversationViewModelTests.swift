@@ -144,7 +144,8 @@ final class ConversationViewModelTests: XCTestCase {
         reactions: [Reaction] = [],
         pinnedAt: Date? = nil,
         pinnedBy: String? = nil,
-        deletedAt: Date? = nil
+        deletedAt: Date? = nil,
+        createdAt: Date = Date()
     ) -> Message {
         Message(
             id: id,
@@ -154,11 +155,26 @@ final class ConversationViewModelTests: XCTestCase {
             deletedAt: deletedAt,
             pinnedAt: pinnedAt,
             pinnedBy: pinnedBy,
-            createdAt: Date(),
-            updatedAt: Date(),
+            createdAt: createdAt,
+            updatedAt: createdAt,
             reactions: reactions,
             isMe: isMe
         )
+    }
+
+    /// Builds a `MessagesAPIResponse` with `count` synthetic messages for the
+    /// reconnect-backfill (`listAfter`) path. Lets a test return a full page
+    /// (== the VM's page size) followed by a partial page to drive the
+    /// watermark forward-paging loop.
+    private func makeBackfillResponse(idPrefix: String, count: Int, createdAtISO: String) -> MessagesAPIResponse {
+        let items = (0..<count).map { i in
+            """
+            {"id":"\(idPrefix)-\(i)","conversationId":"\(testConversationId)","senderId":"\(testUserId)","content":"m\(i)","createdAt":"\(createdAtISO)"}
+            """
+        }
+        return JSONStub.decode("""
+        {"success":true,"data":[\(items.joined(separator: ","))],"pagination":null,"cursorPagination":null,"hasNewer":null}
+        """)
     }
 
     // MARK: - loadMessages Tests
@@ -248,6 +264,66 @@ final class ConversationViewModelTests: XCTestCase {
         await sut.loadMessages()
 
         await fulfillment(of: [marked], timeout: 1.0)
+    }
+
+    // MARK: - syncMissedMessages (T9 — reconnect gap recovery via watermark)
+
+    /// The backfill must ask the gateway for messages created *after* the
+    /// newest message currently held locally — that high-water mark is what
+    /// makes the recovery incremental and contiguous.
+    func test_syncMissedMessages_usesNewestLocalMessageAsWatermark() async throws {
+        let sut = makeSUT()
+        let older = Date(timeIntervalSince1970: 1_750_000_000)
+        let newest = older.addingTimeInterval(3600)
+        sut.messages = [
+            makeMessage(id: "m-old", createdAt: older),
+            makeMessage(id: "m-new", createdAt: newest),
+        ]
+        mockMessageService.listAfterResult = .success(makeMessagesResponse())  // empty page → loop stops after 1 fetch
+
+        await sut.syncMissedMessages()
+
+        XCTAssertEqual(mockMessageService.listAfterCallCount, 1)
+        XCTAssertEqual(mockMessageService.listCallCount, 0, "reconnect backfill must use the watermark path, not offset-based list()")
+        let after = try XCTUnwrap(mockMessageService.lastListAfterAfter)
+        // The watermark is the newest local message (modulo a sub-millisecond
+        // tie backoff so a same-instant missed message isn't excluded by the
+        // gateway's strict `createdAt > after`).
+        XCTAssertLessThanOrEqual(after, newest)
+        XCTAssertGreaterThan(after, newest.addingTimeInterval(-0.01))
+    }
+
+    /// The core bug fix: a missed-message gap larger than one page must be
+    /// filled. The old code fetched `offset:0,limit:30` once and could never
+    /// recover a >30-message gap. The watermark loop pages forward until a
+    /// page comes back shorter than the page size.
+    func test_syncMissedMessages_pagesForwardUntilGapSmallerThanPage() async {
+        let sut = makeSUT()
+        sut.messages = [makeMessage(id: "local-newest", createdAt: Date(timeIntervalSince1970: 1_750_000_000))]
+        // First page is FULL (== the VM's 100-message page size) so the loop
+        // must fetch again; the second page is partial so it then stops.
+        mockMessageService.listAfterResults = [
+            makeBackfillResponse(idPrefix: "p1", count: 100, createdAtISO: "2026-06-01T10:00:00.000Z"),
+            makeBackfillResponse(idPrefix: "p2", count: 5, createdAtISO: "2026-06-01T11:00:00.000Z"),
+        ]
+
+        await sut.syncMissedMessages()
+
+        XCTAssertEqual(mockMessageService.listAfterCallCount, 2, "must page past the first full page to fill a gap larger than one page")
+        XCTAssertEqual(mockMessageService.listCallCount, 0, "must not fall back to offset-based list()")
+    }
+
+    /// With no local messages there is no high-water mark to backfill from —
+    /// a full load happens on conversation open instead, so the reconnect
+    /// path must no-op rather than refetch from the top.
+    func test_syncMissedMessages_withNoLocalMessages_doesNotFetch() async {
+        let sut = makeSUT()
+        sut.messages = []
+
+        await sut.syncMissedMessages()
+
+        XCTAssertEqual(mockMessageService.listAfterCallCount, 0)
+        XCTAssertEqual(mockMessageService.listCallCount, 0)
     }
 
     // MARK: - sendMessage Tests
