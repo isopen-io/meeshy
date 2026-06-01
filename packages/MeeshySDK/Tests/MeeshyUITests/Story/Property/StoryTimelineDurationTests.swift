@@ -43,4 +43,42 @@ final class StoryTimelineDurationTests: XCTestCase {
         // Garde `pinned > 0` : 0 = pas d'autorité → contenu (6 s).
         XCTAssertEqual(slide(timelineDuration: 0).computedTotalDuration(), 6.0, accuracy: 0.001)
     }
+
+    // MARK: - contentDerivedDuration inclut le foreground
+
+    func test_contentDerivedDuration_includesForegroundVideo() {
+        // Un foreground vidéo de 10 s (sans pin) → le slide couvre au moins 10 s,
+        // sinon sa queue serait coupée. (Avant : computedTotalDuration ne regardait
+        // que le bg media → 6 s → vidéo foreground coupée.)
+        let fg = StoryMediaObject(kind: .video, aspectRatio: 1.78,
+                                  isBackground: false, duration: 10.0)
+        let s = StorySlide(id: "s1", effects: StoryEffects(mediaObjects: [fg]), duration: 6)
+        XCTAssertEqual(s.contentDerivedDuration(), 10.0, accuracy: 0.001)
+        XCTAssertEqual(s.computedTotalDuration(), 10.0, accuracy: 0.001)
+    }
+
+    // MARK: - TimelineProject round-trip (pin seulement si surcharge explicite)
+
+    func test_timelineApply_explicitOverride_pinsTimelineDuration() {
+        // Projet durée 4 s ≠ contenu auto (6 s) → surcharge auteur → pin posé.
+        var s = StorySlide(id: "s1", effects: StoryEffects(), duration: 6)
+        TimelineProject(slideId: "s1", slideDuration: 4.0).apply(to: &s)
+        XCTAssertEqual(s.effects.timelineDuration ?? -1, 4.0, accuracy: 0.001)
+        XCTAssertEqual(s.computedTotalDuration(), 4.0, accuracy: 0.001)
+    }
+
+    func test_timelineApply_matchesContent_noSpuriousPin() {
+        // Projet durée == contenu auto (6 s) → pas de surcharge → AUCUN pin (reste auto).
+        var s = StorySlide(id: "s1", effects: StoryEffects(), duration: 6)
+        TimelineProject(slideId: "s1", slideDuration: 6.0).apply(to: &s)
+        XCTAssertNil(s.effects.timelineDuration)
+        XCTAssertEqual(s.computedTotalDuration(), 6.0, accuracy: 0.001)
+    }
+
+    func test_timelineProjectInit_preservesExistingPin() {
+        // Un slide déjà épinglé (3 s) ré-ouvert dans le timeline → la valeur épinglée
+        // est rechargée (round-trip stable), pas le contenu auto.
+        let s = StorySlide(id: "s1", effects: StoryEffects(timelineDuration: 3.0), duration: 6)
+        XCTAssertEqual(TimelineProject(from: s).slideDuration, 3.0, accuracy: 0.001)
+    }
 }

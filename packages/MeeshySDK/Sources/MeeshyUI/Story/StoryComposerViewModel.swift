@@ -727,6 +727,11 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
             return currentSlideIndex
         }()
         guard slides.indices.contains(targetIndex) else { return }
+        // Miroir legacy : `slide.duration` n'est plus la source de vérité (ignoré par
+        // `computedTotalDuration`). Le contenu foreground est désormais couvert par
+        // `contentDerivedDuration()` (qui inclut les vidéos non-bg), et le timeline pose
+        // un pin `timelineDuration` quand l'auteur surcharge explicitement la durée — donc
+        // on n'écrit PAS de pin ici (éviterait un pin obsolète après suppression du média).
         let current = Float(slides[targetIndex].duration)
         if end > current {
             slides[targetIndex].duration = TimeInterval(min(600, end + 0.5))

@@ -932,7 +932,15 @@ extension StorySlide {
         if let pinned = effects.timelineDuration, pinned > 0 {
             return pinned
         }
+        return contentDerivedDuration()
+    }
 
+    /// Durée dérivée du CONTENU (bg media loop / texte long / 6 s statique), en
+    /// IGNORANT le pin timeline. Sert (1) de fallback à `computedTotalDuration()`
+    /// quand aucun pin n'est posé, et (2) de référence pour décider si une durée
+    /// configurée par le timeline est une vraie surcharge auteur (≠ contenu) ou
+    /// juste la valeur auto — cf. `TimelineProject.apply`.
+    public func contentDerivedDuration() -> TimeInterval {
         // Règle : MAX(durée bg media, durée lecture texte, 6 s statique).
         // Un bg audio de 4 s avec un texte long doit respecter la lecture
         // du texte ; un bg vidéo de 12 s sans texte tient ses 12 s.
@@ -962,15 +970,23 @@ extension StorySlide {
         // Cible = max(textDur, 6 s).
         let target = max(textDur, Self.defaultStaticDuration)
 
-        // Si pas de media → cible directe.
-        guard let m = rawMediaDur, m > 0 else { return target }
+        // Background media bouclé pour atteindre la cible (ou sa durée naturelle si
+        // plus longue).
+        let bgResult: TimeInterval = {
+            guard let m = rawMediaDur, m > 0 else { return target }
+            if m >= target { return m }               // media ≥ cible → durée exacte
+            return ceil(target / m) * m                // sinon loop jusqu'à ≥ cible
+        }()
 
-        // Si media ≥ cible → durée exacte du media (pas de loop forcé).
-        if m >= target { return m }
+        // Foreground media (vidéos non-bg) : le slide doit au moins couvrir leur durée
+        // naturelle, sinon leur queue serait coupée (start=0 supposé ; un décalage précis
+        // se règle via le timeline, qui pose alors un pin `timelineDuration`).
+        let fgMediaMax = (effects.mediaObjects ?? [])
+            .filter { !$0.isBackground }
+            .compactMap { $0.duration }
+            .max() ?? 0
 
-        // Sinon loop le media jusqu'à atteindre la cible.
-        let loops = ceil(target / m)
-        return loops * m
+        return max(bgResult, fgMediaMax)
     }
 
     /// Effective slide duration that completes any background looping video to a full repetition.
@@ -1944,15 +1960,27 @@ public struct TimelineProject: Codable, Sendable {
         // `[]`, so `TimelineProject(from: slide).apply(to: &slide)` is a true
         // no-op when the slide had `nil` collections to begin with.
         //
-        // Update the slide's floor duration to match the project's duration.
-        // This allows shrinking the duration (e.g., from 12s to 5s) via the
-        // timeline tool, fulfilling the "redefine story running time" requirement.
+        // Update the slide's duration to match the project's duration. The timeline
+        // is AUTHORITATIVE (« la timeline EST la story ») : une durée EXPLICITEMENT
+        // configurée par l'auteur (≠ durée auto du contenu) est persistée dans
+        // `effects.timelineDuration`, lue EN PRIORITÉ par `computedTotalDuration()`
+        // (viewer + canvas + exporter) — permettant d'étendre ET de rogner (12s → 5s).
+        // Si la durée timeline == la durée auto du contenu, on NE pose PAS de pin
+        // (`nil`) : le slide reste auto-dérivé et se recalcule si le contenu change
+        // ensuite (évite un pin obsolète qui figerait une vieille valeur).
+        // `slide.duration` reste un miroir legacy.
         slide.duration = TimeInterval(slideDuration)
 
         slide.effects.mediaObjects = mediaObjects.isEmpty ? nil : mediaObjects
         slide.effects.audioPlayerObjects = audioPlayerObjects.isEmpty ? nil : audioPlayerObjects
         slide.effects.textObjects = textObjects
         slide.effects.clipTransitions = clipTransitions.isEmpty ? nil : clipTransitions
+
+        // Calculé APRÈS l'écriture des arrays pour que `contentDerivedDuration()`
+        // reflète le contenu du projet (et non l'ancien contenu du slide).
+        let content = slide.contentDerivedDuration()
+        slide.effects.timelineDuration =
+            (abs(Double(slideDuration) - content) > 0.05) ? Double(slideDuration) : nil
     }
 }
 
