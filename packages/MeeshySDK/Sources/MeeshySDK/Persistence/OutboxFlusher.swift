@@ -147,14 +147,34 @@ public actor OutboxFlusher {
         return earliestDeferred?.nextAttemptAt
     }
 
+    /// S1 — atomically claim a pending row for dispatch. Flips pending→inflight
+    /// ONLY while the row is still pending; returns false when another flusher
+    /// already claimed it (the conditional UPDATE matched 0 rows). Because GRDB
+    /// serializes writes, two concurrent flushers reduce to two sequential
+    /// claims and exactly one wins — closing the double-dispatch race the old
+    /// unconditional `update(db)` left open (multiple lifecycle triggers each
+    /// build their own OutboxFlusher over the shared pool, so actor isolation
+    /// alone did not serialize them).
+    func claimPending(_ record: OutboxRecord) async -> Bool {
+        let now = Date()
+        return (try? await pool.write { db -> Bool in
+            try OutboxRecord
+                .filter(Column("id") == record.id)
+                .filter(Column("status") == OutboxStatus.pending.rawValue)
+                .updateAll(
+                    db,
+                    Column("status").set(to: OutboxStatus.inflight.rawValue),
+                    Column("updatedAt").set(to: now)
+                ) == 1
+        }) ?? false
+    }
+
     private func processRecord(_ record: OutboxRecord) async {
+        // S1 — claim atomically; skip dispatch if another flusher beat us to it.
+        guard await claimPending(record) else { return }
         var current = record
         current.status = .inflight
         current.updatedAt = Date()
-        let inflightSnapshot = current
-        try? await pool.write { db in
-            try inflightSnapshot.update(db)
-        }
 
         do {
             try await dispatcher.dispatch(current)
