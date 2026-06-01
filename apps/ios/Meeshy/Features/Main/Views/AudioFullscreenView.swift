@@ -255,7 +255,7 @@ private struct AudioFullscreenPage: View {
 
             Spacer(minLength: 0)
         }
-        .onAppear { startPlayback() }
+        .onAppear { if isActive { startPlayback() } }
         .adaptiveOnChange(of: isActive) { _, active in
             if active {
                 startPlayback()
@@ -612,6 +612,7 @@ private struct AudioFullscreenPage: View {
             segments: displaySegments,
             currentTime: player.currentTime,
             accentColor: currentLangColorHex,
+            isPlaying: player.isPlaying,
             onSeek: { time in
                 player.seekToTime(time)
             }

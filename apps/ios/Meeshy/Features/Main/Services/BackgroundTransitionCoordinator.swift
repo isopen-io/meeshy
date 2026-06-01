@@ -169,9 +169,13 @@ final class MediaLifecycleBridge {
     private init() {}
 
     func prepareForBackground() async {
-        if ConversationAudioCoordinator.sharedForTesting.isPlaying {
+        if ConversationAudioCoordinator.sharedForTesting.isPlaying
+            || PlaybackCoordinator.shared.isAnyPlaying {
             // Audio Meeshy en cours -> on ne coupe rien. UIBackgroundModes "audio"
-            // autorise l'OS a continuer la lecture en background.
+            // autorise l'OS a continuer la lecture en background. On considere
+            // TOUTE lecture active (coordinator conversation OU lecteur plein
+            // ecran via son propre AudioPlaybackManager, OU video), pas seulement
+            // celle pilotee par le coordinator de conversation.
             return
         }
         #if DEBUG

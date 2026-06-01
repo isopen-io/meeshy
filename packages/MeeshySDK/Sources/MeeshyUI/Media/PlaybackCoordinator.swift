@@ -85,6 +85,20 @@ public final class PlaybackCoordinator {
         SharedAVPlayerManager.shared.stop()
     }
 
+    // MARK: - Active Playback Query
+
+    /// `true` when ANY registered player (SDK `AudioPlaybackManager`,
+    /// external `StoppablePlayer`, or the shared video manager) is currently
+    /// playing. Used by the background-transition guard so playback driven by
+    /// players the conversation-level coordinator does not own — e.g. the
+    /// fullscreen audio page's own `AudioPlaybackManager` — survives
+    /// backgrounding under the `audio` UIBackgroundMode.
+    public var isAnyPlaying: Bool {
+        if SharedAVPlayerManager.shared.isPlaying { return true }
+        for (_, weak) in audioPlayers where weak.player?.isPlaying == true { return true }
+        return false
+    }
+
     // MARK: - Stop All Playback
 
     public func stopAll() {

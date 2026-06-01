@@ -142,6 +142,7 @@ struct ConversationMediaGalleryView: View {
                     return
                 }
                 if scale <= 1.0 && abs(value.translation.height) > 150 {
+                    stopActiveVideoAudio()
                     dismiss()
                 } else {
                     withAnimation(.spring()) { offset = .zero }
@@ -230,7 +231,10 @@ struct ConversationMediaGalleryView: View {
     private var controlsOverlay: some View {
         VStack {
             HStack {
-                Button { dismiss() } label: {
+                Button {
+                    stopActiveVideoAudio()
+                    dismiss()
+                } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 28))
                         .foregroundColor(.white.opacity(0.8))
@@ -341,6 +345,19 @@ struct ConversationMediaGalleryView: View {
     }
 
     // MARK: - Actions
+
+    /// Stops the gallery's video audio when the gallery is dismissed via a path
+    /// that is NOT the swipe-down-to-PIP gesture (X button, image vertical
+    /// dismiss). `SharedAVPlayerManager` is process-wide, so without this the
+    /// AVPlayer keeps emitting audio with no visible player after the gallery is
+    /// gone. The PIP swipe path deliberately calls `startPip()` instead and must
+    /// never reach here — keeping the player alive for picture-in-picture.
+    private func stopActiveVideoAudio() {
+        guard currentIndex < allAttachments.count else { return }
+        let att = allAttachments[currentIndex]
+        guard att.type == .video, videoManager.activeURL == att.fileUrl else { return }
+        videoManager.pause()
+    }
 
     private func cacheAttachment(_ attachment: MessageAttachment?) {
         guard let attachment else { return }

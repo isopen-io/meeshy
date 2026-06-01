@@ -64,7 +64,11 @@ struct MiniAudioPlayerBar: View {
     /// driving the playback. The mini-player MUST hide in this case — the
     /// audio bubble in the conversation is the single source of UI truth.
     private var isInsidePlayingConversation: Bool {
-        guard let active = coordinator.activeContext,
+        // Use the grace context as a fallback when the queue just finished
+        // (`activeContext` → nil during the ~5s grace window). Otherwise the bar
+        // fades in INSIDE the source conversation during the grace window,
+        // overlapping the in-conversation audio bubble it must defer to.
+        guard let active = coordinator.activeContext ?? graceContext,
               let currentId = currentConversationId() else { return false }
         return active.conversationId == currentId
     }
