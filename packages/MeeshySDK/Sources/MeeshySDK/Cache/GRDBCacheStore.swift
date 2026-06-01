@@ -520,14 +520,22 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
                     try entry.save(db)
                 }
 
-                // Preserve cursor state across flushes — see writeToL2.
-                let existingCursor = try DBCacheMetadata.filter(Column("key") == keyStr).fetchOne(db)
+                // Preserve cursor state AND the network-fetch freshness clock
+                // across flushes. A dirty flush is triggered by purely-LOCAL
+                // mutations (update/upsert/mergeUpdate), so resetting
+                // `lastFetchedAt` to `now` here would make stale data read as
+                // `.fresh` after L1 eviction / restart and suppress the
+                // stale-while-revalidate refresh. Only `save()` (a genuine
+                // network fetch, see writeToL2) may advance lastFetchedAt; we
+                // fall back to `now` only when no prior metadata exists (a key
+                // created purely locally with no network counterpart).
+                let existingMeta = try DBCacheMetadata.filter(Column("key") == keyStr).fetchOne(db)
                 let meta = DBCacheMetadata(
                     key: keyStr,
-                    nextCursor: existingCursor?.nextCursor,
-                    hasMore: existingCursor?.hasMore ?? false,
+                    nextCursor: existingMeta?.nextCursor,
+                    hasMore: existingMeta?.hasMore ?? false,
                     totalCount: items.count,
-                    lastFetchedAt: now
+                    lastFetchedAt: existingMeta?.lastFetchedAt ?? now
                 )
                 try meta.save(db)
             }
