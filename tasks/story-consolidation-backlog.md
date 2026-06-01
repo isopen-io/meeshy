@@ -52,3 +52,27 @@ Local-first, efficient cache, FABs, show-only-necessary. Each fix: prove → fix
 ### Local-first / cache / perf
 - [ ] Confirm cache-first on story tray + viewer (CacheCoordinator.stories) — stale-while-revalidate.
 - [ ] Leaf views: no @ObservedObject on global singletons in story cells.
+
+## Progress — structured loop (2026-06-01)
+- [x] it.1 ThumbHash composite includes drawing layer (all layers) — pushed main 0c8fe3d7d
+- [x] it.2 Drawing topmost everywhere (renderComposite + SlideMiniPreview parity) — pushed main 4a83174dd
+- [x] it.3 Tray own-first sort on network/cache load (unified w/ socket path) — pushed main 30dc06754
+- [x] it.4 Visual review (latest build): drawing band + canvas scale/round/below-island + draw OK, no regression.
+
+## Verified-correct this session (no fix needed, proven)
+- buildEffects includes drawingStrokes (publish keeps drawing); currentEffects write-through (live thumbnail).
+- addMediaObject sets real aspectRatio for images + videos (TODO@1037 is stale, handled at picker).
+- loadStories cache-first + stale-while-revalidate (textbook); availableTranslationLanguages correct.
+- toggleBackground enforces 1-bg invariant; resolvedBackgroundAudio legacy synth correct.
+
+## FEATURE GAPS (need design decision, NOT blind-fixable)
+- Viewer language picker (showFullLanguagePicker) calls requestTranslation only — NO display override
+  and NO user feedback. Per Prisme "explore other languages", picking should display the chosen language
+  (needs: session override @State, fold into resolvedViewerLanguageChain, re-render on translation arrival,
+  revert-on-slide-change policy). Mirror messages' activeTranslationOverrides. Medium feature, design-gated.
+- Repost: RepostPayload drops modern drawingStrokes (DORMANT — only diagnostic consumer today).
+
+## NEXT to consume
+- [ ] ios-simulator: systematic nav/visual/alignment pass (login lost on reinstall — batch checks; don't reinstall per-iter).
+- [ ] Thumbnail single-source audit (tray ring vs slide-strip vs reader loading overlay).
+- [ ] Confirm leaf story cells have no @ObservedObject on global singletons (zero-rerender).
