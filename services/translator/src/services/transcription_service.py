@@ -31,6 +31,7 @@ from .model_manager import (
 
 # Import du smart segment merger pour fusionner intelligemment les mots courts
 from utils.smart_segment_merger import merge_short_segments
+from .audio_pipeline.transcription_guards import resolve_transcription_confidence
 
 # Configuration du logging
 logger = logging.getLogger(__name__)
@@ -498,7 +499,7 @@ class TranscriptionService:
             result = TranscriptionResult(
                 text=full_text,
                 language=info.language,
-                confidence=info.language_probability,
+                confidence=resolve_transcription_confidence(full_text, info.language_probability),
                 segments=segments,
                 duration_ms=int(info.duration * 1000),
                 source="whisper",
