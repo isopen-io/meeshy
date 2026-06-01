@@ -188,6 +188,14 @@ Body:
 
 ---
 
+## RÉSOLUTION A5 + A6 (2026-06-01)
+
+- **A5 — SATISFAIT par le carrousel existant, PAS de nouveau code.** Le besoin utilisateur exact (« la vidéo prend toute la place inline puis reprend sa place de **carrousel** ») est déjà couvert par `BubbleCarouselView` : chaque page est pleine largeur, la vidéo joue plein-page, et swipe/fin de lecture y ramène. La grille album (2–4) garde la lecture vidéo en-cellule (R1). Une tentative d'expand vidéo DANS la grille (`expandedInlineVideoAttachment` + `.id()`) a été faite (`04b96bdaa`) puis **revertée** (`b3cc802e6`) : le `.id()` ne préserve pas l'identité à travers le switch structurel grille→solo, donc `onDisappear→release()→stop()` coupait la vidéo à l'expansion (régression). Si un jour on veut l'expand grille, il faudra une restructure ZStack/opacity gardant le `_InlineRenderer` à une position structurelle stable + investiguer le ref-count de `SharedAVPlayerManager` — effort dédié, hors scope ici.
+- **A6 — VÉRIFIÉ structurellement, pas de code.** Le carrousel audio réutilise `AdaptiveHorizontalPager` (ScrollView .paging iOS17 / TabView iOS16), qui coexiste déjà en prod avec le `DragGesture(minimumDistance:22)` + garde 2:1 de `BubbleSwipeContainer` pour les bulles multi-image. Le ScrollView gagne l'arbitrage du pan horizontal ; aux bords, le swipe-reply/forward reprend. Reste : smoke device pour confirmer la parité visuelle (non bloquant).
+
+## Follow-up identifié (hors Plan 2)
+**Traduction audio par-piste** : `messageTranslatedAudios` reste keyed par `msg.id` (overwrite/dedup par-message), donc en multi-audio une seule piste conserve ses audios traduits → les boutons de langue par-piste sont partiels. Symétrique au fix transcription (`messageTranscriptionsByAttachment`). À traiter dans un effort dédié (`messageTranslatedAudiosByAttachment`) pour compléter « chaque piste affiche sa translation ».
+
 ## Stratégie de test (TDD)
 - **A4.1** pure builder: unit tests (current/tail, thread continuation, dedup, clamping).
 - **A4.2/A4.3** view wiring: build-green + reuse of already-tested SDK components (`AudioPlayerView`, `MediaTranscriptionView`, coordinator) + manual smoke; no fragile View unit tests.
