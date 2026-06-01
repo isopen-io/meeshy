@@ -545,3 +545,28 @@ PLAN DE CORRECTIF (incrément focalisé, TDD) :
       → Décision user. Non vérifiable visuellement sans login.
 - [ ] Foreground (non-bg) vidéos pas dessinées dans le composite (poster seulement) — étendre la boucle foreground.
 - [ ] P1 filtres (6 sans kernel) + P3 looks divergents — chantier archi (plan dédié).
+
+## it.27 IMPLÉMENTÉ — thumbnail composite local-first dans le tray (hybride Phase 1) (af655b14b)
+- [x] Demande user : « the entire story should have a thumbnail capturing text drawing and all content on send ».
+- [x] Au send (runStoryUpload, après createStory), rend le composite COMPLET (bg couleur/image/**vidéo** + texte
+      + dessin + média + stickers + filtre) via `StorySlideRenderer.renderComposite` à 270×480, cache dans
+      `CacheCoordinator.thumbnails` sous clé synthétique `story-cover:<postId>` (pas de collision URL média).
+- [x] `StoryTrayView` préfère ce cover local (file://, déjà supporté par CachedAsyncImage) → l'auteur voit
+      instantanément sa story composée, au lieu du thumbnail serveur (bg brut, sans overlays).
+- [x] `renderComposite` gagne param `size` (défaut 100×178 inchangé pour thumbHash) ; `CacheCoordinator`
+      gagne `thumbnailLocalFileURL(for:)` (nonisolated, miroir imageLocalFileURL) ; enum `StoryCoverThumbnail`
+      centralise clé + ordre de résolution pur testable.
+- [x] App build full vert (compile tout). 3 tests StoryViewModelTests (clé, prefer-local, fallback chain).
+- [!] EXÉCUTION tests bloquée ce tour par contention SPM d'un agent // (éviction répétée des XCFrameworks
+      Firebase/GoogleAds) + un test SDK cassé par le même agent (SocialSocketAdditionalTests / SocketPostCreatedData).
+      À relancer quand le cache SPM se stabilise. Vérif visuelle device (login) reste à faire.
+
+## REPLENISHED backlog — post it.27
+- [ ] **Phase 2 (hybride, user a choisi both) — cover baké uploadé** : pour que TOUS les viewers voient les
+      overlays dans le tray (pas seulement l'auteur). Upload TUS du composite comme asset thumbnail + champ modèle
+      + gateway. ⚠️ touche la règle « never bake/upload composite » (Prisme : fige le texte langue auteur dans le
+      preview) — assumé pour un preview de tray. Plan dédié.
+- [ ] Relancer les 3 tests StoryViewModelTests cover-thumbnail + les 11 renderer tests quand SPM stable.
+- [ ] Vérif visuelle device : tray montre le composite (texte+dessin+vidéo) pour ses propres stories après publish.
+- [ ] Foreground (non-bg) vidéos pas dessinées dans le composite (poster seulement).
+- [ ] P1 filtres (6 sans kernel) + P3 looks divergents — chantier archi.
