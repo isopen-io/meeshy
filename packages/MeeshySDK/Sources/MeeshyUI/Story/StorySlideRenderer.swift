@@ -1,5 +1,7 @@
 import UIKit
 import PencilKit
+import CoreImage
+import CoreImage.CIFilterBuiltins
 import MeeshySDK
 
 /// Renders a story slide composite to a UIImage for thumbHash computation.
@@ -22,7 +24,7 @@ public enum StorySlideRenderer {
         let size = CGSize(width: w, height: h)
 
         let renderer = UIGraphicsImageRenderer(size: size)
-        return renderer.image { ctx in
+        let base = renderer.image { ctx in
             let rect = CGRect(origin: .zero, size: size)
             let cgCtx = ctx.cgContext
 
@@ -86,6 +88,45 @@ public enum StorySlideRenderer {
                 drawing.image(from: drawing.bounds, scale: 1).draw(in: rect)
             }
         }
+
+        // 7. Filter — applied over the WHOLE composite, mirroring the canvas which
+        //    runs its kernel on the captured (background + items) texture. Gated on
+        //    the SAME `StoryFilteredLayer.Kind(storyFilter:)` bridge the canvas uses,
+        //    so the thumbHash reflects exactly what the viewer renders: vintage/bw
+        //    (the only kernels that exist) are applied; kernel-less filters
+        //    (warm/cool/…) leave the composite untouched, just as the viewer leaves
+        //    them unfiltered — no placeholder→story colour pop. CoreImage approximates
+        //    the Metal look (sepia for vintage, mono for bw); exact parity is
+        //    unnecessary for a ~28-byte blur placeholder (only the average-colour
+        //    direction is encoded).
+        return applyActiveFilter(to: base, effects: slide.effects)
+    }
+
+    /// Applies the active story filter to the rendered composite, gated on the same
+    /// `StoryFilteredLayer.Kind` bridge the canvas/viewer use so coverage stays in
+    /// lock-step (today: vintage + bw; the six kernel-less filters return the image
+    /// unchanged). Returns the input untouched on any CoreImage failure.
+    static func applyActiveFilter(to image: UIImage, effects: StoryEffects) -> UIImage {
+        guard let kind = StoryFilteredLayer.Kind(storyFilter: effects.filter),
+              let input = CIImage(image: image) else { return image }
+        let intensity = Float(max(0.0, min(1.0, effects.filterIntensity ?? 1.0)))
+
+        let output: CIImage?
+        switch kind {
+        case .vintage:
+            let f = CIFilter.sepiaTone()
+            f.inputImage = input
+            f.intensity = intensity
+            output = f.outputImage
+        case .bwContrast:
+            let f = CIFilter.photoEffectMono()
+            f.inputImage = input
+            output = f.outputImage
+        }
+
+        guard let out = output,
+              let cg = CIContext().createCGImage(out, from: input.extent) else { return image }
+        return UIImage(cgImage: cg, scale: image.scale, orientation: image.imageOrientation)
     }
 
     /// Compute thumbHash for a complete slide composite.
