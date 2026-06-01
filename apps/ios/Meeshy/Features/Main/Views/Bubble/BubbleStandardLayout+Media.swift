@@ -33,7 +33,19 @@ extension BubbleStandardLayout {
     var visualMediaGrid: some View {
         let items = visualAttachments
 
-        switch items.count {
+        // A5/R1 — inline video "expand to full while playing, return when done".
+        // When one of the grid's videos becomes the active inline player, it
+        // takes over the whole bubble content width (other cells hidden) and
+        // plays in place. On playback finish (or any stop), `SharedAVPlayerManager`
+        // clears `activeURL`, `expandedInlineVideoAttachment` returns `nil`, and
+        // this falls back to the normal grid below — the cell "reprend sa place".
+        // No fullscreen modal, no SDK finish callback needed.
+        if items.count > 1, let expanded = expandedInlineVideoAttachment {
+            makeGridCell(expanded, solo: true)
+                .frame(width: gridMaxWidth)
+                .transition(.opacity)
+        } else {
+            switch items.count {
         case 1:
             let item = items[0]
             if item.type == .video {
@@ -84,6 +96,7 @@ extension BubbleStandardLayout {
                 }
             }
             .frame(width: gridMaxWidth, height: 240)
+            }
         }
     }
 
@@ -106,7 +119,17 @@ extension BubbleStandardLayout {
     /// is bounded; demangling a 4-deep `_ConditionalContent` tree per call
     /// site is not. This also lets SwiftUI cache the cell's structural
     /// identity across body re-evaluations.
-    fileprivate func makeGridCell(_ attachment: MessageAttachment, overflowCount: Int = 0, solo: Bool = false) -> BubbleGridCell {
+    ///
+    /// `.id(attachment.id)` is critical for A5/R1 : when `visualMediaGrid`
+    /// switches between the multi-cell layout and the single expanded video
+    /// cell, the explicit per-attachment identity lets SwiftUI MOVE the
+    /// playing cell (keeping its mounted `MeeshyVideoSurface` + AVPlayer)
+    /// instead of tearing it down. Without it, the disappearing cell's
+    /// `.onDisappear` would call `SharedAVPlayerManager.release` and stop the
+    /// very video the user just expanded. The id wraps a single nominal type
+    /// (`ModifiedContent<BubbleGridCell, …>`) — bounded for the demangler,
+    /// unlike the `_ConditionalContent` tree this struct was extracted to fix.
+    fileprivate func makeGridCell(_ attachment: MessageAttachment, overflowCount: Int = 0, solo: Bool = false) -> some View {
         BubbleGridCell(
             attachment: attachment,
             overflowCount: overflowCount,
@@ -123,6 +146,7 @@ extension BubbleStandardLayout {
             showShareSheet: $showShareSheet,
             onConsumeViewOnce: onConsumeViewOnce
         )
+        .id(attachment.id)
     }
 
     // MARK: - Carousel View (inline within message, for browsing this message's media)
