@@ -1186,10 +1186,17 @@ struct StoryViewerView: View {
     var isContentTranslated: Bool { // internal for cross-file extension access
         guard storyHasTranslatableContent,
               let story = currentStory,
-              let viewerLang = resolvedViewerLanguage,
               let translations = story.translations,
-              !translations.isEmpty else { return false }
-        return translations.contains { $0.language == viewerLang }
+              !translations.isEmpty,
+              !resolvedViewerLanguageChain.isEmpty else { return false }
+        // Prisme : le contenu est affiché via la CHAÎNE préférée complète
+        // (systemLanguage > regionalLanguage > customDestination > deviceLocale)
+        // — `resolvedText` retourne une traduction dès qu'UNE langue de la chaîne
+        // a une entrée. Le badge « translate » doit donc refléter la même logique :
+        // tester la chaîne entière, pas seulement la première. Sinon un viewer
+        // voyant le contenu traduit dans sa langue SECONDAIRE ne voyait aucun
+        // indicateur (incohérent avec le texte/caption affichés — bug 2026-06-01).
+        return translations.contains { resolvedViewerLanguageChain.contains($0.language) }
     }
 
     // MARK: - Voice Caption
