@@ -65,4 +65,45 @@ final class AuthManagerProfileMutationTests: XCTestCase {
         XCTAssertEqual(auth.currentUser?.bio, "Hello")
         XCTAssertEqual(auth.currentUser?.avatar, "https://cdn/old.jpg")
     }
+
+    // MARK: - U3 — optimistic profile survives a server revalidation/refresh
+
+    /// The /auth/me revalidation (or token-refresh applySession) returns the
+    /// PRE-edit profile while the updateProfile outbox row is still in flight —
+    /// the optimistic edit must win, not be clobbered.
+    func test_resolveServerUserWithOptimistic_serverHasStaleProfile_keepsOptimisticEdit() {
+        let server = makeUser(displayName: "Alice", bio: "Hello", avatar: "https://cdn/old.jpg")
+        let pending = ProfileSnapshot(displayName: "Bob", bio: "World", avatarUrl: "https://cdn/new.jpg")
+
+        let r = AuthManager.resolveServerUserWithOptimistic(server, pending: pending)
+
+        XCTAssertEqual(r.user.displayName, "Bob")
+        XCTAssertEqual(r.user.bio, "World")
+        XCTAssertEqual(r.user.avatar, "https://cdn/new.jpg")
+        XCTAssertFalse(r.clearedPending, "edit not yet reflected server-side → keep guarding")
+    }
+
+    /// Once the edit propagates and the server returns it, drop the guard so a
+    /// later external profile change isn't shadowed by the stale optimistic value.
+    func test_resolveServerUserWithOptimistic_serverReflectsEdit_clearsGuard() {
+        let server = makeUser(displayName: "Bob", bio: "World", avatar: "https://cdn/new.jpg")
+        let pending = ProfileSnapshot(displayName: "Bob", bio: "World", avatarUrl: "https://cdn/new.jpg")
+
+        let r = AuthManager.resolveServerUserWithOptimistic(server, pending: pending)
+
+        XCTAssertEqual(r.user.displayName, "Bob")
+        XCTAssertTrue(r.clearedPending)
+    }
+
+    /// The common login/session path: no optimistic edit → the server user is
+    /// authoritative and unchanged (additive guard, zero behavior change here).
+    func test_resolveServerUserWithOptimistic_noPending_returnsServerUnchanged() {
+        let server = makeUser(displayName: "Server", bio: "Bio", avatar: "https://cdn/s.jpg")
+
+        let r = AuthManager.resolveServerUserWithOptimistic(server, pending: nil)
+
+        XCTAssertEqual(r.user.displayName, "Server")
+        XCTAssertEqual(r.user.bio, "Bio")
+        XCTAssertFalse(r.clearedPending)
+    }
 }
