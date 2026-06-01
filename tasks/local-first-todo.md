@@ -21,7 +21,7 @@ Backlog issu du workflow `ios-local-first-backlog` (31 agents, 16 candidats vér
 ### P1 — sync correctness + efficacité haute valeur
 - [x] **T2** (M, sdk) — Préserver/restaurer `joinedConversations` + `activeConversationId` à travers suspend/resume. Dépend T1. ✅ `suspendTransport` préserve les rooms (resume re-join via seam `roomsToRejoinOnConnect()` active-first) ; `disconnect` (logout) les efface. `joinRoom()` mort supprimé (ConversationSocketHandler). TDD 3 tests (RED 1/3 → GREEN 3/3) + régr 64/0 + app build OK.
 - [ ] **T7** (M, multiple) — Tagger la réaction de l'utilisateur courant avec son `userId` (pas le `participantId` de l'auteur) en ingestion REST.
-- [ ] **T8** (S, backend) — Param watermark `since`/`after` sur `GET /conversations/:id/messages`.
+- [x] **T8** (S, backend) — Param watermark `since`/`after` sur `GET /conversations/:id/messages`. ✅ Helper pur `buildAfterWatermarkClause(after)` (gt Date, garde Invalid Date) + `afterMode` câblé : `createdAt > after`, ordre **asc** (backfill contigu), skip COUNT + skip offset-pagination. `MessagesQuery.after?` ajouté. TDD 4 tests jest (RED 1/4 → GREEN 4/4, ts-jest typecheck OK). Débloque T9.
 - [ ] **T9** (M, sdk) — Câbler gap recovery message au reconnect via watermark `after` (réveiller/remplacer `ReconnectionGapDetector`). Dépend T1, T8.
 - [ ] **T10** (S, app) — Flusher les mutations offline non-message au reconnect réseau (block/friend/profile/like/comment).
 - [ ] **T11** (M, app) — Router edit/delete offline via l'outbox (câbler `enqueueEdit`/`enqueueDelete`). Dépend T10.
