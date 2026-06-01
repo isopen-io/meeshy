@@ -811,6 +811,16 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
             loadedAudioURLs.removeValue(forKey: id)
             zIndexMap.removeValue(forKey: id)
         }
+        // Supprimer un slide AVANT le slide courant décale tout le contenu d'un
+        // cran vers la gauche : il faut décrémenter `currentSlideIndex` pour
+        // rester sur le MÊME slide que l'on éditait. Sans ça (l'ancien code ne
+        // faisait que clamper `>= count`), supprimer un slide antérieur via le
+        // menu contextuel d'une vignette faisait sauter l'édition au slide
+        // suivant (bug 2026-06-01). Le clamp couvre ensuite le cas « on a
+        // supprimé le dernier slide qui était le courant ».
+        if index < currentSlideIndex {
+            currentSlideIndex -= 1
+        }
         if currentSlideIndex >= slides.count {
             currentSlideIndex = slides.count - 1
         }
