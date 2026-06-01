@@ -487,6 +487,10 @@ struct AudioMediaView: View, Equatable {
             && lhs.replyIsStory == rhs.replyIsStory
             && lhs.parentIsMe == rhs.parentIsMe
             && lhs.embedsCaptionInWidget == rhs.embedsCaptionInWidget
+            && lhs.transcription?.text == rhs.transcription?.text
+            && lhs.transcription?.segments.count == rhs.transcription?.segments.count
+            && lhs.translatedAudios.count == rhs.translatedAudios.count
+            && lhs.translatedAudios.map(\.url) == rhs.translatedAudios.map(\.url)
     }
 
     @State private var resolvedAvailability: AudioAvailability = .needsDownload

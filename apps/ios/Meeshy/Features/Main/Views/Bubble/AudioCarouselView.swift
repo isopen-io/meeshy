@@ -93,7 +93,7 @@ struct AudioCarouselView: View {
                 }
             }
             .onPreferenceChange(AudioCarouselHeightKey.self) { newHeight in
-                if newHeight > 0 { pagerHeight = max(pagerHeight, newHeight) }
+                if newHeight > 0 { pagerHeight = newHeight }
             }
 
             BubbleFooter(
