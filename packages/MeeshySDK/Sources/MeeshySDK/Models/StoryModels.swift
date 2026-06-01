@@ -924,6 +924,15 @@ extension StorySlide {
     static let longTextSecondsPerWord: Double = 1.0 / 6.0
 
     public func computedTotalDuration() -> TimeInterval {
+        // PRIORITÉ 0 — autorité timeline (« la timeline EST la story »). Si l'auteur
+        // a configuré la durée du slide via le timeline editor, elle est AUTORITAIRE :
+        // elle gagne sur le contenu (un média plus long est rogné). Champ dédié
+        // `timelineDuration` (distinct du legacy `slideDuration` aux valeurs backend
+        // arbitraires) → `nil` pour tout l'existant = fallback contenu, zéro régression.
+        if let pinned = effects.timelineDuration, pinned > 0 {
+            return pinned
+        }
+
         // Règle : MAX(durée bg media, durée lecture texte, 6 s statique).
         // Un bg audio de 4 s avec un texte long doit respecter la lecture
         // du texte ; un bg vidéo de 12 s sans texte tient ses 12 s.
@@ -1084,8 +1093,17 @@ public struct StoryEffects: Codable, Sendable {
     // Transform appliqué à l'image/vidéo de fond (scale, offset, rotation)
     public var backgroundTransform: StoryBackgroundTransform?
 
-    // Durée totale du slide (sérialisée au publish)
+    // Durée totale du slide (sérialisée au publish) — LEGACY : valeurs backend
+    // héritées arbitraires, IGNORÉE par `computedTotalDuration()` (cf. doc).
     public var slideDuration: Float?
+
+    /// Durée AUTORITAIRE configurée par le timeline editor (« la timeline EST la
+    /// story »). `nil` = aucune autorité timeline (vieilles stories, slide jamais
+    /// édité) → `computedTotalDuration()` retombe sur le contenu. Non-`nil` = durée
+    /// du slide imposée par le timeline, lue EN PRIORITÉ par `computedTotalDuration()`
+    /// (peut être < contenu : le média long est alors rogné). Champ dédié distinct du
+    /// legacy `slideDuration` pour ne pas hériter des valeurs backend arbitraires.
+    public var timelineDuration: Double?
 
     // Timeline V2 — transitions between adjacent clips of this slide
     public var clipTransitions: [StoryClipTransition]?
@@ -1114,6 +1132,7 @@ public struct StoryEffects: Codable, Sendable {
                 backgroundAudioVariants: [StoryAudioVariant]? = nil,
                 backgroundTransform: StoryBackgroundTransform? = nil,
                 slideDuration: Float? = nil,
+                timelineDuration: Double? = nil,
                 clipTransitions: [StoryClipTransition]? = nil) {
         self.background = background; self.textStyle = textStyle; self.textColor = textColor
         self.textPosition = textPosition; self.filter = filter; self.filterIntensity = filterIntensity; self.stickers = stickers
@@ -1135,6 +1154,7 @@ public struct StoryEffects: Codable, Sendable {
         self.backgroundAudioVariants = backgroundAudioVariants
         self.backgroundTransform = backgroundTransform
         self.slideDuration = slideDuration
+        self.timelineDuration = timelineDuration
         self.clipTransitions = clipTransitions
     }
 
@@ -1148,7 +1168,7 @@ public struct StoryEffects: Codable, Sendable {
         case voiceAttachmentId, voiceTranscriptions
         case opening, closing
         case textObjects, mediaObjects, audioPlayerObjects, backgroundAudioVariants
-        case thumbHash, backgroundTransform, slideDuration, clipTransitions
+        case thumbHash, backgroundTransform, slideDuration, timelineDuration, clipTransitions
         case musicTrackId, musicStartTime, musicEndTime
     }
 
@@ -1193,6 +1213,7 @@ public struct StoryEffects: Codable, Sendable {
         thumbHash = try c.decodeIfPresent(String.self, forKey: .thumbHash)
         backgroundTransform = try c.decodeIfPresent(StoryBackgroundTransform.self, forKey: .backgroundTransform)
         slideDuration = try c.decodeIfPresent(Float.self, forKey: .slideDuration)
+        timelineDuration = try c.decodeIfPresent(Double.self, forKey: .timelineDuration)
         clipTransitions = try c.decodeIfPresent([StoryClipTransition].self, forKey: .clipTransitions)
         musicTrackId = try c.decodeIfPresent(String.self, forKey: .musicTrackId)
         musicStartTime = try c.decodeIfPresent(TimeInterval.self, forKey: .musicStartTime)
@@ -1231,6 +1252,7 @@ public struct StoryEffects: Codable, Sendable {
         try c.encodeIfPresent(thumbHash, forKey: .thumbHash)
         try c.encodeIfPresent(backgroundTransform, forKey: .backgroundTransform)
         try c.encodeIfPresent(slideDuration, forKey: .slideDuration)
+        try c.encodeIfPresent(timelineDuration, forKey: .timelineDuration)
         try c.encodeIfPresent(clipTransitions, forKey: .clipTransitions)
         try c.encodeIfPresent(musicTrackId, forKey: .musicTrackId)
         try c.encodeIfPresent(musicStartTime, forKey: .musicStartTime)
@@ -1406,6 +1428,7 @@ public struct StoryEffects: Codable, Sendable {
             }
         }
         if let sd = slideDuration { dict["slideDuration"] = sd }
+        if let td = timelineDuration { dict["timelineDuration"] = td }
         return dict
     }
 }
