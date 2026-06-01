@@ -1009,6 +1009,26 @@ public actor MessagePersistenceActor {
         let currentUserId = self.currentUserId
         defer { postMessageStoreRefresh(conversationIds: convIds) }
         try await dbWriter.write { db in
+            // T13 — message ids whose reaction toggle is still pending in the
+            // outbox. Their local `reactionsJson` holds an optimistic add/remove
+            // not yet on the server, so a stale REST snapshot must NOT clobber
+            // it on upsert — otherwise the reaction visibly reverts until the
+            // next post-sync refresh. One query per batch (a handful of rows).
+            let pendingReactionMessageIds: Set<String> = {
+                guard let rows = try? OutboxRecord
+                    .filter(Column("kind") == OutboxKind.sendReaction.rawValue)
+                    .filter(Column("status") == OutboxStatus.pending.rawValue)
+                    .fetchAll(db) else { return [] }
+                let payloadDecoder = JSONDecoder()
+                payloadDecoder.dateDecodingStrategy = .iso8601
+                var ids = Set<String>()
+                for row in rows {
+                    if let payload = try? payloadDecoder.decode(ReactionOutboxPayload.self, from: row.payload) {
+                        ids.insert(payload.messageId)
+                    }
+                }
+                return ids
+            }()
             for api in apiMessages {
                 let senderName = api.sender?.name
                 let senderUsername = api.sender?.username
@@ -1262,7 +1282,14 @@ public actor MessagePersistenceActor {
                     // arrive attachment-less, and a hard overwrite would blank
                     // the optimistic file:// preview into an empty bubble.
                     existing.attachmentsJson = attachmentsJson ?? existing.attachmentsJson
-                    existing.reactionsJson = reactionsJson
+                    // T13 — preserve a locally-mutated reactionsJson (+ count) while
+                    // its toggle is still pending in the outbox; otherwise this stale
+                    // REST snapshot reverts the optimistic reaction until the next
+                    // post-sync refresh. When nothing is pending, take the server state.
+                    if !pendingReactionMessageIds.contains(api.id) {
+                        existing.reactionsJson = reactionsJson
+                        existing.reactionCount = uiReactions.count
+                    }
                     if !keepLocalPlaintext {
                         // Keep the encryption flags coherent so the display
                         // pipeline knows to decrypt — a row first inserted via
@@ -1270,7 +1297,6 @@ public actor MessagePersistenceActor {
                         existing.isEncrypted = api.isEncrypted ?? existing.isEncrypted
                         existing.encryptionMode = api.encryptionMode ?? existing.encryptionMode
                     }
-                    existing.reactionCount = uiReactions.count
                     existing.deliveredCount = deliveredCount
                     existing.readCount = readCount
                     existing.deliveredToAllAt = api.deliveredToAllAt

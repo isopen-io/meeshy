@@ -1060,4 +1060,53 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertNotEqual(owned.first?.participantId, "author_participant_id",
             "must NOT reuse the message author's participantId for the current user's reaction")
     }
+
+    // MARK: - T13 — don't clobber a locally-mutated reaction with a stale REST snapshot
+
+    /// While a reaction toggle is still pending in the outbox, a REST refresh
+    /// that doesn't yet carry the (un-synced) reaction must NOT overwrite the
+    /// optimistic local reactionsJson — otherwise the reaction visibly reverts.
+    func test_upsertFromAPIMessages_preservesLocalReactions_whenReactionPendingInOutbox() async throws {
+        let conv = "c_t13"
+        let msgId = "m_t13"
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv)])
+        try await actor.appendReaction(localId: msgId, reactionId: "r1", messageId: msgId, participantId: "me", emoji: "👍")
+
+        // A reaction add for this message is still pending in the outbox.
+        let payload = try JSONEncoder().encode(ReactionOutboxPayload(
+            messageId: msgId, emoji: "👍", action: .add, conversationId: conv, clientMessageId: "cid_r1"))
+        let now = Date()
+        try await dbQueue.write { db in
+            try OutboxRecord(
+                id: "ofqr_t13", kind: .sendReaction, conversationId: conv,
+                clientMessageId: "cid_r1", payload: payload, status: .pending,
+                attempts: 0, lastError: nil, createdAt: now, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+
+        // REST refresh arrives WITHOUT the not-yet-synced reaction.
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv)])
+
+        let rows = try actor.messages(for: conv, limit: 10)
+        let json = try XCTUnwrap(rows.first?.reactionsJson, "local reaction must be preserved while pending")
+        let reactions = try JSONDecoder().decode([MeeshyReaction].self, from: json)
+        XCTAssertEqual(reactions.map(\.emoji), ["👍"],
+            "an optimistic reaction pending in the outbox must survive a stale REST snapshot")
+    }
+
+    /// With NO pending reaction mutation, the server snapshot is authoritative —
+    /// a refresh that drops a reaction must clobber the local copy (normal SWR).
+    func test_upsertFromAPIMessages_takesServerReactions_whenNothingPending() async throws {
+        let conv = "c_t13b"
+        let msgId = "m_t13b"
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv)])
+        try await actor.appendReaction(localId: msgId, reactionId: "r1", messageId: msgId, participantId: "me", emoji: "👍")
+
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv)])
+
+        let rows = try actor.messages(for: conv, limit: 10)
+        let reactions = (rows.first?.reactionsJson).flatMap { try? JSONDecoder().decode([MeeshyReaction].self, from: $0) } ?? []
+        XCTAssertTrue(reactions.isEmpty,
+            "with no pending mutation the server (empty) reaction state must win")
+    }
 }
