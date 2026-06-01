@@ -319,6 +319,65 @@ final class OfflineQueueTests: XCTestCase {
         }
     }
 
+    // MARK: - S6 — audio-orphan rows must be terminal (.exhausted), not .failed
+
+    /// A crash between the outbox insert and the audio file copy leaves a
+    /// sendMessage row whose audio bytes are permanently gone. bootRecovery must
+    /// mark it `.exhausted` (terminal + GC-eligible via purgeExhaustedOlderThan),
+    /// NOT `.failed` — a `.failed` row is never flushed, never exhausted, never
+    /// GC'd, so it leaks in the outbox + SyncPill across every session.
+    func test_bootRecovery_audioFileMissing_marksExhaustedNotFailed() async throws {
+        let maybePool = await queue.outboxPoolForTesting
+        let pool = try XCTUnwrap(maybePool)
+        let cid = "cid_boot_\(UUID().uuidString.lowercased())"
+        // Enqueue a real audio row (correctly-encoded payload + copied files),
+        // then delete the copied files to simulate a crash that lost the bytes.
+        let src = try makeTempAudioFile()
+        let result = try await queue.enqueueAudios(
+            sourceAudioURLs: [src], conversationId: "conv-1",
+            content: nil, clientMessageId: cid, originalLanguage: "fr"
+        )
+        for path in result.localAudioPaths {
+            try? FileManager.default.removeItem(
+                atPath: OfflineQueue.absoluteAudioPath(forStored: path))
+        }
+
+        let report = try await queue.bootRecovery()
+
+        XCTAssertEqual(report.audioOrphanFailed, 1, "the missing-audio row must be swept")
+        let status = try await pool.read { db in
+            try OutboxRecord.filter(Column("clientMessageId") == cid).fetchOne(db)?.status
+        }
+        XCTAssertEqual(status, .exhausted,
+            "an audio-orphan row must be terminal (.exhausted, GC-eligible), not .failed")
+    }
+
+    /// A copy failure in enqueueAudios (source bytes unreadable) is permanent —
+    /// the row must end `.exhausted`, not `.failed`.
+    func test_enqueueAudios_copyFailure_marksExhaustedNotFailed_andThrows() async throws {
+        let maybePool = await queue.outboxPoolForTesting
+        let pool = try XCTUnwrap(maybePool)
+        let cid = "cid_copyfail_\(UUID().uuidString.lowercased())"
+        let badSource = FileManager.default.temporaryDirectory
+            .appendingPathComponent("does_not_exist_\(UUID().uuidString).m4a")
+
+        do {
+            _ = try await queue.enqueueAudios(
+                sourceAudioURLs: [badSource], conversationId: "conv-1",
+                content: nil, clientMessageId: cid, originalLanguage: "fr"
+            )
+            XCTFail("enqueueAudios must throw when the source copy fails")
+        } catch {
+            // expected EnqueueAudioError.audioCopyFailed
+        }
+
+        let status = try await pool.read { db in
+            try OutboxRecord.filter(Column("clientMessageId") == cid).fetchOne(db)?.status
+        }
+        XCTAssertEqual(status, .exhausted,
+            "a copy-failure row must be terminal (.exhausted), not .failed")
+    }
+
     func test_enqueueAudio_single_stillWorks_viaWrapper() async throws {
         let cid = "cid_\(UUID().uuidString.lowercased())"
         let url = try makeTempAudioFile()

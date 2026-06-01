@@ -1138,6 +1138,12 @@ public actor OfflineQueue {
                 try FileManager.default.copyItem(at: source, to: dst)
             }
         } catch {
+            // S6 — a copy failure is permanent (the source bytes are
+            // unreadable), so the row is TERMINAL: mark `.exhausted`
+            // (GC-eligible via purgeExhaustedOlderThan) rather than `.failed`,
+            // which the flusher never picks up and the GC never reclaims, so it
+            // would leak in the outbox + SyncPill across every session.
+            let copyError = error
             do {
                 try await pool.write { db in
                     try db.execute(sql: """
@@ -1145,16 +1151,27 @@ public actor OfflineQueue {
                         SET status = ?, lastError = ?, updatedAt = ?
                         WHERE id = ?
                         """, arguments: [
-                            OutboxStatus.failed.rawValue,
-                            "Audio copy failed: \(error.localizedDescription)",
+                            OutboxStatus.exhausted.rawValue,
+                            "Audio copy failed: \(copyError.localizedDescription)",
                             Date(),
                             outboxId
                         ])
                 }
             } catch {
-                logger.error("Failed to mark audio outbox row .failed after copy error: \(error.localizedDescription, privacy: .public)")
+                logger.error("Failed to mark audio outbox row .exhausted after copy error: \(error.localizedDescription, privacy: .public)")
             }
-            throw EnqueueAudioError.audioCopyFailed(underlying: error)
+            // Best-effort clean any partially-copied tracks so they don't leak.
+            for relativePath in relativePaths {
+                try? FileManager.default.removeItem(atPath: Self.absoluteAudioPath(forStored: relativePath))
+            }
+            // Terminal signal so a live ViewModel resolves the optimistic bubble.
+            emitRetryExhausted(OfflineRetryExhausted(
+                kind: .sendMessage,
+                clientMessageId: clientMessageId,
+                conversationId: conversationId,
+                lastError: "Audio copy failed: \(copyError.localizedDescription)"
+            ))
+            throw EnqueueAudioError.audioCopyFailed(underlying: copyError)
         }
 
         // Phase C — best-effort cleanup of the original tmp files. A failure
@@ -1678,7 +1695,12 @@ public actor OfflineQueue {
                     guard let item = try? dec.decode(OfflineQueueItem.self, from: record.payload) else { continue }
                     // Single-track legacy path + multi-track paths are both
                     // checked: any referenced file missing on disk means the
-                    // pre-crash copy never landed → mark the whole row failed.
+                    // pre-crash copy never landed → the audio bytes are gone, so
+                    // the row can never succeed. S6 — mark it `.exhausted`
+                    // (terminal + GC-eligible via purgeExhaustedOlderThan), NOT
+                    // `.failed`, which the flusher never picks up and the GC
+                    // never reclaims, so it would leak in the outbox + SyncPill
+                    // across every session.
                     let referencedPaths = ([item.localAudioPath].compactMap { $0 } + (item.localAudioPaths ?? []))
                         .filter { !$0.isEmpty }
                     guard !referencedPaths.isEmpty else { continue }
@@ -1689,12 +1711,12 @@ public actor OfflineQueue {
                             SET status = ?, lastError = ?, updatedAt = ?
                             WHERE id = ?
                             """, arguments: [
-                                OutboxStatus.failed.rawValue,
+                                OutboxStatus.exhausted.rawValue,
                                 "Audio file missing after crash",
                                 Date(),
                                 record.id
                             ])
-                        log.warning("Audio file missing for OutboxRecord \(record.id, privacy: .public), marked .failed")
+                        log.warning("Audio file missing for OutboxRecord \(record.id, privacy: .public), marked .exhausted")
                         local.audioOrphanFailed += 1
                     }
                 }
