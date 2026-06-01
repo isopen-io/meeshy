@@ -1064,21 +1064,24 @@ export function registerMessagesRoutes(
         }
       }
 
-      // Marquer les messages comme lus (optimisé - ne marquer que les messages non lus)
+      // Marquer les messages comme "reçus" — EFFET DE BORD (statut de livraison
+      // propagé aux autres participants via socket). La réponse (mappedMessages)
+      // n'en dépend PAS. Déféré en fire-and-forget : l'awaiter ajoutait
+      // 50-130ms à CHAQUE fetch de messages (l'endpoint le plus appelé).
       t0 = performance.now();
-      if (messages.length > 0 && !authRequest.authContext.isAnonymous) {
-        try {
-          const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
-          const readStatusService = new MessageReadStatusService(prisma);
-
-          if (currentParticipantId) {
-            await readStatusService.markMessagesAsReceived(currentParticipantId, conversationId);
+      if (messages.length > 0 && !authRequest.authContext.isAnonymous && currentParticipantId) {
+        const participantIdForReceipt = currentParticipantId;
+        void (async () => {
+          try {
+            const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
+            const readStatusService = new MessageReadStatusService(prisma);
+            await readStatusService.markMessagesAsReceived(participantIdForReceipt, conversationId);
+          } catch (error) {
+            logger.warn('Error marking messages as received:', error);
           }
-        } catch (error) {
-          logger.warn('Error marking messages as received:', error);
-        }
+        })();
       }
-      timings.markAsReceived = performance.now() - t0;
+      timings.markAsReceived = performance.now() - t0; // ~0 : dispatch non-bloquant désormais
 
       // Construire les métadonnées de cursor pagination
       // When using cursor-based pagination (before), we fetched limit+1 rows.
