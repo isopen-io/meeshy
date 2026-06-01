@@ -23,6 +23,14 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
     private var backgroundFillLayer: CALayer?
     private var glassBackdropLayer: StoryGlassBackdropLayer?
 
+    /// Sous-calque de glyphes utilisée UNIQUEMENT pour le fond `.glass`. Un
+    /// `CATextLayer` peint son `string` dans son propre contenu, lequel passe
+    /// SOUS tout sous-calque (donc sous le backdrop glass). Pour garder les
+    /// glyphes lisibles, on les rend dans cette sous-calque posée AU-DESSUS du
+    /// backdrop, et on rend les glyphes propres du parent transparents. `nil`
+    /// pour `.none` / `.solid` (le parent peint alors lui-même ses glyphes).
+    private var glyphLayer: CATextLayer?
+
     /// Chaînes attribuées mémorisées par `configure`, permettant à
     /// `setGlyphsHidden` de basculer les glyphes sans toucher `bounds` ni les
     /// sous-calques de fond.
@@ -153,7 +161,13 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
     @MainActor
     public func setGlyphsHidden(_ hidden: Bool) {
         glyphsHidden = hidden
-        string = hidden ? hiddenString : visibleString
+        if let glyphLayer {
+            // Cas `.glass` : les glyphes visibles vivent dans la sous-calque
+            // au-dessus du backdrop. Le parent reste transparent en permanence.
+            glyphLayer.string = hidden ? hiddenString : visibleString
+        } else {
+            string = hidden ? hiddenString : visibleString
+        }
     }
 
     // MARK: - Background style
@@ -166,6 +180,8 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
         backgroundFillLayer = nil
         glassBackdropLayer?.removeFromSuperlayer()
         glassBackdropLayer = nil
+        glyphLayer?.removeFromSuperlayer()
+        glyphLayer = nil
         // Reset le fond propre de la calque (cas `.none` / `.glass`, ou
         // réutilisation d'instance) — sinon un ancien `backgroundColor` solide
         // survivrait à un passage vers `.none`.
@@ -201,6 +217,25 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
             backdrop.configure(sigma: renderedSigma)
             addSublayer(backdrop)
             glassBackdropLayer = backdrop
+
+            // Z-order (suite de 104ff0387) : le backdrop ci-dessus est un
+            // sous-calque, donc composé AU-DESSUS du contenu propre du parent
+            // (ses glyphes). Pour rester lisibles, les glyphes visibles sont
+            // peints dans une sous-calque posée APRÈS le backdrop (sibling
+            // au-dessus, `zPosition` 0 > -1), et les glyphes propres du parent
+            // sont rendus transparents — sinon ils peindraient une 2e fois SOUS
+            // le verre, ré-introduisant le « blanc sur black » hors édition.
+            let glyphs = CATextLayer()
+            glyphs.frame = bounds
+            glyphs.contentsScale = UIScreen.main.scale
+            glyphs.alignmentMode = alignmentMode
+            glyphs.isWrapped = true
+            glyphs.truncationMode = .none
+            glyphs.zPosition = 0
+            glyphs.string = glyphsHidden ? hiddenString : visibleString
+            addSublayer(glyphs)
+            glyphLayer = glyphs
+            string = hiddenString
         }
     }
 
