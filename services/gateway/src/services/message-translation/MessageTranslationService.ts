@@ -1921,12 +1921,16 @@ export class MessageTranslationService extends EventEmitter {
               ...((fresh?.translations as unknown as AttachmentTranslations) || {}),
               ...newTranslationEntries
             };
+            // N'écrire `transcription` QUE si présente : data.result.originalAudio
+            // peut être absent (transcriptionData=null) et écraser une
+            // transcription déjà stockée par un autre handler (data-loss).
+            const updateData: { translations: any; transcription?: any } = { translations: merged as any };
+            if (transcriptionData) {
+              updateData.transcription = transcriptionData as any;
+            }
             await this.prisma.messageAttachment.update({
               where: { id: attachmentIdForUpdate },
-              data: {
-                transcription: transcriptionData as any,
-                translations: merged as any
-              }
+              data: updateData
             });
             return merged;
           }
