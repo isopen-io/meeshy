@@ -25,7 +25,7 @@ Backlog issu du workflow `ios-local-first-backlog` (31 agents, 16 candidats vér
 - [ ] **T9** (M, sdk) — Câbler gap recovery message au reconnect via watermark `after` (réveiller/remplacer `ReconnectionGapDetector`). Dépend T1, T8.
 - [ ] **T10** (S, app) — Flusher les mutations offline non-message au reconnect réseau (block/friend/profile/like/comment).
 - [ ] **T11** (M, app) — Router edit/delete offline via l'outbox (câbler `enqueueEdit`/`enqueueDelete`). Dépend T10.
-- [ ] **T12** (S, sdk) — Re-fetch ciblé des pages intérieures perdues dans `fullSync` (liste partielle silencieuse).
+- [x] **T12** (S, sdk) — Re-fetch ciblé des pages intérieures perdues dans `fullSync` (liste partielle silencieuse). ✅ `droppedIndices` re-fetchés avant `saveSorted` (merge dédupe par id) ; `succeeded=recoveredAll` (un échec transitoire récupéré ne flag plus incomplet). TDD 1 test (RED 150≠250 → GREEN 250) + régr ConversationSyncEngine 21/0.
 
 ### P2 — efficacité / robustesse
 - [ ] **T13** (S, sdk) — Ne pas clobber `reactionsJson` muté localement avec un snapshot REST périmé. Dépend T7.

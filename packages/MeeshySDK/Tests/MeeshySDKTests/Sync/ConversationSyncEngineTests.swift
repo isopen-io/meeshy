@@ -1,5 +1,6 @@
 import XCTest
 import Combine
+import GRDB
 @testable import MeeshySDK
 
 final class ConversationSyncEngineTests: XCTestCase {
@@ -36,6 +37,48 @@ final class ConversationSyncEngineTests: XCTestCase {
         mockConvService.reset()
         mockMsgService.reset()
         super.tearDown()
+    }
+
+    // MARK: - T12: full-sync interior-gap recovery
+
+    /// An interior page that fails the whole fan-out (all 3 retries) while a
+    /// later page succeeds used to be swallowed: the partial list was cached and
+    /// the sequential tail started at `merged.count`, beyond the hole. fullSync
+    /// must re-fetch the dropped page so the cached list is provably complete.
+    func test_fullSync_refetchesDroppedInteriorPage_fillsTheGap() async throws {
+        let db = try DatabaseQueue()
+        try AppDatabase.runMigrations(on: db)
+        let testCache = CacheCoordinator(messageSocket: MockMessageSocket(), socialSocket: MockSocialSocket(), db: db)
+
+        let gap = GapMockConversationService()
+        gap.pagesByOffset = [
+            0: (0..<100).map { TestFactories.makeAPIConversation(id: "p0-\($0)") },
+            100: (0..<100).map { TestFactories.makeAPIConversation(id: "p1-\($0)") },
+            200: (0..<50).map { TestFactories.makeAPIConversation(id: "p2-\($0)") }
+        ]
+        gap.advertisedTotal = 250
+        // Page 1 (offset 100) fails all three fan-out attempts, then recovers on
+        // the targeted re-fetch — exactly the transient-window scenario.
+        gap.failTimesRemaining = [100: 3]
+
+        let engine = ConversationSyncEngine(
+            cache: testCache,
+            conversationService: gap,
+            messageService: MockMessageService(),
+            messageSocket: MockMessageSocket(),
+            socialSocket: MockSocialSocket(),
+            api: MockAPIClient()
+        )
+
+        let ok = await engine.fullSync()
+
+        let cached = await testCache.conversations.load(for: "list").snapshot() ?? []
+        XCTAssertEqual(cached.count, 250,
+                       "fullSync must re-fetch the dropped interior page so the cached list is complete")
+        let ids = Set(cached.map(\.id))
+        XCTAssertTrue(ids.contains("p1-0") && ids.contains("p1-99"),
+                      "the dropped page's conversations must be present after recovery")
+        XCTAssertTrue(ok, "fullSync should report success once the targeted re-fetch recovers the dropped page")
     }
 
     // MARK: - fullSync
@@ -530,4 +573,50 @@ private extension TestFactories {
         decoder.dateDecodingStrategy = .iso8601
         return try! decoder.decode(APIConversation.self, from: data)
     }
+}
+
+// MARK: - Gap-recovery mock (per-offset pages + transient per-offset failure)
+
+private final class GapMockConversationService: ConversationServiceProviding, @unchecked Sendable {
+    private let lock = NSLock()
+    var pagesByOffset: [Int: [APIConversation]] = [:]
+    var advertisedTotal: Int?
+    /// offset -> number of leading calls that should throw before succeeding.
+    var failTimesRemaining: [Int: Int] = [:]
+
+    func list(offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[APIConversation]> {
+        let (items, total): ([APIConversation], Int?) = try lock.withLock {
+            if let remaining = failTimesRemaining[offset], remaining > 0 {
+                failTimesRemaining[offset] = remaining - 1
+                throw URLError(.timedOut)
+            }
+            return (pagesByOffset[offset] ?? [], advertisedTotal)
+        }
+        return OffsetPaginatedAPIResponse(
+            success: true,
+            data: items,
+            pagination: OffsetPagination(total: total, hasMore: nil, limit: limit, offset: offset),
+            error: nil
+        )
+    }
+
+    func listPage(before cursor: String?, limit: Int, currentUserId: String) async throws -> ConversationPage {
+        ConversationPage(items: [], nextCursor: nil, hasMore: false)
+    }
+    func getById(_ conversationId: String) async throws -> APIConversation { fatalError("Not used in tests") }
+    func create(type: String, title: String?, participantIds: [String]) async throws -> CreateConversationResponse { fatalError("Not used in tests") }
+    func delete(conversationId: String) async throws {}
+    func markRead(conversationId: String) async throws {}
+    func markAsReceived(conversationId: String) async throws {}
+    func markUnread(conversationId: String) async throws {}
+    func getParticipants(conversationId: String, limit: Int, cursor: String?) async throws -> PaginatedAPIResponse<[APIParticipant]> { fatalError("Not used in tests") }
+    func deleteForMe(conversationId: String) async throws {}
+    func listSharedWith(userId: String, limit: Int) async throws -> [APIConversation] { [] }
+    func findDirectWith(userId: String) async throws -> APIConversation? { nil }
+    func removeParticipant(conversationId: String, participantId: String) async throws {}
+    func updateParticipantRole(conversationId: String, participantId: String, role: String) async throws {}
+    func update(conversationId: String, title: String?, description: String?, avatar: String?, banner: String?, defaultWriteRole: String?, isAnnouncementChannel: Bool?, slowModeSeconds: Int?, autoTranslateEnabled: Bool?) async throws -> APIConversation { fatalError("Not used in tests") }
+    func leave(conversationId: String) async throws {}
+    func banParticipant(conversationId: String, userId: String) async throws {}
+    func unbanParticipant(conversationId: String, userId: String) async throws {}
 }
