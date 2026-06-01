@@ -19,7 +19,7 @@ Backlog issu du workflow `ios-local-first-backlog` (31 agents, 16 candidats vér
 - [x] **T6** (S, sdk) — Purger les tables GRDB `messages` au logout (étendre `clearOutbox`). ✅ Nouveau `clearAllMessagesForLogout()` purge les 7 tables (messages+translations+transcriptions+audio+attachments+pending_ids+outbox, aucune FK, transaction atomique) ; hook `wireOutboxLogoutHook` re-câblé. TDD (stub → RED 7/7 → GREEN) + régression persistence 49/0 + app build 38s OK. **Tous les P0 terminés.**
 
 ### P1 — sync correctness + efficacité haute valeur
-- [ ] **T2** (M, sdk) — Préserver/restaurer `joinedConversations` + `activeConversationId` à travers suspend/resume. Dépend T1.
+- [x] **T2** (M, sdk) — Préserver/restaurer `joinedConversations` + `activeConversationId` à travers suspend/resume. Dépend T1. ✅ `suspendTransport` préserve les rooms (resume re-join via seam `roomsToRejoinOnConnect()` active-first) ; `disconnect` (logout) les efface. `joinRoom()` mort supprimé (ConversationSocketHandler). TDD 3 tests (RED 1/3 → GREEN 3/3) + régr 64/0 + app build OK.
 - [ ] **T7** (M, multiple) — Tagger la réaction de l'utilisateur courant avec son `userId` (pas le `participantId` de l'auteur) en ingestion REST.
 - [ ] **T8** (S, backend) — Param watermark `since`/`after` sur `GET /conversations/:id/messages`.
 - [ ] **T9** (M, sdk) — Câbler gap recovery message au reconnect via watermark `after` (réveiller/remplacer `ReconnectionGapDetector`). Dépend T1, T8.

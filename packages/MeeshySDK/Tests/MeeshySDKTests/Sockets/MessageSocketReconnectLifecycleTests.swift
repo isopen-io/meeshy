@@ -92,4 +92,47 @@ final class MessageSocketReconnectLifecycleTests: XCTestCase {
         XCTAssertTrue(sut.handleConnectionEstablished(),
                       "forceReconnect must preserve the reconnect flag across the transport rebuild")
     }
+
+    // MARK: - T2: joined rooms preserved across suspend/resume
+
+    func test_roomsToRejoin_preservedAcrossBackgroundResume() {
+        let sut = MessageSocketManager.shared
+        sut.disconnect() // clean slate
+
+        sut.joinConversation("A")
+        sut.joinConversation("B")
+        sut.activeConversationId = "A"
+
+        // App backgrounds (transport-only suspend) then would resume + reconnect.
+        sut.prepareForBackground()
+
+        let rooms = sut.roomsToRejoinOnConnect()
+        XCTAssertEqual(rooms.first, "A", "active conversation must be re-joined first")
+        XCTAssertEqual(Set(rooms), ["A", "B"], "all joined rooms must survive a background suspend")
+    }
+
+    func test_roomsToRejoin_activeConversationFirst() {
+        let sut = MessageSocketManager.shared
+        sut.disconnect()
+
+        sut.joinConversation("X")
+        sut.joinConversation("Y")
+        sut.activeConversationId = "Y"
+
+        let rooms = sut.roomsToRejoinOnConnect()
+        XCTAssertEqual(rooms.first, "Y", "the active conversation is re-joined first for fastest UX")
+        XCTAssertEqual(Set(rooms), ["X", "Y"])
+    }
+
+    func test_disconnect_clearsRoomsForColdLogin() {
+        let sut = MessageSocketManager.shared
+        sut.disconnect()
+        sut.joinConversation("A")
+        sut.activeConversationId = "A"
+
+        sut.disconnect() // logout / cold reset
+
+        XCTAssertTrue(sut.roomsToRejoinOnConnect().isEmpty,
+                      "a full disconnect (logout) must clear joined rooms so the next login is clean")
+    }
 }

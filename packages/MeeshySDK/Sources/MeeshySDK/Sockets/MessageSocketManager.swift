@@ -1129,16 +1129,16 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// Transport-only teardown shared by `disconnect()`, `prepareForBackground()`
     /// and `forceReconnect()`. Tears down the live socket + heartbeat (so a stale
     /// `isConnected` flag can never suppress the next reconnect) but DELIBERATELY
-    /// preserves `hadPreviousConnection`: the next successful `.connect` must then
-    /// report `wasReconnect == true` and fire `didReconnect` — the sole trigger
-    /// for the open conversation's missed-message backfill and the queued
-    /// read/received-receipt flush (ConversationSocketHandler.subscribeToReconnect).
+    /// preserves the session-level state — `hadPreviousConnection` (so the next
+    /// `.connect` reports `wasReconnect == true` and fires `didReconnect`, the
+    /// sole trigger for the open conversation's missed-message backfill +
+    /// queued-receipt flush) AND `joinedConversations` / `activeConversationId`
+    /// (so the `.connect` re-join loop restores the rooms active-first, and
+    /// `leaveConversation` / typing accounting stays accurate after resume).
     /// Contrast `disconnect()`, the logout/cold reset, which additionally clears
-    /// the flag so the next login is a genuine cold connect.
+    /// all of that so the next login is a genuine cold connect with no rooms.
     private func suspendTransport() {
         stopHeartbeat()
-        joinedConversations.removeAll()
-        activeConversationId = nil
         socket?.disconnect()
         socket = nil
         manager = nil
@@ -1149,8 +1149,11 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     public func disconnect() {
         suspendTransport()
-        // Logout / cold reset: forget that we ever connected so the next
-        // `.connect` is treated as a cold first connect (no spurious backfill).
+        // Logout / cold reset: forget the prior connection AND the joined rooms
+        // so the next `.connect` is a cold first connect (no spurious backfill,
+        // no stale room re-joins under a different account).
+        joinedConversations.removeAll()
+        activeConversationId = nil
         hadPreviousConnection = false
     }
 
@@ -1210,6 +1213,21 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             DispatchQueue.main.async { [weak self] in self?.didReconnect.send(()) }
         }
         return wasReconnect
+    }
+
+    /// The conversation rooms to (re)join on connect, active-first for fastest
+    /// UX. Extracted from the `.connect` handler so the re-join set — preserved
+    /// across a background suspend (`suspendTransport`) and only cleared on
+    /// logout (`disconnect`) — is unit-testable without a live socket.
+    func roomsToRejoinOnConnect() -> [String] {
+        var rooms: [String] = []
+        if let activeId = activeConversationId, joinedConversations.contains(activeId) {
+            rooms.append(activeId)
+        }
+        for convId in joinedConversations where convId != activeConversationId {
+            rooms.append(convId)
+        }
+        return rooms
     }
 
     // MARK: - Heartbeat
@@ -1798,12 +1816,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
             self.startHeartbeat()
 
-            // Re-join all tracked conversations
-            // Priority: active conversation first for fastest UX
-            if let activeId = self.activeConversationId, self.joinedConversations.contains(activeId) {
-                self.socket?.emit("conversation:join", ["conversationId": activeId])
-            }
-            for convId in self.joinedConversations where convId != self.activeConversationId {
+            // Re-join all tracked conversations (active-first for fastest UX).
+            for convId in self.roomsToRejoinOnConnect() {
                 self.socket?.emit("conversation:join", ["conversationId": convId])
             }
 

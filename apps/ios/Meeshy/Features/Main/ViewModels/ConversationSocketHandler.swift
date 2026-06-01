@@ -154,10 +154,6 @@ final class ConversationSocketHandler {
 
     // MARK: - Room Management
 
-    private func joinRoom() {
-        messageSocket.joinConversation(conversationId)
-    }
-
     private nonisolated func leaveRoom() {
         MessageSocketManager.shared.leaveConversation(conversationId)
     }
