@@ -252,3 +252,29 @@ Choix user (AskUserQuestion) : Option A — canvas TOUJOURS plein 9:16, drawer f
       uniquement le nécessaire" (FAB philosophy) ? Actuellement déplié à l'entrée. À valider avec user.
 - [ ] Smoke autres contrôles texte (Style/Taille/Alignement/Contour) sur canvas committé.
 - [ ] RE-AUDIT trigger: nouveau commit touchant StoryComposerView / Composer*Band / StoryTextLayer.
+
+## Audit it.16 — text background missing in thumbHash composite + mini-preview (REAL BUG, 7aee47888)
+Suite au fix it.14 (canvas StoryTextLayer fond solide → backgroundColor), audit des 3 chemins de
+rendu pour le texte à fond solide (axe user "synchro preview/mini preview/Thumbnail/Thumbhash de
+TOUTE la story avec toutes les couches"). Preuve par code : le contrôle "Fond du texte"
+(TextEditToolOptions:195 / TextBackgroundStylePicker:139) écrit `backgroundStyle = .solid(hex:)`
+AVEC `textBg = nil`. Or :
+- StorySlideRenderer.drawTextObject (composite ThumbHash) lisait `textObj.textBg` (nil) → fond absent.
+- SlideMiniPreview.textItem (vignette strip) ne lisait NI textBg NI backgroundStyle → glyphes nus
+  (souvent illisibles sur slide claire) sans la boîte.
+- Seul le canvas (StoryTextLayer via resolvedBackgroundStyle) affichait la boîte → incohérence.
+- [x] Fix StorySlideRenderer : `compositeBackgroundColor(for:)` (seam testable) basé sur
+      resolvedBackgroundStyle (.solid → hex opaque, .glass → translucide, .none → nil).
+- [x] Fix SlideMiniPreview : `.background(miniTextBackground(...))` + padding proportionnel,
+      même source resolvedBackgroundStyle.
+- [x] 4 tests StorySlideRendererTextBackgroundTests verts (dont régression solid+textBg=nil) +
+      StorySlideRendererBackgroundMediaTests verts. Vignette strip montre la boîte noire (vérif sim).
+
+## REPLENISHED backlog — updated it.16
+- [ ] NEXT: SlideMiniPreview/StorySlideRenderer n'appliquent pas le CONTOUR (border) ni le textStyle
+      (police bold/neon/typewriter) du texte — vérifier la cohérence vs canvas (sans doute approximations
+      acceptables pour une vignette, mais à confirmer pour le contour qui change la lisibilité).
+- [ ] Drawer dessin replié par défaut à l'entrée (philosophie "afficher uniquement le nécessaire") —
+      question ouverte it.15, à trancher.
+- [ ] Smoke autres contrôles texte (Style/Taille/Alignement/Contour) sur canvas committé.
+- [ ] RE-AUDIT trigger: nouveau commit touchant StoryTextLayer/StorySlideRenderer/SlideMiniPreview/Composer*.
