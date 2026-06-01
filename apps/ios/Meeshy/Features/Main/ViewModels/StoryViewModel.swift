@@ -211,11 +211,13 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         switch cached {
         case .fresh(let data, _):
             storyGroups = data
-            prefetchAllStoryMedia(data)
+            sortStoryGroupsInPlace()
+            prefetchAllStoryMedia(storyGroups)
             return
         case .stale(let data, _):
             storyGroups = data
-            prefetchAllStoryMedia(data)
+            sortStoryGroupsInPlace()
+            prefetchAllStoryMedia(storyGroups)
             Task { [weak self] in await self?.fetchStoriesFromNetwork() }
             return
         case .expired, .empty:
@@ -247,8 +249,15 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 }
 
                 storyGroups = groups
-                try? await CacheCoordinator.shared.stories.save(groups, for: Self.storiesCacheKey)
-                prefetchAllStoryMedia(groups)
+                // Tri unifié (ma story d'abord > non-vues > récence), identique au
+                // chemin socket. `toStoryGroups()` est appelé sans `currentUserId`
+                // ici, donc sans ce re-tri la story « Moi » n'arrivait pas en tête
+                // au chargement réseau/cold-start — incohérent avec le tri appliqué
+                // par les events socket (2026-06-01). On sauve la version triée pour
+                // que les chemins .fresh/.stale servent déjà le bon ordre.
+                sortStoryGroupsInPlace()
+                try? await CacheCoordinator.shared.stories.save(storyGroups, for: Self.storiesCacheKey)
+                prefetchAllStoryMedia(storyGroups)
             }
         } catch {
             Logger.messages.error("[StoryVM] Failed to load stories: \(error.localizedDescription)")
