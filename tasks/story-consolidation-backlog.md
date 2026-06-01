@@ -419,3 +419,18 @@ round-trip — tous audités + sains.
 - [ ] Audio story : transcription/voice, mixer (cf. CanvasAudioLifecycle ×5 déféré audio-owner).
 - [ ] Exporter : honore-t-il le timing par-élément (texte startTime=3 → apparaît à 3s dans le MP4) ?
 - [ ] Vérif visuelle (login frais) : glass committé + rognage timeline dans le viewer.
+
+## it.22 — AUDIT exporter timing par-élément : honoré, AUCUN bug
+`StoryAVCompositor` rend chaque frame via `StoryRenderer.render(slide:, at: request.compositionTime,
+mode: .play, ...)` (StoryAVCompositor:138,202-205) → `shouldRender(item:at:.play)` gate la visibilité
+par-élément à CHAQUE frame. Un texte `startTime=3` apparaît bien à 3s dans le MP4 exporté, pas à 0.
+→ Le timing par-élément est cohérent COMPOSER → VIEWER → EXPORTER → PUBLISH (même chemin StoryRenderer).
+
+## CONVERGENCE (post it.7→it.22)
+Tous les axes profonds story sont audités + sains : composition (9:16, couches text/dessin/média/
+sticker, text bg solid+glass z-order), durée (timeline-autoritaire, rognage, end-to-end incl. publish
++ exporter), timing par-élément (viewer+exporter), thumbHash/mini-preview cohérents (toutes couches),
+undo/redo/gomme/aspectRatio. Bugs réels trouvés+corrigés : it.8/9/10/14/16/15/17(glass via agent)/18-19
+(durée source-de-vérité)/19(currentSlideDuration no-op + avatar stale). Reste : surfaces non encore
+auditées (realtime, ops multi-slides, viewer gestes) + vérif VISUELLE (proven par tests ; login flaky
+— utiliser le compte DEMO jcharlesnm via « Autre compte » si besoin) + CanvasAudio ×5 (audio-owner).
