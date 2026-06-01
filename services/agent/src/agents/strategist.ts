@@ -166,6 +166,21 @@ function shuffleArray<T>(arr: T[]): T[] {
 // the source of truth at runtime.
 const DEFAULT_TOPIC_PROVOCATION_PROBABILITY = 0.20;
 
+/**
+ * Effective probability that the strategist provokes a fresh topic this cycle.
+ * The Animator's job is to revive dead conversations, so the probability rises
+ * as human activity falls: a dead conversation (activityScore=0) almost always
+ * provokes, while the admin's `freshTopicProbability` acts as a floor so a high
+ * manual setting is never lowered by activity. Bounded to [0, 1].
+ */
+export function computeProvocationProbability(
+  freshTopicProbability: number,
+  activityScore: number,
+): number {
+  const inactivityBoost = 1 - Math.max(0, Math.min(1, activityScore));
+  return Math.max(0, Math.min(1, Math.max(freshTopicProbability, inactivityBoost)));
+}
+
 export type ProvocationHint = { instruction: string; searchHint: string; topicCategory: string };
 
 /**
@@ -227,10 +242,40 @@ export function renderProvocationHint(
   };
 }
 
-function buildProvocationBlock(hint: ProvocationHint, budgetRemaining: number): string {
+function buildProvocationBlock(
+  hint: ProvocationHint,
+  budgetRemaining: number,
+  burstSize: number,
+  activityScore: number,
+): string {
+  // Dead/calm conversation: the Animator should impersonate SEVERAL users to
+  // spin up a real exchange, not drop a single lonely message. Active enough
+  // conversations keep the lighter single-message provocation.
+  const burstCount = Math.max(2, Math.min(burstSize, budgetRemaining));
+  const animate = activityScore < 0.3 && budgetRemaining >= 2 && burstCount >= 2;
+
+  if (animate) {
+    return [
+      '',
+      '===== RELANCE DE CONVERSATION MORTE (ANIMATION MULTI-UTILISATEURS) =====',
+      hint.instruction,
+      '',
+      'CONTRAINTES:',
+      `- La conversation est MORTE/CALME (score ${activityScore.toFixed(2)}). AJOUTE ${burstCount} interventions "message" formant un ECHANGE NATUREL sur ce nouveau sujet (dans la limite du budget restant ${budgetRemaining}).`,
+      `- Utilise AU MOINS 2 utilisateurs DIFFERENTS — l'un lance le sujet, les autres rebondissent (question → avis → relance), comme une vraie discussion.`,
+      '- Le PREMIER message ouvre le sujet (replyToMessageId: null, needsWebSearch: true).',
+      '- Les messages SUIVANTS se repondent entre eux (replyToMessageId pointant vers le message agent precedent du burst) et n\'ont PAS besoin de web search.',
+      `- searchHint du premier message, base de requete: "${hint.searchHint}" (raffine selon le contexte et la date)`,
+      `- topicCategory: "${hint.topicCategory}" pour tout le burst`,
+      '- delayCategory: "short" ou "medium" avec des delais croissants pour simuler un echange etale dans le temps (jamais tout "immediate").',
+      '- Le sujet doit etre NEUF (pas dans agentHistory, pas dans recentTopicCategories).',
+      '',
+    ].join('\n');
+  }
+
   return [
     '',
-    '===== PROVOCATION DE NOUVEAU SUJET (DECLENCHE — 20%) =====',
+    '===== PROVOCATION DE NOUVEAU SUJET (DECLENCHE) =====',
     hint.instruction,
     '',
     'CONTRAINTES:',
@@ -353,7 +398,7 @@ function buildStrategistPrompt(
       ).join('\n')
       : 'Aucune action programmee')
     .replace('{detectedTheme}', detectedTheme)
-    .replace('{topicProvocation}', provocationHint ? buildProvocationBlock(provocationHint, state.budgetRemaining) : '')
+    .replace('{topicProvocation}', provocationHint ? buildProvocationBlock(provocationHint, state.budgetRemaining, state.burstSize, state.activityScore) : '')
     .replace('{engagementData}', engagementText)
     .replace('{inactiveUsers}', inactiveUsersText)
     .replace('{participants}', participantsText)
@@ -742,7 +787,10 @@ export function createStrategistNode(llm: LlmProvider, deps?: StrategistDependen
     const minResponses = state.minResponsesPerCycle;
     const maxResponses = state.maxResponsesPerCycle;
 
-    const provocationProbability = state.freshTopicProbability ?? DEFAULT_TOPIC_PROVOCATION_PROBABILITY;
+    const provocationProbability = computeProvocationProbability(
+      state.freshTopicProbability ?? DEFAULT_TOPIC_PROVOCATION_PROBABILITY,
+      state.activityScore,
+    );
     const shouldProvoke =
       state.budgetRemaining > 0 && provocationProbability > 0 && Math.random() < provocationProbability;
 
