@@ -943,9 +943,11 @@ export class MessageTranslationService extends EventEmitter {
 
       logger.info(`✅ Transcription sauvegardée: ${data.transcription.language}`);
 
-      // 3. Construire la structure translations JSON
-      const existingTranslations = (attachment.translations as unknown as AttachmentTranslations) || {};
-      const translationsData: AttachmentTranslations = { ...existingTranslations };
+      // 3. Construire les NOUVELLES entrées de traduction (sauvegarde fichiers
+      // incluse). Le merge avec l'existant + l'update sont faits SOUS MUTEX
+      // plus bas (re-fetch dans le lock), pour éviter le lost-update avec le
+      // handler progressif _processTranslationEvent sur le même attachment.
+      const newTranslationEntries: AttachmentTranslations = {};
 
       for (const translatedAudio of data.translatedAudios) {
         // Toujours générer le path et l'URL au format gateway (même sans binaire)
@@ -978,7 +980,7 @@ export class MessageTranslationService extends EventEmitter {
         }
 
         // Ajouter/mettre à jour la traduction dans le map avec segments (format BD)
-        translationsData[translatedAudio.targetLanguage] = {
+        newTranslationEntries[translatedAudio.targetLanguage] = {
           type: 'audio',
           transcription: translatedAudio.translatedText,
           path: localAudioPath,
@@ -997,19 +999,36 @@ export class MessageTranslationService extends EventEmitter {
         logger.info(`✅ Audio traduit sauvegardé: ${translatedAudio.targetLanguage} | segments=${translatedAudio.segments?.length || 0}`);
       }
 
+      // 4. Update SÉRIALISÉ par attachment : re-fetch translations DANS le lock
+      // puis merge les nouvelles entrées (évite le lost-update avec le handler
+      // progressif _processTranslationEvent sur le même attachment). La
+      // transcription (champ séparé) est écrite dans le même update.
+      const translationsData = await this.attachmentTranslationMutex.runExclusive(
+        data.attachmentId,
+        async () => {
+          const fresh = await this.prisma.messageAttachment.findUnique({
+            where: { id: data.attachmentId },
+            select: { translations: true }
+          });
+          const merged: AttachmentTranslations = {
+            ...((fresh?.translations as unknown as AttachmentTranslations) || {}),
+            ...newTranslationEntries
+          };
+          await this.prisma.messageAttachment.update({
+            where: { id: data.attachmentId },
+            data: {
+              transcription: transcriptionData as any,
+              translations: merged as any
+            }
+          });
+          return merged;
+        }
+      );
+
       // Convertir les traductions BD vers format Socket.IO en utilisant la fonction officielle
       const savedTranslatedAudios = Object.entries(translationsData).map(([lang, translation]) =>
         toSocketIOTranslation(data.attachmentId, lang, translation)
       );
-
-      // 4. Mettre à jour l'attachment avec transcription et translations JSON
-      await this.prisma.messageAttachment.update({
-        where: { id: data.attachmentId },
-        data: {
-          transcription: transcriptionData as any,
-          translations: translationsData as any
-        }
-      });
 
       logger.info(`✅ Attachment mis à jour avec transcription et ${Object.keys(translationsData).length} traduction(s)`);
 
@@ -1833,9 +1852,9 @@ export class MessageTranslationService extends EventEmitter {
           durationMs: data.result.originalAudio.durationMs
         } : null;
 
-        // 3. Construire la structure translations JSON
-        const existingTranslations = (attachment.translations as unknown as AttachmentTranslations) || {};
-        const translationsData: AttachmentTranslations = { ...existingTranslations };
+        // 3. Construire les NOUVELLES entrées de traduction (sauvegarde fichiers
+        // incluse). Merge avec l'existant + update faits SOUS MUTEX plus bas.
+        const newTranslationEntries: AttachmentTranslations = {};
 
         for (const translation of data.result.translations) {
           // TOUJOURS générer le path et l'URL au format gateway (même sans binaire)
@@ -1868,7 +1887,7 @@ export class MessageTranslationService extends EventEmitter {
           }
 
           // Ajouter/mettre à jour la traduction dans le map avec segments (format BD)
-          translationsData[translation.targetLanguage] = {
+          newTranslationEntries[translation.targetLanguage] = {
             type: 'audio',
             transcription: translation.translatedText,
             path: localAudioPath,
@@ -1887,19 +1906,36 @@ export class MessageTranslationService extends EventEmitter {
           logger.info(`✅ Audio traduit sauvegardé: ${translation.targetLanguage} | segments=${translation.segments?.length || 0}`);
         }
 
+        // 4. Update SÉRIALISÉ par attachment : re-fetch translations DANS le lock
+        // + merge les nouvelles entrées (évite le lost-update avec le handler
+        // progressif _processTranslationEvent sur le même attachment).
+        const attachmentIdForUpdate = jobMetadata.attachmentId;
+        const translationsData = await this.attachmentTranslationMutex.runExclusive(
+          attachmentIdForUpdate,
+          async () => {
+            const fresh = await this.prisma.messageAttachment.findUnique({
+              where: { id: attachmentIdForUpdate },
+              select: { translations: true }
+            });
+            const merged: AttachmentTranslations = {
+              ...((fresh?.translations as unknown as AttachmentTranslations) || {}),
+              ...newTranslationEntries
+            };
+            await this.prisma.messageAttachment.update({
+              where: { id: attachmentIdForUpdate },
+              data: {
+                transcription: transcriptionData as any,
+                translations: merged as any
+              }
+            });
+            return merged;
+          }
+        );
+
         // Convertir les traductions BD vers format Socket.IO en utilisant la fonction officielle
         const savedTranslatedAudios = Object.entries(translationsData).map(([lang, translation]) =>
           toSocketIOTranslation(jobMetadata.attachmentId, lang, translation)
         );
-
-        // 4. Mettre à jour l'attachment avec transcription et translations JSON
-        await this.prisma.messageAttachment.update({
-          where: { id: jobMetadata.attachmentId },
-          data: {
-            transcription: transcriptionData as any,
-            translations: translationsData as any
-          }
-        });
 
         logger.info(`✅ Attachment mis à jour avec transcription et ${Object.keys(translationsData).length} traduction(s)`);
 
