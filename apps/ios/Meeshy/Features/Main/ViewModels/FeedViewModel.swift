@@ -420,31 +420,45 @@ class FeedViewModel: ObservableObject {
     }
 
     func sendComment(postId: String, content: String, parentId: String? = nil, effectFlags: Int? = nil) async {
-        do {
-            let apiComment = try await postService.addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags)
-            if let index = posts.firstIndex(where: { $0.id == postId }) {
-                let feedComment = FeedComment(
-                    id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
-                    authorAvatarURL: apiComment.author.avatar,
-                    content: apiComment.content, timestamp: apiComment.createdAt,
-                    likes: 0, replies: 0,
-                    parentId: parentId,
-                    effectFlags: apiComment.effectFlags ?? effectFlags ?? 0
-                )
-                posts[index].comments.insert(feedComment, at: 0)
-                posts[index].commentCount += 1
+        guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
+        // T10c — optimistic insert + durable outbox enqueue (survives offline +
+        // app kill, flushes on reconnect via T10) instead of the direct
+        // postService call that silently lost the comment offline. The real
+        // server comment reconciles via `comment:added` / a feed refresh.
+        // Mirrors PostDetailViewModel.sendComment.
+        let cmid = ClientMutationId.generate()
+        let snapshot = posts[index].comments
+        let snapshotCount = posts[index].commentCount
+        let currentUser = AuthManager.shared.currentUser
+        let optimistic = FeedComment(
+            id: cmid,
+            author: currentUser?.displayName ?? currentUser?.username ?? "",
+            authorId: currentUser?.id ?? "",
+            authorAvatarURL: currentUser?.avatar,
+            content: content,
+            timestamp: Date(),
+            likes: 0, replies: 0,
+            parentId: parentId,
+            effectFlags: effectFlags ?? 0
+        )
+        posts[index].comments.insert(optimistic, at: 0)
+        posts[index].commentCount += 1
 
-                // Persist comment + updated count to GRDB
-                if let persistence = feedPersistence,
-                   let record = CommentRecord(from: apiComment, postId: postId) {
-                    let newCount = posts[index].commentCount
-                    Task.detached(priority: .utility) {
-                        try? await persistence.insertComment(record)
-                        try? await persistence.updateCommentCount(postId: postId, count: newCount)
-                    }
-                }
-            }
+        let payload = CreateCommentPayload(
+            clientMutationId: cmid,
+            postId: postId,
+            parentCommentId: parentId,
+            content: content
+        )
+        do {
+            try await offlineQueue.enqueue(.createComment, payload: payload, conversationId: postId)
         } catch {
+            // Roll back the optimistic comment if the outbox refuses the row
+            // (re-resolve the index — the feed may have mutated during the await).
+            if let i = posts.firstIndex(where: { $0.id == postId }) {
+                posts[i].comments = snapshot
+                posts[i].commentCount = snapshotCount
+            }
             FeedbackToastManager.shared.showError("Erreur lors de l'envoi du commentaire")
         }
     }

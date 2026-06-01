@@ -424,40 +424,49 @@ final class FeedViewModelTests: XCTestCase {
 
     // MARK: - sendComment()
 
-    func test_sendComment_success_incrementsCommentCount() async {
-        let (sut, api, _, postService) = makeSUT()
+    func test_sendComment_success_enqueuesCreateComment_andOptimisticallyInserts() async {
+        // T10c — sendComment now routes through the outbox (durable offline)
+        // instead of calling postService directly.
+        let queue = MockOfflineQueue()
+        let (sut, api, _, _) = makeSUT(offlineQueue: queue)
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", commentCount: 3)]))
         await sut.loadFeed()
 
         await sut.sendComment(postId: "p1", content: "Nice post!")
 
         XCTAssertEqual(sut.posts[0].commentCount, 4)
-        XCTAssertEqual(postService.addCommentCallCount, 1)
-        XCTAssertEqual(postService.lastAddCommentPostId, "p1")
-        XCTAssertEqual(postService.lastAddCommentContent, "Nice post!")
-        XCTAssertNil(postService.lastAddCommentParentId)
+        XCTAssertEqual(sut.posts[0].comments.first?.content, "Nice post!", "optimistic comment inserted")
+        XCTAssertEqual(queue.enqueueCalls.count, 1)
+        XCTAssertEqual(queue.enqueueCalls.first?.kind, .createComment)
+        let payload = queue.enqueueCalls.first?.payload as? CreateCommentPayload
+        XCTAssertEqual(payload?.postId, "p1")
+        XCTAssertEqual(payload?.content, "Nice post!")
+        XCTAssertNil(payload?.parentCommentId)
     }
 
     func test_sendComment_withParentId_passesParentId() async {
-        let (sut, api, _, postService) = makeSUT()
+        let queue = MockOfflineQueue()
+        let (sut, api, _, _) = makeSUT(offlineQueue: queue)
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1")]))
         await sut.loadFeed()
 
         await sut.sendComment(postId: "p1", content: "reply", parentId: "c1")
 
-        XCTAssertEqual(postService.lastAddCommentParentId, "c1")
+        let payload = queue.enqueueCalls.first?.payload as? CreateCommentPayload
+        XCTAssertEqual(payload?.parentCommentId, "c1")
     }
 
-    func test_sendComment_failure_doesNotIncrementCommentCount() async {
-        let (sut, api, _, postService) = makeSUT()
+    func test_sendComment_failure_rollsBackOptimisticComment() async {
+        let queue = MockOfflineQueue()
+        queue.enqueueResult = .failure(APIError.networkError(URLError(.timedOut)))
+        let (sut, api, _, _) = makeSUT(offlineQueue: queue)
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", commentCount: 3)]))
         await sut.loadFeed()
 
-        postService.addCommentResult = .failure(APIError.networkError(URLError(.timedOut)))
-
         await sut.sendComment(postId: "p1", content: "failing comment")
 
-        XCTAssertEqual(sut.posts[0].commentCount, 3, "Comment count should not change on failure")
+        XCTAssertEqual(sut.posts[0].commentCount, 3, "comment count must roll back on enqueue failure")
+        XCTAssertTrue(sut.posts[0].comments.isEmpty, "optimistic comment must be removed on rollback")
     }
 
     // MARK: - deletePost()
