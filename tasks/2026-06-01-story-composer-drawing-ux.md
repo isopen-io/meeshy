@@ -67,3 +67,20 @@ drawing UX; Part 1 coordination fix intact. NB: a parallel agent edits apps/ios/
   - Tests 16/16 green (CanvasGeometry + DrawingEditing).
 - Tuning constants: ComposerToolPanelHost.panelHeight(.drawing)=120 (peek), StoryComposerView.drawingBandReservedHeight=215.
 - REMAINING: Increment 3 (multi-height resizable band via grabber drag — user said "Oui") ; Increment 4 (generalize canvas-scaling + resize to other tools).
+
+---
+## Progress update #2 (03:35) — Increment 3 DONE & verified on simulator
+- New DrawingBand (resizable grabber multi-height) replaces band-machine routing for drawing.
+  Reuses ComposerToolSwitcherHeader (back + switch chips) + DrawingStrokeList + band bg style.
+- Empty-gating: no band when 0 strokes (full canvas, draw immediately). Band appears on 1st stroke.
+- Canvas scales into region above the band, rounded corners + below Dynamic Island when scaled;
+  higher band => smaller canvas. Stays 9:16 (coordination preserved).
+- Floating brush bubbles lifted above the band.
+- VERIFIED on simulator (atabeth/Andre): r9 empty=no band+draw-immediate; r12 1st stroke=band w/
+  grabber+header+chips, canvas scaled+rounded+below island; r13 grabber drag up grows band &
+  shrinks canvas (resize regression fixed); drawing capture works (slow drag; fast/horizontal
+  swipes are interpreted as navigation by the automation, not a code issue).
+- Commits pushed: 2008baedf (incr 1+2), 7c652a75d (incr 3). Build + 16 tests green.
+- Nav tip: "Ma story" index 0 = create (composer), index 1 = view (story viewer).
+- REMAINING: Increment 4 — generalize canvas-scaling + resizable band to the OTHER tools
+  (media/text/audio/filters), verifying each.

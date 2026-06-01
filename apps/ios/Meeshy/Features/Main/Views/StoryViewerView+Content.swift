@@ -535,6 +535,12 @@ extension StoryViewerView {
         || showTextEmojiPicker
         || showLanguageOptions
         || showFullLanguagePicker
+        // L'overlay commentaires ouvert met la story en pause : lire / répondre à
+        // un commentaire ne doit pas laisser la slide auto-avancer sous l'overlay
+        // (bug 2026-06-01 — l'utilisateur lit les commentaires et la story passe
+        // à la slide suivante). Parité Instagram : ouvrir les commentaires gèle
+        // la lecture (timer + médias via `isCanvasPlaybackPaused`).
+        || showCommentsOverlay
         || isTransitioning
         || isDismissing
     }
