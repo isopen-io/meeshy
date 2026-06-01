@@ -197,3 +197,31 @@ story-touching commits from parallel agents.
 - [ ] Reader language indicator: should the active override show a subtle "viewing in X" affordance + a
       one-tap revert to preferred? (Prisme discretion — currently silent revert on slide change only.)
 - [ ] StorySlideRenderer.drawTextObject thumbHash font /390 → /designWidth (cosmetic, noted it.7).
+
+## Audit it.14 — solid text background hides glyphs (REAL BUG, fixed 104ff0387)
+Triggered by user report "Le texte effacé dans le fond noir ne rend pas le texte lisible".
+Found via VISUAL SMOKE (composer → Texte → type → Fond=Noir → exit): committed canvas showed
+an EMPTY BLACK BOX while the Texte list still listed the text. Root cause PROVEN (4 screenshots,
+not claims): `StoryTextLayer.applyBackgroundStyle` posed the solid fill as a CALayer SUBLAYER with
+zPosition=-1; Core Animation composites sublayers ABOVE the parent's own contents (the CATextLayer
+glyphs) regardless of zPosition → the opaque fill occluded the glyphs. Inline editor (separate overlay
+UIView) still painted glyphs on top → looked fine while editing, broke once committed. Thumbnail
+composite (`StorySlideRenderer`) used `.backgroundColor` attribute (behind glyphs) → canvas diverged
+from preview (the "incohérence").
+- [x] Decisive control: a NO-bg committed text rendered VISIBLE (rules out the glyphsHidden hypothesis).
+- [x] Fix: move solid fill to the layer's OWN backgroundColor + cornerRadius (painted before contents),
+      reset on .none/.glass. 5 new tests (StoryTextLayerSolidBackgroundTests) + related suites green.
+- [x] Visual verify post-fix: "Lisible" now renders white-on-black, readable; slide thumbnail too.
+- [x] GLASS case PROVEN acceptable (not the same bug): glass backdrop is translucent (blur) so glyphs
+      show through → readable. No risky glyph-on-top restructure needed. Hypothesis disproven by test.
+- Lesson saved: [[feedback_calayer_sublayer_zposition_covers_contents]].
+
+## REPLENISHED backlog (next to consume) — updated it.14
+- [ ] NEXT: continue visual smoke on OTHER text controls now that the editor is reachable — verify
+      Style (Aa cycle), Taille, Alignement, Contour (border) all render correctly on the committed canvas
+      (same editor-vs-committed divergence class as the bg bug just fixed).
+- [ ] Verify multi-line / long text + solid bg: backgroundColor now fills the full padded bounds — confirm
+      wrapped text box still looks right (cornerRadius scales with bounds.height).
+- [ ] RE-AUDIT trigger: new commit touching StoryTextLayer / StorySlideRenderer / StoryCanvas* → re-run.
+- [ ] Reader language indicator affordance (deferred, Prisme discretion).
+- [ ] (deferred, large + well-tested) repost flow, export flow, keyframes.
