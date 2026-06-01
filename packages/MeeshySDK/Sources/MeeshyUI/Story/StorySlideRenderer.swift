@@ -51,25 +51,26 @@ public enum StorySlideRenderer {
                 }
             }
 
-            // 4b. Drawing layer (modern strokes preferred, legacy PKDrawing fallback).
-            // Without this the thumbHash placeholder ignored the drawing entirely —
-            // a story dominated by a freehand drawing got a blur that didn't match
-            // its content (spec user 2026-06-01 : ThumbHash de TOUTE la story avec
-            // toutes les couches : image, texte ET dessin). Strokes are rasterised
-            // at design size (1080x1920) then stretched into the composite rect,
-            // the same design→bounds mapping the live `MeeshyStrokeCanvas` uses.
-            if let strokes = slide.effects.drawingStrokes, !strokes.isEmpty {
-                StoryStrokeRasterizer.image(strokes: strokes, scale: 1)?.draw(in: rect)
-            } else if let data = slide.effects.drawingData,
-                      let drawing = try? PKDrawing(data: data), !drawing.bounds.isEmpty {
-                drawing.image(from: drawing.bounds, scale: 1).draw(in: rect)
-            }
-
             // 5. Sticker emojis (draw as text)
             if let stickers = slide.effects.stickerObjects {
                 for sticker in stickers {
                     drawSticker(sticker, in: size, ctx: cgCtx)
                 }
+            }
+
+            // 6. Drawing layer — TOPMOST (modern strokes preferred, legacy PKDrawing
+            // fallback). Mirrors `StoryRenderer` where the drawing overlay sits at
+            // zPosition 9999 above every item (text/media/stickers). Without this
+            // the thumbHash placeholder ignored the drawing entirely (spec user
+            // 2026-06-01 : ThumbHash de TOUTE la story avec toutes les couches :
+            // image, texte ET dessin). Strokes are rasterised at design size
+            // (1080x1920) then stretched into the composite rect — the same
+            // design→bounds mapping the live `MeeshyStrokeCanvas` uses.
+            if let strokes = slide.effects.drawingStrokes, !strokes.isEmpty {
+                StoryStrokeRasterizer.image(strokes: strokes, scale: 1)?.draw(in: rect)
+            } else if let data = slide.effects.drawingData,
+                      let drawing = try? PKDrawing(data: data), !drawing.bounds.isEmpty {
+                drawing.image(from: drawing.bounds, scale: 1).draw(in: rect)
             }
         }
     }

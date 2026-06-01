@@ -67,10 +67,15 @@ struct SlideMiniPreview: View {
         GeometryReader { geo in
             ZStack {
                 backgroundLayers(in: geo.size)
-                drawingLayer
                 foregroundMediaLayer(in: geo.size)
                 textLayer(in: geo.size)
                 stickerLayer(in: geo.size)
+                // Le dessin est la couche la PLUS HAUTE — parité avec
+                // `StoryRenderer` (overlay dessin à zPosition 9999, au-dessus de
+                // texte/média/stickers) et avec le composite ThumbHash. Avant, le
+                // `drawingLayer` était rendu en 2ᵉ position (sous média/texte) →
+                // mini-preview incohérente avec le rendu réel (2026-06-01).
+                drawingLayer
             }
             // Approximation des filtres `slide.effects.filter` via les
             // modifiers SwiftUI natifs (GPU, ~0 cost à cette taille). Le main
