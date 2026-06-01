@@ -94,7 +94,18 @@ public struct ComposerControlsLayer: View {
                         filtersBadge: filtersBadge,
                         timelineBadge: timelineBadge,
                         activeCategory: nil, // band is hidden so no active category
-                        onTap: { cat in bandStateMachine.tapFAB(cat) },
+                        onTap: { cat in
+                            // Le DESSIN n'a pas de panneau « tuiles » dans le band : son UI
+                            // est les contrôleurs flottants (bulles) + la liste des traits.
+                            // Tapper le FAB doit donc ACTIVER le mode dessin (`selectTool`)
+                            // — l'`adaptiveOnChange(activeTool)` ouvre alors bulles + band.
+                            // `tapFAB` seul ouvrait un band sans contrôles (bug user 2026-06-01).
+                            if cat == .drawing {
+                                viewModel.selectTool(.drawing)
+                            } else {
+                                bandStateMachine.tapFAB(cat)
+                            }
+                        },
                         onSwipeUp: { cat in bandStateMachine.swipeUpOnFAB(cat) },
                         onSwipeDownAny: { areFabsVisible = false }
                     )
@@ -159,7 +170,15 @@ public struct ComposerControlsLayer: View {
                     },
                     resizableHeight: isBandResizable ? $resizableBandHeight : nil,
                     minHeight: bandMinHeight,
-                    maxHeight: bandMaxHeight
+                    maxHeight: bandMaxHeight,
+                    onResizeDismiss: {
+                        // Grabber tiré sous le min → on quitte le dessin, on cache le
+                        // band et on réaffiche les FABs.
+                        viewModel.activeTool = nil
+                        viewModel.exitDrawingEditingMode()
+                        bandStateMachine.reset()
+                        areFabsVisible = true
+                    }
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 // En mode dessin le grabber pilote le RESIZE — on désarme le

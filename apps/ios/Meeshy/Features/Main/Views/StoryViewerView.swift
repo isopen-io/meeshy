@@ -463,8 +463,8 @@ struct StoryViewerView: View {
         viewerContent
         // Prisme « Exploration » : l'override de langue est éphémère — il se réinitialise
         // dès qu'on change de story (slide ou groupe), de sorte que chaque story s'affiche
-        // d'abord dans la langue préférée de base. iOS 16 : signature single-param.
-        .onChange(of: currentStory?.id) { _ in
+        // d'abord dans la langue préférée de base. `adaptiveOnChange` = wrapper iOS 16.
+        .adaptiveOnChange(of: currentStory?.id) { _, _ in
             if sessionLanguageOverride != nil { sessionLanguageOverride = nil }
         }
         .sheet(isPresented: $showViewersSheet, onDismiss: { resumeTimer() }) {

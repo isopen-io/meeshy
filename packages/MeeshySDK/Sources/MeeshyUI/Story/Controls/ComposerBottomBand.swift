@@ -26,6 +26,9 @@ struct ComposerBottomBand: View {
     var resizableHeight: Binding<CGFloat>? = nil
     var minHeight: CGFloat = 160
     var maxHeight: CGFloat = 540
+    /// Appelé quand le grabber est tiré nettement EN-DESSOUS de `minHeight` :
+    /// le band se cache et les FABs réapparaissent (drag-to-dismiss).
+    var onResizeDismiss: (() -> Void)? = nil
     @State private var dragStartHeight: CGFloat?
 
     @Environment(\.colorScheme) private var colorScheme
@@ -203,7 +206,13 @@ struct ComposerBottomBand: View {
                             let base = dragStartHeight ?? height.wrappedValue
                             height.wrappedValue = max(minHeight, min(maxHeight, base - value.translation.height))
                         }
-                        .onEnded { _ in dragStartHeight = nil }
+                        .onEnded { value in
+                            let base = dragStartHeight ?? height.wrappedValue
+                            let proposed = base - value.translation.height
+                            dragStartHeight = nil
+                            // Tiré nettement sous le min → cacher le band + révéler les FABs.
+                            if proposed < minHeight - 50 { onResizeDismiss?() }
+                        }
                 )
         } else {
             handle
