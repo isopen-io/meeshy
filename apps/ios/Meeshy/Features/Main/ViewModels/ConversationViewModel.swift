@@ -371,6 +371,14 @@ class ConversationViewModel: ObservableObject {
     func persistMessagesUsingServerIds() async {
         let convId = conversationId
         let mapping = pendingServerIds
+        // S11 — re-key any "Delete for me" hidden ids from the optimistic temp id
+        // to the reconciled server id. The row's display id flips temp→server at
+        // ack (toMessage = serverId ?? localId); without this the hidden-set
+        // still holds the temp id, the filter (keyed on message.id) stops
+        // matching, and the hidden message reappears (in-memory + at cold start).
+        for (tempId, serverId) in mapping {
+            LocallyHiddenMessagesStore.shared.migrate(from: tempId, to: serverId)
+        }
         let snapshot = messages
         let rewritten: [Message] = snapshot.map { msg -> Message in
             guard let serverId = mapping[msg.id] else { return msg }

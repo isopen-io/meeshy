@@ -50,6 +50,22 @@ final class LocallyHiddenMessagesStore: @unchecked Sendable {
         defaults.set(snapshot, forKey: storageKey)
     }
 
+    /// Re-key a hidden id when an optimistic message's id reconciles temp→server.
+    /// Without this the hidden-set would still hold the pre-ack temp id while the
+    /// row's display id becomes the server id, so the "Delete for me" filter
+    /// (keyed on `message.id`) would stop matching and the hidden message would
+    /// reappear. No-op when `oldId` was not hidden or equals `newId`.
+    func migrate(from oldId: String, to newId: String) {
+        guard oldId != newId else { return }
+        lock.lock()
+        let removed = cache.remove(oldId) != nil
+        if removed { cache.insert(newId) }
+        let snapshot: [String]? = removed ? Array(cache) : nil
+        lock.unlock()
+        guard let snapshot else { return }
+        defaults.set(snapshot, forKey: storageKey)
+    }
+
     /// Filter an array of message ids to those still visible to the user.
     func visibleIds(from ids: [String]) -> [String] {
         lock.lock()

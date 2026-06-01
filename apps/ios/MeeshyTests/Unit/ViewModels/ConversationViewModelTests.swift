@@ -715,6 +715,24 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertNotNil(sut.error)
     }
 
+    /// S11 — a "Delete for me" hide keyed on a temp id must follow the
+    /// temp->server reconciliation, so the hidden message stays hidden instead
+    /// of reappearing once its display id flips to the server id.
+    func test_persistMessagesUsingServerIds_migratesHiddenTempIdToServerId() async {
+        let sut = makeSUT(conversationId: "c_s11")
+        LocallyHiddenMessagesStore.shared.clearAll()
+        defer { LocallyHiddenMessagesStore.shared.clearAll() }
+        LocallyHiddenMessagesStore.shared.hide("temp_s11")
+        sut.pendingServerIds = ["temp_s11": "srv_s11"]
+
+        await sut.persistMessagesUsingServerIds()
+
+        XCTAssertFalse(LocallyHiddenMessagesStore.shared.isHidden("temp_s11"),
+            "the temp id must be migrated away once reconciled")
+        XCTAssertTrue(LocallyHiddenMessagesStore.shared.isHidden("srv_s11"),
+            "the hidden state must follow temp->server so the message stays hidden")
+    }
+
     // MARK: - toggleReaction Tests
     //
     // Post Phase 1.5: `toggleReaction` writes through `messagePersistence.appendReaction`
