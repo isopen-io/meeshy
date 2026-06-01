@@ -707,11 +707,17 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     // MARK: - Slide Duration
 
     var currentSlideDuration: Float {
-        get { Float(currentSlide.duration) }
+        // Source de vérité = `effects.timelineDuration` (autoritaire, lu par
+        // `computedTotalDuration`). Régler explicitement la durée du slide via ce
+        // contrôle POSE donc un pin timeline — sinon le réglage serait ignoré au
+        // playback (la centralisation 28/05 ignore `slide.duration`). Le getter
+        // retombe sur la durée auto du contenu tant qu'aucun pin n'est posé.
+        get { Float(currentSlide.effects.timelineDuration ?? currentSlide.computedTotalDuration()) }
         set {
             let clamped = max(2, min(600, newValue))
             var slide = currentSlide
-            slide.duration = TimeInterval(clamped)
+            slide.duration = TimeInterval(clamped)            // miroir legacy
+            slide.effects.timelineDuration = Double(clamped)  // autoritaire
             currentSlide = slide
         }
     }

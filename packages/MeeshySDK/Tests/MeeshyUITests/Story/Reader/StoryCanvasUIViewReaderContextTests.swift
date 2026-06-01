@@ -54,7 +54,11 @@ final class StoryCanvasUIViewReaderContextTests: XCTestCase {
     private func makeStaticSlide(durationSeconds: Double) -> StorySlide {
         StorySlide(
             id: "test-slide",
-            effects: StoryEffects(textObjects: [StoryTextObject(id: "t1", text: "X")]),
+            // La durée effective (lue par le reader via `computedTotalDuration`) est
+            // désormais pilotée par `timelineDuration` (autoritaire), pas par le legacy
+            // `slide.duration` ignoré. On pose donc le pin pour exprimer la durée voulue.
+            effects: StoryEffects(textObjects: [StoryTextObject(id: "t1", text: "X")],
+                                  timelineDuration: durationSeconds),
             duration: durationSeconds
         )
     }
