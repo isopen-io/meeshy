@@ -472,3 +472,29 @@ PLAN DE CORRECTIF (incrément focalisé, TDD) :
 - [ ] Surfaces story non encore auditées : ops multi-slides (add/delete/reorder/duplicate), viewer gestes.
 - [ ] Vérif visuelle (login frais) : glass committé + rognage timeline + compteur réactions live.
 - [ ] CanvasAudioLifecycle ×5 (gate contentReadyFired, domaine audio-owner) + doublon mémoire CALayer.
+
+## it.24 IMPLÉMENTÉ — filtres story branchés sur le rendu réel (036f4f1d5)
+- [x] BUG CRITIQUE prouvé : `StoryCanvasUIView.updateFilterLayer` faisait `Kind(rawValue: effects.filter)`,
+      mais `effects.filter` = `StoryFilter.rawValue` ("vintage"/"bw"…) alors que `Kind` rawValue = nom de
+      **fonction Metal** ("vintageFilter"/"bwContrastFilter"). → toujours nil → AUCUN filtre rendu sur le
+      canvas composer NI le viewer/reader, pour tous les filtres. Feature 100% non branchée.
+- [x] Fix : `StoryFilteredLayer.Kind(storyFilter:)` (pont vocabulaire → Kind ; vintage→vintage, bw→bwContrast,
+      6 autres → nil faute de kernel). `updateFilterLayer` passe par le pont. Kind rawValue reste le nom Metal.
+- [x] Cause du slip : les tests canvas seedaient `effects.filter = "vintageFilter"` (nom Metal, jamais écrit
+      en prod) → vocabulaire fictif que le canvas acceptait, masquant le mismatch. Corrigés au vrai vocabulaire
+      + cas bw + cas kernel-less. RED reproduit avant fix.
+- [x] 18 tests filtres verts (Canvas/TextureCapture/WarmUp/GlassBackdrop) + app build vert.
+
+## REPLENISHED backlog — post it.24 (filtres = chantier de cohérence)
+- [ ] **P1 — 6 filtres sans kernel Metal** (warm/cool/dramatic/vivid/fade/chrome) : visibles dans la grille
+      (CoreImage via `StoryFilter.ciFilterName`) + mini-preview (SwiftUI) mais AUCUN effet sur canvas/viewer/
+      thumbHash → l'auteur voit un filtre qui disparaît à la publication. Options : (a) rendre les 8 via
+      CoreImage (`ciFilterName`) sur le canvas en unifiant ; (b) écrire 6 kernels Metal ; (c) retirer les 6 de
+      la grille. Décision produit requise. PROUVÉ it.24.
+- [ ] **P2 — ThumbHash ignore les filtres** : `StorySlideRenderer.renderComposite` ne réapplique pas
+      `effects.filter`/`filterIntensity` → placeholder flou non filtré alors que la story rendue l'est
+      (vintage/bw). Refléter au moins vintage/bw (CoreImage) pour matcher le viewer. PROUVÉ it.24.
+- [ ] **P3 — 3 looks divergents** : grille (CoreImage), mini-preview (SwiftUI approx), canvas (Metal kernels)
+      donnent 3 rendus différents pour le même filtre → unifier sur une source de vérité (`ciFilterName`).
+- [ ] Vérif visuelle device/simu (login frais) : vintage + bw désormais visibles sur canvas + reader.
+- [ ] Surfaces non auditées : ops multi-slides (add/delete/reorder/duplicate), viewer gestes.
