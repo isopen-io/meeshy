@@ -211,13 +211,23 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
     /// picks them up. A `nil` deadline matches the legacy unbounded
     /// behavior (used by the 2-second debounce path).
     public func flushDirtyKeys(deadline: Date?) async {
-        guard !dirtyKeys.isEmpty else { return }
+        guard !dirtyKeys.isEmpty else {
+            firstDirtyAt = nil
+            return
+        }
 
         let keysToFlush = dirtyKeys
 
         for key in keysToFlush {
             if let deadline, Date() >= deadline { break }
-            guard let l1 = memoryCache[key] else { continue }
+            guard let l1 = memoryCache[key] else {
+                // The key lost its L1 entry without being flushed. There is
+                // nothing to persist, so drop it from the dirty set rather than
+                // leaving it to leak `firstDirtyAt` and re-arm the debounce
+                // against a phantom key forever.
+                dirtyKeys.remove(key)
+                continue
+            }
             let keyStr = namespacedKey(key.description)
             let items = l1.items
 
@@ -258,8 +268,16 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
     }
 
     public func evictL1() {
+        // Flush any dirty mutations before dropping them from memory — a direct
+        // evictL1 (e.g. memory pressure) must not lose a mutation that landed
+        // after the caller's own flush. Snapshot the set since the flush
+        // mutates it.
+        for key in Array(dirtyKeys) {
+            flushDirtyKeyForEviction(key)
+        }
         memoryCache.removeAll()
         accessOrder.removeAll()
+        if dirtyKeys.isEmpty { firstDirtyAt = nil }
     }
 
     public func loadedKeys() -> [Key] {
@@ -296,7 +314,24 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
 
         while accessOrder.count > maxL1Keys, let evicted = accessOrder.first {
             accessOrder.removeFirst()
+            // Flush a dirty victim before dropping it from memory — otherwise a
+            // local mutation that hasn't reached its 2s debounce window is
+            // silently lost (it lived only in L1).
+            flushDirtyKeyForEviction(evicted)
             memoryCache.removeValue(forKey: evicted)
+        }
+    }
+
+    /// Flush a single dirty key to L2 then drop it from the dirty set. Called by
+    /// every eviction path (LRU in `touchKey`, bulk `evictL1`) so eviction never
+    /// silently loses a local mutation that hasn't reached its debounce window.
+    /// No-op when the key isn't dirty or has no L1 entry. A failed flush (e.g.
+    /// encryption failure) leaves the key dirty for `flushDirtyKeys` to retry or
+    /// GC. Uses `flushKeyToL2`, which preserves `lastFetchedAt`.
+    private func flushDirtyKeyForEviction(_ key: Key) {
+        guard dirtyKeys.contains(key), let entry = memoryCache[key] else { return }
+        if flushKeyToL2(keyStr: namespacedKey(key.description), items: entry.items) {
+            dirtyKeys.remove(key)
         }
     }
 
