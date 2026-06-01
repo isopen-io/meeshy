@@ -118,21 +118,6 @@ struct BubbleStandardLayout: View {
         return visualAttachments.contains { $0.type == .video && $0.fileUrl == inlineVideoActiveURL }
     }
 
-    /// The visual attachment whose inline video is currently the active player
-    /// on this bubble, if any. Read by `visualMediaGrid` (in the `+Media`
-    /// extension) to expand that cell to the full bubble width while it plays
-    /// (A5/R1 : "prend toute la place inline … reprend sa place"). Returns
-    /// `nil` when no grid video is playing — the grid then renders normally.
-    ///
-    /// Restore-on-finish is automatic : when inline playback ends,
-    /// `SharedAVPlayerManager.stop()` clears `activeURL`, the `$activeURL`
-    /// sink resets `inlineVideoActiveURL`, this returns `nil`, and the grid
-    /// re-lays-out its cells. No SDK finish callback is required.
-    var expandedInlineVideoAttachment: MessageAttachment? {
-        guard !inlineVideoActiveURL.isEmpty else { return nil }
-        return visualAttachments.first { $0.type == .video && $0.fileUrl == inlineVideoActiveURL }
-    }
-
     // MARK: - Adaptive sizing (iPad regular size class needs a tighter cap)
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -440,14 +425,9 @@ struct BubbleStandardLayout: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(messageAccessibilityLabel)
         .onReceive(SharedAVPlayerManager.shared.$activeURL) { newURL in
-            // Local mirror — toggles `hasPlayingInlineVideo` (footer overlay
-            // visibility) AND `expandedInlineVideoAttachment` (A5/R1 grid
-            // expand-to-full while a grid video plays, restore when it stops).
-            // Animated so the grid grows/restores smoothly. Doesn't re-render
-            // on time ticks (`$activeURL` only changes on load/stop).
-            withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) {
-                inlineVideoActiveURL = newURL
-            }
+            // Local mirror — toggles `hasPlayingInlineVideo` to drive the
+            // footer overlay visibility. Doesn't re-render on time ticks.
+            inlineVideoActiveURL = newURL
         }
         .sheet(isPresented: $showShareSheet) {
             if let url = shareURL {
