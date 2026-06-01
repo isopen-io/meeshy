@@ -334,3 +334,24 @@ timeline le relit. Viewer/exporter suivent (vérifier rognage). 5 tests export �
       1 model+computedTotalDuration, 2 écrivains+init, 3 tests export+rognage, 4 vérif visuelle).
 - [ ] Vérif visuelle glass committé (session fraîche, login atabeth).
 - [ ] Doublon mémoire CALayer-sublayer (2 entrées même leçon) — fusionner.
+
+## it.18 IMPLÉMENTÉ — timeline pilote la durée du slide (spec livré, 3 incréments)
+Commits : ca2cd5be3 (inc.1 model+computedTotalDuration), 0b0f5e1c2 (inc.2 persistance+foreground),
+06407dbaa (inc.3 tests stale → modèle timeline-autoritaire).
+- [x] `StoryEffects.timelineDuration: Double?` (champ dédié, additif, backward-compat). `nil`=fallback
+      contenu (zéro régression existant). Lu EN PRIORITÉ par `computedTotalDuration()` (autoritaire, peut rogner).
+- [x] `contentDerivedDuration()` extrait + ÉTENDU au foreground media (vidéo non-bg plus coupée hors pin).
+- [x] `TimelineProject.apply` pose le pin SEULEMENT si surcharge explicite (≠ contenu) → pas de pin obsolète ;
+      `init(from:)` recharge le pin. `autoExtendDuration` rétabli en miroir legacy (pas de pin obsolète).
+- [x] Tests : StoryTimelineDurationTests (9 neufs) verts. Stale corrigés : export ×5 (dont
+      `longerThanSlide_truncates` qui PROUVE le rognage via AVFoundation réel), StoryModelsExtensionsTests ×2,
+      SlideDurationLoopTests reframé (auto-loop 6s + pin autoritaire). Toutes les suites durée vertes.
+- [ ] VÉRIF VISUELLE différée (session fraîche) : un slide configuré court rogne bien la vidéo dans le viewer.
+- ⚠️ Sweep large MeeshyUITests BLOQUÉ par un fichier d'un agent parallèle non commité qui ne compile pas
+  (NotificationCoordinator.swift:78 init incomplet) — PAS mon code (mes tests ciblés ont compilé+passé à 17:05).
+  À re-vérifier quand le worktree recompile.
+
+## REPLENISHED backlog — updated post-it.18
+- [ ] Re-lancer le sweep large quand NotificationCoordinator (agent parallèle) recompile.
+- [ ] Vérif visuelle : glass committé + rognage timeline (session fraîche, login atabeth).
+- [ ] Doublon mémoire CALayer-sublayer (2 entrées) — fusionner.
