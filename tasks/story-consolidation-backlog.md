@@ -181,12 +181,19 @@ event-name + subscriber), it.10 (thumbHash bg-media + font). Other areas verifie
 Remaining work is on-device VISUAL/UX validation (best on the user's real account) + re-auditing any new
 story-touching commits from parallel agents.
 
+## Audit it.13 — drawing capture↔render alignment under scaling/zoom: SOLID (no bug)
+- [x] StrokeCaptureLayer.projectionScale = (designW/bounds.w, designH/bounds.h); MeeshyStrokeCanvas render
+      = context.scaleBy(size/designSize) — EXACT inverses → round-trip regardless of bounds aspect.
+- [x] Capture bounds = canvasCore .frame(aspectFitSize) = 9:16; .scaleEffect/.offset (viewport zoom) apply
+      AFTER the frame, so touches arrive in the 9:16 local space → shape + position preserved in the reader
+      (StoryRenderer stretches design 1080×1920 → 9:16 renderSize uniformly). Verified in code, not claims.
+
 ## REPLENISHED backlog (next to consume)
-- [ ] VISUAL SMOKE: on the user's device (real account + clearly-translatable story). Simulator path is
-      cold + fragile (install+login+nav+backend) — defer.
-- [ ] RE-AUDIT trigger: when a parallel-agent commit touches story code (StoryViewModel / StoryComposer* /
-      StoryViewer* / StorySlideRenderer / SocialSocketManager), re-run the relevant audit slice.
-- [ ] (low pri) drawMediaObject 0.6× vs baseMediaDesignSize — negligible blur impact; skip.
+- [ ] NEXT: genuine VISUAL SMOKE attempt — install latest (meeshy.sh run), re-login atabeth, navigate to a
+      story, verify language strip + reader rendering. Accept fragility; bounded attempt per anti-rabbit-hole.
+- [ ] RE-AUDIT trigger: new commit touching StoryViewModel / StoryComposer* / StoryViewer* /
+      StorySlideRenderer / SocialSocketManager → re-run the relevant audit slice.
+- [ ] (deferred, large + well-tested) repost flow, export flow, computedTotalDuration/keyframes.
 - [ ] Reader language indicator: should the active override show a subtle "viewing in X" affordance + a
       one-tap revert to preferred? (Prisme discretion — currently silent revert on slide change only.)
 - [ ] StorySlideRenderer.drawTextObject thumbHash font /390 → /designWidth (cosmetic, noted it.7).
