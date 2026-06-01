@@ -18,7 +18,8 @@ struct OutboxUIItemMappingTests {
         content: String,
         attachmentIds: [String] = [],
         attachmentKinds: [String]? = nil,
-        audioPath: String? = nil
+        audioPath: String? = nil,
+        audioPaths: [String]? = nil
     ) -> Data {
         let item = OfflineQueueItem(
             conversationId: "conv-1",
@@ -30,7 +31,8 @@ struct OutboxUIItemMappingTests {
             forwardedFromConversationId: nil,
             attachmentIds: attachmentIds.isEmpty ? nil : attachmentIds,
             attachmentKinds: attachmentKinds,
-            localAudioPath: audioPath
+            localAudioPath: audioPath,
+            localAudioPaths: audioPaths
         )
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -80,6 +82,22 @@ struct OutboxUIItemMappingTests {
 
     @Test func test_from_audioOnlyMessage_usesAudioPlaceholder() {
         let r = record(kind: .sendMessage, payload: sendMessagePayload(content: "", audioPath: "/tmp/note.m4a"))
+        let item = OutboxUIItem.from(record: r)
+        #expect(item.iconKind == .audio)
+        #expect(item.titlePreview == "🎙 Note vocale")
+    }
+
+    @Test func test_from_multiTrackAudioMessage_usesAudioPlaceholder() {
+        // Multi-track audio rows (enqueueAudios path) set localAudioPath=nil,
+        // localAudioPaths=[...], attachmentKinds=["audio","audio"], attachmentIds=nil.
+        // The SyncPill must show the audio mic icon + voice-note preview, not the
+        // generic text icon + "(message)".
+        let r = record(kind: .sendMessage, payload: sendMessagePayload(
+            content: "",
+            attachmentKinds: [AttachmentKind.audio.rawValue, AttachmentKind.audio.rawValue],
+            audioPath: nil,
+            audioPaths: ["pending-audio/cid_x/0.m4a", "pending-audio/cid_x/1.m4a"]
+        ))
         let item = OutboxUIItem.from(record: r)
         #expect(item.iconKind == .audio)
         #expect(item.titlePreview == "🎙 Note vocale")

@@ -114,13 +114,20 @@ extension OutboxUIItem {
         let attachments = decoded?.attachmentIds ?? []
         let kinds = decoded?.attachmentKinds ?? []
         let audioPath = decoded?.localAudioPath
+        let audioPaths = decoded?.localAudioPaths ?? []
+
+        // Detect audio: legacy scalar path, new multi-track paths array, or
+        // attachmentKinds explicitly marking this row as audio (covers both).
+        let isAudio = audioPath != nil
+            || !audioPaths.isEmpty
+            || kinds.contains(AttachmentKind.audio.rawValue)
 
         let icon: IconKind
         let preview: String
         if !content.isEmpty {
             icon = .text
             preview = truncatePreview(content)
-        } else if audioPath != nil {
+        } else if isAudio {
             icon = .audio
             preview = "🎙 Note vocale"
         } else if !attachments.isEmpty {
