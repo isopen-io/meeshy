@@ -1,8 +1,11 @@
 import UIKit
+import PencilKit
 import MeeshySDK
 
 /// Renders a story slide composite to a UIImage for thumbHash computation.
-/// Produces a low-resolution (~100x178) image combining background + text + foreground media.
+/// Produces a low-resolution (~100x178) image combining background + text + foreground
+/// media + drawing + stickers — i.e. ALL visual layers, so the blur placeholder
+/// reflects the whole story (image + texte + dessin).
 /// Not pixel-perfect — sufficient for thumbHash blur placeholders (~28 bytes).
 public enum StorySlideRenderer {
 
@@ -46,6 +49,20 @@ public enum StorySlideRenderer {
                         drawMediaObject(obj, image: img, in: size, ctx: cgCtx)
                     }
                 }
+            }
+
+            // 4b. Drawing layer (modern strokes preferred, legacy PKDrawing fallback).
+            // Without this the thumbHash placeholder ignored the drawing entirely —
+            // a story dominated by a freehand drawing got a blur that didn't match
+            // its content (spec user 2026-06-01 : ThumbHash de TOUTE la story avec
+            // toutes les couches : image, texte ET dessin). Strokes are rasterised
+            // at design size (1080x1920) then stretched into the composite rect,
+            // the same design→bounds mapping the live `MeeshyStrokeCanvas` uses.
+            if let strokes = slide.effects.drawingStrokes, !strokes.isEmpty {
+                StoryStrokeRasterizer.image(strokes: strokes, scale: 1)?.draw(in: rect)
+            } else if let data = slide.effects.drawingData,
+                      let drawing = try? PKDrawing(data: data), !drawing.bounds.isEmpty {
+                drawing.image(from: drawing.bounds, scale: 1).draw(in: rect)
             }
 
             // 5. Sticker emojis (draw as text)
