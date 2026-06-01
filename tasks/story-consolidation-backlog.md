@@ -520,3 +520,28 @@ PLAN DE CORRECTIF (incrément focalisé, TDD) :
 - [ ] **Surfaces non auditées (prochaine cible loop)** : ops multi-slides (add/delete/reorder/duplicate) —
       vérifier que thumbHash/mini-preview/currentSlideIndex restent synchro après mutation ; viewer gestes
       (tap zones, hold-to-pause, swipe inter-groupes) ; callbacks publication (onPublished/onError branchés).
+
+## it.26 IMPLÉMENTÉ — thumbnail/thumbHash + mini-preview capturent le fond VIDÉO (84f11cdcb)
+- [x] Bug : `renderComposite` ET `SlideMiniPreview` gataient le dessin du média de fond sur `kind == .image`
+      → un FOND VIDÉO était droppé (composite = bgColor + texte + dessin + stickers, sans la frame vidéo),
+      alors que la poster frame est dispo dans `loadedImages[bgMedia.id]` (la frame qu'utilise le canvas/reader).
+- [x] Fix : dessiner la frame du média de fond dès qu'une poster est chargée, quel que soit le kind (image OU
+      vidéo), plein cadre (parité StoryBackgroundLayer reader). Fallback bgColor si pas de poster (no-régression),
+      bg exclu de la boucle foreground (pas de double-dessin). Même fix 1-ligne sur SlideMiniPreview.
+- [x] Le filtre it.25 couvre désormais aussi la frame vidéo (appliqué sur tout le composite).
+- [x] StorySlideRendererBackgroundMediaTests +1 cas vidéo full-bleed (RED reproduit) ; 11 tests verts ; app build vert.
+- BILAN it.24→it.26 : le composite généré AU SEND capture TOUTE la composition — fond (couleur/image/**vidéo**),
+  texte (+ fonds), médias foreground image, stickers, dessin (moderne+legacy), filtre. C'est la source du thumbHash
+  (placeholder reader) et de tout futur vrai thumbnail.
+
+## REPLENISHED backlog — post it.26
+- [ ] **THUMBNAIL TRAY/FEED (demande user directe — décision archi requise)** : le tray affiche le `thumbnailUrl`
+      SERVEUR (généré depuis l'asset de fond brut → SANS overlays texte/dessin). Pour montrer le composite complet :
+      (A) LOCAL-FIRST — le client rend le composite haute-déf au publish, le cache localement (clé = post id),
+          le tray le préfère pour les stories de l'auteur. Pas de backend, respecte RAW-publish, instantané, mais
+          seul l'auteur voit le composite (les autres viewers gardent le thumbnail serveur).
+      (B) UPLOAD BAKÉ — uploader le composite comme asset thumbnail → tout le monde le voit. Touche la règle
+          « ne jamais baker/uploader de composite » (Prisme : fige le texte en langue auteur dans le preview).
+      → Décision user. Non vérifiable visuellement sans login.
+- [ ] Foreground (non-bg) vidéos pas dessinées dans le composite (poster seulement) — étendre la boucle foreground.
+- [ ] P1 filtres (6 sans kernel) + P3 looks divergents — chantier archi (plan dédié).
