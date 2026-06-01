@@ -1126,7 +1126,16 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         socket?.connect()
     }
 
-    public func disconnect() {
+    /// Transport-only teardown shared by `disconnect()`, `prepareForBackground()`
+    /// and `forceReconnect()`. Tears down the live socket + heartbeat (so a stale
+    /// `isConnected` flag can never suppress the next reconnect) but DELIBERATELY
+    /// preserves `hadPreviousConnection`: the next successful `.connect` must then
+    /// report `wasReconnect == true` and fire `didReconnect` — the sole trigger
+    /// for the open conversation's missed-message backfill and the queued
+    /// read/received-receipt flush (ConversationSocketHandler.subscribeToReconnect).
+    /// Contrast `disconnect()`, the logout/cold reset, which additionally clears
+    /// the flag so the next login is a genuine cold connect.
+    private func suspendTransport() {
         stopHeartbeat()
         joinedConversations.removeAll()
         activeConversationId = nil
@@ -1136,6 +1145,12 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         isConnected = false
         connectionState = .disconnected
         reconnectAttempt = 0
+    }
+
+    public func disconnect() {
+        suspendTransport()
+        // Logout / cold reset: forget that we ever connected so the next
+        // `.connect` is treated as a cold first connect (no spurious backfill).
         hadPreviousConnection = false
     }
 
@@ -1150,8 +1165,11 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// `if !isConnected { connect() }` would never reconnect and the app
     /// would appear authenticated but receive zero real-time events.
     public func prepareForBackground() {
-        stopHeartbeat()
-        disconnect()
+        // Transport-only teardown: drop the socket so a stale `isConnected`
+        // cannot fool the resume path, but KEEP `hadPreviousConnection` so the
+        // foreground-resume `.connect` fires `didReconnect` (missed-message
+        // backfill + queued read/received-receipt flush).
+        suspendTransport()
     }
 
     /// Called when the app comes back to `.active`. Since
@@ -1169,8 +1187,29 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// the potentially stale `isConnected` flag. `disconnect()` clears
     /// the flag and nils the underlying socket; `connect()` rebuilds it.
     public func forceReconnect() {
-        disconnect()
+        // Suspend (not full disconnect) so `hadPreviousConnection` survives: this
+        // rebuild is a reconnect (resume / network-back / re-auth), and the next
+        // `.connect` must fire `didReconnect`.
+        suspendTransport()
         connect()
+    }
+
+    /// Connection-handshake bookkeeping, extracted from the `.connect` handler
+    /// so the reconnect-vs-cold decision is unit-testable without driving a live
+    /// socket. Records that we have now connected, resets the retry counter,
+    /// and — when this connection follows a previous one (network blip,
+    /// foreground resume, re-auth) — fires `didReconnect` so the app backfills
+    /// the open conversation and flushes queued read/received receipts. Returns
+    /// whether it was a reconnect for the caller's logging/re-join branch.
+    @discardableResult
+    func handleConnectionEstablished() -> Bool {
+        let wasReconnect = hadPreviousConnection
+        hadPreviousConnection = true
+        reconnectAttempt = 0
+        if wasReconnect {
+            DispatchQueue.main.async { [weak self] in self?.didReconnect.send(()) }
+        }
+        return wasReconnect
     }
 
     // MARK: - Heartbeat
@@ -1749,9 +1788,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         socket.on(clientEvent: .connect) { [weak self] _, _ in
             guard let self else { return }
-            let wasReconnect = self.hadPreviousConnection
-            self.hadPreviousConnection = true
-            self.reconnectAttempt = 0
+            let wasReconnect = self.handleConnectionEstablished()
             Logger.socket.info("[RT-DIAG] socket CONNECT wasReconnect=\(wasReconnect, privacy: .public)")
 
             DispatchQueue.main.async {
@@ -1777,7 +1814,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
             if wasReconnect {
                 Logger.socket.info("MessageSocket reconnected — re-joined \(self.joinedConversations.count) room(s)")
-                DispatchQueue.main.async { self.didReconnect.send(()) }
             } else {
                 Logger.socket.info("MessageSocket connected")
             }
