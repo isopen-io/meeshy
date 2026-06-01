@@ -276,6 +276,11 @@ struct MeeshyApp: App {
                         )
                         let nextRetry = await flusher.flush()
                         await OutboxRetryScheduler.shared.schedule(at: nextRetry)
+                        // T10 — wake the outbox flusher on every network
+                        // reconnect: a mutation enqueued offline leaves no
+                        // backoff timer armed, so without this it waits for an
+                        // incidental lifecycle event.
+                        await OutboxRetryScheduler.shared.startObservingNetworkReconnect()
                     }
 
                     // Parallelize: friendship hydration + session check are independent

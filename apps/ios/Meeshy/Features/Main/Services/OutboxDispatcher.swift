@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import MeeshySDK
 import os
 
@@ -822,7 +823,30 @@ enum OutboxFlushTrigger {
 final class OutboxRetryScheduler {
     static let shared = OutboxRetryScheduler()
     private var timer: Task<Void, Never>?
+    private var networkCancellable: AnyCancellable?
     private init() {}
+
+    /// Réveille le flusher à chaque transition réseau offline→online (T10).
+    ///
+    /// `OutboxFlusher.flush()` est bandwidth-gated : une mutation enqueueée
+    /// hors-ligne court-circuite, et comme rien n'est différé, AUCUN timer de
+    /// backoff n'est armé (`schedule(at: nil)` annule le précédent). Sans ce
+    /// trigger, elle resterait `pending` jusqu'à un évènement de cycle de vie
+    /// incident (boot / retour au premier plan). On s'abonne à la MÊME source
+    /// d'état réseau que le gate du flusher (`NetworkConditionMonitor`) pour
+    /// garantir que trigger et gate s'accordent. Publisher + flush injectés
+    /// pour la testabilité ; à appeler une fois au démarrage de l'app.
+    func startObservingNetworkReconnect(
+        conditionPublisher: AnyPublisher<NetworkCondition, Never> = NetworkConditionMonitor.shared.$condition.eraseToAnyPublisher(),
+        flush: @escaping @MainActor () async -> Void = { await OutboxFlushTrigger.flushNow() }
+    ) {
+        networkCancellable = conditionPublisher
+            .map { $0 != .offline }
+            .removeDuplicates()
+            .dropFirst()            // ignore la valeur courante rejouée à l'abonnement
+            .filter { $0 }          // uniquement offline→online
+            .sink { _ in Task { @MainActor in await flush() } }
+    }
 
     /// (Ré)arme le timer pour rejouer un flush à `date`. `nil` annule le
     /// timer en attente (plus rien n'est différé).
