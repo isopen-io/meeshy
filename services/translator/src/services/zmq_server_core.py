@@ -135,7 +135,24 @@ class ZMQTranslationServer:
             except Exception as e:
                 logger.debug(f"[CPU-MONITOR] Erreur: {e}")
                 await asyncio.sleep(5.0)
-    
+
+    async def _cleanup_temp_files_background(self):
+        """
+        Sweep périodique (toutes les 6h) des fichiers temp audio orphelins dans
+        /tmp/meeshy_audio. Filet de sécurité pour ceux que le cleanup per-request
+        rate (process crashé, fichiers .converted.wav, etc.) — sinon le disque
+        se remplit lentement.
+        """
+        # Laisser le boot se stabiliser avant le premier sweep.
+        await asyncio.sleep(300)
+        while self.running:
+            try:
+                from services.audio_fetcher import get_audio_fetcher
+                get_audio_fetcher().cleanup_old_temp_files(max_age_hours=24)
+            except Exception as e:
+                logger.debug(f"[TEMP-CLEANUP] Erreur sweep fichiers temp: {e}")
+            await asyncio.sleep(6 * 3600)
+
     async def initialize(self):
         """Initialise les sockets ZMQ avec architecture PUSH/PULL + PUB/SUB"""
         try:
@@ -200,6 +217,9 @@ class ZMQTranslationServer:
 
         # OPTIMISATION: Démarrer le monitoring CPU en arrière-plan
         self._cpu_update_task = asyncio.create_task(self._update_cpu_usage_background())
+
+        # Sweep périodique des fichiers temp audio orphelins (anti-fuite disque)
+        self._temp_cleanup_task = asyncio.create_task(self._cleanup_temp_files_background())
 
         logger.info("ZMQTranslationServer démarré")
 
