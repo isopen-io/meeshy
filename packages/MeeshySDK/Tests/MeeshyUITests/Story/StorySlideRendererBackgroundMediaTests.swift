@@ -50,6 +50,26 @@ final class StorySlideRendererBackgroundMediaTests: XCTestCase {
         XCTAssertLessThan(corner.b, 110, "corner should NOT be the blue background colour")
     }
 
+    func test_renderComposite_drawsVideoBackgroundFrameFullBleed() throws {
+        // A VIDEO background carries its poster frame in `loadedImages[bgMedia.id]`
+        // (the same frame the canvas/mini-preview use). The composite (and thus the
+        // thumbHash that becomes the story's preview) MUST stamp it full-bleed so the
+        // thumbnail captures the video background — not just bgColour + overlays.
+        // Pre-fix `renderComposite` gated the bg-media draw on `kind == .image`, so a
+        // video background was dropped and the corner stayed the bg colour.
+        let bgVideo = StoryMediaObject(id: "bgvid", mediaType: "video", aspectRatio: 1.0, isBackground: true)
+        let effects = StoryEffects(background: "0000FF", mediaObjects: [bgVideo]) // blue bg colour
+        let slide = StorySlide(effects: effects)
+
+        let composite = try XCTUnwrap(StorySlideRenderer.renderComposite(
+            slide: slide, bgImage: nil, loadedImages: ["bgvid": solidImage(.red)]
+        ))
+
+        let corner = try XCTUnwrap(pixel(composite, at: CGPoint(x: 3, y: 3)))
+        XCTAssertGreaterThan(corner.r, 150, "video poster frame must fill the composite (corner R high)")
+        XCTAssertLessThan(corner.b, 110, "corner must NOT be the blue background colour")
+    }
+
     func test_renderComposite_noBackgroundMedia_keepsBackgroundColour() throws {
         // Sans média de fond, le composite garde la couleur de fond (pas de régression).
         let effects = StoryEffects(background: "0000FF")

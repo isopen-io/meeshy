@@ -124,8 +124,11 @@ struct SlideMiniPreview: View {
         // sinon retombe sur le 1er media legacy). Avant on utilisait
         // `mediaObjects.first` directement, qui montrait le mauvais element comme
         // background apres un toggleBackground manuel.
+        // Vaut pour IMAGE **et VIDÉO** : la vidéo de fond porte sa poster frame dans
+        // `loadedImages[bgMedia.id]` (parité avec le composite ThumbHash et le canvas).
+        // Sans ça la mini-preview d'une story à fond vidéo n'affichait que la couleur
+        // de fond + overlays — désync avec le canvas qui joue la vidéo.
         if let bgMedia = effects.resolvedBackgroundMedia,
-           bgMedia.kind == .image,
            let img = loadedImages[bgMedia.id] {
             Image(uiImage: img)
                 .resizable()

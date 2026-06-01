@@ -46,9 +46,13 @@ public enum StorySlideRenderer {
             //     ce dessin il n'apparaissait que via la boucle foreground en petite
             //     image 0.6× centrée — et, dessinée APRÈS le texte, elle l'occultait.
             //     On ne dessine que si aucun `bgImage` legacy n'a déjà rempli le cadre.
+            //     Vaut pour les fonds IMAGE **et VIDÉO** : une vidéo de fond porte sa
+            //     poster frame dans `loadedImages[bgMedia.id]` (même frame que le
+            //     canvas / mini-preview) ; sans ce dessin le thumbnail/thumbHash d'une
+            //     story à fond vidéo perdait le fond (bgColor + overlays seulement) →
+            //     le « thumbnail de TOUTE la story » manquait la couche dominante.
             if bgImage == nil,
                let bgMedia = slide.effects.resolvedBackgroundMedia,
-               bgMedia.kind == .image,
                let bgMediaImage = loadedImages[bgMedia.id] {
                 bgMediaImage.draw(in: rect)
             }
