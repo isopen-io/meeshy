@@ -278,3 +278,31 @@ AVEC `textBg = nil`. Or :
       question ouverte it.15, à trancher.
 - [ ] Smoke autres contrôles texte (Style/Taille/Alignement/Contour) sur canvas committé.
 - [ ] RE-AUDIT trigger: nouveau commit touchant StoryTextLayer/StorySlideRenderer/SlideMiniPreview/Composer*.
+
+## Audit it.17 — glass text z-order fix completed + worktree stabilized (0119209c7)
+État au réveil : changements NON COMMITÉS d'un autre acteur (StoryTextLayer.swift `glyphLayer` pour le
+cas .glass = la suite z-order différée par 104ff0387, + StoryTextLayerGlassZOrderTests untracked).
+Review (loop "un review doit être réalisé") → 2 problèmes bloquants trouvés :
+- [x] Le test glass avait un warning-as-error (`as? CGColor` always-succeeds) → bundle MeeshyUITests ne
+      compilait PLUS (bloquait TOUT le monde). Fix : CFGetTypeID(value) == CGColor.typeID.
+- [x] Le changement glass cassait un test EXISTANT (StoryTextLayerGlyphSuppressionTests
+      .test_setGlyphsHidden_makesForegroundTransparent_thenRestores) : il lisait `layer.string` alors
+      que pour le glass les glyphes visibles vivent désormais dans la sous-calque glyphLayer (parent
+      transparent en permanence). Test mis à jour pour lire la sous-calque.
+- [x] Logique glass VALIDÉE par 5 tests (glyphes au-dessus du backdrop, foreground visible, parent
+      supprimé, setGlyphsHidden bascule la sous-calque, backdrop reste sous-calque sans solid fill) +
+      suites solid/glyph-suppression/renderer/wrapping/languages vertes. Changeset cohésif commité
+      (StoryTextLayer + nouveau test + fix test existant) → worktree stabilisé.
+- [ ] RESTE : vérif VISUELLE du glass committé (glyphes nets sur boîte givrée) — bloquée ce tour par
+      expiration de session JWT (re-login mot de passe atabeth ≠ DEMO_PASSWORD). À refaire en session
+      fraîche. (Anti-rabbit-hole : la logique est prouvée par 5 tests unitaires.)
+- Convergence fond-de-texte : canvas solid (104ff0387) + canvas glass (0119209c7) + thumbHash composite
+  + mini-preview (7aee47888) → les 4 chemins lisent resolvedBackgroundStyle, cohérents.
+
+## REPLENISHED backlog — updated it.17
+- [ ] Vérif visuelle glass committé (session fraîche).
+- [ ] Doublon mémoire potentiel : feedback_calayer_sublayer_zposition_covers_contents (mien) vs
+      feedback_catextlayer_sublayer_covers_glyphs (autre acteur) — même leçon ; fusionner un jour.
+- [ ] Session JWT expire vite (plusieurs fois en qq heures) — hors scope story mais à signaler équipe ?
+- [ ] Border/textStyle dans SlideMiniPreview/StorySlideRenderer (approximations vignette) — à confirmer.
+- [ ] Drawer dessin replié par défaut (question it.15).
