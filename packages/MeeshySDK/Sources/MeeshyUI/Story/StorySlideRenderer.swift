@@ -63,9 +63,14 @@ public enum StorySlideRenderer {
                 drawTextObject(textObj, in: size, ctx: cgCtx)
             }
 
-            // 4. Foreground media images — EXCLUT le média de fond (résolu en 2b),
-            //    sinon double-dessin + occlusion du texte (cf. 2b).
-            for obj in slide.effects.resolvedForegroundMediaObjects where obj.kind == .image {
+            // 4. Foreground media — EXCLUT le média de fond (résolu en 2b), sinon
+            //    double-dessin + occlusion du texte (cf. 2b). Dessine tout média
+            //    foreground qui a une frame chargée : IMAGE **et VIDÉO** (poster frame
+            //    dans `loadedImages`), à parité avec `SlideMiniPreview` (qui ne filtre
+            //    pas par kind). Sans la vidéo foreground, un clip placé sur le slide
+            //    manquait au thumbnail/thumbHash. L'audio (pas de frame chargée) est
+            //    naturellement ignoré (le `if let img` échoue).
+            for obj in slide.effects.resolvedForegroundMediaObjects {
                 if let img = loadedImages[obj.id] {
                     drawMediaObject(obj, image: img, in: size, ctx: cgCtx)
                 }

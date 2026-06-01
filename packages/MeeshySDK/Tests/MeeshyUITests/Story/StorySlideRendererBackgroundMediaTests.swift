@@ -70,6 +70,30 @@ final class StorySlideRendererBackgroundMediaTests: XCTestCase {
         XCTAssertLessThan(corner.b, 110, "corner must NOT be the blue background colour")
     }
 
+    func test_renderComposite_drawsForegroundVideoPosterFrame() throws {
+        // A FOREGROUND (non-background) video carries its poster in loadedImages[id]
+        // — the mini-preview already draws it (no kind filter), but renderComposite
+        // gated the foreground loop on `kind == .image`, dropping foreground videos
+        // from the composite/thumbHash. "All content of the composer" must include
+        // foreground video clips. (A distinct background media is present so the fg
+        // video isn't resolved AS the background.)
+        let bg = StoryMediaObject(id: "bg", mediaType: "image", aspectRatio: 1.0, isBackground: true)
+        let fgVideo = StoryMediaObject(id: "fgvid", mediaType: "video", aspectRatio: 1.0,
+                                       x: 0.5, y: 0.5, isBackground: false)
+        let effects = StoryEffects(background: "0000FF", mediaObjects: [bg, fgVideo]) // blue bg colour
+        let slide = StorySlide(effects: effects)
+
+        // Only the fg video has a poster → bg falls back to the blue colour; the centre
+        // must show the red fg-video poster, the corner stays blue.
+        let composite = try XCTUnwrap(StorySlideRenderer.renderComposite(
+            slide: slide, bgImage: nil, loadedImages: ["fgvid": solidImage(.red)]
+        ))
+        guard let cg = composite.cgImage else { return XCTFail("no cgImage") }
+        let centre = try XCTUnwrap(pixel(composite, at: CGPoint(x: cg.width / 2, y: cg.height / 2)))
+        XCTAssertGreaterThan(centre.r, 150, "foreground video poster must be drawn at its position")
+        XCTAssertLessThan(centre.b, 110, "centre must NOT be the blue background colour")
+    }
+
     func test_renderComposite_noBackgroundMedia_keepsBackgroundColour() throws {
         // Sans média de fond, le composite garde la couleur de fond (pas de régression).
         let effects = StoryEffects(background: "0000FF")
