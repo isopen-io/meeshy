@@ -402,39 +402,41 @@ export class MessageTranslationService extends EventEmitter {
         return;
       }
 
-      // 2. CACHE-FIRST: Vérifier le cache pour chaque langue cible
+      // 2. CACHE-FIRST: mémoire d'abord (0 requête DB si tout est chaud), puis
+      // UN SEUL findUnique pour résoudre toutes les langues manquantes — au lieu
+      // de N findUnique identiques (le même doc message) en série.
       const cacheMisses: string[] = [];
       const cacheResults: Array<{ lang: string; result: TranslationResult }> = [];
+      const memoryMissed: string[] = [];
 
       for (const targetLang of filteredTargetLanguages) {
-        const cacheKey = TranslationCache.generateKey(
-          message.id,
-          targetLang,
-          message.originalLanguage
-        );
-
-        // Vérifier cache mémoire d'abord
-        let cached = this.translationCache.get(cacheKey);
-
-        // Si pas en cache mémoire, vérifier DB
-        if (!cached) {
-          cached = await this.getTranslation(message.id, targetLang, message.originalLanguage);
-
-          // Si trouvé en DB, mettre en cache mémoire pour les prochaines requêtes
-          if (cached) {
-            this.translationCache.set(cacheKey, cached);
-          }
-        }
-
+        const cacheKey = TranslationCache.generateKey(message.id, targetLang, message.originalLanguage);
+        const cached = this.translationCache.get(cacheKey);
         if (cached) {
-          // ✅ CACHE HIT
           cacheResults.push({ lang: targetLang, result: cached });
           this.stats.incrementCacheHits();
-          logger.info(`💾 [CACHE HIT] Message ${message.id} → ${targetLang} (0ms from cache)`);
         } else {
-          // ❌ CACHE MISS
-          cacheMisses.push(targetLang);
-          this.stats.incrementCacheMisses();
+          memoryMissed.push(targetLang);
+        }
+      }
+
+      if (memoryMissed.length > 0) {
+        // Un seul fetch du document, réutilisé pour chaque langue manquante.
+        const prefetched = await this.prisma.message.findUnique({
+          where: { id: message.id },
+          select: { originalLanguage: true, translations: true },
+        });
+
+        for (const targetLang of memoryMissed) {
+          // getTranslation peuple le cache mémoire en interne sur hit DB.
+          const stored = await this.getTranslation(message.id, targetLang, message.originalLanguage, prefetched);
+          if (stored) {
+            cacheResults.push({ lang: targetLang, result: stored });
+            this.stats.incrementCacheHits();
+          } else {
+            cacheMisses.push(targetLang);
+            this.stats.incrementCacheMisses();
+          }
         }
       }
 
@@ -2776,7 +2778,15 @@ export class MessageTranslationService extends EventEmitter {
    * Get a translation from cache or database
    * SECURITY: Automatically decrypts encrypted translations
    */
-  async getTranslation(messageId: string, targetLanguage: string, sourceLanguage?: string): Promise<TranslationResult | null> {
+  async getTranslation(
+    messageId: string,
+    targetLanguage: string,
+    sourceLanguage?: string,
+    // Optional pre-fetched message (originalLanguage + translations JSON). When
+    // provided, skips the per-call DB read — lets callers resolve many target
+    // languages from a SINGLE findUnique instead of N identical queries.
+    prefetched?: { originalLanguage: string | null; translations: unknown } | null,
+  ): Promise<TranslationResult | null> {
     try {
       // Vérifier d'abord le cache mémoire
       const cacheKey = TranslationCache.generateKey(messageId, targetLanguage, sourceLanguage);
@@ -2786,14 +2796,17 @@ export class MessageTranslationService extends EventEmitter {
         return cachedResult;
       }
 
-      // Si pas en cache, chercher dans Message.translations (JSON)
-      const message = await this.prisma.message.findUnique({
-        where: { id: messageId },
-        select: {
-          originalLanguage: true,
-          translations: true
-        }
-      });
+      // Si pas en cache, chercher dans Message.translations (JSON) — sauf si le
+      // document a déjà été pré-récupéré par l'appelant.
+      const message = prefetched !== undefined
+        ? prefetched
+        : await this.prisma.message.findUnique({
+            where: { id: messageId },
+            select: {
+              originalLanguage: true,
+              translations: true
+            }
+          });
 
       if (message?.translations) {
         const translations = message.translations as unknown as Record<string, MessageTranslationJSON>;

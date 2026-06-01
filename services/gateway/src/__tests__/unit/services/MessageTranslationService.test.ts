@@ -420,6 +420,22 @@ describe('MessageTranslationService', () => {
       expect(result?.sourceLanguage).toBe('fr');
     });
 
+    it('uses the prefetched message and skips the DB query when provided', async () => {
+      mockPrisma.message.findUnique.mockClear();
+      const prefetched = {
+        originalLanguage: 'fr',
+        translations: {
+          en: { text: 'Hi there', translationModel: 'basic', confidenceScore: 0.9 },
+        },
+      };
+
+      const result = await translationService.getTranslation('msg-pref', 'en', 'fr', prefetched as any);
+
+      expect(result?.translatedText).toBe('Hi there');
+      expect(result?.sourceLanguage).toBe('fr');
+      expect(mockPrisma.message.findUnique).not.toHaveBeenCalled();
+    });
+
     it('should return null if translation not found', async () => {
       mockPrisma.message.findUnique.mockResolvedValue({
         id: 'msg-not-found',
