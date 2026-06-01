@@ -1222,6 +1222,11 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
             guard canAddMedia else { return }
             let newId = UUID().uuidString
             media.id = newId
+            // Le clone est TOUJOURS un foreground : dupliquer un média de fond
+            // créait un 2e background (invariant « au plus 1 background / slide »
+            // violé) qui remplit tout le canvas en ignorant l'offset → clone
+            // invisible (l'utilisateur ne voyait rien). Bug 2026-06-01.
+            media.isBackground = false
             media.x = min(1.0, media.x + 0.05)
             media.y = min(1.0, media.y + 0.05)
             effects.mediaObjects?.append(media)
@@ -1232,6 +1237,10 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
             guard canAddMedia else { return }
             let newId = UUID().uuidString
             audio.id = newId
+            // Idem média : le clone est foreground, sinon dupliquer l'audio de
+            // fond créait un 2e background audio (invariant « 1 audio de fond /
+            // slide » violé). Bug 2026-06-01.
+            audio.isBackground = false
             audio.x = min(1.0, audio.x + 0.05)
             audio.y = min(1.0, audio.y + 0.05)
             effects.audioPlayerObjects?.append(audio)
