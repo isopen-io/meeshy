@@ -153,3 +153,8 @@ Meeshy/Resources/MLModels/*.mlpackage
 scripts/NLLBModels/*.mlpackage
 scripts/NLLBModels/tokenizer/
 *.mlmodelc
+
+# Build / capture artifacts (do not version at the iOS root)
+build_output.txt
+screenshot_*.png
+master_*.png

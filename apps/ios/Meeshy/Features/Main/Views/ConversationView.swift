@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import os
 import PhotosUI
 import CoreLocation
 import AVFoundation
@@ -732,7 +733,7 @@ struct ConversationView: View {
         bodyContent
             .background(InteractivePopEnabler())
             .task {
-                print("[DIAG] ConversationView.task ENTERED conv=\(viewModel.conversationId)")
+                Logger.messages.debug("[DIAG] ConversationView.task ENTERED conv=\(viewModel.conversationId)")
                 viewModel.observeSync()
                 await viewModel.loadMessages()
                 MessageSocketManager.shared.connect()
@@ -808,7 +809,7 @@ struct ConversationView: View {
                 }
             }
             .onDisappear {
-                print("[DIAG] ConversationView.onDisappear conv=\(viewModel.conversationId)")
+                Logger.messages.debug("[DIAG] ConversationView.onDisappear conv=\(viewModel.conversationId)")
                 typingDotConnection?.cancel()
                 typingDotConnection = nil
             }
@@ -836,7 +837,7 @@ struct ConversationView: View {
                 // ViewModel has already wiped per-conversation cache and
                 // local message state. We dismiss the screen here and
                 // surface a toast so the user knows why.
-                print("[DIAG] accessRevoked.onChange revoked=\(revoked)")
+                Logger.messages.debug("[DIAG] accessRevoked.onChange revoked=\(revoked)")
                 guard revoked else { return }
                 FeedbackToastManager.shared.showError(viewModel.error ?? "Vous n'avez plus acces a cette conversation")
                 dismiss()

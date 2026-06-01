@@ -1,6 +1,9 @@
 import ActivityKit
 import WidgetKit
 import SwiftUI
+import os
+
+private let logger = Logger(subsystem: "me.meeshy.app", category: "live-activity")
 
 // MARK: - Live Activity Attributes
 struct MeeshyActivityAttributes: ActivityAttributes {
@@ -448,9 +451,9 @@ class LiveActivityManager {
                 content: ActivityContent(state: contentState, staleDate: nil),
                 pushType: .token
             )
-            print("Started call Live Activity: \(activity.id)")
+            logger.info("Started call Live Activity: \(activity.id)")
         } catch {
-            print("Error starting call Live Activity: \(error.localizedDescription)")
+            logger.error("Error starting call Live Activity: \(error.localizedDescription)")
         }
     }
 
@@ -490,9 +493,9 @@ class LiveActivityManager {
                 content: ActivityContent(state: contentState, staleDate: nil),
                 pushType: .token
             )
-            print("Started message delivery Live Activity: \(activity.id)")
+            logger.info("Started message delivery Live Activity: \(activity.id)")
         } catch {
-            print("Error starting message delivery Live Activity: \(error.localizedDescription)")
+            logger.error("Error starting message delivery Live Activity: \(error.localizedDescription)")
         }
     }
 
@@ -540,9 +543,9 @@ class LiveActivityManager {
                 content: ActivityContent(state: contentState, staleDate: nil),
                 pushType: .token
             )
-            print("Started translation Live Activity: \(activity.id)")
+            logger.info("Started translation Live Activity: \(activity.id)")
         } catch {
-            print("Error starting translation Live Activity: \(error.localizedDescription)")
+            logger.error("Error starting translation Live Activity: \(error.localizedDescription)")
         }
     }
 

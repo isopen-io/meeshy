@@ -1,4 +1,5 @@
 import Foundation
+import os
 import GRDB
 
 /// Notification posted after MessagePersistenceActor commits a write that may
@@ -183,7 +184,7 @@ public actor MessagePersistenceActor {
                 // (PK collision) or was reconciled away by the socket
                 // path before this applyEvent ran. Caller's `try?` would
                 // hide the nil return otherwise.
-                print("[StateMachine] applyEvent localId=\(localId) event=\(event) → record NOT FOUND in GRDB")
+                Logger.messages.error("[StateMachine] applyEvent localId=\(localId) event=\(String(describing: event)) → record NOT FOUND in GRDB")
                 return nil
             }
             affectedConversationId = record.conversationId
@@ -202,7 +203,7 @@ public actor MessagePersistenceActor {
                 // Transition rejected by the state machine — e.g. a stale
                 // .serverAck arriving on an already-sent record (no-op in
                 // theory but worth logging while we debug the ⏱→✓ flow).
-                print("[StateMachine] applyEvent localId=\(localId) event=\(event) → transition REJECTED from priorState=\(record.state)")
+                Logger.messages.warning("[StateMachine] applyEvent localId=\(localId) event=\(String(describing: event)) → transition REJECTED from priorState=\(String(describing: record.state))")
                 return nil
             }
 
@@ -236,7 +237,7 @@ public actor MessagePersistenceActor {
         // observers actually re-read. Skip when the row was missing or the
         // transition was rejected (no DB write happened).
         if let result, let convId = affectedConversationId, let prior = priorState {
-            print("[StateMachine] applyEvent localId=\(localId) event=\(event) → \(prior) → \(result) (conv=\(convId))")
+            Logger.messages.debug("[StateMachine] applyEvent localId=\(localId) event=\(String(describing: event)) → \(String(describing: prior)) → \(String(describing: result)) (conv=\(convId))")
             postMessageStoreRefresh(conversationIds: [convId])
         }
         return result

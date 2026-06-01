@@ -2,6 +2,7 @@
 
 import Foundation
 import Combine
+import os
 // `@preconcurrency` relaxes Swift 6 strict concurrency interop checks for the
 // GRDB module. Without it, the runtime injects `_swift_task_checkIsolatedSwift`
 // at the invocation of @Sendable closures we pass to GRDB observation APIs,
@@ -226,12 +227,12 @@ public final class MessageStore: ObservableObject {
                 anchor: anchor, initialWindowSize: initialWindowSize
             )
         } catch {
-            print("[MessageStore] refreshFromDB failed: \(error.localizedDescription)")
+            Logger.messages.error("[MessageStore] refreshFromDB failed: \(error.localizedDescription)")
             return
         }
 
         let count = newRecords?.count ?? -1
-        print("[DIAG] MessageStore.refreshFromDB conv=\(convId) fetched=\(count) current=\(messages.count)")
+        Logger.messages.debug("[DIAG] MessageStore.refreshFromDB conv=\(convId) fetched=\(count) current=\(messages.count)")
         guard let newRecords, newRecords != messages else { return }
 
         // Yield to a fresh runloop iteration before publishing the @Published
@@ -298,7 +299,7 @@ public final class MessageStore: ObservableObject {
                 anchor: anchor, initialWindowSize: initialWindow
             )
         } catch {
-            print("[MessageStore] loadInitialSnapshot failed: \(error.localizedDescription)")
+            Logger.messages.error("[MessageStore] loadInitialSnapshot failed: \(error.localizedDescription)")
             return []
         }
 

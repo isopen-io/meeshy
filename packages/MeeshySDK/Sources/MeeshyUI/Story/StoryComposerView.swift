@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import os
 import PhotosUI
 import UniformTypeIdentifiers
 import AVFoundation
@@ -1876,7 +1877,7 @@ public struct StoryComposerView: View {
                         }
                     }
                 } catch {
-                    print("[StoryComposer] Video write error: \(error)")
+                    Logger.media.error("[StoryComposer] Video write error: \(error.localizedDescription)")
                 }
             } else {
                 // ImageIO downsample for foreground images (max 1080px)
