@@ -355,3 +355,28 @@ Commits : ca2cd5be3 (inc.1 model+computedTotalDuration), 0b0f5e1c2 (inc.2 persis
 - [ ] Re-lancer le sweep large quand NotificationCoordinator (agent parallèle) recompile.
 - [ ] Vérif visuelle : glass committé + rognage timeline (session fraîche, login atabeth).
 - [ ] Doublon mémoire CALayer-sublayer (2 entrées) — fusionner.
+
+## it.19 — broad sweep post-recompile : régressions de la centralisation durée triées
+Sweep large relancé après recompilation (NotificationCoordinator de l'agent parallèle réglé).
+Échecs triés MINE vs PRE-EXISTING :
+- [x] MINE (vrai bug introduit) : `currentSlideDuration` setter écrivait seulement le legacy
+      `slide.duration` (ignoré) → le contrôle de durée du composer était un no-op au playback.
+      Corrigé (e2d363d7c) : getter/setter via `effects.timelineDuration` (autoritaire, clampé
+      [2,600]). + fixture stale `StoryCanvasUIViewReaderContextTests.makeStaticSlide` pin posé.
+      Vérifié : Timeline/ReaderContext/clamp/conformance verts.
+- [x] STALE (intentionnel, hors durée) : `AvatarContextTests` ×5 — le trail avatar doublé à 88pt
+      (ab691abaf, demande user 2026-05-27) jamais répercuté aux tests. Expectations mises à jour
+      (a3265b3f1). 57/0 verts.
+- [ ] PRE-EXISTING, DOMAINE AGENT PARALLÈLE (audio) — NON corrigé (diagnostic précis) :
+      `CanvasAudioLifecycleTests` ×5 échouent car `startAudioPlayback()` gate désormais sur
+      `contentReadyFired` (gate intentionnel « ne pas démarrer l'audio bg tant que les médias ne
+      sont pas prêts », StoryCanvasUIView:1005). Or `makePlayingCanvas()` ne pose PAS de frame →
+      `bounds == .zero` → `rebuildLayers` early-return → content-ready ne fire jamais → mixer gaté →
+      `isPlaying` reste false. Test STALE vs gate intentionnel. Fix = poser un frame + déclencher
+      content-ready (mécanisme du domaine audio). À traiter par le propriétaire audio/playback
+      (pas de seam `_forTesting` content-ready ; risque de flakiness si patché à l'aveugle).
+
+## REPLENISHED backlog — updated it.19
+- [ ] CanvasAudioLifecycleTests ×5 (cf. diagnostic ci-dessus) — propriétaire audio.
+- [ ] Vérif visuelle (session fraîche) : glass committé + rognage timeline dans le viewer.
+- [ ] Doublon mémoire CALayer-sublayer — fusionner.
