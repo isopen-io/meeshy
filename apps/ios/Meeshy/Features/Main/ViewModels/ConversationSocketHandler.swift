@@ -13,6 +13,11 @@ protocol ConversationSocketDelegate: AnyObject {
     var lastUnreadMessage: Message? { get set }
     var messageTranslations: [String: [MessageTranslation]] { get set }
     var messageTranscriptions: [String: MessageTranscription] { get set }
+    /// Per-attachment transcription keyed by `attachmentId`. Mirrors
+    /// `ConversationViewModel.messageTranscriptionsByAttachment` so the
+    /// socket handler can write both dicts atomically in the
+    /// `transcription:ready` handler (multi-audio karaoke realtime fix).
+    var messageTranscriptionsByAttachment: [String: MessageTranscription] { get set }
     var messageTranslatedAudios: [String: [MessageTranslatedAudio]] { get set }
     var activeLiveLocations: [ActiveLiveLocation] { get set }
     var isConversationClosed: Bool { get set }
@@ -683,7 +688,7 @@ final class ConversationSocketHandler {
                         speakerId: s.speakerId
                     )
                 }
-                delegate.messageTranscriptions[event.messageId] = MessageTranscription(
+                let transcription = MessageTranscription(
                     attachmentId: event.attachmentId,
                     text: event.transcription.text,
                     language: event.transcription.language,
@@ -692,6 +697,11 @@ final class ConversationSocketHandler {
                     segments: segments,
                     speakerCount: event.transcription.speakerCount
                 )
+                // Per-message dict (single-audio backward compat)
+                delegate.messageTranscriptions[event.messageId] = transcription
+                // Per-attachment dict (multi-audio karaoke realtime fix):
+                // mirrors how all 3 VM hydration sites populate both dicts.
+                delegate.messageTranscriptionsByAttachment[event.attachmentId] = transcription
             }
             .store(in: &cancellables)
 

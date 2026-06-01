@@ -13,6 +13,7 @@ final class MockConversationSocketDelegate: ConversationSocketDelegate {
     var lastUnreadMessage: Message?
     var messageTranslations: [String: [MessageTranslation]] = [:]
     var messageTranscriptions: [String: MessageTranscription] = [:]
+    var messageTranscriptionsByAttachment: [String: MessageTranscription] = [:]
     var messageTranslatedAudios: [String: [MessageTranslatedAudio]] = [:]
     var activeLiveLocations: [ActiveLiveLocation] = []
     var isConversationClosed: Bool = false
