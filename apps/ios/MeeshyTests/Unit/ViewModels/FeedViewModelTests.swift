@@ -469,6 +469,86 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertTrue(sut.posts[0].comments.isEmpty, "optimistic comment must be removed on rollback")
     }
 
+    // MARK: - Outbox terminal outcome (R7) — rollback on .exhausted
+
+    func test_likePost_rollsBack_whenOutcomeExhausted() async {
+        // R7 — a like that enqueues successfully but later EXHAUSTS its retry
+        // budget (server permanently rejected it) must roll back the optimistic
+        // toggle. Before this fix nobody observed the outcome, so the like was
+        // stuck "liked" forever even though the server never accepted it.
+        let queue = MockOfflineQueue()
+        let (sut, api, _, _) = makeSUT(offlineQueue: queue)
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", likeCount: 5)]))
+        await sut.loadFeed()
+
+        await sut.likePost("p1")
+        XCTAssertTrue(sut.posts[0].isLiked, "optimistic like applied")
+        XCTAssertEqual(sut.posts[0].likes, 6)
+
+        guard let payload = queue.enqueueCalls.first?.payload as? ToggleLikePostPayload else {
+            return XCTFail("no toggleLikePost enqueue")
+        }
+        try? await waitForContinuation(in: queue, for: payload.clientMutationId)
+        queue.emitOutcome(.exhausted(cmid: payload.clientMutationId), for: payload.clientMutationId)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertFalse(sut.posts[0].isLiked, "exhausted outbox row must roll back the optimistic like")
+        XCTAssertEqual(sut.posts[0].likes, 5, "like count must revert on exhausted")
+    }
+
+    func test_likePost_doesNotRollBack_whenOutcomeApplied() async {
+        let queue = MockOfflineQueue()
+        let (sut, api, _, _) = makeSUT(offlineQueue: queue)
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", likeCount: 5)]))
+        await sut.loadFeed()
+
+        await sut.likePost("p1")
+        guard let payload = queue.enqueueCalls.first?.payload as? ToggleLikePostPayload else {
+            return XCTFail("no toggleLikePost enqueue")
+        }
+        try? await waitForContinuation(in: queue, for: payload.clientMutationId)
+        queue.emitOutcome(.applied(cmid: payload.clientMutationId), for: payload.clientMutationId)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertTrue(sut.posts[0].isLiked, "applied outcome keeps the optimistic like")
+        XCTAssertEqual(sut.posts[0].likes, 6)
+    }
+
+    func test_sendComment_rollsBack_whenOutcomeExhausted() async {
+        let queue = MockOfflineQueue()
+        let (sut, api, _, _) = makeSUT(offlineQueue: queue)
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", commentCount: 3)]))
+        await sut.loadFeed()
+
+        await sut.sendComment(postId: "p1", content: "doomed comment")
+        XCTAssertEqual(sut.posts[0].commentCount, 4, "optimistic comment inserted")
+        XCTAssertEqual(sut.posts[0].comments.first?.content, "doomed comment")
+
+        guard let payload = queue.enqueueCalls.first?.payload as? CreateCommentPayload else {
+            return XCTFail("no createComment enqueue")
+        }
+        try? await waitForContinuation(in: queue, for: payload.clientMutationId)
+        queue.emitOutcome(.exhausted(cmid: payload.clientMutationId), for: payload.clientMutationId)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.posts[0].commentCount, 3, "comment count must revert on exhausted")
+        XCTAssertTrue(sut.posts[0].comments.isEmpty, "optimistic comment must be removed on exhausted")
+    }
+
+    /// Polls the mock's continuation dict until the fire-and-forget observer
+    /// Task has registered its `outcomeStream` continuation for `cmid`. Times
+    /// out after 500 ms (50 × 10 ms).
+    private func waitForContinuation(
+        in queue: MockOfflineQueue,
+        for cmid: String
+    ) async throws {
+        for _ in 0..<50 {
+            if queue.outcomeContinuations[cmid] != nil { return }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTFail("Observer continuation never registered for cmid=\(cmid)")
+    }
+
     // MARK: - deletePost()
 
     func test_deletePost_success_removesPostFromList() async {

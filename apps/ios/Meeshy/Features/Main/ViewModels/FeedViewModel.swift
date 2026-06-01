@@ -309,6 +309,12 @@ class FeedViewModel: ObservableObject {
     func likePost(_ postId: String) async {
         guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
 
+        // Snapshot pre-mutation state so both the synchronous enqueue-refusal
+        // path and the async `.exhausted` observer roll back to the exact prior
+        // state (the feed may mutate across the enqueue await).
+        let wasLiked = posts[index].isLiked
+        let priorLikes = posts[index].likes
+
         // Optimistic update — batch mutations to trigger a single objectWillChange
         var post = posts[index]
         post.isLiked.toggle()
@@ -321,8 +327,9 @@ class FeedViewModel: ObservableObject {
         // this VM's own toggleLikeComment; the dispatcher sends POST/DELETE
         // /posts/:id/like per `liked`.
         let liked = posts[index].isLiked
+        let cmid = ClientMutationId.generate()
         let payload = ToggleLikePostPayload(
-            clientMutationId: ClientMutationId.generate(),
+            clientMutationId: cmid,
             postId: postId,
             liked: liked
         )
@@ -337,12 +344,50 @@ class FeedViewModel: ObservableObject {
                     try? await persistence.updateLikeCount(postId: postId, count: count, isLikedByMe: liked)
                 }
             }
+
+            // R7 — roll back the optimistic like if the outbox exhausts its
+            // retry budget (server permanently rejects). Without this the toggle
+            // stays stuck "liked" forever even though the server never accepted it.
+            observeOutcome(cmid: cmid, rollback: { [weak self] in
+                self?.restoreLike(postId: postId, isLiked: wasLiked, likes: priorLikes)
+            }, toast: "Erreur lors du like")
         } catch {
             // Roll back optimistic state if the outbox refuses the row.
-            var revert = posts[index]
-            revert.isLiked.toggle()
-            revert.likes += revert.isLiked ? 1 : -1
-            posts[index] = revert
+            restoreLike(postId: postId, isLiked: wasLiked, likes: priorLikes)
+        }
+    }
+
+    /// Restores a post's like state to a captured snapshot, re-resolving the
+    /// index since the feed may have mutated during an `await`. Shared by the
+    /// synchronous enqueue-refusal path and the async `.exhausted` observer.
+    private func restoreLike(postId: String, isLiked: Bool, likes: Int) {
+        guard let i = posts.firstIndex(where: { $0.id == postId }) else { return }
+        var revert = posts[i]
+        revert.isLiked = isLiked
+        revert.likes = likes
+        posts[i] = revert
+        debouncedCacheSave()
+    }
+
+    /// Subscribes to the injected queue's `outcomeStream(for: cmid)` and runs
+    /// `rollback` if the OutboxFlusher escalates the row to `.exhausted` (retry
+    /// budget spent — the server permanently rejected it). `.applied` is a no-op
+    /// (the optimistic state is already final). Fire-and-forget Task; the stream
+    /// is single-shot so the for-await ends after one event.
+    private func observeOutcome(
+        cmid: String,
+        rollback: @escaping @MainActor () -> Void,
+        toast: String
+    ) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let stream = await self.offlineQueue.outcomeStream(for: cmid)
+            for await event in stream {
+                if case .exhausted = event {
+                    rollback()
+                    FeedbackToastManager.shared.showError(toast)
+                }
+            }
         }
     }
 
@@ -452,6 +497,16 @@ class FeedViewModel: ObservableObject {
         )
         do {
             try await offlineQueue.enqueue(.createComment, payload: payload, conversationId: postId)
+
+            // R7 — roll back the optimistic comment if the outbox exhausts its
+            // retry budget (server permanently rejects). The synchronous catch
+            // below only covers an enqueue refusal; without this observer a
+            // permanently-failing comment stays in the feed forever.
+            observeOutcome(cmid: cmid, rollback: { [weak self] in
+                guard let self, let i = self.posts.firstIndex(where: { $0.id == postId }) else { return }
+                self.posts[i].comments = snapshot
+                self.posts[i].commentCount = snapshotCount
+            }, toast: "Erreur lors de l'envoi du commentaire")
         } catch {
             // Roll back the optimistic comment if the outbox refuses the row
             // (re-resolve the index — the feed may have mutated during the await).
