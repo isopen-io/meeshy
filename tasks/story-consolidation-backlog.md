@@ -133,11 +133,26 @@ Local-first, efficient cache, FABs, show-only-necessary. Each fix: prove → fix
       viewModel.storyGroups. StoryViewerContainer does (live); StoryTrayView passes a frozen [group]
       snapshot → that path updates on re-open only. Pre-existing (storyUpdated has the same shape). Note.
 
+## Progress it.10 — ThumbHash composite layer fidelity (2026-06-01)
+- [x] PROVEN: StoryTrayView frozen [group] is the PREVIEW path (isPreviewMode, ephemeral) — figer est
+      correct. The REAL viewing path is StoryViewerContainer (@ObservedObject viewModel, live storyGroups)
+      → the it.9 realtime translation merge re-renders the open viewer live. (false-alarm item dropped)
+- [x] PROVEN + FIXED: StorySlideRenderer.renderComposite (thumbHash) ignored the modern background
+      MEDIA object — a `StoryMediaObject(isBackground:true)` was drawn by the foreground loop as a
+      0.6× centred blob AFTER the text (occluding it), never full-bleed. Now draws resolvedBackgroundMedia
+      full-bleed (parity with StoryBackgroundLayer/SlideMiniPreview) + foreground loop uses
+      resolvedForegroundMediaObjects (excludes bg). 2 pixel tests GREEN.
+- [x] FIXED: drawTextObject font /390 → /CanvasGeometry.designWidth (1080) — text was ~2.77× oversized
+      in the composite (parity with SlideMiniPreview's /designWidth).
+- [x] xcodebuild BUILD SUCCEEDED; MeeshyUITests bundle compiled + ran the new renderComposite (runtime-proven).
+
 ## REPLENISHED backlog (next to consume)
 - [ ] VISUAL SMOKE (ios-simulator): open a story with translations → tap flag in language strip → confirm
       text switches to that language + badge; advance slide → confirm override resets to base preferred.
-- [ ] StoryTrayView frozen [group] snapshot → pass live viewModel binding so the open viewer reflects
-      realtime translation/reaction/count updates without re-open (parity with StoryViewerContainer).
+- [ ] Audit: does StoryComposerView per-media foreground thumbHash (loop after computeThumbHash) also
+      need the bg-exclusion, or is it already per-media-id correct? (verify no bg media gets a fg thumbHash)
+- [ ] Audit drawMediaObject in renderComposite: 0.6× heuristic vs StoryMediaLayer.baseMediaDesignSize —
+      SlideMiniPreview uses baseMediaDesignSize; the thumbHash composite still uses 0.6×. Align for parity?
 - [ ] Reader language indicator: should the active override show a subtle "viewing in X" affordance + a
       one-tap revert to preferred? (Prisme discretion — currently silent revert on slide change only.)
 - [ ] StorySlideRenderer.drawTextObject thumbHash font /390 → /designWidth (cosmetic, noted it.7).

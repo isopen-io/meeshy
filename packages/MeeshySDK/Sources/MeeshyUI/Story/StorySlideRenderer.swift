@@ -37,17 +37,30 @@ public enum StorySlideRenderer {
                 bgImage.draw(in: rect)
             }
 
+            // 2b. Background MEDIA object (story moderne) — rempli PLEIN CADRE, à
+            //     parité avec `StoryBackgroundLayer` (reader) et `SlideMiniPreview`.
+            //     Le fond moderne n'est pas un `bgImage` legacy séparé mais un
+            //     `StoryMediaObject(isBackground: true)` dans `mediaObjects` ; sans
+            //     ce dessin il n'apparaissait que via la boucle foreground en petite
+            //     image 0.6× centrée — et, dessinée APRÈS le texte, elle l'occultait.
+            //     On ne dessine que si aucun `bgImage` legacy n'a déjà rempli le cadre.
+            if bgImage == nil,
+               let bgMedia = slide.effects.resolvedBackgroundMedia,
+               bgMedia.kind == .image,
+               let bgMediaImage = loadedImages[bgMedia.id] {
+                bgMediaImage.draw(in: rect)
+            }
+
             // 3. Text overlays
             for textObj in slide.effects.textObjects {
                 drawTextObject(textObj, in: size, ctx: cgCtx)
             }
 
-            // 4. Foreground media images
-            if let mediaObjects = slide.effects.mediaObjects {
-                for obj in mediaObjects where obj.kind == .image {
-                    if let img = loadedImages[obj.id] {
-                        drawMediaObject(obj, image: img, in: size, ctx: cgCtx)
-                    }
+            // 4. Foreground media images — EXCLUT le média de fond (résolu en 2b),
+            //    sinon double-dessin + occlusion du texte (cf. 2b).
+            for obj in slide.effects.resolvedForegroundMediaObjects where obj.kind == .image {
+                if let img = loadedImages[obj.id] {
+                    drawMediaObject(obj, image: img, in: size, ctx: cgCtx)
                 }
             }
 
@@ -87,7 +100,11 @@ public enum StorySlideRenderer {
     // MARK: - Private Drawing
 
     private static func drawTextObject(_ textObj: StoryTextObject, in size: CGSize, ctx: CGContext) {
-        let fontSize = max(6, size.width * CGFloat(textObj.resolvedSize / 390.0))  // Scale relative to 390pt screen width
+        // `resolvedSize` (= fontSize) est en pixels DESIGN (référentiel 1080), donc
+        // projeté par `size.width / 1080` — parité avec le canvas réel (`StoryTextLayer`)
+        // et `SlideMiniPreview`. L'ancien diviseur `390` (largeur device) rendait le
+        // texte ~2,77× trop gros dans le composite ThumbHash.
+        let fontSize = max(6, size.width * CGFloat(textObj.resolvedSize / Double(CanvasGeometry.designWidth)))
         let textColor = UIColor(hex: textObj.textColor ?? "FFFFFF") ?? .white
 
         let style = NSMutableParagraphStyle()
