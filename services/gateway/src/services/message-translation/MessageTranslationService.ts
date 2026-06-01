@@ -556,26 +556,30 @@ export class MessageTranslationService extends EventEmitter {
       // 3. SUPPRIMER LES ANCIENNES TRADUCTIONS POUR LES LANGUES CIBLES
       // Cela permet de remplacer les traductions existantes par les nouvelles
       if (filteredTargetLanguages.length > 0) {
-        // Lire le message
-        const message = await this.prisma.message.findUnique({
-          where: { id: messageId },
-          select: { translations: true }
-        });
-
-        if (message?.translations) {
-          const translations = message.translations as unknown as Record<string, MessageTranslationJSON>;
-
-          // Supprimer les langues cibles du JSON
-          filteredTargetLanguages.forEach(lang => {
-            delete translations[lang];
-          });
-
-          // Sauvegarder
-          await this.prisma.message.update({
+        // Sérialisé par messageId (même mutex que _saveTranslationToDatabase) :
+        // ce read-modify-write peut sinon clobber des traductions en cours de
+        // complétion (lost update sur Message.translations).
+        await this.messageTranslationMutex.runExclusive(messageId, async () => {
+          const message = await this.prisma.message.findUnique({
             where: { id: messageId },
-            data: { translations: translations as any }
+            select: { translations: true }
           });
-        }
+
+          if (message?.translations) {
+            const translations = message.translations as unknown as Record<string, MessageTranslationJSON>;
+
+            // Supprimer les langues cibles du JSON
+            filteredTargetLanguages.forEach(lang => {
+              delete translations[lang];
+            });
+
+            // Sauvegarder
+            await this.prisma.message.update({
+              where: { id: messageId },
+              data: { translations: translations as any }
+            });
+          }
+        });
       }
       
       // 4. ENVOYER LA REQUÊTE DE RETRADUCTION VIA ZMQ
