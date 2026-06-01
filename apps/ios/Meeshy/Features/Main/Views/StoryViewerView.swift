@@ -193,6 +193,10 @@ struct StoryViewerView: View {
     @State var commentEffects: MessageEffects = .none // internal for cross-file extension access
     @State var showLanguageOptions = false // internal for cross-file extension access
     @State var showFullLanguagePicker = false // internal for cross-file extension access
+    /// Langue d'exploration choisie via le picker (Prisme « Exploration »). Prépendue à
+    /// `resolvedViewerLanguageChain` tant qu'elle est non-nil. Éphémère : réinitialisée au
+    /// changement de slide. `nil` = affichage selon les préférences de base uniquement.
+    @State var sessionLanguageOverride: String? = nil // internal for cross-file extension access
     @StateObject private var keyboard = KeyboardObserver()
     @Environment(\.scenePhase) private var scenePhase
 
@@ -457,6 +461,12 @@ struct StoryViewerView: View {
 
     var body: some View {
         viewerContent
+        // Prisme « Exploration » : l'override de langue est éphémère — il se réinitialise
+        // dès qu'on change de story (slide ou groupe), de sorte que chaque story s'affiche
+        // d'abord dans la langue préférée de base. iOS 16 : signature single-param.
+        .onChange(of: currentStory?.id) { _ in
+            if sessionLanguageOverride != nil { sessionLanguageOverride = nil }
+        }
         .sheet(isPresented: $showViewersSheet, onDismiss: { resumeTimer() }) {
             if let story = currentStory {
                 StoryViewersSheet(story: story, accentColor: Color(hex: "4ECDC4"))
@@ -920,6 +930,9 @@ struct StoryViewerView: View {
             isGlobalMuted: isGlobalMuted,
             availableTranslationLanguages: availableTranslationLanguages,
             onReplyToStory: onReplyToStory,
+            onSelectLanguageOverride: { lang in
+                withAnimation(.easeInOut(duration: 0.2)) { sessionLanguageOverride = lang }
+            },
             composerAccentColor: currentGroup?.avatarColor ?? "6366F1",
             storyComments: storyComments,
             storyCommentRepliesMap: storyCommentRepliesMap,
@@ -1097,8 +1110,24 @@ struct StoryViewerView: View {
     /// Chaine complete : systemLanguage → regionalLanguage → customDestinationLanguage → "fr"
     /// (cf. `MeeshyUser.preferredContentLanguages`). Utilisee par le reader pour resoudre
     /// les traductions selon le Prisme Linguistique.
+    ///
+    /// Quand l'utilisateur explore une autre langue via le picker (`sessionLanguageOverride`),
+    /// celle-ci est PRÉPENDUE à la chaine (priorité la plus haute) sans supprimer les
+    /// préférences de base — cf. Prisme « Exploration ». L'override est éphémère : il se
+    /// réinitialise au changement de slide (cf. `.onChange(of: currentStory?.id)`).
     private var resolvedViewerLanguageChain: [String] {
-        AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        Self.viewerLanguageChain(
+            base: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+            override: sessionLanguageOverride
+        )
+    }
+
+    /// Helper pur (testable) : prépend l'override langue à la chaine préférée, dédupliqué.
+    /// `nil`/vide → chaine de base inchangée. Sinon l'override passe en tête et est retiré
+    /// de sa position d'origine (jamais de doublon).
+    static func viewerLanguageChain(base: [String], override: String?) -> [String] {
+        guard let override, !override.isEmpty else { return base }
+        return [override] + base.filter { $0 != override }
     }
 
     /// Drives the sidebar sound/mute button. A silent video (muted by the author

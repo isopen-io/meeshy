@@ -87,3 +87,27 @@ Local-first, efficient cache, FABs, show-only-necessary. Each fix: prove → fix
   StoryViewerView; resolvedViewerLanguageChain prepends it when set; picker sets it (+ requestTranslation);
   re-render on translation arrival; clear on slide change. Medium async feature — implement next iteration
   unless user redirects. Until then picker = request-only (no display change).
+
+## Progress it.7 — composer↔reader alignment EMPIRICALLY + DATA verified (2026-06-01)
+- [x] it.7 Pulled REAL stored positions via API (GET /posts/feed/stories). jcnm "Zero" 6a1ccd74:
+      image isBackground=true x=0.525 y=0.568 ratio=1.333 ; text "Zero" y=0.82. "Noir Sacré" 6a1ccefa:
+      image isBackground=true x=0.306 (left!) y=0.632 ; texts y=0.25 / y=0.963.
+- [x] PROVEN ROOT CAUSE (no blind fix): background media offset = (x-0.5)·renderSize.width,
+      (y-0.5)·renderSize.height (StoryCanvasUIView). renderSize.height differs old composer (874)
+      vs reader (714) → same normalized y renders at different px → bg pan + text shift in reader.
+      These stories are PRE-9:16-fix (composed ~00h, fix ~04h). NOT migratable (normalized positions
+      are render-size-independent; only the composer that captured them used 874).
+- [x] EMPIRICAL CONFIRM new stories align: composed bg image in current (9:16) composer → in-composer
+      preview (=reader pipeline, .play) renders the bg image IDENTICALLY (full-frame, centered, no canvas
+      bg). edit==reader for new stories. (screenshots /tmp/c6 edit, /tmp/c7_preview reader)
+- [x] No code fix needed for the coordination bug — already fixed by aspectFitSize 9:16 parity; the
+      perceived misalignment in the J.Charles story is unmigratable old data.
+
+## NEW backlog item (minor, low-priority cosmetic)
+- [ ] StorySlideRenderer.drawTextObject (thumbHash composite) font uses /390.0 (device width) instead of
+      /CanvasGeometry.designWidth (1080) → text ~2.77× oversized in the 100×178 blur composite. Cosmetic
+      only (thumbHash is a ~28-byte blur placeholder, downsampled to ~32×32) but inconsistent w/ the fixed
+      SlideMiniPreview (/designWidth). Align for single-source consistency when touching this file.
+
+## NOW ACTIVE (user-queued after the create/view loop)
+- [ ] Viewer language-picker display OVERRIDE (the "explore other languages" Prisme feature). See plan above.

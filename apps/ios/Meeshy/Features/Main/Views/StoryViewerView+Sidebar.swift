@@ -43,6 +43,8 @@ struct StoryActionSidebarView: View {
     let storyHasTranslatableContent: Bool
     let isGlobalMuted: Bool
     let availableTranslationLanguages: [TranslationLanguage]
+    /// Prisme « Exploration » : affiche la story dans la langue choisie (override éphémère).
+    let onSelectLanguageOverride: (String) -> Void
 
     @Binding var showEmojiStrip: Bool
     @Binding var showFullEmojiPicker: Bool
@@ -325,6 +327,9 @@ struct StoryActionSidebarView: View {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                     showLanguageOptions = false
                                 }
+                                // Prisme « Exploration » : bascule l'affichage dans la
+                                // langue choisie (override) ; demande la traduction si absente.
+                                onSelectLanguageOverride(lang.id)
                                 guard let story = currentStory else { return }
                                 Task {
                                     await StoryInteractionService().requestTranslation(

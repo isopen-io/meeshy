@@ -523,6 +523,9 @@ struct StoryCardView: View {
     let isGlobalMuted: Bool
     let availableTranslationLanguages: [TranslationLanguage]
     let onReplyToStory: ((ReplyContext) -> Void)?
+    /// Prisme « Exploration » : appelé quand l'utilisateur choisit une langue dans le
+    /// picker/strip pour afficher le contenu dans cette langue (override éphémère).
+    let onSelectLanguageOverride: (String) -> Void
 
     // Header inputs
     let composerAccentColor: String
@@ -1007,6 +1010,7 @@ struct StoryCardView: View {
                     storyHasTranslatableContent: storyHasTranslatableContent,
                     isGlobalMuted: isGlobalMuted,
                     availableTranslationLanguages: availableTranslationLanguages,
+                    onSelectLanguageOverride: onSelectLanguageOverride,
                     showEmojiStrip: $showEmojiStrip,
                     showFullEmojiPicker: $showFullEmojiPicker,
                     showCommentsOverlay: $showCommentsOverlay,
@@ -1172,6 +1176,10 @@ struct StoryCardView: View {
             if showFullLanguagePicker {
                 LanguagePickerSheet(style: .dark) { lang in
                     LanguageUsageTracker.recordUsage(languageId: lang.id)
+                    // Prisme « Exploration » : affiche immédiatement dans la langue choisie
+                    // (override prépendu à la chaine) ; la traduction est demandée si absente
+                    // et le reader se re-rend dès son arrivée.
+                    onSelectLanguageOverride(lang.id)
                     guard let story = currentStory else { return }
                     Task {
                         await StoryInteractionService().requestTranslation(

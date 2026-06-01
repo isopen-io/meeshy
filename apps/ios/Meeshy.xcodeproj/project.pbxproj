@@ -480,6 +480,7 @@
 		SETT002A002A002A002A0002 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SETT001A001A001A001A0001 /* SettingsView.swift */; };
 		SGDT0001000100010001002 /* StoryGestureDecisionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SGDT0001000100010001001 /* StoryGestureDecisionsTests.swift */; };
 		SVRF0001000100010001002 /* StoryViewerReactionFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SVRF0001000100010001001 /* StoryViewerReactionFlowTests.swift */; };
+		SVLO0001000100010001002 /* StoryViewerLanguageOverrideTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SVLO0001000100010001001 /* StoryViewerLanguageOverrideTests.swift */; };
 		SKLN0001000100010001BLD /* SkeletonVisibilityResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = SKLN0001000100010001REF /* SkeletonVisibilityResolver.swift */; };
 		SKLN0002000100010001BLD /* SkeletonProfileHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = SKLN0002000100010001REF /* SkeletonProfileHeader.swift */; };
 		SKLN0003000100010001BLD /* SkeletonStoryThumb.swift in Sources */ = {isa = PBXBuildFile; fileRef = SKLN0003000100010001REF /* SkeletonStoryThumb.swift */; };
@@ -1061,6 +1062,7 @@
 		SETT001A001A001A001A0001 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		SGDT0001000100010001001 /* StoryGestureDecisionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryGestureDecisionsTests.swift; sourceTree = "<group>"; };
 		SVRF0001000100010001001 /* StoryViewerReactionFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerReactionFlowTests.swift; sourceTree = "<group>"; };
+		SVLO0001000100010001001 /* StoryViewerLanguageOverrideTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerLanguageOverrideTests.swift; sourceTree = "<group>"; };
 		SKLN0001000100010001REF /* SkeletonVisibilityResolver.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Skeletons/SkeletonVisibilityResolver.swift; sourceTree = SOURCE_ROOT; };
 		SKLN0002000100010001REF /* SkeletonProfileHeader.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Skeletons/SkeletonProfileHeader.swift; sourceTree = SOURCE_ROOT; };
 		SKLN0003000100010001REF /* SkeletonStoryThumb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Skeletons/SkeletonStoryThumb.swift; sourceTree = SOURCE_ROOT; };
@@ -2030,6 +2032,7 @@
 				TSTRN0001000100010001000 /* Notifications */,
 				SGDT0001000100010001001 /* StoryGestureDecisionsTests.swift */,
 				SVRF0001000100010001001 /* StoryViewerReactionFlowTests.swift */,
+				SVLO0001000100010001001 /* StoryViewerLanguageOverrideTests.swift */,
 			);
 			path = Stories;
 			sourceTree = "<group>";
@@ -2827,6 +2830,7 @@
 				STAB0001000100010001002 /* StoryActiveBridgeTests.swift in Sources */,
 				SGDT0001000100010001002 /* StoryGestureDecisionsTests.swift in Sources */,
 				SVRF0001000100010001002 /* StoryViewerReactionFlowTests.swift in Sources */,
+				SVLO0001000100010001002 /* StoryViewerLanguageOverrideTests.swift in Sources */,
 				CLRT0001000100010001002 /* ComposerLanguageResolverTests.swift in Sources */,
 				AE6AF9B4AA7E4759A0A02D38 /* ThemedBackButtonTests.swift in Sources */,
 				STNF0001000100010001002 /* StoryNotificationFlowTests.swift in Sources */,
