@@ -169,7 +169,7 @@ struct ComposerToolPanelHost: View {
         switch tool {
         case .media:    return 220
         case .audio:    return 220
-        case .drawing:  return 140
+        case .drawing:  return 300
         case .text:     return 280
         case .texture:  return 160
         case .filters:  return 180
@@ -425,13 +425,15 @@ struct ComposerToolPanelHost: View {
         .accessibilityLabel(tip)
     }
 
-    /// Refonte dessin (2026-05-30) : les contrôles de dessin sont désormais des
-    /// contrôleurs flottants (`StoryDrawingToolbar`) posés au-dessus du canvas, plus
-    /// dans le band inférieur. Le band est masqué pendant l'édition de dessin
-    /// (`isFloatingEditorActive`), donc ce panneau n'est jamais affiché — il reste
-    /// `EmptyView` pour satisfaire le `switch` exhaustif sur `StoryToolMode`.
+    /// Panneau Dessin dans la bande (2026-06-01) : la **liste des traits éditables**
+    /// vit ici, comme tous les autres outils (donc avec le même chrome `headerRow` =
+    /// retour arrière + accès rapide aux autres outils). Les contrôles du pinceau
+    /// (couleur / épaisseur / lissage / pinceau) restent eux des bulles flottantes
+    /// posées sur le canvas (`StoryDrawingToolbar`), pour tracer immédiatement. La
+    /// liste remplit la hauteur disponible du panneau (redimensionnable).
     private var drawingPanel: some View {
-        EmptyView()
+        DrawingStrokeList(viewModel: viewModel, maxListHeight: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     @ViewBuilder

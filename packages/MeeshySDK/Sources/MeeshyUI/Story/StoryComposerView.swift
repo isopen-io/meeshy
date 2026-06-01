@@ -300,7 +300,10 @@ public struct StoryComposerView: View {
                 .padding(.bottom, keyboardHeight)
 
             // Floating drawing controls — mirror du toolbar texte. Vide quand
-            // `drawingEditingMode == .inactive`.
+            // `drawingEditingMode == .inactive`. Les bulles (pinceau/couleur/
+            // épaisseur/lissage) restent flottantes sur le canvas ; la liste des
+            // traits éditable vit, elle, dans la bande standard (`ComposerToolPanelHost`
+            // → `drawingPanel`), comme tous les autres outils.
             StoryDrawingToolbar(viewModel: viewModel)
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.85),
@@ -876,6 +879,7 @@ public struct StoryComposerView: View {
         viewModel.textEditingMode != .inactive || viewModel.drawingEditingMode.isActive
     }
 
+
     private var isComposerEmpty: Bool {
         let slidesEmpty = viewModel.slides.allSatisfy { slide in
             slide.content == nil
@@ -1166,37 +1170,69 @@ public struct StoryComposerView: View {
     /// doesn't time out on the parent body.
     @ViewBuilder
     private var canvasComposerLayer: some View {
-        canvasCore
-            .scaleEffect(viewModel.canvasScale * viewportPinchDelta)
-            .offset(
-                x: viewModel.canvasOffset.width + viewportDragDelta.width,
-                y: viewModel.canvasOffset.height + viewportDragDelta.height
-            )
-            // Le pinch viewport (zoom canvas) est maintenant un pinch 3 doigts
-            // géré par `ThreeFingerPinchGestureRecognizer` côté UIKit, routé
-            // via `onCanvasZoomScaleChanged`. Sans ça, l'ancien
-            // `MagnificationGesture` SwiftUI 2-doigts firait en parallèle du
-            // pinch d'élément UIKit → tout le canvas scalait.
-            .gesture(isCanvasGestureEnabled && isPanEnabled ? viewportDragGesture : nil)
-            .overlay { mediaLoadingOverlay }
-            .overlay(alignment: .topTrailing) { canvasZoomResetButton }
-            .overlay(alignment: .top) {
-                CanvasLayerIndicator(layer: manipulationLayer)
-                    .padding(.top, 6)
-                    .allowsHitTesting(false)
-            }
-            .ignoresSafeArea()
-            .background(
-                GeometryReader { proxy in
-                    Color.clear
-                        .onAppear { canvasNaturalFrame = proxy.frame(in: .global) }
-                        .adaptiveOnChange(of: proxy.frame(in: .global)) { _, f in
-                            canvasNaturalFrame = f
-                        }
+        // **Parité 9:16 composer ↔ reader / preview / export (2026-06-01).**
+        // Le canvas d'édition était auparavant plein écran (`.ignoresSafeArea()`
+        // sans contrainte de ratio), donc plus haut que 9:16 sur la plupart des
+        // iPhone (ex. 402×874 sur iPhone 16 Pro). Le reader, lui, contraint le
+        // canvas à 9:16 (402×714). Comme `StoryRenderer` projette en design→écran
+        // sur la largeur (`scaleFactor = width/1080`), texte/média round-trippaient
+        // (même largeur) mais : (1) le **dessin** (projection bounds non-uniforme
+        // `1920/bounds.height`, cf. `StrokeCaptureLayer`) se compressait du ratio
+        // `714/874` au reader et se détachait du texte qu'il entourait ; (2) le
+        // contenu placé dans la hauteur excédentaire du composer était rogné par
+        // le reader 9:16. On contraint donc le canvas à `aspectFitSize` (source de
+        // vérité partagée avec le reader), centré dans la zone disponible — les
+        // bandes letterbox haut/bas accueillent la top bar et le toolbar flottant.
+        GeometryReader { proxy in
+            // Quand un panneau d'outil redimensionnable est ouvert en bas
+            // (`bottomPanelHeight`), le canvas 9:16 est ajusté dans la zone
+            // restante AU-DESSUS du panneau et y est centré — il reste donc
+            // entièrement visible, et l'utilisateur peut placer du contenu
+            // partout dessus (spec user 2026-06-01). Sans panneau ouvert,
+            // `bottomPanelHeight == 0` → plein écran 9:16 centré, comportement
+            // d'origine.
+            let regionHeight = max(160, proxy.size.height - bottomPanelHeight)
+            let fit = CanvasGeometry.aspectFitSize(in: CGSize(width: proxy.size.width, height: regionHeight))
+            canvasCore
+                .frame(width: fit.width, height: fit.height)
+                .scaleEffect(viewModel.canvasScale * viewportPinchDelta)
+                .offset(
+                    x: viewModel.canvasOffset.width + viewportDragDelta.width,
+                    y: viewModel.canvasOffset.height + viewportDragDelta.height
+                )
+                // Le pinch viewport (zoom canvas) est maintenant un pinch 3 doigts
+                // géré par `ThreeFingerPinchGestureRecognizer` côté UIKit, routé
+                // via `onCanvasZoomScaleChanged`. Sans ça, l'ancien
+                // `MagnificationGesture` SwiftUI 2-doigts firait en parallèle du
+                // pinch d'élément UIKit → tout le canvas scalait.
+                .gesture(isCanvasGestureEnabled && isPanEnabled ? viewportDragGesture : nil)
+                .overlay { mediaLoadingOverlay }
+                .overlay(alignment: .topTrailing) { canvasZoomResetButton }
+                .overlay(alignment: .top) {
+                    CanvasLayerIndicator(layer: manipulationLayer)
+                        .padding(.top, 6)
+                        .allowsHitTesting(false)
                 }
-            )
-            .offset(y: -canvasEditShift)
-            .animation(.spring(response: 0.32, dampingFraction: 0.85), value: canvasEditShift)
+                // Mesure la frame globale du canvas 9:16 (et non plein écran) —
+                // `canvasNaturalFrame` pilote l'évitement clavier `canvasEditShift`
+                // qui projette `textObj.y * canvasNaturalFrame.height`. Avec un
+                // canvas 9:16, cette hauteur == `renderHeightFor1920`, donc le
+                // calcul redevient exact.
+                .background(
+                    GeometryReader { p in
+                        Color.clear
+                            .onAppear { canvasNaturalFrame = p.frame(in: .global) }
+                            .adaptiveOnChange(of: p.frame(in: .global)) { _, f in
+                                canvasNaturalFrame = f
+                            }
+                    }
+                )
+                // Centre le canvas 9:16 dans la zone disponible.
+                .frame(width: proxy.size.width, height: proxy.size.height)
+                .offset(y: -canvasEditShift)
+                .animation(.spring(response: 0.32, dampingFraction: 0.85), value: canvasEditShift)
+        }
+        .ignoresSafeArea()
     }
 
     @ViewBuilder

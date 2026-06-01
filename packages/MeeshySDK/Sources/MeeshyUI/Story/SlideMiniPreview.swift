@@ -165,12 +165,19 @@ struct SlideMiniPreview: View {
     @ViewBuilder
     private func foregroundMediaItem(_ media: StoryMediaObject, in size: CGSize) -> some View {
         if let img = loadedImages[media.id] {
-            let baseSize = size.width * 0.35
+            // Parité avec le canvas réel (`StoryMediaLayer`) : la taille de base
+            // vient de `baseMediaDesignSize(aspectRatio:)` (≈ 0,5–0,65 × designWidth,
+            // enveloppe respectant l'aspect ratio) projetée par `width / 1080`.
+            // L'ancien heuristique `0,35 × width` carré + `scaledToFit` rendait le
+            // média ~moitié trop petit et au mauvais ratio vs reader/preview.
+            let base = StoryMediaLayer.baseMediaDesignSize(aspectRatio: media.aspectRatio)
+            let factor = size.width / CanvasGeometry.designWidth
             Image(uiImage: img)
                 .resizable()
-                .scaledToFit()
-                .frame(width: baseSize * CGFloat(media.scale),
-                       height: baseSize * CGFloat(media.scale))
+                .scaledToFill()
+                .frame(width: base.width * factor * CGFloat(media.scale),
+                       height: base.height * factor * CGFloat(media.scale))
+                .clipped()
                 .rotationEffect(.degrees(Double(media.rotation)))
                 .position(x: CGFloat(media.x) * size.width,
                           y: CGFloat(media.y) * size.height)
@@ -189,8 +196,13 @@ struct SlideMiniPreview: View {
 
     @ViewBuilder
     private func textItem(_ text: StoryTextObject, in size: CGSize) -> some View {
-        // 393pt = design reference width (9:16 canvas on iPhone 14 Pro). Mini preview scales proportionally.
-        let fontSize = CGFloat(max(3, text.fontSize * Double(size.width) / 393))
+        // Parité avec le canvas réel (`StoryTextLayer`) : la police est exprimée en
+        // espace design (référence 1080 = `CanvasGeometry.designWidth`) et projetée
+        // par `scaleFactor = width / 1080`. L'ancien diviseur `393` (largeur device
+        // iPhone 14 Pro, pas la référence design) rendait le texte 2,75× trop gros
+        // par rapport au reader/preview. Le clamp `max(3, …)` garde un plancher
+        // lisible sur les très petites vignettes.
+        let fontSize = CGFloat(max(3, text.fontSize * Double(size.width) / Double(CanvasGeometry.designWidth)))
         Text(text.text.isEmpty ? " " : text.text)
             .font(.system(size: fontSize, weight: .medium))
             .foregroundColor(Color(hex: text.textColor ?? "FFFFFF"))

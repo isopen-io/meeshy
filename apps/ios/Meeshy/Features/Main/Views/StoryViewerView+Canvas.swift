@@ -646,11 +646,10 @@ struct StoryCardView: View {
     /// → out of 402 (bug 2026-05-27). On force ici les dimensions explicites
     /// par calcul direct du fit ratio.
     private var canvasFitSize: CGSize {
-        let w = geometry.size.width
-        let h = geometry.size.height
-        let ratio: CGFloat = 9.0 / 16.0
-        let widthBound = min(w, h * ratio)
-        return CGSize(width: widthBound, height: widthBound / ratio)
+        // Source de vérité partagée avec le composer (`CanvasGeometry.aspectFitSize`)
+        // pour garantir la parité 9:16 composer ↔ reader. Math identique à
+        // l'ancien calcul inline `min(w, h * 9/16)`.
+        CanvasGeometry.aspectFitSize(in: geometry.size)
     }
 
     var body: some View {

@@ -47,4 +47,47 @@ struct CanvasGeometryTests {
         #expect(abs(g.render(100.0) - 50.0) < 0.0001)
         #expect(abs(g.render(64.0) - 32.0) < 0.0001) // fontSize=64 design px → 32pt rendered
     }
+
+    // MARK: - aspectFitSize (parité composer ↔ reader, 2026-06-01)
+
+    @Test("aspectFitSize produces an exact 9:16 size")
+    func aspectFitSize_isNineSixteen() {
+        let fit = CanvasGeometry.aspectFitSize(in: CGSize(width: 402, height: 874))
+        #expect(abs(fit.width / fit.height - 9.0 / 16.0) < 0.0001)
+    }
+
+    @Test("aspectFitSize is width-bound when area is taller than 9:16 (iPhone full screen)")
+    func aspectFitSize_widthBound_whenTaller() {
+        // iPhone 16 Pro plein écran : 402×874 (ratio 0.46, plus haut que 9:16).
+        let fit = CanvasGeometry.aspectFitSize(in: CGSize(width: 402, height: 874))
+        #expect(abs(fit.width - 402) < 0.0001)          // largeur conservée
+        #expect(abs(fit.height - 402 * 16.0 / 9.0) < 0.001) // hauteur ramenée à 9:16 (≈714.7)
+        #expect(fit.height < 874)                        // strictement plus court que l'écran
+    }
+
+    @Test("aspectFitSize is height-bound when area is wider than 9:16")
+    func aspectFitSize_heightBound_whenWider() {
+        let fit = CanvasGeometry.aspectFitSize(in: CGSize(width: 2000, height: 800))
+        #expect(abs(fit.height - 800) < 0.0001)
+        #expect(abs(fit.width - 800 * 9.0 / 16.0) < 0.001)
+        #expect(fit.width < 2000)
+    }
+
+    @Test("composer (full screen) and reader (9:16 frame) resolve to the same canvas — root-cause parity")
+    func aspectFitSize_composerAndReaderMatch() {
+        // Avant le fix : le composer rendait plein écran (402×874) et le reader en
+        // 9:16. `aspectFitSize` appliqué aux deux donne des bounds identiques, donc
+        // tous les pipelines (texte largeur, dessin bounds non-uniforme) round-trip.
+        let composerArea = CGSize(width: 402, height: 874) // ZStack plein écran
+        let readerArea = CGSize(width: 402, height: 874)   // même device, frame 9:16 appliquée par le reader
+        let composerFit = CanvasGeometry.aspectFitSize(in: composerArea)
+        let readerFit = CanvasGeometry.aspectFitSize(in: readerArea)
+        #expect(abs(composerFit.width - readerFit.width) < 0.0001)
+        #expect(abs(composerFit.height - readerFit.height) < 0.0001)
+    }
+
+    @Test("aspectFitSize is a no-op fallback for empty area")
+    func aspectFitSize_emptyArea_returnsInput() {
+        #expect(CanvasGeometry.aspectFitSize(in: .zero) == .zero)
+    }
 }

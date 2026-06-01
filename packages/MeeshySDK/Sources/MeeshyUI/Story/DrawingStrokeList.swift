@@ -8,6 +8,9 @@ import MeeshySDK
 /// ligne (réutilise `DrawingEditToolOptions`, qui édite le trait sélectionné).
 struct DrawingStrokeList: View {
     @ObservedObject var viewModel: StoryComposerViewModel
+    /// Hauteur max du scroll. `230` pour l'usage flottant historique ; la sheet
+    /// redimensionnable passe `.infinity` pour remplir le détent courant.
+    var maxListHeight: CGFloat = 230
 
     var body: some View {
         if !viewModel.drawingStrokes.isEmpty {
@@ -23,7 +26,7 @@ struct DrawingStrokeList: View {
                     }
                     .padding(.vertical, 2)
                 }
-                .frame(maxHeight: 230)
+                .frame(maxHeight: maxListHeight)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .animation(.spring(response: 0.28, dampingFraction: 0.85),
