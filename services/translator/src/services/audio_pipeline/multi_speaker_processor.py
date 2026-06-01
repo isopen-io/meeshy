@@ -506,9 +506,12 @@ def _resolve_transitive_mapping(mapping: Dict[str, str]) -> Dict[str, str]:
         # Suivre la chaîne jusqu'à la destination finale
         current = speaker_id
         visited = set()
-        while mapping[current] != current and current not in visited:
+        # .get(current, current) : si une valeur du mapping n'est pas elle-même
+        # une clé (speaker fusionné vers un id absent), on s'arrête dessus au
+        # lieu de lever KeyError (qui crasherait tout le pipeline multi-speaker).
+        while mapping.get(current, current) != current and current not in visited:
             visited.add(current)
-            current = mapping[current]
+            current = mapping.get(current, current)
         resolved[speaker_id] = current
     return resolved
 
