@@ -69,6 +69,8 @@ export class MessageTranslationService extends EventEmitter {
   // Sérialise les updates de translations par attachment (évite le lost-update
   // quand plusieurs langues complètent en concurrence sur le même attachment).
   private readonly attachmentTranslationMutex = new KeyedMutex();
+  // Idem pour les traductions TEXTE par message (Message.translations).
+  private readonly messageTranslationMutex = new KeyedMutex();
   private readonly stats: TranslationStats;
   private readonly encryptionHelper: EncryptionHelper;
 
@@ -2685,33 +2687,40 @@ export class MessageTranslationService extends EventEmitter {
       // NOUVELLE ARCHITECTURE: Utiliser Message.translations (JSON)
       // Plus de doublons possibles, plus de contraintes uniques nécessaires
 
-      // 1. Lire le message actuel
-      const message = await this.prisma.message.findUnique({
-        where: { id: result.messageId },
-        select: { translations: true }
-      });
+      // Read-modify-write de Message.translations SÉRIALISÉ par messageId.
+      // Plusieurs langues complètent en concurrence (emit non sérialisé) ;
+      // sans lock, chaque handler lisait l'objet translations puis le réécrivait
+      // entier → lost update (traductions texte écrasées/manquantes). Le
+      // findUnique sert de re-lecture DANS le lock (état committé des autres).
+      await this.messageTranslationMutex.runExclusive(result.messageId, async () => {
+        // 1. Lire le message actuel
+        const message = await this.prisma.message.findUnique({
+          where: { id: result.messageId },
+          select: { translations: true }
+        });
 
-      // 2. Parser et mettre à jour les translations
-      const translations = (message?.translations as unknown as Record<string, MessageTranslationJSON>) || {};
+        // 2. Parser et mettre à jour les translations
+        const translations = (message?.translations as unknown as Record<string, MessageTranslationJSON>) || {};
 
-      // Préserver createdAt existant si présent (pour updatedAt correct)
-      const existingCreatedAt = translations[result.targetLanguage]?.createdAt;
+        // Préserver createdAt existant si présent (pour updatedAt correct)
+        const existingCreatedAt = translations[result.targetLanguage]?.createdAt;
 
-      translations[result.targetLanguage] = createTranslationJSON({
-        text: contentToStore,
-        translationModel: modelInfo as 'basic' | 'medium' | 'premium',
-        confidenceScore: confidenceScore,
-        isEncrypted: encryptionData.isEncrypted,
-        encryptionKeyId: encryptionData.encryptionKeyId,
-        encryptionIv: encryptionData.encryptionIv,
-        encryptionAuthTag: encryptionData.encryptionAuthTag,
-        preserveCreatedAt: existingCreatedAt
-      });
+        translations[result.targetLanguage] = createTranslationJSON({
+          text: contentToStore,
+          translationModel: modelInfo as 'basic' | 'medium' | 'premium',
+          confidenceScore: confidenceScore,
+          isEncrypted: encryptionData.isEncrypted,
+          encryptionKeyId: encryptionData.encryptionKeyId,
+          encryptionIv: encryptionData.encryptionIv,
+          encryptionAuthTag: encryptionData.encryptionAuthTag,
+          preserveCreatedAt: existingCreatedAt
+        });
 
-      // 3. Sauvegarder dans MongoDB
-      await this.prisma.message.update({
-        where: { id: result.messageId },
-        data: { translations: translations as any }
+        // 3. Sauvegarder dans MongoDB
+        await this.prisma.message.update({
+          where: { id: result.messageId },
+          data: { translations: translations as any }
+        });
       });
 
       const queryTime = Date.now() - startTime;
