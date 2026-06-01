@@ -225,3 +225,30 @@ from preview (the "incohérence").
 - [ ] RE-AUDIT trigger: new commit touching StoryTextLayer / StorySlideRenderer / StoryCanvas* → re-run.
 - [ ] Reader language indicator affordance (deferred, Prisme discretion).
 - [ ] (deferred, large + well-tested) repost flow, export flow, keyframes.
+
+## Audit it.15 — drawing mode: full-viewport canvas + collapsible drawer (REDESIGN, 3f3d2bf24)
+User reports (2): (1) "les dessins prend toute la vue mais ... le dessin ne prend pas tout le
+viewport" en preview ; (2) "le canvas arrondi doit être visible en bas de la bande header ...
+permettre que le drawer puisse se reduire totalement sans faire disparaitre le controleur overlay".
+Root cause: le DESSIN était le SEUL outil qui rétrécissait le canvas (bottomPanelHeight =
+composerBandHeight+40) pour le caser au-dessus du drawer ; et le drag-below-min (onResizeDismiss)
+quittait le dessin (contrôleur flottant disparu + FABs réaffichées).
+Choix user (AskUserQuestion) : Option A — canvas TOUJOURS plein 9:16, drawer flottant par-dessus.
+- [x] Canvas plein 9:16 en dessin (top reserve + arrondi only, plus de bottom shrink) → dessin WYSIWYG
+      avec le reader (projection 9:16→design space inchangée).
+- [x] Inset du contrôleur flottant découplé de la géométrie canvas (drawingDrawerHeight).
+- [x] Drag du grabber sous le min → REPLIE le drawer (poignée seule, drawingDrawerCollapsed) SANS
+      quitter le dessin : contrôleur (bulles) persiste, canvas arrondi 100 % visible. Grabber tiré/
+      tapé vers le haut → redéploie. Quitter le dessin = bouton dismiss des bulles.
+- [x] Vérifié simulateur : canvas plein+arrondi derrière les overlays ; collapse→poignée+contrôleur+
+      canvas plein ; re-expand ; un trait dessiné en édition matche sa position proportionnelle en
+      preview (WYSIWYG, en tenant compte du letterbox 9:16 du reader).
+- [x] No re-expand-on-commit (confirmé par code : commitStroke ne touche pas drawingDrawerCollapsed).
+- Tests construction ComposerControlsLayer/BandStateMachine verts (nouvel arg threadé). Layout/gesture
+  pur → vérif visuelle (ViewInspector indispo). Flakiness gesture.py = ciblage synthétique, pas produit.
+
+## REPLENISHED backlog — updated it.15
+- [ ] NEXT: vérifier que le drawer dessin part REPLIÉ par défaut serait + conforme à "afficher
+      uniquement le nécessaire" (FAB philosophy) ? Actuellement déplié à l'entrée. À valider avec user.
+- [ ] Smoke autres contrôles texte (Style/Taille/Alignement/Contour) sur canvas committé.
+- [ ] RE-AUDIT trigger: nouveau commit touchant StoryComposerView / Composer*Band / StoryTextLayer.
