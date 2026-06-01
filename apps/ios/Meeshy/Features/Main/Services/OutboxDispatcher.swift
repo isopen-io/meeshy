@@ -624,6 +624,85 @@ struct OutboxDispatcher: OutboxDispatching {
                 return
             }
 
+            // S7b ST3 — offline VISUAL-media (photo/video) replay, the parity
+            // twin of the audio branch above. Each pending file (relocated under
+            // Documents/pending-media/ by enqueueMedia) is uploaded via TUS with
+            // a MIME derived from its preserved extension (MimeTypeResolver —
+            // the audio branch hardcodes audio/mp4), then all ids go out in one
+            // message:send-with-attachments. The within-session TUS checkpoint
+            // resume fires automatically on re-upload (same sha256 key), so a
+            // kill mid-upload resumes from the saved offset (S8).
+            if let pendingMediaPaths = item.localMediaPaths, !pendingMediaPaths.isEmpty {
+                let serverOrigin = MeeshyConfig.shared.serverOrigin
+                guard let baseURL = URL(string: serverOrigin),
+                      let token = APIClient.shared.authToken else {
+                    throw NSError(
+                        domain: "OutboxDispatcher",
+                        code: 401,
+                        userInfo: [NSLocalizedDescriptionKey: "No baseURL or auth token to upload media"]
+                    )
+                }
+
+                let uploader = TusUploadManager(baseURL: baseURL)
+                var uploadedIds: [String] = []
+                var uploadedPaths: [String] = []
+
+                for stored in pendingMediaPaths {
+                    let absolutePath = OfflineQueue.absoluteMediaPath(forStored: stored)
+                    guard FileManager.default.fileExists(atPath: absolutePath) else {
+                        logger.error("Media file missing on dispatch, path=\(stored, privacy: .public)")
+                        continue
+                    }
+                    do {
+                        let mime = MimeTypeResolver.mimeType(
+                            forExtension: URL(fileURLWithPath: absolutePath).pathExtension)
+                        let tusResult = try await uploader.uploadFile(
+                            fileURL: URL(fileURLWithPath: absolutePath),
+                            mimeType: mime,
+                            token: token
+                        )
+                        uploadedIds.append(tusResult.id)
+                        uploadedPaths.append(absolutePath)
+                    } catch {
+                        logger.error("Media TUS upload failed (best-effort skip): \(error.localizedDescription, privacy: .public)")
+                    }
+                }
+
+                guard !uploadedIds.isEmpty else {
+                    throw NSError(
+                        domain: "OutboxDispatcher",
+                        code: 503,
+                        userInfo: [NSLocalizedDescriptionKey: "No media uploaded for offline media dispatch"]
+                    )
+                }
+
+                let ack = await MessageSocketManager.shared.sendWithAttachmentsAsync(
+                    conversationId: item.conversationId,
+                    content: item.content.isEmpty ? nil : item.content,
+                    attachmentIds: uploadedIds,
+                    replyToId: item.replyToId,
+                    storyReplyToId: nil,
+                    originalLanguage: item.originalLanguage,
+                    clientMessageId: item.clientMessageId
+                )
+                guard let ack else {
+                    throw NSError(
+                        domain: "OutboxDispatcher",
+                        code: 502,
+                        userInfo: [NSLocalizedDescriptionKey: "Socket ACK missing for offline media dispatch"]
+                    )
+                }
+
+                for path in uploadedPaths { try? FileManager.default.removeItem(atPath: path) }
+
+                await reconcileSuccessfulMessageSend(
+                    clientMessageId: item.clientMessageId,
+                    serverId: ack.messageId,
+                    conversationId: item.conversationId
+                )
+                return
+            }
+
             let request = SendMessageRequest(
                 content: item.content,
                 replyToId: item.replyToId,

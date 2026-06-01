@@ -44,8 +44,15 @@ internal func cleanupLocalFiles(for record: OutboxRecord) {
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
     guard let item = try? decoder.decode(OfflineQueueItem.self, from: record.payload) else { return }
-    let relativePaths: [String] = ([item.localAudioPath].compactMap { $0 } + (item.localAudioPaths ?? []))
-        .filter { !$0.isEmpty }
+    // S7b — sweep audio (pending-audio/) AND visual media (pending-media/)
+    // paths; both relocate bytes under Documents/ and would leak if a
+    // terminated row didn't clean them. `absoluteAudioPath` is a generic
+    // Documents-relative resolver, so it resolves both correctly.
+    let relativePaths: [String] = (
+        [item.localAudioPath].compactMap { $0 }
+        + (item.localAudioPaths ?? [])
+        + (item.localMediaPaths ?? [])
+    ).filter { !$0.isEmpty }
     guard !relativePaths.isEmpty else { return }
     var parentDirs = Set<String>()
     for rel in relativePaths {

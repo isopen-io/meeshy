@@ -301,6 +301,29 @@ final class OfflineQueueTests: XCTestCase {
             [AttachmentKind.image.rawValue, AttachmentKind.video.rawValue])
     }
 
+    /// A terminated media row must have its relocated `pending-media/` file
+    /// swept (no leak), exactly like audio.
+    func test_cleanupLocalFiles_sweepsLocalMediaPaths() async throws {
+        let cid = "cid_\(UUID().uuidString.lowercased())"
+        let result = try await queue.enqueueMedia(
+            sourceMediaURLs: [try makeTempMediaFile(ext: "jpg")],
+            kinds: [AttachmentKind.image.rawValue],
+            conversationId: "conv-1", content: nil, clientMessageId: cid
+        )
+        let abs = OfflineQueue.absoluteMediaPath(forStored: result.localMediaPaths[0])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: abs), "precondition: file relocated")
+
+        let maybePool = await queue.outboxPoolForTesting
+        let pool = try XCTUnwrap(maybePool)
+        let record = try await pool.read { db in
+            try OutboxRecord.filter(Column("clientMessageId") == cid).fetchOne(db)
+        }
+        cleanupLocalFiles(for: try XCTUnwrap(record))
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: abs),
+            "a terminated media row must sweep its pending-media file (no leak)")
+    }
+
     private func makeTempMediaFile(ext: String) throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("media_\(UUID().uuidString).\(ext)")
