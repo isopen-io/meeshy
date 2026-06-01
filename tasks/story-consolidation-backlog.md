@@ -110,4 +110,34 @@ Local-first, efficient cache, FABs, show-only-necessary. Each fix: prove → fix
       SlideMiniPreview (/designWidth). Align for single-source consistency when touching this file.
 
 ## NOW ACTIVE (user-queued after the create/view loop)
-- [ ] Viewer language-picker display OVERRIDE (the "explore other languages" Prisme feature). See plan above.
+- [x] it.8 Viewer language-picker display OVERRIDE shipped — pushed main ae5e97be7. Pure helper
+      StoryViewerView.viewerLanguageChain(base:override:) (6 tests GREEN), @State sessionLanguageOverride
+      prepended to resolvedViewerLanguageChain, reset on slide change (.onChange currentStory?.id),
+      onSelectLanguageOverride closure → StoryCardView + StoryActionSidebarView (full picker + strip both
+      set it + requestTranslation). Full picker auto-dismisses on select → story re-renders in chosen lang.
+      Build 21s OK. Falls through to next preferred lang if chosen lang not yet translated (never
+      translations.first per Prisme rule #1); re-renders when translation arrives.
+
+## Progress it.9 — realtime story TEXT translation delivery wired (2026-06-01)
+- [x] it.9 PROVEN 2 pre-existing bugs that made the override work for cached translations ONLY:
+      (1) SDK listened on stale event `post:story-translation-updated` while the gateway emits
+          `story:translation-updated` (source of truth socketio-events.ts:242; gateway
+          StoryTextObjectTranslationService:110) → translations never reached the client.
+      (2) NO app subscriber to socialSocket.storyTranslationUpdated → even if received, no merge.
+- [x] FIX (1): SocialSocketManager listens on `story:translation-updated`.
+- [x] FIX (2): StoryViewModel subscribes to storyTranslationUpdated → merges per-text-object translations
+      into the cached story (mirrors storyUpdated handler) → reader re-renders via observed VM.
+- [x] SDK helper StoryItem.mergingTextObjectTranslations(at:translations:) — pure, immutable rebuild,
+      6 tests GREEN (MeeshySDKTests). App helper viewerLanguageChain 6 tests GREEN. App + SDK build OK.
+- [ ] KNOWN: open-viewer live-update for NON-cached translations depends on the presenter passing live
+      viewModel.storyGroups. StoryViewerContainer does (live); StoryTrayView passes a frozen [group]
+      snapshot → that path updates on re-open only. Pre-existing (storyUpdated has the same shape). Note.
+
+## REPLENISHED backlog (next to consume)
+- [ ] VISUAL SMOKE (ios-simulator): open a story with translations → tap flag in language strip → confirm
+      text switches to that language + badge; advance slide → confirm override resets to base preferred.
+- [ ] StoryTrayView frozen [group] snapshot → pass live viewModel binding so the open viewer reflects
+      realtime translation/reaction/count updates without re-open (parity with StoryViewerContainer).
+- [ ] Reader language indicator: should the active override show a subtle "viewing in X" affordance + a
+      one-tap revert to preferred? (Prisme discretion — currently silent revert on slide change only.)
+- [ ] StorySlideRenderer.drawTextObject thumbHash font /390 → /designWidth (cosmetic, noted it.7).

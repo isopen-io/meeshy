@@ -1149,6 +1149,30 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             }
             .store(in: &cancellables)
 
+        // Prisme realtime : traductions de texte de story par text-object.
+        // Le gateway diffuse `story:translation-updated` (postId + textObjectIndex
+        // + translations) après avoir traduit un overlay. On fusionne dans la story
+        // en cache pour que le reader (qui résout via la chaine préférée) bascule
+        // sur la langue demandée dès l'arrivée — branche le picker langue d'« Exploration »
+        // au-delà des traductions déjà en cache (parité avec `storyUpdated`).
+        socialSocket.storyTranslationUpdated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] payload in
+                guard let self else { return }
+                for groupIdx in self.storyGroups.indices {
+                    var stories = self.storyGroups[groupIdx].stories
+                    guard let storyIdx = stories.firstIndex(where: { $0.id == payload.postId }) else { continue }
+                    stories[storyIdx] = stories[storyIdx].mergingTextObjectTranslations(
+                        at: payload.textObjectIndex,
+                        translations: payload.translations
+                    )
+                    self.storyGroups[groupIdx] = self.storyGroups[groupIdx].with(stories: stories)
+                    self.persistStoryCache()
+                    return
+                }
+            }
+            .store(in: &cancellables)
+
         socialSocket.storyDeleted
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in

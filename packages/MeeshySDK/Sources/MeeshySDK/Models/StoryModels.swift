@@ -1540,6 +1540,34 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         let twentyFourHoursAfterCreation = createdAt.addingTimeInterval(24 * 60 * 60)
         return twentyFourHoursAfterCreation <= now
     }
+
+    /// Prisme realtime : le gateway diffuse les traductions PAR text-object via
+    /// `story:translation-updated` (payload `{ postId, textObjectIndex, translations }`).
+    /// Retourne une copie de la story avec ces traductions fusionnées dans le
+    /// text-object à `index` (les langues existantes sont écrasées, les nouvelles
+    /// ajoutées). Index hors borne / pas d'effects / dict vide → `self` inchangé.
+    /// `storyEffects` étant immuable (`let`), on reconstruit la `StoryItem` via son
+    /// init mémberwise — aucune mutation en place.
+    public func mergingTextObjectTranslations(at index: Int, translations: [String: String]) -> StoryItem {
+        guard !translations.isEmpty, var effects = storyEffects,
+              index >= 0, index < effects.textObjects.count else { return self }
+        var object = effects.textObjects[index]
+        var merged = object.translations ?? [:]
+        for (language, text) in translations { merged[language] = text }
+        object.translations = merged
+        effects.textObjects[index] = object
+        return StoryItem(
+            id: id, content: content, media: media, storyEffects: effects,
+            createdAt: createdAt, expiresAt: expiresAt, repostOfId: repostOfId,
+            originalRepostOfId: originalRepostOfId, repostAuthorName: repostAuthorName,
+            visibility: visibility, audioUrl: audioUrl, isViewed: isViewed,
+            translations: self.translations,
+            backgroundAudio: backgroundAudio,
+            reactionCount: reactionCount, commentCount: commentCount,
+            shareCount: shareCount, viewCount: viewCount, repostCount: repostCount,
+            currentUserReactions: currentUserReactions
+        )
+    }
 }
 
 // MARK: - Story Group

@@ -919,7 +919,13 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
 
         // --- Story translation events ---
 
-        socket.on("post:story-translation-updated") { [weak self] data, _ in
+        // Source de vérité : `packages/shared/types/socketio-events.ts` →
+        // `STORY_TRANSLATION_UPDATED: 'story:translation-updated'`. L'ancien nom
+        // `post:story-translation-updated` (en place jusqu'au 2026-06-01) ne
+        // correspondait plus à l'event émis par le gateway
+        // (`StoryTextObjectTranslationService`) → les traductions de story temps
+        // réel n'atteignaient jamais le client.
+        socket.on("story:translation-updated") { [weak self] data, _ in
             guard let self else { return }
             self.decode(SocketStoryTranslationUpdatedData.self, from: data) { [weak self] payload in
                 self?.storyTranslationUpdated.send(payload)
