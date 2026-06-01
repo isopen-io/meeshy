@@ -197,14 +197,21 @@ struct DrawingEditToolOptions: View {
         }
     }
 
-    /// Convertit une `Color` en hex "RRGGBB" (troncature — convention codebase).
+    /// Convertit une `Color` en hex "RRGGBB". Utilise un ARRONDI (`.rounded()`),
+    /// pas une troncature : le roundtrip `Color(hex:)` → `hex(of:)` doit être
+    /// l'identité pour que la sélection de couleur s'affiche. La conversion
+    /// `Color → UIColor → getRed` décale parfois une composante de ~1/255 vers le
+    /// bas (ex. vert `2ECC71` : 204 → 203.99) ; avec une troncature `Int(x*255)`
+    /// elle tombait à 203 (`CB`) → l'hex ne matchait plus la palette → cercle non
+    /// surligné (bug 2026-06-01 « vert/violet non sélectionnés »). L'arrondi
+    /// absorbe ce décalage.
     static func hex(of color: Color) -> String {
         let ui = UIColor(color)
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         guard ui.getRed(&r, green: &g, blue: &b, alpha: &a) else { return "FFFFFF" }
         return String(format: "%02X%02X%02X",
-                      Int(max(0, min(1, r)) * 255),
-                      Int(max(0, min(1, g)) * 255),
-                      Int(max(0, min(1, b)) * 255))
+                      Int((max(0, min(1, r)) * 255).rounded()),
+                      Int((max(0, min(1, g)) * 255).rounded()),
+                      Int((max(0, min(1, b)) * 255).rounded()))
     }
 }
