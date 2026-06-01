@@ -278,6 +278,10 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     private let decoder = JSONDecoder()
     private var reconnectAttempt: Int = 0
     private var hadPreviousConnection = false
+    /// Fires on every reconnect (a `.connect` that follows a previous one).
+    /// R2 — feed/social re-sync trigger; app-side handlers (FeedViewModel /
+    /// FeedSyncEngine) observe this to backfill missed posts/reactions.
+    public let didReconnect = PassthroughSubject<Void, Never>()
     private var heartbeatTimer: Timer?
     private var lifecycleCancellables = Set<AnyCancellable>()
 
@@ -392,7 +396,12 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         socket?.connect()
     }
 
-    public func disconnect() {
+    /// Transport-only teardown (R1 — sibling of MessageSocketManager.suspendTransport).
+    /// Drops the socket + heartbeat so a stale `isConnected == true` cannot fool
+    /// the resume path, but PRESERVES `hadPreviousConnection` so the next
+    /// `.connect` is recognised as a reconnect (fires `didReconnect` → feed/social
+    /// re-sync). Contrast `disconnect()` (logout/cold reset) which also clears it.
+    private func suspendTransport() {
         stopHeartbeat()
         socket?.disconnect()
         socket = nil
@@ -400,6 +409,12 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         isConnected = false
         connectionState = .disconnected
         reconnectAttempt = 0
+    }
+
+    public func disconnect() {
+        suspendTransport()
+        // Logout / cold reset: forget the prior connection so the next `.connect`
+        // is a genuine cold first connect (no spurious reconnect backfill).
         hadPreviousConnection = false
     }
 
@@ -408,11 +423,12 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     /// Stops the heartbeat and tears down the socket explicitly so the
     /// resume path cannot be fooled by a stale `isConnected == true`
     /// flag. iOS suspension kills the WebSocket silently; without an
-    /// explicit disconnect here, `resumeFromBackground()` would guard on
+    /// explicit teardown here, `resumeFromBackground()` would guard on
     /// the stale flag and never reconnect — the feed would stay dark.
+    /// R1 — transport-only suspend KEEPS `hadPreviousConnection` so the
+    /// foreground-resume `.connect` fires `didReconnect`.
     public func prepareForBackground() {
-        stopHeartbeat()
-        disconnect()
+        suspendTransport()
     }
 
     /// Called when the app comes back to `.active`. `prepareForBackground`
@@ -425,10 +441,29 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     }
 
     /// Unconditionally rebuild the socket. Safe to call from any lifecycle
-    /// hook — used to bypass the stale `isConnected` flag.
+    /// hook — used to bypass the stale `isConnected` flag. R1 — suspends the
+    /// transport (not a full disconnect) so `hadPreviousConnection` survives
+    /// the rebuild and the next `.connect` fires `didReconnect`.
     public func forceReconnect() {
-        disconnect()
+        suspendTransport()
         connect()
+    }
+
+    /// Connection-handshake bookkeeping, extracted from the `.connect` handler
+    /// so the reconnect-vs-cold decision is unit-testable without a live socket
+    /// (R1/R2 — mirror of MessageSocketManager.handleConnectionEstablished).
+    /// Fires `didReconnect` when this connection follows a previous one
+    /// (network blip / foreground resume / re-auth) so feed + social state is
+    /// re-synced. Returns whether it was a reconnect.
+    @discardableResult
+    func handleConnectionEstablished() -> Bool {
+        let wasReconnect = hadPreviousConnection
+        hadPreviousConnection = true
+        reconnectAttempt = 0
+        if wasReconnect {
+            DispatchQueue.main.async { [weak self] in self?.didReconnect.send(()) }
+        }
+        return wasReconnect
     }
 
     // MARK: - Heartbeat
@@ -666,8 +701,9 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
 
         socket.on(clientEvent: .connect) { [weak self] _, _ in
             guard let self else { return }
-            self.reconnectAttempt = 0
-            self.hadPreviousConnection = true
+            // R1/R2 — records the connection and fires `didReconnect` when this
+            // follows a previous connection (resume / network-back / re-auth).
+            self.handleConnectionEstablished()
             DispatchQueue.main.async {
                 self.isConnected = true
                 self.connectionState = .connected
