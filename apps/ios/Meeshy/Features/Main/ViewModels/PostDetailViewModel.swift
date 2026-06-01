@@ -240,6 +240,10 @@ class PostDetailViewModel: ObservableObject {
     /// post) are swallowed by the dispatcher.
     func likePost() async {
         guard var current = post else { return }
+        // Snapshot pre-mutation state so both the synchronous enqueue-refusal
+        // path and the async `.exhausted` observer roll back to it.
+        let wasLiked = current.isLiked
+        let priorLikes = current.likes
         let nowLiked = !current.isLiked
         current.isLiked = nowLiked
         current.likes += nowLiked ? 1 : -1
@@ -252,12 +256,47 @@ class PostDetailViewModel: ObservableObject {
         )
         do {
             try await offlineQueue.enqueue(.toggleLikePost, payload: payload, conversationId: nil)
+            // R5 — roll back the optimistic like if the outbox exhausts its
+            // retry budget (server permanently rejects). Without this the toggle
+            // stays stuck "liked" forever even though the server never accepted it.
+            observeOutcome(cmid: cmid, rollback: { [weak self] in
+                self?.restoreLike(isLiked: wasLiked, likes: priorLikes)
+            }, toast: "Erreur lors du like")
         } catch {
             // Roll back optimistic state if the outbox refuses the row.
-            current.isLiked = !nowLiked
-            current.likes += nowLiked ? -1 : 1
-            post = current
+            restoreLike(isLiked: wasLiked, likes: priorLikes)
             FeedbackToastManager.shared.showError("Erreur lors du like")
+        }
+    }
+
+    /// Restores the loaded post's like state to a captured snapshot. Shared by
+    /// the synchronous enqueue-refusal path and the async `.exhausted` observer.
+    private func restoreLike(isLiked: Bool, likes: Int) {
+        guard var current = post else { return }
+        current.isLiked = isLiked
+        current.likes = likes
+        post = current
+    }
+
+    /// Subscribes to the injected queue's `outcomeStream(for: cmid)` and runs
+    /// `rollback` if the OutboxFlusher escalates the row to `.exhausted` (retry
+    /// budget spent — the server permanently rejected it). `.applied` is a no-op
+    /// (the optimistic state is already final). Fire-and-forget Task; the stream
+    /// is single-shot so the for-await ends after one event.
+    private func observeOutcome(
+        cmid: String,
+        rollback: @escaping @MainActor () -> Void,
+        toast: String
+    ) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let stream = await self.offlineQueue.outcomeStream(for: cmid)
+            for await event in stream {
+                if case .exhausted = event {
+                    rollback()
+                    FeedbackToastManager.shared.showError(toast)
+                }
+            }
         }
     }
 
@@ -326,6 +365,16 @@ class PostDetailViewModel: ObservableObject {
         do {
             try await offlineQueue.enqueue(.createComment, payload: payload, conversationId: post.id)
             try? await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
+
+            // R5 — roll back the optimistic comment if the outbox exhausts its
+            // retry budget (server permanently rejects). The synchronous catch
+            // below only covers an enqueue refusal; without this observer a
+            // permanently-failing comment stays in the list forever.
+            observeOutcome(cmid: cmid, rollback: { [weak self] in
+                guard let self else { return }
+                self.comments = snapshot
+                self.post?.commentCount = snapshotCount
+            }, toast: "Erreur lors de l'envoi du commentaire")
         } catch {
             comments = snapshot
             self.post?.commentCount = snapshotCount

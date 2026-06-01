@@ -52,7 +52,7 @@ Backlog frais issu d'un sweep (cache SWR / reconnect-realtime / optimistic-rollb
 - [~] **R2** (P1) — **R2-core (SDK) FAIT** : `SocialSocketManager.didReconnect` publisher + seam `handleConnectionEstablished()` (fire sur reconnect), `.connect` handler câblé. 4 tests `SocialSocketReconnectLifecycleTests` (cold/reconnect/disconnect/forceReconnect) GREEN + build. **Reste R2-app** : observer `SocialSocketManager.didReconnect` côté app (FeedViewModel/FeedSyncEngine) → backfill posts/réactions manqués au reconnect (défini par le futur SocialSyncEngine ; medium, app).
 - [~] **R3** (P1, sdk) — **VÉRIFIÉ** : `saveSorted` (l.1043) ne `throw` PAS, il **swallow** l'erreur `cache.conversations.save` (catch+log) → `syncSinceLastCheckpoint` atteint TOUJOURS `lastSyncTimestamp = Date()` même si le save a silencieusement échoué → conversations non-persistées + watermark avancé → **mises à jour perdues** (jamais re-fetchées). Fix : `saveSorted` retourne `@discardableResult Bool`, watermark avancé seulement si `saved` (+ capturer `syncTime` avant le fetch pour couvrir la fenêtre). **DÉFÉRÉ (test-seam)** : `ConversationSyncEngine` prend un `CacheCoordinator` concret (pas de protocole) → forcer un échec GRDB en test = pas faisable sans abstraction de fault-injection (gros refactor, pas un petit chantier). À reprendre avec un seam de cache mockable.
 - [x] **R6/R7** (P1, app) — `FeedViewModel.likePost`+`sendComment` rollback sur `.exhausted`. ✅ Helper `observeOutcome(cmid:rollback:toast:)` (miroir RequestsViewModel, via injected `offlineQueue`) + `restoreLike` snapshot partagé sync-refusal/async-exhausted. 3 tests (`test_likePost_rollsBack_whenOutcomeExhausted`, `..._doesNotRollBack_whenOutcomeApplied`, `test_sendComment_rollsBack_whenOutcomeExhausted`) + helper `waitForContinuation`. Suite FeedViewModelTests verte (aucune régression).
-- [ ] **R4/R5** (P1, app) — Même pattern pour `PostDetailViewModel.likePost`+`sendComment` (sibling de R6/R7). Réutiliser le helper `observeOutcome` établi. Mockable via `MockOfflineQueue.emitOutcome`.
+- [x] **R4/R5** (P1, app) — `PostDetailViewModel.likePost`+`sendComment` rollback sur `.exhausted`. ✅ Même `observeOutcome(cmid:rollback:toast:)` + `restoreLike` snapshot. 3 tests (`test_likePost_rollsBack_whenOutcomeExhausted`, `..._doesNotRollBack_whenOutcomeApplied`, `test_sendComment_rollsBack_whenOutcomeExhausted`) + `waitForContinuation`. Suite PostDetailViewModelTests verte. ⇒ **Groupe R4-R7 (rollback optimistic `.exhausted`) ÉPUISÉ.**
 
 ### P2 — efficiency / robustesse
 - [ ] **R8** (P2, sdk-isolatable, trivial) — `DiskCacheStore.data(for:)` l.229 utilise `result.value?.first` (déprécié, collapse le signal de fraîcheur) → `result.snapshot()?.first`.
@@ -65,8 +65,9 @@ Backlog frais issu d'un sweep (cache SWR / reconnect-realtime / optimistic-rollb
 
 ### P3 — polish
 - [ ] **R15** (P3, sdk-isolatable) — `ConversationSyncEngine` : clamper `lastSyncTimestamp` à `Date()` (jamais un watermark futur) pour résister à un saut d'horloge NTP/DST arrière.
+- [ ] **R16** (P3, app, reuse) — Le helper `observeOutcome(cmid:rollback:toast:)` existe désormais en 5 copies privées quasi-identiques (RequestsViewModel, UserProfileViewModel, EditProfileViewModel `(cmid:snapshot:)`, FeedViewModel, PostDetailViewModel). Extraire un seul `protocol OutboxOutcomeObserving { var offlineQueue: OfflineQueueing { get } }` + extension default `observeOutcome` (app-side, pas SDK — c'est de l'orchestration UX). Refactor à isofonction, couvert par les tests existants des 5 VMs. À faire en chantier dédié (touche 5 fichiers).
 
-**Prochain : R1** (P1, sdk-isolatable, miroir T1, débloqué).
+**Prochain : R8** (P2 sdk trivial `DiskCacheStore.value→snapshot()`) ou R9/R10/R13 (events socket non-câblés, app). R3 déféré (test-seam).
 
 ## Review log
 _(rempli au fil des tâches)_
