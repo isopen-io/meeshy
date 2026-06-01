@@ -199,10 +199,18 @@ export class RedisDeliveryQueue {
     let delivered = 0;
 
     for (const id of readyIds) {
+      // Claim atomique : seul le poll qui retire l'id du sorted set (zrem == 1)
+      // le livre. Empêche un poll concurrent (réentrance setInterval pendant un
+      // deliver() lent) de re-livrer le même item → double delivery des
+      // messages/réactions de l'agent.
+      const claimed = await this.redis.zrem(SORTED_SET_KEY, id);
+      if (claimed !== 1) {
+        continue; // déjà réclamé par un poll concurrent
+      }
+
       const raw = await this.redis.get(this.itemKey(id));
       if (!raw) {
-        await this.redis.zrem(SORTED_SET_KEY, id);
-        continue;
+        continue; // données absentes (TTL/orphelin) — déjà retiré du set ci-dessus
       }
 
       const item: RedisDeliveryItem = JSON.parse(raw);

@@ -368,6 +368,22 @@ describe('RedisDeliveryQueue — poll delivers ready items', () => {
     expect(remaining).toBe(0);
   });
 
+  it('does not double-deliver when two polls run concurrently (atomic claim)', async () => {
+    const redis = createMockRedis();
+    const publisher = makePublisher();
+    const queue = new RedisDeliveryQueue(redis as any, publisher, makePersistence());
+
+    await queue.enqueue('conv-1', makeMessage({ delaySeconds: 0 }));
+
+    // setInterval ne attend pas le poll async précédent : si deliver() est lent
+    // (réseau), un poll concurrent peut re-livrer le même item. Le claim
+    // atomique (zrem avant deliver) doit garantir une seule livraison.
+    const [d1, d2] = await Promise.all([queue.poll(), queue.poll()]);
+
+    expect(d1 + d2).toBe(1);
+    expect(publisher.publish).toHaveBeenCalledTimes(1);
+  });
+
   it('delivers reactions via publishReaction', async () => {
     const redis = createMockRedis();
     const publisher = makePublisher();
