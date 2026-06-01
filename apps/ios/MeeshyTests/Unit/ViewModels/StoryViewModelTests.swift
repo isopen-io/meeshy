@@ -978,4 +978,43 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertEqual(sut.storyGroups[0].stories[0].reactionCount, 2,
                        "le sink story:unreacted doit décrémenter via applyStoryReactionDelta")
     }
+
+    // MARK: - StoryCoverThumbnail (local-first tray cover, hybrid Phase 1)
+
+    func test_storyCoverThumbnail_cacheKey_isSyntheticAndStoryScoped() {
+        XCTAssertEqual(StoryCoverThumbnail.cacheKey(storyId: "abc123"), "story-cover:abc123")
+        // Distinct per story so covers never collide; synthetic scheme so it never
+        // collides with a media-URL cache entry.
+        XCTAssertNotEqual(StoryCoverThumbnail.cacheKey(storyId: "a"),
+                          StoryCoverThumbnail.cacheKey(storyId: "b"))
+    }
+
+    func test_preferredCoverURL_prefersLocalComposite_overServerThumbnail() {
+        let local = URL(fileURLWithPath: "/tmp/story-cover.jpg")
+        let resolved = StoryCoverThumbnail.preferredCoverURLString(
+            localCover: local, serverThumbnailUrl: "https://cdn/x.jpg",
+            mediaUrl: "https://cdn/raw.mp4", avatarURL: "https://cdn/avatar.png")
+        XCTAssertEqual(resolved, local.absoluteString,
+                       "local composite (captures text/drawing) must win over the server thumbnail")
+    }
+
+    func test_preferredCoverURL_fallbackChain_whenNoLocalCover() {
+        // server thumb wins when no local cover
+        XCTAssertEqual(
+            StoryCoverThumbnail.preferredCoverURLString(
+                localCover: nil, serverThumbnailUrl: "https://cdn/thumb.jpg",
+                mediaUrl: "https://cdn/raw.mp4", avatarURL: "av"),
+            "https://cdn/thumb.jpg")
+        // empty server thumb is skipped → media url
+        XCTAssertEqual(
+            StoryCoverThumbnail.preferredCoverURLString(
+                localCover: nil, serverThumbnailUrl: "",
+                mediaUrl: "https://cdn/raw.mp4", avatarURL: "av"),
+            "https://cdn/raw.mp4")
+        // nothing but avatar
+        XCTAssertEqual(
+            StoryCoverThumbnail.preferredCoverURLString(
+                localCover: nil, serverThumbnailUrl: nil, mediaUrl: nil, avatarURL: "av"),
+            "av")
+    }
 }

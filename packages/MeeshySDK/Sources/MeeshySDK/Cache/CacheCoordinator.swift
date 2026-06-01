@@ -120,6 +120,14 @@ public actor CacheCoordinator {
         shared.images.cachedFileURL(for: urlString)
     }
 
+    /// Synchronous local file URL for a `thumbnails`-store key — e.g. a story
+    /// cover composite rendered at publish (`StoryCoverThumbnail.cacheKey`). Lets
+    /// a View (MainActor) read the cover without an actor hop. Mirrors
+    /// `imageLocalFileURL` / `videoLocalFileURL`.
+    nonisolated public static func thumbnailLocalFileURL(for key: String) -> URL? {
+        shared.thumbnails.cachedFileURL(for: key)
+    }
+
     /// Configures memory caps for the image pipeline. Call once at app launch.
     ///
     /// Sets:

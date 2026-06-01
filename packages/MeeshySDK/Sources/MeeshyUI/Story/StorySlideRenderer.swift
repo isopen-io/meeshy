@@ -16,12 +16,13 @@ public enum StorySlideRenderer {
     public static func renderComposite(
         slide: StorySlide,
         bgImage: UIImage?,
-        loadedImages: [String: UIImage] = [:]
+        loadedImages: [String: UIImage] = [:],
+        size: CGSize = CGSize(width: 100, height: 178)
     ) -> UIImage? {
-        // ThumbHash only encodes ~32x32 average colors — low res is fine
-        let w: CGFloat = 100
-        let h: CGFloat = 178  // ~9:16 story aspect ratio
-        let size = CGSize(width: w, height: h)
+        // Default ~100x178 (9:16) is enough for a ThumbHash (~32x32 avg colours).
+        // Callers needing a crisp preview — the story-tray cover thumbnail that must
+        // show ALL composer layers (text + drawing + media) — pass a larger `size`.
+        // Every layer draw scales relative to `size`, so geometry stays correct.
 
         let renderer = UIGraphicsImageRenderer(size: size)
         let base = renderer.image { ctx in

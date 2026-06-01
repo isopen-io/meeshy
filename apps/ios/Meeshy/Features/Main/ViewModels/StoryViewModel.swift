@@ -5,6 +5,39 @@ import os
 import MeeshySDK
 import MeeshyUI
 
+/// Local-first story-cover thumbnail (hybrid Phase 1).
+///
+/// The story tray/feed normally shows a SERVER-generated `thumbnailUrl` built from
+/// the raw background asset — which can never contain the composer's text/drawing
+/// overlays (those live as JSON effects, never baked: RAW-publish / Prisme). So on
+/// send we render the FULL slide composite (bg incl. video frame + text + drawing +
+/// media + stickers + filter, via `StorySlideRenderer.renderComposite`) and cache it
+/// locally, keyed by the published story id. The tray prefers this local cover for
+/// the author's own stories — instant, no backend, no baked upload. Other viewers
+/// keep the server thumbnail until Phase 2 (baked cover upload) ships.
+enum StoryCoverThumbnail {
+    /// Pixel size of the cached cover — 9:16, crisp enough for the tray ring avatar.
+    static let renderSize = CGSize(width: 270, height: 480)
+
+    /// Disk-cache key (in `CacheCoordinator.thumbnails`) for a story's local cover.
+    /// Synthetic scheme so it never collides with a media-URL cache entry.
+    static func cacheKey(storyId: String) -> String { "story-cover:\(storyId)" }
+
+    /// Tray cover resolution order: locally-rendered composite (captures every layer)
+    /// → server thumbnail → raw media URL → author avatar. Pure + testable.
+    static func preferredCoverURLString(
+        localCover: URL?,
+        serverThumbnailUrl: String?,
+        mediaUrl: String?,
+        avatarURL: String?
+    ) -> String? {
+        if let localCover { return localCover.absoluteString }
+        if let t = serverThumbnailUrl, !t.isEmpty { return t }
+        if let u = mediaUrl, !u.isEmpty { return u }
+        return avatarURL
+    }
+}
+
 @MainActor
 class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// Versioned cache key for the home tray story list. Bump the suffix
@@ -915,6 +948,23 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             )
 
             newPostIds.append(post.id)
+
+            // Local-first cover (hybrid Phase 1): render the FULL composite of this
+            // slide — text + drawing + media + stickers + filter, including a video
+            // background's poster frame (it.26) — and cache it under the published
+            // story id. The tray prefers it so the author instantly sees their fully
+            // composed story, instead of the server thumbnail (raw bg, no overlays).
+            if let cover = StorySlideRenderer.renderComposite(
+                slide: slide,
+                bgImage: upload.slideImages[slide.id],
+                loadedImages: upload.loadedImages,
+                size: StoryCoverThumbnail.renderSize
+            ), let jpeg = cover.jpegData(compressionQuality: 0.85) {
+                await CacheCoordinator.shared.thumbnails.store(
+                    jpeg, for: StoryCoverThumbnail.cacheKey(storyId: post.id)
+                )
+            }
+
             let media = buildFeedMedia(from: post, fallback: uploadResult)
             let newItem = StoryItem(
                 id: post.id, content: post.content, media: media,

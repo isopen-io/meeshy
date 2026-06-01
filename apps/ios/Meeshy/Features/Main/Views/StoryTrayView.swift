@@ -249,13 +249,18 @@ struct StoryTrayView: View {
 /// pour pouvoir s'appeler depuis `MyStoryButton` aussi.
 fileprivate func latestStoryThumbnailURL(_ group: StoryGroup) -> String? {
     guard let lastStory = group.stories.last else { return group.avatarURL }
-    if let thumb = lastStory.media.first?.thumbnailUrl, !thumb.isEmpty {
-        return thumb
-    }
-    if let url = lastStory.media.first?.url, !url.isEmpty {
-        return url
-    }
-    return group.avatarURL
+    // Local-first: a composite cover rendered at publish (text + drawing + all
+    // layers) wins over the server thumbnail (raw bg, no overlays). Synchronous
+    // existence check — no actor hop, safe in the View body.
+    let localCover = CacheCoordinator.thumbnailLocalFileURL(
+        for: StoryCoverThumbnail.cacheKey(storyId: lastStory.id)
+    )
+    return StoryCoverThumbnail.preferredCoverURLString(
+        localCover: localCover,
+        serverThumbnailUrl: lastStory.media.first?.thumbnailUrl,
+        mediaUrl: lastStory.media.first?.url,
+        avatarURL: group.avatarURL
+    )
 }
 
 // MARK: - My Story Button (extracted struct to avoid PAC issues with @ViewBuilder + @EnvironmentObject)
