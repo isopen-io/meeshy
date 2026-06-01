@@ -192,8 +192,17 @@ public struct StoryComposerView: View {
 
     /// Hauteur (redimensionnable) du panneau DESSIN du band partagé, pilotée par le
     /// drag du grabber (`ComposerBottomBand`). Tirer vers le haut agrandit le panneau
-    /// (liste des traits) et rétrécit le canvas scalé au-dessus ; vers le bas l'inverse.
+    /// (liste des traits) ; vers le bas le réduit. En mode dessin (Option A) le canvas
+    /// reste PLEIN — ce drawer flotte par-dessus, il ne rétrécit plus le canvas.
     @State private var composerBandHeight: CGFloat = 280
+
+    /// Drawer dessin replié « totalement » : seul le grabber reste visible, le canvas
+    /// est 100 % visible et le contrôleur flottant (`StoryDrawingToolbar`) persiste
+    /// (spec user 2026-06-01 — réduire le drawer NE quitte PAS le mode dessin).
+    @State private var drawingDrawerCollapsed = false
+
+    /// Hauteur du drawer dessin une fois replié (poignée seule).
+    static let drawingDrawerGrabberHeight: CGFloat = 38
 
     @State private var showDiscardAlert = false
     @State private var showRestoreDraftAlert = false
@@ -314,7 +323,7 @@ public struct StoryComposerView: View {
             // `drawingEditingMode == .inactive`. Les bulles (pinceau/couleur/
             // épaisseur/lissage) flottent sur le canvas, levées au-dessus du band
             // partagé (`bottomInset`).
-            StoryDrawingToolbar(viewModel: viewModel, bottomInset: bottomPanelHeight)
+            StoryDrawingToolbar(viewModel: viewModel, bottomInset: drawingDrawerHeight)
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.85),
                    value: viewModel.textEditingMode)
@@ -335,6 +344,9 @@ public struct StoryComposerView: View {
                     bandStateMachine.tapTile(.drawing)
                 }
                 areFabsVisible = true
+                // Entrer en dessin réaffiche le drawer (liste des traits) déplié ;
+                // l'utilisateur peut le replier ensuite pour libérer le canvas.
+                drawingDrawerCollapsed = false
             } else {
                 viewModel.exitDrawingEditingMode()
                 if bandStateMachine.state.activeCategory == .drawing {
@@ -656,6 +668,7 @@ public struct StoryComposerView: View {
                     resizableBandHeight: $composerBandHeight,
                     bandMinHeight: Self.composerBandMinHeight,
                     bandMaxHeight: Self.composerBandMaxHeight,
+                    drawingDrawerCollapsed: $drawingDrawerCollapsed,
                     onOpenMediaCrop: { id in openMediaEditor(elementId: id) }
                 )
             }
@@ -1217,19 +1230,19 @@ public struct StoryComposerView: View {
         // vérité partagée avec le reader), centré dans la zone disponible — les
         // bandes letterbox haut/bas accueillent la top bar et le toolbar flottant.
         GeometryReader { proxy in
-            // Quand un panneau d'outil redimensionnable est ouvert en bas
-            // (`bottomPanelHeight`), le canvas 9:16 est ajusté dans la zone
-            // restante AU-DESSUS du panneau et y est centré — il reste donc
-            // entièrement visible, et l'utilisateur peut placer du contenu
-            // partout dessus (spec user 2026-06-01). Sans panneau ouvert,
-            // `bottomPanelHeight == 0` → plein écran 9:16 centré, comportement
-            // d'origine.
-            // Quand la bande est ouverte (scalé), le canvas descend SOUS la zone
-            // Dynamic Island / top bar (`topReserve`) et reçoit des coins arrondis.
-            // En plein écran (bande fermée) il occupe tout l'espace, sans arrondi.
-            let scaled = bottomPanelHeight > 0
+            // En mode dessin (`canvasIsInset`), le canvas 9:16 occupe TOUTE la zone
+            // sous la top bar (`topReserve`) et y est centré — il reste donc plein
+            // et l'utilisateur dessine sur tout le viewport (WYSIWYG preview). Le
+            // drawer (liste des traits) flotte par-dessus le bas et se replie pour
+            // libérer le canvas (spec user 2026-06-01).
+            // Option A dessin : le canvas reste PLEIN au bas (le drawer flotte
+            // par-dessus, il ne le rétrécit plus) — seul un top reserve le fait
+            // descendre SOUS la top bar et lui donne des coins arrondis. Hors
+            // dessin (`canvasIsInset == false`) → plein écran 9:16 centré sans
+            // arrondi, comportement d'origine.
+            let scaled = canvasIsInset
             let topReserve: CGFloat = scaled ? max(proxy.safeAreaInsets.top, 59) + 12 : 0
-            let regionHeight = max(160, proxy.size.height - bottomPanelHeight - topReserve)
+            let regionHeight = max(160, proxy.size.height - topReserve)
             let fit = CanvasGeometry.aspectFitSize(in: CGSize(width: proxy.size.width, height: regionHeight))
             canvasCore
                 .frame(width: fit.width, height: fit.height)
@@ -1276,24 +1289,28 @@ public struct StoryComposerView: View {
                 .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
                 .offset(y: -canvasEditShift)
                 .animation(.spring(response: 0.32, dampingFraction: 0.85), value: canvasEditShift)
-                .animation(.spring(response: 0.32, dampingFraction: 0.85), value: bottomPanelHeight)
+                .animation(.spring(response: 0.32, dampingFraction: 0.85), value: canvasIsInset)
         }
         .ignoresSafeArea()
     }
 
-    /// Hauteur réservée en bas par le band PARTAGÉ (`ComposerBottomBand`) quand
-    /// l'outil DESSIN est actif : scale le canvas 9:16 au-dessus (zone dessinable
-    /// visible) ET lève les contrôleurs flottants (`StoryDrawingToolbar`) au-dessus
-    /// du band. Constante alignée sur la hauteur du band en mode dessin
-    /// (grabber + `drawingPanel`). Le dessin n'a plus de bande dédiée `DrawingBand`.
-    private var bottomPanelHeight: CGFloat {
-        // Le band affiche le panneau DESSIN dès que les contrôleurs sont actifs OU
-        // que la machine d'état pointe sur le dessin. On réserve alors la hauteur
-        // (redimensionnable) du panneau + le chrome du band (grabber + header +
-        // paddings ≈ 40) pour scaler le canvas au-dessus ET lever les bulles.
-        let bandShowsDrawing = viewModel.drawingEditingMode.isActive
+    /// Le mode DESSIN est actif (contrôleurs flottants OU machine d'état sur dessin).
+    /// En dessin (Option A, spec user 2026-06-01) le canvas reste PLEIN et seul un
+    /// top reserve + l'arrondi s'appliquent (le drawer flotte par-dessus le bas du
+    /// canvas — il ne le rétrécit plus). C'est ce qui rend le dessin WYSIWYG avec la
+    /// preview/le reader (le drawing remplit tout le viewport).
+    private var canvasIsInset: Bool {
+        viewModel.drawingEditingMode.isActive
             || bandStateMachine.state.activeCategory == .drawing
-        return bandShowsDrawing ? composerBandHeight + 40 : 0
+    }
+
+    /// Hauteur visible du drawer dessin (band partagé) — sert UNIQUEMENT à lever les
+    /// contrôleurs flottants (`StoryDrawingToolbar`) juste au-dessus du drawer. Replié
+    /// « totalement » = poignée seule ; déplié = panneau (liste des traits) + chrome.
+    /// Ne rétrécit PLUS le canvas (Option A).
+    private var drawingDrawerHeight: CGFloat {
+        guard canvasIsInset else { return 0 }
+        return drawingDrawerCollapsed ? Self.drawingDrawerGrabberHeight : composerBandHeight + 40
     }
 
     static let composerBandMinHeight: CGFloat = 160

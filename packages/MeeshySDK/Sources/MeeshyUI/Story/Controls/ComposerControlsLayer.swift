@@ -15,11 +15,15 @@ public struct ComposerControlsLayer: View {
     @Binding var showAudioDocumentPicker: Bool
     @Binding var showVoiceRecorderSheet: Bool
 
-    /// Hauteur redimensionnable du panneau DESSIN (drag du grabber → pilote aussi le
-    /// scale du canvas au-dessus côté `StoryComposerView`).
+    /// Hauteur redimensionnable du panneau DESSIN (drag du grabber). En mode dessin
+    /// (Option A) le canvas reste PLEIN — ce drawer flotte par-dessus son bas.
     @Binding var resizableBandHeight: CGFloat
     let bandMinHeight: CGFloat
     let bandMaxHeight: CGFloat
+
+    /// Drawer dessin replié « totalement » (poignée seule). Tirer le grabber sous le
+    /// min le replie (sans quitter le dessin) ; le tirer vers le haut le redéplie.
+    @Binding var drawingDrawerCollapsed: Bool
 
     /// Ouvre l'éditeur d'image plein écran pour un média (recadrage/filtres/
     /// ajustements). Seul point d'entrée d'édition média — il n'y a plus de
@@ -37,6 +41,7 @@ public struct ComposerControlsLayer: View {
         resizableBandHeight: Binding<CGFloat>,
         bandMinHeight: CGFloat,
         bandMaxHeight: CGFloat,
+        drawingDrawerCollapsed: Binding<Bool>,
         onOpenMediaCrop: @escaping (String) -> Void
     ) {
         self.viewModel = viewModel
@@ -49,6 +54,7 @@ public struct ComposerControlsLayer: View {
         self._resizableBandHeight = resizableBandHeight
         self.bandMinHeight = bandMinHeight
         self.bandMaxHeight = bandMaxHeight
+        self._drawingDrawerCollapsed = drawingDrawerCollapsed
         self.onOpenMediaCrop = onOpenMediaCrop
     }
 
@@ -172,12 +178,17 @@ public struct ComposerControlsLayer: View {
                     minHeight: bandMinHeight,
                     maxHeight: bandMaxHeight,
                     onResizeDismiss: {
-                        // Grabber tiré sous le min → on quitte le dessin, on cache le
-                        // band et on réaffiche les FABs.
-                        viewModel.activeTool = nil
-                        viewModel.exitDrawingEditingMode()
-                        bandStateMachine.reset()
-                        areFabsVisible = true
+                        // Grabber tiré sous le min → on REPLIE le drawer (poignée
+                        // seule) SANS quitter le dessin : le contrôleur flottant
+                        // (bulles) reste visible et le canvas devient 100 % visible
+                        // (spec user 2026-06-01). Pour quitter le dessin → bouton
+                        // dismiss des bulles (`StoryDrawingToolbar`).
+                        drawingDrawerCollapsed = true
+                    },
+                    drawingCollapsed: isBandResizable && drawingDrawerCollapsed,
+                    onExpandDrawer: {
+                        // Grabber (replié) tiré vers le haut → on redéplie le drawer.
+                        drawingDrawerCollapsed = false
                     }
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))

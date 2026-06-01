@@ -27,8 +27,13 @@ struct ComposerBottomBand: View {
     var minHeight: CGFloat = 160
     var maxHeight: CGFloat = 540
     /// Appelé quand le grabber est tiré nettement EN-DESSOUS de `minHeight` :
-    /// le band se cache et les FABs réapparaissent (drag-to-dismiss).
+    /// en mode dessin (Option A) cela REPLIE le drawer (poignée seule) sans quitter
+    /// le dessin (le canvas devient 100 % visible) — cf. `drawingCollapsed`.
     var onResizeDismiss: (() -> Void)? = nil
+    /// `true` (dessin replié) → la bande n'affiche QUE sa poignée ; tirer la poignée
+    /// vers le haut rappelle `onExpandDrawer` pour ré-afficher la liste des traits.
+    var drawingCollapsed: Bool = false
+    var onExpandDrawer: (() -> Void)? = nil
     @State private var dragStartHeight: CGFloat?
 
     @Environment(\.colorScheme) private var colorScheme
@@ -78,6 +83,10 @@ struct ComposerBottomBand: View {
         VStack(spacing: 0) {
             grabber
 
+            // Drawer dessin replié « totalement » → poignée seule (le canvas est
+            // 100 % visible). Le panneau (liste des traits) est masqué ; tirer la
+            // poignée vers le haut le ré-affiche (`onExpandDrawer`).
+            if !drawingCollapsed {
             // Panel content — keyed by state so the old panel slides
             // down and the new one slides up from the bottom.
             Group {
@@ -140,8 +149,9 @@ struct ComposerBottomBand: View {
                 insertion: .move(edge: .bottom).combined(with: .opacity),
                 removal: .move(edge: .bottom).combined(with: .opacity)
             ))
+            } // if !drawingCollapsed
         }
-        .padding(.bottom, 16) // Breathing room above home indicator
+        .padding(.bottom, drawingCollapsed ? 8 : 16) // Breathing room above home indicator
         .frame(maxWidth: .infinity)
         .background(
             UnevenRoundedRectangle(
@@ -178,6 +188,7 @@ struct ComposerBottomBand: View {
         )
         .shadow(color: .black.opacity(0.25), radius: 14, y: -6)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: stateKey)
+        .animation(.spring(response: 0.32, dampingFraction: 0.85), value: drawingCollapsed)
     }
 
     /// Poignée du band. En mode redimensionnable (dessin), drag vertical = RESIZE :
@@ -196,9 +207,21 @@ struct ComposerBottomBand: View {
             .accessibilityLabel("Poignée de la barre d'outils")
             .accessibilityAddTraits(.isButton)
 
-        if let height = resizableHeight {
+        if drawingCollapsed {
+            // Drawer replié : la poignée seule reste ; un drag vers le HAUT le
+            // redéploie (la liste des traits réapparaît). Un tap aussi (pratique).
             handle
-                .accessibilityHint("Faites glisser vers le haut pour agrandir, vers le bas pour réduire.")
+                .accessibilityHint("Faites glisser vers le haut pour afficher la liste des traits.")
+                .onTapGesture { onExpandDrawer?() }
+                .gesture(
+                    DragGesture(minimumDistance: 4)
+                        .onEnded { value in
+                            if value.translation.height < -24 { onExpandDrawer?() }
+                        }
+                )
+        } else if let height = resizableHeight {
+            handle
+                .accessibilityHint("Faites glisser vers le haut pour agrandir, vers le bas pour réduire ou replier.")
                 .gesture(
                     DragGesture(minimumDistance: 2)
                         .onChanged { value in
@@ -210,7 +233,8 @@ struct ComposerBottomBand: View {
                             let base = dragStartHeight ?? height.wrappedValue
                             let proposed = base - value.translation.height
                             dragStartHeight = nil
-                            // Tiré nettement sous le min → cacher le band + révéler les FABs.
+                            // Tiré nettement sous le min → REPLIE le drawer (poignée
+                            // seule) sans quitter le dessin (cf. `onResizeDismiss`).
                             if proposed < minHeight - 50 { onResizeDismiss?() }
                         }
                 )
