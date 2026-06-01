@@ -7,7 +7,11 @@ import MeeshySDK
 ///
 /// Rules:
 ///  1. Only attachments with `type == .audio` are considered.
-///  2. Self-audios (sender == `currentUserId`) are excluded.
+///  2. Self-audios (sender == `currentUserId`) are excluded — EXCEPT the
+///     cursor message (the one containing `startingAfterAttachmentId`). The
+///     user can tap-play their own multi-audio message, and the tail must
+///     include that same message's later sibling tracks so auto-advance walks
+///     through tracks #2/#3 (BUG F).
 ///  3. Attachments whose id is in `listenedAttachmentIds` are excluded.
 ///  4. When a cursor (`startingAfterAttachmentId`) is provided, only audios
 ///     that come strictly AFTER it (by `receivedAt`, then by message
@@ -28,9 +32,16 @@ public enum AudioQueueBuilder {
             messages.first { $0.attachments.contains(where: { $0.id == cursorId }) }
                 .map(\.createdAt)
         }
+        // BUG F — the cursor message is exempt from the self-author filter so
+        // the user's own multi-audio message yields its sibling tracks into
+        // the tail (auto-advance through #2/#3). Other self-authored messages
+        // stay excluded.
+        let cursorMessageIdForSelfExemption: String? = startingAfterAttachmentId
+            .flatMap { findMessageId(for: $0, in: messages) }
 
         let candidates: [QueuedAudio] = messages.flatMap { message -> [QueuedAudio] in
-            guard message.senderId != currentUserId else { return [] }
+            let isCursorMessage = message.id == cursorMessageIdForSelfExemption
+            guard message.senderId != currentUserId || isCursorMessage else { return [] }
             return message.attachments.compactMap { att -> QueuedAudio? in
                 guard att.type == .audio else { return nil }
                 guard !listenedAttachmentIds.contains(att.id) else { return nil }

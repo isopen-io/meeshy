@@ -24,10 +24,27 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     @Published public var attachmentId: String?
 
     private var player: AVAudioPlayer?
-    private var timer: Timer?
-    private var loadTask: Task<Void, Never>?
+    private var timer: Timer? {
+        didSet { cleanupHandle.timer = timer }
+    }
+    private var loadTask: Task<Void, Never>? {
+        didSet { cleanupHandle.loadTask = loadTask }
+    }
     public private(set) var currentUrl: String?
     private var listenStartTime: Date?
+
+    /// Holds thread-safe-to-cancel handles (`Timer.invalidate()` /
+    /// `Task.cancel()`) so `deinit` — which may run off the main thread — can
+    /// release them WITHOUT `MainActor.assumeIsolated` (a precondition crash
+    /// off-main, see lesson feedback_swift6_concurrency_pitfalls). Kept in
+    /// sync with the @MainActor stored props via their `didSet`. Marked
+    /// `nonisolated(unsafe)` because the contained operations are themselves
+    /// thread-safe and we only ever cancel/invalidate from deinit.
+    private final class CleanupHandle {
+        nonisolated(unsafe) var timer: Timer?
+        nonisolated(unsafe) var loadTask: Task<Void, Never>?
+    }
+    private let cleanupHandle = CleanupHandle()
 
     public override init() {
         super.init()
@@ -143,6 +160,11 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         isPlaying = false
         progress = 0
         currentTime = 0
+        // B2 fix — clear the listen analytics window so a fresh `play()` of a
+        // different track does not inherit the prior track's start time and
+        // post `reportListenProgress` against the wrong attachment. The new
+        // track's `listenStartTime` is set in `playData(_:)` on actual start.
+        listenStartTime = nil
         loadTask?.cancel()
         loadTask = nil
     }
@@ -280,11 +302,13 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         }
     }
 
+    // C fix — `Timer.invalidate()` and `Task.cancel()` are thread-safe, so we
+    // call them directly. `MainActor.assumeIsolated` from a non-main thread is
+    // a precondition crash (see lesson feedback_swift6_concurrency_pitfalls:
+    // @MainActor deinit pitfall) and the last release can happen off-main.
     deinit {
-        MainActor.assumeIsolated {
-            timer?.invalidate()
-            loadTask?.cancel()
-        }
+        cleanupHandle.timer?.invalidate()
+        cleanupHandle.loadTask?.cancel()
     }
 
     @MainActor public func unregisterFromCoordinator() {
@@ -571,26 +595,42 @@ public struct AudioPlayerView: View {
             if !usesExternalPlayer {
                 player.attachmentId = attachment.id
             }
-            let autoplayUrl = attachment.fileUrl
-            AudioPlaybackManager.registerAutoplay(url: autoplayUrl) { [player] in
-                // Optimistic local audio can never load through the cache
-                // (DiskCacheStore.data(for:) rejects file://) — autoplay it
-                // straight from disk. See Sprint 3 RC3.2.
-                if autoplayUrl.hasPrefix("file://"), let localURL = URL(string: autoplayUrl) {
-                    player.playLocal(url: localURL)
-                } else {
-                    player.play(urlString: autoplayUrl)
+            // BUG A fix — the legacy static autoplay registry is the
+            // auto-advance mechanism ONLY for the owned-engine path. When an
+            // external coordinator engine drives this view, the coordinator
+            // queue is the single source of auto-advance (`advanceQueue`).
+            // Registering here would make the registry stomp the coordinator's
+            // next head after a track finishes (double auto-advance → wrong
+            // track plays). Gate registration on `!usesExternalPlayer` so the
+            // two mechanisms never co-drive the same engine. Unregistration in
+            // `onDisappear` is gated symmetrically.
+            if !usesExternalPlayer {
+                let autoplayUrl = attachment.fileUrl
+                AudioPlaybackManager.registerAutoplay(url: autoplayUrl) { [player] in
+                    // Optimistic local audio can never load through the cache
+                    // (DiskCacheStore.data(for:) rejects file://) — autoplay it
+                    // straight from disk. See Sprint 3 RC3.2.
+                    if autoplayUrl.hasPrefix("file://"), let localURL = URL(string: autoplayUrl) {
+                        player.playLocal(url: localURL)
+                    } else {
+                        player.play(urlString: autoplayUrl)
+                    }
                 }
             }
             loadWaveformSamples()
         }
         .onDisappear {
-            AudioPlaybackManager.unregisterAutoplay(url: attachment.fileUrl)
-            // Symmetrical to onAppear: when an external engine is injected
-            // it is owned by the parent (e.g. ConversationAudioCoordinator)
-            // and survives view hierarchy churn. Unregistering it from
-            // PlaybackCoordinator on every scroll-off would break sibling
-            // bubbles + the coordinator itself.
+            // Symmetrical to onAppear (BUG A fix): only unregister the legacy
+            // autoplay closure if it was registered — i.e. only in the
+            // owned-engine path. Never registered when an external engine
+            // drives the view, so never unregister there.
+            if !usesExternalPlayer {
+                AudioPlaybackManager.unregisterAutoplay(url: attachment.fileUrl)
+            }
+            // When an external engine is injected it is owned by the parent
+            // (e.g. ConversationAudioCoordinator) and survives view hierarchy
+            // churn. Unregistering it from PlaybackCoordinator on every
+            // scroll-off would break sibling bubbles + the coordinator itself.
             if !usesExternalPlayer {
                 player.unregisterFromCoordinator()
             }
@@ -900,7 +940,14 @@ public struct AudioPlayerView: View {
             .animation(.easeInOut(duration: 0.15), value: isActive)
             .animation(.easeInOut(duration: 0.15), value: isPast)
         } else {
-            let activeIdx = segments.firstIndex { player.currentTime >= $0.startTime && player.currentTime < $0.endTime }
+            // BUG D fix — gate active-segment detection on `isPlaying`. On an
+            // idle carousel page `player.currentTime == 0` and segment 0 has
+            // `startTime == 0`, so the unguarded predicate false-highlighted
+            // segment 0 on every idle page. The single-segment branch above is
+            // already gated the same way.
+            let activeIdx = player.isPlaying
+                ? segments.firstIndex { player.currentTime >= $0.startTime && player.currentTime < $0.endTime }
+                : nil
             FlowLayout(spacing: 0) {
                 ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
                     let isActive = index == activeIdx

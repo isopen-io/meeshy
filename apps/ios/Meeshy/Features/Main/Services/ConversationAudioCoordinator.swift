@@ -125,7 +125,16 @@ public final class ConversationAudioCoordinator: ObservableObject {
         startCurrentHead()
     }
 
-    public func togglePlayPause() { engine.togglePlayPause() }
+    public func togglePlayPause() {
+        // BUG E fix — same CallKit guard as `play()`. Without it, toggling
+        // play on an already-loaded engine steals the VoIP audio session
+        // during a call.
+        guard !CallManager.shared.isCallActiveForAudioGuard else {
+            Self.log.info("togglePlayPause() ignored: a CallKit call is active")
+            return
+        }
+        engine.togglePlayPause()
+    }
     public func playNext() { advanceQueue() }
 
     public func close() {
@@ -152,6 +161,14 @@ public final class ConversationAudioCoordinator: ObservableObject {
     // MARK: - Internals
 
     private func startCurrentHead() {
+        // BUG E fix — guard auto-advance + initial play here (the single
+        // engine-start chokepoint reached by both `play()` and
+        // `advanceQueue()`). Without it, a track finishing during a call would
+        // auto-advance and steal the VoIP audio session.
+        guard !CallManager.shared.isCallActiveForAudioGuard else {
+            Self.log.info("startCurrentHead() ignored: a CallKit call is active")
+            return
+        }
         guard let head = queue.first else {
             activeContext = nil
             return

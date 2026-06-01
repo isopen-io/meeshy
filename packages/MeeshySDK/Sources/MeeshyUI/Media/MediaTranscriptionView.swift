@@ -59,19 +59,28 @@ public struct MediaTranscriptionView: View {
     public var accentColor: String = "08D9D6"
     public var maxHeight: CGFloat = 200
     public var onSeek: ((Double) -> Void)? = nil
+    /// BUG D fix — gate active-segment detection on the real playing state.
+    /// When idle, `currentTime == 0` and segment 0's `startTime == 0` would
+    /// false-highlight segment 0. Defaults to `true` for back-compat so
+    /// existing callers that always pass a synchronized `currentTime` keep
+    /// their behavior; callers that can be idle pass the real state.
+    public var isPlaying: Bool = true
 
     @ObservedObject private var theme = ThemeManager.shared
     private var isDark: Bool { theme.mode.isDark }
 
     public init(segments: [TranscriptionDisplaySegment], currentTime: Double,
                 accentColor: String = "08D9D6", maxHeight: CGFloat = 200,
+                isPlaying: Bool = true,
                 onSeek: ((Double) -> Void)? = nil) {
         self.segments = segments; self.currentTime = currentTime
-        self.accentColor = accentColor; self.maxHeight = maxHeight; self.onSeek = onSeek
+        self.accentColor = accentColor; self.maxHeight = maxHeight
+        self.isPlaying = isPlaying; self.onSeek = onSeek
     }
 
     private var activeIndex: Int? {
-        segments.firstIndex { currentTime >= $0.startTime && currentTime < $0.endTime }
+        guard isPlaying else { return nil }
+        return segments.firstIndex { currentTime >= $0.startTime && currentTime < $0.endTime }
     }
 
     public var body: some View {
