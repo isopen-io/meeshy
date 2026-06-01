@@ -21,3 +21,11 @@
 9. **Route tasks in `@MainActor { Task { await ... } }` through a small actor state machine when multiple exit points exist.** Otherwise a race between happy-path completion and OS expiration leads to double-call of `completionHandler`.
 
 10. **Backgrounding is a single state transition — orchestrate it.** Multiple `.background` handlers scattered across the app invariably drift out of sync. A single `BackgroundTransitionCoordinator` with explicit ordering (players → cache → push → sockets → BG tasks → widgets) makes the lifecycle auditable.
+
+## Prod debugging — agent/translator (2026-06-01)
+
+11. **Prefer a maintained library over a hand-rolled parser, even if absent from node_modules.** "Pas de lib dispo" is not a reason to reinvent — `npm view <pkg>` first. For repairing loose LLM JSON, `jsonrepair` (CJS+ESM, zero-dep) handles trailing commas, single quotes, unquoted keys AND truncation (LLM hitting maxTokens) — a custom scanner missed truncation entirely. Reuse > creation (matches the standing feedback memory).
+
+12. **Never label a behavior "by design" without proving it from the product intent.** Claimed the agent's reactions-only output in dead conversations was "expected" — wrong. The Animator's whole purpose is to revive dead conversations by impersonating multiple users. The burst mechanism existed in the prompt but was never wired to low activity. Verify intent (CLAUDE.md, product docs) before excusing a gap as design.
+
+13. **A hung process with thread-count 1 + ~0% CPU + frozen logs = deadlock, not load.** The translator held a global `threading.Lock` (synthesis serialization) across a never-returning `_model.generate()`; all 37 workers piled behind it. Fix: per-call `asyncio.wait_for` watchdog so a stuck synthesis exits the `with lock:` and frees everyone. Caveat: `run_in_executor` threads can't be truly killed — the watchdog breaks the deadlock but leaks the stuck thread (real fix = killable subprocess).
