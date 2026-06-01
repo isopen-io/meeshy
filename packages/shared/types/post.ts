@@ -117,6 +117,13 @@ export interface PostView {
 
 export interface PostCreatedEventData {
   readonly post: Post;
+  /**
+   * Echoed back from the createPost request's `X-Client-Mutation-Id` header so
+   * an offline author can reconcile its optimistic temp post (keyed by the cmid)
+   * with the authoritative server post on the `post:created` broadcast, instead
+   * of rendering a duplicate (U1). Absent for posts created without a cmid.
+   */
+  readonly clientMutationId?: string;
 }
 
 export interface PostUpdatedEventData {

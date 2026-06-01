@@ -140,6 +140,17 @@ describe('SocialEventsHandler', () => {
       expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.POST_CREATED, { post });
     });
 
+    it('should echo the clientMutationId in the payload when provided (U1)', async () => {
+      const post = createMockPost();
+
+      await handler.broadcastPostCreated(post, AUTHOR_ID, 'cmid_offline_post');
+
+      expect(mockIO.emit).toHaveBeenCalledWith(
+        SERVER_EVENTS.POST_CREATED,
+        { post, clientMutationId: 'cmid_offline_post' }
+      );
+    });
+
     it('should use the SERVER_EVENTS.POST_CREATED constant ("post:created")', async () => {
       const post = createMockPost();
       await handler.broadcastPostCreated(post, AUTHOR_ID);
