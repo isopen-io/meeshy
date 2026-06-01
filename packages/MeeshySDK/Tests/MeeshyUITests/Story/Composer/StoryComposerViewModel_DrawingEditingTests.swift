@@ -25,10 +25,21 @@ final class StoryComposerViewModel_DrawingEditingTests: XCTestCase {
         XCTAssertEqual(makeSubject().drawingEditingMode, .inactive)
     }
 
-    func test_enterDrawingEditingMode_setsActiveWithNilStrokeAndTool() {
+    func test_enterDrawingEditingMode_whenNoStrokes_expandsColorPalette() {
         let vm = makeSubject()
         vm.enterDrawingEditingMode()
-        XCTAssertEqual(vm.drawingEditingMode, .active(strokeId: nil, expandedTool: nil))
+        XCTAssertTrue(vm.drawingEditingMode.isActive)
+        XCTAssertNil(vm.drawingEditingMode.selectedStrokeId)
+        XCTAssertEqual(vm.drawingEditingMode.expandedTool, .color)
+    }
+
+    func test_enterDrawingEditingMode_whenStrokesExist_noExpandedPanel() {
+        let vm = makeSubject()
+        vm.drawingStrokes = [stroke(id: "s1")]
+        vm.enterDrawingEditingMode()
+        XCTAssertTrue(vm.drawingEditingMode.isActive)
+        XCTAssertNil(vm.drawingEditingMode.selectedStrokeId)
+        XCTAssertNil(vm.drawingEditingMode.expandedTool)
     }
 
     func test_setExpandedDrawingTool_updatesWhenActive() {

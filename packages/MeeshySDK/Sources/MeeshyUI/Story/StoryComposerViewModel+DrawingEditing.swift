@@ -75,11 +75,15 @@ extension StoryComposerViewModel {
 
     // MARK: Mode transitions
 
-    /// Entre en mode édition de dessin flottant. Aucun trait présélectionné, aucun
-    /// panneau déplié. Idempotent si déjà actif (préserve la sélection/le panneau).
+    /// Entre en mode édition de dessin flottant. Quand aucun trait n'existe encore,
+    /// la liste verticale par-trait est vide : on déplie d'emblée le panneau couleur
+    /// du pinceau actif pour donner accès aux contrôles de dessin directement (sinon
+    /// la barre paraît vide). Quand des traits existent déjà, on ouvre sans panneau
+    /// pour ne pas masquer la liste. Idempotent si déjà actif (préserve la sélection/le panneau).
     func enterDrawingEditingMode() {
         if drawingEditingMode.isActive { return }
-        drawingEditingMode = .active(strokeId: nil, expandedTool: nil)
+        let initialTool: DrawingEditTool? = drawingStrokes.isEmpty ? .color : nil
+        drawingEditingMode = .active(strokeId: nil, expandedTool: initialTool)
     }
 
     /// Sort du mode édition de dessin.
