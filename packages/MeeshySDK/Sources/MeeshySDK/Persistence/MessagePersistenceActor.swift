@@ -45,6 +45,15 @@ public actor MessagePersistenceActor {
     private let writeContinuation: AsyncStream<WriteOperation>.Continuation
     private var processorTask: Task<Void, Never>?
 
+    /// The authenticated user's id. The on-device DB has no userId column and
+    /// the aggregated reaction payload only flags WHICH emojis the current user
+    /// reacted with (`currentUserReactions`), not the reactor's id — so the
+    /// actor must know who "the current user" is to tag their reconstructed
+    /// reaction with the right owner. Set by the app at auth time (see
+    /// `DependencyContainer`); `nil` until then (cold-start reactions simply
+    /// carry no ownership until the next refresh, never the wrong owner).
+    private var currentUserId: String?
+
     enum WriteOperation: Sendable {
         case reconcileBatch([IncomingMessageData])
         /// Buffered ingestion of fully-decoded `APIMessage` payloads. Routes
@@ -83,12 +92,20 @@ public actor MessagePersistenceActor {
         }
     }
 
-    public init(dbWriter: any DatabaseWriter) {
+    public init(dbWriter: any DatabaseWriter, currentUserId: String? = nil) {
         self.dbWriter = dbWriter
+        self.currentUserId = currentUserId
         let (stream, continuation) = AsyncStream.makeStream(of: WriteOperation.self)
         self.writeStream = stream
         self.writeContinuation = continuation
         self.processorTask = nil
+    }
+
+    /// Update the authenticated user's id (login / account switch / logout=nil).
+    /// Used to tag the current user's own reactions during REST ingestion so the
+    /// "I reacted" highlight survives a cache reload.
+    public func setCurrentUserId(_ userId: String?) {
+        currentUserId = userId
     }
 
     // MARK: - Session quiesce (P1 Q3 — logout)
@@ -986,6 +1003,10 @@ public actor MessagePersistenceActor {
         guard !apiMessages.isEmpty else { return }
         let encoder = JSONEncoder()
         let convIds = Set(apiMessages.map(\.conversationId))
+        // Capture the actor-isolated current user id into a Sendable local so
+        // the GRDB write closure can tag the current user's own reactions
+        // without reaching back across the actor isolation boundary.
+        let currentUserId = self.currentUserId
         defer { postMessageStoreRefresh(conversationIds: convIds) }
         try await dbWriter.write { db in
             for api in apiMessages {
@@ -1067,17 +1088,17 @@ public actor MessagePersistenceActor {
                     return try? encoder.encode(ui)
                 }()
 
-                let reactionSummary = api.reactionSummary ?? [:]
-                let userReactions = Set(api.currentUserReactions ?? [])
-                let uiReactions: [MeeshyReaction] = reactionSummary.flatMap { emoji, count in
-                    (0..<count).map { index in
-                        MeeshyReaction(
-                            messageId: api.id,
-                            participantId: (userReactions.contains(emoji) && index == 0) ? api.senderId : nil,
-                            emoji: emoji
-                        )
-                    }
-                }
+                // The current user's own reaction is tagged with `currentUserId`
+                // (NOT `api.senderId`, the message author's participantId) so the
+                // downstream `participantId == currentUserId` ownership check
+                // survives a cache reload. Shared helper keeps this in lockstep
+                // with `APIMessage.toMessage(currentUserId:)`.
+                let uiReactions = MeeshyReaction.reconstructFromSummary(
+                    messageId: api.id,
+                    reactionSummary: api.reactionSummary,
+                    currentUserReactions: api.currentUserReactions,
+                    currentUserId: currentUserId
+                )
                 let reactionsJson: Data? = uiReactions.isEmpty ? nil : try? encoder.encode(uiReactions)
 
                 let replyToJson: Data? = {

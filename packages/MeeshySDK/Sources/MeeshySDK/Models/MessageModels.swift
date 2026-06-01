@@ -540,20 +540,12 @@ extension APIMessage {
             )
         }
 
-        let userReactionSet = Set(currentUserReactions ?? [])
-        let uiReactions: [MeeshyReaction] = {
-            guard let summary = reactionSummary else { return [] }
-            return summary.flatMap { emoji, count in
-                let meReacted = userReactionSet.contains(emoji)
-                return (0..<count).map { index in
-                    MeeshyReaction(
-                        messageId: id,
-                        participantId: (meReacted && index == 0) ? currentUserId : nil,
-                        emoji: emoji
-                    )
-                }
-            }
-        }()
+        let uiReactions = MeeshyReaction.reconstructFromSummary(
+            messageId: id,
+            reactionSummary: reactionSummary,
+            currentUserReactions: currentUserReactions,
+            currentUserId: currentUserId
+        )
 
         let uiReplyTo: ReplyReference? = {
             if let reply = replyTo {

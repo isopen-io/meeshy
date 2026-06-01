@@ -618,6 +618,8 @@ final class MessagePersistenceActorTests: XCTestCase {
         clientMessageId: String? = nil,
         isEncrypted: Bool = false,
         attachments: [[String: Any]] = [],
+        reactionSummary: [String: Int]? = nil,
+        currentUserReactions: [String]? = nil,
         createdAt: Date = Date()
     ) -> APIMessage {
         var json: [String: Any] = [
@@ -631,6 +633,8 @@ final class MessagePersistenceActorTests: XCTestCase {
         if let clientMessageId { json["clientMessageId"] = clientMessageId }
         if isEncrypted { json["isEncrypted"] = true }
         if !attachments.isEmpty { json["attachments"] = attachments }
+        if let reactionSummary { json["reactionSummary"] = reactionSummary }
+        if let currentUserReactions { json["currentUserReactions"] = currentUserReactions }
         let data = try! JSONSerialization.data(withJSONObject: json)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -998,5 +1002,62 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertNil(att2.transcription,
                      "att_2 transcription must remain nil — enrichment targets att_1 only")
         XCTAssertNil(att2.audioTranslations)
+    }
+
+    // MARK: - T7 — reaction ownership (current user's userId, not author participantId)
+
+    /// Pure helper: only the FIRST row of an emoji the current user reacted
+    /// with is tagged with `currentUserId`; every other synthetic row (further
+    /// counts of the same emoji, and emojis the user didn't react with) carries
+    /// no ownership.
+    func test_reconstructFromSummary_tagsOnlyCurrentUserFirstRow() {
+        let reactions = MeeshyReaction.reconstructFromSummary(
+            messageId: "m1",
+            reactionSummary: ["👍": 3, "❤️": 1],
+            currentUserReactions: ["👍"],
+            currentUserId: "me"
+        )
+
+        XCTAssertEqual(reactions.count, 4)
+        let owned = reactions.filter { $0.participantId == "me" }
+        XCTAssertEqual(owned.count, 1, "only the first 👍 row is owned by the current user")
+        XCTAssertEqual(owned.first?.emoji, "👍")
+        XCTAssertTrue(
+            reactions.filter { $0.emoji == "❤️" }.allSatisfy { $0.participantId == nil },
+            "an emoji the user didn't react with carries no ownership"
+        )
+        XCTAssertEqual(
+            reactions.filter { $0.emoji == "👍" && $0.participantId == nil }.count, 2,
+            "the 2nd and 3rd 👍 rows are other reactors — no ownership"
+        )
+    }
+
+    /// Regression for the local-first bug: during REST ingestion the current
+    /// user's own reaction must be tagged with their userId, NOT the message
+    /// author's participantId (`api.senderId`). Otherwise the
+    /// `participantId == currentUserId` ownership check fails after a cache
+    /// reload and the "I reacted" highlight disappears.
+    func test_upsertFromAPIMessages_tagsCurrentUserReactionWithUserId_notAuthorParticipantId() async throws {
+        let scopedActor = MessagePersistenceActor(dbWriter: dbQueue, currentUserId: "me_user_id")
+        let apiMsg = makeAPIMessage(
+            id: "srv_react_t7",
+            conversationId: "conv_t7",
+            senderId: "author_participant_id",
+            reactionSummary: ["👍": 2],
+            currentUserReactions: ["👍"]
+        )
+
+        try await scopedActor.upsertFromAPIMessages([apiMsg])
+
+        let rows = try scopedActor.messages(for: "conv_t7", limit: 10)
+        let json = try XCTUnwrap(rows.first?.reactionsJson,
+            "ingested reactions must be persisted to reactionsJson")
+        let reactions = try JSONDecoder().decode([MeeshyReaction].self, from: json)
+        let owned = reactions.filter { $0.participantId != nil }
+        XCTAssertEqual(owned.count, 1, "exactly the current user's first 👍 row carries ownership")
+        XCTAssertEqual(owned.first?.participantId, "me_user_id",
+            "current user's reaction must be tagged with their userId")
+        XCTAssertNotEqual(owned.first?.participantId, "author_participant_id",
+            "must NOT reuse the message author's participantId for the current user's reaction")
     }
 }
