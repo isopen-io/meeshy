@@ -25,6 +25,7 @@ class FeedViewModel: ObservableObject {
 
     private var nextCursor: String?
     private let api: APIClientProviding
+    private let offlineQueue: OfflineQueueing
     private let limit = 20
     private var cancellables = Set<AnyCancellable>()
     /// Subscriptions owned by `subscribeToSocketEvents()` only — kept
@@ -53,12 +54,14 @@ class FeedViewModel: ObservableObject {
         api: APIClientProviding = APIClient.shared,
         socialSocket: SocialSocketProviding = SocialSocketManager.shared,
         postService: PostServiceProviding = PostService.shared,
-        languageProvider: LanguageProviding = AuthManagerLanguageProvider()
+        languageProvider: LanguageProviding = AuthManagerLanguageProvider(),
+        offlineQueue: OfflineQueueing = OfflineQueue.shared
     ) {
         self.api = api
         self.socialSocket = socialSocket
         self.postService = postService
         self.languageProvider = languageProvider
+        self.offlineQueue = offlineQueue
         observePreferredLanguageChanges()
     }
 
@@ -312,27 +315,30 @@ class FeedViewModel: ObservableObject {
         post.likes += post.isLiked ? 1 : -1
         posts[index] = post
 
+        // T10b — route the like through the durable outbox (survives offline +
+        // app kill, flushes on reconnect via T10) instead of a direct REST call
+        // that was lost when offline. Mirrors PostDetailViewModel.likePost and
+        // this VM's own toggleLikeComment; the dispatcher sends POST/DELETE
+        // /posts/:id/like per `liked`.
+        let liked = posts[index].isLiked
+        let payload = ToggleLikePostPayload(
+            clientMutationId: ClientMutationId.generate(),
+            postId: postId,
+            liked: liked
+        )
         do {
-            if posts[index].isLiked {
-                let _: SimpleAPIResponse = try await api.request(
-                    endpoint: "/posts/\(postId)/like",
-                    method: "POST"
-                )
-            } else {
-                let _ = try await api.delete(endpoint: "/posts/\(postId)/like")
-            }
+            try await offlineQueue.enqueue(.toggleLikePost, payload: payload, conversationId: nil)
             debouncedCacheSave()
 
-            // Sync like state to GRDB
+            // Sync optimistic like state to GRDB so the feed cache matches.
             if let persistence = feedPersistence {
-                let liked = posts[index].isLiked
                 let count = posts[index].likes
                 Task.detached(priority: .utility) {
                     try? await persistence.updateLikeCount(postId: postId, count: count, isLikedByMe: liked)
                 }
             }
         } catch {
-            // Revert on failure — batch mutations
+            // Roll back optimistic state if the outbox refuses the row.
             var revert = posts[index]
             revert.isLiked.toggle()
             revert.likes += revert.isLiked ? 1 : -1
@@ -455,7 +461,7 @@ class FeedViewModel: ObservableObject {
             liked: true
         )
         do {
-            try await OfflineQueue.shared.enqueue(.toggleLikeComment, payload: payload, conversationId: postId)
+            try await offlineQueue.enqueue(.toggleLikeComment, payload: payload, conversationId: postId)
         } catch {
             FeedbackToastManager.shared.showError("Erreur lors du like")
         }

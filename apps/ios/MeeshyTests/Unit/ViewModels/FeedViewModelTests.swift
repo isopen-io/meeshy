@@ -21,6 +21,7 @@ final class FeedViewModelTests: XCTestCase {
         api: MockAPIClientForApp? = nil,
         socialSocket: MockSocialSocket? = nil,
         postService: MockPostService? = nil,
+        offlineQueue: MockOfflineQueue? = nil,
         preferredLanguages: [String] = []
     ) -> (
         sut: FeedViewModel,
@@ -36,7 +37,8 @@ final class FeedViewModelTests: XCTestCase {
             api: api,
             socialSocket: socket,
             postService: postService,
-            languageProvider: languageProvider
+            languageProvider: languageProvider,
+            offlineQueue: offlineQueue ?? MockOfflineQueue()
         )
         return (sut, api, socket, postService)
     }
@@ -365,17 +367,19 @@ final class FeedViewModelTests: XCTestCase {
     }
 
     func test_likePost_failure_rollsBackIsLikedAndCount() async {
-        let (sut, api, _, _) = makeSUT()
+        // T10b — likePost now routes through the outbox, so "failure" means the
+        // enqueue is refused (not a direct API error). Rollback semantics unchanged.
+        let queue = MockOfflineQueue()
+        queue.enqueueResult = .failure(APIError.networkError(URLError(.timedOut)))
+        let (sut, api, _, _) = makeSUT(offlineQueue: queue)
         let post = Self.makeAPIPost(id: "rollback-test", likeCount: 5)
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [post]))
         await sut.loadFeed()
 
-        api.errorToThrow = APIError.networkError(URLError(.timedOut))
-
         await sut.likePost("rollback-test")
 
-        XCTAssertFalse(sut.posts[0].isLiked, "Should revert isLiked on failure")
-        XCTAssertEqual(sut.posts[0].likes, 5, "Should revert likes count on failure")
+        XCTAssertFalse(sut.posts[0].isLiked, "Should revert isLiked when the outbox refuses the row")
+        XCTAssertEqual(sut.posts[0].likes, 5, "Should revert likes count on enqueue failure")
     }
 
     func test_likePost_unlikeAlreadyLiked_decrementsCount() async {
@@ -1025,4 +1029,23 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertTrue(sut.publishSuccess)
         XCTAssertEqual(sut.posts.count, 1)
     }
+
+    // MARK: - likePost (T10b — routes through the durable outbox)
+
+    func test_likePost_enqueuesToggleLikePost_andOptimisticallyTogglesLike() async {
+        let queue = MockOfflineQueue()
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
+        sut.posts = [Self.makeFeedPost(id: "lp1", likes: 5, isLiked: false)]
+
+        await sut.likePost("lp1")
+
+        XCTAssertEqual(queue.enqueueCalls.count, 1, "the like must be queued in the outbox, not lost on a direct REST call")
+        XCTAssertEqual(queue.enqueueCalls.first?.kind, .toggleLikePost)
+        let payload = queue.enqueueCalls.first?.payload as? ToggleLikePostPayload
+        XCTAssertEqual(payload?.postId, "lp1")
+        XCTAssertEqual(payload?.liked, true)
+        XCTAssertTrue(sut.posts[0].isLiked)
+        XCTAssertEqual(sut.posts[0].likes, 6)
+    }
+
 }
