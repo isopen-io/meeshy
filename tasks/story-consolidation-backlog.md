@@ -570,3 +570,20 @@ PLAN DE CORRECTIF (incrément focalisé, TDD) :
 - [ ] Vérif visuelle device : tray montre le composite (texte+dessin+vidéo) pour ses propres stories après publish.
 - [ ] Foreground (non-bg) vidéos pas dessinées dans le composite (poster seulement).
 - [ ] P1 filtres (6 sans kernel) + P3 looks divergents — chantier archi.
+
+## it.28 IMPLÉMENTÉ — composite capture les vidéos FOREGROUND (parité mini-preview) (b5cd10c28)
+- [x] `renderComposite` boucle foreground gatait `where obj.kind == .image` → un clip vidéo foreground placé
+      sur le slide était droppé du composite/thumbHash, alors que SlideMiniPreview le dessine déjà (pas de
+      filtre kind). Fix : dessiner tout média foreground avec une frame chargée (image OU poster vidéo). Audio
+      (pas de frame) naturellement ignoré ; bg exclu (resolvedForegroundMediaObjects) → pas de double-dessin.
+- [x] +1 test fg-video (RED reproduit), 12 renderer tests verts, app build vert.
+- ✅ BILAN COMPLÉTUDE COMPOSITE : le composite (= thumbHash + cover local it.27) capture TOUTES les couches :
+  fond (couleur/image/vidéo), texte (+fonds), foreground (images ET vidéos), stickers, dessin, filtre.
+
+## REPLENISHED backlog — post it.28
+- [ ] Relancer quand SPM stable : 3 tests app StoryCoverThumbnail (it.27) + suite renderer complète.
+- [ ] Vérif visuelle device (login) : tray montre le composite complet après publish (it.27) ; vidéos fg/bg
+      dans thumbnail (it.26/it.28).
+- [ ] **Phase 2 hybride — cover baké uploadé** (tous les viewers voient les overlays) — plan dédié, touche RAW-publish.
+- [ ] P1 filtres (6 sans kernel Metal) + P3 looks divergents — chantier archi (plan dédié).
+- [ ] Surfaces non auditées : ops multi-slides (add/delete/reorder/duplicate) + sync index/thumbHash ; viewer gestes.
