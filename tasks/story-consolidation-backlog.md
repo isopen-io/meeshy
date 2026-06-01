@@ -76,3 +76,14 @@ Local-first, efficient cache, FABs, show-only-necessary. Each fix: prove → fix
 - [ ] ios-simulator: systematic nav/visual/alignment pass (login lost on reinstall — batch checks; don't reinstall per-iter).
 - [ ] Thumbnail single-source audit (tray ring vs slide-strip vs reader loading overlay).
 - [ ] Confirm leaf story cells have no @ObservedObject on global singletons (zero-rerender).
+
+## Progress it.5-6
+- [x] it.5 Preview-surface default-bg audit: minor/rare gap only (nil bg color differs canvas/thumbhash/mini) — not worth blind fix (pastel auto-applied).
+- [x] it.6 ios-simulator visual pass (viewer): real story (photo + 'Zero' text) renders clean — 9:16 canvas, letterbox blur, text/photo positioning, sidebar, composer all aligned; tap-right advance/dismiss OK. No visual/nav/alignment bug.
+
+## DECISION NEEDED (highest remaining value = an IMPROVEMENT, not a bug)
+- Viewer language-picker display override: complete the half-wired "explore other languages" Prisme
+  feature. Plan (mirror messages' activeTranslationOverrides): add @State sessionLanguageOverride in
+  StoryViewerView; resolvedViewerLanguageChain prepends it when set; picker sets it (+ requestTranslation);
+  re-render on translation arrival; clear on slide change. Medium async feature — implement next iteration
+  unless user redirects. Until then picker = request-only (no display change).
