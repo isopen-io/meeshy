@@ -1302,11 +1302,16 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     static let translationBufferTTL: TimeInterval = 60
 
     public func requestTranslation(messageId: String, targetLanguage: String) {
-        if socket?.status == .connected {
-            socket?.emit("translation:request", ["messageId": messageId, "targetLanguage": targetLanguage])
-            Logger.socket.info("Requested translation for \(messageId) -> \(targetLanguage)")
-            return
-        }
+        // U4 — ALWAYS buffer, in addition to emitting when connected. The
+        // gateway's `message:translation` completion broadcast is fire-and-forget
+        // with no ack/replay, so if the socket drops between this request and the
+        // broadcast (a multi-second Whisper/NLLB window), the result is dropped
+        // and reconnect never re-asks (syncMissedMessages only re-fetches NEWER
+        // messages; flushBufferedTranslationRequests previously replayed only the
+        // disconnected buffer). Buffering unconditionally lets the reconnect
+        // replay re-ask; the gateway request is idempotent (returns the cached
+        // translation) so a redundant replay is harmless, and TTL(60s)+dedup+cap
+        // bound the buffer.
         bufferTranslationRequest(
             PendingTranslationRequest(
                 messageId: messageId,
@@ -1314,6 +1319,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                 queuedAt: Date()
             )
         )
+        if isConnected {
+            socket?.emit("translation:request", ["messageId": messageId, "targetLanguage": targetLanguage])
+            Logger.socket.info("Requested translation for \(messageId) -> \(targetLanguage)")
+        }
     }
 
     private func bufferTranslationRequest(_ request: PendingTranslationRequest) {
@@ -1329,7 +1338,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             let dropCount = pendingTranslationRequests.count - Self.translationBufferMaxSize
             pendingTranslationRequests.removeFirst(dropCount)
         }
-        Logger.socket.info("[RT-DIAG] translation:request BUFFERED (socket not connected) msg=\(request.messageId, privacy: .public) target=\(request.targetLanguage, privacy: .public) queued=\(self.pendingTranslationRequests.count, privacy: .public)")
+        Logger.socket.info("[RT-DIAG] translation:request BUFFERED (replay safety net) msg=\(request.messageId, privacy: .public) target=\(request.targetLanguage, privacy: .public) queued=\(self.pendingTranslationRequests.count, privacy: .public)")
     }
 
     /// Flush queued translation requests that are still fresh enough to

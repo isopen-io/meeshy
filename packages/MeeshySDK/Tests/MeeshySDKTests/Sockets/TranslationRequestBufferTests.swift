@@ -13,6 +13,7 @@ final class TranslationRequestBufferTests: XCTestCase {
     /// Cleans the buffer between cases — the manager is a singleton.
     override func tearDown() async throws {
         MessageSocketManager.shared.flushBufferedTranslationRequests(now: Date.distantFuture)
+        MessageSocketManager.shared.isConnected = false
         try await super.tearDown()
     }
 
@@ -26,6 +27,24 @@ final class TranslationRequestBufferTests: XCTestCase {
         XCTAssertEqual(pending.count, 1)
         XCTAssertEqual(pending.first?.messageId, "msg-1")
         XCTAssertEqual(pending.first?.targetLanguage, "fr")
+    }
+
+    /// U4 — a translation requested while CONNECTED must ALSO be buffered, so a
+    /// socket drop during the server's multi-second Whisper/NLLB processing is
+    /// recovered by the reconnect replay. Before the fix the connected path
+    /// emitted + returned, leaving nothing to replay.
+    func test_requestTranslation_whenConnected_stillBuffers() {
+        let sut = MessageSocketManager.shared
+        sut.flushBufferedTranslationRequests(now: Date.distantFuture)  // reset
+        sut.isConnected = true
+        defer { sut.isConnected = false }
+
+        sut.requestTranslation(messageId: "msg-c", targetLanguage: "de")
+
+        let pending = sut.debug_pendingTranslationRequests
+        XCTAssertEqual(pending.count, 1,
+            "a connected translation request must still be buffered for reconnect replay")
+        XCTAssertEqual(pending.first?.messageId, "msg-c")
     }
 
     func test_requestTranslation_duplicateRequest_refreshesInsteadOfDuplicating() {
