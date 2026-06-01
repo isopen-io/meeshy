@@ -1199,9 +1199,20 @@ struct StoryViewerView: View {
               effects.voiceAttachmentId != nil,
               let transcriptions = effects.voiceTranscriptions,
               !transcriptions.isEmpty else { return nil }
-        let lang = resolvedViewerLanguage ?? "en"
-        return transcriptions.first { $0.language == lang }?.content
-            ?? transcriptions.first?.content
+        // Prisme Linguistique : on essaie la CHAÎNE complète des langues préférées
+        // (systemLanguage > regionalLanguage > customDestination > deviceLocale),
+        // pas seulement la première + défaut "en". Sans ça, un viewer dont la
+        // langue SECONDAIRE (ex. regionalLanguage) a une transcription mais pas
+        // la primaire voyait une langue arbitraire (la 1ʳᵉ entrée, souvent
+        // l'original parlé) au lieu de sa secondaire — violation du Prisme
+        // (bug 2026-06-01).
+        for lang in resolvedViewerLanguageChain {
+            if let t = transcriptions.first(where: { $0.language == lang })?.content { return t }
+        }
+        // Aucune langue préférée ne matche → transcription ORIGINALE (1ʳᵉ entrée =
+        // langue parlée d'origine par convention gateway). On ne choisit JAMAIS
+        // une traduction arbitraire d'une autre langue (règle Prisme).
+        return transcriptions.first?.content
     }
 
 
