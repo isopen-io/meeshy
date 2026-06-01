@@ -28,6 +28,7 @@ import type {
   CreateConversationBody
 } from './types';
 import { buildCursorPaginationMeta } from '../../utils/pagination';
+import { sendWithETag } from '../../utils/etag';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 
 /**
@@ -542,12 +543,11 @@ export function registerCoreRoutes(
         lastConversation?.id ?? null
       );
 
-      reply.header('Cache-Control', 'private, no-cache');
       // NOTE: Cannot use sendSuccess() — response includes top-level `pagination` and
       // `cursorPagination` fields that iOS SDK (ConversationListResponse) and web
       // (conversations.service.ts) parse at root level. Migration to sendSuccess requires
       // a coordinated client update (breaking change).
-      reply.send({
+      const responseBody = {
         success: true,
         data: conversationsWithUnreadCount,
         pagination: {
@@ -557,7 +557,12 @@ export function registerCoreRoutes(
           hasMore
         },
         cursorPagination: cursorPaginationMeta
-      });
+      };
+      // T15 — ETag + If-None-Match→304: don't re-send an unchanged conversation
+      // list body. `sendWithETag` sets ETag + Cache-Control: private, no-cache
+      // (always revalidate) and short-circuits with a body-less 304 on a match.
+      if (sendWithETag(request, reply, responseBody)) return;
+      reply.send(responseBody);
 
     } catch (error) {
       console.error('Error fetching conversations:', error);

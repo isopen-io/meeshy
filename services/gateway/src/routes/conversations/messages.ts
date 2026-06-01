@@ -28,6 +28,7 @@ import type {
 } from './types';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { sendWithETag } from '../../utils/etag';
 import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
@@ -1196,7 +1197,12 @@ export function registerMessagesRoutes(
         timings: Object.fromEntries(Object.entries(timings).map(([k, v]) => [k, Math.round(v)]))
       });
 
-      reply.header('Cache-Control', 'private, no-cache');
+      // T15 — ETag + If-None-Match→304: don't re-send an unchanged message
+      // page body. `sendWithETag` sets ETag + Cache-Control: private, no-cache
+      // and short-circuits with a body-less 304 on a match. The ETag reflects
+      // the filtered result, so it composes with the `after`/`before`/`around`
+      // delta-sync modes without special handling.
+      if (sendWithETag(request, reply, responsePayload)) return;
       reply.send(responsePayload);
 
     } catch (error) {
