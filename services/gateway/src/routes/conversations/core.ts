@@ -32,6 +32,44 @@ import { sendWithETag } from '../../utils/etag';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 
 /**
+ * Participant fields fetched + serialized per participant in the GET
+ * /conversations LIST response (up to 5 participants × N conversations per
+ * page, so per-field over-fetch multiplies).
+ *
+ * T17 — `permissions` (a ~20-boolean ParticipantPermissions object) is
+ * intentionally NOT selected here: no client (iOS SDK/app or web) reads
+ * participant permissions in the list view, and the conversation DETAIL
+ * endpoint (`GET /conversations/:id`) still fetches it via an unfiltered
+ * include. `language` IS kept — the web frontend reads `participant.language`
+ * for conversation-title language resolution (`apps/web/utils/user.ts`).
+ */
+export const conversationListParticipantSelect = {
+  id: true,
+  conversationId: true,
+  type: true,
+  userId: true,
+  displayName: true,
+  avatar: true,
+  role: true,
+  language: true,
+  nickname: true,
+  joinedAt: true,
+  isActive: true,
+  isOnline: true,
+  lastActiveAt: true,
+  user: {
+    select: {
+      id: true,
+      username: true,
+      displayName: true,
+      avatar: true,
+      isOnline: true,
+      lastActiveAt: true
+    }
+  }
+} as const;
+
+/**
  * Enregistre les routes CRUD de base pour les conversations
  */
 export function registerCoreRoutes(
@@ -246,32 +284,7 @@ export function registerCoreRoutes(
             where: {
               isActive: true
             },
-            select: {
-              id: true,
-              conversationId: true,
-              type: true,
-              userId: true,
-              displayName: true,
-              avatar: true,
-              role: true,
-              language: true,
-              permissions: true,
-              nickname: true,
-              joinedAt: true,
-              isActive: true,
-              isOnline: true,
-              lastActiveAt: true,
-              user: {
-                select: {
-                  id: true,
-                  username: true,
-                  displayName: true,
-                  avatar: true,
-                  isOnline: true,
-                  lastActiveAt: true
-                }
-              }
-            }
+            select: conversationListParticipantSelect
           },
           // User preferences (isPinned, isMuted, isArchived, tags, categoryId)
           userPreferences: {
