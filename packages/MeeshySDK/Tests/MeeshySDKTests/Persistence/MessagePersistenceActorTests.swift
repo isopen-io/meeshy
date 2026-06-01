@@ -1110,6 +1110,73 @@ final class MessagePersistenceActorTests: XCTestCase {
             "with no pending mutation the server (empty) reaction state must win")
     }
 
+    // MARK: - S2 — preserve optimistic edit/delete while pending in outbox
+
+    func test_upsertFromAPIMessages_preservesOptimisticEdit_whenEditPendingInOutbox() async throws {
+        let conv = "c_s2e"
+        let msgId = "m_s2e"
+        // Server message exists locally with its original content.
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv, content: "original")])
+        // User edits it offline → optimistic local content + a pending editMessage outbox row.
+        try await actor.markEdited(localId: msgId, newContent: "edited offline", editedAt: Date())
+        let payload = try JSONEncoder().encode(OfflineEditPayload(
+            messageId: msgId, clientMessageId: "cid_e1", content: "edited offline", conversationId: conv))
+        let now = Date()
+        try await dbQueue.write { db in
+            try OutboxRecord(
+                id: "ofqr_s2e", kind: .editMessage, conversationId: conv,
+                clientMessageId: "cid_e1", payload: payload, status: .pending,
+                attempts: 0, lastError: nil, createdAt: now, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+        // Stale REST refresh arrives with the PRE-edit content.
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv, content: "original")])
+
+        let rows = try actor.messages(for: conv, limit: 10)
+        XCTAssertEqual(rows.first?.content, "edited offline",
+            "an optimistic edit pending in the outbox must survive a stale REST snapshot")
+        XCTAssertEqual(rows.first?.isEdited, true,
+            "isEdited must stay true while the edit is pending")
+    }
+
+    func test_upsertFromAPIMessages_preservesOptimisticDelete_whenDeletePendingInOutbox() async throws {
+        let conv = "c_s2d"
+        let msgId = "m_s2d"
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv)])
+        try await actor.markDeleted(localId: msgId, deletedAt: Date())
+        let payload = try JSONEncoder().encode(OfflineDeletePayload(
+            messageId: msgId, clientMessageId: "cid_d1", conversationId: conv))
+        let now = Date()
+        try await dbQueue.write { db in
+            try OutboxRecord(
+                id: "ofqr_s2d", kind: .deleteMessage, conversationId: conv,
+                clientMessageId: "cid_d1", payload: payload, status: .pending,
+                attempts: 0, lastError: nil, createdAt: now, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+        // Stale REST refresh arrives with the message NOT deleted (deletedAt nil).
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv)])
+
+        let rows = try actor.messages(for: conv, limit: 10)
+        XCTAssertNotNil(rows.first?.deletedAt,
+            "an optimistic delete pending in the outbox must survive a stale REST snapshot")
+    }
+
+    /// Scoping guard: with NO pending edit mutation the server snapshot is
+    /// authoritative — a refresh must clobber a stale local content (normal SWR).
+    func test_upsertFromAPIMessages_takesServerContent_whenNoEditPending() async throws {
+        let conv = "c_s2n"
+        let msgId = "m_s2n"
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv, content: "original")])
+        try await actor.markEdited(localId: msgId, newContent: "local edit", editedAt: Date())
+        // No outbox row → not pending → server is authoritative.
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv, content: "server version")])
+
+        let rows = try actor.messages(for: conv, limit: 10)
+        XCTAssertEqual(rows.first?.content, "server version",
+            "with no pending edit the server snapshot must win")
+    }
+
     // MARK: - T14 — GC of stale exhausted outbox rows
 
     /// `.exhausted` rows older than the retention window are reclaimed so the

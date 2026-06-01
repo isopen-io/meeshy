@@ -1055,6 +1055,42 @@ public actor MessagePersistenceActor {
                 }
                 return ids
             }()
+            // S2 — message ids whose edit/delete is still pending in the outbox.
+            // Their local content/editedAt/deletedAt hold an optimistic mutation
+            // not yet on the server, so a stale REST snapshot must NOT clobber
+            // them — otherwise the edit reverts to the old text / the delete
+            // un-deletes until the outbox drains (or forever if exhausted).
+            // Mirrors the reaction guard above (one query each per batch).
+            let pendingEditMessageIds: Set<String> = {
+                guard let rows = try? OutboxRecord
+                    .filter(Column("kind") == OutboxKind.editMessage.rawValue)
+                    .filter(Column("status") == OutboxStatus.pending.rawValue)
+                    .fetchAll(db) else { return [] }
+                let payloadDecoder = JSONDecoder()
+                payloadDecoder.dateDecodingStrategy = .iso8601
+                var ids = Set<String>()
+                for row in rows {
+                    if let payload = try? payloadDecoder.decode(OfflineEditPayload.self, from: row.payload) {
+                        ids.insert(payload.messageId)
+                    }
+                }
+                return ids
+            }()
+            let pendingDeleteMessageIds: Set<String> = {
+                guard let rows = try? OutboxRecord
+                    .filter(Column("kind") == OutboxKind.deleteMessage.rawValue)
+                    .filter(Column("status") == OutboxStatus.pending.rawValue)
+                    .fetchAll(db) else { return [] }
+                let payloadDecoder = JSONDecoder()
+                payloadDecoder.dateDecodingStrategy = .iso8601
+                var ids = Set<String>()
+                for row in rows {
+                    if let payload = try? payloadDecoder.decode(OfflineDeletePayload.self, from: row.payload) {
+                        ids.insert(payload.messageId)
+                    }
+                }
+                return ids
+            }()
             for api in apiMessages {
                 let senderName = api.sender?.name
                 let senderUsername = api.sender?.username
@@ -1292,17 +1328,27 @@ public actor MessagePersistenceActor {
                     let keepLocalPlaintext = api.isEncrypted == true
                         && !existing.isEncrypted
                         && !(existing.content ?? "").isEmpty
+                    // S2 — an edit/delete still pending in the outbox holds an
+                    // optimistic mutation not yet on the server; a stale REST
+                    // snapshot must NOT revert the local content/edit flag or
+                    // un-delete the row.
+                    let pendingEdit = pendingEditMessageIds.contains(api.id)
+                    let pendingDelete = pendingDeleteMessageIds.contains(api.id)
                     // Update mutable fields; preserve layout cache.
-                    if !keepLocalPlaintext {
+                    if !keepLocalPlaintext && !pendingEdit && !pendingDelete {
                         existing.content = api.content
                     }
                     // Backfill the server id so future reconciliations can find
                     // the row via the serverId column or PendingIdRecord even
                     // if applyEvent(.serverAck) didn't run for some reason.
                     existing.serverId = api.id
-                    existing.isEdited = api.isEdited ?? false
-                    existing.editedAt = nil
-                    existing.deletedAt = api.deletedAt
+                    if !pendingEdit {
+                        existing.isEdited = api.isEdited ?? false
+                        existing.editedAt = nil
+                    }
+                    if !pendingDelete {
+                        existing.deletedAt = api.deletedAt
+                    }
                     // Preserve existing attachments when the payload carries
                     // none: a media echo that races server-side processing can
                     // arrive attachment-less, and a hard overwrite would blank
