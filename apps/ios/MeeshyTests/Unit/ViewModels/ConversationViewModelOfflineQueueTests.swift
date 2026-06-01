@@ -334,6 +334,92 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
         XCTAssertEqual(fx.messageService.deleteCallCount, 0,
             "the offline path must NOT call the REST delete directly")
     }
+
+    // MARK: - S3 — rollback exhausted offline edit/delete
+
+    /// An offline delete that exhausts its retry budget never reached the
+    /// server, so the message must be un-deleted locally — otherwise it shows
+    /// as deleted on this device only, forever.
+    func test_handleRetryExhausted_deleteMessage_undeletesLocally() async throws {
+        let fx = try await makeFixture(isOnline: false)
+        try await seedMessage(localId: "m_del_s3", content: "hello", fixture: fx)
+        try await fx.sut.messagePersistence.markDeleted(localId: "m_del_s3", deletedAt: Date())
+
+        let before = try await fx.persistencePool.read { db in
+            try MessageRecord.filter(Column("localId") == "m_del_s3").fetchOne(db)?.deletedAt
+        }
+        XCTAssertNotNil(before, "precondition: the message is optimistically deleted")
+
+        await fx.sut.handleRetryExhausted(OfflineRetryExhausted(
+            kind: .deleteMessage, clientMessageId: "m_del_s3",
+            conversationId: fx.conversationId, lastError: "permanent"))
+
+        let after = try await fx.persistencePool.read { db in
+            try MessageRecord.filter(Column("localId") == "m_del_s3").fetchOne(db)?.deletedAt
+        }
+        XCTAssertNil(after,
+            "an exhausted offline delete must roll back (un-delete) instead of diverging forever")
+    }
+
+    /// An offline edit that exhausts must restore the pre-edit content (kept in
+    /// EditHistoryStore) and drop the phantom revision.
+    func test_handleRetryExhausted_editMessage_restoresOriginalContent() async throws {
+        let fx = try await makeFixture(isOnline: false)
+        try await seedMessage(localId: "m_edit_s3", content: "original", fixture: fx)
+        // Mirror editMessage: record the pre-edit revision, then apply the edit.
+        EditHistoryStore.shared.recordRevision(messageId: "m_edit_s3", previousContent: "original")
+        try await fx.sut.messagePersistence.markEdited(
+            localId: "m_edit_s3", newContent: "edited offline", editedAt: Date())
+
+        let before = try await fx.persistencePool.read { db in
+            try MessageRecord.filter(Column("localId") == "m_edit_s3").fetchOne(db)?.content
+        }
+        XCTAssertEqual(before, "edited offline", "precondition: the optimistic edit is applied")
+
+        await fx.sut.handleRetryExhausted(OfflineRetryExhausted(
+            kind: .editMessage, clientMessageId: "m_edit_s3",
+            conversationId: fx.conversationId, lastError: "permanent"))
+
+        let after = try await fx.persistencePool.read { db in
+            try MessageRecord.filter(Column("localId") == "m_edit_s3").fetchOne(db)?.content
+        }
+        XCTAssertEqual(after, "original",
+            "an exhausted offline edit must restore the pre-edit content")
+        XCTAssertTrue(EditHistoryStore.shared.revisions(for: "m_edit_s3").isEmpty,
+            "the phantom edit revision must be removed on rollback")
+    }
+
+    private func seedMessage(localId: String, content: String, fixture fx: Fixture) async throws {
+        let record = MessageRecord(
+            localId: localId, serverId: nil,
+            conversationId: fx.conversationId, senderId: fx.userId,
+            content: content, originalLanguage: "en",
+            messageType: "text", messageSource: "user", contentType: "text",
+            state: .sent, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: nil, senderUsername: nil,
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil, changeVersion: 0
+        )
+        try await fx.sut.messagePersistence.insertOptimistic(record)
+    }
 }
 
 // MARK: - Test helpers on FakeOfflineMessageQueue

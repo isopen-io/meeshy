@@ -969,50 +969,66 @@ class ConversationViewModel: ObservableObject {
         OfflineQueue.shared.retryExhausted
             .receive(on: DispatchQueue.main)
             .sink { [weak self] payload in
-                guard let self, payload.conversationId == self.conversationId else { return }
-                switch payload.kind {
-                case .sendMessage:
-                    let localId = payload.tempId
-                    Task { [weak self] in
-                        _ = try? await self?.messagePersistence.applyEvent(
-                            localId: localId,
-                            event: .retryExhausted
-                        )
-                    }
-                case .sendReaction:
-                    guard let reaction = payload.reaction else { return }
-                    let participantId = self._resolvedParticipantId ?? self.currentUserId
-                    let localId = reaction.messageId
-                    let emoji = reaction.emoji
-                    switch reaction.action {
-                    case .add:
-                        // Optimistic add failed permanently — remove the
-                        // reaction we wrote.
-                        Task { [weak self] in
-                            try? await self?.messagePersistence.removeReaction(
-                                localId: localId, emoji: emoji, participantId: participantId
-                            )
-                        }
-                    case .remove:
-                        // Optimistic remove failed permanently — restore the
-                        // reaction we erased.
-                        let remoteId = self.serverId(for: localId)
-                        Task { [weak self] in
-                            try? await self?.messagePersistence.appendReaction(
-                                localId: localId, reactionId: UUID().uuidString,
-                                messageId: remoteId, participantId: participantId, emoji: emoji
-                            )
-                        }
-                    }
-                default:
-                    // Other outbox kinds (edit, delete, blockUser, etc.)
-                    // surface their own exhausted paths through dedicated
-                    // ViewModels ; this conversation-level subscription is
-                    // scoped to the optimistic message+reaction lifecycle.
-                    break
-                }
+                Task { [weak self] in await self?.handleRetryExhausted(payload) }
             }
             .store(in: &cancellables)
+    }
+
+    /// Reconcile an outbox row that the `OutboxFlusher` escalated to
+    /// `.exhausted` (5 attempts, or a permanent dispatcher rejection). We
+    /// dispatch on `kind` to apply the right rollback so the optimistic local
+    /// state does not diverge from the server forever. Scoped to THIS
+    /// conversation. Extracted from the Combine sink so it is directly
+    /// awaitable in tests.
+    func handleRetryExhausted(_ payload: OfflineRetryExhausted) async {
+        guard payload.conversationId == self.conversationId else { return }
+        switch payload.kind {
+        case .sendMessage:
+            _ = try? await messagePersistence.applyEvent(
+                localId: payload.tempId, event: .retryExhausted
+            )
+        case .sendReaction:
+            guard let reaction = payload.reaction else { return }
+            let participantId = _resolvedParticipantId ?? currentUserId
+            let localId = reaction.messageId
+            let emoji = reaction.emoji
+            switch reaction.action {
+            case .add:
+                // Optimistic add failed permanently — remove the reaction we wrote.
+                try? await messagePersistence.removeReaction(
+                    localId: localId, emoji: emoji, participantId: participantId
+                )
+            case .remove:
+                // Optimistic remove failed permanently — restore the reaction we erased.
+                let remoteId = serverId(for: localId)
+                try? await messagePersistence.appendReaction(
+                    localId: localId, reactionId: UUID().uuidString,
+                    messageId: remoteId, participantId: participantId, emoji: emoji
+                )
+            }
+        case .editMessage:
+            // S3 — an offline edit that exhausted its retries never reached the
+            // server; restore the pre-edit content (captured in EditHistoryStore
+            // when the edit was applied) and drop the phantom revision. Mirrors
+            // the online edit rollback in `editMessage`.
+            let localId = payload.tempId
+            let canonicalId = serverId(for: localId)
+            if let original = EditHistoryStore.shared.revisions(for: canonicalId).last?.content {
+                try? await messagePersistence.markEdited(
+                    localId: localId, newContent: original, editedAt: Date()
+                )
+                EditHistoryStore.shared.removeHistory(for: canonicalId)
+            }
+        case .deleteMessage:
+            // S3 — an offline delete that exhausted never reached the server;
+            // un-delete locally so the message stops showing as deleted on this
+            // device only. Mirrors the online delete rollback (`markUndeleted`).
+            try? await messagePersistence.markUndeleted(localId: payload.tempId)
+        default:
+            // Other outbox kinds (blockUser, friendRequest, etc.) reconcile
+            // through their own dedicated ViewModels.
+            break
+        }
     }
 
     /// Mirror the legacy `@Published var messages` into the new
