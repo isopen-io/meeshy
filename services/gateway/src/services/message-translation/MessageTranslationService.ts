@@ -24,6 +24,7 @@ import type { AttachmentTranscription, AttachmentTranslations, AttachmentTransla
 import { toSocketIOTranslation } from '@meeshy/shared/types/attachment-audio';
 import { createTranslationJSON, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { isBlankTranscriptionText } from '../../utils/transcription';
+import { KeyedMutex } from '../../utils/keyed-mutex';
 import { PostAudioService } from '../posts/PostAudioService';
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 
@@ -65,6 +66,9 @@ export class MessageTranslationService extends EventEmitter {
   // Composition de modules
   private readonly translationCache: TranslationCache;
   private readonly languageCache: LanguageCache;
+  // Sérialise les updates de translations par attachment (évite le lost-update
+  // quand plusieurs langues complètent en concurrence sur le même attachment).
+  private readonly attachmentTranslationMutex = new KeyedMutex();
   private readonly stats: TranslationStats;
   private readonly encryptionHelper: EncryptionHelper;
 
@@ -1520,28 +1524,43 @@ export class MessageTranslationService extends EventEmitter {
         logger.warn(`   ⚠️ Aucun binaire disponible pour ${data.language}, path=${localAudioPath}, url=${localAudioUrl}`);
       }
 
-      // 2. Mettre à jour le champ translations JSON avec la nouvelle traduction
-      const existingTranslations = (attachment.translations as unknown as AttachmentTranslations) || {};
+      // 2. Mettre à jour translations JSON — SÉRIALISÉ par attachment.
+      // Plusieurs langues complètent en concurrence ; sans sérialisation, chaque
+      // handler lisait `translations` puis réécrivait l'objet ENTIER → lost
+      // update (langues écrasées, audios traduits manquants). On re-lit DANS le
+      // lock pour voir l'état committé des autres langues, puis on écrit.
+      const translationEntry = await this.attachmentTranslationMutex.runExclusive(
+        data.attachmentId,
+        async () => {
+          const fresh = await this.prisma.messageAttachment.findUnique({
+            where: { id: data.attachmentId },
+            select: { translations: true }
+          });
+          const existingTranslations = (fresh?.translations as unknown as AttachmentTranslations) || {};
 
-      existingTranslations[data.language] = {
-        type: 'audio',
-        transcription: data.translatedAudio.translatedText,
-        path: localAudioPath,  // Chemin local si sauvegardé
-        url: localAudioUrl,     // URL correcte si sauvegardé
-        durationMs: data.translatedAudio.durationMs,
-        format: data.translatedAudio.audioMimeType?.replace('audio/', '') || 'mp3',
-        cloned: data.translatedAudio.voiceCloned,
-        quality: data.translatedAudio.voiceQuality,
-        ttsModel: 'xtts',
-        segments: data.translatedAudio.segments as any,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
+          existingTranslations[data.language] = {
+            type: 'audio',
+            transcription: data.translatedAudio.translatedText,
+            path: localAudioPath,  // Chemin local si sauvegardé
+            url: localAudioUrl,     // URL correcte si sauvegardé
+            durationMs: data.translatedAudio.durationMs,
+            format: data.translatedAudio.audioMimeType?.replace('audio/', '') || 'mp3',
+            cloned: data.translatedAudio.voiceCloned,
+            quality: data.translatedAudio.voiceQuality,
+            ttsModel: 'xtts',
+            segments: data.translatedAudio.segments as any,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
 
-      await this.prisma.messageAttachment.update({
-        where: { id: data.attachmentId },
-        data: { translations: existingTranslations as any }
-      });
+          await this.prisma.messageAttachment.update({
+            where: { id: data.attachmentId },
+            data: { translations: existingTranslations as any }
+          });
+
+          return existingTranslations[data.language];
+        }
+      );
 
       logger.info(
         `✅ Traduction ${data.language} sauvegardée | ` +
@@ -1553,7 +1572,7 @@ export class MessageTranslationService extends EventEmitter {
       const translationSocketIO = toSocketIOTranslation(
         data.attachmentId,
         data.language,
-        existingTranslations[data.language]
+        translationEntry
       );
 
       this.emit(eventName, {
