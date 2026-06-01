@@ -398,3 +398,24 @@ Vérifié que mon nouveau champ durée se publie end-to-end (emphase user « pub
 - iOS decode : `decodeIfPresent(.timelineDuration)`.
 → Le rognage timeline fonctionne donc aussi pour les viewers DISTANTS. Aucun changement backend requis.
 Le fix durée est complet : composer + preview + exporter + publish + viewers distants.
+
+## it.21 — AUDIT timing par-élément (viewer) : honoré, AUCUN bug
+Vérifié (vision user « la timeline configure le moment où chaque élément apparaît + animation ») :
+- `StoryRenderer.shouldRender(item:at:mode:)` : `.edit` montre tout ; `.play` respecte la fenêtre
+  `t >= startTime && t < startTime+duration` (StoryRenderer.swift:237-248). Keyframes
+  (`applyKeyframeOverrides`) + fadeIn/fadeOut (`fadeOpacity`) snapshot au playhead. → timing
+  par-élément BRANCHÉ dans le viewer.
+- Compose correctement avec `timelineDuration` : un élément dont la fenêtre dépasse la durée
+  (rognée) du slide est coupé à la fin du slide (cohérent, timeline autoritaire).
+- ThumbHash/mini-preview montrent TOUS les éléments (composite « TOUTE la story ») — intentionnel.
+Convergence : composition (9:16, couches, text bg solid+glass, dessin, foreground), durée
+(timeline-autoritaire end-to-end), thumbHash/mini-preview cohérents, timing par-élément, publish
+round-trip — tous audités + sains.
+
+## REPLENISHED backlog — surfaces story PAS ENCORE auditées (prochaines cibles bugs)
+- [ ] Viewer navigation/gestes : progression slides, tap/swipe, barre de progression, edge cases.
+- [ ] Realtime story : story:new/updated/deleted + translation-updated (sink câblé ? tri ? dedup ?).
+- [ ] Ops multi-slides : add/delete/reorder/duplicate (cohérence index, sélection, durée).
+- [ ] Audio story : transcription/voice, mixer (cf. CanvasAudioLifecycle ×5 déféré audio-owner).
+- [ ] Exporter : honore-t-il le timing par-élément (texte startTime=3 → apparaît à 3s dans le MP4) ?
+- [ ] Vérif visuelle (login frais) : glass committé + rognage timeline dans le viewer.
