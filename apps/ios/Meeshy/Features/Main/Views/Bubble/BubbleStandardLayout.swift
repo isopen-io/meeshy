@@ -586,10 +586,22 @@ struct BubbleStandardLayout: View {
                         .compactMap { item in item.transcription.map { (item.id, $0) } },
                     uniquingKeysWith: { first, _ in first }
                 )
-                let perPageTranslatedAudios = Dictionary(
-                    grouping: translatedAudios,
-                    by: { $0.attachmentId }
+                // Per-page translated audios are keyed by attachmentId from
+                // `allAudioItems` — each `AudioItem` already carries ITS OWN
+                // translated audios (the VM populates
+                // `messageTranslatedAudiosByAttachment`). The single per-message
+                // `translatedAudios` array only holds the LAST track's audios,
+                // so it can't be used to key the carousel. Falls back to the
+                // grouped per-message array for safety (single-audio path).
+                let perAttachmentAudios = Dictionary(
+                    allAudioItems
+                        .filter { trackIDs.contains($0.id) }
+                        .map { ($0.id, $0.translatedAudios) },
+                    uniquingKeysWith: { first, _ in first }
                 )
+                let perPageTranslatedAudios = perAttachmentAudios.allSatisfy({ $0.value.isEmpty })
+                    ? Dictionary(grouping: translatedAudios, by: { $0.attachmentId })
+                    : perAttachmentAudios
                 AudioCarouselView(
                     items: auds,
                     message: message,

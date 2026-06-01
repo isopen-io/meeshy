@@ -165,6 +165,16 @@ class ConversationViewModel: ObservableObject {
     @Published var messageTranslatedAudios: [String: [MessageTranslatedAudio]] = [:] {
         didSet { _allAudioItems = nil }
     }
+    /// Per-attachment translated audios keyed by `attachmentId`. The per-message
+    /// `messageTranslatedAudios` slot only holds ONE attachment's audios per
+    /// message — for a multi-audio message it is overwritten in the hydration
+    /// loop so only the LAST track survives. This dict keeps EACH track's own
+    /// translated audios so the audio carousel can show per-page language
+    /// buttons (Prisme Linguistique). The single-audio path still falls back to
+    /// `messageTranslatedAudios[msg.id]`. Mirrors `messageTranscriptionsByAttachment`.
+    @Published var messageTranslatedAudiosByAttachment: [String: [MessageTranslatedAudio]] = [:] {
+        didSet { _allAudioItems = nil }
+    }
 
     /// Manual translation override per message (user selected a specific language in Language tab)
     /// nil value means user chose "show original"
@@ -524,7 +534,8 @@ class ConversationViewModel: ObservableObject {
                         attachment: att,
                         message: msg,
                         transcription: messageTranscriptionsByAttachment[att.id] ?? messageTranscriptions[msg.id],
-                        translatedAudios: (messageTranslatedAudios[msg.id] ?? []).filter { $0.attachmentId == att.id }
+                        translatedAudios: messageTranslatedAudiosByAttachment[att.id]
+                            ?? (messageTranslatedAudios[msg.id] ?? []).filter { $0.attachmentId == att.id }
                     )
                 }
         }
@@ -3182,6 +3193,7 @@ class ConversationViewModel: ObservableObject {
                     }
                     if !audios.isEmpty {
                         messageTranslatedAudios[msg.id] = audios
+                        messageTranslatedAudiosByAttachment[att.id] = audios
                     }
                 }
             }
@@ -3248,8 +3260,7 @@ class ConversationViewModel: ObservableObject {
                 }
 
                 // Hydrate audio translations
-                if let translations = att.audioTranslations, !translations.isEmpty,
-                   forceOverwrite || messageTranslatedAudios[msgId] == nil {
+                if let translations = att.audioTranslations, !translations.isEmpty {
                     var audios: [MessageTranslatedAudio] = []
                     for (lang, trans) in translations {
                         let segments = (trans.segments ?? []).map {
@@ -3276,7 +3287,12 @@ class ConversationViewModel: ObservableObject {
                         ))
                     }
                     if !audios.isEmpty {
-                        messageTranslatedAudios[msgId] = audios
+                        if forceOverwrite || messageTranslatedAudios[msgId] == nil {
+                            messageTranslatedAudios[msgId] = audios
+                        }
+                        if forceOverwrite || messageTranslatedAudiosByAttachment[att.id] == nil {
+                            messageTranslatedAudiosByAttachment[att.id] = audios
+                        }
                     }
                 }
             }
@@ -3417,6 +3433,7 @@ extension ConversationViewModel: ConversationSocketDelegate {
             }
             if !audios.isEmpty {
                 messageTranslatedAudios[msgId] = audios
+                messageTranslatedAudiosByAttachment[attachment.id] = audios
             }
         }
     }

@@ -19,6 +19,11 @@ protocol ConversationSocketDelegate: AnyObject {
     /// `transcription:ready` handler (multi-audio karaoke realtime fix).
     var messageTranscriptionsByAttachment: [String: MessageTranscription] { get set }
     var messageTranslatedAudios: [String: [MessageTranslatedAudio]] { get set }
+    /// Per-attachment translated audios keyed by `attachmentId`. Mirrors
+    /// `ConversationViewModel.messageTranslatedAudiosByAttachment` so the
+    /// socket handler can write both dicts atomically in the audio
+    /// translation handler (multi-audio Prisme realtime fix).
+    var messageTranslatedAudiosByAttachment: [String: [MessageTranslatedAudio]] { get set }
     var activeLiveLocations: [ActiveLiveLocation] { get set }
     var isConversationClosed: Bool { get set }
     var pendingServerIds: [String: String] { get set }
@@ -732,6 +737,8 @@ final class ConversationSocketHandler {
                 ttsModel: event.translatedAudio.ttsModel,
                 segments: segments
             )
+            // Per-message dict (single-audio backward compat): dedup by
+            // targetLanguage only.
             var existing = delegate.messageTranslatedAudios[msgId] ?? []
             if let idx = existing.firstIndex(where: { $0.targetLanguage == audio.targetLanguage }) {
                 existing[idx] = audio
@@ -739,6 +746,17 @@ final class ConversationSocketHandler {
                 existing.append(audio)
             }
             delegate.messageTranslatedAudios[msgId] = existing
+            // Per-attachment dict (multi-audio Prisme realtime fix): dedup
+            // scoped to (attachmentId, targetLanguage) so each track keeps its
+            // own language buttons. Mirrors how the transcription handler
+            // populates `messageTranscriptionsByAttachment`.
+            var existingForAttachment = delegate.messageTranslatedAudiosByAttachment[event.attachmentId] ?? []
+            if let idx = existingForAttachment.firstIndex(where: { $0.targetLanguage == audio.targetLanguage }) {
+                existingForAttachment[idx] = audio
+            } else {
+                existingForAttachment.append(audio)
+            }
+            delegate.messageTranslatedAudiosByAttachment[event.attachmentId] = existingForAttachment
         }
 
         socketManager.audioTranslationReady

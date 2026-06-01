@@ -169,7 +169,7 @@ struct ComposerToolPanelHost: View {
         switch tool {
         case .media:    return 220
         case .audio:    return 220
-        case .drawing:  return 120
+        case .drawing:  return 140
         case .text:     return 280
         case .texture:  return 160
         case .filters:  return 180
@@ -425,15 +425,12 @@ struct ComposerToolPanelHost: View {
         .accessibilityLabel(tip)
     }
 
-    /// Panneau Dessin dans la bande (2026-06-01) : la **liste des traits éditables**
-    /// vit ici, comme tous les autres outils (donc avec le même chrome `headerRow` =
-    /// retour arrière + accès rapide aux autres outils). Les contrôles du pinceau
-    /// (couleur / épaisseur / lissage / pinceau) restent eux des bulles flottantes
-    /// posées sur le canvas (`StoryDrawingToolbar`), pour tracer immédiatement. La
-    /// liste remplit la hauteur disponible du panneau (redimensionnable).
+    /// Le mode dessin n'utilise PAS ce panneau de bande : il a sa propre bande
+    /// redimensionnable dédiée (`DrawingBand`, pilotée par `StoryComposerView`),
+    /// affichée uniquement quand au moins un trait existe. Ici on reste `EmptyView`
+    /// pour satisfaire le `switch` exhaustif sur `StoryToolMode`.
     private var drawingPanel: some View {
-        DrawingStrokeList(viewModel: viewModel, maxListHeight: .infinity)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        EmptyView()
     }
 
     @ViewBuilder
