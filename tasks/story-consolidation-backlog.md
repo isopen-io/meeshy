@@ -151,15 +151,25 @@ Local-first, efficient cache, FABs, show-only-necessary. Each fix: prove → fix
       including the background media — this is CORRECT: every media (bg or fg) needs its own loading-state
       blur (StoryBackgroundLayer uses the bg media's thumbHash). No bg-exclusion needed here. (false alarm)
 
+## Audit it.11 — publication path + cache + mini-preview: SOLID (no bug found)
+- [x] runStoryUpload: dedup-safe (skip slideIdx < alreadyPublishedCount on retry → no duplicate slides),
+      RAW publish (bg + fg media uploaded individually, effects JSON), offline queue (enqueueStoryForOffline
+      → StoryPublishQueue replay), onPublishedSlide → insertOrAppendStoryItem (id-dedup). Solid.
+- [x] insertOrAppendStoryItem: dedups by story id (optimistic+echo → no double segment). persistStoryCache.
+- [x] Cache coherence: realtime counters (reaction/comment) route via mutateStoryItem → persistStoryCache
+      → survive cold start (local-first). storyUpdated/Deleted/TranslationUpdated all persist. Solid.
+- [x] SlideMiniPreview: only used at StoryComposerView:853 with a 9:16 cell (thumbW = thumbH*9/16) →
+      non-uniform .position(y: media.y*size.height) is consistent with the width-based reader. No bug.
+  → 3 potential concerns verified as NON-issues (no blind fix). Publish/cache subsystem in good shape.
+
 ## REPLENISHED backlog (next to consume)
-- [ ] VISUAL SMOKE: best done on the user's device (real account + clearly-translatable story). Open a
-      story with text → tap a language flag → text switches (cached) or switches after ~seconds (it.9
-      realtime) → advance slide → reverts to base preferred. ios-simulator nav is fragile + needs a set-up
-      story; defer to device validation.
-- [ ] Audit drawMediaObject in renderComposite: 0.6× heuristic vs StoryMediaLayer.baseMediaDesignSize
-      (SlideMiniPreview uses baseMediaDesignSize). Cosmetic thumbHash accuracy — align for parity (low pri).
-- [ ] NEXT ANALYSIS PASS: story PUBLICATION path (runStoryUpload / outbox / TUS) + cache coherence
-      (CacheCoordinator.stories invalidation on edit) — areas not yet deeply audited this session.
+- [ ] VISUAL SMOKE: best on the user's device (real account + clearly-translatable story) — simulator is
+      cold (home screen), needs full install+login+nav+backend; defer per anti-rabbit-hole + device pref.
+- [ ] NEXT ANALYSIS PASS (fresh areas, not yet audited): composer DRAWING/TEXT editing flows
+      (StoryComposerViewModel+DrawingEditing / +TextEditing), reader GESTURES/timer gating, and
+      StoryComposerView+GranularSync (live thumbnail/effects write-through correctness).
+- [ ] (low pri) drawMediaObject 0.6× vs baseMediaDesignSize — negligible blur impact; skip unless other
+      thumbHash work touches it.
 - [ ] Reader language indicator: should the active override show a subtle "viewing in X" affordance + a
       one-tap revert to preferred? (Prisme discretion — currently silent revert on slide change only.)
 - [ ] StorySlideRenderer.drawTextObject thumbHash font /390 → /designWidth (cosmetic, noted it.7).
