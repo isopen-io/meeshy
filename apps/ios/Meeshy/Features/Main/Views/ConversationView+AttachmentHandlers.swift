@@ -197,26 +197,32 @@ extension ConversationView {
                 // that will fail immediately.
                 if send.group.kind == .audio, NetworkMonitor.shared.isOffline {
                     let urls = send.group.attachments.compactMap { mediaFiles[$0.id] }
-                    if !urls.isEmpty {
-                        do {
-                            _ = try await OfflineQueue.shared.enqueueAudios(
-                                sourceAudioURLs: urls,
-                                conversationId: viewModel.conversationId,
-                                content: nil,
-                                clientMessageId: send.tempId,
-                                originalLanguage: lang,
-                                replyToId: send.group.carriesReply ? replyId : nil
-                            )
-                            anySuccess = true
-                            Logger.messages.info("Audio group queued offline for \(send.tempId)")
-                        } catch {
-                            Logger.messages.error("Audio offline enqueue failed: \(error.localizedDescription)")
-                            await MainActor.run {
-                                FeedbackToastManager.shared.showError("Échec de la mise en file du message vocal")
-                            }
-                        }
-                        continue   // skip the online TUS path for this group
+                    // Offline: NEVER fall through to the TUS path (it would just
+                    // fail). A race-to-online between this check and the GRDB
+                    // write is handled by the flusher, which drains the queue
+                    // on the next cycle.
+                    guard !urls.isEmpty else {
+                        Logger.messages.warning("Audio group offline but no source URLs — skipping \(send.tempId)")
+                        continue
                     }
+                    do {
+                        _ = try await OfflineQueue.shared.enqueueAudios(
+                            sourceAudioURLs: urls,
+                            conversationId: viewModel.conversationId,
+                            content: nil,
+                            clientMessageId: send.tempId,
+                            originalLanguage: lang,
+                            replyToId: send.group.carriesReply ? replyId : nil
+                        )
+                        anySuccess = true
+                        Logger.messages.info("Audio group queued offline for \(send.tempId)")
+                    } catch {
+                        Logger.messages.error("Audio offline enqueue failed: \(error.localizedDescription)")
+                        await MainActor.run {
+                            FeedbackToastManager.shared.showError("Échec de la mise en file du message vocal")
+                        }
+                    }
+                    continue   // skip the online TUS path for this group
                 }
 
                 do {
