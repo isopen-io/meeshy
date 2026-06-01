@@ -748,7 +748,8 @@ export function registerMessagesRoutes(
                 // Vérifier si l'audio a une transcription
                 if (att.transcription) {
                   audioWithTranscriptionCount++;
-                  const transcriptionText = (att.transcription.text || att.transcription.transcribedText)?.substring(0, 50) + '...';
+                  const rawTranscriptionText = att.transcription.text || att.transcription.transcribedText || '';
+                  const transcriptionText = rawTranscriptionText ? `${rawTranscriptionText.substring(0, 50)}...` : '(vide)';
 
                   // Vérifier speakerAnalysis AVANT nettoyage
                   let speakerAnalysisInfo = '';

@@ -23,6 +23,7 @@ import { MultiLevelJobMappingCache } from '../MultiLevelJobMappingCache';
 import type { AttachmentTranscription, AttachmentTranslations, AttachmentTranslation, TranscriptionSegment } from '@meeshy/shared/types/attachment-audio';
 import { toSocketIOTranslation } from '@meeshy/shared/types/attachment-audio';
 import { createTranslationJSON, type MessageTranslationJSON } from '../../utils/translation-transformer';
+import { isBlankTranscriptionText } from '../../utils/transcription';
 import { PostAudioService } from '../posts/PostAudioService';
 import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 
@@ -1168,6 +1169,14 @@ export class MessageTranslationService extends EventEmitter {
     try {
       const startTime = Date.now();
 
+      // No-speech audio (VAD removed everything): never persist a blank
+      // transcription — it surfaces as "undefined" in the UI. Leave the
+      // attachment without a transcription instead.
+      if (isBlankTranscriptionText(data.transcription?.text)) {
+        logger.info(`🔇 [TranslationService] Transcription vide ignorée: ${data.attachmentId} (no speech)`);
+        return;
+      }
+
       logger.info(
         `📝 [TranslationService] Transcription only completed: ${data.attachmentId} | ` +
         (data.transcription?.text ? `Text: "${data.transcription.text.substring(0, 50)}..." | ` : '') +
@@ -1308,6 +1317,13 @@ export class MessageTranslationService extends EventEmitter {
   }) {
     try {
       const startTime = Date.now();
+
+      // No-speech audio: skip a blank transcription so it is never stored or
+      // displayed as "undefined".
+      if (isBlankTranscriptionText(data.transcription?.text)) {
+        logger.info(`🔇 [TranslationService] Transcription ready vide ignorée: ${data.attachmentId} (no speech)`);
+        return;
+      }
 
       // Post audio requests have no messageAttachment — emit and return immediately
       // so MeeshySocketIOManager can route to PostAudioService.
