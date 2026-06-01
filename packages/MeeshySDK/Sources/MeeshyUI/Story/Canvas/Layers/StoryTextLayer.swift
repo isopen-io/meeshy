@@ -137,9 +137,12 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
         if shouldRasterize { rasterizationScale = UIScreen.main.scale }
 
         // Install background fill / glass backdrop behind the text glyphs.
-        // The CATextLayer renders its `string` into its own contents; the
-        // background must live in a *sublayer* placed at zPosition < 0 so the
-        // CATextLayer's own drawn glyphs paint above it.
+        // The CATextLayer renders its `string` into its OWN contents. Un
+        // sous-calque composite TOUJOURS au-dessus du contenu propre du parent
+        // (son `zPosition` n'ordonne que les sous-calques entre eux, il ne le
+        // pousse PAS derrière les glyphes) — c'est pourquoi un fond SOLIDE doit
+        // être posé sur `backgroundColor` de la calque (peint avant le contenu),
+        // tandis que le GLASS reste un sous-calque (il fait du blur GPU).
         applyBackgroundStyle(text.resolvedBackgroundStyle, geometry: geometry)
     }
 
@@ -163,21 +166,27 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
         backgroundFillLayer = nil
         glassBackdropLayer?.removeFromSuperlayer()
         glassBackdropLayer = nil
+        // Reset le fond propre de la calque (cas `.none` / `.glass`, ou
+        // réutilisation d'instance) — sinon un ancien `backgroundColor` solide
+        // survivrait à un passage vers `.none`.
+        backgroundColor = nil
+        cornerRadius = 0
 
         switch style {
         case .none:
             return
 
         case .solid(let hex):
-            let fill = CALayer()
-            fill.frame = bounds
-            // Symmetric inset already baked into bounds via the +16 design-px pad.
-            fill.cornerRadius = max(4, bounds.height * 0.15)
-            fill.backgroundColor = (parseHexColor(hex) ?? .black.withAlphaComponent(0.5)).cgColor
-            fill.zPosition = -1
-            fill.contentsScale = UIScreen.main.scale
-            addSublayer(fill)
-            backgroundFillLayer = fill
+            // Fond solide posé sur le `backgroundColor` de la calque ELLE-MÊME
+            // (peint AVANT le contenu → les glyphes s'affichent par-dessus), et
+            // NON en sous-calque (qui composerait au-dessus des glyphes et les
+            // masquerait — régression « boîte noire vide » du 2026-06-01).
+            // L'inset symétrique est déjà intégré dans `bounds` via le pad de
+            // +16 design-px. `masksToBounds` reste false : `cornerRadius`
+            // arrondit le fond sans rogner les glyphes (le contenu n'est clippé
+            // que si `masksToBounds == true`).
+            backgroundColor = (parseHexColor(hex) ?? .black.withAlphaComponent(0.5)).cgColor
+            cornerRadius = max(4, bounds.height * 0.15)
 
         case .glass(let radius):
             let backdrop = StoryGlassBackdropLayer()
