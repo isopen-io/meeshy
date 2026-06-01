@@ -147,9 +147,35 @@ public actor MessagePersistenceActor {
         }
     }
 
+    /// Retention window (days) for terminal `.exhausted` outbox rows. They are
+    /// kept briefly so the user can still see / manually retry a permanently
+    /// failed mutation, then GC'd — a row that hit `maxAttempts` is otherwise
+    /// only ever deleted at logout, so without this the outbox grows without
+    /// bound across sessions (T14).
+    public static let exhaustedRetentionDays = 7
+
+    /// Delete `.exhausted` outbox rows older than `days`, returning how many
+    /// were removed. Runs once at boot (see `start()`); cheap + idempotent.
+    /// Bounded retention rather than delete-on-exhaust so a recent permanent
+    /// failure stays visible/retriable for a week before it is reclaimed.
+    @discardableResult
+    public func purgeExhaustedOlderThan(days: Int = exhaustedRetentionDays) async throws -> Int {
+        let cutoff = Date().addingTimeInterval(-TimeInterval(days) * 86_400)
+        return try await dbWriter.write { db in
+            try OutboxRecord
+                .filter(Column("status") == OutboxStatus.exhausted.rawValue)
+                .filter(Column("createdAt") < cutoff)
+                .deleteAll(db)
+        }
+    }
+
     /// Call after init to start the background write processor.
     public func start() {
         guard processorTask == nil else { return }
+        // T14 — one-shot GC of stale terminal (`.exhausted`) outbox rows so the
+        // table can't grow without bound across sessions. Fire-and-forget: a
+        // failure here is non-fatal and retried next boot.
+        Task { [weak self] in try? await self?.purgeExhaustedOlderThan() }
         processorTask = Task { [weak self, writeStream] in
             for await op in writeStream {
                 guard let self else { break }

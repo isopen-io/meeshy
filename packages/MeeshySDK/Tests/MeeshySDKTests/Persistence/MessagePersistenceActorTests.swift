@@ -1109,4 +1109,33 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertTrue(reactions.isEmpty,
             "with no pending mutation the server (empty) reaction state must win")
     }
+
+    // MARK: - T14 — GC of stale exhausted outbox rows
+
+    /// `.exhausted` rows older than the retention window are reclaimed so the
+    /// outbox can't grow without bound; recent exhausted (still retriable) and
+    /// non-terminal rows survive.
+    func test_purgeExhaustedOlderThan_deletesOldExhausted_keepsRecentAndNonTerminal() async throws {
+        let now = Date()
+        let old = now.addingTimeInterval(-10 * 86_400)   // 10 days ago
+        let recent = now.addingTimeInterval(-1 * 86_400) // 1 day ago
+        try await dbQueue.write { db in
+            try OutboxRecord(id: "ex_old", kind: .blockUser, conversationId: "c", clientMessageId: "c1",
+                             payload: Data(), status: .exhausted, attempts: 5, lastError: "x",
+                             createdAt: old, updatedAt: old, nextAttemptAt: old).insert(db)
+            try OutboxRecord(id: "ex_recent", kind: .blockUser, conversationId: "c", clientMessageId: "c2",
+                             payload: Data(), status: .exhausted, attempts: 5, lastError: "x",
+                             createdAt: recent, updatedAt: recent, nextAttemptAt: recent).insert(db)
+            try OutboxRecord(id: "pend_old", kind: .blockUser, conversationId: "c", clientMessageId: "c3",
+                             payload: Data(), status: .pending, attempts: 0, lastError: nil,
+                             createdAt: old, updatedAt: old, nextAttemptAt: old).insert(db)
+        }
+
+        let deleted = try await actor.purgeExhaustedOlderThan(days: 7)
+
+        XCTAssertEqual(deleted, 1, "only the old exhausted row is reclaimed")
+        let remaining = try await dbQueue.read { db in try OutboxRecord.fetchAll(db).map(\.id).sorted() }
+        XCTAssertEqual(remaining, ["ex_recent", "pend_old"],
+            "recent exhausted (still retriable) + old non-terminal rows must survive")
+    }
 }
