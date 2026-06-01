@@ -498,3 +498,25 @@ PLAN DE CORRECTIF (incrément focalisé, TDD) :
       donnent 3 rendus différents pour le même filtre → unifier sur une source de vérité (`ciFilterName`).
 - [ ] Vérif visuelle device/simu (login frais) : vintage + bw désormais visibles sur canvas + reader.
 - [ ] Surfaces non auditées : ops multi-slides (add/delete/reorder/duplicate), viewer gestes.
+
+## it.25 IMPLÉMENTÉ — thumbHash reflète le filtre, synchro avec le viewer (7756dd99e)
+- [x] P2 résolu : `StorySlideRenderer.renderComposite` applique `effects.filter` sur tout le composite,
+      gaté sur le MÊME pont `StoryFilteredLayer.Kind(storyFilter:)` que le canvas → couverture en lock-step
+      avec ce que le viewer rend réellement. vintage (CISepiaTone) + bw (CIPhotoEffectMono) ; 6 kernel-less
+      laissent le composite intact (pas de faux placeholder → pas de pop placeholder→story).
+- [x] 4 tests StorySlideRendererFilterTests (RED reproduit avant fix) + 2 suites sœurs sans régression
+      + app build vert (direct ; meeshy.sh exit 1 = contention SPM transitoire d'un agent //, résolu).
+- Note forward-compat : quand le canvas rendra les 8 filtres (P1), thumbHash suivra automatiquement via le pont.
+
+## REPLENISHED backlog — post it.25
+- [ ] **P1 — 6 filtres sans kernel Metal (chantier architectural, nécessite un PLAN)** : warm/cool/dramatic/
+      vivid/fade/chrome visibles grille+mini-preview mais pas canvas/viewer/thumbHash. Solution élégante =
+      unifier le rendu canvas sur CoreImage (`StoryFilter.ciFilterName`, déjà la source des 8 dans la grille)
+      OU écrire 6 kernels Metal. Décision archi+produit → mode plan dédié, PAS une itération loop rushée.
+- [ ] **P3 — 3 looks divergents** (grille CoreImage vs mini-preview SwiftUI vs canvas Metal) — se résout
+      avec P1 (unifier sur ciFilterName). Lié.
+- [ ] Vérif visuelle device/simu (login frais) : vintage + bw visibles canvas+reader (it.24) ET thumbHash
+      placeholder teinté cohérent (it.25). Login-gated → à faire quand session de test dispo.
+- [ ] **Surfaces non auditées (prochaine cible loop)** : ops multi-slides (add/delete/reorder/duplicate) —
+      vérifier que thumbHash/mini-preview/currentSlideIndex restent synchro après mutation ; viewer gestes
+      (tap zones, hold-to-pause, swipe inter-groupes) ; callbacks publication (onPublished/onError branchés).
