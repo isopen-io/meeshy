@@ -72,6 +72,13 @@ public final class ConversationAudioCoordinator: ObservableObject {
     }
 
     private var queue: [QueuedAudio] = []
+    /// BUG C — ids of attachments that have already finished/failed and been
+    /// removed from the head in `advanceQueue()`. `appendUpcoming` skips these
+    /// in addition to the live `queue`, closing the narrow window where a
+    /// re-emitted `$messages` could re-queue a just-finished audio before the
+    /// VM-side `listenedAttachmentIds` set updates. Cleared on a fresh
+    /// `play(...)` so replaying a track later in a new session still works.
+    private var consumedAttachmentIds: Set<String> = []
     private var currentName: String = ""
     private var currentArtwork: String?
     private var cancellables = Set<AnyCancellable>()
@@ -120,6 +127,9 @@ public final class ConversationAudioCoordinator: ObservableObject {
         }
         queue = [current] + tail
         queueCount = queue.count
+        // BUG C — a fresh play session starts a new lifecycle: previously
+        // consumed ids must be forgotten so the user can replay them.
+        consumedAttachmentIds = []
         currentName = conversationName
         currentArtwork = conversationArtworkURL
         startCurrentHead()
@@ -150,6 +160,9 @@ public final class ConversationAudioCoordinator: ObservableObject {
 
     public func appendUpcoming(_ audio: QueuedAudio) {
         guard !queue.contains(where: { $0.attachmentId == audio.attachmentId }) else { return }
+        // BUG C — also skip ids already consumed (finished/failed) this session,
+        // even if they've already been removed from the live `queue`.
+        guard !consumedAttachmentIds.contains(audio.attachmentId) else { return }
         queue.append(audio)
         queueCount = queue.count
     }
@@ -190,6 +203,9 @@ public final class ConversationAudioCoordinator: ObservableObject {
         if !queue.isEmpty { queue.removeFirst() }
         queueCount = queue.count
         if let finishedHead {
+            // BUG C — record the consumed id so a re-emitted `$messages` can't
+            // re-`appendUpcoming` it before the VM updates `listenedAttachmentIds`.
+            consumedAttachmentIds.insert(finishedHead.attachmentId)
             attachmentFinishedSubject.send(AttachmentFinishedEvent(
                 attachmentId: finishedHead.attachmentId,
                 conversationId: finishedHead.conversationId

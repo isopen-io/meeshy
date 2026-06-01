@@ -64,6 +64,13 @@ struct AudioCarouselView: View {
     /// zone (no transcription) are shorter; the pager keeps the max so paging
     /// between them does not jump.
     @State private var pagerHeight: CGFloat = 72
+    /// BUG A — pending settle task for swipe-driven playback. A fast fling
+    /// across multiple pages emits intermediate `currentPageID` values; each
+    /// would otherwise fire `onPlayAudio` → rebuild + restart the coordinator
+    /// queue from 0. We debounce: store the latest task, cancel the previous
+    /// one on each change, and only fire `onPlayAudio` once the page has
+    /// SETTLED on a track for ~220ms.
+    @State private var pendingPlayTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -97,7 +104,7 @@ struct AudioCarouselView: View {
             }
 
             BubbleFooter(
-                model: footerModel,
+                model: currentPageFooterModel,
                 actions: footerActions,
                 style: .overlay,
                 isDark: isDark
@@ -118,8 +125,61 @@ struct AudioCarouselView: View {
         .adaptiveOnChange(of: currentPageID) { oldID, newID in
             guard let newID, oldID != nil else { return }
             HapticFeedback.light()
-            onPlayAudio?(newID)
+            // BUG A — skip-if-already-active: a deliberate swipe back onto the
+            // track that's currently playing must not rebuild + restart the
+            // queue. The coordinator's `activeContext` is the source of truth.
+            let coordinator = ConversationAudioCoordinator.shared
+            if coordinator.activeContext?.attachmentId == newID && coordinator.isPlaying {
+                return
+            }
+            // BUG A — debounce: cancel any pending settle task and only fire
+            // `onPlayAudio` once the page has stayed on `newID` for ~220ms, so
+            // a fast fling across pages doesn't start-then-restart each
+            // intermediate track.
+            pendingPlayTask?.cancel()
+            pendingPlayTask = Task {
+                try? await Task.sleep(nanoseconds: 220_000_000)
+                guard !Task.isCancelled, currentPageID == newID else { return }
+                onPlayAudio?(newID)
+            }
         }
+        .onDisappear { pendingPlayTask?.cancel() }
+    }
+
+    // MARK: - Per-visible-track footer (BUG B)
+
+    /// The footer rendered below the pager. Timestamp / delivery / sender are
+    /// CONSTANT across same-message tracks, so those come straight from the
+    /// message-level `footerModel`. Only the LANGUAGE FLAGS are per-track: a
+    /// heterogeneous multi-audio message can carry different languages per
+    /// track, so the flags must advertise the CURRENTLY VISIBLE track's
+    /// languages — not the message-level (last-track) set.
+    private var currentPageFooterModel: BubbleFooterModel {
+        guard let pageID = currentPageID else { return footerModel }
+        let flags = footerFlags(forTrack: pageID)
+        // Preserve the message-level model entirely when the visible track has
+        // no per-track language data (e.g. transcription not yet arrived) so we
+        // never blank out flags that the message-level model legitimately holds.
+        guard !flags.isEmpty else { return footerModel }
+        var model = footerModel
+        model.flags = flags
+        return model
+    }
+
+    /// Languages available for a track: its original (transcription) language
+    /// plus every translated-audio target language, deduplicated and order-
+    /// preserving (original first). The active flag matches `activeAudioLanguage`.
+    private func footerFlags(forTrack attachmentId: String) -> [FooterFlag] {
+        var codes: [String] = []
+        if let original = transcriptions[attachmentId]?.language {
+            codes.append(original)
+        }
+        for audio in translatedAudios[attachmentId] ?? [] {
+            codes.append(audio.targetLanguage)
+        }
+        var seen = Set<String>()
+        let ordered = codes.filter { seen.insert($0).inserted }
+        return ordered.map { FooterFlag(code: $0, isActive: $0 == activeAudioLanguage) }
     }
 
     @ViewBuilder
