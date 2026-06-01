@@ -36,6 +36,24 @@ import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesServ
 
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
 
+/**
+ * Nested-user fields fetched for a message sender in the GET messages select.
+ *
+ * T16 — only the fields the response actually derives are fetched: the handler
+ * overlays the top-level sender username / displayName / avatar from this
+ * nested user (with the flat Participant fields as the primary). `firstName`,
+ * `lastName`, `systemLanguage` and `role` are NOT selected: the response schema
+ * (`messageSenderSchema`) strips the nested user entirely and never exposes
+ * systemLanguage/role, `firstName`/`lastName` are read by no client, so
+ * fetching them was pure per-message DB over-fetch.
+ */
+export const messageSenderUserSelect = {
+  id: true,
+  username: true,
+  displayName: true,
+  avatar: true
+} as const;
+
 // `content` est optionnel : un message média-seul (image/vidéo/fichier sans
 // légende) ou un forward arrive avec un contenu vide. Le `.refine()` final
 // exige qu'au moins une source de contenu soit présente. Restaure le
@@ -577,16 +595,7 @@ export function registerMessagesRoutes(
             role: true,
             language: true,
             user: {
-              select: {
-                id: true,
-                username: true,
-                displayName: true,
-                firstName: true,
-                lastName: true,
-                avatar: true,
-                systemLanguage: true,
-                role: true
-              }
+              select: messageSenderUserSelect
             }
           }
         },
@@ -934,8 +943,8 @@ export function registerMessagesRoutes(
           sender: message.sender ? {
             ...message.sender,
             username: message.sender.user?.username ?? message.sender.username ?? null,
-            firstName: message.sender.user?.firstName ?? null,
-            lastName: message.sender.user?.lastName ?? null,
+            // T16 — firstName/lastName were serialized but read by no client and
+            // are no longer fetched (messageSenderUserSelect trims them).
             displayName: message.sender.displayName ?? message.sender.user?.displayName ?? null,
             avatar: message.sender.avatar ?? message.sender.user?.avatar ?? null,
             isOnline: message.sender.user?.isOnline ?? message.sender.isOnline ?? null,
