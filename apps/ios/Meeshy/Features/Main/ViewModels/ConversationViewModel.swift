@@ -153,6 +153,15 @@ class ConversationViewModel: ObservableObject {
     @Published var messageTranscriptions: [String: MessageTranscription] = [:] {
         didSet { _allAudioItems = nil }
     }
+    /// Per-attachment transcription keyed by `attachmentId`. The per-message
+    /// `messageTranscriptions` slot only holds ONE transcription per message —
+    /// for a multi-audio message it is overwritten in the hydration loop so
+    /// only the LAST track survives. This dict keeps EACH track's own
+    /// transcription so the audio carousel can show per-page karaoke.
+    /// The single-audio path still reads `messageTranscriptions[msg.id]`.
+    @Published var messageTranscriptionsByAttachment: [String: MessageTranscription] = [:] {
+        didSet { _allAudioItems = nil }
+    }
     @Published var messageTranslatedAudios: [String: [MessageTranslatedAudio]] = [:] {
         didSet { _allAudioItems = nil }
     }
@@ -514,8 +523,8 @@ class ConversationViewModel: ObservableObject {
                         id: att.id,
                         attachment: att,
                         message: msg,
-                        transcription: messageTranscriptions[msg.id],
-                        translatedAudios: messageTranslatedAudios[msg.id] ?? []
+                        transcription: messageTranscriptionsByAttachment[att.id] ?? messageTranscriptions[msg.id],
+                        translatedAudios: (messageTranslatedAudios[msg.id] ?? []).filter { $0.attachmentId == att.id }
                     )
                 }
         }
@@ -3132,7 +3141,7 @@ class ConversationViewModel: ObservableObject {
                             speakerId: $0.speakerId
                         )
                     }
-                    messageTranscriptions[msg.id] = MessageTranscription(
+                    let transcription = MessageTranscription(
                         attachmentId: att.id,
                         text: t.resolvedText,
                         language: t.language ?? "?",
@@ -3141,6 +3150,8 @@ class ConversationViewModel: ObservableObject {
                         segments: segments,
                         speakerCount: t.speakerCount
                     )
+                    messageTranscriptions[msg.id] = transcription
+                    messageTranscriptionsByAttachment[att.id] = transcription
                 }
                 if let translations = att.translations {
                     var audios: [MessageTranslatedAudio] = []
@@ -3210,8 +3221,7 @@ class ConversationViewModel: ObservableObject {
 
             for att in attachments {
                 // Hydrate transcription
-                if let t = att.transcription,
-                   forceOverwrite || messageTranscriptions[msgId] == nil {
+                if let t = att.transcription {
                     let segments = (t.segments ?? []).map {
                         MessageTranscriptionSegment(
                             text: $0.text,
@@ -3220,7 +3230,7 @@ class ConversationViewModel: ObservableObject {
                             speakerId: $0.speakerId
                         )
                     }
-                    messageTranscriptions[msgId] = MessageTranscription(
+                    let transcription = MessageTranscription(
                         attachmentId: att.id,
                         text: t.text,
                         language: t.language,
@@ -3229,6 +3239,12 @@ class ConversationViewModel: ObservableObject {
                         segments: segments,
                         speakerCount: t.speakerCount
                     )
+                    if forceOverwrite || messageTranscriptions[msgId] == nil {
+                        messageTranscriptions[msgId] = transcription
+                    }
+                    if forceOverwrite || messageTranscriptionsByAttachment[att.id] == nil {
+                        messageTranscriptionsByAttachment[att.id] = transcription
+                    }
                 }
 
                 // Hydrate audio translations
@@ -3360,7 +3376,7 @@ extension ConversationViewModel: ConversationSocketDelegate {
                     speakerId: $0.speakerId
                 )
             }
-            messageTranscriptions[msgId] = MessageTranscription(
+            let transcription = MessageTranscription(
                 attachmentId: attachment.id,
                 text: t.transcribedText ?? t.text ?? "",
                 language: t.language ?? "?",
@@ -3369,6 +3385,8 @@ extension ConversationViewModel: ConversationSocketDelegate {
                 segments: segments,
                 speakerCount: t.speakerCount
             )
+            messageTranscriptions[msgId] = transcription
+            messageTranscriptionsByAttachment[attachment.id] = transcription
         }
         if let translations = attachment.translations, !translations.isEmpty {
             var audios: [MessageTranslatedAudio] = []

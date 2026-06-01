@@ -59,6 +59,11 @@ struct AudioCarouselView: View {
     let onPlayAudio: ((String) -> Void)?
 
     @State private var currentPageID: String?
+    /// Height of the pager — grows to the tallest audio page so a track with a
+    /// longer karaoke transcription is not clipped. Pages without a karaoke
+    /// zone (no transcription) are shorter; the pager keeps the max so paging
+    /// between them does not jump.
+    @State private var pagerHeight: CGFloat = 72
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -104,18 +109,18 @@ struct AudioCarouselView: View {
         }
         // Swipe to a track plays it from 0 (validated UX). Tapping play inside a
         // page routes through the same `onPlayAudio` callback below.
-        .adaptiveOnChange(of: currentPageID) { _, newID in
-            guard let newID else { return }
+        //
+        // The `oldID != nil` guard skips the INITIAL appear-driven assignment
+        // (`nil -> items[0].id`, set by `.onAppear` / the iOS17 scrollPosition
+        // binding). Without it, a multi-audio bubble would auto-play track 0
+        // just by scrolling into view — playback must only start on a real
+        // user swipe (or an explicit tap-play inside a page).
+        .adaptiveOnChange(of: currentPageID) { oldID, newID in
+            guard let newID, oldID != nil else { return }
             HapticFeedback.light()
             onPlayAudio?(newID)
         }
     }
-
-    /// Height of the pager — grows to the tallest audio page so a track with a
-    /// longer karaoke transcription is not clipped. Pages without a karaoke
-    /// zone (no transcription) are shorter; the pager keeps the max so paging
-    /// between them does not jump.
-    @State private var pagerHeight: CGFloat = 72
 
     @ViewBuilder
     private func page(_ attachment: MessageAttachment) -> some View {

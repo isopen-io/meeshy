@@ -559,22 +559,45 @@ struct BubbleStandardLayout: View {
             //   - `audioHostsCaption` (NEW 2026-05-29) : audio + texte, le
             //     texte devient le caption rendu DANS playerBackground via
             //     `embedsCaptionInWidget` au lieu d'une bulle texte séparée.
-            if audioAttachments.count > 1 {
+            if case .audio(let auds) = content.attachments, auds.count > 1 {
                 // Multi-track audio message → horizontal carousel (one page per
                 // track) with one shared footer. All tracks belong to the SAME
                 // message, so the footer model is constant across pages. The
                 // composer always sends multi-audio as a sole-content audio
                 // message (text/reply are separate messages, per Plan 1), so
                 // the message-level footer is always shown here.
+                //
+                // Gated to the PURE `.audio` enum case: a `.mixed` message that
+                // ever carried multi-audio (rare inbound MIMI) would render the
+                // carousel footer AND the visual grid footer → two footers, so
+                // it falls back to the stacked `ForEach` path below.
+                //
+                // Per-page transcription/translatedAudios are keyed by
+                // attachmentId from `allAudioItems` — each `AudioItem` already
+                // carries ITS OWN transcription (the VM populates
+                // `messageTranscriptionsByAttachment`). The single per-message
+                // `transcription` slot only holds the LAST track's data, so it
+                // can't be used to key the carousel.
                 let footer = resolvedFooter(includesTranslationControls: true)
+                let trackIDs = Set(auds.map(\.id))
+                let perPageTranscriptions = Dictionary(
+                    allAudioItems
+                        .filter { trackIDs.contains($0.id) }
+                        .compactMap { item in item.transcription.map { (item.id, $0) } },
+                    uniquingKeysWith: { first, _ in first }
+                )
+                let perPageTranslatedAudios = Dictionary(
+                    grouping: translatedAudios,
+                    by: { $0.attachmentId }
+                )
                 AudioCarouselView(
-                    items: audioAttachments,
+                    items: auds,
                     message: message,
                     contactColor: content.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
                     isDark: isDark,
                     accentColor: content.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
-                    transcriptions: transcription.map { [$0.attachmentId: $0] } ?? [:],
-                    translatedAudios: Dictionary(grouping: translatedAudios, by: { $0.attachmentId }),
+                    transcriptions: perPageTranscriptions,
+                    translatedAudios: perPageTranslatedAudios,
                     textTranslations: textTranslations,
                     allAudioItems: allAudioItems,
                     mentionDisplayNames: mentionDisplayNames,

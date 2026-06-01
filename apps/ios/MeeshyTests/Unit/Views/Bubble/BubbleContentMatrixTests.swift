@@ -82,6 +82,24 @@ final class BubbleContentMatrixTests: XCTestCase {
         }
     }
 
+    /// Multi-audio (count 2) routes to `.audio([a1, a2])` carrying BOTH tracks
+    /// in order. Protects the carousel's `filter`-vs-`first` change: a regression
+    /// to `audioAttachments.first` would drop track 2 and the carousel would
+    /// never render. The pure-`.audio`-case gate in BubbleStandardLayout keys
+    /// the carousel branch off exactly this shape.
+    func test_twoAudioAttachments_routesToAudioCaseWithBothTracks() {
+        let a1 = makeAttachment(type: .audio)
+        let a2 = makeAttachment(type: .audio)
+        let msg = makeMessage(content: "", attachments: [a1, a2])
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        guard case .audio(let auds) = content.attachments else {
+            return XCTFail("expected .audio, got \(content.attachments)")
+        }
+        XCTAssertEqual(auds.count, 2)
+        XCTAssertEqual(auds.map(\.id), [a1.id, a2.id])
+    }
+
     func test_deletedMessage_routesToDeletedKind() {
         let msg = makeMessage(content: "ignored", deletedAt: Date())
         let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
