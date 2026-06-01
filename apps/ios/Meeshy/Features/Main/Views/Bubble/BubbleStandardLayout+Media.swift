@@ -639,8 +639,11 @@ struct BubbleCarouselView: View {
 
             if oldIndex != newIndex {
                 let oldAttachment = items[oldIndex]
-                if oldAttachment.type == .video && SharedAVPlayerManager.shared.activeURL == oldAttachment.fileUrl {
-                    SharedAVPlayerManager.shared.pause()
+                if oldAttachment.type == .video {
+                    // BUG E fix : release (URL-gated) plutôt que pause sur
+                    // swipe-away — vide `activeURL` pour que la bulle réaffiche
+                    // son footer et que le player ne traîne pas en mémoire.
+                    SharedAVPlayerManager.shared.release(urlString: oldAttachment.fileUrl)
                 }
                 HapticFeedback.light()
             }
@@ -654,6 +657,13 @@ struct BubbleCarouselView: View {
     private var carouselTopBar: some View {
         HStack(spacing: 0) {
             Button {
+                // BUG E fix : libère le player de la slide active (URL-gated)
+                // pour vider `activeURL`, sinon `hasPlayingInlineVideo` reste
+                // vrai et le footer de la bulle reste masqué après fermeture.
+                let current = items[max(0, min(carouselIndex, items.count - 1))]
+                if current.type == .video {
+                    SharedAVPlayerManager.shared.release(urlString: current.fileUrl)
+                }
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showCarousel = false
                 }
@@ -808,7 +818,12 @@ struct BubbleCarouselView: View {
         let prefetchRange = max(0, index - 1)...min(items.count - 1, index + 1)
         for i in prefetchRange {
             let attachment = items[i]
-            let urlStr = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
+            // BUG C fix : pour une vidéo, NE JAMAIS prefetch le body MP4 dans
+            // le cache image (téléchargement complet + échec de décodage
+            // UIImage). On prefetch le thumbnail uniquement ; si absent, skip.
+            let urlStr: String = attachment.type == .video
+                ? (attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl! : "")
+                : (attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl)
             guard !urlStr.isEmpty else { continue }
             Task {
                 _ = await CacheCoordinator.shared.images.image(

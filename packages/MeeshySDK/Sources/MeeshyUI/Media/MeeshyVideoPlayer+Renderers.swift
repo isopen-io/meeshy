@@ -116,7 +116,7 @@ internal struct _InlineRenderer: View {
             Color.black
 
             if isThisActive, let p = manager.player {
-                MeeshyVideoSurface(player: p, gravity: .resizeAspect, isMuted: false)
+                MeeshyVideoSurface(player: p, gravity: .resizeAspect, isMuted: manager.isMuted)
                     .onTapGesture { toggleControls() }
                 if isLoadingAsset {
                     loadingIndicator
@@ -398,7 +398,18 @@ internal struct _FullscreenRenderer: View {
     @State private var saveState: SaveState = .idle
     @State private var dismissOffset: CGFloat = 0
     @State private var watchStartTime: Date?
-    @State private var endObserver: NSObjectProtocol?
+    // NOTE (BUG B fix): the fullscreen renderer no longer registers its own
+    // `.AVPlayerItemDidPlayToEndTime` observer. `SharedAVPlayerManager` is the
+    // single source of truth for end-of-stream — it reports watch progress
+    // (`complete: true`) and then stops/loops. A second observer here caused a
+    // duplicate `POST /attachments/.../status complete:true`. The partial-watch
+    // report on disappear (`reportWatch(complete:false)`) stays here.
+    /// Guards the initial-mount auto-load against a teardown-triggered nil.
+    /// When a non-loop fullscreen video reaches the end, the manager calls
+    /// `stop()` → `player = nil`, which re-inserts the loading `else` branch.
+    /// Without this flag its `.onAppear` would RELOAD + REPLAY the just-watched
+    /// video from 0. We only auto-load on the very first mount.
+    @State private var didInitialLoad = false
     @ObservedObject private var manager = SharedAVPlayerManager.shared
 
     internal enum SaveState { case idle, saving, saved, failed }
@@ -452,6 +463,12 @@ internal struct _FullscreenRenderer: View {
                     .tint(.white)
                     .scaleEffect(1.4)
                     .onAppear {
+                        // Only auto-load on the INITIAL mount. An end-of-stream
+                        // nil (manager.stop() on non-loop end) re-inserts this
+                        // branch — guarding here prevents an unwanted reload +
+                        // replay of the just-watched video.
+                        guard !didInitialLoad else { return }
+                        didInitialLoad = true
                         manager.attachmentId = player.attachment.id
                         manager.load(urlString: player.attachment.fileUrl)
                         manager.play()
@@ -473,7 +490,6 @@ internal struct _FullscreenRenderer: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: showControls)
-        .onAppear { observeEnd() }
     }
 
     @ViewBuilder
@@ -652,22 +668,10 @@ internal struct _FullscreenRenderer: View {
 
     // MARK: Lifecycle
 
-    private func observeEnd() {
-        guard endObserver == nil, let item = manager.player?.currentItem else { return }
-        endObserver = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime,
-            object: item, queue: .main
-        ) { _ in
-            Task { @MainActor in reportWatch(complete: true) }
-        }
-    }
-
     private func onDisappearTeardown() {
         controlsTimer?.invalidate(); controlsTimer = nil
-        if let obs = endObserver {
-            NotificationCenter.default.removeObserver(obs)
-            endObserver = nil
-        }
+        // End-of-stream watch reporting is owned by SharedAVPlayerManager
+        // (BUG B fix). Here we only report the partial watch on dismiss.
         reportWatch(complete: false)
         watchStartTime = nil
     }
@@ -676,6 +680,15 @@ internal struct _FullscreenRenderer: View {
         // Reset loop défensif : sans ça, le flag persisterait jusqu'au prochain
         // load() et pourrait faire boucler une vidéo inline ouverte ensuite.
         manager.shouldLoop = false
+        // BUG E fix : si la lecture est en pause/terminée au moment de la
+        // fermeture, on libère le player pour vider `activeURL`. Sans ça,
+        // `hasPlayingInlineVideo` reste vrai côté bulle (footer/timestamp
+        // masqué) et le player traîne en mémoire. Choix : ne PAS stopper un
+        // player encore en lecture — l'utilisateur peut vouloir un handoff PIP
+        // ou une continuation inline ; seul un dismiss "à l'arrêt" coupe.
+        if !manager.isPlaying {
+            manager.stop()
+        }
         player.onClose?()
     }
 
