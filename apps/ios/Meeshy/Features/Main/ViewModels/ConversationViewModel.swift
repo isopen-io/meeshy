@@ -2218,6 +2218,15 @@ class ConversationViewModel: ObservableObject {
         )
     }
 
+    /// S7 — flip an optimistic media bubble to `.failed` so a stuck `.sending`
+    /// spinner resolves into a retryable failed state when its upload/send
+    /// fails (e.g. an offline visual attachment whose TUS upload threw). Without
+    /// this the bubble stays a permanent ghost spinner. Thin passthrough; the
+    /// store observation surfaces the new state.
+    func markOptimisticMediaFailed(tempId: String, reason: String) async {
+        try? await messagePersistence.markOptimisticFailed(localId: tempId, reason: reason)
+    }
+
     func insertOptimisticMediaMessage(
         tempId: String,
         content: String,

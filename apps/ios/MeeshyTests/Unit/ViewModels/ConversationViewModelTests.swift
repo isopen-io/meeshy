@@ -733,6 +733,26 @@ final class ConversationViewModelTests: XCTestCase {
             "the hidden state must follow temp->server so the message stays hidden")
     }
 
+    /// S7 — an optimistic media bubble whose upload/send fails must flip to
+    /// `.failed` (retryable) rather than stay a permanent `.sending` ghost.
+    func test_markOptimisticMediaFailed_flipsRowToFailed() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let record = MessageStoreObservationHelper.makeRecord(
+            localId: "media-s7", conversationId: testConversationId,
+            senderId: testUserId, content: ""
+        )
+        try await persistence.insertOptimistic(record)
+
+        await sut.markOptimisticMediaFailed(tempId: "media-s7", reason: "upload failed")
+
+        let row = try await MessageStoreObservationHelper.fetchRecord(localId: "media-s7", from: pool)
+        XCTAssertEqual(row?.state, .failed,
+            "a failed-upload media bubble must flip to .failed, not stay .sending")
+        XCTAssertEqual(row?.lastError, "upload failed")
+    }
+
     // MARK: - toggleReaction Tests
     //
     // Post Phase 1.5: `toggleReaction` writes through `messagePersistence.appendReaction`

@@ -284,6 +284,12 @@ extension ConversationView {
                     anySuccess = anySuccess || ok
                 } catch {
                     Logger.messages.error("Group upload failed (\(String(describing: send.group.kind))): \(error.localizedDescription)")
+                    // S7 — flip the optimistic bubble to .failed so it stops
+                    // showing a permanent .sending spinner and offers a retry,
+                    // instead of a silent ghost (the offline-visual path reaches
+                    // here because the TUS upload throws with no durable queue).
+                    await viewModel.markOptimisticMediaFailed(
+                        tempId: send.tempId, reason: error.localizedDescription)
                 }
             }
 
