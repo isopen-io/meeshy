@@ -679,7 +679,11 @@ public actor OfflineQueue {
                 .filter([
                     OutboxStatus.pending.rawValue,
                     OutboxStatus.inflight.rawValue,
-                    OutboxStatus.failed.rawValue
+                    OutboxStatus.failed.rawValue,
+                    // T14b — surface permanently-failed (`.exhausted`) rows so the
+                    // SyncPill can show a non-message mutation that gave up; the
+                    // T14 GC bounds how long they linger.
+                    OutboxStatus.exhausted.rawValue
                 ].contains(Column("status")))
                 .order(Column("createdAt").asc)
                 .limit(limit)

@@ -63,6 +63,13 @@ final class SyncPillViewModelDeriveTests: XCTestCase {
         guard case .failed = s else { return XCTFail("expected .failed, got \(s)") }
     }
 
+    func test_exhausted_maps_to_failed() {
+        // T14b — a permanently-failed (.exhausted) mutation surfaces like a
+        // transient .failed: the pill must flag it for the user, not stay syncing.
+        let s = SyncPillViewModel.derive(items: [item(status: .exhausted)], isOffline: false, now: now)
+        guard case .failed = s else { return XCTFail("expected .failed for an exhausted row, got \(s)") }
+    }
+
     func test_offline_when_stale_inflight_above_4s_and_online() {
         let stale = item(status: .inflight, createdAt: now.addingTimeInterval(-5))
         let s = SyncPillViewModel.derive(items: [stale], isOffline: false, now: now)

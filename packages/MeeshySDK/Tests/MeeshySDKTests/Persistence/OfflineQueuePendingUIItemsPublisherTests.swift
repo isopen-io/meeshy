@@ -193,6 +193,37 @@ final class OfflineQueuePendingUIItemsPublisherTests: XCTestCase {
         XCTAssertEqual(last.first?.titlePreview, "boom")
     }
 
+    // MARK: - Exhausted rows surface (T14b)
+
+    func test_publisher_surfaces_exhausted_rows() async throws {
+        let now = Date(timeIntervalSince1970: 1_750_000_000)
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "ofq_exhausted",
+                kind: .blockUser,
+                conversationId: "conv-ex",
+                clientMessageId: "cid_ex",
+                payload: Data(),
+                status: .exhausted,
+                attempts: 5,
+                lastError: "gave up",
+                createdAt: now,
+                updatedAt: now,
+                nextAttemptAt: now
+            ).insert(db)
+        }
+        await queue.refreshForTesting()
+
+        let recorder = Recorder<[OutboxUIItem]>()
+        let cancellable = queue.pendingUIItemsPublisher.sink { recorder.append($0) }
+        try await Task.sleep(nanoseconds: 200_000_000)
+        cancellable.cancel()
+
+        let last = recorder.snapshot().last ?? []
+        XCTAssertEqual(last.count, 1, "an exhausted (permanently failed) row MUST surface in the SyncPill snapshot")
+        XCTAssertEqual(last.first?.status, .exhausted)
+    }
+
     // MARK: - Helpers
 
     private static func encodedSendPayload(content: String, cmid: String) -> Data {

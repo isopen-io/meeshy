@@ -119,7 +119,7 @@ struct ConnectionBanner: View {
                 id: item.id,
                 label: SyncPillLabels.operationLabel(for: item),
                 iconName: itemIcon(for: item.iconKind),
-                dotStyle: item.status == .failed ? .error : .brand,
+                dotStyle: (item.status == .failed || item.status == .exhausted) ? .error : .brand,
                 source: item.source
             ))
         }

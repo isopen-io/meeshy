@@ -60,7 +60,9 @@ final class SyncPillViewModel: ObservableObject {
         isOffline: Bool,
         now: Date
     ) -> PillState {
-        if items.contains(where: { $0.status == .failed }) {
+        // T14b — `.exhausted` (gave up after maxAttempts) is a permanent failure
+        // needing user attention, surfaced the same as a transient `.failed`.
+        if items.contains(where: { $0.status == .failed || $0.status == .exhausted }) {
             return .failed(items: items)
         }
         let hasStaleInflight = items.contains { item in
