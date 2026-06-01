@@ -162,14 +162,31 @@ Local-first, efficient cache, FABs, show-only-necessary. Each fix: prove → fix
       non-uniform .position(y: media.y*size.height) is consistent with the width-based reader. No bug.
   → 3 potential concerns verified as NON-issues (no blind fix). Publish/cache subsystem in good shape.
 
+## Audit it.12 — composer sync architecture + leaf-view perf: SOLID (no bug)
+- [x] GranularSync watches View-level state (filter/image/stickers/drawing/bgColor) → syncCurrentSlideEffects
+      (= currentEffects = buildEffects(), full rebuild). VM mutation methods (text/media/drawing-strokes)
+      write-through DIRECTLY: `var e = currentEffects; …; currentEffects = e` → slide.effects → mini-preview
+      re-renders. Verified text edits (1166-1219), drawingStrokes computed setter (DrawingEditing:67-72),
+      drawingData didSet (368) all write-through. No sync gap (text-not-synced hypothesis = FALSE).
+- [x] drawingCount watch uses legacy drawingData?.count — redundant (modern strokes write-through), not a bug.
+- [x] Leaf-view perf: StoryTrayView cells read ThemeManager.shared / PresenceManager.shared DIRECTLY
+      (computed property, NOT @ObservedObject) → no per-event re-render. @ObservedObject viewModel only on
+      the top-level tray. "Zero unnecessary re-render" principle respected. No bug.
+
+## CONVERGENCE (2026-06-01)
+After it.7→it.12 the core story create/view/publish subsystem is audited across composition (9:16),
+language override, realtime translation, ThumbHash all-layers, publish path, cache coherence, sync
+architecture, and leaf-view perf. Real bugs found+fixed: it.8 (override), it.9 (realtime translation
+event-name + subscriber), it.10 (thumbHash bg-media + font). Other areas verified solid (no blind fixes).
+Remaining work is on-device VISUAL/UX validation (best on the user's real account) + re-auditing any new
+story-touching commits from parallel agents.
+
 ## REPLENISHED backlog (next to consume)
-- [ ] VISUAL SMOKE: best on the user's device (real account + clearly-translatable story) — simulator is
-      cold (home screen), needs full install+login+nav+backend; defer per anti-rabbit-hole + device pref.
-- [ ] NEXT ANALYSIS PASS (fresh areas, not yet audited): composer DRAWING/TEXT editing flows
-      (StoryComposerViewModel+DrawingEditing / +TextEditing), reader GESTURES/timer gating, and
-      StoryComposerView+GranularSync (live thumbnail/effects write-through correctness).
-- [ ] (low pri) drawMediaObject 0.6× vs baseMediaDesignSize — negligible blur impact; skip unless other
-      thumbHash work touches it.
+- [ ] VISUAL SMOKE: on the user's device (real account + clearly-translatable story). Simulator path is
+      cold + fragile (install+login+nav+backend) — defer.
+- [ ] RE-AUDIT trigger: when a parallel-agent commit touches story code (StoryViewModel / StoryComposer* /
+      StoryViewer* / StorySlideRenderer / SocialSocketManager), re-run the relevant audit slice.
+- [ ] (low pri) drawMediaObject 0.6× vs baseMediaDesignSize — negligible blur impact; skip.
 - [ ] Reader language indicator: should the active override show a subtle "viewing in X" affordance + a
       one-tap revert to preferred? (Prisme discretion — currently silent revert on slide change only.)
 - [ ] StorySlideRenderer.drawTextObject thumbHash font /390 → /designWidth (cosmetic, noted it.7).
