@@ -146,13 +146,20 @@ Local-first, efficient cache, FABs, show-only-necessary. Each fix: prove → fix
       in the composite (parity with SlideMiniPreview's /designWidth).
 - [x] xcodebuild BUILD SUCCEEDED; MeeshyUITests bundle compiled + ran the new renderComposite (runtime-proven).
 
+## Verified it.10b — per-media thumbHash loop is CORRECT (no fix)
+- [x] PROVEN: StoryComposerView per-media thumbHash loop (line 2033) computes a thumbHash PER media-id
+      including the background media — this is CORRECT: every media (bg or fg) needs its own loading-state
+      blur (StoryBackgroundLayer uses the bg media's thumbHash). No bg-exclusion needed here. (false alarm)
+
 ## REPLENISHED backlog (next to consume)
-- [ ] VISUAL SMOKE (ios-simulator): open a story with translations → tap flag in language strip → confirm
-      text switches to that language + badge; advance slide → confirm override resets to base preferred.
-- [ ] Audit: does StoryComposerView per-media foreground thumbHash (loop after computeThumbHash) also
-      need the bg-exclusion, or is it already per-media-id correct? (verify no bg media gets a fg thumbHash)
-- [ ] Audit drawMediaObject in renderComposite: 0.6× heuristic vs StoryMediaLayer.baseMediaDesignSize —
-      SlideMiniPreview uses baseMediaDesignSize; the thumbHash composite still uses 0.6×. Align for parity?
+- [ ] VISUAL SMOKE: best done on the user's device (real account + clearly-translatable story). Open a
+      story with text → tap a language flag → text switches (cached) or switches after ~seconds (it.9
+      realtime) → advance slide → reverts to base preferred. ios-simulator nav is fragile + needs a set-up
+      story; defer to device validation.
+- [ ] Audit drawMediaObject in renderComposite: 0.6× heuristic vs StoryMediaLayer.baseMediaDesignSize
+      (SlideMiniPreview uses baseMediaDesignSize). Cosmetic thumbHash accuracy — align for parity (low pri).
+- [ ] NEXT ANALYSIS PASS: story PUBLICATION path (runStoryUpload / outbox / TUS) + cache coherence
+      (CacheCoordinator.stories invalidation on edit) — areas not yet deeply audited this session.
 - [ ] Reader language indicator: should the active override show a subtle "viewing in X" affordance + a
       one-tap revert to preferred? (Prisme discretion — currently silent revert on slide change only.)
 - [ ] StorySlideRenderer.drawTextObject thumbHash font /390 → /designWidth (cosmetic, noted it.7).
