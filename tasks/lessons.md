@@ -21,3 +21,8 @@
 9. **Route tasks in `@MainActor { Task { await ... } }` through a small actor state machine when multiple exit points exist.** Otherwise a race between happy-path completion and OS expiration leads to double-call of `completionHandler`.
 
 10. **Backgrounding is a single state transition — orchestrate it.** Multiple `.background` handlers scattered across the app invariably drift out of sync. A single `BackgroundTransitionCoordinator` with explicit ordering (players → cache → push → sockets → BG tasks → widgets) makes the lifecycle auditable.
+
+## 2026-06-01 — Cleanup / suppression de fichiers
+
+11. **"Absent de `project.yml`" ≠ "non utilisé". Avant de supprimer un fichier, lire son en-tête ET vérifier toutes les voies de build.** J'ai supprimé `apps/ios/WebRTCStubs.swift` en concluant "non compilé" parce qu'il n'était ni dans `project.yml`, ni dans le `project.pbxproj` committé, ni dans les workflows `.github`/`ci_scripts`/`fastlane`. Mais son en-tête disait explicitement : *stubs guardés par `#if !canImport(WebRTC)`, compilés UNIQUEMENT quand le package WebRTC n'est pas résolu (CI sans WebRTC)*. C'est un fallback CI volontaire : inerte quand WebRTC est présent (le `#if` le vide), indispensable quand il est absent. Restauré après correction user. **Règle : un fichier dont l'en-tête décrit une compilation conditionnelle (`#if !canImport(...)`, fallback CI, build variant) ne doit JAMAIS être supprimé sur la seule base "pas trouvé dans la config de build par défaut" — le grep ne voit pas les chemins de build alternatifs.**
+
