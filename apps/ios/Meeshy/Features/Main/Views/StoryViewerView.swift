@@ -1041,9 +1041,14 @@ struct StoryViewerView: View {
             }
         }
 
-        storyReactionCount += 1
+        // N'incrémenter le compteur QUE pour une réaction réellement nouvelle :
+        // re-taper le même emoji ne crée pas une nouvelle réaction côté serveur
+        // (l'array `storyCurrentUserReactions` est dédupliqué), donc l'ancien
+        // `+= 1` inconditionnel gonflait le compteur visible à chaque tap
+        // (incohérent jusqu'au refresh serveur). Bug 2026-06-01.
         if !storyCurrentUserReactions.contains(emoji) {
             storyCurrentUserReactions.append(emoji)
+            storyReactionCount += 1
         }
         heartBouncePulse += 1
         sendReaction(emoji: emoji)
