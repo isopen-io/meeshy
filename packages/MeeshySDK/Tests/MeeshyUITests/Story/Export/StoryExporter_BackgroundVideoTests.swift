@@ -359,6 +359,11 @@ internal enum BackgroundVideoFixture {
         var effects = StoryEffects()
         effects.mediaObjects = [video]
         effects.textObjects = [text]
+        // La durée du slide est AUTORITAIRE via le timeline (« la timeline EST la
+        // story », elle rogne le média) : on la pose sur `timelineDuration`, lue en
+        // priorité par `computedTotalDuration()` que l'exporter utilise. Sans ce pin,
+        // l'export retomberait sur la durée auto du contenu (bug pré-correctif).
+        effects.timelineDuration = slideDuration
 
         return StorySlide(id: UUID().uuidString,
                           effects: effects,
@@ -395,6 +400,8 @@ internal enum BackgroundVideoFixture {
         var effects = StoryEffects()
         effects.mediaObjects = [image]
         effects.textObjects = [text]
+        // Durée autoritaire via le timeline (cf. fixture `slide`).
+        effects.timelineDuration = slideDuration
 
         return StorySlide(id: UUID().uuidString,
                           effects: effects,
