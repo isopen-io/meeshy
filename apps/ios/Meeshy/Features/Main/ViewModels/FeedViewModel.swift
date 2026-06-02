@@ -435,6 +435,25 @@ class FeedViewModel: ObservableObject {
     func createPost(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil) async {
         publishError = nil
         publishSuccess = false
+
+        // U1 ST3 — a text-only POST routes through the durable outbox so it
+        // survives offline + app kill (the direct postService.create below was
+        // silently lost when offline). Media / audio posts stay on the direct
+        // path for now (their assets are not yet durably queued — U1b). The
+        // gateway only echoes the cmid on the POST branch of post:created, so
+        // only type == "POST" can be reconciled by FeedViewModel.postCreated.
+        let hasMedia = !(mediaIds?.isEmpty ?? true)
+        let isDurableTextOnly = type == "POST"
+            && !hasMedia
+            && audioUrl == nil
+            && mobileTranscription == nil
+        if isDurableTextOnly,
+           let text = content,
+           !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            await enqueueDurableTextPost(content: text, visibility: visibility, originalLanguage: originalLanguage)
+            return
+        }
+
         do {
             let apiPost = try await postService.create(
                 content: content,
@@ -462,6 +481,57 @@ class FeedViewModel: ObservableObject {
         } catch {
             publishError = error.localizedDescription
         }
+    }
+
+    /// U1 ST3 — inserts an optimistic post keyed by a fresh cmid and enqueues a
+    /// durable `.createPost` row. The post appears instantly; the OutboxFlusher
+    /// dispatches it (POST /posts with `X-Client-Mutation-Id`) and the gateway
+    /// echoes the cmid on `post:created`, where FeedViewModel reconciles the
+    /// optimistic post in place (cmid -> server id). Rolls back if the outbox
+    /// refuses the row synchronously, or later exhausts its retry budget.
+    private func enqueueDurableTextPost(content: String, visibility: String, originalLanguage: String?) async {
+        let cmid = ClientMutationId.generate()
+        let currentUser = AuthManager.shared.currentUser
+        let optimistic = FeedPost(
+            id: cmid,
+            author: currentUser?.displayName ?? currentUser?.username ?? "",
+            authorId: currentUser?.id ?? "",
+            authorUsername: currentUser?.username,
+            authorAvatarURL: currentUser?.avatar,
+            type: "POST",
+            content: content,
+            timestamp: Date(),
+            originalLanguage: originalLanguage
+        )
+        posts.insert(optimistic, at: 0)
+        debouncedCacheSave()
+
+        let payload = CreatePostPayload(
+            clientMutationId: cmid,
+            content: content,
+            attachmentIds: [],
+            visibility: visibility,
+            originalLanguage: originalLanguage
+        )
+        do {
+            try await offlineQueue.enqueue(.createPost, payload: payload, conversationId: nil)
+            publishSuccess = true
+            observeOutcome(cmid: cmid, rollback: { [weak self] in
+                self?.removeOptimisticPost(id: cmid)
+            }, toast: "Erreur lors de la publication")
+        } catch {
+            removeOptimisticPost(id: cmid)
+            publishError = error.localizedDescription
+        }
+    }
+
+    /// Removes an optimistic post by id (re-resolving the index since the feed
+    /// may mutate across an `await`). Rolls back a queued create the outbox
+    /// refused or exhausted.
+    private func removeOptimisticPost(id: String) {
+        guard let i = posts.firstIndex(where: { $0.id == id }) else { return }
+        posts.remove(at: i)
+        debouncedCacheSave()
     }
 
     func sendComment(postId: String, content: String, parentId: String? = nil, effectFlags: Int? = nil) async {

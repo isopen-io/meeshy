@@ -578,30 +578,77 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(sut.posts[0].id, "p1")
     }
 
-    // MARK: - createPost()
+    // MARK: - createPost() — U1 ST3: text-only routes through the durable outbox
 
-    func test_createPost_success_insertsAtIndexZeroAndSetsPublishSuccess() async {
-        let (sut, _, _, postService) = makeSUT()
-        postService.createResult = .success(Self.makeAPIPost(id: "created-1", content: "New creation"))
+    func test_createPost_textOnly_enqueuesCreatePostAndInsertsOptimisticPost() async {
+        let queue = MockOfflineQueue()
+        let (sut, _, _, postService) = makeSUT(offlineQueue: queue)
 
-        await sut.createPost(content: "New creation")
+        await sut.createPost(content: "New creation", originalLanguage: "en")
 
+        // Optimistic post inserted immediately (instant-app), keyed by the cmid.
         XCTAssertEqual(sut.posts.count, 1)
-        XCTAssertEqual(sut.posts[0].id, "created-1")
+        XCTAssertEqual(sut.posts[0].content, "New creation")
         XCTAssertTrue(sut.publishSuccess)
         XCTAssertNil(sut.publishError)
-        XCTAssertEqual(postService.createCallCount, 1)
+
+        // Routed through the durable outbox — NOT a direct postService.create
+        // (which silently lost the post when offline).
+        XCTAssertEqual(postService.createCallCount, 0, "text-only create must not hit postService directly")
+        XCTAssertEqual(queue.enqueueCalls.count, 1)
+        XCTAssertEqual(queue.enqueueCalls.first?.kind, .createPost)
+        let payload = queue.enqueueCalls.first?.payload as? CreatePostPayload
+        XCTAssertEqual(payload?.content, "New creation")
+        XCTAssertEqual(payload?.originalLanguage, "en", "originalLanguage must survive the outbox so the Prisme pipeline detects the source")
+        XCTAssertEqual(payload?.visibility, "PUBLIC")
+        XCTAssertTrue(payload?.attachmentIds.isEmpty ?? false)
+        // The optimistic post id == the payload cmid → ST2 reconciles it in place
+        // when post:created echoes that cmid.
+        XCTAssertEqual(sut.posts[0].id, payload?.clientMutationId, "optimistic post must be keyed by the cmid for ST2 reconcile")
     }
 
-    func test_createPost_failure_setsPublishError() async {
-        let (sut, _, _, postService) = makeSUT()
-        postService.createResult = .failure(APIError.networkError(URLError(.timedOut)))
+    func test_createPost_textOnly_enqueueRefused_rollsBackOptimisticPost() async {
+        let queue = MockOfflineQueue()
+        queue.enqueueResult = .failure(APIError.networkError(URLError(.timedOut)))
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
 
         await sut.createPost(content: "Failing post")
 
-        XCTAssertTrue(sut.posts.isEmpty)
+        XCTAssertTrue(sut.posts.isEmpty, "optimistic post must be removed when the outbox refuses the row")
         XCTAssertNotNil(sut.publishError)
         XCTAssertFalse(sut.publishSuccess)
+    }
+
+    func test_createPost_textOnly_outboxExhausted_rollsBackOptimisticPost() async {
+        let queue = MockOfflineQueue()
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
+
+        await sut.createPost(content: "Doomed post")
+        XCTAssertEqual(sut.posts.count, 1)
+        let cmid = sut.posts[0].id
+
+        // The OutboxFlusher exhausts its retry budget → the optimistic post must
+        // be rolled back (the server permanently rejected it). Wait for the
+        // observer to register before emitting, else the outcome is dropped.
+        try? await waitForContinuation(in: queue, for: cmid)
+        queue.emitOutcome(.exhausted(cmid: cmid), for: cmid)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertTrue(sut.posts.isEmpty, "exhausted outbox row must roll back the optimistic post")
+    }
+
+    func test_createPost_withMedia_usesDirectPostServicePath() async {
+        let queue = MockOfflineQueue()
+        let (sut, _, _, postService) = makeSUT(offlineQueue: queue)
+        postService.createResult = .success(Self.makeAPIPost(id: "media-1", content: "With media"))
+
+        await sut.createPost(content: "With media", mediaIds: ["att-1"])
+
+        // Media posts are NOT yet durable (U1b) — they take the direct path.
+        XCTAssertEqual(postService.createCallCount, 1)
+        XCTAssertTrue(queue.enqueueCalls.isEmpty, "media create must not (yet) route through the outbox")
+        XCTAssertEqual(sut.posts.count, 1)
+        XCTAssertEqual(sut.posts[0].id, "media-1")
     }
 
     // MARK: - repostPost()
@@ -1141,8 +1188,12 @@ final class FeedViewModelTests: XCTestCase {
     }
 
     func test_publishPost_error_setsPublishError() async {
-        let (sut, _, _, postService) = makeSUT()
-        postService.createResult = .failure(APIError.networkError(URLError(.timedOut)))
+        // U1 ST3 — a text-only publish now routes through the durable outbox, so
+        // "error" means the enqueue is refused (the direct postService.create is
+        // no longer on the text-only path). Rollback semantics unchanged.
+        let queue = MockOfflineQueue()
+        queue.enqueueResult = .failure(APIError.networkError(URLError(.timedOut)))
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
 
         await sut.createPost(content: "Failing publish")
 

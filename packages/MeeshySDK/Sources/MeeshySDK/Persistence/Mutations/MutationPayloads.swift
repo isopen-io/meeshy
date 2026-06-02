@@ -217,17 +217,23 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// `"public" | "friends" | "community:<id>"` — kept as free-form string to
     /// avoid coupling the offline payload to backend enum churn.
     public let visibility: String
+    /// Source language of `content`, forwarded to the gateway so the Prisme
+    /// translation pipeline detects the right source. `nil` lets the gateway
+    /// auto-detect. Optional so older persisted rows (pre-U1 ST3) decode as nil.
+    public let originalLanguage: String?
 
     public init(
         clientMutationId: String,
         content: String,
         attachmentIds: [String],
-        visibility: String
+        visibility: String,
+        originalLanguage: String? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.content = content
         self.attachmentIds = attachmentIds
         self.visibility = visibility
+        self.originalLanguage = originalLanguage
     }
 }
 
