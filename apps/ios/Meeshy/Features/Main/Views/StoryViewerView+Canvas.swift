@@ -655,6 +655,25 @@ struct StoryCardView: View {
         CanvasGeometry.aspectFitSize(in: geometry.size)
     }
 
+    /// Cadrage « carte → plein écran » du canvas reader, MUTUALISÉ avec le composer
+    /// via `StoryCanvasFraming` (même solveur, même rendu). Au repos (mode normal) le
+    /// canvas est une carte arrondie (coins 22) SOUS le chrome auteur (progress + ligne
+    /// auteur) et AU-DESSUS du footer (actions + champ répondre), avec marges latérales
+    /// nettes (distinguée du viewport). En plein écran (`isFullscreenStorySession`) →
+    /// `.free` = identité (canvas 9:16 plein bord, coins 0 ; le chrome se masque par
+    /// ailleurs via `chromeVisible`). Un seul ressort anime taille/coins/position au
+    /// toggle — design user 2026-06-02. (it.33 : insets relevés pour une carte nette —
+    /// la tentative it.32 cadrait déjà mais à 0.94 ≈ plein bord, donc invisible.)
+    private var readerCanvasFraming: StoryCanvasFraming.Result {
+        StoryCanvasFraming.resolve(.init(
+            viewport: geometry.size,
+            headerInset: topInset + 72,   // barres progress (~8) + ligne auteur (~48) + gap
+            bottomInset: 128,             // actions + champ « répondre » + safe-area + gap
+            sideInset: 16,
+            state: isFullscreenStorySession ? .free : .carded,
+            cardedCornerRadius: 22))
+    }
+
     var body: some View {
         ZStack {
             // === Layer 1: Background ===
@@ -681,6 +700,18 @@ struct StoryCardView: View {
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
+
+            // Scrim « carte » : en mode normal, assombrit le backdrop flou plein cadre
+            // pour que la carte canvas (au-dessus) se détache nettement du viewport
+            // (sinon le backdrop = même contenu flouté que la carte → carte invisible).
+            // En plein écran (`isFullscreenStorySession`) → 0 : le backdrop habille les
+            // letterbox immersifs. Animé par le même ressort que la carte (design user).
+            Color.black
+                .opacity(isFullscreenStorySession ? 0 : 0.55)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+                .animation(.spring(response: 0.42, dampingFraction: 0.84), value: isFullscreenStorySession)
 
             // === Outgoing canvas (cross-dissolve pixel-perfect) ===
             if let outgoing = outgoingStory, outgoingOpacity > 0 {
@@ -713,6 +744,10 @@ struct StoryCardView: View {
                     .clipped()
                     .opacity(outgoingOpacity)
                     .scaleEffect(closingScale)
+                    // Canvas sortant suit la carte (même cadrage) pendant le cross-fade.
+                    .scaleEffect(readerCanvasFraming.scale)
+                    .offset(y: readerCanvasFraming.offset.height)
+                    .clipShape(RoundedRectangle(cornerRadius: readerCanvasFraming.cornerRadius, style: .continuous))
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
             }
@@ -763,6 +798,12 @@ struct StoryCardView: View {
                     .clipShape(
                         RevealCircleShape(progress: isRevealActive ? 1.0 : (currentStory?.storyEffects?.opening == .reveal ? 0.001 : 1.0))
                     )
+                    // Carte → plein écran (mutualisé composer). Visuel pur (la frame
+                    // reste `canvasFitSize` → projection design→render intacte).
+                    .scaleEffect(readerCanvasFraming.scale)
+                    .offset(y: readerCanvasFraming.offset.height)
+                    .clipShape(RoundedRectangle(cornerRadius: readerCanvasFraming.cornerRadius, style: .continuous))
+                    .animation(.spring(response: 0.42, dampingFraction: 0.84), value: isFullscreenStorySession)
 
                 // Overlay loader granulaire — ThumbHash bg flouté + (spinner+%).
                 // Le backdrop ThumbHash est monté DÈS qu'une slide est active
@@ -795,6 +836,12 @@ struct StoryCardView: View {
                     .frame(width: canvasFitSize.width,
                            height: canvasFitSize.height)
                     .clipped()
+                    // Le loader suit la carte (même cadrage) → pas de saut entre le
+                    // placeholder ThumbHash carté et le canvas carté.
+                    .scaleEffect(readerCanvasFraming.scale)
+                    .offset(y: readerCanvasFraming.offset.height)
+                    .clipShape(RoundedRectangle(cornerRadius: readerCanvasFraming.cornerRadius, style: .continuous))
+                    .animation(.spring(response: 0.42, dampingFraction: 0.84), value: isFullscreenStorySession)
                     .allowsHitTesting(false)
                     .transition(.opacity)
                 }
