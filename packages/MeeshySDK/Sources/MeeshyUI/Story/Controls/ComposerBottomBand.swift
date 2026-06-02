@@ -209,9 +209,9 @@ struct ComposerBottomBand: View {
 
         if drawingCollapsed {
             // Drawer replié : la poignée seule reste ; un drag vers le HAUT le
-            // redéploie (la liste des traits réapparaît). Un tap aussi (pratique).
+            // redéploie (le panneau de l'outil réapparaît). Un tap aussi (pratique).
             handle
-                .accessibilityHint("Faites glisser vers le haut pour afficher la liste des traits.")
+                .accessibilityHint("Faites glisser vers le haut pour afficher les options de l'outil.")
                 .onTapGesture { onExpandDrawer?() }
                 .gesture(
                     DragGesture(minimumDistance: 4)
@@ -234,7 +234,7 @@ struct ComposerBottomBand: View {
                             let proposed = base - value.translation.height
                             dragStartHeight = nil
                             // Tiré nettement sous le min → REPLIE le drawer (poignée
-                            // seule) sans quitter le dessin (cf. `onResizeDismiss`).
+                            // seule) sans quitter l'outil actif (cf. `onResizeDismiss`).
                             if proposed < minHeight - 50 { onResizeDismiss?() }
                         }
                 )

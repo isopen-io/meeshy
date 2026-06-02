@@ -23,7 +23,7 @@ public struct ComposerControlsLayer: View {
 
     /// Drawer dessin replié « totalement » (poignée seule). Tirer le grabber sous le
     /// min le replie (sans quitter le dessin) ; le tirer vers le haut le redéplie.
-    @Binding var drawingDrawerCollapsed: Bool
+    @Binding var bandDrawerCollapsed: Bool
 
     /// Ouvre l'éditeur d'image plein écran pour un média (recadrage/filtres/
     /// ajustements). Seul point d'entrée d'édition média — il n'y a plus de
@@ -41,7 +41,7 @@ public struct ComposerControlsLayer: View {
         resizableBandHeight: Binding<CGFloat>,
         bandMinHeight: CGFloat,
         bandMaxHeight: CGFloat,
-        drawingDrawerCollapsed: Binding<Bool>,
+        bandDrawerCollapsed: Binding<Bool>,
         onOpenMediaCrop: @escaping (String) -> Void
     ) {
         self.viewModel = viewModel
@@ -54,12 +54,14 @@ public struct ComposerControlsLayer: View {
         self._resizableBandHeight = resizableBandHeight
         self.bandMinHeight = bandMinHeight
         self.bandMaxHeight = bandMaxHeight
-        self._drawingDrawerCollapsed = drawingDrawerCollapsed
+        self._bandDrawerCollapsed = bandDrawerCollapsed
         self.onOpenMediaCrop = onOpenMediaCrop
     }
 
-    /// Le grabber redimensionne le band dès qu'il affiche le panneau DESSIN.
-    private var isBandResizable: Bool { effectiveBandState.activeCategory == .drawing }
+    /// Le grabber redimensionne ET replie le band pour TOUS les panneaux d'outil
+    /// (plus seulement DESSIN). L'utilisateur veut la poignée rétractable jusqu'à
+    /// se cacher entièrement sur chaque outil, comme le dessin (2026-06-02).
+    private var isBandResizable: Bool { effectiveBandState.allowsCollapsibleDrawer }
 
     /// État effectif du band : le dessin utilise le band PARTAGÉ comme tous les
     /// outils (`drawingPanel` = liste éditable des traits). On force donc l'affichage
@@ -179,16 +181,17 @@ public struct ComposerControlsLayer: View {
                     maxHeight: bandMaxHeight,
                     onResizeDismiss: {
                         // Grabber tiré sous le min → on REPLIE le drawer (poignée
-                        // seule) SANS quitter le dessin : le contrôleur flottant
-                        // (bulles) reste visible et le canvas devient 100 % visible
-                        // (spec user 2026-06-01). Pour quitter le dessin → bouton
-                        // dismiss des bulles (`StoryDrawingToolbar`).
-                        drawingDrawerCollapsed = true
+                        // seule), pour TOUT outil : le canvas devient 100 % visible
+                        // et l'outil reste actif (en dessin, le contrôleur flottant
+                        // des bulles reste visible). Re-déplier via le grabber ; pour
+                        // fermer l'outil → chevron retour du band (2026-06-02, étend
+                        // le repli dessin à tous les outils).
+                        bandDrawerCollapsed = true
                     },
-                    drawingCollapsed: isBandResizable && drawingDrawerCollapsed,
+                    drawingCollapsed: isBandResizable && bandDrawerCollapsed,
                     onExpandDrawer: {
                         // Grabber (replié) tiré vers le haut → on redéplie le drawer.
-                        drawingDrawerCollapsed = false
+                        bandDrawerCollapsed = false
                     }
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
