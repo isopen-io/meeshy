@@ -21,10 +21,10 @@ struct ComposerToolPanelHost: View {
     /// fermeture (flicker visible).
     var onDeleteText: ((String) -> Void)? = nil
     var onShowInTimeline: (() -> Void)? = nil
-    /// Hauteur redimensionnable du panneau DESSIN (drag du grabber). Non-nil →
-    /// remplace la hauteur fixe `panelHeight` du dessin (mécanisme éprouvé
-    /// `.frame(height: panelHeight - 50)`), donc le band suit le grabber.
-    var drawingPanelHeightOverride: CGFloat? = nil
+    /// Hauteur redimensionnable du panneau (drag du grabber), pour TOUS les outils
+    /// (2026-06-02, plus seulement le dessin). Non-nil → remplace la hauteur fixe
+    /// `panelHeight` (`.frame(height: panelHeight - 50)`), donc le menu suit le grabber.
+    var panelHeightOverride: CGFloat? = nil
 
     @Environment(\.colorScheme) private var colorScheme
 
@@ -170,10 +170,16 @@ struct ComposerToolPanelHost: View {
     private var toolTitle: String { Self.title(for: tool) }
 
     private var panelHeight: CGFloat {
+        // Le grabber pilote la hauteur du panneau pour TOUS les outils (2026-06-02) :
+        // quand le band est redimensionnable, `panelHeightOverride` (= hauteur du band
+        // tirée par le grabber) prime sur la hauteur intrinsèque par défaut — sinon
+        // tirer la poignée ne rétrécissait PAS le menu hors dessin (le contenu gardait
+        // sa hauteur fixe). Le contenu scrolle s'il est plus grand que l'espace.
+        if let override = panelHeightOverride { return override }
         switch tool {
         case .media:    return 220
         case .audio:    return 220
-        case .drawing:  return drawingPanelHeightOverride ?? 280   // liste des traits ; redimensionnable via le grabber
+        case .drawing:  return 280   // liste des traits
         case .text:     return 280
         case .texture:  return 160
         case .filters:  return 180

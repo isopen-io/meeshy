@@ -116,7 +116,7 @@ struct ComposerBottomBand: View {
                         onEditText: onEditText,
                         onDeleteText: onDeleteText,
                         onShowInTimeline: onShowInTimeline,
-                        drawingPanelHeightOverride: resizableHeight?.wrappedValue
+                        panelHeightOverride: resizableHeight?.wrappedValue
                     )
                 case .formatPanel(.text, let elementId):
                     if let binding = textObjectBinding(for: elementId) {

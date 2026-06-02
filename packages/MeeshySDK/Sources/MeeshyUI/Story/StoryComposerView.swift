@@ -1352,6 +1352,13 @@ public struct StoryComposerView: View {
         if viewModel.textEditingMode != .inactive {
             return min(cap, keyboardHeight + 132)
         }
+        // Drawer replié (tout outil) → seul le grabber est présenté : le canvas ne
+        // réserve que sa hauteur, au lieu de la pleine hauteur du band. Sans ça la
+        // réservation (composerBandHeight) ne matchait pas la sheet visible (poignée
+        // seule) → canvas mal cadré + écart sous le canvas (bug user 2026-06-02).
+        if bandDrawerCollapsed {
+            return Self.drawingDrawerGrabberHeight
+        }
         return min(cap, composerBandHeight)
     }
 
