@@ -221,19 +221,28 @@ public struct CreatePostPayload: Codable, Sendable, Equatable {
     /// translation pipeline detects the right source. `nil` lets the gateway
     /// auto-detect. Optional so older persisted rows (pre-U1 ST3) decode as nil.
     public let originalLanguage: String?
+    /// U1b — local media file paths (stored relative to the pending-media dir,
+    /// resolved via `OfflineQueue.absoluteMediaPath(forStored:)`) for an OFFLINE
+    /// media post: the dispatcher uploads them via TUS on reconnect, then creates
+    /// the post with the resulting ids (+ any already-uploaded `attachmentIds`).
+    /// `nil`/empty = text-only or already-uploaded post. Optional so older
+    /// persisted rows decode as nil. Mirrors message media durability (S7b/S8).
+    public let localMediaPaths: [String]?
 
     public init(
         clientMutationId: String,
         content: String,
         attachmentIds: [String],
         visibility: String,
-        originalLanguage: String? = nil
+        originalLanguage: String? = nil,
+        localMediaPaths: [String]? = nil
     ) {
         self.clientMutationId = clientMutationId
         self.content = content
         self.attachmentIds = attachmentIds
         self.visibility = visibility
         self.originalLanguage = originalLanguage
+        self.localMediaPaths = localMediaPaths
     }
 }
 

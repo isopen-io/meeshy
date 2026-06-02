@@ -347,6 +347,56 @@ struct OutboxDispatcher: OutboxDispatching {
     /// `mediaIds` at the wire boundary to match the gateway field name.
     private func dispatchCreatePost(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: CreatePostPayload.self)
+
+        // U1b — an OFFLINE media post carries local file paths; upload them via
+        // TUS on reconnect, then create the post with the resulting ids. Faithful
+        // twin of the message media replay (dispatchSendMessage). The within-
+        // session TUS checkpoint resume fires automatically on re-upload (same
+        // sha256 key), so a kill mid-upload resumes from the saved offset.
+        var resolvedMediaIds = payload.attachmentIds
+        var uploadedLocalPaths: [String] = []
+        if let pendingMediaPaths = payload.localMediaPaths, !pendingMediaPaths.isEmpty {
+            let serverOrigin = MeeshyConfig.shared.serverOrigin
+            guard let baseURL = URL(string: serverOrigin),
+                  let token = APIClient.shared.authToken else {
+                throw NSError(
+                    domain: "OutboxDispatcher",
+                    code: 401,
+                    userInfo: [NSLocalizedDescriptionKey: "No baseURL or auth token to upload post media"]
+                )
+            }
+            let uploader = TusUploadManager(baseURL: baseURL)
+            var uploadedIds: [String] = []
+            for stored in pendingMediaPaths {
+                let absolutePath = OfflineQueue.absoluteMediaPath(forStored: stored)
+                guard FileManager.default.fileExists(atPath: absolutePath) else {
+                    logger.error("Post media file missing on dispatch, path=\(stored, privacy: .public)")
+                    continue
+                }
+                do {
+                    let mime = MimeTypeResolver.mimeType(
+                        forExtension: URL(fileURLWithPath: absolutePath).pathExtension)
+                    let tusResult = try await uploader.uploadFile(
+                        fileURL: URL(fileURLWithPath: absolutePath),
+                        mimeType: mime,
+                        token: token
+                    )
+                    uploadedIds.append(tusResult.id)
+                    uploadedLocalPaths.append(absolutePath)
+                } catch {
+                    logger.error("Post media TUS upload failed (best-effort skip): \(error.localizedDescription, privacy: .public)")
+                }
+            }
+            guard !uploadedIds.isEmpty else {
+                throw NSError(
+                    domain: "OutboxDispatcher",
+                    code: 503,
+                    userInfo: [NSLocalizedDescriptionKey: "No media uploaded for offline post media dispatch"]
+                )
+            }
+            resolvedMediaIds = uploadedIds + payload.attachmentIds
+        }
+
         struct CreatePostBody: Encodable {
             let content: String?
             let mediaIds: [String]?
@@ -367,7 +417,7 @@ struct OutboxDispatcher: OutboxDispatching {
         }
         let body = CreatePostBody(
             content: payload.content,
-            mediaIds: payload.attachmentIds.isEmpty ? nil : payload.attachmentIds,
+            mediaIds: resolvedMediaIds.isEmpty ? nil : resolvedMediaIds,
             visibility: payload.visibility,
             originalLanguage: payload.originalLanguage
         )
@@ -378,6 +428,7 @@ struct OutboxDispatcher: OutboxDispatching {
             queryItems: nil,
             headers: ["X-Client-Mutation-Id": payload.clientMutationId]
         )
+        for path in uploadedLocalPaths { try? FileManager.default.removeItem(atPath: path) }
         logger.info("createPost dispatched cmid=\(payload.clientMutationId, privacy: .public)")
     }
 

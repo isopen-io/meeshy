@@ -278,6 +278,37 @@ final class MutationPayloadsTests: XCTestCase {
         XCTAssertEqual(decoded, original)
     }
 
+    /// U1b — an offline media post carries `localMediaPaths` + `originalLanguage`;
+    /// both must survive the persisted-row roundtrip so the dispatcher can replay
+    /// the TUS upload on reconnect.
+    func test_createPostPayload_roundtrip_withLocalMediaPathsAndLanguage() throws {
+        let original = CreatePostPayload(
+            clientMutationId: ClientMutationId.generate(),
+            content: "Photo post",
+            attachmentIds: [],
+            visibility: "PUBLIC",
+            originalLanguage: "en",
+            localMediaPaths: ["pending-media/abc.jpg", "pending-media/def.mp4"]
+        )
+        let data = try encoder.encode(original)
+        let decoded = try decoder.decode(CreatePostPayload.self, from: data)
+        XCTAssertEqual(decoded, original)
+        XCTAssertEqual(decoded.localMediaPaths, ["pending-media/abc.jpg", "pending-media/def.mp4"])
+        XCTAssertEqual(decoded.originalLanguage, "en")
+    }
+
+    /// A pre-U1b persisted row (no `localMediaPaths` key) must still decode, with
+    /// the new optional defaulting to nil — no migration needed.
+    func test_createPostPayload_decodesLegacyRowWithoutLocalMediaPaths() throws {
+        let legacyJSON = """
+        {"clientMutationId":"cmid_legacy","content":"old","attachmentIds":[],"visibility":"PUBLIC"}
+        """
+        let decoded = try decoder.decode(CreatePostPayload.self, from: Data(legacyJSON.utf8))
+        XCTAssertNil(decoded.localMediaPaths)
+        XCTAssertNil(decoded.originalLanguage)
+        XCTAssertEqual(decoded.content, "old")
+    }
+
     // MARK: - ToggleLikePostPayload (Phase C)
 
     func test_toggleLikePostPayload_encodes_likedBool() throws {
