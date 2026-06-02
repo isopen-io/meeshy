@@ -13,14 +13,20 @@ struct StrokeWidthMappingTests {
         #expect(StrokeWidthMapping.base(width: 10, tool: .pen) == 10)
         #expect(StrokeWidthMapping.base(width: 10, tool: .marker) == 20)
     }
-    @Test("pressure 0 maps to 0.5×base (≥1)")
-    func pressureLow() { #expect(StrokeWidthMapping.effectiveWidth(of: stroke(width: 10, tool: .pen, captureVersion: 1, pressure: 0), pressure: 0) == 5) }
-    @Test("0.5×base never drops below 1")
+    @Test("pressure 0 maps to EXACTLY base (chosen width is the floor, never thinner)")
+    func pressureLow() { #expect(StrokeWidthMapping.effectiveWidth(of: stroke(width: 10, tool: .pen, captureVersion: 1, pressure: 0), pressure: 0) == 10) }
+    @Test("chosen width respected at min pressure even for tiny widths")
     func lowClampFloor() { #expect(StrokeWidthMapping.effectiveWidth(of: stroke(width: 1, tool: .pen, captureVersion: 1, pressure: 0), pressure: 0) == 1) }
-    @Test("pressure 1 maps to 1.6×base (≤2.5×base)")
-    func pressureHigh() { #expect(StrokeWidthMapping.effectiveWidth(of: stroke(width: 10, tool: .pen, captureVersion: 1, pressure: 1), pressure: 1) == 16) }
-    @Test("marker multiplier flows through base")
-    func markerThrough() { #expect(StrokeWidthMapping.effectiveWidth(of: stroke(width: 10, tool: .marker, captureVersion: 1, pressure: 1), pressure: 1) == 32) }
+    @Test("pressure only GROWS the stroke: pressure 1 maps to 1.8×base (≤2.5×base)")
+    func pressureHigh() { #expect(StrokeWidthMapping.effectiveWidth(of: stroke(width: 10, tool: .pen, captureVersion: 1, pressure: 1), pressure: 1) == 18) }
+    @Test("never thinner than the chosen width across the whole pressure range")
+    func neverBelowBase() {
+        for p in stride(from: 0.0, through: 1.0, by: 0.1) {
+            #expect(StrokeWidthMapping.effectiveWidth(of: stroke(width: 12, tool: .pen, captureVersion: 1, pressure: p), pressure: p) >= 12)
+        }
+    }
+    @Test("marker multiplier flows through base (1.8 × 10×2 = 36)")
+    func markerThrough() { #expect(StrokeWidthMapping.effectiveWidth(of: stroke(width: 10, tool: .marker, captureVersion: 1, pressure: 1), pressure: 1) == 36) }
     @Test("legacy captureVersion 0 → constant base (pressure ignored)")
     func legacyConstant() {
         #expect(StrokeWidthMapping.effectiveWidth(of: stroke(width: 10, tool: .pen, captureVersion: 0, pressure: 0), pressure: 0) == 10)
