@@ -196,10 +196,11 @@ public struct StoryComposerView: View {
     /// reste PLEIN — ce drawer flotte par-dessus, il ne rétrécit plus le canvas.
     @State private var composerBandHeight: CGFloat = 280
 
-    /// Drawer dessin replié « totalement » : seul le grabber reste visible, le canvas
-    /// est 100 % visible et le contrôleur flottant (`StoryDrawingToolbar`) persiste
-    /// (spec user 2026-06-01 — réduire le drawer NE quitte PAS le mode dessin).
-    @State private var drawingDrawerCollapsed = false
+    /// Drawer d'outil replié « totalement » : seul le grabber reste visible et le
+    /// canvas est 100 % visible. Vaut pour TOUS les outils (2026-06-02) — replier ne
+    /// quitte pas l'outil actif (en dessin, le contrôleur flottant `StoryDrawingToolbar`
+    /// persiste en plus). Re-déplier via le grabber.
+    @State private var bandDrawerCollapsed = false
 
     /// Hauteur du drawer dessin une fois replié (poignée seule).
     static let drawingDrawerGrabberHeight: CGFloat = 38
@@ -330,6 +331,11 @@ public struct StoryComposerView: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.85),
                    value: viewModel.drawingEditingMode)
         .adaptiveOnChange(of: viewModel.activeTool) { _, newTool in
+            // Changer d'outil ré-affiche toujours le drawer déplié : sinon l'état
+            // replié d'un outil précédent (poignée seule) persisterait sur le
+            // nouvel outil et son panneau resterait caché (2026-06-02, le repli
+            // s'applique désormais à tous les outils).
+            bandDrawerCollapsed = false
             // Le mode dessin flottant suit l'outil actif : entrer expose les
             // contrôleurs flottants (bulles) ; quitter les masque. La liste des
             // traits vit dans le band PARTAGÉ (`ComposerBottomBand.drawingPanel`)
@@ -344,9 +350,6 @@ public struct StoryComposerView: View {
                     bandStateMachine.tapTile(.drawing)
                 }
                 areFabsVisible = true
-                // Entrer en dessin réaffiche le drawer (liste des traits) déplié ;
-                // l'utilisateur peut le replier ensuite pour libérer le canvas.
-                drawingDrawerCollapsed = false
             } else {
                 viewModel.exitDrawingEditingMode()
                 if bandStateMachine.state.activeCategory == .drawing {
@@ -674,7 +677,7 @@ public struct StoryComposerView: View {
                     resizableBandHeight: $composerBandHeight,
                     bandMinHeight: Self.composerBandMinHeight,
                     bandMaxHeight: Self.composerBandMaxHeight,
-                    drawingDrawerCollapsed: $drawingDrawerCollapsed,
+                    bandDrawerCollapsed: $bandDrawerCollapsed,
                     onOpenMediaCrop: { id in openMediaEditor(elementId: id) }
                 )
             }
@@ -1318,7 +1321,7 @@ public struct StoryComposerView: View {
     /// Ne rétrécit PLUS le canvas (Option A).
     private var drawingDrawerHeight: CGFloat {
         guard canvasIsInset else { return 0 }
-        return drawingDrawerCollapsed ? Self.drawingDrawerGrabberHeight : composerBandHeight + 40
+        return bandDrawerCollapsed ? Self.drawingDrawerGrabberHeight : composerBandHeight + 40
     }
 
     static let composerBandMinHeight: CGFloat = 160
