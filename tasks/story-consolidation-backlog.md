@@ -688,3 +688,24 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
       (b) voice caption position en mode carte ; (c) tuning insets/scrim si besoin (0.86 / 0.55).
 - [ ] Viewer audit (it.31) : BUG#1 pause-desync overlay commentaires, BUG#2 markViewed silencieux, BUG#4 durée lang-mismatch.
 - [ ] Ops multi-slides (add/delete/reorder/duplicate) + sync thumbHash/index.
+
+## it.34 — reader carte : ThumbHash en fond + bord arrondi (dd4e0cd9b) + BUG#4 écarté
+- [x] User feedback : « bords arrondis + mettre en fond le ThumbHash ». it.33 cachait le ThumbHash sous un
+      scrim noir 0.55. → scrim 0.55→0.18 (le `storyBlurredBackdrop` ThumbHash est maintenant visible en marge) ;
+      la carte se distingue par son BORD arrondi (coins 22) + une OMBRE portée (au lieu du voile sombre).
+      Ombre + scrim coupés en plein écran. Vérifié simulateur (clean build).
+- [x] BUG#4 (durée lang-mismatch) ÉCARTÉ — faux positif de l'audit : `contentDerivedDuration` compte les mots
+      de `text.text` (texte ORIGINAL, pas `resolvedText`), donc `toRenderableSlide([])` = `toRenderableSlide(langs)`
+      pour la durée. Le `preferredLanguages: []` est CORRECT. (Leçon : audit doit cross-checker le code.)
+- [x] Confirmé : le binaire installé garde la carte it.33 (persistance OK).
+
+## REPLENISHED backlog — post it.34
+- [ ] Polish carte reader : sidebar réactions (Envoyer/eye/Exporter) chevauche le bord droit de la carte →
+      la décaler dans la marge droite en mode carte. Caption voix idem.
+- [ ] BUG#1 (HIGH) pause-desync : changer de slide avec overlay commentaires ouvert → nouvelle slide en pause
+      silencieuse. Investiguer l'interaction pause/overlay/timer + fix + vérif.
+- [ ] BUG#2 markViewed silencieux : catch vide → Logger.stories.error (trivial, observability ; commencé it.34 puis
+      dépriorisé pour le feedback user). Logger.stories existe (Logger+Categories.swift).
+- [ ] Confirmation DEVICE du toggle plein écran (carte→plein bord) — nav menu accessibilité non fiable en simu.
+- [ ] Ops multi-slides (add/delete/reorder/duplicate) + sync thumbHash/index.
+- [ ] ⚠️ Résoudre le partage de worktree avec l'agent // (corruption incremental build récurrente).
