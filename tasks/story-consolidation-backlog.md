@@ -647,3 +647,23 @@ PLAN (mutualisation — réutiliser le solveur composer) :
 - [ ] BUG#4 (MED) : `updateStoryDuration` passe `preferredLanguages: []` → durée calculée sur texte non-résolu
       vs canvas résolu (langue) → désync progress bar / auto-advance pour stories texte auto-durée multilingues.
 - [x] Vérifié OK : tap-zones (gauche=prev/droite=next), bornes de groupe, hold-to-pause, audio lifecycle outgoing.
+
+## it.32 — Reader carte→plein écran : TENTATIVE #1 (revertée, non vérifiée) — blocage identifié
+Approche tentée (pattern composer, mutualisé) : `readerCanvasFraming = StoryCanvasFraming.resolve(viewport:
+geometry.size, headerInset: topInset+56, bottomInset: safeBottom+88, sideInset:12, state: fullscreen ? .free :
+.carded, corner:22)` puis `.scaleEffect(framing.scale).offset(y:).clipShape(RoundedRectangle(corner))` appliqué
+au canvas courant + loader + canvas sortant dans `StoryCardView` (StoryViewerView+Canvas.swift). Build vert (26s).
+RÉSULTAT VISUEL : canvas TOUJOURS plein bord (drawings bord-à-bord) — le scaleEffect ne carde PAS visuellement.
+→ REVERTÉ (ne pas shipper non-vérifié ; worktree partagé agent //).
+ANALYSE : `scale` ne PEUT pas valoir 1 en `.carded` (scaleW=(393-24)/393=0.94<1 toujours). Donc soit (a)
+`StoryReaderRepresentable` (UIViewRepresentable du reader) IGNORE la transform SwiftUI scaleEffect (sa updateUIView
+re-cale peut-être la frame interne sur les bounds écran — cf. les nombreux commentaires « le canvas débordait /
+ne se contraignait pas »), soit (b) un override de frame en aval ré-étend le canvas. Le composer (StoryCanvasRepresentable)
+HONORE scaleEffect (it.29 vérifié) → les 2 représentables diffèrent.
+PROCHAINE ITÉRATION (contexte frais) — diagnostic AVANT de recoder :
+1. Instrumenter : `.overlay(Text("\(readerCanvasFraming.scale) \(geometry.size)"))` temporaire → confirmer scale≈0.88.
+2. Test transform brut : hardcoder `.scaleEffect(0.5)` sur le canvas reader → SI le canvas ne rétrécit pas de moitié,
+   le représentable ignore la transform → la carte doit passer par la FRAME (canvasFitSize * framing) et NON scaleEffect,
+   en re-vérifiant la projection design→render (les bugs offset 77pt historiques).
+3. Sinon (transform honorée) → revoir pourquoi framing.scale=1 (geometry.size/safeArea runtime).
+Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFullscreenStorySession` déjà câblé.
