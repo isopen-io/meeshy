@@ -709,3 +709,20 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
 - [ ] Confirmation DEVICE du toggle plein écran (carte→plein bord) — nav menu accessibilité non fiable en simu.
 - [ ] Ops multi-slides (add/delete/reorder/duplicate) + sync thumbHash/index.
 - [ ] ⚠️ Résoudre le partage de worktree avec l'agent // (corruption incremental build récurrente).
+
+## it.35 — BUG#2 fixé, BUG#1 écarté, sidebar = décision design
+- [x] BUG#2 markViewed (d24b56086) : catch vide → `Logger.stories.error`. L'état « vu » local reste optimiste
+      (local-first) ; pas de toast (effet de fond, pas action user). Clean build vert.
+- [x] BUG#1 (pause-desync) ÉCARTÉ — faux positif : `shouldPauseTimer` est une computed property RÉACTIVE
+      incluant `showCommentsOverlay` ; le changement de slide appelle `restartTimer → startTimer` qui remet
+      `showCommentsOverlay = false` → SwiftUI ré-évalue → le canvas reprend au render suivant. Pas de pause
+      figée. (L'audit it.31 ignorait la réactivité SwiftUI — comme BUG#4. Audit = spéculatif, à cross-checker.)
+- [ ] **Polish sidebar réactions (décision design requise)** : en mode carte, la carte (scale 0.86 → 346pt large,
+      centrée → bord droit ~374) chevauche la sidebar réactions (trailing ~x350-400). Géométrie : 402 − sidebar(~50)
+      − margeGauche(28) = 324 max → la carte (346) est ~22pt TROP LARGE pour tenir À CÔTÉ de la sidebar. Options :
+      (A) carte plus étroite en mode carte (inset latéral asymétrique : petit à gauche, grand à droite pour la
+          sidebar) — change StoryCanvasFraming (offset.width) ; (B) déplacer les réactions en RANGÉE dans le footer
+          sous la carte (le mock montre « répondre » en footer) ; (C) accepter le léger chevauchement de la sidebar
+          translucide (Instagram-like). → choix user + itération visuelle (verif flaky en simu).
+- [ ] Confirmation DEVICE toggle plein écran (carte→plein bord).
+- [ ] Ops multi-slides (add/delete/reorder/duplicate) + sync thumbHash/index.
