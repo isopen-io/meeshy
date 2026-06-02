@@ -42,7 +42,8 @@ struct StrokeCaptureLayer: UIViewRepresentable {
         guard let pkStroke = drawing.strokes.last else { return .none }
 
         let (scaleX, scaleY) = projectionScale(bounds: bounds, designSize: designSize)
-        let designPoints: [CGPoint] = Array(pkStroke.path).map { point in
+        let pkPoints = Array(pkStroke.path)
+        let designPoints: [CGPoint] = pkPoints.map { point in
             CGPoint(x: point.location.x * scaleX, y: point.location.y * scaleY)
         }
         guard !designPoints.isEmpty else { return .none }
@@ -51,14 +52,52 @@ struct StrokeCaptureLayer: UIViewRepresentable {
             return .erase(designPoints)
         }
 
+        // Per-point width driver (C1). Pencil force VARIES across points; finger force is ~constant.
+        let forces = pkPoints.map { CGFloat($0.force) }
+        let maxForce = forces.max() ?? 0
+        let forceSpread = maxForce - (forces.min() ?? 0)
+        let usesPencilForce = forceSpread > 0.05
+
+        let pressures: [CGFloat]
+        if usesPencilForce {
+            pressures = forces.map { StrokeWidthDriver.pencilDriver(force: $0, maxForce: maxForce) }
+        } else {
+            pressures = Self.fingerPressures(designPoints: designPoints, pkPoints: pkPoints)
+        }
+
+        let strokePoints = zip(designPoints, pressures).map { pt, p in
+            StoryDrawingStrokePoint(x: pt.x, y: pt.y, pressure: Double(p))
+        }
         let stroke = StoryDrawingStroke(
-            points: designPoints.map { StoryDrawingStrokePoint(x: $0.x, y: $0.y) },
+            points: strokePoints,
             colorHex: colorHex,
             width: width,
             tool: tool,
-            smoothing: smoothing
+            smoothing: smoothing,
+            captureVersion: 1
         )
         return .stroke(stroke)
+    }
+
+    /// Finger driver: vitesse locale (design-space) lissée → `1 - vitesse normalisée`
+    /// (lent = épais). 1er point = neutre (pas de prédécesseur).
+    private static func fingerPressures(designPoints: [CGPoint], pkPoints: [PKStrokePoint]) -> [CGFloat] {
+        let n = designPoints.count
+        guard n == pkPoints.count, n > 1 else {
+            return Array(repeating: StrokeWidthDriver.neutral, count: n)
+        }
+        var rawVel: [CGFloat] = [0]
+        for i in 1..<n {
+            let dt = CGFloat(pkPoints[i].timeOffset - pkPoints[i - 1].timeOffset)
+            rawVel.append(StrokeWidthDriver.velocity(from: designPoints[i - 1], to: designPoints[i], dt: dt) ?? 0)
+        }
+        let smoothed = StrokeWidthDriver.movingAverage(rawVel, window: 5)
+        return smoothed.enumerated().map { idx, v in
+            guard idx > 0 else { return StrokeWidthDriver.neutral }
+            return StrokeWidthDriver.fingerDriver(
+                normalizedSmoothedVelocity: StrokeWidthDriver.normalize(v, vMax: StrokeWidthDriver.designVMax)
+            )
+        }
     }
 
     /// Échelle bounds→design **non-uniforme** (axes X/Y séparés). Doit matcher le

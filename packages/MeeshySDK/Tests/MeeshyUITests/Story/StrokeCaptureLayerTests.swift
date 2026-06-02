@@ -15,6 +15,12 @@ final class StrokeCaptureLayerTests: XCTestCase {
                       force: 1, azimuth: 0, altitude: 0)
     }
 
+    private func point(_ x: CGFloat, _ y: CGFloat, t: TimeInterval, force: CGFloat) -> PKStrokePoint {
+        PKStrokePoint(location: CGPoint(x: x, y: y), timeOffset: t,
+                      size: CGSize(width: 5, height: 5), opacity: 1,
+                      force: force, azimuth: 0, altitude: 0)
+    }
+
     private func drawing(_ controlPoints: [PKStrokePoint]) -> PKDrawing {
         let path = PKStrokePath(controlPoints: controlPoints, creationDate: Date())
         return PKDrawing(strokes: [PKStroke(ink: PKInk(.pen, color: .red), path: path)])
@@ -90,5 +96,30 @@ final class StrokeCaptureLayerTests: XCTestCase {
             bounds: .zero, designSize: CanvasGeometry.designSize)
         XCTAssertEqual(s.x, 1.0)
         XCTAssertEqual(s.y, 1.0)
+    }
+
+    func test_extract_setsCaptureVersion1_andPerPointPressure() {
+        // Pencil: rising, VARYING force ⇒ pencil path ⇒ rising pressure driver.
+        let d = drawing([point(100, 100, t: 0, force: 0),
+                         point(200, 100, t: 0.10, force: 4)])
+        let event = StrokeCaptureLayer.extract(from: d, bounds: bounds, tool: .pen,
+                                               colorHex: "00FF00", width: 7, smoothing: .raw)
+        guard case .stroke(let stroke) = event else { return XCTFail("expected .stroke") }
+        XCTAssertEqual(stroke.captureVersion, 1)
+        XCTAssertEqual(stroke.points.count, 2)
+        XCTAssertGreaterThan(stroke.points.last!.pressure, stroke.points.first!.pressure)
+        XCTAssertTrue(stroke.points.allSatisfy { (0...1).contains($0.pressure) })
+    }
+
+    func test_extract_zeroTimeOffsetDelta_doesNotCrash_usesNeutral() {
+        // Constant (finger) force ⇒ finger path; Δt==0 ⇒ velocity guard ⇒ no NaN.
+        let d = drawing([point(0, 0, t: 0, force: 1),
+                         point(50, 0, t: 0, force: 1)])
+        let event = StrokeCaptureLayer.extract(from: d, bounds: bounds, tool: .pen,
+                                               colorHex: "FFFFFF", width: 5, smoothing: .raw)
+        guard case .stroke(let stroke) = event else { return XCTFail("expected .stroke") }
+        XCTAssertEqual(stroke.captureVersion, 1)
+        XCTAssertTrue(stroke.points.allSatisfy { $0.pressure.isFinite })
+        XCTAssertTrue(stroke.points.allSatisfy { (0...1).contains($0.pressure) })
     }
 }
