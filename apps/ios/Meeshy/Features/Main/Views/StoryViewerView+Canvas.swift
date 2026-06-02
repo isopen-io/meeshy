@@ -701,13 +701,13 @@ struct StoryCardView: View {
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
 
-            // Scrim « carte » : en mode normal, assombrit le backdrop flou plein cadre
-            // pour que la carte canvas (au-dessus) se détache nettement du viewport
-            // (sinon le backdrop = même contenu flouté que la carte → carte invisible).
-            // En plein écran (`isFullscreenStorySession`) → 0 : le backdrop habille les
-            // letterbox immersifs. Animé par le même ressort que la carte (design user).
+            // Voile LÉGER sur le backdrop ThumbHash flou : on GARDE le ThumbHash visible
+            // en fond (demande user 2026-06-02 « mettre en fond le ThumbHash »), juste un
+            // soupçon d'assombrissement pour séparer. La carte se distingue surtout par ses
+            // coins arrondis + son ombre (voir le canvas cardé). En plein écran → 0 (le
+            // backdrop habille les letterbox immersifs). Animé par le ressort de la carte.
             Color.black
-                .opacity(isFullscreenStorySession ? 0 : 0.55)
+                .opacity(isFullscreenStorySession ? 0 : 0.18)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
@@ -803,6 +803,12 @@ struct StoryCardView: View {
                     .scaleEffect(readerCanvasFraming.scale)
                     .offset(y: readerCanvasFraming.offset.height)
                     .clipShape(RoundedRectangle(cornerRadius: readerCanvasFraming.cornerRadius, style: .continuous))
+                    // Ombre portée : la carte se détache du backdrop ThumbHash flou (même
+                    // contenu) par son BORD arrondi + son ombre, pas par un voile sombre
+                    // (demande user 2026-06-02 « bords arrondis + ThumbHash en fond »).
+                    // Coupée en plein écran (carte = plein bord, pas d'ombre).
+                    .shadow(color: .black.opacity(isFullscreenStorySession ? 0 : 0.4),
+                            radius: 20, y: 8)
                     .animation(.spring(response: 0.42, dampingFraction: 0.84), value: isFullscreenStorySession)
 
                 // Overlay loader granulaire — ThumbHash bg flouté + (spinner+%).
