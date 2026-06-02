@@ -145,6 +145,34 @@ extension FeedView {
             return
         }
 
+        // U1b — offline visual-media post → durable outbox (skip TUS). Audio
+        // posts keep the existing path (audio offline durability = future). The
+        // source URLs are captured before the UI reset (feedCleanupAttachments
+        // only clears the state arrays, not the temp files on disk) so
+        // enqueuePostMedia can relocate them; its Phase C deletes the sources.
+        // Text-only offline posts are already durable via createPost above.
+        if NetworkMonitor.shared.isOffline, audioURL == nil {
+            let sources = attachments.compactMap { mediaFiles[$0.id] }
+            let lang = composerLanguage
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showComposer = false
+                isComposerFocused = false
+                composerText = ""
+            }
+            feedCleanupAttachments()
+            HapticFeedback.success()
+            FeedbackToastManager.shared.showSuccess("Post en attente d'envoi")
+            Task {
+                await viewModel.createOfflineMediaPost(
+                    localMediaURLs: sources,
+                    content: text,
+                    visibility: postVisibility,
+                    originalLanguage: lang
+                )
+            }
+            return
+        }
+
         isUploading = true
         HapticFeedback.light()
 
@@ -1046,6 +1074,29 @@ struct FeedComposerSheet: View {
             if !text.isEmpty {
                 let lang = composerLanguage
                 Task { await viewModel.createPost(content: text, visibility: postVisibility, originalLanguage: lang) }
+            }
+            return
+        }
+
+        // U1b — offline: route the media post through the durable outbox instead
+        // of the TUS upload (which throws offline → the post would be lost). The
+        // post appears optimistically (local-media preview); the OutboxFlusher
+        // uploads + creates on reconnect, and the cmid echo reconciles it
+        // (U1 ST2). Mirrors the message offline-media gate. Text-only offline
+        // posts are already durable via createPost above (U1 ST3).
+        if NetworkMonitor.shared.isOffline {
+            let sources = attachments.compactMap { mediaFiles[$0.id] }
+            let lang = composerLanguage
+            onDismiss()
+            HapticFeedback.success()
+            FeedbackToastManager.shared.showSuccess("Post en attente d'envoi")
+            Task {
+                await viewModel.createOfflineMediaPost(
+                    localMediaURLs: sources,
+                    content: text,
+                    visibility: postVisibility,
+                    originalLanguage: lang
+                )
             }
             return
         }
