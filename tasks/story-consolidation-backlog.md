@@ -616,3 +616,34 @@ PLAN DE CORRECTIF (incrément focalisé, TDD) :
 - [ ] canvasEditShift vs canvasNaturalFrame mesuré avant transform : revérifier l'évitement clavier si un
       texte bas est édité (subtil, non reproduit comme bug ce tour — overlay plein écran gère le clavier).
 - [ ] Phase 2 cover baké (tous viewers) + relancer tests app SPM-bloqués (it.27).
+
+## it.31 — AUDIT VIEWER + DESIGN READER CARTE/PLEIN-ÉCRAN (user-directed, à implémenter)
+
+### TOP PRIORITY — Reader « carte → plein écran immersif » (design user 2026-06-02 + bug)
+BUG signalé : « le canvas n'est pas arrondi, le canvas arrive au-delà du header » → le reader rend
+la story PLEIN BORD au repos (cardScale=1, cardCornerRadius≈0, pas d'inset header) — StoryViewerView.swift:832-850.
+DESIGN voulu (image fournie) :
+- **État normal = CARTE** : story 9:16 arrondie (coins 22), SOUS le header auteur, AU-DESSUS du footer
+  répondre, marges latérales (distinguée du viewport), chrome (auteur + composition) visible.
+- **Plein écran immersif** : bouton « Plein écran » (déjà là, `isFullscreenStorySession`, +Sidebar.swift:573)
+  → UN SEUL ressort pilote en // : taille carte→plein écran, coins 22→0, opacité chrome 1→0. Retour = inverse.
+PLAN (mutualisation — réutiliser le solveur composer) :
+1. Reuse `StoryCanvasFraming.resolve` pour la carte reader (région = [headerAuteur, footerRépondre] + sideInset),
+   coins 22 au repos. MÊME composant canvas + même cadrage que le composer (principe user « mutualiser »).
+2. Introduire `fullscreenProgress` (0=carte,1=plein écran) animé `withAnimation(.spring)` sur le toggle
+   `isFullscreenStorySession` ; lerp(scale, coins 22→0, chromeOpacity 1→0). `chromeVisible` déjà lié au flag.
+3. RISQUE : `cardScale/cardCornerRadius/cardOffsetY` sont PARTAGÉS avec la transition tray→reader (appearScale)
+   + le drag swipe-dismiss (dragProgress). NE PAS casser ces 2 animations — composer `fullscreenProgress`
+   par-dessus sans toucher appear/drag, ou faire atterrir la transition tray sur l'état CARTE (cohérent).
+4. Vérif visuelle obligatoire (meeshy.sh run + /ios-simulator) : ouverture tray→carte, toggle plein écran
+   aller/retour, swipe-dismiss intact, multi-slides/groupes intacts.
+→ À implémenter en itération dédiée (contexte frais), TDD sur le pur framing + ressort, review.
+
+### Audit viewer (findings explore it.31 — à trier/corriger)
+- [ ] BUG#1 (HIGH) : pause canvas pas resync au changement de slide si overlay commentaires ouvert →
+      nouvelle slide silencieusement en pause (StoryViewerView+Content.swift:435-443 / +Canvas.swift). PROUVABLE.
+- [ ] BUG#2 (MED) : `markViewed` fire-and-forget catch vide (StoryViewModel.swift:389-397) → échec réseau
+      silencieux, ring « vu » localement mais pas serveur. Logger + (option) feedback sur 4xx permanent.
+- [ ] BUG#4 (MED) : `updateStoryDuration` passe `preferredLanguages: []` → durée calculée sur texte non-résolu
+      vs canvas résolu (langue) → désync progress bar / auto-advance pour stories texte auto-durée multilingues.
+- [x] Vérifié OK : tap-zones (gauche=prev/droite=next), bornes de groupe, hold-to-pause, audio lifecycle outgoing.
