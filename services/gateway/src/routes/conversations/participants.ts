@@ -336,6 +336,19 @@ export function registerParticipantsRoutes(
         }
       });
 
+      // R6-1 — broadcast so other members' devices refresh the participant list
+      // in real time (the POST previously created the row silently → stale member
+      // lists until manual reload). Mirrors the role-update emit below.
+      // conversation:joined feeds ParticipantsView (invalidate+reload) and
+      // ConversationSyncEngine (participants cache invalidate) on iOS.
+      const io = (request.server as any).io;
+      if (io) {
+        io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.CONVERSATION_JOINED, {
+          conversationId,
+          userId,
+        });
+      }
+
       const notificationService = (request.server as any).notificationService;
       if (notificationService) {
         notificationService.createAddedToConversationNotification({
@@ -443,6 +456,15 @@ export function registerParticipantsRoutes(
         return sendBadRequest(reply, 'Vous ne pouvez pas vous supprimer de la conversation');
       }
 
+      // Capture the removed participant's displayName before flipping inactive,
+      // for the real-time broadcast payload (R6-2). leftAt is shared by the DB
+      // write and the emit so they agree.
+      const removedParticipant = await prisma.participant.findFirst({
+        where: { conversationId, userId, isActive: true },
+        select: { displayName: true }
+      });
+      const leftAt = new Date();
+
       await prisma.participant.updateMany({
         where: {
           conversationId: conversationId,
@@ -451,9 +473,25 @@ export function registerParticipantsRoutes(
         },
         data: {
           isActive: false,
-          leftAt: new Date()
+          leftAt
         }
       });
+
+      // R6-2 — broadcast so other members' devices drop the removed user from
+      // the list + decrement the member count in real time (the DELETE
+      // previously mutated the DB silently). Mirrors leave.ts. Use
+      // conversation:participant-left (room broadcast feeding ParticipantsView,
+      // ConversationListViewModel count, ConversationSyncEngine invalidate) —
+      // NOT conversation:left, which is a self-only ack.
+      const io = (request.server as any).io;
+      if (io) {
+        io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.CONVERSATION_PARTICIPANT_LEFT, {
+          conversationId,
+          userId,
+          displayName: removedParticipant?.displayName ?? '',
+          leftAt: leftAt.toISOString()
+        });
+      }
 
       const notificationService = (request.server as any).notificationService;
       if (notificationService) {
