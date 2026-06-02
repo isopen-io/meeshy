@@ -387,12 +387,17 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     // MARK: - Mark Story as Viewed
 
     func markViewed(storyId: String) {
-        // Fire & forget
+        // Fire & forget : l'état « vu » local est posé optimistiquement (local-first).
+        // L'échec réseau ne déclenche PAS de toast (marquer-vu est un effet de bord de
+        // fond, pas une action utilisateur attendant un feedback — un toast serait du
+        // bruit), mais il est désormais LOGGÉ (avant : catch vide → échec invisible,
+        // ring « vu » localement mais jamais côté serveur → revert au prochain fetch).
         Task {
             do {
                 try await storyService.markViewed(storyId: storyId)
             } catch {
-                // Silent failure
+                Logger.stories.error(
+                    "markViewed failed for \(storyId, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
         }
 
