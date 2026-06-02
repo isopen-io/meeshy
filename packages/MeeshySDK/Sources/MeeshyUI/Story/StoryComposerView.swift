@@ -323,7 +323,7 @@ public struct StoryComposerView: View {
             // `drawingEditingMode == .inactive`. Les bulles (pinceau/couleur/
             // épaisseur/lissage) flottent sur le canvas, levées au-dessus du band
             // partagé (`bottomInset`).
-            StoryDrawingToolbar(viewModel: viewModel, bottomInset: drawingDrawerHeight)
+            StoryDrawingToolbar(viewModel: viewModel, bottomInset: presentedSheetHeight)
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.85),
                    value: viewModel.textEditingMode)
@@ -405,6 +405,12 @@ public struct StoryComposerView: View {
             canvasEditShift = 0
         }
         .adaptiveOnChange(of: viewModel.textEditingMode) { _, _ in recomputeCanvasShift() }
+        // Quand le canvas se carde/décarde, sa frame présentée change (post-scale) ;
+        // on re-aligne l'éditeur texte inline APRÈS que la carte se soit posée
+        // (ressort 0.32s) pour que `canvasEditShift` se base sur le rect final.
+        .adaptiveOnChange(of: canvasIsCarded) { _, _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.34) { recomputeCanvasShift() }
+        }
         .granularCanvasSync(
             filter: selectedFilter?.rawValue,
             hasImage: selectedImage != nil,
@@ -1230,20 +1236,24 @@ public struct StoryComposerView: View {
         // vérité partagée avec le reader), centré dans la zone disponible — les
         // bandes letterbox haut/bas accueillent la top bar et le toolbar flottant.
         GeometryReader { proxy in
-            // En mode dessin (`canvasIsInset`), le canvas 9:16 occupe TOUTE la zone
-            // sous la top bar (`topReserve`) et y est centré — il reste donc plein
-            // et l'utilisateur dessine sur tout le viewport (WYSIWYG preview). Le
-            // drawer (liste des traits) flotte par-dessus le bas et se replie pour
-            // libérer le canvas (spec user 2026-06-01).
-            // Option A dessin : le canvas reste PLEIN au bas (le drawer flotte
-            // par-dessus, il ne le rétrécit plus) — seul un top reserve le fait
-            // descendre SOUS la top bar et lui donne des coins arrondis. Hors
-            // dessin (`canvasIsInset == false`) → plein écran 9:16 centré sans
-            // arrondi, comportement d'origine.
-            let scaled = canvasIsInset
-            let topReserve: CGFloat = scaled ? max(proxy.safeAreaInsets.top, 59) + 12 : 0
-            let regionHeight = max(160, proxy.size.height - topReserve)
-            let fit = CanvasGeometry.aspectFitSize(in: CGSize(width: proxy.size.width, height: regionHeight))
+            // Le canvas garde des bounds intrinsèques 9:16 FIXES (`aspectFitSize` du
+            // viewport PLEIN) — on n'anime JAMAIS la frame de la
+            // `UIViewRepresentable` (sinon `layoutSubviews → rebuildLayers()` à
+            // chaque frame = tempête perf). Le placement « cardé au-dessus de la
+            // sheet » est rendu UNIQUEMENT par le container SwiftUI qui applique
+            // `scaleEffect`/`offset`/`clipShape` calculés par `StoryCanvasFraming`.
+            // La sheet (band/dessin/éditeur texte) est épinglée en bas ; le canvas
+            // se rétracte au-dessus d'elle (`bottomInset = presentedSheetHeight`)
+            // au lieu de la chevaucher (ancienne Option A).
+            let headerInset = max(proxy.safeAreaInsets.top, 59) + 12
+            let bottomInset = presentedSheetHeight
+            let framing = StoryCanvasFraming.resolve(.init(
+                viewport: proxy.size,
+                headerInset: headerInset,
+                bottomInset: bottomInset,
+                state: canvasIsCarded ? .carded : .free,
+                cardedCornerRadius: 22))
+            let fit = CanvasGeometry.aspectFitSize(in: proxy.size)
             canvasCore
                 .frame(width: fit.width, height: fit.height)
                 .scaleEffect(viewModel.canvasScale * viewportPinchDelta)
@@ -1264,11 +1274,11 @@ public struct StoryComposerView: View {
                         .padding(.top, 6)
                         .allowsHitTesting(false)
                 }
-                // Mesure la frame globale du canvas 9:16 (et non plein écran) —
+                // Mesure la frame globale du canvas 9:16 PRÉSENTÉE (post-scale) —
                 // `canvasNaturalFrame` pilote l'évitement clavier `canvasEditShift`
-                // qui projette `textObj.y * canvasNaturalFrame.height`. Avec un
-                // canvas 9:16, cette hauteur == `renderHeightFor1920`, donc le
-                // calcul redevient exact.
+                // qui projette `textObj.y * canvasNaturalFrame.height`. Attaché
+                // AVANT le container transform pour rapporter le rect réellement
+                // affiché (le canvas cardé), donc le calcul reste exact.
                 .background(
                     GeometryReader { p in
                         Color.clear
@@ -1278,18 +1288,16 @@ public struct StoryComposerView: View {
                             }
                     }
                 )
-                // Coins arrondis quand le canvas est scalé (bande ouverte) ; aucun
-                // arrondi en plein écran. Le clip englobe le canvas + ses overlays.
-                .clipShape(RoundedRectangle(cornerRadius: scaled ? 22 : 0, style: .continuous))
-                // Centre le canvas 9:16 dans la zone au-dessus du panneau, sous la
-                // zone Dynamic Island (`topReserve`), puis épingle l'ensemble en
-                // haut (l'espace réservé restant est en bas = la bande d'outils).
-                .frame(width: proxy.size.width, height: regionHeight, alignment: .center)
-                .padding(.top, topReserve)
-                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .top)
+                // ── Container transform (A4) : placement « carte au-dessus de la
+                // sheet ». Seules ces 3 modifications réagissent au carding ; les
+                // bounds intrinsèques (`fit`) restent FIXES (jamais animées).
+                .scaleEffect(framing.scale)
+                .offset(framing.offset)
+                .clipShape(RoundedRectangle(cornerRadius: framing.cornerRadius, style: .continuous))
+                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .center)
                 .offset(y: -canvasEditShift)
+                .animation(.spring(response: 0.32, dampingFraction: 0.85), value: framing)
                 .animation(.spring(response: 0.32, dampingFraction: 0.85), value: canvasEditShift)
-                .animation(.spring(response: 0.32, dampingFraction: 0.85), value: canvasIsInset)
         }
         .ignoresSafeArea()
     }
@@ -1315,6 +1323,49 @@ public struct StoryComposerView: View {
 
     static let composerBandMinHeight: CGFloat = 160
     static let composerBandMaxHeight: CGFloat = 540
+
+    /// Vrai dès qu'un panneau (band partagé, mode dessin, ou éditeur texte) est
+    /// présenté : le canvas se carde alors en rectangle arrondi AU-DESSUS de la
+    /// sheet (plus de chevauchement Option A). Truth-table dans `StoryCanvasFraming`.
+    private var canvasIsCarded: Bool {
+        let bandPresent = bandStateMachine.state != .hidden
+        let drawingActive = viewModel.drawingEditingMode.isActive
+        let textActive = viewModel.textEditingMode != .inactive
+        return StoryCanvasFraming.isCarded(
+            bandPresent: bandPresent,
+            drawingActive: drawingActive,
+            textActive: textActive
+        )
+    }
+
+    /// Hauteur (en points) de la sheet actuellement présentée, telle que le canvas
+    /// doit la réserver en bas pour ne PAS la chevaucher. Source INTÉRIMAIRE
+    /// (lot B4 remplacera la source par un modèle par-outil) : band/dessin →
+    /// `composerBandHeight` cappé ; éditeur texte → `keyboardHeight + 132` (barre
+    /// bulles). Hors carding → `0` (canvas plein écran).
+    private var presentedSheetHeight: CGFloat {
+        guard canvasIsCarded else { return 0 }
+        let cap = cappedSheetMaxHeight(screenHeight: composerScreenHeight)
+        if viewModel.textEditingMode != .inactive {
+            return min(cap, keyboardHeight + 132)
+        }
+        return min(cap, composerBandHeight)
+    }
+
+    /// Plafond de hauteur de sheet : ~42 % de l'écran, borné à 540 pt — garde le
+    /// canvas cardé toujours visible (jamais écrasé sous la sheet).
+    private func cappedSheetMaxHeight(screenHeight: CGFloat) -> CGFloat {
+        min(540, screenHeight * 0.42)
+    }
+
+    /// Hauteur de la fenêtre active (et non `UIScreen.main.bounds`) — identique au
+    /// calcul de `recomputeCanvasShift`, pour respecter split-screen / Stage Manager.
+    private var composerScreenHeight: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first(where: { $0.isKeyWindow })?.bounds.height
+            ?? UIScreen.main.bounds.height
+    }
 
     @ViewBuilder
     private var canvasCore: some View {
