@@ -117,6 +117,11 @@ struct StrokeCaptureLayer: UIViewRepresentable {
         canvas.backgroundColor = .clear
         canvas.isOpaque = false
         canvas.drawingPolicy = .anyInput
+        // PencilKit adapte sinon l'encre noir↔blanc selon le mode clair/sombre :
+        // un trait noir choisi vire au blanc en dark mode (et inversement). On épingle
+        // le canvas en mode clair pour que l'encre live rende la couleur EXACTE choisie
+        // dès l'instant du tracé, y compris pour le blanc et le noir purs (user 2026-06-02).
+        canvas.overrideUserInterfaceStyle = .light
         canvas.delegate = context.coordinator
         applyTool(to: canvas)
         context.coordinator.lastToolKey = toolKey
