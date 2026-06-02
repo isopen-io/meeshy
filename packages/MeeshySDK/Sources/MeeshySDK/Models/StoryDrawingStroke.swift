@@ -19,6 +19,10 @@ public struct StoryDrawingStroke: Codable, Identifiable, Sendable, Equatable {
     public var tool: StrokeTool
     public var smoothing: StrokeSmoothing
     public var createdAt: Date
+    /// Version du pipeline de capture. 0 = legacy (rendu largeur constante `base`,
+    /// identique à avant la feature pression). ≥1 = chaque point porte un driver réel
+    /// dans `pressure` → rendu largeur-variable.
+    public var captureVersion: Int
 
     public init(id: String = UUID().uuidString,
                 points: [StoryDrawingStrokePoint] = [],
@@ -26,7 +30,8 @@ public struct StoryDrawingStroke: Codable, Identifiable, Sendable, Equatable {
                 width: Double,
                 tool: StrokeTool = .pen,
                 smoothing: StrokeSmoothing = .raw,
-                createdAt: Date = Date()) {
+                createdAt: Date = Date(),
+                captureVersion: Int = 0) {
         self.id = id
         self.points = points
         self.colorHex = colorHex
@@ -34,6 +39,23 @@ public struct StoryDrawingStroke: Codable, Identifiable, Sendable, Equatable {
         self.tool = tool
         self.smoothing = smoothing
         self.createdAt = createdAt
+        self.captureVersion = captureVersion
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, points, colorHex, width, tool, smoothing, createdAt, captureVersion
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        points = try c.decode([StoryDrawingStrokePoint].self, forKey: .points)
+        colorHex = try c.decode(String.self, forKey: .colorHex)
+        width = try c.decode(Double.self, forKey: .width)
+        tool = try c.decode(StrokeTool.self, forKey: .tool)
+        smoothing = try c.decode(StrokeSmoothing.self, forKey: .smoothing)
+        createdAt = try c.decode(Date.self, forKey: .createdAt)
+        captureVersion = try c.decodeIfPresent(Int.self, forKey: .captureVersion) ?? 0
     }
 }
 
