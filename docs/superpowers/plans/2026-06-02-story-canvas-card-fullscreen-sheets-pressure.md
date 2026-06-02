@@ -15,7 +15,7 @@
 ## File Structure
 
 **New files (pure, unit-tested):**
-- `packages/MeeshySDK/Sources/MeeshySDK/Story/StoryCanvasFraming.swift` — pure container-transform solver (scale/offset/cornerRadius for `free`/`carded`/`immersive`). Core target, nonisolated. (Lot A)
+- `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryCanvasFraming.swift` — pure container-transform solver (scale/offset/cornerRadius for `free`/`carded`/`immersive`). **MeeshyUI** target (depends on `CanvasGeometry`, which lives in MeeshyUI), `public nonisolated`. (Lot A)
 - `packages/MeeshySDK/Sources/MeeshyUI/Story/Controls/BandLayoutState.swift` — pure per-tool sheet height + collapse model. (Lot B)
 - `packages/MeeshySDK/Sources/MeeshySDK/Story/Drawing/StrokeWidthDriver.swift` — pure pencil-force / finger-velocity → `[0,1]` driver. (Lot C)
 - `packages/MeeshySDK/Sources/MeeshySDK/Story/Drawing/StrokeWidthMapping.swift` — pure driver → effective width, legacy non-regression. (Lot C)
@@ -36,7 +36,7 @@
 
 These names are the single source of truth; every lot must use them verbatim.
 
-1. **`StoryCanvasFraming` (Lot A, core).** Canonical API is:
+1. **`StoryCanvasFraming` (Lot A, MeeshyUI, `public nonisolated`).** Lives in MeeshyUI because it depends on `CanvasGeometry` (also MeeshyUI). Canonical API is:
    ```swift
    StoryCanvasFraming.resolve(_ input: StoryCanvasFraming.Input) -> StoryCanvasFraming.Result
    // Input(viewport:headerInset:bottomInset:state:cardedCornerRadius:)
@@ -70,14 +70,14 @@ These names are the single source of truth; every lot must use them verbatim.
 
 ### Task A4.1 — RED: create the failing framing-helper test file
 
-- [ ] Create `packages/MeeshySDK/Tests/MeeshySDKTests/Story/StoryCanvasFramingTests.swift` (new file; SPM globs `Tests/MeeshySDKTests/**`, no pbxproj edit).
+- [ ] Create `packages/MeeshySDK/Tests/MeeshyUITests/Story/StoryCanvasFramingTests.swift` (new file; SPM globs `Tests/MeeshyUITests/**`, no pbxproj edit).
 - [ ] The test class is `final class StoryCanvasFramingTests: XCTestCase` — **NOT `@MainActor`** (SUT is `nonisolated`).
 - [ ] Paste the COMPLETE test body:
 
 ```swift
 import XCTest
 import CoreGraphics
-@testable import MeeshySDK
+@testable import MeeshyUI
 
 final class StoryCanvasFramingTests: XCTestCase {
 
@@ -182,11 +182,11 @@ final class StoryCanvasFramingTests: XCTestCase {
 }
 ```
 
-- [ ] Run `-only-testing:MeeshySDKTests/StoryCanvasFramingTests` (see Cross-Lot command). Expected: **compile error** `cannot find 'StoryCanvasFraming' in scope` (RED).
+- [ ] Run `-only-testing:MeeshyUITests/StoryCanvasFramingTests` (see Cross-Lot command). Expected: **compile error** `cannot find 'StoryCanvasFraming' in scope` (RED).
 
 ### Task A4.2 — GREEN: implement the pure framing helper
 
-- [ ] Create `packages/MeeshySDK/Sources/MeeshySDK/Story/StoryCanvasFraming.swift` (CORE target — nonisolated, SwiftUI-free; depends only on `CanvasGeometry`):
+- [ ] Create `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryCanvasFraming.swift` (MeeshyUI target — `CanvasGeometry` lives here; the enum is `public nonisolated` so it stays testable off-main under MeeshyUI's `defaultIsolation(MainActor)`):
 
 ```swift
 import Foundation
@@ -252,7 +252,7 @@ public nonisolated enum StoryCanvasFraming {
 }
 ```
 
-- [ ] Re-run `-only-testing:MeeshySDKTests/StoryCanvasFramingTests`. Expected: **PASS** (all assertions).
+- [ ] Re-run `-only-testing:MeeshyUITests/StoryCanvasFramingTests`. Expected: **PASS** (all assertions).
 - [ ] Commit: `feat(story): pure StoryCanvasFraming container-transform solver (Lot A)`.
 
 ### Task A1.1 — Composer: add `canvasIsCarded` + interim sheet-height plumbing
@@ -375,14 +375,14 @@ withAnimation(.spring(response: 0.42, dampingFraction: 0.82)) { chromeVisible = 
 
 ### Task A.5 — A — Validation gate
 
-- [ ] `-only-testing:MeeshySDKTests/StoryCanvasFramingTests` → all green.
+- [ ] `-only-testing:MeeshyUITests/StoryCanvasFramingTests` → all green.
 - [ ] `./apps/ios/meeshy.sh run` → `** BUILD SUCCEEDED **`, app launches.
 - [ ] Full manual pass: composer all tools card above sheet + resize/collapse + drawing included + inline text aligned; reader own == others carded; reader fullscreen zoom in/out, long-press pause-only, dismiss disabled; no flicker.
 - [ ] Commit Lot A:
 
 ```bash
-git add packages/MeeshySDK/Sources/MeeshySDK/Story/StoryCanvasFraming.swift \
-        packages/MeeshySDK/Tests/MeeshySDKTests/Story/StoryCanvasFramingTests.swift \
+git add packages/MeeshySDK/Sources/MeeshyUI/Story/StoryCanvasFraming.swift \
+        packages/MeeshySDK/Tests/MeeshyUITests/Story/StoryCanvasFramingTests.swift \
         packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView.swift \
         apps/ios/Meeshy/Features/Main/Views/StoryViewerView.swift \
         apps/ios/Meeshy/Features/Main/Views/StoryViewerView+Canvas.swift \
