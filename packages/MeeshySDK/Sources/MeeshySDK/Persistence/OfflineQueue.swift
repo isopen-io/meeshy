@@ -1296,14 +1296,7 @@ public actor OfflineQueue {
 
         // Phase B — copy each media file into the per-message pending subdir.
         do {
-            for (source, relativePath) in zip(sourceMediaURLs, relativePaths) {
-                let absolutePath = Self.absoluteMediaPath(forStored: relativePath)
-                let dst = URL(fileURLWithPath: absolutePath)
-                if FileManager.default.fileExists(atPath: absolutePath) {
-                    try FileManager.default.removeItem(at: dst)
-                }
-                try FileManager.default.copyItem(at: source, to: dst)
-            }
+            try Self.copyPendingMediaFiles(sources: sourceMediaURLs, to: relativePaths)
         } catch {
             // S6 — a copy failure is permanent; mark the row terminal so it
             // doesn't leak, clean partial copies, and emit the terminal signal.
@@ -1346,6 +1339,106 @@ public actor OfflineQueue {
         logger.info("Enqueued \(sourceMediaURLs.count) media file(s) for conversation \(conversationId, privacy: .public), message \(clientMessageId, privacy: .public)")
         await refreshPendingCount()
 
+        return EnqueueMediaResult(outboxId: outboxId, localMediaPaths: relativePaths)
+    }
+
+    /// Phase B of a write-ahead media enqueue: copies each source file to its
+    /// pending-media destination (overwriting a stale file at the same key).
+    /// Shared by `enqueueMedia` (messages) and `enqueuePostMedia` (posts). Throws
+    /// on the first copy failure — the caller flips the row terminal (S6).
+    static func copyPendingMediaFiles(sources: [URL], to relativePaths: [String]) throws {
+        for (source, relativePath) in zip(sources, relativePaths) {
+            let absolutePath = absoluteMediaPath(forStored: relativePath)
+            let dst = URL(fileURLWithPath: absolutePath)
+            if FileManager.default.fileExists(atPath: absolutePath) {
+                try FileManager.default.removeItem(at: dst)
+            }
+            try FileManager.default.copyItem(at: source, to: dst)
+        }
+    }
+
+    /// U1b — durable write-ahead for an OFFLINE media POST, the parity twin of
+    /// `enqueueMedia` (messages). Computes the pending paths, inserts the
+    /// `.createPost` row referencing them via the generic enqueue (write-ahead),
+    /// then copies each source under `Documents/pending-media/<cmid>/` (extension
+    /// preserved so the dispatcher derives the MIME per file). A copy failure is
+    /// permanent → the row is flipped `.exhausted` + cleaned + a terminal signal
+    /// emitted (S6), rather than retried against a missing file. The dispatcher
+    /// (U1b ST1) replays `localMediaPaths` via TUS on flush. Until the caller
+    /// (ST2b) wires it, this has no caller, so no row can mis-dispatch.
+    @discardableResult
+    public func enqueuePostMedia(
+        sourceMediaURLs: [URL],
+        clientMutationId cmid: String,
+        content: String?,
+        visibility: String,
+        originalLanguage: String? = nil
+    ) async throws -> EnqueueMediaResult {
+        guard let pool = outboxPool else { throw EnqueueMediaError.poolNotConfigured }
+
+        let relativePaths: [String] = try sourceMediaURLs.indices.map { index in
+            try Self.pendingMediaRelativePath(
+                for: cmid, index: index, ext: sourceMediaURLs[index].pathExtension)
+        }
+        let payload = CreatePostPayload(
+            clientMutationId: cmid,
+            content: content ?? "",
+            attachmentIds: [],
+            visibility: visibility,
+            originalLanguage: originalLanguage,
+            localMediaPaths: relativePaths
+        )
+
+        // Phase A — write-ahead INSERT of the `.createPost` row (referencing the
+        // not-yet-copied paths) via the generic enqueue, so a crash mid-copy
+        // leaves a recoverable row (the dispatcher skips missing files).
+        let outboxId: String
+        do {
+            _ = try await enqueue(.createPost, payload: payload, conversationId: nil)
+            outboxId = "ofqm_\(cmid)"
+        } catch {
+            throw EnqueueMediaError.outboxWriteFailed(underlying: error)
+        }
+
+        // Phase B — copy each source into the per-cmid pending subdir.
+        do {
+            try Self.copyPendingMediaFiles(sources: sourceMediaURLs, to: relativePaths)
+        } catch {
+            // S6 — a copy failure is permanent; flip the row terminal so it
+            // doesn't leak, clean partial copies, and emit the terminal signal.
+            let copyError = error
+            do {
+                try await pool.write { db in
+                    try db.execute(sql: """
+                        UPDATE outbox SET status = ?, lastError = ?, updatedAt = ? WHERE id = ?
+                        """, arguments: [
+                            OutboxStatus.exhausted.rawValue,
+                            "Post media copy failed: \(copyError.localizedDescription)",
+                            Date(),
+                            outboxId
+                        ])
+                }
+            } catch {
+                logger.error("Failed to mark post-media outbox row .exhausted after copy error: \(error.localizedDescription, privacy: .public)")
+            }
+            for relativePath in relativePaths {
+                try? FileManager.default.removeItem(atPath: Self.absoluteMediaPath(forStored: relativePath))
+            }
+            emitRetryExhausted(OfflineRetryExhausted(
+                kind: .createPost,
+                clientMessageId: cmid,
+                conversationId: "",
+                lastError: "Post media copy failed: \(copyError.localizedDescription)"
+            ))
+            throw EnqueueMediaError.mediaCopyFailed(underlying: copyError)
+        }
+
+        // Phase C — best-effort cleanup of the original tmp sources.
+        for source in sourceMediaURLs {
+            try? FileManager.default.removeItem(at: source)
+        }
+
+        logger.info("Enqueued \(sourceMediaURLs.count) media file(s) for offline post, cmid \(cmid, privacy: .public)")
         return EnqueueMediaResult(outboxId: outboxId, localMediaPaths: relativePaths)
     }
 

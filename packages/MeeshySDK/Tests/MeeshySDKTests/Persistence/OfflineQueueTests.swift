@@ -324,6 +324,51 @@ final class OfflineQueueTests: XCTestCase {
             "a terminated media row must sweep its pending-media file (no leak)")
     }
 
+    // MARK: - U1b — enqueuePostMedia durable write-ahead (offline media post)
+
+    func test_enqueuePostMedia_persistsCreatePostRow_withLocalMediaPaths_andRelocatesFiles() async throws {
+        let cmid = "cmid_\(UUID().uuidString.lowercased())"
+        let url1 = try makeTempMediaFile(ext: "jpg")
+        let url2 = try makeTempMediaFile(ext: "mp4")
+
+        let result = try await queue.enqueuePostMedia(
+            sourceMediaURLs: [url1, url2],
+            clientMutationId: cmid,
+            content: "Photo post",
+            visibility: "PUBLIC",
+            originalLanguage: "fr"
+        )
+
+        XCTAssertEqual(result.localMediaPaths.count, 2)
+        XCTAssertTrue(result.localMediaPaths[0].hasSuffix(".jpg"),
+            "the source extension must be preserved so the dispatcher can derive the MIME")
+        XCTAssertTrue(result.localMediaPaths[1].hasSuffix(".mp4"))
+        for path in result.localMediaPaths {
+            XCTAssertTrue(path.contains(cmid), "stored under the per-cmid subdir")
+            XCTAssertTrue(FileManager.default.fileExists(
+                atPath: OfflineQueue.absoluteMediaPath(forStored: path)),
+                "each media file must be relocated under Documents/pending-media/")
+        }
+
+        // The persisted row must be a .createPost carrying the localMediaPaths so
+        // the dispatcher (ST1) can replay the TUS upload on reconnect.
+        let maybePool = await queue.outboxPoolForTesting
+        let pool = try XCTUnwrap(maybePool)
+        let record = try await pool.read { db in
+            try OutboxRecord.filter(Column("id") == "ofqm_\(cmid)").fetchOne(db)
+        }
+        let row = try XCTUnwrap(record)
+        XCTAssertEqual(row.kind, .createPost)
+        XCTAssertEqual(row.status, .pending)
+        let payload = try JSONDecoder().decode(CreatePostPayload.self, from: row.payload)
+        XCTAssertEqual(payload.clientMutationId, cmid)
+        XCTAssertEqual(payload.localMediaPaths?.count, 2)
+        XCTAssertEqual(payload.content, "Photo post")
+        XCTAssertEqual(payload.visibility, "PUBLIC")
+        XCTAssertEqual(payload.originalLanguage, "fr")
+        XCTAssertTrue(payload.attachmentIds.isEmpty)
+    }
+
     private func makeTempMediaFile(ext: String) throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("media_\(UUID().uuidString).\(ext)")
