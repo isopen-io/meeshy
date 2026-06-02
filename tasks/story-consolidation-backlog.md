@@ -667,3 +667,24 @@ PROCHAINE ITÉRATION (contexte frais) — diagnostic AVANT de recoder :
    en re-vérifiant la projection design→render (les bugs offset 77pt historiques).
 3. Sinon (transform honorée) → revoir pourquoi framing.scale=1 (geometry.size/safeArea runtime).
 Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFullscreenStorySession` déjà câblé.
+
+## it.33 IMPLÉMENTÉ — reader carte→plein écran (fbd3ce54c) — carte VÉRIFIÉE visuellement
+- [x] DIAGNOSTIC : le scaleEffect cardait DÉJÀ en it.32 (readout s=0.94) — invisible car la carte se fondait
+      dans le `storyBlurredBackdrop` plein cadre (même contenu flouté). it.32 reverté à tort. Insets relevés → 0.86.
+- [x] `readerCanvasFraming` = StoryCanvasFraming.resolve(headerInset topInset+72, bottomInset 128, sideInset 16,
+      state fullscreen? .free : .carded, corner 22) appliqué (scaleEffect/offset/clipShape) au canvas+loader+sortant
+      DANS StoryCardView (transform visuel pur, frame canvasFitSize inchangée → projection intacte). Outer
+      cardScale/offset (tray-open + swipe-dismiss) NON touchés → transitions préservées.
+- [x] Scrim noir (opacity repos 0.55 / plein écran 0) sur le backdrop flou → la carte se détache du viewport.
+- [x] VÉRIFIÉ simulateur (clean build) : ouverture reader = carte arrondie nette, marges sombres, sous le header.
+      ✅ « état normal (carte) » du mock livré.
+- [~] Toggle plein écran : CÂBLÉ à l'identique (même flag → framing .free + scrim 0 + chrome masqué, animés 1 ressort).
+      Confirmation device du zoom EN ATTENTE (nav menu « … » flaky en accessibilité ce tour). Logique sûre (state SwiftUI pur).
+- ⚠️ Agent // corrompt l'incremental build partagé (erreur spurious GlobalSearchViewModel) → seuls les CLEAN builds fiables.
+
+## REPLENISHED backlog — post it.33
+- [ ] Confirmer device : toggle « Plein écran » anime carte→plein bord (coins 22→0, chrome fade) + retour.
+- [ ] Polish carte reader : (a) sidebar réactions dans la marge droite (pas sur la carte) en mode carte ;
+      (b) voice caption position en mode carte ; (c) tuning insets/scrim si besoin (0.86 / 0.55).
+- [ ] Viewer audit (it.31) : BUG#1 pause-desync overlay commentaires, BUG#2 markViewed silencieux, BUG#4 durée lang-mismatch.
+- [ ] Ops multi-slides (add/delete/reorder/duplicate) + sync thumbHash/index.
