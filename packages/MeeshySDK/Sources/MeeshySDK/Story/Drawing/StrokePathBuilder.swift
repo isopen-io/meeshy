@@ -26,6 +26,34 @@ public enum StrokePathBuilder {
         }
     }
 
+    /// Un point de rendu porteur de sa largeur effective (design-pixels). Produit par
+    /// `renderWidthPoints(for:)` et consommé par `VariableWidthStrokeBuilder` pour
+    /// tesseller le ruban largeur-variable.
+    public struct StrokeWidthPoint: Equatable, Sendable {
+        public let point: CGPoint
+        public let width: CGFloat
+        public init(point: CGPoint, width: CGFloat) {
+            self.point = point
+            self.width = width
+        }
+    }
+
+    /// Applique le lissage du trait en transportant la largeur effective de chaque point
+    /// (via `StrokeWidthMapping.effectiveWidth`) en lockstep avec la géométrie. Pour
+    /// `captureVersion == 0` (legacy), toutes les largeurs valent la `base` constante →
+    /// ruban uniforme, rendu pixel-identique au trait à largeur constante d'avant.
+    public static func renderWidthPoints(for stroke: StoryDrawingStroke) -> [StrokeWidthPoint] {
+        let pts = stroke.points.map { CGPoint(x: $0.x, y: $0.y) }
+        let widths = stroke.points.map { StrokeWidthMapping.effectiveWidth(of: stroke, pressure: $0.pressure) }
+        let result: (points: [CGPoint], widths: [CGFloat])
+        switch stroke.smoothing {
+        case .raw:   result = (pts, widths)
+        case .curve: result = CatmullRomSmoother.smooth(pts, widths: widths)
+        case .line:  result = RamerDouglasPeucker.straighten(pts, widths: widths)
+        }
+        return zip(result.points, result.widths).map { StrokeWidthPoint(point: $0, width: $1) }
+    }
+
     /// Assemble un `CGPath` passant par les points de rendu.
     /// - 0 point  : chemin vide.
     /// - 1 point  : un point dégénéré (`move` + `addLine` sur lui-même) — rendu en
