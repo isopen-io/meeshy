@@ -96,6 +96,8 @@ final class GlobalSearchViewModel: ObservableObject {
     private let userService: UserServiceProviding
     private let authManager: AuthManaging
     private let searchService: MessageSearchService
+    private let messageSocket: MessageSocketProviding
+    private let socialSocket: SocialSocketProviding
 
     // MARK: - Private
 
@@ -144,7 +146,9 @@ final class GlobalSearchViewModel: ObservableObject {
         api: APIClientProviding = APIClient.shared,
         userService: UserServiceProviding = UserService.shared,
         authManager: AuthManaging = AuthManager.shared,
-        searchService: MessageSearchService? = nil
+        searchService: MessageSearchService? = nil,
+        messageSocket: MessageSocketProviding = MessageSocketManager.shared,
+        socialSocket: SocialSocketProviding = SocialSocketManager.shared
     ) {
         self.api = api
         self.userService = userService
@@ -152,8 +156,11 @@ final class GlobalSearchViewModel: ObservableObject {
         self.searchService = searchService ?? MessageSearchService(
             reader: DependencyContainer.shared.dbPool
         )
+        self.messageSocket = messageSocket
+        self.socialSocket = socialSocket
         loadRecentSearches()
         setupDebounce()
+        setupSocketInvalidation()
     }
 
     deinit {
@@ -162,6 +169,31 @@ final class GlobalSearchViewModel: ObservableObject {
         // warning. Cancel any in-flight search so we don't leak network
         // work after the view disappears.
         searchTask?.cancel()
+    }
+
+    // MARK: - Socket-driven cache invalidation
+
+    /// A conversation rename/avatar change (`conversation:updated`) or deletion
+    /// (`conversation:deleted`/`closed`) can leave a cached message-search result
+    /// showing a stale title or a dead row (the cached `conversationName` is what
+    /// renders as the row title). The in-memory message-query cache is tiny
+    /// (5 entries) so a coarse clear on any conversation mutation is cheap and
+    /// correct — the next identical query simply re-fetches. `.receive(on:.main)`
+    /// because the socket publishers emit off the main thread.
+    private func setupSocketInvalidation() {
+        messageSocket.conversationUpdated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.invalidateMessageQueryCache() }
+            .store(in: &cancellables)
+
+        socialSocket.conversationDeleted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.invalidateMessageQueryCache() }
+            .store(in: &cancellables)
+    }
+
+    private func invalidateMessageQueryCache() {
+        messageQueryCache.removeAll()
     }
 
     // MARK: - Debounced Search
