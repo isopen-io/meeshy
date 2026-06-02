@@ -587,3 +587,32 @@ PLAN DE CORRECTIF (incrément focalisé, TDD) :
 - [ ] **Phase 2 hybride — cover baké uploadé** (tous les viewers voient les overlays) — plan dédié, touche RAW-publish.
 - [ ] P1 filtres (6 sans kernel Metal) + P3 looks divergents — chantier archi (plan dédié).
 - [ ] Surfaces non auditées : ops multi-slides (add/delete/reorder/duplicate) + sync index/thumbHash ; viewer gestes.
+
+## it.29 IMPLÉMENTÉ — composer drawer rétractable + canvas card mutualisé (user-directed, 3 commits)
+- [x] e9f9ce066 : drawer rétractable sur TOUS les outils (pas seulement dessin) — `isBandResizable`
+      gaté `== .drawing` → `BandState.allowsCollapsibleDrawer` (true pour tout `.toolPanel`). +2 tests.
+- [x] 697edfdcb : Bug A (le menu rétrécit au resize pour tous les outils — `panelHeight` honore
+      `panelHeightOverride`, plus seulement dessin) + Bug B (`presentedSheetHeight` collapse-aware →
+      réserve la poignée seule, canvas bien cadré).
+- [x] 128dcda43 : canvas = carte arrondie cohérente pour TOUS les outils (dessin inclus) — `StoryCanvasFraming`
+      aspect-fit dans région inset (sous header / au-dessus sheet + marge latérale `sideInset:14`), arrondi dès
+      que cardé. +2 tests (12 framing tests verts). bottomInset min + safe-area.
+- [x] VÉRIF VISUELLE simulateur (meeshy.sh run + idb) : Effets ouvert (carte au-dessus sheet, sous header,
+      marges) + Effets collapsé (carte arrondie, marges, sous header, near-full) + Dessin ouvert (même carte)
+      + éditeur texte (overlay plein écran INTENTIONNEL pour la frappe → retour carte au dismiss). Cohérent.
+- BILAN : canvas + .sheet (`ComposerBottomBand`) = composants partagés, comportement identique tous outils.
+  L'agent // a abandonné son `BandLayoutState` concurrent au profit de cet état partagé (mutualisation max).
+
+## it.30 — éditeur texte vérifié (pas de bug)
+- [x] L'éditeur texte est un overlay plein écran intentionnel pendant la frappe (canvas cardé masqué opacity 0,
+      surface d'édition séparée avec padding clavier). Le cadrage carte s'applique correctement aux états
+      tool-drawer, pas au mode frappe. Retour à la carte au dismiss vérifié. RAS.
+
+## REPLENISHED backlog — post it.30 (élargir la couverture)
+- [ ] **VIEWER/READER (prochaine cible)** : gestes (tap zones prev/next, hold-to-pause, swipe inter-groupes),
+      progress bars, transitions slides, audio/vidéo lifecycle. Auditer cohérence + callbacks branchés.
+- [ ] **Ops multi-slides** : add/delete/reorder/duplicate + sync thumbHash/mini-preview/currentSlideIndex.
+- [ ] Marge latérale composer (14pt) + corner (22pt) : tuning visuel si l'utilisateur veut plus inset/rond.
+- [ ] canvasEditShift vs canvasNaturalFrame mesuré avant transform : revérifier l'évitement clavier si un
+      texte bas est édité (subtil, non reproduit comme bug ce tour — overlay plein écran gère le clavier).
+- [ ] Phase 2 cover baké (tous viewers) + relancer tests app SPM-bloqués (it.27).
