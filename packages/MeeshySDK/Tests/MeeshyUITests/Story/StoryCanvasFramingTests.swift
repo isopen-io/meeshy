@@ -10,6 +10,7 @@ final class StoryCanvasFramingTests: XCTestCase {
         viewport: CGSize? = nil,
         headerInset: CGFloat = 100,
         bottomInset: CGFloat = 320,
+        sideInset: CGFloat = 0,
         state: StoryCanvasFraming.Presentation = .carded,
         cornerRadius: CGFloat = 22
     ) -> StoryCanvasFraming.Input {
@@ -17,6 +18,7 @@ final class StoryCanvasFramingTests: XCTestCase {
             viewport: viewport ?? self.viewport(),
             headerInset: headerInset,
             bottomInset: bottomInset,
+            sideInset: sideInset,
             state: state,
             cardedCornerRadius: cornerRadius
         )
@@ -62,6 +64,33 @@ final class StoryCanvasFramingTests: XCTestCase {
     func test_resolve_carded_collapsedSheet_scaleApproachesFull() {
         let r = StoryCanvasFraming.resolve(makeInput(headerInset: 0, bottomInset: 0))
         XCTAssertEqual(r.scale, 1, accuracy: 0.001)
+    }
+
+    func test_resolve_carded_sideInset_keepsHorizontalMargins() {
+        // With a side inset the canvas card never spans the full viewport width — even with
+        // a tiny bottom inset (drawer collapsed) — so it stays distinguished from the
+        // viewport edges, and remains rounded (user spec 2026-06-02).
+        let vp = viewport()
+        let sideInset: CGFloat = 16
+        let r = StoryCanvasFraming.resolve(
+            makeInput(headerInset: 80, bottomInset: 40, sideInset: sideInset))
+        let intrinsic = CanvasGeometry.aspectFitSize(in: vp)
+        let cardWidth = intrinsic.width * r.scale
+        XCTAssertLessThanOrEqual(cardWidth, vp.width - 2 * sideInset + 0.5,
+                                 "card must keep horizontal margins (not full-bleed)")
+        XCTAssertGreaterThan(r.cornerRadius, 0)
+        XCTAssertLessThan(r.scale, 1)
+    }
+
+    func test_resolve_carded_fullSize_keepsRoundedCorners() {
+        // "Rounded card, always" (user 2026-06-02): a carded canvas (any tool active) keeps
+        // its rounded corners even when it fills the viewport — e.g. drawer collapsed to a
+        // handle → scale≈1. Pre-fix the corner dropped to 0 once scale hit 1 → square
+        // full-bleed canvas, which the user flagged ("ni les bordures arrondies").
+        let r = StoryCanvasFraming.resolve(makeInput(headerInset: 0, bottomInset: 0))
+        XCTAssertEqual(r.scale, 1, accuracy: 0.001)
+        XCTAssertEqual(r.cornerRadius, 22, accuracy: 0.0001,
+                       "a carded canvas stays rounded even at full size")
     }
 
     func test_resolve_carded_canvasBottomNeverBelowSheetTop() {

@@ -14,12 +14,16 @@ public nonisolated enum StoryCanvasFraming {
         public let viewport: CGSize
         public let headerInset: CGFloat
         public let bottomInset: CGFloat
+        /// Horizontal margin (each side) kept around the canvas card so it is always
+        /// visually distinguished from the viewport edges. 0 = fit-by-width (legacy).
+        public let sideInset: CGFloat
         public let state: Presentation
         public let cardedCornerRadius: CGFloat
         public init(viewport: CGSize, headerInset: CGFloat, bottomInset: CGFloat,
+                    sideInset: CGFloat = 0,
                     state: Presentation, cardedCornerRadius: CGFloat) {
             self.viewport = viewport; self.headerInset = headerInset
-            self.bottomInset = bottomInset; self.state = state
+            self.bottomInset = bottomInset; self.sideInset = sideInset; self.state = state
             self.cardedCornerRadius = cardedCornerRadius
         }
     }
@@ -48,14 +52,25 @@ public nonisolated enum StoryCanvasFraming {
         let regionTop = max(0, input.headerInset)
         let regionBottom = max(regionTop, input.viewport.height - max(0, input.bottomInset))
         let regionHeight = max(0, regionBottom - regionTop)
-        guard regionHeight > 0 else { return .identity }
+        let regionWidth = max(0, input.viewport.width - 2 * max(0, input.sideInset))
+        guard regionHeight > 0, regionWidth > 0 else { return .identity }
 
-        let rawScale = regionHeight / intrinsic.height
-        let scale = min(1, max(0, rawScale))
+        // Aspect-fit the (full-width 9:16) canvas inside the inset region — constrained by
+        // BOTH the height (below header / above sheet, resized to the sheet opening) AND the
+        // width (side margins). Never upscales past intrinsic. So the canvas is always a
+        // centred rounded card that (a) starts below the header, (b) never overlaps the sheet
+        // when open, (c) grows toward full-but-margined when the sheet collapses — identical
+        // for every tool incl. drawing (user spec 2026-06-02).
+        let scaleH = regionHeight / intrinsic.height
+        let scaleW = regionWidth / intrinsic.width
+        let scale = min(1, max(0, min(scaleH, scaleW)))
 
         let regionCenterY = regionTop + regionHeight / 2
         let offsetY = regionCenterY - input.viewport.height / 2
-        let corner = scale < 1 ? input.cardedCornerRadius : 0
+        // Rounded whenever carded — even near full size (e.g. drawer collapsed). A carded
+        // canvas is always a rounded card ("rounded card, always", user 2026-06-02) ; the
+        // `.free`/`.immersive` states short-circuit to `.identity` (no rounding) above.
+        let corner = input.cardedCornerRadius
         return Result(scale: scale, offset: CGSize(width: 0, height: offsetY), cornerRadius: corner)
     }
 }

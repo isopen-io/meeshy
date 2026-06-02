@@ -1249,11 +1249,17 @@ public struct StoryComposerView: View {
             // se rétracte au-dessus d'elle (`bottomInset = presentedSheetHeight`)
             // au lieu de la chevaucher (ancienne Option A).
             let headerInset = max(proxy.safeAreaInsets.top, 59) + 12
-            let bottomInset = presentedSheetHeight
+            // Marge basse minimale même sheet repliée → la carte reste détachée du bas du
+            // viewport (et de la poignée), sinon elle touchait quasi le bord en collapse.
+            let bottomInset = max(presentedSheetHeight, 16) + max(proxy.safeAreaInsets.bottom, 0)
             let framing = StoryCanvasFraming.resolve(.init(
                 viewport: proxy.size,
                 headerInset: headerInset,
                 bottomInset: bottomInset,
+                // Marge latérale : la carte canvas reste toujours détachée des bords du
+                // viewport (spec user 2026-06-02 « une marge suffisante pour être distingué
+                // du viewport »), pour tous les outils (dessin inclus).
+                sideInset: 14,
                 state: canvasIsCarded ? .carded : .free,
                 cardedCornerRadius: 22))
             let fit = CanvasGeometry.aspectFitSize(in: proxy.size)
