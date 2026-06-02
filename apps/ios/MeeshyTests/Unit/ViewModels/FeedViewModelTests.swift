@@ -644,11 +644,63 @@ final class FeedViewModelTests: XCTestCase {
 
         await sut.createPost(content: "With media", mediaIds: ["att-1"])
 
-        // Media posts are NOT yet durable (U1b) — they take the direct path.
+        // Online media posts take the direct path (TUS-uploaded ids → postService).
         XCTAssertEqual(postService.createCallCount, 1)
-        XCTAssertTrue(queue.enqueueCalls.isEmpty, "media create must not (yet) route through the outbox")
+        XCTAssertTrue(queue.enqueueCalls.isEmpty, "online media create must not route through the outbox")
         XCTAssertEqual(sut.posts.count, 1)
         XCTAssertEqual(sut.posts[0].id, "media-1")
+    }
+
+    // MARK: - createOfflineMediaPost() — U1b ST2: durable offline media post
+
+    func test_createOfflineMediaPost_enqueuesPostMediaAndInsertsOptimisticPost() async {
+        let queue = MockOfflineQueue()
+        let (sut, _, _, postService) = makeSUT(offlineQueue: queue)
+        let urls = [URL(fileURLWithPath: "/tmp/a.jpg"), URL(fileURLWithPath: "/tmp/b.mp4")]
+
+        await sut.createOfflineMediaPost(localMediaURLs: urls, content: "Photo post", originalLanguage: "en")
+
+        // Optimistic post with a local-media preview, keyed by the cmid.
+        XCTAssertEqual(sut.posts.count, 1)
+        XCTAssertEqual(sut.posts[0].content, "Photo post")
+        XCTAssertEqual(sut.posts[0].media.count, 2, "optimistic local-media preview rendered before upload")
+        XCTAssertTrue(sut.publishSuccess)
+        XCTAssertNil(sut.publishError)
+
+        // Durable outbox path — NOT a direct postService.create (lost offline).
+        XCTAssertEqual(postService.createCallCount, 0, "offline media post must not hit postService directly")
+        XCTAssertEqual(queue.enqueuePostMediaCalls.count, 1)
+        let call = queue.enqueuePostMediaCalls.first
+        XCTAssertEqual(call?.sourceMediaURLs, urls)
+        XCTAssertEqual(call?.content, "Photo post")
+        XCTAssertEqual(call?.originalLanguage, "en")
+        XCTAssertEqual(call?.visibility, "PUBLIC")
+        XCTAssertEqual(sut.posts[0].id, call?.clientMutationId,
+            "optimistic post must be keyed by the cmid for ST2 reconcile")
+    }
+
+    func test_createOfflineMediaPost_enqueueRefused_rollsBackOptimisticPost() async {
+        let queue = MockOfflineQueue()
+        queue.enqueuePostMediaError = APIError.networkError(URLError(.timedOut))
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
+
+        await sut.createOfflineMediaPost(localMediaURLs: [URL(fileURLWithPath: "/tmp/a.jpg")], content: "Doomed")
+
+        XCTAssertTrue(sut.posts.isEmpty, "optimistic media post must be removed when the outbox refuses the row")
+        XCTAssertNotNil(sut.publishError)
+        XCTAssertFalse(sut.publishSuccess)
+    }
+
+    func test_createOfflineMediaPost_emptyURLs_fallsBackToTextOnly() async {
+        let queue = MockOfflineQueue()
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
+
+        await sut.createOfflineMediaPost(localMediaURLs: [], content: "Just text")
+
+        XCTAssertEqual(queue.enqueuePostMediaCalls.count, 0, "no media → no media enqueue")
+        XCTAssertEqual(queue.enqueueCalls.count, 1, "falls back to the durable text-only path")
+        XCTAssertEqual(queue.enqueueCalls.first?.kind, .createPost)
+        XCTAssertEqual(sut.posts.count, 1)
     }
 
     // MARK: - repostPost()

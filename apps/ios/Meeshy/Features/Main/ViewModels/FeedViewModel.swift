@@ -534,6 +534,80 @@ class FeedViewModel: ObservableObject {
         debouncedCacheSave()
     }
 
+    /// U1b — durably publishes an OFFLINE media post. Inserts an optimistic post
+    /// keyed by a fresh cmid (rendering the picked files as a local-URL preview)
+    /// and routes the media through `enqueuePostMedia` (relocate + write-ahead
+    /// `.createPost`). The OutboxFlusher uploads the files via TUS on reconnect
+    /// and creates the post; the gateway echoes the cmid on `post:created`, where
+    /// the reconcile (U1 ST2) swaps the optimistic post for the server one (no
+    /// duplicate). Rolls back on synchronous enqueue refusal or `.exhausted`.
+    /// Falls back to the text-only path when there are no media URLs.
+    func createOfflineMediaPost(
+        localMediaURLs: [URL],
+        content: String?,
+        visibility: String = "PUBLIC",
+        originalLanguage: String? = nil
+    ) async {
+        publishError = nil
+        publishSuccess = false
+        guard !localMediaURLs.isEmpty else {
+            await enqueueDurableTextPost(
+                content: content ?? "",
+                visibility: visibility,
+                originalLanguage: originalLanguage
+            )
+            return
+        }
+
+        let cmid = ClientMutationId.generate()
+        let currentUser = AuthManager.shared.currentUser
+        let optimistic = FeedPost(
+            id: cmid,
+            author: currentUser?.displayName ?? currentUser?.username ?? "",
+            authorId: currentUser?.id ?? "",
+            authorUsername: currentUser?.username,
+            authorAvatarURL: currentUser?.avatar,
+            type: "POST",
+            content: content ?? "",
+            timestamp: Date(),
+            media: localMediaURLs.map(Self.optimisticFeedMedia(forLocalURL:)),
+            originalLanguage: originalLanguage
+        )
+        posts.insert(optimistic, at: 0)
+        debouncedCacheSave()
+
+        do {
+            _ = try await offlineQueue.enqueuePostMedia(
+                sourceMediaURLs: localMediaURLs,
+                clientMutationId: cmid,
+                content: content,
+                visibility: visibility,
+                originalLanguage: originalLanguage
+            )
+            publishSuccess = true
+            observeOutcome(cmid: cmid, rollback: { [weak self] in
+                self?.removeOptimisticPost(id: cmid)
+            }, toast: "Erreur lors de la publication")
+        } catch {
+            removeOptimisticPost(id: cmid)
+            publishError = error.localizedDescription
+        }
+    }
+
+    /// Builds the optimistic `FeedMedia` for a not-yet-uploaded local file,
+    /// deriving the type from its extension so the preview renders as image vs
+    /// video. The `file://` URL is replaced by the server media URL on reconcile.
+    private static func optimisticFeedMedia(forLocalURL url: URL) -> FeedMedia {
+        let mime = MimeTypeResolver.mimeType(forExtension: url.pathExtension)
+        let type: FeedMediaType
+        switch AttachmentKind(mimeType: mime) {
+        case .video: type = .video
+        case .audio: type = .audio
+        default: type = .image
+        }
+        return FeedMedia(type: type, url: url.absoluteString)
+    }
+
     func sendComment(postId: String, content: String, parentId: String? = nil, effectFlags: Int? = nil) async {
         guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
         // T10c — optimistic insert + durable outbox enqueue (survives offline +

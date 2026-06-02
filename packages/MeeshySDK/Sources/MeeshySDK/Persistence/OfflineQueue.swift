@@ -400,6 +400,20 @@ public protocol OfflineQueueing: Sendable {
     ) async throws -> String
 
     func outcomeStream(for cmid: String) async -> AsyncStream<OutboxOutcome>
+
+    /// U1b — durable write-ahead enqueue for an OFFLINE media post. Relocates the
+    /// source files + inserts the `.createPost` row referencing them; the
+    /// dispatcher replays the TUS upload on reconnect. On the protocol so
+    /// ViewModels can route offline media posts through an injected (mockable)
+    /// queue, like the generic `enqueue`.
+    @discardableResult
+    func enqueuePostMedia(
+        sourceMediaURLs: [URL],
+        clientMutationId: String,
+        content: String?,
+        visibility: String,
+        originalLanguage: String?
+    ) async throws -> OfflineQueue.EnqueueMediaResult
 }
 
 extension OfflineQueue: OfflineQueueing {}
@@ -1212,6 +1226,11 @@ public actor OfflineQueue {
     public struct EnqueueMediaResult: Sendable {
         public let outboxId: String
         public let localMediaPaths: [String]
+
+        public init(outboxId: String, localMediaPaths: [String]) {
+            self.outboxId = outboxId
+            self.localMediaPaths = localMediaPaths
+        }
     }
 
     public enum EnqueueMediaError: Error, Sendable {

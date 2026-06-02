@@ -29,6 +29,41 @@ final class MockOfflineQueue: OfflineQueueing, @unchecked Sendable {
         return try enqueueResult.get()
     }
 
+    struct EnqueuePostMediaCall {
+        let sourceMediaURLs: [URL]
+        let clientMutationId: String
+        let content: String?
+        let visibility: String
+        let originalLanguage: String?
+    }
+
+    var enqueuePostMediaCalls: [EnqueuePostMediaCall] = []
+    /// When set, `enqueuePostMedia` throws this instead of recording a success —
+    /// drives the synchronous rollback path in tests.
+    var enqueuePostMediaError: Error?
+
+    @discardableResult
+    func enqueuePostMedia(
+        sourceMediaURLs: [URL],
+        clientMutationId: String,
+        content: String?,
+        visibility: String,
+        originalLanguage: String?
+    ) async throws -> OfflineQueue.EnqueueMediaResult {
+        enqueuePostMediaCalls.append(EnqueuePostMediaCall(
+            sourceMediaURLs: sourceMediaURLs,
+            clientMutationId: clientMutationId,
+            content: content,
+            visibility: visibility,
+            originalLanguage: originalLanguage
+        ))
+        if let enqueuePostMediaError { throw enqueuePostMediaError }
+        return OfflineQueue.EnqueueMediaResult(
+            outboxId: "ofqm_\(clientMutationId)",
+            localMediaPaths: sourceMediaURLs.map { $0.lastPathComponent }
+        )
+    }
+
     func outcomeStream(for cmid: String) async -> AsyncStream<OutboxOutcome> {
         AsyncStream<OutboxOutcome> { continuation in
             outcomeContinuations[cmid] = continuation
