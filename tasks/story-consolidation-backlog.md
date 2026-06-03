@@ -740,3 +740,20 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
       vérif visuelle) OU (B) supprimer moveSlide (code mort — touche protocol + MockStoryComposerViewModel).
 - NOTE : sous-système story largement sain. Restant = décisions user (sidebar A/B/C, moveSlide A/B) ou vérif
   visuelle flaky (toggle plein écran device). Bugs provables autonomes ~épuisés côté story.
+
+## it.37 — reorder gesture câblé + contraste boutons élégant (user-directed)
+- [x] REORDER (ee35bda5c, moveSlide option A) : `moveSlide` réécrit en `slides.move(fromOffsets:toOffset:)`
+      (convention `.onMove`, accepte move-to-end, currentSlideIndex suit le slide ÉDITÉ par id) + câblé via
+      `.draggable(slide.id)/.dropDestination` sur le slide strip (même UX que la liste média). +2 tests (28 verts).
+      Drag UX = confirmation device.
+- [x] CONTRASTE (78dd209d1) : boutons d'action droite (React/Envoyer/Vues/Exporter) invisibles sur fond clair.
+      User a rejeté le scrim gradient → solution ÉLÉGANTE : halo sombre (drop-shadow) sur l'icône (0.2→0.55) +
+      le label (avant sans ombre) — style flottant Instagram, lisible sur N'IMPORTE QUEL fond, sans cartouche.
+      Vérifié simulateur (story photo colorée). S'applique reader + preview (composant partagé).
+
+## REPLENISHED backlog — post it.37
+- [ ] Sidebar OVERLAP (distinct de la visibilité, désormais réglée) : en mode carte reader, la sidebar chevauche
+      le bord droit de la carte. Décision A/B/C encore ouverte (A carte plus étroite / B footer / C accepter).
+      Le halo rend les boutons visibles même en chevauchement → priorité abaissée.
+- [ ] Confirmation DEVICE : drag-reorder des slides + toggle plein écran (carte→plein bord).
+- [ ] Publication (runStoryUpload / TUS / offline queue) — audit reporté d'it.37.
