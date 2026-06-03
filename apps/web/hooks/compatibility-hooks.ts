@@ -3,13 +3,14 @@
  * These provide the same interface as the old Context API hooks but use Zustand stores
  */
 
-import { 
+import {
   useUser as useUserStore,
   useAuthActions,
   useCurrentInterfaceLanguage,
   useUserLanguageConfig,
   useLanguageActions,
 } from '@/stores';
+import { INTERFACE_LANGUAGES } from '@/types/frontend';
 
 // Legacy useUser hook compatibility
 export function useUser() {
@@ -36,11 +37,14 @@ export function useLanguage() {
     setCustomDestinationLanguage,
     setInterfaceLanguage,
     isLanguageSupported,
-    getSupportedLanguages: () => [
-      { code: 'en', name: 'English', nativeName: 'English' },
-      { code: 'fr', name: 'Français', nativeName: 'Français' },
-      // Note: Seuls EN et FR ont des fichiers de traduction complets
-      // TODO: Ajouter es, de, pt, it quand les traductions seront prêtes
-    ],
+    // Interface languages with complete translation bundles. Sourced from the
+    // canonical INTERFACE_LANGUAGES (same source the language store uses), so
+    // this stays in sync as locale bundles are added (en, es, fr, pt today).
+    getSupportedLanguages: () =>
+      INTERFACE_LANGUAGES.map(({ code, name }) => ({
+        code,
+        name,
+        nativeName: name,
+      })),
   };
 }
