@@ -98,6 +98,36 @@ final class StoryComposerViewModelTests: XCTestCase {
         XCTAssertEqual(vm.slides.map(\.id), before)
     }
 
+    // MARK: - moveSlide (reorder gesture wiring, it.37)
+
+    func test_moveSlide_reordersViaOnMoveConvention_andPreservesEditedSlide() {
+        let vm = makeSubject()
+        vm.addSlide(); vm.addSlide()        // 3 slides A,B,C (indices 0,1,2)
+        let ids = vm.slides.map(\.id)
+        vm.selectSlide(at: 0)               // user is editing slide A
+        XCTAssertEqual(vm.currentSlideIndex, 0)
+
+        // SwiftUI .onMove / .dropDestination convention: move C (index 2) to the
+        // FRONT (toOffset 0) → [C, A, B].
+        vm.moveSlide(from: 2, to: 0)
+
+        XCTAssertEqual(vm.slides.map(\.id), [ids[2], ids[0], ids[1]], "C moved to front → [C,A,B]")
+        XCTAssertEqual(vm.currentSlideIndex, 1, "currentSlideIndex follows the EDITED slide A (now index 1), not the dropped slot")
+        XCTAssertEqual(vm.slides.map(\.order), [0, 1, 2], "order reindexed by position")
+    }
+
+    func test_moveSlide_toEnd_isAccepted() {
+        // The .onMove move-to-end passes toOffset == count — the old `destination < count`
+        // guard wrongly rejected it, so a slide could never be dragged to the last slot.
+        let vm = makeSubject()
+        vm.addSlide(); vm.addSlide()        // A,B,C
+        let ids = vm.slides.map(\.id)
+
+        vm.moveSlide(from: 0, to: 3)        // toOffset == count → move A to end
+
+        XCTAssertEqual(vm.slides.map(\.id), [ids[1], ids[2], ids[0]], "A moved to end → [B,C,A]")
+    }
+
     // MARK: - toggleBackground
 
     func test_toggleBackground_enforcesSingleBackgroundMediaPerSlide() {

@@ -979,14 +979,25 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         nextZIndex = maxZ + 1
     }
 
+    /// Reorder slides. `destination` follows the SwiftUI `.onMove` / `.dropDestination`
+    /// convention (offset in the PRE-move array, so it may equal `slides.count` for
+    /// move-to-end) — identical to `moveMedia`, so the slide-strip drag wiring is
+    /// mutualized with the media-list reorder. `currentSlideIndex` tracks the slide the
+    /// user was EDITING by id (not the dropped slot), mirroring `removeSlide`'s
+    /// preserve-the-edited-slide philosophy. Side caches are keyed by slide/element id,
+    /// so a move needs no cache surgery — only `order` is reindexed. (it.37: was a
+    /// remove+insert with a `destination < count` guard that rejected move-to-end and
+    /// produced an off-by-one vs the drop offset; that path was also entirely unwired.)
     func moveSlide(from source: Int, to destination: Int) {
-        guard source < slides.count,
-              destination < slides.count,
-              source != destination else { return }
-        let slide = slides.remove(at: source)
-        slides.insert(slide, at: destination)
+        guard slides.indices.contains(source),
+              destination >= 0, destination <= slides.count,
+              source != destination, source != destination - 1 else { return }
+        let editedSlideId = slides[safe: currentSlideIndex]?.id
+        slides.move(fromOffsets: IndexSet(integer: source), toOffset: destination)
         reorderSlides()
-        currentSlideIndex = destination
+        if let editedSlideId, let newIndex = slides.firstIndex(where: { $0.id == editedSlideId }) {
+            currentSlideIndex = newIndex
+        }
     }
 
     private func reorderSlides() {

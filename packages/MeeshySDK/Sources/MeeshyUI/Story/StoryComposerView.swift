@@ -903,6 +903,28 @@ public struct StoryComposerView: View {
                 Label(String(localized: "story.composer.duplicateSlide", defaultValue: "Dupliquer", bundle: .module), systemImage: "doc.on.doc")
             }
         }
+        // Réordonner les slides par glisser-déposer (long-press natif), MÊME mécanisme
+        // que la liste des médias (`.draggable` + `.dropDestination`) — convention
+        // `.onMove` (offset post-cible). Câble enfin `moveSlide` (it.37).
+        .draggable(slide.id) {
+            SlideMiniPreview(effects: slide.effects, bgImage: viewModel.slideImages[slide.id],
+                             drawingData: drawData, loadedImages: viewModel.loadedImages, index: index)
+                .frame(width: thumbW, height: thumbH)
+                .clipShape(RoundedRectangle(cornerRadius: 3))
+        }
+        .dropDestination(for: String.self) { items, _ in
+            guard let sourceId = items.first,
+                  let sourceIdx = viewModel.slides.firstIndex(where: { $0.id == sourceId }),
+                  let targetIdx = viewModel.slides.firstIndex(where: { $0.id == slide.id }),
+                  sourceIdx != targetIdx else { return false }
+            // Offset `.onMove` : après la cible si on descend, avant si on monte.
+            let destination = sourceIdx < targetIdx ? targetIdx + 1 : targetIdx
+            syncCurrentSlideEffects()
+            viewModel.moveSlide(from: sourceIdx, to: destination)
+            restoreCanvas(from: viewModel.currentSlide)
+            HapticFeedback.light()
+            return true
+        }
     }
 
     // MARK: - Empty-State Large Picker
