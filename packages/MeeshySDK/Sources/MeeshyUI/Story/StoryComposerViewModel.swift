@@ -388,6 +388,12 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     @Published var drawingEditingMode: DrawingEditingMode = .inactive
     var isDrawingActive: Bool { activeTool == .drawing }
 
+    /// Trait en cours de tracé (WYSIWYG, C4). Rendu live PAR-DESSUS `drawingStrokes` via
+    /// un `MeeshyStrokeCanvas` dédié dans `StoryComposerView`, avec notre moteur
+    /// largeur-variable — l'aperçu correspond EXACTEMENT au trait commité au lift-up.
+    /// `nil` quand aucun geste n'est en cours (effacé au commit/annulation).
+    @Published var activeStrokePreview: StoryDrawingStroke?
+
     /// Pile de rétablissement (redo) du dessin. Les traits annulés via
     /// `undoLastStroke()` y sont empilés et réappliqués par `redoLastStroke()`.
     /// Vidée dès qu'un nouveau trait est dessiné (`commitStroke`) ou supprimé

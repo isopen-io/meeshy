@@ -1520,18 +1520,27 @@ public struct StoryComposerView: View {
                         selectedId: viewModel.drawingEditingMode.selectedStrokeId
                     )
                     .equatable()
+                    // Aperçu WYSIWYG du trait en cours (C4) : rendu PAR-DESSUS les
+                    // traits commités, par notre moteur largeur-variable, donc identique
+                    // au trait finalement commité au lift-up.
+                    if let preview = viewModel.activeStrokePreview {
+                        MeeshyStrokeCanvas(strokes: [preview], selectedId: nil)
+                    }
                     StrokeCaptureLayer(
                         activeTool: viewModel.activeBrushTool,
                         activeColorHex: DrawingEditToolOptions.hex(of: viewModel.drawingColor),
                         activeWidth: Double(viewModel.drawingWidth),
                         activeSmoothing: viewModel.activeBrushSmoothing,
+                        onStrokeInProgress: { viewModel.activeStrokePreview = $0 },
                         onStrokeCommitted: { stroke in
                             // `commitStroke` ajoute le trait ET vide la pile de redo
                             // (un nouveau trait rend le « rétablir » caduc).
                             viewModel.commitStroke(stroke)
+                            viewModel.activeStrokePreview = nil
                         },
                         onEraseGesture: { points in
                             eraseStrokes(near: points)
+                            viewModel.activeStrokePreview = nil
                         }
                     )
                 }
