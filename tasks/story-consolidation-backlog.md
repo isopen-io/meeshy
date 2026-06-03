@@ -870,9 +870,28 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
 - Cible it.46 : StoryRepostEmbedCell rendu feed-embed (Prisme/thumbHash/aspect 9:16 dans cellule) OU StoryPublishQueue
   offline replay (StoryQueueMigrator, StoryOfflineQueueBootstrap). Preuve avant fix.
 
+## it.46 — audit feed-embed + offline replay : CLEAN sauf 1 finding (backoff non branché → décision user)
+- [x] `StoryRepostEmbedCell` : attribution single-level (handle reposter), `post.content` rendu, embed via
+      `StoryReaderRepresentable(repost:)` 9:16 fit + maxWidth 420 + clip 16 + a11y. `preferredContentLanguages` wiré
+      depuis `AuthManager.currentUser` (FeedPostCard:242) → Prisme des overlays OK. SAIN.
+- [x] `StoryQueueMigrator` : one-shot idempotent, delete-after-forward (reprise si launch interrompu), quarantine
+      JSON corrompu (.corrupted-<ts>), test seam `PublishQueueForwarding`. MATURE.
+- [x] `StoryPublishQueue.processNext` : dispositions atomiques, missing-media → permanent fail, FIFO break sur retryable,
+      retryCount++ → permanent à maxRetries(5), drop overflow (cap 50) surfacé via publishFailed. Boucle SAINE.
+- [!] FINDING (décision, PAS fix autonome) : `retryDelays=[30,120,600,3600,7200]` (l.141) DÉCLARÉ mais JAMAIS lu → backoff
+      exponentiel planifié NON branché. Retries seulement sur reconnexion socket OU launch. Conséquence : échec retryable
+      (5xx/timeout) sur connexion STABLE bump retryCount+break puis attend reconnexion/restart (jamais de retry programmé).
+      Le commentaire setPublishHandler reconnaît le trou « stable network may never [reconnect] ». Implémenter = feature
+      (Task planifiée + isolation actor + seam DI pour TDD le délai 30s). Surfacé EN ATTENTE USER.
+- Cible it.47 : StoryOfflineQueue (write-ahead offline, setOnPublish/flush) OU StorySlideRenderer thumbHash composite
+      (toutes couches) OU mini-preview/cover sync. Preuve avant fix.
+
 ## EN ATTENTE USER (décisions produit — ne pas fixer en autonomie)
 - Sidebar A/B/C overlap (carte reader) — A carte étroite / B footer / C accepter chevauchement.
 - DEVICE : drag-reorder slides + toggle plein écran carte→bord.
 - **C.2 repost-as-post import (it.44)** : (A) compléter un éditeur post-canvas qui consomme `RepostImportResult`
   (texts/media/stickers/drawing reprojetés éditables) ; OU (B) retirer le scaffolding reprojection + bannière
   `reprojectionWarnings` (garder le quote-repost pur via embed). Aujourd'hui : calculé, loggé, jamais affiché.
+- **StoryPublishQueue backoff (it.46)** : (A) brancher le backoff exponentiel planifié (`retryDelays`) avec seam DI
+  testable + retryTask annulable + scheduleNextRetryIfNeeded en fin de processNext ; OU (B) retirer la constante morte +
+  acter que les retries sont reconnect/launch-driven. Aujourd'hui : déclaré, jamais lu.
