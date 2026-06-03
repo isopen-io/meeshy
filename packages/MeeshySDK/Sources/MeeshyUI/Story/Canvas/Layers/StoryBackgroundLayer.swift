@@ -292,8 +292,28 @@ extension StoryBackgroundLayer {
             // un détachement transitoire. Resync frame (resize du canvas) +
             // transform (pinch / pan utilisateur sur l'image bg) + gravity
             // (changement de videoFitMode via double-tap, sans rebuild).
-            contentLayer?.frame = bounds
-            avPlayerLayer?.frame = bounds
+            //
+            // CoreAnimation footgun : assigner `.frame` à un layer dont le
+            // `.transform` est non-identité donne des bounds/position INDÉFINIS
+            // (le frame setter suppose transform == identité). Pendant un drag
+            // du fond, `updateManipulatedItemLayer → applyContentTransform` a
+            // posé un transform live sur `contentLayer` SANS mettre à jour
+            // `transform3D` ; au `.ended`, ce `rebuildLayers → configure` arrive
+            // donc ici avec un sublayer encore transformé. Sans reset préalable,
+            // `frame = bounds` corrompait les bounds (÷ scale du drag) et le
+            // fond « revenait à sa position initiale » au relâchement, alors que
+            // le mini-preview restait correct (piloté par `mediaObjects[bg]`).
+            // On remet le transform à l'identité AVANT de réécrire le frame,
+            // puis `applyContentTransform` réapplique le transform résolu. Bug
+            // exposé quand l'unification BG/FG (2026-05-29) a retiré le seam
+            // `commitLiveTransform` qui court-circuitait ce chemin via
+            // `nothingChanged`.
+            Self.withDisabledCAActions {
+                contentLayer?.transform = CATransform3DIdentity
+                avPlayerLayer?.transform = CATransform3DIdentity
+                contentLayer?.frame = bounds
+                avPlayerLayer?.frame = bounds
+            }
             // Transform appliqué au CONTENT, pas à self : le backgroundLayer
             // reste fixe (couvre tout le canvas) et seul son contenu zoom /
             // pan dedans (Instagram-style "zoom inside bg").
