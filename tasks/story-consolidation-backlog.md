@@ -838,3 +838,25 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
 - CONCLUSION it.43 : surface mutation/reconstruction StoryItem/StoryGroup SAINE. Seul markViewed (it.42) portait le bug.
 - Cible it.44 : UnifiedPostComposer import path (C.2 edit-repost-as-post) OU StoryRepostEmbedCell/feed-embed rendering
   OU deleteStory/optimistic-sync edge cases. Rendements décroissants — preuve avant fix.
+
+## it.44 — audit C.2 import + deleteStory : deleteStory CLEAN, C.2 import = SCAFFOLDING NON BRANCHÉ (décision user)
+- [x] `deleteStory` (l.1091) : delete serveur PUIS retrait local en place (remove(at:) + cleanup groupe vide) + persist.
+      Pas de reconstruction partielle. SAIN. (Non-optimiste = attend confirmation serveur ; choix défendable, pas un bug.)
+- [x] C.2 « Éditer et republier en post » (StoryViewerView:529) : FONCTIONNEL comme quote-repost — `PostService.repost`
+      (targetType:.post, content, isQuote) + le feed rend l'original via `StoryRepostEmbedCell` (FeedPostCard:240).
+- [!] FINDING (décision produit, PAS un bug autonome) : `UnifiedPostComposer.autoImportFromRepostSource` (l.393) reprojette
+      texts/media/stickers/drawing story 9:16 → post 1:1 (`importFromStory` + `CanvasReprojector`), pose `reprojectionWarnings`
+      et appelle `onStoryImported(result)`. MAIS le composer « has no canvas-overlay state » et l'UNIQUE consommateur
+      (StoryViewerView:548) ne fait que LOGGER le result. Donc : items reprojetés jamais affichés/éditables ; la bannière
+      « items clampés » peut s'afficher pour du contenu invisible (confusion UX mineure). C'est du scaffolding partiellement
+      branché. Preuve avant fix → pas de fix spéculatif (compléter un éditeur post-canvas = feature, ou retirer le
+      scaffolding + bannière = risqué si futur-facing). À ARBITRER PAR USER (cf. EN ATTENTE USER ci-dessous).
+- Cible it.45 : StoryRepostEmbedCell rendu feed-embed (Prisme/thumbHash/aspect) OU socket story:created/updated sinks
+  OU StoryPublishQueue offline replay. Preuve avant fix.
+
+## EN ATTENTE USER (décisions produit — ne pas fixer en autonomie)
+- Sidebar A/B/C overlap (carte reader) — A carte étroite / B footer / C accepter chevauchement.
+- DEVICE : drag-reorder slides + toggle plein écran carte→bord.
+- **C.2 repost-as-post import (it.44)** : (A) compléter un éditeur post-canvas qui consomme `RepostImportResult`
+  (texts/media/stickers/drawing reprojetés éditables) ; OU (B) retirer le scaffolding reprojection + bannière
+  `reprojectionWarnings` (garder le quote-repost pur via embed). Aujourd'hui : calculé, loggé, jamais affiché.
