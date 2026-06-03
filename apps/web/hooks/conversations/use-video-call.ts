@@ -14,6 +14,7 @@ import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { useCallStore } from '@/stores/call-store';
 import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { Conversation } from '@meeshy/shared/types';
+import type { CallInitiateAck, CallJoinAck } from '@meeshy/shared/types/video-call';
 
 interface UseVideoCallOptions {
   /**
@@ -104,7 +105,14 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
         },
       };
 
-      socket.emit(CLIENT_EVENTS.CALL_INITIATE, callData, () => {});
+      socket.emit(CLIENT_EVENTS.CALL_INITIATE, callData, (ack: CallInitiateAck) => {
+        // Persist the server-provided ICE servers (STUN + time-limited TURN)
+        // so the initiator's RTCPeerConnection is built with TURN credentials
+        // before the SDP offer is created.
+        if (ack?.success && ack.data?.iceServers?.length) {
+          useCallStore.getState().setIceServers(ack.data.iceServers);
+        }
+      });
       toast.success('Starting call...');
     } catch (error: unknown) {
       cleanupStream(stream);
@@ -118,9 +126,13 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
       setError('Socket not connected');
       return;
     }
-    socket.emit(CLIENT_EVENTS.CALL_JOIN, { callId }, (response: { success: boolean; data?: { callSession: unknown; iceServers: RTCIceServer[] } }) => {
-      if (!response.success) {
+    socket.emit(CLIENT_EVENTS.CALL_JOIN, { callId }, (response: CallJoinAck) => {
+      if (!response?.success) {
         setError('Failed to join call');
+        return;
+      }
+      if (response.data?.iceServers?.length) {
+        useCallStore.getState().setIceServers(response.data.iceServers);
       }
     });
   }, []);

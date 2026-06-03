@@ -36,6 +36,7 @@ const mockSetRemoteDescription = jest.fn();
 const mockAddIceCandidate = jest.fn();
 const mockGetLocalStream = jest.fn();
 const mockClose = jest.fn();
+const mockSetIceServers = jest.fn();
 
 jest.mock('@/services/webrtc-service', () => ({
   WebRTCService: jest.fn().mockImplementation((options?: any) => ({
@@ -46,6 +47,7 @@ jest.mock('@/services/webrtc-service', () => ({
     setRemoteDescription: mockSetRemoteDescription,
     addIceCandidate: mockAddIceCandidate,
     getLocalStream: mockGetLocalStream,
+    setIceServers: mockSetIceServers,
     close: mockClose,
     options,
   })),
@@ -58,10 +60,12 @@ const mockAddPeerConnection = jest.fn();
 const mockRemovePeerConnection = jest.fn();
 const mockSetError = jest.fn();
 const mockSetConnecting = jest.fn();
+let mockIceServers: RTCIceServer[] | null = null;
 
 jest.mock('@/stores/call-store', () => ({
   useCallStore: () => ({
     localStream: null,
+    iceServers: mockIceServers,
     setLocalStream: mockSetLocalStream,
     addRemoteStream: mockAddRemoteStream,
     addPeerConnection: mockAddPeerConnection,
@@ -116,6 +120,7 @@ describe('useWebRTCP2P', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockIceServers = null;
 
     // Default mock implementations
     mockGetSocket.mockReturnValue(mockSocket);
@@ -243,14 +248,18 @@ describe('useWebRTCP2P', () => {
       expect(mockAddPeerConnection).toHaveBeenCalledWith(mockTargetUserId, mockPeerConnection);
       expect(mockAddTrack).toHaveBeenCalled();
       expect(mockCreateOffer).toHaveBeenCalled();
-      expect(mockEmit).toHaveBeenCalledWith(CLIENT_EVENTS.CALL_SIGNAL, expect.objectContaining({
-        callId: mockCallId,
-        signal: expect.objectContaining({
-          type: 'offer',
-          from: mockUserId,
-          to: mockTargetUserId,
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_SIGNAL,
+        expect.objectContaining({
+          callId: mockCallId,
+          signal: expect.objectContaining({
+            type: 'offer',
+            from: mockUserId,
+            to: mockTargetUserId,
+          }),
         }),
-      }));
+        expect.any(Function)
+      );
     });
 
     it('should handle offer creation error', async () => {
@@ -280,6 +289,45 @@ describe('useWebRTCP2P', () => {
       });
 
       expect(mockSetError).toHaveBeenCalled();
+    });
+  });
+
+  describe('Server ICE servers (TURN)', () => {
+    it('should apply server-provided ICE servers before creating the peer connection', async () => {
+      mockIceServers = [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'turn:turn.meeshy.me:3478', username: '1700000000:user-456', credential: 'hmac-cred' },
+      ];
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+
+      expect(mockSetIceServers).toHaveBeenCalledWith(mockIceServers);
+
+      // The TURN servers MUST be applied before the RTCPeerConnection is built,
+      // otherwise the offer carries STUN-only candidates.
+      const setIceOrder = mockSetIceServers.mock.invocationCallOrder[0];
+      const createPcOrder = mockCreatePeerConnection.mock.invocationCallOrder[0];
+      expect(setIceOrder).toBeLessThan(createPcOrder);
+    });
+
+    it('should not call setIceServers when no server ICE servers are available', async () => {
+      mockIceServers = null;
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+
+      expect(mockSetIceServers).not.toHaveBeenCalled();
     });
   });
 

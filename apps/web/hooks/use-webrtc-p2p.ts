@@ -29,6 +29,7 @@ export interface UseWebRTCP2POptions {
 export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
   const {
     localStream,
+    iceServers,
     setLocalStream,
     addRemoteStream,
     addPeerConnection,
@@ -144,12 +145,25 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
           },
         });
 
+        // Apply the server-provided ICE servers (STUN + time-limited TURN)
+        // BEFORE the RTCPeerConnection is created in createOffer/handleOffer.
+        // Without this the peer connection uses the STUN-only defaults and
+        // calls fail between peers behind symmetric NATs.
+        if (iceServers && iceServers.length > 0) {
+          service.setIceServers(iceServers);
+          logger.debug('[useWebRTCP2P]', 'Applied server ICE servers', {
+            participantId,
+            callId,
+            iceServersCount: iceServers.length,
+          });
+        }
+
         webrtcServicesRef.current.set(participantId, service);
       }
 
       return service;
     },
-    [callId, userId, addRemoteStream, setError, setConnecting, onError]  // CRITICAL: Added userId
+    [callId, userId, iceServers, addRemoteStream, setError, setConnecting, onError]  // CRITICAL: Added userId, iceServers
   );
 
   /**
