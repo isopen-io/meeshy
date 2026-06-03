@@ -143,6 +143,42 @@ public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
         onFinalImageStamped?()
     }
 
+    /// Active background filter baked into the displayed bitmap (story effects).
+    /// The filter is applied to the IMAGE itself at stamp time (not via a
+    /// separate overlay) so it renders identically in the composer, the Play
+    /// preview, the reader and published stories — and so an in-place image edit
+    /// re-filters correctly. Set by `configure(...)`. Applies to image
+    /// backgrounds only (text/sticker overlays are intentionally NOT filtered —
+    /// standard photo-filter behaviour).
+    @MainActor public private(set) var activeFilter: StoryFilter?
+    @MainActor public private(set) var activeFilterIntensity: Float = 1.0
+    /// Monotonic token from the composer (`loadedImagesVersion`); a change forces
+    /// a re-fetch + re-stamp even when the media identity is unchanged, so an
+    /// in-place bitmap edit under the same id is reflected on the canvas.
+    @MainActor private var lastContentVersion: UInt64 = 0
+
+    /// Applies the active filter (if any) to `image`, stamps it into `img.contents`
+    /// with the resolved gravity, and marks final content. The single choke point
+    /// for every FINAL image stamp (warm hit / composer cache / URL load) so the
+    /// filter is baked uniformly. Filtering preserves dimensions, so gravity is
+    /// computed from the (filtered) bitmap size.
+    @MainActor
+    private func stampFinalImage(_ image: UIImage, imageId: String?, on img: CALayer?) {
+        let display: UIImage = activeFilter.map {
+            StoryFilterProcessor.apply($0, to: image, imageId: imageId, intensity: activeFilterIntensity)
+        } ?? image
+        Self.withDisabledCAActions {
+            img?.contents = display.cgImage
+            if let layer = img, let cg = display.cgImage {
+                layer.contentsGravity = StoryBackgroundLayer.resolveImageGravity(
+                    naturalSize: CGSize(width: cg.width, height: cg.height),
+                    canvasSize: self.bounds.size,
+                    override: self.transform3D.videoFitMode)
+            }
+        }
+        markFinalContentStamped()
+    }
+
     public override nonisolated init() {
         super.init()
         // Clip le contenu interne aux bounds du backgroundLayer pour le
@@ -256,7 +292,10 @@ extension StoryBackgroundLayer {
                           resolver: ((String) -> URL?)?,
                           imageCache: ImageCacheReader?,
                           letterboxColor: UIColor? = nil,
-                          slidePreviewThumbHash: String? = nil) {
+                          slidePreviewThumbHash: String? = nil,
+                          filter: StoryFilter? = nil,
+                          filterIntensity: Float = 1.0,
+                          contentVersion: UInt64 = 0) {
         // FAST PATH ANTI-FLASH :
         // `configure(...)` est appelé à CHAQUE `rebuildLayers()` du canvas
         // (i.e. à chaque slide.didSet, drop d'un élément foreground, lancement
@@ -303,16 +342,29 @@ extension StoryBackgroundLayer {
                 return avPlayerLayer != nil
             }
         }()
+        let filterUnchanged = (self.activeFilter == filter)
+            && (self.activeFilterIntensity == filterIntensity)
+            && (self.lastContentVersion == contentVersion)
         let nothingChanged = (previousContentIdentity == nextContentIdentity)
             && (self.transform3D == transform)
             && (self.frame.size == geometry.renderSize)
             && hasVisibleContent
+            && filterUnchanged
         if nothingChanged { return }
 
-        let canReuseContent = (previousContentIdentity == nextContentIdentity) && (contentLayer != nil)
+        // Reuse the existing content sublayer ONLY when identity AND filter AND
+        // content version are unchanged. A filter switch or an in-place bitmap
+        // edit (same id, bumped version) must fall through to a fresh fetch +
+        // re-stamp so the baked filter / edited pixels actually update.
+        let canReuseContent = (previousContentIdentity == nextContentIdentity)
+            && (contentLayer != nil)
+            && filterUnchanged
 
         self.kind = kind
         self.transform3D = transform
+        self.activeFilter = filter
+        self.activeFilterIntensity = filterIntensity
+        self.lastContentVersion = contentVersion
         self.frame = CGRect(origin: .zero, size: geometry.renderSize)
 
         if canReuseContent {
@@ -432,24 +484,34 @@ extension StoryBackgroundLayer {
             addSublayer(img)
             contentLayer = img
 
-            // Fast-path cache chaud : si on peut résoudre le bitmap MAINTENANT
-            // (sync NSCache via `warmedImage`), on stamp `contents` direct sans
-            // afficher de ThumbHash placeholder. Évite le flash placeholder→
-            // bitmap réel quand on revisite une story.
+            // Composer in-place edits live in `loadedImages` keyed by the media
+            // object id, but the bg routing key (postMediaId) is the file://
+            // mediaURL. Derive the id from the temp filename ({id}.jpg) so an
+            // edited bitmap is surfaced — parity with StoryMediaLayer's media.id
+            // fallback. Used for the synchronous prime AND the async lookup below.
             let directURLForWarm = Self.directURLIfAny(from: postMediaId)
-            let warmURL: URL? = directURLForWarm ?? resolver?(postMediaId)
+            let composerKey = directURLForWarm?.deletingPathExtension().lastPathComponent
+            let stampId = composerKey ?? postMediaId
             var hasVisual = false
-            if let warm = warmURL,
-               let cached = CacheCoordinator.warmedImage(for: warm.absoluteString)?.cgImage {
-                Self.withDisabledCAActions {
-                    img.contents = cached
-                    let naturalSize = CGSize(width: cached.width, height: cached.height)
-                    img.contentsGravity = StoryBackgroundLayer.resolveImageGravity(
-                        naturalSize: naturalSize, canvasSize: self.bounds.size,
-                        override: self.transform3D.videoFitMode)
-                }
+
+            // (0) SYNCHRONOUS composer-cache prime — an edited bitmap written by
+            // `MeeshyImageEditorView` onAccept (loadedImages[id]) wins over the
+            // on-disk file:// (which still holds the ORIGINAL). This is what makes
+            // an image edit appear live on the canvas; the filter is baked via
+            // `stampFinalImage` so the canvas shows the edited+filtered bitmap.
+            if let synchronousReader = imageCache as? ComposerImageCacheReader,
+               let edited = (composerKey.flatMap { synchronousReader.images[$0] }) ?? synchronousReader.images[postMediaId] {
+                stampFinalImage(edited, imageId: stampId, on: img)
                 hasVisual = true
-                markFinalContentStamped()
+            }
+
+            // (1) Warm NSCache hit (revisited story) → stamp directly (filtered),
+            // no ThumbHash placeholder flash.
+            let warmURL: URL? = directURLForWarm ?? resolver?(postMediaId)
+            if !hasVisual, let warm = warmURL,
+               let warmImage = CacheCoordinator.warmedImage(for: warm.absoluteString) {
+                stampFinalImage(warmImage, imageId: stampId, on: img)
+                hasVisual = true
             }
 
             // Synchronous thumbHash placeholder (si pas de hit cache chaud).
@@ -495,20 +557,17 @@ extension StoryBackgroundLayer {
             let urlResolver = resolver
             if directURL != nil || imageCacheReader != nil || urlResolver != nil {
                 Task { @MainActor [weak self, weak img] in
-                    // (1) Fast-path cache (preview / disque).
-                    if let imageCacheReader,
-                       let cached = await imageCacheReader.cachedImage(for: postMediaId) {
-                        Self.withDisabledCAActions {
-                            img?.contents = cached.cgImage
-                            if let layer = img, let cg = cached.cgImage, let canvas = self?.bounds.size {
-                                layer.contentsGravity = StoryBackgroundLayer.resolveImageGravity(
-                                    naturalSize: CGSize(width: cg.width, height: cg.height),
-                                    canvasSize: canvas,
-                                    override: self?.transform3D.videoFitMode)
-                            }
+                    // (1) Composer/disk cache — try the media-id key first (edited
+                    // bitmap), then the routing key (published / disk). Filtered via
+                    // stampFinalImage so the baked filter survives the async path.
+                    if let imageCacheReader {
+                        var cached: UIImage? = nil
+                        if let key = composerKey { cached = await imageCacheReader.cachedImage(for: key) }
+                        if cached == nil { cached = await imageCacheReader.cachedImage(for: postMediaId) }
+                        if let cached {
+                            self?.stampFinalImage(cached, imageId: stampId, on: img)
+                            return
                         }
-                        self?.markFinalContentStamped()
-                        return
                     }
                     // (2) URL directe embarquée, sinon (3) resolver distant.
                     // Stories publiées avant le `sanitizedForServerPublish()`
@@ -530,16 +589,7 @@ extension StoryBackgroundLayer {
                     }
 
                     guard let uiImage = loadedImage else { return }
-                    Self.withDisabledCAActions {
-                        img?.contents = uiImage.cgImage
-                        if let layer = img, let cg = uiImage.cgImage, let canvas = self?.bounds.size {
-                            layer.contentsGravity = StoryBackgroundLayer.resolveImageGravity(
-                                naturalSize: CGSize(width: cg.width, height: cg.height),
-                                canvasSize: canvas,
-                                override: self?.transform3D.videoFitMode)
-                        }
-                    }
-                    self?.markFinalContentStamped()
+                    self?.stampFinalImage(uiImage, imageId: stampId, on: img)
                 }
                 break
             }
