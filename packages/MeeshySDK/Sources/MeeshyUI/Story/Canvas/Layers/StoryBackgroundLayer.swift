@@ -787,12 +787,14 @@ extension StoryBackgroundLayer {
         if let o = override {
             return o == "fit" ? .resizeAspect : .resizeAspectFill
         }
-        guard naturalSize.height > 0, canvasSize.height > 0 else {
-            return .resizeAspectFill
-        }
-        let mediaRatio = naturalSize.width / naturalSize.height
-        let canvasRatio = canvasSize.width / canvasSize.height
-        return mediaRatio > canvasRatio ? .resizeAspect : .resizeAspectFill
+        // Mode libre (override == nil) : TOUJOURS `.resizeAspectFill` — pas
+        // d'auto-pick basé sur les ratios. L'auto-pick (mediaRatio > canvasRatio
+        // → fit, sinon fill) sautait visuellement quand le bitmap arrivait async :
+        // la gravity initiale `.resizeAspectFill` (posée à l.381) basculait sur
+        // `.resizeAspect` (letterbox) pour les images paysage → le BG "se
+        // cachait" derrière sa propre letterbox (user feedback 2026-05-29).
+        // Fit/Fill sont maintenant exclusivement déclenchés par le double-tap.
+        return .resizeAspectFill
     }
 
     /// Resolves the contentsGravity for an image background. Same logic as video.
@@ -804,11 +806,7 @@ extension StoryBackgroundLayer {
         if let o = override {
             return o == "fit" ? .resizeAspect : .resizeAspectFill
         }
-        guard naturalSize.height > 0, canvasSize.height > 0 else {
-            return .resizeAspectFill
-        }
-        let mediaRatio = naturalSize.width / naturalSize.height
-        let canvasRatio = canvasSize.width / canvasSize.height
-        return mediaRatio > canvasRatio ? .resizeAspect : .resizeAspectFill
+        // Mode libre — voir `resolveVideoGravity` pour la justification.
+        return .resizeAspectFill
     }
 }

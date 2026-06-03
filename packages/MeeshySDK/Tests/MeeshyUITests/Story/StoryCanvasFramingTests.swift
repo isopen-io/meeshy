@@ -131,4 +131,31 @@ final class StoryCanvasFramingTests: XCTestCase {
         XCTAssertTrue(StoryCanvasFraming.isCarded(bandPresent: false, drawingActive: false, textActive: true))
         XCTAssertTrue(StoryCanvasFraming.isCarded(bandPresent: true, drawingActive: true, textActive: true))
     }
+
+    // MARK: - readerPresentation (reader expand-on-hide truth-table)
+
+    func test_readerPresentation_normalMode_chromeVisible_isCarded() {
+        // Au repos en mode normal (chrome visible) → carte arrondie marginée.
+        XCTAssertEqual(
+            StoryCanvasFraming.readerPresentation(isFullscreenSession: false, chromeVisible: true),
+            .carded)
+    }
+
+    func test_readerPresentation_normalMode_chromeHidden_isFree() {
+        // Long-press masque le chrome → le canvas épouse le viewport (plein bord 9:16).
+        XCTAssertEqual(
+            StoryCanvasFraming.readerPresentation(isFullscreenSession: false, chromeVisible: false),
+            .free)
+    }
+
+    func test_readerPresentation_fullscreenSession_alwaysFree() {
+        // En session plein écran, le canvas reste plein bord même quand le chrome
+        // ré-apparaît temporairement (touch-and-hold peek) — pas de re-cardage.
+        XCTAssertEqual(
+            StoryCanvasFraming.readerPresentation(isFullscreenSession: true, chromeVisible: true),
+            .free)
+        XCTAssertEqual(
+            StoryCanvasFraming.readerPresentation(isFullscreenSession: true, chromeVisible: false),
+            .free)
+    }
 }

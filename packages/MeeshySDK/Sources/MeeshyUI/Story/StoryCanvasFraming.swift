@@ -43,6 +43,17 @@ public nonisolated enum StoryCanvasFraming {
         bandPresent || drawingActive || textActive
     }
 
+    /// Présentation du canvas **reader** selon la visibilité du chrome.
+    /// - Au repos en mode normal (chrome visible) → `.carded` : carte arrondie
+    ///   marginée, distincte du viewport.
+    /// - Chrome masqué (long-press « peek » immersif) → `.free` : le canvas épouse
+    ///   les bords du viewport (plein bord 9:16, coins droits), contrôleurs cachés.
+    /// - Session plein écran (`isFullscreenSession`) → toujours `.free`, même quand
+    ///   le chrome ré-apparaît brièvement au touch-and-hold (pas de re-cardage).
+    public static func readerPresentation(isFullscreenSession: Bool, chromeVisible: Bool) -> Presentation {
+        (isFullscreenSession || !chromeVisible) ? .free : .carded
+    }
+
     public static func resolve(_ input: Input) -> Result {
         guard input.state == .carded else { return .identity }
         let intrinsic = CanvasGeometry.aspectFitSize(in: input.viewport)

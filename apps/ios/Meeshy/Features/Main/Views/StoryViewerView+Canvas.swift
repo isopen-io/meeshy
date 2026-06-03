@@ -664,13 +664,28 @@ struct StoryCardView: View {
     /// ailleurs via `chromeVisible`). Un seul ressort anime taille/coins/position au
     /// toggle — design user 2026-06-02. (it.33 : insets relevés pour une carte nette —
     /// la tentative it.32 cadrait déjà mais à 0.94 ≈ plein bord, donc invisible.)
+    /// Présentation du canvas : `.free` (plein bord) quand le chrome est masqué
+    /// (long-press immersif) OU en session plein écran ; `.carded` (carte arrondie
+    /// marginée) au repos. Source de vérité : `StoryCanvasFraming.readerPresentation`
+    /// (truth-table SDK pure, testée). Le long-press qui cache les contrôleurs
+    /// agrandit ainsi le canvas pour épouser le viewport (user 2026-06-03).
+    private var canvasPresentation: StoryCanvasFraming.Presentation {
+        StoryCanvasFraming.readerPresentation(
+            isFullscreenSession: isFullscreenStorySession,
+            chromeVisible: chromeVisible)
+    }
+
+    /// `true` quand le canvas est étendu plein bord (`.free`) — pilote le voile,
+    /// l'ombre et l'animation de la carte en phase avec le cadrage.
+    private var canvasIsExpanded: Bool { canvasPresentation == .free }
+
     private var readerCanvasFraming: StoryCanvasFraming.Result {
         StoryCanvasFraming.resolve(.init(
             viewport: geometry.size,
-            headerInset: topInset + 72,   // barres progress (~8) + ligne auteur (~48) + gap
-            bottomInset: 128,             // actions + champ « répondre » + safe-area + gap
-            sideInset: 16,
-            state: isFullscreenStorySession ? .free : .carded,
+            headerInset: topInset + 72,   // barres progress (~8) + ligne auteur (~48) + gap — clairance chrome, flush sans occlusion
+            bottomInset: 64,              // marge basse ÷2 (it.48) — carte plus proche du bord bas
+            sideInset: 8,                 // marges latérales ÷2 (it.48) — carte plus proche des bords L/R
+            state: canvasPresentation,
             cardedCornerRadius: 22))
     }
 
@@ -707,11 +722,11 @@ struct StoryCardView: View {
             // coins arrondis + son ombre (voir le canvas cardé). En plein écran → 0 (le
             // backdrop habille les letterbox immersifs). Animé par le ressort de la carte.
             Color.black
-                .opacity(isFullscreenStorySession ? 0 : 0.18)
+                .opacity(canvasIsExpanded ? 0 : 0.18)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
                 .accessibilityHidden(true)
-                .animation(.spring(response: 0.42, dampingFraction: 0.84), value: isFullscreenStorySession)
+                .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
 
             // === Outgoing canvas (cross-dissolve pixel-perfect) ===
             if let outgoing = outgoingStory, outgoingOpacity > 0 {
@@ -807,9 +822,9 @@ struct StoryCardView: View {
                     // contenu) par son BORD arrondi + son ombre, pas par un voile sombre
                     // (demande user 2026-06-02 « bords arrondis + ThumbHash en fond »).
                     // Coupée en plein écran (carte = plein bord, pas d'ombre).
-                    .shadow(color: .black.opacity(isFullscreenStorySession ? 0 : 0.4),
+                    .shadow(color: .black.opacity(canvasIsExpanded ? 0 : 0.4),
                             radius: 20, y: 8)
-                    .animation(.spring(response: 0.42, dampingFraction: 0.84), value: isFullscreenStorySession)
+                    .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
 
                 // Overlay loader granulaire — ThumbHash bg flouté + (spinner+%).
                 // Le backdrop ThumbHash est monté DÈS qu'une slide est active
@@ -847,7 +862,7 @@ struct StoryCardView: View {
                     .scaleEffect(readerCanvasFraming.scale)
                     .offset(y: readerCanvasFraming.offset.height)
                     .clipShape(RoundedRectangle(cornerRadius: readerCanvasFraming.cornerRadius, style: .continuous))
-                    .animation(.spring(response: 0.42, dampingFraction: 0.84), value: isFullscreenStorySession)
+                    .animation(.spring(response: 0.42, dampingFraction: 0.84), value: canvasIsExpanded)
                     .allowsHitTesting(false)
                     .transition(.opacity)
                 }
@@ -1293,9 +1308,26 @@ struct StoryCardView: View {
 
     // MARK: - Story Background
 
+    /// `true` quand la slide courante a un vrai fond média (image/vidéo) : le canvas
+    /// peint alors ce média plein cadre et le `storyBlurredBackdrop` (Layer 1.5) habille
+    /// les letterbox d'un flou DÉRIVÉ du média. Dans ce cas le fond de canvas couleur/gradient
+    /// (`storyBackground`, Layer 1) est redondant — pire, il bleed (~15 %) derrière le backdrop
+    /// semi-transparent, teintant le média d'un voile indigo parasite. On le neutralise en noir
+    /// (user 2026-06-03 : « le reader/preview ne doit pas afficher de fond de canvas quand le fond
+    /// est déjà une image/vidéo »).
+    private var currentSlideHasMediaBackground: Bool {
+        guard let story = currentStory else { return false }
+        return story.toRenderableSlide(preferredLanguages: resolvedViewerLanguageChain)
+            .effects.resolvedBackgroundMedia != nil
+    }
+
     private var storyBackground: some View {
         Group {
-            if let bg = currentStory?.storyEffects?.background {
+            if currentSlideHasMediaBackground {
+                // Fond média (image/vidéo) : aucun fond de canvas synthétique. Noir immersif
+                // sous le backdrop flou dérivé du média (pas de bleed couleur/gradient).
+                Color.black
+            } else if let bg = currentStory?.storyEffects?.background {
                 if bg.hasPrefix("gradient:") {
                     let colors = bg.replacingOccurrences(of: "gradient:", with: "").split(separator: ",").map { String($0) }
                     LinearGradient(

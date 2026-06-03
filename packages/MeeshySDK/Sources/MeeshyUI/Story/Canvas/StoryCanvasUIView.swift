@@ -1862,6 +1862,17 @@ public final class StoryCanvasUIView: UIView {
         backgroundContentReady = true
         recomputeContentProgress()
         fireContentReadyIfNeeded()
+        // The background image just landed. In `.play` (reader / full preview) the
+        // photo loads asynchronously, so the filter snapshot captured during the
+        // initial `rebuildLayers` was BLANK and the overlay showed nothing — the
+        // photo then appeared UNFILTERED beneath the empty overlay. Re-capture now
+        // that the live tree holds the real content so the filter actually applies.
+        // (The composer worked already because its photo was warm/synchronous.)
+        // Cf. « effet pas appliqué dans le play preview » 2026-06-03.
+        if filteredLayer != nil {
+            cachedFilterSnapshot = nil
+            updateFilterLayer()
+        }
     }
 
     private func fireContentReadyIfNeeded() {
@@ -2558,9 +2569,15 @@ public final class StoryCanvasUIView: UIView {
             // ses propres bounds). updatePosition mute mediaObjects[bg].x/y
             // qui est lu par le converter bgTransform de rebuildLayers et
             // appliqué via applyContentTransform sur le contentLayer du bg.
+            //
+            // Sensibilité réduite (× 0.5) pour le pan BG : le geste s'applique
+            // au repositionnement d'une image qui couvre déjà tout le canvas,
+            // donc un déplacement 1:1 du doigt à la position normalisée est
+            // trop sensible pour ajuster finement le cadrage (user feedback
+            // 2026-05-29 : « avec une faible sensibilité »).
             if id == backgroundMediaObjectId {
-                let rawX = clamp(dragStartSlideX + dxNorm)
-                let rawY = clamp(dragStartSlideY + dyNorm)
+                let rawX = clamp(dragStartSlideX + dxNorm * 0.5)
+                let rawY = clamp(dragStartSlideY + dyNorm * 0.5)
                 slide = updatePosition(slideId: id, x: rawX, y: rawY)
                 onItemModified?(slide)
                 return
