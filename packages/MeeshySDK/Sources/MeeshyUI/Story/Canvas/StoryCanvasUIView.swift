@@ -212,37 +212,20 @@ public final class StoryCanvasUIView: UIView {
     /// `internal` (not private) so test seams can introspect transform during live drag tests.
     internal let backgroundLayer = StoryBackgroundLayer()
 
-    /// Optional CoreImage filter overlay. Non-nil iff `slide.effects.filter` is a
-    /// recognised `StoryFilter`. A plain `CALayer` whose `contents` is the
-    /// filtered full-canvas snapshot (all 8 effects via `StoryFilterProcessor` —
-    /// the same recipe the picker tiles use). Owned and removed by
-    /// `updateFilterLayer()`. Replaced the Metal `StoryFilteredLayer` (only 2
-    /// kernels, top-left-only coverage bug) on 2026-06-03.
-    private var filteredLayer: CALayer?
-
-    /// Monotonic counter incremented whenever `slide` is reassigned. The filter
-    /// source-texture cache compares this token against `lastCapturedRevision`
-    /// to decide whether `CARenderer` needs to walk the layer tree again. In
-    /// `.play` mode the slide model doesn't mutate between display-link ticks
-    /// (only `currentTime` advances), so the same captured texture is reused
-    /// across the full slide duration — turning the worst case 60 Hz
-    /// `CARenderer.render()` loop into a single capture per slide.
-    /// Compteur incrémenté à chaque `slide.didSet` (révision sémantique
-    /// du contenu). Utilisé en interne pour le caching renderer et en
-    /// test pour vérifier qu'une mutation déclenche un nombre prévisible
-    /// de `didSet` (régression perf : la triple mutation directe via
-    /// subscript en faisait exploser le compte).
+    /// Monotonic counter incremented whenever `slide` is reassigned (semantic
+    /// content revision). Drives the foreground `StoryRendererCache` signature
+    /// and the audio mixer key; in `.play` it stays stable between display-link
+    /// ticks (only `currentTime` advances). Also used in tests to assert a
+    /// mutation triggers a predictable number of `didSet`s.
     internal var slideContentRevision: UInt64 = 0
-    private var lastCapturedRevision: UInt64?
-    private var lastCapturedSize: CGSize?
-    /// Filter identity last baked into `filteredLayer.contents`, so the snapshot
-    /// is only re-filtered when the chosen effect or its intensity actually changes.
-    private var lastFilterRaw: String?
-    private var lastFilterIntensity: Float?
-    /// Cached full-canvas snapshot fed to the CoreImage filter — recaptured only
-    /// on content/size change, NOT on intensity change, so dragging the intensity
-    /// slider re-filters a cached bitmap instead of re-rasterising the layer tree.
-    private var cachedFilterSnapshot: UIImage?
+
+    /// Monotonic token bumped by `invalidateImageCache()` when the composer's
+    /// in-memory image cache changes (an in-place image edit bumped
+    /// `loadedImagesVersion`). Passed to `backgroundLayer.configure` as
+    /// `contentVersion` so the background re-stamps an edited bitmap under the
+    /// same media id. The story filter is BAKED into the background bitmap by
+    /// `StoryBackgroundLayer` (no overlay) since the 2026-06-03 pivot.
+    private var composerImageRevision: UInt64 = 0
 
     /// Two-pass backdrop snapshot helper. Drives the MPS path on
     /// `StoryGlassBackdropLayer` by capturing the canvas-minus-glass tree
@@ -533,14 +516,6 @@ public final class StoryCanvasUIView: UIView {
         super.init(frame: .zero)
         layer.addSublayer(rootLayer)
         rootLayer.insertSublayer(backgroundLayer, at: 0)
-        // When the FINAL background image lands (asynchronous in `.play` / reader),
-        // re-apply the CoreImage filter so its overlay reflects the real photo
-        // rather than the ThumbHash placeholder captured during the initial layout.
-        backgroundLayer.onFinalImageStamped = { [weak self] in
-            guard let self else { return }
-            self.cachedFilterSnapshot = nil
-            self.updateFilterLayer()
-        }
         rootLayer.addSublayer(itemsContainer)
         rootLayer.addSublayer(editOverlayLayer)
         editOverlayLayer.zPosition = 10_000  // always on top
@@ -963,6 +938,12 @@ public final class StoryCanvasUIView: UIView {
     /// par le user — « progress bar ne progresse même plus du tout »).
     public func invalidateImageCache() {
         slideContentRevision &+= 1
+        // Dedicated token for composer image-cache invalidation (an in-place image
+        // edit bumped `loadedImagesVersion`). Passed to `backgroundLayer.configure`
+        // as `contentVersion` so the background re-stamps the edited bitmap under
+        // the same media id. Distinct from `slideContentRevision` (which bumps on
+        // every edit incl. text keystrokes) to avoid needless bg re-fetches.
+        composerImageRevision &+= 1
         rebuildLayers()
     }
 
@@ -1306,7 +1287,13 @@ public final class StoryCanvasUIView: UIView {
             // Slide-level thumbHash flows through so `.solidColor` and
             // `.gradient` cases can stamp the preview ON TOP of the flat tint
             // (user spec 2026-05-28: thumbnail visible above color, not below).
-            slidePreviewThumbHash: slide.effects.thumbHash
+            slidePreviewThumbHash: slide.effects.thumbHash,
+            // Filter is BAKED into the background bitmap at stamp time (no overlay) —
+            // renders identically in composer / preview / reader / published, and an
+            // in-place image edit re-filters via `contentVersion` (2026-06-03 pivot).
+            filter: slide.effects.filter.flatMap { StoryFilter(rawValue: $0) },
+            filterIntensity: Float(slide.effects.filterIntensity ?? 1.0),
+            contentVersion: composerImageRevision
         )
 
         // Items — détache les sublayers existants AVANT de les ré-attacher.
@@ -1377,7 +1364,6 @@ public final class StoryCanvasUIView: UIView {
         }
 
         applyForegroundFrames()
-        updateFilterLayer()
         scheduleContentReadyEvaluation(for: bgKind)
         // Emit l'état initial de progression (généralement 0.0 hors color/gradient
         // qui passent immédiatement à backgroundContentReady=true via le path sync).
@@ -1422,123 +1408,6 @@ public final class StoryCanvasUIView: UIView {
         }
     }
 
-    /// Whether the background's visible content is final enough to snapshot for
-    /// the filter overlay. Colour/gradient render synchronously; an image is only
-    /// ready once its FINAL bitmap is stamped (`hasFinalContentStamped`) — not the
-    /// ThumbHash placeholder; a video once its player layer exists. Gating on this
-    /// prevents the overlay from baking (and then showing) the blurry placeholder.
-    private var backgroundContentIsFilterable: Bool {
-        switch backgroundLayer.kind {
-        case .solidColor, .gradient: return true
-        case .image: return backgroundLayer.hasFinalContentStamped
-        case .video: return backgroundLayer.avPlayerLayer != nil
-        }
-    }
-
-    /// Inserts, updates, or removes the CoreImage filter overlay driven by
-    /// `slide.effects.filter` + `slide.effects.filterIntensity`.
-    ///
-    /// When a filter is active, the slide content beneath the overlay
-    /// (background + items, excluding the filter layer itself and the edit
-    /// overlay) is rasterised into a `UIImage`, filtered through
-    /// `StoryFilterProcessor` (all eight effects, the same recipe the picker
-    /// tiles use), and baked into the overlay's `contents`. The overlay spans the
-    /// whole canvas, so every effect covers the entire story (the prior Metal
-    /// path only filtered the top-left quadrant due to a points-vs-pixels grid
-    /// mismatch, and only supported two of the eight effects).
-    ///
-    /// The rasterised snapshot is cached keyed by `slideContentRevision` + render
-    /// size, so `.play` (60 Hz display-link) reuses it for the whole slide and the
-    /// intensity slider re-filters the cached bitmap rather than re-rasterising
-    /// the layer tree. Gesture-driven edits in `.edit` bump the revision via
-    /// `slide.didSet`, triggering a fresh capture.
-    private func updateFilterLayer() {
-        // `effects.filter` holds a `StoryFilter` rawValue ("vintage", "bw", "warm",
-        // "cool", "dramatic", "vivid", "fade", "chrome"). ALL eight render via
-        // CoreImage (`StoryFilterProcessor`) — the exact recipe the picker tiles
-        // use — so the composer canvas AND the reader reflect every effect, not
-        // just the two that shipped a Metal kernel. The filtered full-canvas
-        // snapshot is baked into a plain `CALayer.contents`, so coverage is the
-        // whole story (the old Metal path filtered only the top-left because the
-        // dispatch grid was sized in points while the drawable was in pixels).
-        guard let raw = slide.effects.filter,
-              let storyFilter = StoryFilter(rawValue: raw) else {
-            filteredLayer?.removeFromSuperlayer()
-            filteredLayer = nil
-            lastCapturedRevision = nil
-            lastCapturedSize = nil
-            lastFilterRaw = nil
-            lastFilterIntensity = nil
-            cachedFilterSnapshot = nil
-            return
-        }
-        let intensity = Float(slide.effects.filterIntensity ?? 1.0)
-        let renderSize = geometry.renderSize
-        guard renderSize.width > 0, renderSize.height > 0 else { return }
-
-        if filteredLayer == nil {
-            let l = CALayer()
-            l.contentsGravity = .resize
-            l.masksToBounds = true
-            rootLayer.addSublayer(l)
-            filteredLayer = l
-            // First attach — force a recompute even if nothing else changed.
-            lastCapturedRevision = nil
-            lastCapturedSize = nil
-            lastFilterRaw = nil
-            lastFilterIntensity = nil
-        }
-        guard let layer = filteredLayer else { return }
-        layer.frame = CGRect(origin: .zero, size: renderSize)
-
-        // Don't cover the background with a filtered snapshot until its FINAL
-        // content is on screen. In `.play` the photo loads asynchronously, so a
-        // snapshot taken during the initial layout captures only the blurry
-        // ThumbHash placeholder — and an opaque overlay then HIDES the real photo
-        // once it lands (« le preview affiche le thumbHash, pas l'image »). While
-        // not ready, hide the overlay so the loading background shows through;
-        // `backgroundLayer.onFinalImageStamped` re-runs this method (and
-        // `backgroundDidBecomeReady` covers video) once the real content is stamped.
-        guard backgroundContentIsFilterable else {
-            layer.isHidden = true
-            return
-        }
-        layer.isHidden = false
-
-        // The snapshot (rasterised layer tree) depends only on content + size, so
-        // recapture it only when those change. Dragging the intensity slider then
-        // re-filters a CACHED bitmap instead of re-rasterising the whole tree.
-        // In `.play` the slide model is static between display-link ticks, so the
-        // snapshot is captured once per slide.
-        let snapshotStale = (lastCapturedRevision != slideContentRevision)
-            || (lastCapturedSize != renderSize)
-            || (cachedFilterSnapshot == nil)
-        if snapshotStale {
-            cachedFilterSnapshot = captureFilterSourceImage(renderSize: renderSize)
-            lastCapturedRevision = slideContentRevision
-            lastCapturedSize = renderSize
-        }
-        guard let snapshot = cachedFilterSnapshot else { return }
-
-        // Re-apply the filter only when the snapshot, the chosen effect, or the
-        // intensity changed — otherwise the baked `contents` is reused for free.
-        let filterStale = snapshotStale
-            || (lastFilterRaw != raw)
-            || (lastFilterIntensity != intensity)
-            || (layer.contents == nil)
-        guard filterStale else { return }
-
-        let filtered = StoryFilterProcessor.apply(storyFilter, to: snapshot,
-                                                  imageId: "\(slide.id)_\(slideContentRevision)",
-                                                  intensity: intensity)
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        layer.contents = filtered.cgImage
-        layer.contentsScale = filtered.scale
-        CATransaction.commit()
-        lastFilterRaw = raw
-        lastFilterIntensity = intensity
-    }
 
     /// Captures the slide content that should be filtered (background +
     /// itemsContainer) into a fresh `MTLTexture` sized to `renderSize`.
@@ -1660,54 +1529,12 @@ public final class StoryCanvasUIView: UIView {
         return host
     }
 
-    /// Rasterises the slide content (background + items) into a `UIImage` at
-    /// screen scale via `UIGraphicsImageRenderer`, used by `updateFilterLayer` as
-    /// the CoreImage filter input. Covers the WHOLE canvas (no Metal
-    /// points-vs-pixels grid mismatch that previously filtered only the top-left)
-    /// and is orientation-safe (no `CIImage(mtlTexture:)` flip).
-    ///
-    /// CRUCIAL : we snapshot the LIVE `rootLayer` (which already holds the
-    /// displayed photo / colour / items), NOT a freshly built tree. A fresh tree
-    /// loads its background image asynchronously, so a synchronous `render(in:)`
-    /// captured a BLANK frame — and the opaque filtered overlay then covered the
-    /// real photo, leaving the canvas apparently empty (user bug 2026-06-03).
-    /// `render(in:)` is a CPU snapshot, so it is safe on the live tree (the
-    /// CARenderer mid-flush hazard that justified the fresh-tree path does not
-    /// apply here). The filter overlay (this very layer) and the edit overlay are
-    /// hidden during the snapshot so we don't capture ourselves or selection chrome.
-    /// Video backgrounds aren't captured by `render(in:)` — same limitation the
-    /// prior MTLTexture path had; image/colour/gradient backgrounds capture fully.
-    private func captureFilterSourceImage(renderSize: CGSize) -> UIImage? {
-        guard renderSize.width > 0, renderSize.height > 0 else { return nil }
-        let prevFilterHidden = filteredLayer?.isHidden ?? false
-        let prevOverlayHidden = editOverlayLayer.isHidden
-        filteredLayer?.isHidden = true
-        editOverlayLayer.isHidden = true
-        defer {
-            filteredLayer?.isHidden = prevFilterHidden
-            editOverlayLayer.isHidden = prevOverlayHidden
-        }
-        let format = UIGraphicsImageRendererFormat.preferred()
-        format.opaque = false
-        let renderer = UIGraphicsImageRenderer(size: renderSize, format: format)
-        return renderer.image { ctx in
-            rootLayer.render(in: ctx.cgContext)
-        }
-    }
-
     /// Test-only seam: forces a fresh filter source capture and returns the
     /// resulting texture without applying it to the live layer. Lets unit tests
     /// inspect the bytes coming out of `CARenderer` and assert non-zero pixels
     /// without coupling to the live presentation pipeline.
     public func _captureFilterSourceForTesting(renderSize: CGSize) -> MTLTexture? {
         captureFilterSourceTexture(renderSize: renderSize)
-    }
-
-    /// Test-only seam: read-only access to the currently attached filter
-    /// layer (a plain `CALayer` whose `contents` is the filtered snapshot).
-    /// Returns `nil` when `slide.effects.filter` is unset/unrecognised.
-    public var _filteredLayerForTesting: CALayer? {
-        filteredLayer
     }
 
     // MARK: - Content readiness (drives StoryReaderTimerController)
@@ -1899,17 +1726,6 @@ public final class StoryCanvasUIView: UIView {
         backgroundContentReady = true
         recomputeContentProgress()
         fireContentReadyIfNeeded()
-        // The background image just landed. In `.play` (reader / full preview) the
-        // photo loads asynchronously, so the filter snapshot captured during the
-        // initial `rebuildLayers` was BLANK and the overlay showed nothing — the
-        // photo then appeared UNFILTERED beneath the empty overlay. Re-capture now
-        // that the live tree holds the real content so the filter actually applies.
-        // (The composer worked already because its photo was warm/synchronous.)
-        // Cf. « effet pas appliqué dans le play preview » 2026-06-03.
-        if filteredLayer != nil {
-            cachedFilterSnapshot = nil
-            updateFilterLayer()
-        }
     }
 
     private func fireContentReadyIfNeeded() {
