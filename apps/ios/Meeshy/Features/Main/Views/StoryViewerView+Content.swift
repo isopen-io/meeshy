@@ -1920,17 +1920,24 @@ struct StoryActionButton: View {
                         .foregroundColor(isActive ? activeColor : .white)
                         .adaptiveSymbolBounce(value: isActive)
                 }
+                // Halo sombre sous l'icône — lisibilité garantie sur N'IMPORTE QUEL
+                // fond de story (clair comme foncé), sans voile ni gros cartouche
+                // (style flottant Instagram/TikTok). Sur fond clair, le `white.opacity(0.08)`
+                // du disque disparaît : c'est ce halo (et celui du label) qui porte le
+                // contraste. Actif → glow coloré (demande user 2026-06-03 : contraste élégant).
                 .shadow(
-                    color: isActive ? (activeGlow ?? activeColor).opacity(0.3) : .black.opacity(0.2),
+                    color: isActive ? (activeGlow ?? activeColor).opacity(0.45) : .black.opacity(0.55),
                     radius: isActive ? 8 : 4,
-                    y: isActive ? 0 : 2
+                    y: isActive ? 0 : 1
                 )
 
                 Text(label)
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white.opacity(isActive ? 0.95 : 0.65))
+                    .foregroundColor(.white.opacity(isActive ? 0.98 : 0.85))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
+                    // Même halo pour le label : blanc sur fond clair sinon illisible.
+                    .shadow(color: .black.opacity(0.55), radius: 2, y: 1)
             }
             .frame(width: 56)
         }
