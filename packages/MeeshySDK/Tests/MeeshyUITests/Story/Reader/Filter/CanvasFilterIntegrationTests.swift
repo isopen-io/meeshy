@@ -5,13 +5,12 @@ import XCTest
 @MainActor
 final class CanvasFilterIntegrationTests: XCTestCase {
 
-    // NB: `effects.filter` stores the **`StoryFilter` rawValue** ("vintage", "bw", …)
-    // — that's what the filter grid persists (`applyFilter(filter.rawValue)`).
-    //
-    // Since 2026-06-03 ALL eight filters render on the canvas via CoreImage
-    // (`StoryFilterProcessor`) instead of only the two that shipped a Metal kernel.
-    // The overlay is a plain `CALayer` whose `contents` is the filtered full-canvas
-    // snapshot, so every effect both renders AND covers the whole story.
+    // Since the 2026-06-03 pivot the story filter is BAKED into the background
+    // bitmap by `StoryBackgroundLayer` (no overlay). `StoryCanvasUIView` simply
+    // forwards `slide.effects.filter` / `filterIntensity` into the background
+    // layer's `configure(...)`. These tests pin that wiring: the background
+    // layer's `activeFilter` must reflect the slide's effect for all eight
+    // filters, clear when unset, and update on change.
 
     private let canvasSize = CGSize(width: 412, height: 732)
 
@@ -26,34 +25,29 @@ final class CanvasFilterIntegrationTests: XCTestCase {
         return view
     }
 
-    /// Every `StoryFilter` (including warm/cool/dramatic/vivid/fade/chrome which
-    /// had no Metal kernel) must attach a filter overlay that spans the whole
-    /// canvas — the regression was that six of eight rendered nothing and the two
-    /// that did only covered the top-left quadrant.
-    func test_canvas_addsFullCanvasOverlay_forEveryStoryFilter() {
+    func test_canvas_bakesEveryStoryFilter_intoBackgroundLayer() {
         for filter in StoryFilter.allCases {
             let view = makeView(filter: filter, intensity: 0.7)
-            let overlay = view._filteredLayerForTesting
-            XCTAssertNotNil(overlay, "Filter \(filter.rawValue) must attach a filter overlay layer")
-            XCTAssertEqual(overlay?.frame, CGRect(origin: .zero, size: canvasSize),
-                           "Filter overlay for \(filter.rawValue) must cover the full canvas")
+            XCTAssertEqual(view.backgroundLayer.activeFilter, filter,
+                           "Filter \(filter.rawValue) must be forwarded to the background layer")
+            XCTAssertEqual(view.backgroundLayer.activeFilterIntensity, 0.7, accuracy: 1e-3)
         }
     }
 
-    func test_canvas_noFilteredLayer_whenFilterUnset() {
+    func test_canvas_clearsBackgroundFilter_whenUnset() {
         let view = makeView(filter: nil)
-        XCTAssertNil(view._filteredLayerForTesting)
+        XCTAssertNil(view.backgroundLayer.activeFilter)
     }
 
-    func test_canvas_removesFilteredLayer_whenEffectsFilterCleared() {
+    func test_canvas_updatesBackgroundFilter_whenChanged() {
         let view = makeView(filter: .vintage)
-        XCTAssertNotNil(view._filteredLayerForTesting)
+        XCTAssertEqual(view.backgroundLayer.activeFilter, .vintage)
 
-        var clearedEffects = StoryEffects()
-        clearedEffects.filter = nil
-        view.slide = StorySlide(id: "s", effects: clearedEffects)
+        var changed = StoryEffects()
+        changed.filter = StoryFilter.bw.rawValue
+        view.slide = StorySlide(id: "s", effects: changed)
         view.layoutIfNeeded()
 
-        XCTAssertNil(view._filteredLayerForTesting)
+        XCTAssertEqual(view.backgroundLayer.activeFilter, .bw)
     }
 }
