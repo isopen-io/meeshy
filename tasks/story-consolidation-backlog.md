@@ -886,6 +886,20 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
 - Cible it.47 : StoryOfflineQueue (write-ahead offline, setOnPublish/flush) OU StorySlideRenderer thumbHash composite
       (toutes couches) OU mini-preview/cover sync. Preuve avant fix.
 
+## it.47 — fix crash-trap reverse() clés dupliquées (PROVABLE défense-profondeur, shipped 64fc110e7)
+- [x] BUG (crash trap au trust boundary) : `StoryQueueItemConverter.reverse` consomme un `StoryPublishQueueItem`
+      DÉCODÉ DU DISQUE → `mediaReferences` = JSON sans invariant d'unicité. `reverse` fusionne image+video dans
+      `mediaPairs` (`filter != "audio"`) puis `Dictionary(uniqueKeysWithValues:)` → TRAPPE sur clé dupliquée. Un
+      elementId partagé entre ref image et ref video (ou payload corrompu / schéma futur) crashait le chemin publish
+      (`setOnPublish` appelle `reverse` PAR ITEM via processNext) ET `pendingItems`.
+- [x] FIX défensif : `Dictionary(_, uniquingKeysWith: { _, last in last })` pour mediaPaths + audioPaths. +1 test
+      (refs dupliquées image+video / audio ne trappent pas, last-wins). MeeshySDK-Package 7/7 verts.
+- AUDIT autres : `StoryOfflineQueue` = adapter THIN propre sur StoryPublishQueue (enqueue/flush/setOnPublish/dequeue,
+      test seam). `StoryRepostEmbedCell` propre (Prisme wiré, 9:16/clip/a11y). `StoryQueueMigrator` mature (it.46).
+- Note : « commit tout » (user, mid-it.47) → committé le travail filtre cohérent de l'agent // (2266da708) + bump build.
+- Cible it.48 : StorySlideRenderer couches NON-filtre (drawTextObject/drawMediaObject/drawSticker projection+rotation)
+      OU StoryStrokeRasterizer (dessin) OU SlideMiniPreview sync. Preuve avant fix. NE PAS toucher zone filtre (agent //).
+
 ## EN ATTENTE USER (décisions produit — ne pas fixer en autonomie)
 - Sidebar A/B/C overlap (carte reader) — A carte étroite / B footer / C accepter chevauchement.
 - DEVICE : drag-reorder slides + toggle plein écran carte→bord.
