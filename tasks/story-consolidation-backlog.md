@@ -915,6 +915,18 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
 - Note : agent // a maintenant des modifs canvas-framing non commitées (StoryViewerView+Canvas, StoryCanvasUIView,
       StoryCanvasFraming + test) — NE PAS toucher.
 
+## it.49 — fix composite rate le pinch-scale du texte (PROVABLE, shipped c36413f34)
+- [x] BUG (prédit it.48) : `drawTextObject` projetait `resolvedSize` (= fontSize de BASE) SANS `text.scale`, alors que
+      le canvas calcule `designFontSize = fontSize * scale` (StoryTextLayer:62) et que le pinch écrit `text.scale`
+      (StoryCanvasUIView.updateScale, 0.3…4.0). Texte pinch-scalé → taille de BASE dans cover/thumbHash (≠ canvas).
+      drawMediaObject (`scale*0.6`) / drawSticker (`scale*0.15`) appliquaient déjà scale → seul le texte divergeait.
+- [x] FIX : `designFontSize = resolvedSize * textObj.scale` (parité StoryTextLayer). +2 tests (scale change la taille
+      rendue + déterminisme). MeeshySDK-Package 9/9 renderer verts. → text/media/sticker appliquent maintenant TOUS scale+rotation.
+- LEAD it.50 (même classe parité) : `StoryBackgroundLayer` applique un transform zoom+pan+rotation sur le FOND
+      (commentaire l.5 « zoom + pan + rotation »). Le composite dessine-t-il le bg full-bleed en IGNORANT ce transform ?
+      Si l'user a zoomé/pané/pivoté le fond, le cover/thumbHash le montrerait non-transformé. À PROUVER (le composite
+      lit-il backgroundTransform/zoom/offset/rotation ?) avant fix.
+
 ## EN ATTENTE USER (décisions produit — ne pas fixer en autonomie)
 - ~~Sidebar A/B/C overlap (carte reader)~~ → RÉSOLU 2026-06-03 : **option C retenue** (chevauchement accepté,
   le halo sombre it.37 assure la lisibilité, story reste grande). AUCUN changement code — état actuel = voulu.
