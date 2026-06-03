@@ -150,6 +150,21 @@ public enum StorySlideRenderer {
 
     // MARK: - Private Drawing
 
+    /// Applique une rotation (degrés, sens horaire UIKit — parité `CATransform3DMakeRotation`
+    /// du canvas) autour de `center` le temps de `body`, puis restaure le CTM. No-op si
+    /// `degrees ≈ 0` pour préserver le chemin commun (zéro surcoût sur les éléments non pivotés).
+    /// Le contexte courant (UIGraphicsImageRenderer) est `ctx`, donc transformer son CTM
+    /// affecte `NSString.draw` / `UIImage.draw` exécutés dans `body`.
+    private static func drawRotated(_ degrees: Double, around center: CGPoint, in ctx: CGContext, _ body: () -> Void) {
+        guard abs(degrees) > 0.01 else { body(); return }
+        ctx.saveGState()
+        ctx.translateBy(x: center.x, y: center.y)
+        ctx.rotate(by: CGFloat(degrees) * .pi / 180)
+        ctx.translateBy(x: -center.x, y: -center.y)
+        body()
+        ctx.restoreGState()
+    }
+
     private static func drawTextObject(_ textObj: StoryTextObject, in size: CGSize, ctx: CGContext) {
         // `resolvedSize` (= fontSize) est en pixels DESIGN (référentiel 1080), donc
         // projeté par `size.width / 1080` — parité avec le canvas réel (`StoryTextLayer`)
@@ -190,7 +205,11 @@ public enum StorySlideRenderer {
             height: fontSize * 3
         )
 
-        (textObj.text as NSString).draw(in: textRect, withAttributes: attrs)
+        // Rotation autour du centre — parité canvas (`StoryTextLayer`). Sans ça un texte
+        // pivoté apparaissait DROIT dans le composite cover/thumbHash (≠ ce que l'auteur voit).
+        drawRotated(textObj.rotation, around: CGPoint(x: centerX, y: centerY), in: ctx) {
+            (textObj.text as NSString).draw(in: textRect, withAttributes: attrs)
+        }
     }
 
     /// Couleur de fond composite (thumbHash) d'un texte, dérivée du
@@ -215,7 +234,10 @@ public enum StorySlideRenderer {
         let imgH = imgW * (image.size.height / max(1, image.size.width))
         let x = size.width * obj.x - imgW / 2
         let y = size.height * obj.y - imgH / 2
-        image.draw(in: CGRect(x: x, y: y, width: imgW, height: imgH))
+        let center = CGPoint(x: size.width * obj.x, y: size.height * obj.y)
+        drawRotated(obj.rotation, around: center, in: ctx) {
+            image.draw(in: CGRect(x: x, y: y, width: imgW, height: imgH))
+        }
     }
 
     private static func drawSticker(_ sticker: StorySticker, in size: CGSize, ctx: CGContext) {
@@ -225,7 +247,10 @@ public enum StorySlideRenderer {
         ]
         let x = size.width * sticker.x - fontSize / 2
         let y = size.height * sticker.y - fontSize / 2
-        (sticker.emoji as NSString).draw(at: CGPoint(x: x, y: y), withAttributes: attrs)
+        let center = CGPoint(x: size.width * sticker.x, y: size.height * sticker.y)
+        drawRotated(sticker.rotation, around: center, in: ctx) {
+            (sticker.emoji as NSString).draw(at: CGPoint(x: x, y: y), withAttributes: attrs)
+        }
     }
 }
 
