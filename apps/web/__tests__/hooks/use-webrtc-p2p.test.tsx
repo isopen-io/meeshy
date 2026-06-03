@@ -331,6 +331,58 @@ describe('useWebRTCP2P', () => {
     });
   });
 
+  describe('ICE candidate buffering (offerer)', () => {
+    const getSignalHandler = () => {
+      const call = [...mockOn.mock.calls].reverse().find((c) => c[0] === SERVER_EVENTS.CALL_SIGNAL);
+      return call?.[1] as (event: any) => void;
+    };
+
+    it('should buffer remote ICE candidates that arrive before the answer, then apply them', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+
+      // Offerer creates the offer -> a WebRTC service now exists for the target,
+      // but no remote description has been applied yet (answer not received).
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+
+      const signalHandler = getSignalHandler();
+
+      // A remote ICE candidate arrives BEFORE the answer.
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: {
+            type: 'ice-candidate',
+            from: mockTargetUserId,
+            to: mockUserId,
+            candidate: 'candidate:early',
+            sdpMLineIndex: 0,
+            sdpMid: '0',
+          },
+        });
+      });
+
+      // It must be queued, not applied (would throw InvalidStateError otherwise).
+      expect(mockAddIceCandidate).not.toHaveBeenCalled();
+
+      // The answer arrives -> remote description applied -> queue drained.
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'answer', from: mockTargetUserId, to: mockUserId, sdp: 'answer-sdp' },
+        });
+      });
+
+      expect(mockSetRemoteDescription).toHaveBeenCalled();
+      expect(mockAddIceCandidate).toHaveBeenCalledWith(
+        expect.objectContaining({ candidate: 'candidate:early' })
+      );
+    });
+  });
+
   describe('Cleanup', () => {
     it('should close all WebRTC services', async () => {
       const { result } = renderHook(() =>
