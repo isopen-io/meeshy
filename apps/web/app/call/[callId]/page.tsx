@@ -27,7 +27,7 @@ export default function CallPage({ params }: CallPageProps) {
   const { callId } = resolvedParams;
   const router = useRouter();
   const { user, isChecking: isLoading } = useAuth();
-  const { currentCall, setCurrentCall, setInCall, reset } = useCallStore();
+  const { currentCall, setCurrentCall, setInCall, setIceServers, reset } = useCallStore();
 
   const [isJoining, setIsJoining] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -61,14 +61,20 @@ export default function CallPage({ params }: CallPageProps) {
 
         logger.info('[CallPage]', 'Auto-joining call', { callId });
 
-        // Emit join event
+        // Emit join event. Apply the server-provided ICE servers (STUN +
+        // time-limited TURN) returned in the ack so the RTCPeerConnection is
+        // built with TURN credentials instead of falling back to STUN-only.
         socket.emit(CLIENT_EVENTS.CALL_JOIN, {
           callId,
           settings: {
             audioEnabled: true,
             videoEnabled: true,
           },
-        }, () => {});
+        }, (ack: { success?: boolean; data?: { iceServers?: RTCIceServer[] } }) => {
+          if (ack?.success && ack.data?.iceServers?.length) {
+            setIceServers(ack.data.iceServers);
+          }
+        });
 
         // Wait for call:participant-joined or call:initiated event
         // The CallManager component will handle these events and update the store
@@ -126,7 +132,7 @@ export default function CallPage({ params }: CallPageProps) {
     };
 
     joinCall();
-  }, [callId, user, isLoading, currentCall, router, setCurrentCall, setInCall]);
+  }, [callId, user, isLoading, currentCall, router, setCurrentCall, setInCall, setIceServers]);
 
   // Handle call ended - redirect to home
   useEffect(() => {
