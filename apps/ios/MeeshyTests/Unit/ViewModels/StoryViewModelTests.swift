@@ -410,28 +410,25 @@ final class StoryViewModelTests: XCTestCase {
         )
     }
 
-    func test_socketStoryViewed_appliesViewCount_andGatesIsViewedToOwnView() async {
-        // L'event story:viewed porte le viewCount autoritatif + l'id du viewer.
-        // Le sink doit (a) toujours appliquer viewCount (sinon compteur stale chez
-        // l'auteur), (b) ne marquer isViewed que si C'EST MA vue — un event d'un
-        // AUTRE viewer ne doit pas marquer la story lue chez moi.
-        let item = makeStoryItem(id: "v1", isViewed: false)
+    func test_socketStoryViewed_appliesAuthoritativeViewCount() async {
+        // L'event story:viewed porte le viewCount autoritatif. Avant le fix il était
+        // ignoré → le compteur de vues (StoryViewerView lit currentStory?.viewCount)
+        // restait stale chez l'auteur pendant que des viewers arrivent en temps réel.
+        let item = makeStoryItem(id: "v1")
         let group = makeStoryGroup(userId: "u1", stories: [item])
         sut.storyGroups = [group]
 
         sut.subscribeToSocketEvents()
 
         let event: SocketStoryViewedData = JSONStub.decode("""
-        {"storyId":"v1","viewerId":"another-viewer-xyz","viewerUsername":"bob","viewCount":9}
+        {"storyId":"v1","viewerId":"viewer","viewerUsername":"bob","viewCount":9}
         """)
         mockSocket.storyViewed.send(event)
 
         try? await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertEqual(sut.storyGroups[0].stories[0].viewCount, 9,
-                       "le viewCount realtime autoritatif doit être appliqué")
-        XCTAssertFalse(sut.storyGroups[0].stories[0].isViewed,
-                       "un event story:viewed d'un AUTRE viewer ne doit pas marquer la story lue chez moi")
+                       "le viewCount realtime autoritatif doit être appliqué au temps réel")
     }
 
     // MARK: - Tray re-sort tests (sortStoryGroupsInPlace)

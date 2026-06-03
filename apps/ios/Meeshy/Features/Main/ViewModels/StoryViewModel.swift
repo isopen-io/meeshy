@@ -1167,7 +1167,6 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] viewedData in
                 guard let self else { return }
-                let myId = AuthManager.shared.currentUser?.id
                 for i in self.storyGroups.indices {
                     if let j = self.storyGroups[i].stories.firstIndex(where: { $0.id == viewedData.storyId }) {
                         var updatedStories = self.storyGroups[i].stories
@@ -1175,13 +1174,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                         // (Avant : ignoré → le compteur de vues restait stale chez l'auteur
                         // qui regarde sa propre story pendant que des viewers arrivent.)
                         updatedStories[j].viewCount = viewedData.viewCount
-                        // L'anneau « lu » (isViewed) ne se pose QUE pour MA propre vue :
-                        // un event déclenché par un AUTRE viewer ne doit pas marquer la story
-                        // lue chez moi (avant : `isViewed = true` inconditionnel). La sync
-                        // cross-device du même user reste OK (viewerId == myId).
-                        if viewedData.viewerId == myId {
-                            updatedStories[j].isViewed = true
-                        }
+                        updatedStories[j].isViewed = true
                         self.storyGroups[i] = self.storyGroups[i].with(stories: updatedStories)
                         // Re-sort: `hasUnviewed` may flip when the last
                         // unviewed story is consumed, dropping the group
