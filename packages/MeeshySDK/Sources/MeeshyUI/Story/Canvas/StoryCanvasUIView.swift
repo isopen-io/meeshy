@@ -1623,21 +1623,38 @@ public final class StoryCanvasUIView: UIView {
         return host
     }
 
-    /// Rasterises the slide content (background + items, excluding the filter &
-    /// edit overlays) into a `UIImage` at screen scale via `UIGraphicsImageRenderer`.
-    /// Used by `updateFilterLayer` as the CoreImage filter input: covers the WHOLE
-    /// canvas (no Metal points-vs-pixels grid mismatch that previously filtered only
-    /// the top-left corner) and is orientation-safe (no `CIImage(mtlTexture:)` flip).
+    /// Rasterises the slide content (background + items) into a `UIImage` at
+    /// screen scale via `UIGraphicsImageRenderer`, used by `updateFilterLayer` as
+    /// the CoreImage filter input. Covers the WHOLE canvas (no Metal
+    /// points-vs-pixels grid mismatch that previously filtered only the top-left)
+    /// and is orientation-safe (no `CIImage(mtlTexture:)` flip).
+    ///
+    /// CRUCIAL : we snapshot the LIVE `rootLayer` (which already holds the
+    /// displayed photo / colour / items), NOT a freshly built tree. A fresh tree
+    /// loads its background image asynchronously, so a synchronous `render(in:)`
+    /// captured a BLANK frame — and the opaque filtered overlay then covered the
+    /// real photo, leaving the canvas apparently empty (user bug 2026-06-03).
+    /// `render(in:)` is a CPU snapshot, so it is safe on the live tree (the
+    /// CARenderer mid-flush hazard that justified the fresh-tree path does not
+    /// apply here). The filter overlay (this very layer) and the edit overlay are
+    /// hidden during the snapshot so we don't capture ourselves or selection chrome.
     /// Video backgrounds aren't captured by `render(in:)` — same limitation the
-    /// prior MTLTexture path had; image/color/gradient backgrounds capture fully.
+    /// prior MTLTexture path had; image/colour/gradient backgrounds capture fully.
     private func captureFilterSourceImage(renderSize: CGSize) -> UIImage? {
         guard renderSize.width > 0, renderSize.height > 0 else { return nil }
-        let host = buildFilterSourceHost(renderSize: renderSize)
+        let prevFilterHidden = filteredLayer?.isHidden ?? false
+        let prevOverlayHidden = editOverlayLayer.isHidden
+        filteredLayer?.isHidden = true
+        editOverlayLayer.isHidden = true
+        defer {
+            filteredLayer?.isHidden = prevFilterHidden
+            editOverlayLayer.isHidden = prevOverlayHidden
+        }
         let format = UIGraphicsImageRendererFormat.preferred()
         format.opaque = false
         let renderer = UIGraphicsImageRenderer(size: renderSize, format: format)
         return renderer.image { ctx in
-            host.render(in: ctx.cgContext)
+            rootLayer.render(in: ctx.cgContext)
         }
     }
 

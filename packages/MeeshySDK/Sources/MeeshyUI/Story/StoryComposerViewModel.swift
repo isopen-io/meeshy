@@ -441,6 +441,22 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     @Published var loadedVideoURLs: [String: URL] = [:]
     @Published var loadedAudioURLs: [String: URL] = [:]
 
+    /// The current slide's background bitmap used as the base for filter-tile
+    /// previews. Resolves the background media object (modern unified path,
+    /// `loadedImages[bgMedia.id]`) first, then falls back to the legacy
+    /// slide-level `slideImages` entry. `nil` for colour/gradient-only slides
+    /// (the grid then shows its gradient placeholders). Mirrors how
+    /// `SlideMiniPreview` and the canvas resolve the background image — passing
+    /// only `slideImages[slide.id]` left every photo-backed slide's tiles blank
+    /// because modern photos live in `mediaObjects`, not `slideImages`.
+    var currentSlideBackgroundImage: UIImage? {
+        if let bgId = currentSlide.effects.resolvedBackgroundMedia?.id,
+           let img = loadedImages[bgId] {
+            return img
+        }
+        return slideImages[currentSlide.id]
+    }
+
     /// Cookie monotone bumpé à chaque édition d'un bitmap déjà présent dans
     /// `loadedImages` (typiquement `MeeshyImageEditorView` onAccept qui
     /// remplace la valeur sous une clé inchangée). Le `Coordinator` du
