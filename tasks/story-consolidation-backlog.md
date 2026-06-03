@@ -960,6 +960,19 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
 - Cible it.52 (HORS composite) : StoryService decode (robustesse parsing) OU sync realtime comment/reaction count
       OU StatusEntry (moods, expiry, realtime) OU aspectFill caveat. Preuve avant fix.
 
+## it.52 — fix realtime viewCount drop dans story:viewed (PROVABLE, shipped daa3cd572)
+- [x] BUG (callback mal branché) : sink `socialSocket.storyViewed` posait `isViewed=true` mais IGNORAIT
+      `viewedData.viewCount` (total autoritatif porté par l'event). → compteur de vues (StoryViewerView:933 lit
+      `currentStory?.viewCount`) stale chez l'auteur pendant l'arrivée de viewers temps réel, jusqu'au prochain fetch.
+- [x] FIX : `updatedStories[j].viewCount = viewedData.viewCount` (viewCount est `var`). +1 test (viewCount realtime appliqué).
+      StoryViewModelTests 54/54 verts.
+- [!] ÉCARTÉ (preuve avant fix) : gate `isViewed` sur `viewerId == myId` (ne marquer lu que pour MA vue) — sémantiquement
+      plus correct MAIS régressait `dropsAllViewedGroupBelowUnviewedPeers` (le test envoie `viewerId:"me"` ≠ currentUser
+      en test) et repose sur un scope de broadcast gateway NON prouvé. Comportement `isViewed=true` inconditionnel inchangé.
+- GOTCHA infra : `build.db is locked` quand l'agent // build en parallèle dans la même DerivedData → réessayer (transitoire).
+- Cible it.53 : StoryService decode (robustesse parsing) OU StatusEntry (moods expiry/realtime) OU comment count realtime
+      OU aspectFill caveat non-9:16. Rendements TRÈS décroissants (story subsystem très mature, it.40-52). Preuve avant fix.
+
 ## EN ATTENTE USER (décisions produit — ne pas fixer en autonomie)
 - ~~Sidebar A/B/C overlap (carte reader)~~ → RÉSOLU 2026-06-03 : **option C retenue** (chevauchement accepté,
   le halo sombre it.37 assure la lisibilité, story reste grande). AUCUN changement code — état actuel = voulu.
