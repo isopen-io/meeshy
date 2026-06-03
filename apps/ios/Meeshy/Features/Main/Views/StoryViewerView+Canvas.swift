@@ -1153,15 +1153,17 @@ struct StoryCardView: View {
                         replyingToStoryComment: $replyingToStoryComment,
                         sendComment: sendComment
                     )
-                        // Clears the iPhone Pro bottom-rounded-corners
-                        // (~55pt radius). Root viewer uses `.ignoresSafeArea()`
-                        // so we can't rely on the SwiftUI safe-area inset to
-                        // pad us — without this the (+) and send buttons land
-                        // inside the screen's curvature and get visually clipped
-                        // (bug 2026-05-28: send button half-cut off the right).
-                        // Iterated: 14 → 20 still clipped → 28 to give the 44pt
-                        // round buttons real breathing room over the corner arc.
-                        .padding(.horizontal, 28)
+                        // Marge latérale 16pt, alignée sur le `sideInset` (16) de
+                        // la carte reader (`readerCanvasFraming`) et le
+                        // `.padding(.trailing, 16)` du sidebar — même rythme 16pt
+                        // pour les trois colonnes de chrome.
+                        // (Historique 14 → 20 → 28 : tentatives de rattraper un
+                        // bouton d'envoi rogné à droite. La cause réelle n'était
+                        // pas la courbure des coins — le composer est ~54pt au-dessus
+                        // du bas, où l'arc des coins a déjà reculé — mais le
+                        // `maxWidth: .infinity` du bloc, corrigé par le pin de
+                        // largeur sur le viewport ci-dessous.)
+                        .padding(.horizontal, 16)
                         .simultaneousGesture(
                             DragGesture(minimumDistance: 20, coordinateSpace: .local)
                                 .onEnded { value in
@@ -1185,16 +1187,25 @@ struct StoryCardView: View {
                     }
                 }
             }
-            // **CRITIQUE** : `maxHeight: .infinity, alignment: .bottom` force la
-            // VStack à remplir la hauteur du canvas ZStack. Sans cela, le
+            // **CRITIQUE (hauteur)** : `maxHeight: .infinity, alignment: .bottom`
+            // force la VStack à remplir la hauteur du canvas ZStack. Sans cela, le
             // `Spacer()` au top collapse à minLength: 0 et la VStack prend sa
             // hauteur intrinsèque (~150pt = composer + emoji panel). Le canvas
-            // ZStack parent utilisant `alignment: .center` (line 1192), une
-            // VStack courte se faisait CENTRER verticalement dans le canvas
-            // 874pt → composer apparaissait à y≈360pt au lieu de y≈760pt en
-            // bas (bug user 2026-05-28 « le composeur est rogné au lieu d'être
-            // bien aligné, le composant sort du viewport »).
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            // ZStack parent utilisant `alignment: .center`, une VStack courte se
+            // faisait CENTRER verticalement dans le canvas 874pt → composer
+            // apparaissait à y≈360pt au lieu de y≈760pt en bas (bug user
+            // 2026-05-28 « le composeur est rogné au lieu d'être bien aligné »).
+            //
+            // **CRITIQUE (largeur)** : `maxWidth: geometry.size.width` (et NON
+            // `.infinity`) borne la proposition de largeur du bloc au viewport réel.
+            // Le canvas UIViewRepresentable gonfle la largeur intrinsèque du ZStack
+            // parent au-delà de l'écran (~480pt vs 402pt sur iPhone 16 Pro) ; avec
+            // `.infinity` le composer remplissait ces ~480pt et son bouton d'envoi
+            // sortait à droite de l'écran (bug user 2026-06-03). Borné au viewport,
+            // le bloc se cadre sur l'écran réel et reste centré — même principe que
+            // le pin `.frame(width: geometry.size.width)` du header (L1013) et du
+            // sidebar (L1099).
+            .frame(maxWidth: geometry.size.width, maxHeight: .infinity, alignment: .bottom)
             .padding(.bottom, composerBottomPadding(geometry))
             .animation(.easeInOut(duration: 0.25), value: keyboard.height)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showTextEmojiPicker)
