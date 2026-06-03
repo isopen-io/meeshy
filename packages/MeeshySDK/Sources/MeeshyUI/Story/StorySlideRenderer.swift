@@ -55,7 +55,31 @@ public enum StorySlideRenderer {
             if bgImage == nil,
                let bgMedia = slide.effects.resolvedBackgroundMedia,
                let bgMediaImage = loadedImages[bgMedia.id] {
-                bgMediaImage.draw(in: rect)
+                // Transform du fond (zoom/pan/rotation) — parité avec `SlideMiniPreview`
+                // (référence non-ambiguë : `.scaleEffect(scale)` + `.rotationEffect(rotation)`
+                // autour du centre, puis `.position(x·w, y·h)`) et le canvas. Sans ça un fond
+                // zoomé/pané/pivoté par l'user apparaissait DROIT & full-bleed dans le
+                // cover/thumbHash (it.50). scale+rotation autour du centre (commutent, scale
+                // uniforme) ; pan en screen-space (centre → (x·w, y·h)). No-op aux défauts
+                // (scale 1, x=y=0.5, rotation 0) → chemin commun préservé. Base `draw(in:rect)`
+                // = stretch (≈ aspectFill pour un fond 9:16 ; aspect non-9:16 = parité partielle).
+                let isTransformed = abs(bgMedia.scale - 1) > 0.001
+                    || abs(bgMedia.x - 0.5) > 0.001 || abs(bgMedia.y - 0.5) > 0.001
+                    || abs(bgMedia.rotation) > 0.01
+                if isTransformed {
+                    let cx = size.width / 2, cy = size.height / 2
+                    let panX = (CGFloat(bgMedia.x) - 0.5) * size.width
+                    let panY = (CGFloat(bgMedia.y) - 0.5) * size.height
+                    cgCtx.saveGState()
+                    cgCtx.translateBy(x: cx + panX, y: cy + panY)
+                    cgCtx.rotate(by: CGFloat(bgMedia.rotation) * .pi / 180)
+                    cgCtx.scaleBy(x: CGFloat(bgMedia.scale), y: CGFloat(bgMedia.scale))
+                    cgCtx.translateBy(x: -cx, y: -cy)
+                    bgMediaImage.draw(in: rect)
+                    cgCtx.restoreGState()
+                } else {
+                    bgMediaImage.draw(in: rect)
+                }
             }
 
             // 3. Text overlays
