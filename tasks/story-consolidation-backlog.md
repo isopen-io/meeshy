@@ -1000,6 +1000,22 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
 - ÉTAT : story subsystem TRÈS mature (it.40-54). Bugs provables autonomes ~épuisés ; restant = décisions user/device +
       findings scope-large/spéculatifs. Cible it.55 : re-sweep léger (perf affichage, nouveaux commits agent //) ou conclure.
 
+## it.55 — re-sweep perf viewer : CLEAN + conclusion backlog autonome ÉPUISÉ
+- [x] Timer progression story viewer (StoryViewerView+Content `startTimer`/`StoryProgressDisplayLinkProxy`) :
+      CADisplayLink wall-clock (CACurrentMediaTime), commit `progress` THROTTLÉ (≥ 1/300 delta, l.602) — pas 60Hz,
+      gated `isContentReady` + `shouldPauseTimer`, prefetch N+1 à 2ᵉ moitié, goToNext one-shot. BIEN CONÇU.
+      Pas de bug perf provable sans profiling Instruments (hors portée autonome).
+- [x] Aucun nouveau commit agent // depuis it.54 (rien à reviewer pour régression).
+- CONCLUSION (honnête) : backlog de bugs PROVABLES autonomes ÉPUISÉ. Couvert : parité composite (48/49/51), sync
+      realtime end-to-end (52/53/54), mutations/reconstruction (42/43), expiry/tray (40), repost (41), crash-trap (47),
+      publication/offline (38/46), markViewed (42), socket revert (45), timer viewer (55). RESTANT = NON-autonome :
+      • décisions produit USER (C.2 import, StoryPublishQueue backoff retryDelays),
+      • vérif DEVICE (drag-reorder, toggle plein écran),
+      • findings scope-large/spéculatifs sans preuve (StoryService lenient decode, bg aspectFill non-9:16, perf timer profiling),
+      • zone agent // active (canvas/composer/filtre) — ne pas toucher.
+      → Prochaines itérations : sans nouvel angle provable, rester en veille (audits clean) ; le vrai progrès demande
+      l'input USER (décisions) ou un DEVICE. Pas de fix spéculatif.
+
 ## EN ATTENTE USER (décisions produit — ne pas fixer en autonomie)
 - ~~Sidebar A/B/C overlap (carte reader)~~ → RÉSOLU 2026-06-03 : **option C retenue** (chevauchement accepté,
   le halo sombre it.37 assure la lisibilité, story reste grande). AUCUN changement code — état actuel = voulu.
