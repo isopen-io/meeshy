@@ -854,6 +854,22 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
 - Cible it.45 : StoryRepostEmbedCell rendu feed-embed (Prisme/thumbHash/aspect) OU socket story:created/updated sinks
   OU StoryPublishQueue offline replay. Preuve avant fix.
 
+## it.45 — fix socket story:updated reverte l'état vu local (PROVABLE, shipped e184e767a)
+- [x] BUG provable (local-first violation) : le sink `socialSocket.storyUpdated` remplaçait la story par celle
+      reconstruite via `toStoryGroups` → `isViewed = post.isViewedByMe ?? false`. markViewed est optimiste +
+      fire-and-forget (serveur peut lagger) ; un story:updated (ex: bump reactionCount) arrivant avec isViewedByMe
+      stale reverterait l'anneau « vu » → « non-vu ». Le chemin REST (fetchStoriesFromNetwork) protège déjà via
+      `buildLocallyViewedSet` ; le chemin socket DIVERGEAIT (pas de garde).
+- [x] FIX : `isViewed` MONOTONE — on préserve l'état local `true` lors du remplacement (`if stories[idx].isViewed
+      && !replacement.isViewed { replacement.isViewed = true }`). Parité REST/temps-réel. +1 test
+      (storyUpdated avec isViewedByMe stale ne reverte pas). Suite app 1739 tests, 0 failure (~50s).
+- AUDIT sinks socket SAIN par ailleurs : storyCreated (dedup id + sort asc), storyViewed (in-place isViewed=true),
+  storyTranslationUpdated (mergingTextObjectTranslations in-place), réactions/comment (mutateStoryItem inout). OK.
+- GOTCHA infra (relevé) : `meeshy.sh test` exit 64 si `test-results/unit-tests.xcresult` existe déjà (xcodebuild
+  refuse d'écraser) — nettoyer le bundle entre deux runs. Évité les runs concurrents.
+- Cible it.46 : StoryRepostEmbedCell rendu feed-embed (Prisme/thumbHash/aspect 9:16 dans cellule) OU StoryPublishQueue
+  offline replay (StoryQueueMigrator, StoryOfflineQueueBootstrap). Preuve avant fix.
+
 ## EN ATTENTE USER (décisions produit — ne pas fixer en autonomie)
 - Sidebar A/B/C overlap (carte reader) — A carte étroite / B footer / C accepter chevauchement.
 - DEVICE : drag-reorder slides + toggle plein écran carte→bord.
