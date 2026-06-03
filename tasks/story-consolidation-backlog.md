@@ -1031,3 +1031,4 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
 ## it.56 — veille (dry well confirmé)
 - [x] Aucun nouveau commit story de l'agent // depuis it.55. `ReaderAudioMixer` audité = mixer AVAudioEngine sample-accurate (host-time anchored, fade-in/out, loop) — mature, bug non prouvable sans profiling audio runtime. Pas de fix.
 - VEILLE : backlog provable autonome épuisé (cf. it.55). Cadence idle allongée (30 min) en attendant input USER (décision C.2/backoff), nouveau commit agent, ou nouvel angle prouvable.
+- [x] it.57 — story REPLY flow audité CLEAN : bouton gated (`!isOwnStory && onReplyToStory != nil`, Sidebar:155) → `onReplyToStory?(.story(...))` (Sidebar:164) → providers réels (RootView:373 dismiss+navigateToStoryReply, ConversationView, iPad, RootViewComponents). Callback bien branché, pas inerte. Aucun bug.
