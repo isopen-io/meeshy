@@ -26,6 +26,7 @@ public enum LanguageData {
         LanguageInfo(code: "it", name: "Italian", nativeName: "Italiano", flag: "\u{1F1EE}\u{1F1F9}", colorHex: "22C55E"),
         LanguageInfo(code: "pt", name: "Portuguese", nativeName: "Português", flag: "\u{1F1E7}\u{1F1F7}", colorHex: "16A34A"),
         LanguageInfo(code: "ro", name: "Romanian", nativeName: "Română", flag: "\u{1F1F7}\u{1F1F4}", colorHex: "2563EB"),
+        LanguageInfo(code: "ca", name: "Catalan", nativeName: "Català", flag: "\u{1F3F4}", colorHex: "EAB308"),
 
         // Germanic
         LanguageInfo(code: "en", name: "English", nativeName: "English", flag: "\u{1F1EC}\u{1F1E7}", colorHex: "6366F1"),
@@ -131,17 +132,47 @@ public enum LanguageData {
     ]
 
     // MARK: - Interface Languages (UI only)
+    //
+    // Single source for the languages offered in the *interface* picker
+    // (Settings, onboarding). Derived from `allLanguages` so every language's
+    // metadata (name, nativeName, flag, color) lives in exactly one place.
+    // Aligned with the web `INTERFACE_LANGUAGES` set + Arabic.
+    // de/it/pt have no localized UI bundle yet and fall back to English UI —
+    // message content stays translated independently via the translation base.
 
-    public static let interfaceLanguages: [LanguageInfo] = [
-        LanguageInfo(code: "fr", name: "French", nativeName: "Français", flag: "\u{1F1EB}\u{1F1F7}", colorHex: "3B82F6"),
-        LanguageInfo(code: "en", name: "English", nativeName: "English", flag: "\u{1F1EC}\u{1F1E7}", colorHex: "6366F1"),
-        LanguageInfo(code: "es", name: "Spanish", nativeName: "Español", flag: "\u{1F1EA}\u{1F1F8}", colorHex: "EF4444"),
-        LanguageInfo(code: "ar", name: "Arabic", nativeName: "\u{0627}\u{0644}\u{0639}\u{0631}\u{0628}\u{064A}\u{0629}", flag: "\u{1F1F8}\u{1F1E6}", colorHex: "15803D"),
-    ]
+    public static let interfaceLanguageCodes: [String] = ["en", "es", "fr", "pt", "de", "it", "ar"]
+
+    public static let interfaceLanguages: [LanguageInfo] =
+        interfaceLanguageCodes.compactMap { code in
+            allLanguages.first(where: { $0.code == code })
+        }
+
+    // MARK: - Quick Translation Languages
+    //
+    // Curated short-list shown in compact translation pickers (e.g. the
+    // composer language pill) — a *view* over the translation base, not a
+    // separate hardcoded list. Use `allLanguages` for the full picker.
+
+    public static let quickTranslationCodes: [String] = ["fr", "en", "es", "de", "it", "pt", "ja", "zh", "ko", "ar"]
+
+    public static let quickTranslationLanguages: [LanguageInfo] =
+        quickTranslationCodes.compactMap { code in
+            allLanguages.first(where: { $0.code == code })
+        }
 
     // MARK: - Lookup
 
+    /// Canonical-code aliases so legacy/BCP-47 spellings resolve to the entry
+    /// in `allLanguages` (e.g. "fil" → "tl" for Filipino).
+    private static let aliases: [String: String] = ["fil": "tl"]
+
     public static func info(for code: String) -> LanguageInfo? {
-        allLanguages.first(where: { $0.code == code })
+        if let direct = allLanguages.first(where: { $0.code == code }) {
+            return direct
+        }
+        if let canonical = aliases[code] {
+            return allLanguages.first(where: { $0.code == canonical })
+        }
+        return nil
     }
 }
