@@ -769,3 +769,24 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
 - CONCLUSION : sous-système story (création + visualisation + publication) MATURE. Bugs provables autonomes
   ÉPUISÉS. Restant = décisions user (sidebar A/B/C overlap) ou confirmation DEVICE (drag-reorder, toggle plein écran).
   Pistes fraîches éventuelles : expiry 24h, repost composer, perf/fluidité affichage, Phase 2 cover baké (viewers).
+
+## it.39 — audit EXPIRY 24h viewer : SOLIDE
+- [x] `StoryItem.isExpired(at:)` (explicit expiresAt <= now, sinon createdAt+24h <= now) — correct, pinné par
+      StoryItemExpirationTests (8 tests).
+- [x] `skipExpiredStoriesIfNeeded` (StoryViewerView:751) : skip forward depuis currentStoryIndex, dismiss si toute
+      la queue restante expirée, re-déclenché sur changement de slide (onChange) → expirées jamais rendues dans le viewer.
+
+## it.40 — fix TRAY : groupes entièrement expirés masqués (PROVABLE, shipped 7935b608c)
+- [x] BUG provable : `toStoryGroups` ne filtre PAS l'expiration + `loadStories` sert le cache `.fresh/.stale`
+      directement (TTL cache > 24h intentionnel) → un groupe dont TOUTES les stories sont expirées (cache cold-start,
+      OU story expirée en cours de session sans re-fetch) restait dans le tray → tap → viewer ouvre+ferme aussitôt
+      (skipExpiredStoriesIfNeeded) = tap-puis-flash. AUCUN filtre expiry au niveau tray.
+- [x] FIX : `StoryGroup.isFullyExpired(at:)` (pur SDK, allSatisfy isExpired, single source of truth) ; tray "others"
+      filtre `!isFullyExpired()` ; MyStoryButton traite un groupe perso 100% expiré comme « pas de story » (bouton +).
+      `storyGroups` intact (indices viewer préservés, filtre display-only) → défense en profondeur avec le viewer.
+      +4 tests (StoryItemExpirationTests : all-expired/latest-active/all-active/empty), 12/12 verts. Build app 42s OK.
+- NOTE incohérence mineure NON corrigée (pas un bug live) : `toStoryGroups` fallback `effectiveExpiresAt` = createdAt+21h
+  alors que `isExpired` interne défaut = +24h. Sans effet (effectiveExpiresAt toujours posé → branche +24h jamais atteinte
+  pour ces items). À surveiller si un jour expiresAt devient nil sur ce chemin.
+- Cible it.41 : repost composer (UnifiedPostComposer story import/repost) OU perf/fluidité affichage — rendements
+  décroissants, rester rigoureux (preuve avant fix). Restant user/device : sidebar A/B/C, drag-reorder, toggle plein écran.
