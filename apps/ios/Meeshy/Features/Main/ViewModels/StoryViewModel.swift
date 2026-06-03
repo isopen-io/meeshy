@@ -1280,10 +1280,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         socialSocket.commentDeleted
             .receive(on: DispatchQueue.main)
             .sink { [weak self] data in
-                guard let self else { return }
-                self.mutateStoryItem(byPostId: data.postId) { item in
-                    item.commentCount = max(0, item.commentCount - 1)
-                }
+                // `commentCount` autoritatif porté par l'event (parité avec commentAdded).
+                // Avant : `-1` local qui dérivait sur events manqués / hors-ordre / doublons,
+                // et asymétrique avec commentAdded (qui utilise déjà data.commentCount).
+                self?.applyStoryCommentCountDelta(postId: data.postId, newCount: data.commentCount)
             }
             .store(in: &cancellables)
 

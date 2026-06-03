@@ -431,6 +431,28 @@ final class StoryViewModelTests: XCTestCase {
                        "le viewCount realtime autoritatif doit être appliqué au temps réel")
     }
 
+    func test_socketCommentDeleted_appliesAuthoritativeCommentCount() async {
+        // comment:deleted porte le commentCount autoritatif (comme comment:added).
+        // Avant le fix, le sink faisait `-1` → dérive sur events manqués/hors-ordre +
+        // asymétrie avec commentAdded. Ici la story a 5 commentaires, l'event annonce 3
+        // (suppression concurrente de 2) → on doit afficher 3, pas 4 (= 5-1).
+        let item = StoryItem(id: "c1", commentCount: 5)
+        let group = makeStoryGroup(userId: "u1", stories: [item])
+        sut.storyGroups = [group]
+
+        sut.subscribeToSocketEvents()
+
+        let event: SocketCommentDeletedData = JSONStub.decode("""
+        {"postId":"c1","commentId":"cm9","commentCount":3}
+        """)
+        mockSocket.commentDeleted.send(event)
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(sut.storyGroups[0].stories[0].commentCount, 3,
+                       "comment:deleted doit appliquer le commentCount autoritatif (pas un -1 qui dérive)")
+    }
+
     // MARK: - Tray re-sort tests (sortStoryGroupsInPlace)
 
     /// Regression for the bug where an existing author posting a new story did
