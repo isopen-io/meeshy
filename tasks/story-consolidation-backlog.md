@@ -1032,3 +1032,21 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
 - [x] Aucun nouveau commit story de l'agent // depuis it.55. `ReaderAudioMixer` audité = mixer AVAudioEngine sample-accurate (host-time anchored, fade-in/out, loop) — mature, bug non prouvable sans profiling audio runtime. Pas de fix.
 - VEILLE : backlog provable autonome épuisé (cf. it.55). Cadence idle allongée (30 min) en attendant input USER (décision C.2/backoff), nouveau commit agent, ou nouvel angle prouvable.
 - [x] it.57 — story REPLY flow audité CLEAN : bouton gated (`!isOwnStory && onReplyToStory != nil`, Sidebar:155) → `onReplyToStory?(.story(...))` (Sidebar:164) → providers réels (RootView:373 dismiss+navigateToStoryReply, ConversationView, iPad, RootViewComponents). Callback bien branché, pas inerte. Aucun bug.
+
+## it.58 — RÉGRESSION PROUVÉE (migration filtre agent //) : scope filtre composite ≠ canvas
+- [!] L'agent // a migré le filtre canvas overlay→bake (commits a4290753b→34c588707, HEAD compile OK — build SDK vert).
+      `StoryBackgroundLayer.swift:146-152` : filtre BAKÉ dans le bitmap de FOND — « Applies to image backgrounds ONLY
+      (text/sticker overlays intentionally NOT filtered — standard photo-filter behaviour) ».
+- [!] MAIS `StorySlideRenderer.renderComposite` step 7 filtre TOUJOURS LE COMPOSITE ENTIER
+      (`applyActiveFilter(to: base)` = bg+texte+fg+stickers+dessin). NON touché par la migration. → cover/thumbHash d'une
+      story vintage/bw montre texte+dessin sépia/mono alors que le live ne filtre QUE le fond. Incohérence cover↔canvas
+      (régression introduite par la migration).
+- AMBIGUÏTÉ : `StoryCanvasUIView` garde encore `captureFilterSourceTexture` / `StoryFilteredLayer` /
+      `_captureFilterSourceForTesting` (chemin overlay whole-canvas) → scope filtre canvas FINAL incertain (bake bg-only
+      ET overlay coexistent ?). Migration possiblement encore en cours.
+- FIX (à COORDONNER avec l'agent, PAS unilatéral mid-migration) : aligner renderComposite sur la sémantique finale — si
+      bg-only, filtrer bgImage/bgMediaImage AVANT de dessiner les overlays (idéalement via `StoryFilterProcessor.apply`
+      = parité exacte canvas), retirer step 7, + RÉÉCRIRE `StorySlideRendererFilterTests` (encodent l'ancienne sémantique
+      whole-composite sur fond COULEUR → un fond couleur ne serait plus filtré). Zone filtre = agent // active → ne pas
+      toucher tant que la migration n'est pas figée.
+- ACTION : surfacé à l'user (régression live sur main issue du travail parallèle).
