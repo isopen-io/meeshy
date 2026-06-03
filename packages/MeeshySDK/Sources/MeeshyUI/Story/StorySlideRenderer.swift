@@ -170,7 +170,12 @@ public enum StorySlideRenderer {
         // projeté par `size.width / 1080` — parité avec le canvas réel (`StoryTextLayer`)
         // et `SlideMiniPreview`. L'ancien diviseur `390` (largeur device) rendait le
         // texte ~2,77× trop gros dans le composite ThumbHash.
-        let fontSize = max(6, size.width * CGFloat(textObj.resolvedSize / Double(CanvasGeometry.designWidth)))
+        // `resolvedSize × scale` = `designFontSize` du canvas (`StoryTextLayer` : `fontSize * scale`).
+        // Le pinch écrit `text.scale` (StoryCanvasUIView.updateScale, 0.3…4.0) — sans le `× scale`
+        // ici, un texte agrandi/réduit au doigt s'affichait à sa taille de BASE dans le cover/thumbHash
+        // (incohérence avec le canvas). Parité avec `drawMediaObject`/`drawSticker` qui appliquent déjà scale.
+        let designFontSize = textObj.resolvedSize * textObj.scale
+        let fontSize = max(6, size.width * CGFloat(designFontSize / Double(CanvasGeometry.designWidth)))
         let textColor = UIColor(hex: textObj.textColor ?? "FFFFFF") ?? .white
 
         let style = NSMutableParagraphStyle()
