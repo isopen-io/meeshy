@@ -57,4 +57,16 @@ final class StoryBackgroundLayerGravityTests: XCTestCase {
             naturalSize: landscape, canvasSize: canvas, override: "fit")
         XCTAssertEqual(g, .resizeAspect)
     }
+
+    // MARK: - Kind.isVisualMedia (fond coloré supprimé ssi fond visuel média)
+
+    func test_kindIsVisualMedia_imageAndVideo_areVisual() {
+        XCTAssertTrue(StoryBackgroundLayer.Kind.image(postMediaId: "p", thumbHash: nil).isVisualMedia)
+        XCTAssertTrue(StoryBackgroundLayer.Kind.video(postMediaId: "p", looping: true, mute: false, thumbHash: nil).isVisualMedia)
+    }
+
+    func test_kindIsVisualMedia_solidAndGradient_areNotVisual() {
+        XCTAssertFalse(StoryBackgroundLayer.Kind.solidColor(.black).isVisualMedia)
+        XCTAssertFalse(StoryBackgroundLayer.Kind.gradient(colors: [.red, .blue], direction: .topToBottom).isVisualMedia)
+    }
 }

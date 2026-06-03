@@ -55,6 +55,18 @@ public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
         case gradient(colors: [UIColor], direction: GradientDirection)
         case image(postMediaId: String, thumbHash: String?)
         case video(postMediaId: String, looping: Bool, mute: Bool, thumbHash: String?)
+
+        /// `true` si le fond est un média VISUEL (image/vidéo) — par opposition à un
+        /// fond coloré (solidColor/gradient). Source de vérité du Prisme visuel : aucun
+        /// fond coloré (ni letterbox colorée) n'est peint quand `isVisualMedia` est vrai,
+        /// le média couvre le canvas (user 2026-06-03). Le fond coloré n'apparaît QUE
+        /// sans média de fond visuel (texte, dessin, foreground media, son).
+        public nonisolated var isVisualMedia: Bool {
+            switch self {
+            case .image, .video: return true
+            case .solidColor, .gradient: return false
+            }
+        }
     }
 
     public enum GradientDirection: Sendable, Equatable {
@@ -114,6 +126,22 @@ public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
     /// d'où le loader infini à 0% sur les stories image (régression du
     /// commit a60f636b5 / 2026-05-20).
     @MainActor public private(set) var hasFinalContentStamped: Bool = false
+
+    /// Fired exactly when the FINAL background image bitmap is stamped (warm hit
+    /// or async download) — NOT for the ThumbHash placeholder. The composer
+    /// canvas uses this to re-apply its CoreImage filter overlay once the real
+    /// photo lands: in `.play` the image loads asynchronously, so the filter
+    /// snapshot taken during the initial layout captured only the blurry
+    /// ThumbHash, and the opaque overlay then covered the loaded photo with that
+    /// placeholder (« le preview affiche le thumbHash, pas l'image » 2026-06-03).
+    @MainActor public var onFinalImageStamped: (() -> Void)?
+
+    /// Marks the final bitmap as stamped and notifies `onFinalImageStamped`.
+    @MainActor
+    private func markFinalContentStamped() {
+        hasFinalContentStamped = true
+        onFinalImageStamped?()
+    }
 
     public override nonisolated init() {
         super.init()
@@ -421,7 +449,7 @@ extension StoryBackgroundLayer {
                         override: self.transform3D.videoFitMode)
                 }
                 hasVisual = true
-                hasFinalContentStamped = true
+                markFinalContentStamped()
             }
 
             // Synchronous thumbHash placeholder (si pas de hit cache chaud).
@@ -479,7 +507,7 @@ extension StoryBackgroundLayer {
                                     override: self?.transform3D.videoFitMode)
                             }
                         }
-                        self?.hasFinalContentStamped = true
+                        self?.markFinalContentStamped()
                         return
                     }
                     // (2) URL directe embarquée, sinon (3) resolver distant.
@@ -511,7 +539,7 @@ extension StoryBackgroundLayer {
                                 override: self?.transform3D.videoFitMode)
                         }
                     }
-                    self?.hasFinalContentStamped = true
+                    self?.markFinalContentStamped()
                 }
                 break
             }

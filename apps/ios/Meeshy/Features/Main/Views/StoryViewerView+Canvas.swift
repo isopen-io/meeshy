@@ -1318,7 +1318,7 @@ struct StoryCardView: View {
     private var currentSlideHasMediaBackground: Bool {
         guard let story = currentStory else { return false }
         return story.toRenderableSlide(preferredLanguages: resolvedViewerLanguageChain)
-            .effects.resolvedBackgroundMedia != nil
+            .effects.hasVisualBackgroundMedia
     }
 
     private var storyBackground: some View {

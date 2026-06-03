@@ -29,10 +29,19 @@ public enum StorySlideRenderer {
             let rect = CGRect(origin: .zero, size: size)
             let cgCtx = ctx.cgContext
 
-            // 1. Background color
-            let bgHex = slide.effects.background ?? "1E1B4B"
-            let bgColor = UIColor(hex: bgHex) ?? .black
-            bgColor.setFill()
+            // 1. Background color — UNIQUEMENT sans fond visuel de fond. Avec un fond
+            // média (image/vidéo via mediaObjects, ou legacy `bgImage`), pas de fond
+            // coloré (user 2026-06-03) : base neutre noire, le média est dessiné par
+            // dessus (étapes 2 / 2b). D'autant plus nécessaire qu'un fond zoomé/pané ne
+            // remplit plus le rect (transform it.50) → la couleur fuirait en bandes.
+            let hasVisualBg = (bgImage != nil) || slide.effects.hasVisualBackgroundMedia
+            if hasVisualBg {
+                UIColor.black.setFill()
+            } else {
+                let bgHex = slide.effects.background ?? "1E1B4B"
+                let bgColor = UIColor(hex: bgHex) ?? .black
+                bgColor.setFill()
+            }
             cgCtx.fill(rect)
 
             // 2. Background image (fill, respecting aspect ratio)

@@ -1315,6 +1315,17 @@ public struct StoryEffects: Codable, Sendable {
         return objects.first(where: { $0.isBackground == true })
     }
 
+    /// `true` quand la slide a un fond VISUEL (média image/vidéo en background).
+    /// Dans ce cas, aucun fond coloré (`background` solidColor/gradient) ne doit être
+    /// peint — le média couvre le canvas (reader, composer, mini-preview, preview).
+    /// Le fond coloré ne s'affiche QUE sans média de fond visuel (texte, dessin,
+    /// foreground media, son). Source de vérité unique du Prisme visuel des stories
+    /// (user 2026-06-03). NB : le fond legacy `StorySlide.mediaURL` est géré au niveau
+    /// `StorySlide`/`StoryRenderer.renderBackground` (cet `effects` ne le porte pas).
+    public var hasVisualBackgroundMedia: Bool {
+        resolvedBackgroundMedia != nil
+    }
+
     /// Retourne tous les media foreground résolus (exclut le background déterminé par `resolvedBackgroundMedia`).
     public var resolvedForegroundMediaObjects: [StoryMediaObject] {
         guard let objects = mediaObjects, !objects.isEmpty else { return [] }

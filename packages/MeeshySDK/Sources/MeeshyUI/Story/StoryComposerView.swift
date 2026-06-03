@@ -1861,8 +1861,15 @@ public struct StoryComposerView: View {
         let current = viewModel.currentEffects
         return StoryEffects(
             background: bgHex,
-            filter: selectedFilter?.rawValue,
-            filterIntensity: selectedFilter != nil ? viewModel.filterIntensity : nil,
+            // Read the filter from `currentEffects` (the authoritative source the
+            // active filter grid writes via `viewModel.applyFilter`), NOT the
+            // View-local `@State selectedFilter` which only the vestigial legacy
+            // picker updates. Reading the stale @State made `buildEffects()`
+            // overwrite the slide's effects with `filter: nil`, so the Play
+            // preview (and publish) lost the effect even though the composer
+            // canvas showed it. Bug « effet pas préservé dans le preview » 2026-06-03.
+            filter: current.filter,
+            filterIntensity: current.filterIntensity,
             stickers: stickerObjects.isEmpty ? nil : stickerObjects.map(\.emoji),
             stickerObjects: stickerObjects.isEmpty ? nil : stickerObjects,
             drawingData: viewModel.drawingData,

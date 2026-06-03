@@ -99,8 +99,12 @@ struct SlideMiniPreview: View {
 
     @ViewBuilder
     private func backgroundLayers(in size: CGSize) -> some View {
-        // Layer 0: Background color
-        if let bg = effects.background {
+        // Layer 0: Background color — UNIQUEMENT sans fond visuel de fond. Avec un
+        // média de fond (image/vidéo) ou un fond legacy `bgImage`, pas de fond coloré
+        // (user 2026-06-03) : base neutre noire, le média couvre par-dessus.
+        if effects.hasVisualBackgroundMedia || bgImage != nil {
+            Color.black
+        } else if let bg = effects.background {
             Color(hex: bg)
         } else {
             Color(hex: "1A1A2E")

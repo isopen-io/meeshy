@@ -533,6 +533,14 @@ public final class StoryCanvasUIView: UIView {
         super.init(frame: .zero)
         layer.addSublayer(rootLayer)
         rootLayer.insertSublayer(backgroundLayer, at: 0)
+        // When the FINAL background image lands (asynchronous in `.play` / reader),
+        // re-apply the CoreImage filter so its overlay reflects the real photo
+        // rather than the ThumbHash placeholder captured during the initial layout.
+        backgroundLayer.onFinalImageStamped = { [weak self] in
+            guard let self else { return }
+            self.cachedFilterSnapshot = nil
+            self.updateFilterLayer()
+        }
         rootLayer.addSublayer(itemsContainer)
         rootLayer.addSublayer(editOverlayLayer)
         editOverlayLayer.zPosition = 10_000  // always on top
@@ -1277,13 +1285,15 @@ public final class StoryCanvasUIView: UIView {
                                        rotation: 0, videoFitMode: videoFitMode)
         }()
         backgroundLayer.frame = CGRect(origin: .zero, size: geometry.renderSize)
-        // Letterbox fill : pour les vidéos/images bg en aspect (paysage), les
-        // bandes laissent voir le `backgroundColor` du StoryBackgroundLayer.
-        // On y peint la couleur de fond de la slide pour éviter les bandes
-        // noires sur du contenu paysage — le user veut préserver le fond
-        // coloré de la story, pas du noir.
+        // Letterbox fill : la couleur de fond de la slide n'habille les bandes QUE
+        // s'il n'y a PAS de média de fond visuel. Avec un fond image/vidéo
+        // (`bgKind.isVisualMedia`), aucune couleur — letterbox neutre (transparente)
+        // → le fond coloré est supprimé dès qu'un visuel de fond existe (user
+        // 2026-06-03, inverse la préférence 2026-05-28). En pratique le média
+        // remplit le canvas (resizeAspectFill par défaut) ; la bande neutre ne
+        // concerne que le mode fit explicite (double-tap auteur).
         let letterboxColor: UIColor? = {
-            guard let hex = slide.effects.background else { return nil }
+            guard !bgKind.isVisualMedia, let hex = slide.effects.background else { return nil }
             return Self.parseBackgroundHex(hex)
         }()
         backgroundLayer.configure(
@@ -1412,6 +1422,19 @@ public final class StoryCanvasUIView: UIView {
         }
     }
 
+    /// Whether the background's visible content is final enough to snapshot for
+    /// the filter overlay. Colour/gradient render synchronously; an image is only
+    /// ready once its FINAL bitmap is stamped (`hasFinalContentStamped`) — not the
+    /// ThumbHash placeholder; a video once its player layer exists. Gating on this
+    /// prevents the overlay from baking (and then showing) the blurry placeholder.
+    private var backgroundContentIsFilterable: Bool {
+        switch backgroundLayer.kind {
+        case .solidColor, .gradient: return true
+        case .image: return backgroundLayer.hasFinalContentStamped
+        case .video: return backgroundLayer.avPlayerLayer != nil
+        }
+    }
+
     /// Inserts, updates, or removes the CoreImage filter overlay driven by
     /// `slide.effects.filter` + `slide.effects.filterIntensity`.
     ///
@@ -1467,6 +1490,20 @@ public final class StoryCanvasUIView: UIView {
         }
         guard let layer = filteredLayer else { return }
         layer.frame = CGRect(origin: .zero, size: renderSize)
+
+        // Don't cover the background with a filtered snapshot until its FINAL
+        // content is on screen. In `.play` the photo loads asynchronously, so a
+        // snapshot taken during the initial layout captures only the blurry
+        // ThumbHash placeholder — and an opaque overlay then HIDES the real photo
+        // once it lands (« le preview affiche le thumbHash, pas l'image »). While
+        // not ready, hide the overlay so the loading background shows through;
+        // `backgroundLayer.onFinalImageStamped` re-runs this method (and
+        // `backgroundDidBecomeReady` covers video) once the real content is stamped.
+        guard backgroundContentIsFilterable else {
+            layer.isHidden = true
+            return
+        }
+        layer.isHidden = false
 
         // The snapshot (rasterised layer tree) depends only on content + size, so
         // recapture it only when those change. Dragging the intensity slider then
