@@ -8,6 +8,13 @@ final class FeedViewModelTests: XCTestCase {
 
     override func setUp() async throws {
         try await super.setUp()
+        // FeedViewModel persists the fetched feed to the process-global
+        // CacheCoordinator.shared.feed via a non-awaited Task.detached
+        // (fetchFeedFromNetwork). A prior test's late .utility save can repopulate
+        // "main-feed" AFTER this invalidate, so loadFeed() would serve a polluted
+        // .fresh cache and skip the API stub. Socket-handler tests therefore seed
+        // with loadFeed(forceRefresh: true) to bypass the cache read entirely; this
+        // invalidate still covers the common (unpolluted) case.
         await CacheCoordinator.shared.feed.invalidate(for: "main-feed")
     }
 
@@ -841,7 +848,7 @@ final class FeedViewModelTests: XCTestCase {
     func test_socketPostCreated_insertsAtIndexZeroAndIncrementsNewPostsCount() async {
         let (sut, api, socket, _) = makeSUT()
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "existing-1")]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         XCTAssertEqual(sut.posts.count, 1)
         XCTAssertEqual(sut.newPostsCount, 0)
@@ -863,7 +870,7 @@ final class FeedViewModelTests: XCTestCase {
     func test_socketPostCreated_deduplicatesExistingPost() async {
         let (sut, api, socket, _) = makeSUT()
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "dup-1")]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         sut.subscribeToSocketEvents()
 
@@ -925,7 +932,7 @@ final class FeedViewModelTests: XCTestCase {
     func test_socketPostDeleted_removesPostFromList() async {
         let (sut, api, socket, _) = makeSUT()
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "delete-me")]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         sut.subscribeToSocketEvents()
 
@@ -944,7 +951,7 @@ final class FeedViewModelTests: XCTestCase {
         let (sut, api, socket, _) = makeSUT()
         let post = Self.makeAPIPost(id: "update-me", content: "Original", likeCount: 5)
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [post]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         // Simulate the user having liked this post locally
         sut.posts[0].isLiked = true
@@ -968,7 +975,7 @@ final class FeedViewModelTests: XCTestCase {
     func test_socketPostLiked_updatesLikeCount() async {
         let (sut, api, socket, _) = makeSUT()
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "liked-post", likeCount: 5)]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         sut.subscribeToSocketEvents()
 
@@ -987,7 +994,7 @@ final class FeedViewModelTests: XCTestCase {
     func test_socketPostUnliked_updatesLikeCount() async {
         let (sut, api, socket, _) = makeSUT()
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "unliked-post", likeCount: 10)]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         sut.subscribeToSocketEvents()
 
@@ -1008,7 +1015,7 @@ final class FeedViewModelTests: XCTestCase {
     func test_socketCommentAdded_updatesCommentCount() async {
         let (sut, api, socket, _) = makeSUT()
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "commented-post", commentCount: 3)]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         sut.subscribeToSocketEvents()
 
@@ -1027,7 +1034,7 @@ final class FeedViewModelTests: XCTestCase {
     func test_socketCommentDeleted_updatesCommentCount() async {
         let (sut, api, socket, _) = makeSUT()
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "comment-del-post", commentCount: 5)]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         sut.subscribeToSocketEvents()
 
@@ -1090,7 +1097,7 @@ final class FeedViewModelTests: XCTestCase {
     func test_socketPostReposted_insertsRepostAndIncrementsNewPostsCount() async {
         let (sut, api, socket, _) = makeSUT()
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "existing")]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         sut.subscribeToSocketEvents()
 
