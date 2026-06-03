@@ -757,3 +757,15 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
       Le halo rend les boutons visibles même en chevauchement → priorité abaissée.
 - [ ] Confirmation DEVICE : drag-reorder des slides + toggle plein écran (carte→plein bord).
 - [ ] Publication (runStoryUpload / TUS / offline queue) — audit reporté d'it.37.
+
+## it.38 — audit PUBLICATION : SOLIDE (aucun bug provable)
+- [x] Gate online/offline au publish (`NetworkMonitor.isOffline` → `StoryPublishQueue.enqueue` sinon `launchUploadTask`).
+- [x] Partial-failure multi-slides : `publishedPostIds` accumulés sur `activeUpload` → `alreadyPublishedCount`
+      skip au retry (pas de doublon). `cancelUpload` SUPPRIME les slides orphelins déjà commit (Task.detached).
+- [x] Auto-retry sur reconnexion socket (observeReconnectionForRetry : removeDuplicates+dropFirst+filter, délai
+      2s de stabilisation, guard `.failed` → pas de double-fire) + retry manuel via bannière. `retryUpload` relit
+      `activeUpload` (publishedPostIds à jour). Temp files gardés on-failure (le retry les réutilise).
+- [x] TUS within-slide : un upload média qui throw → la slide n'atteint pas createStory → non publiée → reprise au retry.
+- CONCLUSION : sous-système story (création + visualisation + publication) MATURE. Bugs provables autonomes
+  ÉPUISÉS. Restant = décisions user (sidebar A/B/C overlap) ou confirmation DEVICE (drag-reorder, toggle plein écran).
+  Pistes fraîches éventuelles : expiry 24h, repost composer, perf/fluidité affichage, Phase 2 cover baké (viewers).
