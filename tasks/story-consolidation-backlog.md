@@ -973,6 +973,18 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
 - Cible it.53 : StoryService decode (robustesse parsing) OU StatusEntry (moods expiry/realtime) OU comment count realtime
       OU aspectFill caveat non-9:16. Rendements TRÈS décroissants (story subsystem très mature, it.40-52). Preuve avant fix.
 
+## it.53 — fix comment:deleted drift commentCount (PROVABLE, shipped 582b6cd81)
+- [x] BUG (it.52-class) : sink `commentDeleted` faisait `item.commentCount = max(0, commentCount - 1)`, ignorant le
+      `commentCount` autoritatif porté par `SocketCommentDeletedData.commentCount` — alors que `commentAdded` l'utilise
+      déjà (asymétrie). Le `-1` dérive sur events manqués / hors-ordre / doublons.
+- [x] FIX : routé via `applyStoryCommentCountDelta(postId:newCount: data.commentCount)` — symétrique commentAdded, total
+      serveur drift-free. +1 test (commentCount 5 + event=3 → 3, pas 4). StoryViewModelTests 55/55 verts.
+- [x] Finding 2 NON-BUG : `applyPostReactionDelta` utilise un delta ±1 ; l'event `SocketPostReactionUpdateEvent` porte
+      une `aggregation` PAR-EMOJI (pas un total story) → delta correct. Le total autoritatif vit sur `postReactionSync`
+      (totalCount + userReactions), déjà appliqué par son sink. Pas de changement.
+- Cible it.54 : storyReacted/storyUnreacted (porte-t-il un count autoritatif ignoré ?) OU StoryService decode
+      (robustesse parsing) OU StatusEntry. Rendements TRÈS décroissants. Preuve avant fix.
+
 ## EN ATTENTE USER (décisions produit — ne pas fixer en autonomie)
 - ~~Sidebar A/B/C overlap (carte reader)~~ → RÉSOLU 2026-06-03 : **option C retenue** (chevauchement accepté,
   le halo sombre it.37 assure la lisibilité, story reste grande). AUCUN changement code — état actuel = voulu.
