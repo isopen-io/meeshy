@@ -726,3 +726,17 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
           translucide (Instagram-like). → choix user + itération visuelle (verif flaky en simu).
 - [ ] Confirmation DEVICE toggle plein écran (carte→plein bord).
 - [ ] Ops multi-slides (add/delete/reorder/duplicate) + sync thumbHash/index.
+
+## it.36 — audit ops multi-slides : WIRED ops SOLIDES, moveSlide NON BRANCHÉ
+- [x] add/delete/duplicate VÉRIFIÉS solides : nettoyage des side-caches (slideImages/loadedImages/loadedVideoURLs/
+      loadedAudioURLs/mediaAspectRatios/zIndexMap/backgroundTransformCache) + ajustement `currentSlideIndex`
+      (decrement si index<current, clamp) + re-keying complet au duplicate. 31 tests verts
+      (DuplicateSlideTests 26 + ComposerViewModelTests 5). Mini-preview réactive + thumbHash au publish → sync OK.
+- [ ] **moveSlide NON BRANCHÉ** (feature non branché — directive) : impl existe (StoryComposerViewModel:976) mais
+      ZÉRO call site, AUCUN test. Reorder de slides pas câblé à l'UI (le strip de vignettes n'offre que
+      add/delete/duplicate via menu contextuel). + bug latent : guard `destination < slides.count` rejette le
+      move-to-end ; remove+insert ambigu vs convention SwiftUI `.onMove` (offset post-suppression).
+      DÉCISION PRODUIT : (A) câbler un reorder UI (drag/.onMove sur le strip → moveSlide, corriger la convention,
+      vérif visuelle) OU (B) supprimer moveSlide (code mort — touche protocol + MockStoryComposerViewModel).
+- NOTE : sous-système story largement sain. Restant = décisions user (sidebar A/B/C, moveSlide A/B) ou vérif
+  visuelle flaky (toggle plein écran device). Bugs provables autonomes ~épuisés côté story.
