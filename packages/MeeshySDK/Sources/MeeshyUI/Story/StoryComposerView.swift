@@ -1285,7 +1285,12 @@ public struct StoryComposerView: View {
                 state: canvasIsCarded ? .carded : .free,
                 cardedCornerRadius: 22))
             let fit = CanvasGeometry.aspectFitSize(in: proxy.size)
-            canvasCore
+            // Rayon compensé par `framing.scale` : la carte est rendue à sa taille
+            // intrinsèque `fit` PUIS réduite par `.scaleEffect(framing.scale)`, donc
+            // un rayon UIKit de `cornerRadius / scale` atterrit à ~22pt à l'écran.
+            // La rondeur doit vivre sur le layer UIKit : le `.clipShape` SwiftUI
+            // ci-dessous ne masque pas l'arbre CALayer embarqué.
+            canvasCore(cornerRadius: framing.scale > 0 ? framing.cornerRadius / framing.scale : 0)
                 .frame(width: fit.width, height: fit.height)
                 .scaleEffect(viewModel.canvasScale * viewportPinchDelta)
                 .offset(
@@ -1406,7 +1411,7 @@ public struct StoryComposerView: View {
     }
 
     @ViewBuilder
-    private var canvasCore: some View {
+    private func canvasCore(cornerRadius: CGFloat) -> some View {
         StoryComposerCanvasView(
             slide: $viewModel.currentSlide,
             onItemTapped: { id, kind in
@@ -1527,7 +1532,8 @@ public struct StoryComposerView: View {
             // La version sert de cookie au Coordinator pour ne déclencher
             // un rebuild qu'aux mutations utiles.
             loadedImages: viewModel.loadedImages,
-            loadedImagesVersion: viewModel.loadedImagesVersion
+            loadedImagesVersion: viewModel.loadedImagesVersion,
+            canvasCornerRadius: cornerRadius
         )
         .allowsHitTesting(!viewModel.isDrawingActive)
         .overlay {

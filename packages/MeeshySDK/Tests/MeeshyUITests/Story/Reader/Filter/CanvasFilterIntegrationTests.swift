@@ -6,76 +6,54 @@ import XCTest
 final class CanvasFilterIntegrationTests: XCTestCase {
 
     // NB: `effects.filter` stores the **`StoryFilter` rawValue** ("vintage", "bw", …)
-    // — that's what the filter grid persists (`applyFilter(filter.rawValue)`). It is
-    // NOT the Metal kernel function name ("vintageFilter"). These tests therefore use
-    // the production vocabulary; an earlier version used "vintageFilter" and so never
-    // exercised the real path, masking the namespace mismatch that left filters dead
-    // on the canvas/viewer (fix 2026-06-01).
-    func test_canvas_addsFilteredLayer_whenEffectsFilterSet() {
+    // — that's what the filter grid persists (`applyFilter(filter.rawValue)`).
+    //
+    // Since 2026-06-03 ALL eight filters render on the canvas via CoreImage
+    // (`StoryFilterProcessor`) instead of only the two that shipped a Metal kernel.
+    // The overlay is a plain `CALayer` whose `contents` is the filtered full-canvas
+    // snapshot, so every effect both renders AND covers the whole story.
+
+    private let canvasSize = CGSize(width: 412, height: 732)
+
+    private func makeView(filter: StoryFilter?, intensity: Double? = nil) -> StoryCanvasUIView {
         var effects = StoryEffects()
-        effects.filter = StoryFilter.vintage.rawValue   // "vintage"
-        effects.filterIntensity = 0.7
+        effects.filter = filter?.rawValue
+        effects.filterIntensity = intensity
         let slide = StorySlide(id: "s", effects: effects)
         let view = StoryCanvasUIView(slide: slide, mode: .play)
-        view.frame = CGRect(x: 0, y: 0, width: 412, height: 732)
+        view.frame = CGRect(origin: .zero, size: canvasSize)
         view.layoutIfNeeded()
-
-        let filtered = findFilteredLayer(in: view.layer)
-        XCTAssertNotNil(filtered)
-        XCTAssertEqual(filtered?.kind, .vintage)
-        XCTAssertEqual(filtered?.intensity ?? 0, 0.7, accuracy: 1e-3)
+        return view
     }
 
-    func test_canvas_addsBwContrastLayer_whenFilterIsBw() {
-        var effects = StoryEffects()
-        effects.filter = StoryFilter.bw.rawValue   // "bw" → bwContrast kernel
-        let slide = StorySlide(id: "s", effects: effects)
-        let view = StoryCanvasUIView(slide: slide, mode: .play)
-        view.frame = CGRect(x: 0, y: 0, width: 412, height: 732)
-        view.layoutIfNeeded()
-
-        let filtered = findFilteredLayer(in: view.layer)
-        XCTAssertNotNil(filtered)
-        XCTAssertEqual(filtered?.kind, .bwContrast)
+    /// Every `StoryFilter` (including warm/cool/dramatic/vivid/fade/chrome which
+    /// had no Metal kernel) must attach a filter overlay that spans the whole
+    /// canvas — the regression was that six of eight rendered nothing and the two
+    /// that did only covered the top-left quadrant.
+    func test_canvas_addsFullCanvasOverlay_forEveryStoryFilter() {
+        for filter in StoryFilter.allCases {
+            let view = makeView(filter: filter, intensity: 0.7)
+            let overlay = view._filteredLayerForTesting
+            XCTAssertNotNil(overlay, "Filter \(filter.rawValue) must attach a filter overlay layer")
+            XCTAssertEqual(overlay?.frame, CGRect(origin: .zero, size: canvasSize),
+                           "Filter overlay for \(filter.rawValue) must cover the full canvas")
+        }
     }
 
-    func test_canvas_noFilteredLayer_forKernellessFilter() {
-        // warm/cool/dramatic/vivid/fade/chrome have no bundled Metal kernel yet, so
-        // the canvas must add no filter layer (rather than crash or pick a wrong kernel).
-        var effects = StoryEffects()
-        effects.filter = StoryFilter.warm.rawValue
-        let slide = StorySlide(id: "s", effects: effects)
-        let view = StoryCanvasUIView(slide: slide, mode: .play)
-        view.frame = CGRect(x: 0, y: 0, width: 412, height: 732)
-        view.layoutIfNeeded()
-
-        XCTAssertNil(findFilteredLayer(in: view.layer))
+    func test_canvas_noFilteredLayer_whenFilterUnset() {
+        let view = makeView(filter: nil)
+        XCTAssertNil(view._filteredLayerForTesting)
     }
 
     func test_canvas_removesFilteredLayer_whenEffectsFilterCleared() {
-        var effects = StoryEffects()
-        effects.filter = StoryFilter.vintage.rawValue
-        let slide = StorySlide(id: "s", effects: effects)
-        let view = StoryCanvasUIView(slide: slide, mode: .play)
-        view.frame = CGRect(x: 0, y: 0, width: 412, height: 732)
-        view.layoutIfNeeded()
+        let view = makeView(filter: .vintage)
+        XCTAssertNotNil(view._filteredLayerForTesting)
 
         var clearedEffects = StoryEffects()
         clearedEffects.filter = nil
         view.slide = StorySlide(id: "s", effects: clearedEffects)
         view.layoutIfNeeded()
 
-        let filtered = findFilteredLayer(in: view.layer)
-        XCTAssertNil(filtered)
-    }
-
-    // MARK: - Helpers
-
-    private func findFilteredLayer(in root: CALayer) -> StoryFilteredLayer? {
-        if let f = root as? StoryFilteredLayer { return f }
-        for sub in (root.sublayers ?? []) {
-            if let found = findFilteredLayer(in: sub) { return found }
-        }
-        return nil
+        XCTAssertNil(view._filteredLayerForTesting)
     }
 }

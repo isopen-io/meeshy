@@ -46,29 +46,24 @@ final class StoryCanvasUIView_FilterTextureCaptureTests: XCTestCase {
 
     // MARK: - sourceTexture assignment
 
-    func test_updateFilterLayer_assignsNonNilSourceTexture() throws {
+    func test_updateFilterLayer_attachesOverlayWithFilteredContents() throws {
         let view = makeView(filter: "vintage", intensity: 0.7)
 
         let filtered = try XCTUnwrap(view._filteredLayerForTesting,
                                      "Filter overlay must be attached when slide.effects.filter is set")
-        let source = try XCTUnwrap(filtered.sourceTexture,
-                                   "sourceTexture MUST be assigned after rebuildLayers() — without it the Metal kernel silently produces a no-op frame")
-
-        XCTAssertGreaterThan(source.width, 0)
-        XCTAssertGreaterThan(source.height, 0)
+        XCTAssertNotNil(filtered.contents,
+                        "The filtered full-canvas snapshot must be baked into the overlay's contents")
     }
 
-    func test_updateFilterLayer_textureDimensionsMatchCanvasSize() throws {
+    func test_updateFilterLayer_overlayCoversFullCanvas() throws {
         let view = makeView(filter: "bw")
 
         let filtered = try XCTUnwrap(view._filteredLayerForTesting)
-        let source = try XCTUnwrap(filtered.sourceTexture)
-
-        // CARenderer target is allocated against the integer-rounded render
-        // size — the same rounding the production capture helper applies — so
-        // a 412x732 canvas must yield a 412x732 source texture.
-        XCTAssertEqual(source.width, Int(canvasSize.width.rounded()))
-        XCTAssertEqual(source.height, Int(canvasSize.height.rounded()))
+        // The CoreImage overlay spans the WHOLE canvas. The old Metal path only
+        // filtered the top-left because the kernel dispatch grid was sized in
+        // points while the drawable was in pixels — a full-bounds frame is the
+        // coverage guarantee that fixed « l'effet ne s'applique pas sur toute la story ».
+        XCTAssertEqual(filtered.frame, CGRect(origin: .zero, size: canvasSize))
     }
 
     func test_updateFilterLayer_skippedWhenNoFilter() {
@@ -89,7 +84,7 @@ final class StoryCanvasUIView_FilterTextureCaptureTests: XCTestCase {
         let view = StoryCanvasUIView(slide: slide, mode: .edit)
         view.frame = CGRect(origin: .zero, size: canvasSize)
         view.layoutIfNeeded()
-        _ = try XCTUnwrap(view._filteredLayerForTesting?.sourceTexture)
+        _ = try XCTUnwrap(view._filteredLayerForTesting?.contents)
 
         // Remove the filter and re-layout — overlay must vanish, no leak.
         var cleared = StoryEffects()
@@ -155,9 +150,8 @@ final class StoryCanvasUIView_FilterTextureCaptureTests: XCTestCase {
         view.frame = CGRect(origin: .zero, size: canvasSize)
         view.layoutIfNeeded()
 
-        let filtered = try XCTUnwrap(view._filteredLayerForTesting)
-        let source = try XCTUnwrap(filtered.sourceTexture,
-                                   "Source texture must be populated before we sample it")
+        let source = try XCTUnwrap(view._captureFilterSourceForTesting(renderSize: canvasSize),
+                                   "Capture helper must produce a populated source texture before we sample it")
 
         // Read back a single texel near the canvas centre. A non-zero alpha
         // proves that CARenderer wrote actual pixels into the texture — i.e.

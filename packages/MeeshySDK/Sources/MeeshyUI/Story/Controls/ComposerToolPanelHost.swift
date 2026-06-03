@@ -201,7 +201,11 @@ struct ComposerToolPanelHost: View {
         case .texture:
             texturePanel
         case .filters:
-            StoryFilterGridView(viewModel: viewModel, previewImage: nil)
+            // Feed the grid the current slide's base image so each tile renders
+            // a real per-effect preview (the grid falls back to flat gradients
+            // when this is nil). The image is already in memory on the VM.
+            StoryFilterGridView(viewModel: viewModel,
+                                previewImage: viewModel.slideImages[viewModel.currentSlide.id])
         case .timeline:
             EmptyView()
         }

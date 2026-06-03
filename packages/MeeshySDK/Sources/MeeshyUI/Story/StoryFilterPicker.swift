@@ -165,12 +165,22 @@ public nonisolated struct StoryFilterProcessor {
     nonisolated(unsafe) private static let context = CIContext()
     nonisolated(unsafe) private static let cache = NSCache<NSString, UIImage>()
 
-    public static func apply(_ filter: StoryFilter?, to image: UIImage, imageId: String? = nil) -> UIImage {
+    /// Applies `filter` to `image` at `intensity` (0…1). This is the SINGLE
+    /// source of truth for the story filter look — shared by the composer
+    /// canvas (`StoryCanvasUIView.updateFilterLayer`), the filter grid tiles and
+    /// the legacy picker — so what the tile previews is exactly what the canvas
+    /// renders. Intensity blends the fully-filtered image back toward the
+    /// original via a dissolve, so the slider behaves identically for all eight
+    /// effects (default `1.0` = full effect, preserving prior callers).
+    public static func apply(_ filter: StoryFilter?, to image: UIImage,
+                             imageId: String? = nil, intensity: Float = 1.0) -> UIImage {
         guard let filter = filter, let ciImage = CIImage(image: image) else { return image }
+        let clamped = max(0, min(1, intensity))
 
-        // Cache lookup — use caller-provided imageId (slide ID) or fallback to dimensions
+        // Cache lookup — use caller-provided imageId (slide ID) or fallback to dimensions.
+        // Intensity is part of the key so a slider drag doesn't serve a stale look.
         let id = imageId ?? "\(Int(image.size.width))x\(Int(image.size.height))_\(image.cgImage?.bytesPerRow ?? 0)"
-        let cacheKey = "\(id)_\(filter.rawValue)" as NSString
+        let cacheKey = "\(id)_\(filter.rawValue)_\(Int((clamped * 100).rounded()))" as NSString
         if let cached = cache.object(forKey: cacheKey) { return cached }
 
         let output: CIImage?
@@ -212,8 +222,19 @@ public nonisolated struct StoryFilterProcessor {
             output = f?.outputImage
         }
 
-        guard let outputImage = output,
-              let cgImage = context.createCGImage(outputImage, from: outputImage.extent) else {
+        guard let fullyFiltered = output else { return image }
+        // Blend the full effect back toward the original by `intensity` so the
+        // slider is meaningful for every filter (including the fixed-recipe
+        // PhotoEffect ones). `dissolveTransition.time` 0 = original, 1 = filtered.
+        let finalImage: CIImage = {
+            if clamped >= 0.999 { return fullyFiltered }
+            let dissolve = CIFilter.dissolveTransition()
+            dissolve.inputImage = ciImage
+            dissolve.targetImage = fullyFiltered.cropped(to: ciImage.extent)
+            dissolve.time = clamped
+            return dissolve.outputImage ?? fullyFiltered
+        }()
+        guard let cgImage = context.createCGImage(finalImage, from: ciImage.extent) else {
             return image
         }
         let result = UIImage(cgImage: cgImage, scale: image.scale, orientation: image.imageOrientation)

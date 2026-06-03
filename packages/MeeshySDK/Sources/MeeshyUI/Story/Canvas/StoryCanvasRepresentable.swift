@@ -67,6 +67,12 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// décider si un rebuild canvas est nécessaire (les dicts UIImage ne sont
     /// pas Equatable).
     public var loadedImagesVersion: UInt64 = 0
+    /// Corner radius applied to the embedded `StoryCanvasUIView`'s backing layer
+    /// so the rounded « card » actually clips the CALayer story content. A
+    /// SwiftUI `.clipShape` on this representable cannot round the embedded
+    /// UIKit CALayer tree, so the radius is plumbed down to the UIView. The
+    /// composer passes a scale-compensated value (see `canvasComposerLayer`).
+    public var canvasCornerRadius: CGFloat = 0
 
     public init(slide: Binding<StorySlide>,
                 onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
@@ -81,7 +87,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 onBackgroundTransformChanged: ((StoryBackgroundTransform) -> Void)? = nil,
                 isDrawingOverlayActive: Bool = false,
                 loadedImages: [String: UIImage] = [:],
-                loadedImagesVersion: UInt64 = 0) {
+                loadedImagesVersion: UInt64 = 0,
+                canvasCornerRadius: CGFloat = 0) {
         self._slide = slide
         self.onItemTapped = onItemTapped
         self.onItemDoubleTapped = onItemDoubleTapped
@@ -96,6 +103,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         self.isDrawingOverlayActive = isDrawingOverlayActive
         self.loadedImages = loadedImages
         self.loadedImagesVersion = loadedImagesVersion
+        self.canvasCornerRadius = canvasCornerRadius
     }
 
     public final class Coordinator {
@@ -119,6 +127,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         view.onBackgroundTapped = onBackgroundTapped
         view.onBackgroundTransformChanged = onBackgroundTransformChanged
         view.isDrawingOverlayActive = isDrawingOverlayActive
+        view.canvasCornerRadius = canvasCornerRadius
         // Wire le pont ImageCacheReader dès la première frame pour que le
         // `StoryRenderer.render(...)` initial (déclenché par le slide.didSet
         // du init StoryCanvasUIView) puisse déjà résoudre les bitmaps
@@ -148,6 +157,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         uiView.onBackgroundTapped = onBackgroundTapped
         uiView.onBackgroundTransformChanged = onBackgroundTransformChanged
         uiView.isDrawingOverlayActive = isDrawingOverlayActive
+        uiView.canvasCornerRadius = canvasCornerRadius
 
         // Bridge des bitmaps édités/foreground du composer vers
         // `StoryCanvasUIView.readerContext.imageCache`. On reconstruit le
