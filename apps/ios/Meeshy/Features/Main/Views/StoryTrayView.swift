@@ -148,7 +148,7 @@ struct StoryTrayView: View {
                 myStoryButton
                     .bounceOnAppear(delay: 0)
 
-                ForEach(Array(viewModel.storyGroups.filter { $0.id != currentUserId }.enumerated()), id: \.element.id) { visibleIndex, group in
+                ForEach(Array(viewModel.storyGroups.filter { $0.id != currentUserId && !$0.isFullyExpired() }.enumerated()), id: \.element.id) { visibleIndex, group in
                     Group {
                         if visibleIndex < staggerCap {
                             storyRing(group: group, userId: group.id)
@@ -278,7 +278,10 @@ private struct MyStoryButton: View {
     var body: some View {
         let currentUser = AuthManager.shared.currentUser
         let userId = currentUser?.id ?? ""
-        let myGroup = viewModel.storyGroupForUser(userId: userId)
+        // Un groupe entièrement expiré est traité comme « pas de story » : on
+        // affiche le bouton d'ajout, jamais un anneau dont le viewer se fermerait
+        // aussitôt (`skipExpiredStoriesIfNeeded`). Cohérent avec le filtre du tray.
+        let myGroup = viewModel.storyGroupForUser(userId: userId).flatMap { $0.isFullyExpired() ? nil : $0 }
         let hasMyStory = myGroup != nil
         let userName = currentUser?.displayName ?? currentUser?.username ?? "Moi"
         let accentColor = DynamicColorGenerator.colorForName(currentUser?.username ?? "")

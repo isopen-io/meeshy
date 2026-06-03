@@ -1620,6 +1620,16 @@ public struct StoryGroup: Identifiable, Codable, Sendable, CacheIdentifiable {
     public var hasUnviewed: Bool { stories.contains { !$0.isViewed } }
     public var latestStory: StoryItem? { stories.last }
 
+    /// `true` quand TOUTES les stories du groupe sont expirées (ou le groupe est
+    /// vide). Le tray (app) filtre ces groupes : sans ce filtre, une vignette de
+    /// groupe entièrement expiré (cache TTL > 24h, ou story expirée en cours de
+    /// session sans re-fetch) ouvre puis ferme instantanément le viewer via
+    /// `skipExpiredStoriesIfNeeded` (tap-puis-flash). Pur + testable via `now`
+    /// explicite. Source de vérité d'expiration : `StoryItem.isExpired(at:)`.
+    public func isFullyExpired(at now: Date = Date()) -> Bool {
+        stories.allSatisfy { $0.isExpired(at: now) }
+    }
+
     public init(id: String, username: String, avatarColor: String, avatarURL: String? = nil, stories: [StoryItem]) {
         self.id = id; self.username = username; self.avatarColor = avatarColor; self.avatarURL = avatarURL; self.stories = stories
     }
