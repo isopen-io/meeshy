@@ -61,13 +61,23 @@ export interface ChatRoom {
 // ===== CONSTANTES FRONTEND =====
 
 /**
- * Langues d'interface supportées (avec traductions complètes dans /apps/web/locales/)
- * IMPORTANT: Cette liste doit correspondre exactement aux dossiers dans /apps/web/locales/
- * Ne jamais ajouter de langue ici sans avoir les fichiers de traduction complets dans locales/
+ * Langues d'interface proposées dans le sélecteur de langue.
+ *
+ * en / es / fr / pt disposent de bundles de traduction complets dans
+ * /apps/web/locales/. de / it sont proposées comme langues d'interface mais
+ * n'ont pas encore de bundle : `useTranslation` (hooks/use-i18n.ts) retombe
+ * gracieusement sur la `fallbackLocale` ('en') pour leurs namespaces manquants,
+ * donc l'UI s'affiche en anglais en attendant les fichiers locales/de & locales/it.
+ * Le contenu des messages reste traduit via NLLB indépendamment de l'UI.
+ *
+ * En ajoutant les bundles locales/de et locales/it, aucune autre modification
+ * n'est nécessaire ici — l'entrée existe déjà.
  */
 export const INTERFACE_LANGUAGES: LanguageCode[] = [
   { code: 'en', name: 'English', flag: '🇺🇸', translateText: 'Translate to English' },
   { code: 'es', name: 'Español', flag: '🇪🇸', translateText: 'Traducir al español' },
   { code: 'fr', name: 'Français', flag: '🇫🇷', translateText: 'Traduire en français' },
   { code: 'pt', name: 'Português', flag: '🇵🇹', translateText: 'Traduzir para português' },
+  { code: 'de', name: 'Deutsch', flag: '🇩🇪', translateText: 'Auf Deutsch übersetzen' },
+  { code: 'it', name: 'Italiano', flag: '🇮🇹', translateText: 'Traduci in italiano' },
 ];

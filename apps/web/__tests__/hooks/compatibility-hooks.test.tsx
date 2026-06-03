@@ -17,13 +17,14 @@ jest.mock('@/stores', () => ({
 }));
 
 describe('useLanguage().getSupportedLanguages', () => {
-  it('returns the interface languages that have complete translation bundles', () => {
+  it('returns every interface language offered in the picker', () => {
     const { result } = renderHook(() => useLanguage());
 
     const codes = result.current.getSupportedLanguages().map((l) => l.code);
 
-    // en, es, fr, pt all ship full locale bundles today (de/it do not).
-    expect(codes).toEqual(['en', 'es', 'fr', 'pt']);
+    // en/es/fr/pt ship full locale bundles; de/it are offered and fall back to
+    // English UI until their bundles land (content stays NLLB-translated).
+    expect(codes).toEqual(['en', 'es', 'fr', 'pt', 'de', 'it']);
   });
 
   it('stays in sync with the canonical INTERFACE_LANGUAGES source', () => {

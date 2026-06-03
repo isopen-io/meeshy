@@ -37,9 +37,9 @@ export function useLanguage() {
     setCustomDestinationLanguage,
     setInterfaceLanguage,
     isLanguageSupported,
-    // Interface languages with complete translation bundles. Sourced from the
+    // Interface languages offered in the language picker. Sourced from the
     // canonical INTERFACE_LANGUAGES (same source the language store uses), so
-    // this stays in sync as locale bundles are added (en, es, fr, pt today).
+    // this stays in sync as languages are added (en, es, fr, pt, de, it).
     getSupportedLanguages: () =>
       INTERFACE_LANGUAGES.map(({ code, name }) => ({
         code,
