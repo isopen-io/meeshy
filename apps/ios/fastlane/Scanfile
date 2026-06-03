@@ -14,7 +14,10 @@ devices([
 
 # Test Configuration
 configuration("Debug")
-clean(true)
+# clean(false): a combined `clean build test` xcodebuild pass corrupts the Swift
+# const-extraction protocol list (App Intents) → "Corrupted JSON" build failure.
+# Keep clean and build in separate invocations (run `fastlane clean` when needed).
+clean(false)
 code_coverage(true)
 
 # Output
