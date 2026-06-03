@@ -790,3 +790,18 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
   pour ces items). À surveiller si un jour expiresAt devient nil sur ce chemin.
 - Cible it.41 : repost composer (UnifiedPostComposer story import/repost) OU perf/fluidité affichage — rendements
   décroissants, rester rigoureux (preuve avant fix). Restant user/device : sidebar A/B/C, drag-reorder, toggle plein écran.
+
+## it.41 — fix REPOST-of-REPOST : badges d'attribution empilés (PROVABLE, shipped ba25f5bf4)
+- [x] BUG provable : `StoryComposerViewModel(reposting:authorHandle:)` cloné `story.storyEffects` puis APPENDait un
+      badge locked "Reposté de @X" sans strip. Or `sanitizedForServerPublish` ne strip QUE les `file://` mediaURLs
+      (pas les text objects locked) → le badge est persisté en base et réimporté tel quel. Reposter un repost
+      (Alice→Bob→Charlie) empilait donc 2 badges locked au même point (x:0.5, y:0.92) = chevauchement / incohérence compo.
+- [x] FIX : filtre `effects.textObjects.filter { $0.isLocked != true }` avant d'append. Sûr car `isLocked: true`
+      n'a qu'UN site producteur (ce badge) → texte éditable de l'auteur préservé. Racine tracée via `originalRepostOfId`.
+      Badge attribue à la source immédiate (`authorHandle`). +2 tests (no-stacking + préservation texte éditable), 7/7 verts.
+      Build app 11s OK.
+- AUDIT repost (C.1 repost-as-story / C.2 edit-repost-as-post / direct) globalement sain : root-flatten IDs corrects
+  (repostOfId=immédiat, originalRepostOfId=racine), preload média 3-tier cancellable, deinit annule la Task.
+  NOTE lossy connue (documentée) : repost-as-story ne clone QUE la slide active (multi-slide source → 1 slide) — choix produit assumé.
+- Cible it.42 : perf/fluidité affichage (prefetch média tray, re-renders, ThumbHash) OU UnifiedPostComposer import path (C.2).
+  Rendements décroissants — preuve avant fix. Restant user/device inchangé.
