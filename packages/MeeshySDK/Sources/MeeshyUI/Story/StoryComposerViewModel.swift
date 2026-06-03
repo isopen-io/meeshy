@@ -1705,7 +1705,14 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
             isLocked: true
         )
         var effects = cloned.effects
-        var texts = effects.textObjects
+        // Strip toute attribution verrouillée héritée de la source avant d'ajouter
+        // la nôtre : reposter un repost empilerait sinon deux badges locked qui se
+        // chevauchent au même point (x:0.5, y:0.92). Les text objects locked sont
+        // EXCLUSIVEMENT des badges d'attribution (ce site est l'unique producteur de
+        // `isLocked: true`), donc ce filtre ne touche jamais le texte éditable de
+        // l'auteur. Le nouveau badge attribue à la source immédiate (`authorHandle`) ;
+        // la racine reste tracée via `originalRepostOfId`.
+        var texts = effects.textObjects.filter { $0.isLocked != true }
         texts.append(badge)
         effects.textObjects = texts
         cloned.effects = effects
