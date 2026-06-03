@@ -384,6 +384,32 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertEqual(sut.storyGroups[0].stories.count, 1, "Duplicate story should not be added")
     }
 
+    // MARK: - socket storyUpdated tests
+
+    func test_socketStoryUpdated_preservesLocalViewedState() async {
+        // Local-first : la story s1 a été vue localement (markViewed optimiste,
+        // fire-and-forget). Un event story:updated (ex: bump de reactionCount)
+        // arrive avec isViewedByMe absent (→ false, serveur pas encore synchronisé).
+        // L'anneau « vu » ne doit PAS reverter — viewed est monotone.
+        let viewed = makeStoryItem(id: "s1", isViewed: true)
+        let group = makeStoryGroup(userId: "u1", username: "alice", stories: [viewed])
+        sut.storyGroups = [group]
+
+        sut.subscribeToSocketEvents()
+
+        let event: SocketStoryUpdatedData = JSONStub.decode("""
+        {"story":{"id":"s1","type":"STORY","content":"reaction bump","createdAt":"2026-01-15T12:00:00.000Z","author":{"id":"u1","username":"alice"}}}
+        """)
+        mockSocket.storyUpdated.send(event)
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertTrue(
+            sut.storyGroups[0].stories[0].isViewed,
+            "story:updated avec isViewedByMe stale ne doit pas reverter l'état vu local (monotone)"
+        )
+    }
+
     // MARK: - Tray re-sort tests (sortStoryGroupsInPlace)
 
     /// Regression for the bug where an existing author posting a new story did

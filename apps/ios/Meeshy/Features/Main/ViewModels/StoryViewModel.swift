@@ -1193,7 +1193,17 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     var stories = self.storyGroups[groupIdx].stories
                     for newStory in updatedGroup.stories {
                         if let storyIdx = stories.firstIndex(where: { $0.id == newStory.id }) {
-                            stories[storyIdx] = newStory
+                            var replacement = newStory
+                            // Local-first : `isViewed` est posé en optimiste par markViewed
+                            // (fire-and-forget) ; le serveur peut lagger → un `isViewedByMe`
+                            // stale dans story:updated reverterait l'anneau en « non-vu ».
+                            // Viewed est MONOTONE (une fois vu, reste vu). Même garde que
+                            // fetchStoriesFromNetwork (buildLocallyViewedSet) appliquée ici
+                            // au chemin socket pour éviter la divergence REST/temps-réel.
+                            if stories[storyIdx].isViewed && !replacement.isViewed {
+                                replacement.isViewed = true
+                            }
+                            stories[storyIdx] = replacement
                         }
                     }
                     self.storyGroups[groupIdx] = self.storyGroups[groupIdx].with(stories: stories)
