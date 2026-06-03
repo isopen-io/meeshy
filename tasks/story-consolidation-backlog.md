@@ -900,6 +900,21 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
 - Cible it.48 : StorySlideRenderer couches NON-filtre (drawTextObject/drawMediaObject/drawSticker projection+rotation)
       OU StoryStrokeRasterizer (dessin) OU SlideMiniPreview sync. Preuve avant fix. NE PAS toucher zone filtre (agent //).
 
+## it.48 — fix composite ignore rotation overlays (PROVABLE, shipped 897818f24)
+- [x] BUG : `renderComposite` (cover tray + thumbHash) ignorait le champ `rotation` de text/media/sticker, alors que
+      le canvas l'applique (StoryTextLayer/StoryMediaLayer/StoryStickerLayer `CATransform3DMakeRotation`) ET que l'user
+      pivote via `UIRotationGestureRecognizer` (StoryCanvasUIView:316/2343 → updateRotation:2905 écrit text/media/sticker.rotation).
+      → overlay pivoté apparaissait DROIT dans la vignette tray. Viole « thumbHash de TOUTE la story avec toutes les couches ».
+- [x] FIX : helper `drawRotated` (saveGState→translate center→rotate(°→rad horaire = parité CALayer)→translate back→
+      draw→restore, no-op si ≈0) appliqué à drawTextObject/drawMediaObject/drawSticker. +3 tests (rotation texte/sticker
+      change le composite + déterminisme). MeeshySDK-Package 15/15 renderer verts. Direction parité = déductif + device.
+- LEAD it.49 (même classe) : `drawTextObject` applique SEULEMENT `fontSize` (resolvedSize), PAS `textObj.scale` — alors
+      que drawMediaObject (`scale*0.6`) et drawSticker (`scale*0.15`) appliquent scale. Si StoryTextLayer applique un
+      scale de pinch séparé (transform) en plus de fontSize → composite raterait le pinch-scale du texte. À PROUVER
+      (StoryTextLayer applique-t-il text.scale ? le pinch écrit-il scale ou fontSize ?) avant fix.
+- Note : agent // a maintenant des modifs canvas-framing non commitées (StoryViewerView+Canvas, StoryCanvasUIView,
+      StoryCanvasFraming + test) — NE PAS toucher.
+
 ## EN ATTENTE USER (décisions produit — ne pas fixer en autonomie)
 - ~~Sidebar A/B/C overlap (carte reader)~~ → RÉSOLU 2026-06-03 : **option C retenue** (chevauchement accepté,
   le halo sombre it.37 assure la lisibilité, story reste grande). AUCUN changement code — état actuel = voulu.
