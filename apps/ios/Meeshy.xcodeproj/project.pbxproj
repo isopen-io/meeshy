@@ -237,6 +237,7 @@
 		CC2000000000002F20 /* CameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2000000000001F20 /* CameraView.swift */; };
 		CC2100000000002F21 /* ReportMessageSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2100000000001F21 /* ReportMessageSheet.swift */; };
 		CC2200000000002F22 /* MessageDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2200000000001F22 /* MessageDetailSheet.swift */; };
+		MDSTAB0000000004F01 /* MessageDetailSentimentTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = MDSTAB0000000003F01 /* MessageDetailSentimentTab.swift */; };
 		CC2300000000002F23 /* ConversationLockSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2300000000001F23 /* ConversationLockSheet.swift */; };
 		CC2400000000002F24 /* ConversationLockManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2400000000001F24 /* ConversationLockManager.swift */; };
 		CC4000000000002F40 /* ContactCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC4000000000001F40 /* ContactCardView.swift */; };
@@ -844,6 +845,7 @@
 		CC2000000000001F20 /* CameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraView.swift; sourceTree = "<group>"; };
 		CC2100000000001F21 /* ReportMessageSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportMessageSheet.swift; sourceTree = "<group>"; };
 		CC2200000000001F22 /* MessageDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageDetailSheet.swift; sourceTree = "<group>"; };
+		MDSTAB0000000003F01 /* MessageDetailSentimentTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageDetailSentimentTab.swift; sourceTree = "<group>"; };
 		CC2300000000001F23 /* ConversationLockSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationLockSheet.swift; sourceTree = "<group>"; };
 		CC2400000000001F24 /* ConversationLockManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationLockManager.swift; sourceTree = "<group>"; };
 		CC2A08DB67EE64A4EEE71EBC /* AudioBubbleCell.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AudioBubbleCell.swift; sourceTree = "<group>"; };
@@ -1209,6 +1211,7 @@
 				CC1700000000001F17 /* MessageOverlayMenu.swift */,
 				CC2100000000001F21 /* ReportMessageSheet.swift */,
 				CC2200000000001F22 /* MessageDetailSheet.swift */,
+				MDSTAB0000000003F01 /* MessageDetailSentimentTab.swift */,
 				CC1800000000001F18 /* MessageInfoSheet.swift */,
 				CC1900000000001F19 /* ForwardPickerSheet.swift */,
 				CC1900000000003F19 /* ConversationInfoSheet.swift */,
@@ -2430,6 +2433,7 @@
 				CC1700000000002F17 /* MessageOverlayMenu.swift in Sources */,
 				CC2100000000002F21 /* ReportMessageSheet.swift in Sources */,
 				CC2200000000002F22 /* MessageDetailSheet.swift in Sources */,
+				MDSTAB0000000004F01 /* MessageDetailSentimentTab.swift in Sources */,
 				CC1800000000002F18 /* MessageInfoSheet.swift in Sources */,
 				CC1900000000002F19 /* ForwardPickerSheet.swift in Sources */,
 				CC1900000000004F19 /* ConversationInfoSheet.swift in Sources */,
