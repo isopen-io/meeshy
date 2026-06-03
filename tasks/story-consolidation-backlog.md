@@ -1027,3 +1027,7 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
 - **StoryPublishQueue backoff (it.46)** : (A) brancher le backoff exponentiel planifié (`retryDelays`) avec seam DI
   testable + retryTask annulable + scheduleNextRetryIfNeeded en fin de processNext ; OU (B) retirer la constante morte +
   acter que les retries sont reconnect/launch-driven. Aujourd'hui : déclaré, jamais lu.
+
+## it.56 — veille (dry well confirmé)
+- [x] Aucun nouveau commit story de l'agent // depuis it.55. `ReaderAudioMixer` audité = mixer AVAudioEngine sample-accurate (host-time anchored, fade-in/out, loop) — mature, bug non prouvable sans profiling audio runtime. Pas de fix.
+- VEILLE : backlog provable autonome épuisé (cf. it.55). Cadence idle allongée (30 min) en attendant input USER (décision C.2/backoff), nouveau commit agent, ou nouvel angle prouvable.
