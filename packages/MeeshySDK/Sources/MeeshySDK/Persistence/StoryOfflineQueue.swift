@@ -168,8 +168,14 @@ extension StoryQueueItemConverter {
         let audioPairs = unified.mediaReferences
             .filter { $0.mediaType == "audio" }
             .map { ($0.elementId, $0.localFilePath) }
-        let mediaPaths = Dictionary(uniqueKeysWithValues: mediaPairs)
-        let audioPaths = Dictionary(uniqueKeysWithValues: audioPairs)
+        // `item` est décodé depuis le disque → `mediaReferences` n'a AUCUN invariant
+        // d'unicité (corruption, schéma futur, ou bug producteur). De plus `mediaPairs`
+        // fusionne image+video (`mediaType != "audio"`), donc un `elementId` partagé
+        // entre une ref image et une ref video collisionnerait. `Dictionary(uniqueKeysWithValues:)`
+        // TRAPPE sur clé dupliquée → crash du chemin publish (setOnPublish appelle `reverse`
+        // par item) et de `pendingItems`. Last-wins défensif au franchissement du trust boundary.
+        let mediaPaths = Dictionary(mediaPairs, uniquingKeysWith: { _, last in last })
+        let audioPaths = Dictionary(audioPairs, uniquingKeysWith: { _, last in last })
 
         return StoryOfflineQueueItem(
             id: unified.tempStoryId,
