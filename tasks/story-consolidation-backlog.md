@@ -946,6 +946,20 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
 - Cible it.51 : StoryStrokeRasterizer (parité dessin design→bounds) OU SlideMiniPreview (sync mini-preview vs canvas/cover)
       OU sortir de la série composite. Preuve avant fix.
 
+## it.51 — fix transform du FOND dans le composite (RÉSOUT le différé it.50, shipped b1359956f)
+- [x] `StoryStrokeRasterizer` audité PROPRE : rasterise à la taille design (1080×1920, traits déjà en coords design)
+      puis le composite étire dans `rect` — exactement le mapping design→bounds du canvas/SlideMiniPreview. Parité OK.
+- [x] DÉBLOCAGE it.50 : `SlideMiniPreview` (l.137-139) applique le transform du fond via SwiftUI NON-AMBIGU :
+      `.scaleEffect(scale)` + `.rotationEffect(rotation)` autour du centre + `.position(x·w, y·h)` (pan screen-space).
+      → référence qui tranche l'ordre que CATransform3D rendait ambigu. Porté en CGContext (translate(center+pan)→
+      rotate→scale→translate(-center)→draw ; scale uniforme commute avec rotation). Garde `isTransformed` → no-op aux
+      défauts (full-bleed commun préservé). +4 tests (zoom/pan/rotation/déterminisme). MeeshySDK-Package 13/13 verts.
+- BILAN série « parité composite cover/thumbHash vs canvas » COMPLÈTE : rotation (it.48) + scale texte (it.49) +
+      transform fond (it.51) + dessin (StoryStrokeRasterizer propre). Caveat résiduel mineur : `draw(in:rect)` STRETCH
+      vs `contentsGravity`/scaledToFill du canvas pour un fond NON-9:16 (parité partielle, séparé, faible impact).
+- Cible it.52 (HORS composite) : StoryService decode (robustesse parsing) OU sync realtime comment/reaction count
+      OU StatusEntry (moods, expiry, realtime) OU aspectFill caveat. Preuve avant fix.
+
 ## EN ATTENTE USER (décisions produit — ne pas fixer en autonomie)
 - ~~Sidebar A/B/C overlap (carte reader)~~ → RÉSOLU 2026-06-03 : **option C retenue** (chevauchement accepté,
   le halo sombre it.37 assure la lisibilité, story reste grande). AUCUN changement code — état actuel = voulu.
