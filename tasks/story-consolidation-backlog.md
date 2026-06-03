@@ -901,8 +901,10 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
       OU StoryStrokeRasterizer (dessin) OU SlideMiniPreview sync. Preuve avant fix. NE PAS toucher zone filtre (agent //).
 
 ## EN ATTENTE USER (décisions produit — ne pas fixer en autonomie)
-- Sidebar A/B/C overlap (carte reader) — A carte étroite / B footer / C accepter chevauchement.
-- DEVICE : drag-reorder slides + toggle plein écran carte→bord.
+- ~~Sidebar A/B/C overlap (carte reader)~~ → RÉSOLU 2026-06-03 : **option C retenue** (chevauchement accepté,
+  le halo sombre it.37 assure la lisibilité, story reste grande). AUCUN changement code — état actuel = voulu.
+- DEVICE (pas une décision, juste à tester sur vrai iPhone) : drag-reorder slides (logique testée, ressenti tactile
+  à confirmer) + toggle plein écran carte→bord (animation spring à confirmer). Le simulateur ne suffit pas.
 - **C.2 repost-as-post import (it.44)** : (A) compléter un éditeur post-canvas qui consomme `RepostImportResult`
   (texts/media/stickers/drawing reprojetés éditables) ; OU (B) retirer le scaffolding reprojection + bannière
   `reprojectionWarnings` (garder le quote-repost pur via embed). Aujourd'hui : calculé, loggé, jamais affiché.
