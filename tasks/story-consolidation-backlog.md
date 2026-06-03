@@ -805,3 +805,19 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
   NOTE lossy connue (documentée) : repost-as-story ne clone QUE la slide active (multi-slide source → 1 slide) — choix produit assumé.
 - Cible it.42 : perf/fluidité affichage (prefetch média tray, re-renders, ThumbHash) OU UnifiedPostComposer import path (C.2).
   Rendements décroissants — preuve avant fix. Restant user/device inchangé.
+
+## it.42 — fix CRITIQUE markViewed : perte de données StoryItem (PROVABLE, shipped f96b3e299)
+- [x] BUG provable (data corruption) : `StoryViewModel.markViewed` posait l'état « vu » en RECONSTRUISANT le
+      StoryItem via init partiel (7 champs : id/content/media/storyEffects/createdAt/expiresAt/isViewed) → les ~13
+      autres champs retombaient à leur défaut nil/0 (l'init `StoryItem.init` les défaut tous). Champs perdus à CHAQUE
+      visionnage : `translations` (→ Prisme Linguistique cassé, viewer re-rend en langue originale), `currentUserReactions`
+      + `reactionCount` (→ réaction perdue), `repostOfId`/`originalRepostOfId`/`repostAuthorName` (→ chaîne d'attribution
+      effacée, casse it.41), `audioUrl`/`backgroundAudio`, `comment/share/view/repostCount`. Pire : `persistStoryCache()`
+      gravait l'état gutté en cache → corruption persistée au cold-start.
+- [x] FIX : flip `isViewed` EN PLACE (`updated[j].isViewed = true`, c'est un `var`) — pattern idiomatique déjà utilisé
+      dans `fetchStoriesFromNetwork` (l.276-278). Tous les autres champs préservés. +1 test
+      (markViewed préserve translations/réactions/chaîne repost/audio/compteurs). Suite app 1738 tests, 0 failure (46s).
+- AUDIT perf affichage : `prefetchAllStoryMedia` sain (prefix 5 groupes, 1er non-vu + 3 upcoming, pas de preroll
+  AVPlayer en utility). Bien borné, respecte « afficher uniquement le nécessaire ».
+- Cible it.43 : autres mutations in-place de StoryGroup/StoryItem (deleteStory, reactions, addStory) — vérifier qu'aucune
+  ne reconstruit partiellement (même classe de bug) ; OU UnifiedPostComposer import C.2. Preuve avant fix.
