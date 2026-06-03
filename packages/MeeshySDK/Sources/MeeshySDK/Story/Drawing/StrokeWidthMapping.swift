@@ -4,14 +4,15 @@ import CoreGraphics
 /// Mappe le driver de pression `[0,1]` vers une largeur effective. Fonction pure unique,
 /// partagée live + baked. Legacy (`captureVersion == 0`) → `base` constant (non-régression).
 ///
-/// **La largeur choisie au pinceau est le PLANCHER, jamais réduite** (`minPressureFactor = 1`) :
-/// la pression ne fait que **grossir** le trait (user 2026-06-02 « respecter la pression qui
-/// grossit les traits »). Driver 0 (trait rapide / pression légère) → largeur choisie exacte ;
-/// driver 1 (trait lent / forte pression) → jusqu'à `maxPressureFactor × base`.
+/// **La largeur choisie au pinceau est le PLAFOND** (atteint au trait LENT / forte pression) ;
+/// les tracés RAPIDES / pression légère **affinent** le trait (user 2026-06-03 « lent = largeur
+/// choisie, rapide on raffine »). Driver 1 (lent / forte pression) → largeur choisie exacte
+/// (`maxPressureFactor = 1.0`) ; driver 0 (rapide / pression légère) → `minPressureFactor × base`
+/// (plus fin). La largeur choisie n'est donc JAMAIS dépassée — elle est la pleine épaisseur.
 public enum StrokeWidthMapping {
-    private static let minPressureFactor: CGFloat = 1.0
-    private static let maxPressureFactor: CGFloat = 1.8
-    private static let hardCapFactor: CGFloat = 2.5
+    private static let minPressureFactor: CGFloat = 0.4
+    private static let maxPressureFactor: CGFloat = 1.0
+    private static let hardCapFactor: CGFloat = 1.0
     private static let minWidth: CGFloat = 1
 
     public static func base(width: Double, tool: StrokeTool) -> CGFloat {
