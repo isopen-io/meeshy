@@ -212,6 +212,55 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertFalse(sut.storyGroups[0].stories[0].isViewed, "Should not modify unrelated stories")
     }
 
+    func test_markViewed_preservesAllStoryFields() {
+        // markViewed ne doit poser QUE isViewed=true. Avant le fix il reconstruisait
+        // le StoryItem via un init partiel → ~13 champs (translations, réactions,
+        // chaîne de repost, audio, compteurs) retombaient à leur défaut nil/0.
+        // Régressions : Prisme Linguistique cassé après visionnage, réaction perdue,
+        // attribution de repost effacée — et persistStoryCache gravait l'état corrompu.
+        let rich = StoryItem(
+            id: "rich",
+            content: "Bonjour",
+            media: [],
+            storyEffects: nil,
+            createdAt: Date(timeIntervalSince1970: 1_000_000),
+            expiresAt: Date(timeIntervalSince1970: 1_072_000),
+            repostOfId: "parent-1",
+            originalRepostOfId: "root-1",
+            repostAuthorName: "alice",
+            visibility: "PUBLIC",
+            audioUrl: "https://cdn/audio.m4a",
+            isViewed: false,
+            translations: [StoryTranslation(language: "fr", content: "Bonjour")],
+            backgroundAudio: nil,
+            reactionCount: 7,
+            commentCount: 3,
+            shareCount: 2,
+            viewCount: 42,
+            repostCount: 5,
+            currentUserReactions: ["❤️"]
+        )
+        let group = makeStoryGroup(userId: "u1", stories: [rich])
+        sut.storyGroups = [group]
+
+        sut.markViewed(storyId: "rich")
+
+        let updated = sut.storyGroups[0].stories[0]
+        XCTAssertTrue(updated.isViewed)
+        XCTAssertEqual(updated.translations?.first?.content, "Bonjour", "translations préservées (Prisme)")
+        XCTAssertEqual(updated.currentUserReactions, ["❤️"], "réaction utilisateur préservée")
+        XCTAssertEqual(updated.reactionCount, 7)
+        XCTAssertEqual(updated.commentCount, 3)
+        XCTAssertEqual(updated.shareCount, 2)
+        XCTAssertEqual(updated.viewCount, 42)
+        XCTAssertEqual(updated.repostCount, 5)
+        XCTAssertEqual(updated.repostOfId, "parent-1", "chaîne de repost préservée")
+        XCTAssertEqual(updated.originalRepostOfId, "root-1")
+        XCTAssertEqual(updated.repostAuthorName, "alice")
+        XCTAssertEqual(updated.audioUrl, "https://cdn/audio.m4a")
+        XCTAssertEqual(updated.visibility, "PUBLIC")
+    }
+
     // MARK: - deleteStory() Tests
 
     func test_deleteStory_removesStoryFromGroup() async {

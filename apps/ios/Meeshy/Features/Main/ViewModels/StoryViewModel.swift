@@ -401,19 +401,17 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             }
         }
 
-        // Update local state
+        // Update local state — `isViewed` est un `var` : on le flippe EN PLACE.
+        // (Avant : reconstruction via init partiel qui droppait ~13 champs à leur
+        // défaut — translations [Prisme cassé après visionnage], currentUserReactions,
+        // chaîne de repost repostOfId/originalRepostOfId/repostAuthorName, audioUrl,
+        // backgroundAudio, reaction/comment/share/view/repostCount. Et persistStoryCache
+        // gravait l'état corrompu en cache → survie au cold-start.) Même pattern que
+        // fetchStoriesFromNetwork (`var copy = story; copy.isViewed = true`).
         for i in storyGroups.indices {
             if let j = storyGroups[i].stories.firstIndex(where: { $0.id == storyId }) {
                 var updated = storyGroups[i].stories
-                updated[j] = StoryItem(
-                    id: updated[j].id,
-                    content: updated[j].content,
-                    media: updated[j].media,
-                    storyEffects: updated[j].storyEffects,
-                    createdAt: updated[j].createdAt,
-                    expiresAt: updated[j].expiresAt,
-                    isViewed: true
-                )
+                updated[j].isViewed = true
                 storyGroups[i] = storyGroups[i].with(stories: updated)
                 persistStoryCache()
                 return
