@@ -985,6 +985,21 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
 - Cible it.54 : storyReacted/storyUnreacted (porte-t-il un count autoritatif ignoré ?) OU StoryService decode
       (robustesse parsing) OU StatusEntry. Rendements TRÈS décroissants. Preuve avant fix.
 
+## it.54 — audit storyReacted + double-count : CLEAN (cross-check gateway, 0 bug)
+- [x] `storyReacted`/`storyUnreacted` : `SocketStoryReactedData` ne porte que storyId/userId/emoji — AUCUN count
+      autoritatif → `applyStoryReactionDelta` ±1 est correct (pas it.52-class). SAIN.
+- [x] Double-count REFUTÉ (cross-check gateway) : `routes/posts/interactions.ts:76-96` — une réaction STORY émet
+      EXCLUSIVEMENT `broadcastStoryReacted` (chaîne if/else-if par type), JAMAIS `broadcastPostLiked`/post:reaction-added
+      (réservé POST/MOOD). Donc une réaction story → seul `applyStoryReactionDelta(+1)`, pas de +2.
+- BILAN sync realtime story FULLY AUDITÉ end-to-end (client sinks + gateway emits) : viewCount (it.52 fixé),
+      comment add/delete (it.53 fixé), reactions story/post (delta/sync corrects). Plus de bug realtime provable.
+- Finding différé (défense, scope large) : `StoryService.list` → `PaginatedAPIResponse<[APIPost]>` decode all-or-nothing :
+      1 post malformé ferait échouer TOUT le feed stories. Lenient-decode = best-practice trust-boundary MAIS le decode
+      est dans le générique `api.paginatedRequest` (toucherait TOUTES les réponses paginées) → trop large pour un fix
+      story-loop ; pas de payload échouant prouvé. Noté, non implémenté.
+- ÉTAT : story subsystem TRÈS mature (it.40-54). Bugs provables autonomes ~épuisés ; restant = décisions user/device +
+      findings scope-large/spéculatifs. Cible it.55 : re-sweep léger (perf affichage, nouveaux commits agent //) ou conclure.
+
 ## EN ATTENTE USER (décisions produit — ne pas fixer en autonomie)
 - ~~Sidebar A/B/C overlap (carte reader)~~ → RÉSOLU 2026-06-03 : **option C retenue** (chevauchement accepté,
   le halo sombre it.37 assure la lisibilité, story reste grande). AUCUN changement code — état actuel = voulu.
