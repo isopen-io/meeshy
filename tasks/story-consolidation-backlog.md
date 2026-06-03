@@ -927,6 +927,25 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
       Si l'user a zoomé/pané/pivoté le fond, le cover/thumbHash le montrerait non-transformé. À PROUVER (le composite
       lit-il backgroundTransform/zoom/offset/rotation ?) avant fix.
 
+## it.50 — audit parité TRANSFORM DU FOND : gap PROUVÉ, fix différé (risque > full-bleed sans device)
+- [x] GAP prouvé : `renderComposite` dessine le fond FULL-BLEED (`bgMediaImage.draw(in: rect)`, l.53-58) en ignorant
+      le transform zoom/pan/rotation. Le canvas l'applique : source moderne = bg `StoryMediaObject` → `BackgroundTransform(
+      scale: bg.scale, offsetX: (bg.x-0.5)*renderW, offsetY: (bg.y-0.5)*renderH, rotation: bg.rotation)` (StoryCanvasUIView:1260-1267),
+      appliqué via `caTransform()` au `contentLayer` (anchor centre, frame=bounds). L'user zoome/pane/pivote le fond
+      (pinch/pan/rotation → updateScale/Position/Rotation sur le bg media object). → fond zoomé/pané/pivoté apparaît
+      DROIT & full-bleed dans cover/thumbHash.
+- [!] FIX DIFFÉRÉ (pas de fix spéculatif) : porter `caTransform` dans le raster exige de fixer l'ORDRE de composition
+      CATransform3D (Translate→Rotate→Scale : pan en screen-space ou en espace scalé/rotaté ?) — un test pngData prouve
+      « appliqué » mais PAS « ordre/direction correct », et un transform FAUX est PIRE que le full-bleed actuel (cover
+      cassé). Non vérifiable sans device. + caveat aspect : `draw(in:rect)` STRETCH vs `contentsGravity` aspectFill du
+      canvas (parité OK seulement pour fond 9:16 ; landscape diverge — pré-existant). À IMPLÉMENTER prudemment avec
+      vérif visuelle device : translate(center)→translate(offset)→rotate→scale→translate(-center)→draw(in:rect), offset=
+      (bg.x-0.5)*size.w / (bg.y-0.5)*size.h, en validant l'ordre contre le rendu canvas réel.
+- AUTRES couches composite OK : rotation (it.48) + scale text/media/sticker (it.49) shippés ; bg color/image/media full-bleed,
+      texte, fg media, stickers, dessin (StoryStrokeRasterizer design→rect) tous dessinés.
+- Cible it.51 : StoryStrokeRasterizer (parité dessin design→bounds) OU SlideMiniPreview (sync mini-preview vs canvas/cover)
+      OU sortir de la série composite. Preuve avant fix.
+
 ## EN ATTENTE USER (décisions produit — ne pas fixer en autonomie)
 - ~~Sidebar A/B/C overlap (carte reader)~~ → RÉSOLU 2026-06-03 : **option C retenue** (chevauchement accepté,
   le halo sombre it.37 assure la lisibilité, story reste grande). AUCUN changement code — état actuel = voulu.
