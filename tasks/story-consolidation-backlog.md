@@ -821,3 +821,20 @@ Chrome (header/footer) reste fixe (séparé du canvas) ; `chromeVisible = !isFul
   AVPlayer en utility). Bien borné, respecte « afficher uniquement le nécessaire ».
 - Cible it.43 : autres mutations in-place de StoryGroup/StoryItem (deleteStory, reactions, addStory) — vérifier qu'aucune
   ne reconstruit partiellement (même classe de bug) ; OU UnifiedPostComposer import C.2. Preuve avant fix.
+
+## it.43 — audit mutations/reconstructions StoryItem/StoryGroup : CLEAN (0 nouveau bug)
+- [x] `mutateStoryItem(byPostId:)` (l.1379) : mutation `inout` EN PLACE, aucune reconstruction. Les handlers réaction/comment
+      (applyPostReactionDelta, applyStoryReactionDelta, applyStoryCommentCountDelta) mutent les champs en place → SAINS.
+- [x] `insertOrAppendStoryItem` (l.1407) : insert/replace d'un item COMPLET + dédup par id → SAIN.
+- [x] Constructions optimistes publish (l.486/580/972) : items NEUFS de l'auteur (isViewed:true), champs vides corrects
+      (fresh story → 0 réactions, pas de translations encore). PAS de la classe it.42 (pas une reconstruction d'existant).
+      Note mineure : repostOfId/repostAuthorName droppés sur l'optimiste repost, mais le badge locked baké dans effects
+      masque l'attribution + refresh serveur corrige → transitoire, non bloquant.
+- [x] Synthetic reader inits `StoryReaderRepresentable.init(post:)`/`init(repost:)` : droppent `StoryItem.translations`.
+      PROUVÉ NON-VISIBLE : `StorySlide.content` n'est JAMAIS rendu comme layer texte (StorySlideRenderer : 0 read de `.content` ;
+      le texte visible vient exclusivement de `effects.textObjects[].translations`, qui EST passé). Donc pas de bug Prisme.
+      LATENT (non corrigé, invisible aujourd'hui) : divergence vs toStoryGroups (qui set translations) — ne deviendrait
+      visible QUE si un affichage de caption `slide.content` était ajouté au reader. À garder en tête, pas de fix spéculatif.
+- CONCLUSION it.43 : surface mutation/reconstruction StoryItem/StoryGroup SAINE. Seul markViewed (it.42) portait le bug.
+- Cible it.44 : UnifiedPostComposer import path (C.2 edit-repost-as-post) OU StoryRepostEmbedCell/feed-embed rendering
+  OU deleteStory/optimistic-sync edge cases. Rendements décroissants — preuve avant fix.
