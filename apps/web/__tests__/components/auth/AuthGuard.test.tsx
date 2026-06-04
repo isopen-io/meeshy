@@ -20,6 +20,26 @@ jest.mock('@/hooks/use-auth', () => ({
   useAuth: () => mockUseAuth(),
 }));
 
+// Mock the i18n hook so AuthGuard's localized labels resolve without loading
+// the full translation/store chain. Keys map to the French copy the assertions
+// below expect (common.json `authGuard`).
+jest.mock('@/hooks/useI18n', () => {
+  const labels: Record<string, string> = {
+    'authGuard.checking': 'Vérification...',
+    'authGuard.deniedTitle': 'Accès refusé',
+    'authGuard.deniedDescription': 'Vous devez être connecté pour accéder à cette page',
+    'authGuard.signIn': 'Se connecter',
+    'authGuard.accountRequiredTitle': 'Compte requis',
+    'authGuard.accountRequiredDescription': 'Cette page nécessite un compte permanent',
+    'authGuard.createAccount': 'Créer un compte',
+  };
+  return {
+    useI18n: () => ({
+      t: (key: string) => labels[key] ?? key,
+    }),
+  };
+});
+
 // Mock window.location by replacing it with a plain object
 const mockLocation = {
   href: '',

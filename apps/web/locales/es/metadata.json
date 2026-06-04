@@ -1,0 +1,133 @@
+{
+  "siteName": "Meeshy",
+  "skipToContent": "Saltar al contenido principal",
+  "pages": {
+    "home": {
+      "title": "Meeshy - Mensajería multilingüe en tiempo real",
+      "description": "Chatea con todo el mundo en tu propio idioma. Traducción automática en tiempo real para más de 100 idiomas. Únete a conversaciones globales sin barreras lingüísticas.",
+      "ogImageAlt": "Meeshy - Bienvenido a la mensajería multilingüe"
+    },
+    "notifications": {
+      "title": "Notificaciones - Meeshy",
+      "description": "Consulta tus notificaciones de Meeshy. Mantente al día de los nuevos mensajes, menciones y actividad en tus conversaciones multilingües.",
+      "ogImageAlt": "Notificaciones de Meeshy"
+    },
+    "settings": {
+      "title": "Ajustes - Meeshy",
+      "description": "Personaliza tu experiencia en Meeshy. Gestiona tus preferencias de idioma, tus notificaciones y tu configuración de privacidad.",
+      "ogImageAlt": "Ajustes de Meeshy"
+    },
+    "conversations": {
+      "title": "Conversaciones - Meeshy",
+      "description": "Accede a tus conversaciones multilingües en tiempo real. Chatea con tus contactos en su idioma materno gracias a la traducción automática.",
+      "ogImageAlt": "Conversaciones de Meeshy"
+    },
+    "groups": {
+      "title": "Comunidades - Meeshy",
+      "ogTitle": "Comunidades multilingües - Meeshy",
+      "description": "Descubre y únete a comunidades multilingües de todo el mundo. Conecta con personas que comparten tus intereses en su idioma materno.",
+      "ogImageAlt": "Comunidades de Meeshy"
+    },
+    "about": {
+      "title": "Acerca de - Meeshy",
+      "ogTitle": "Acerca de Meeshy",
+      "description": "Descubre Meeshy, la plataforma de mensajería multilingüe en tiempo real. Nuestra misión: conectar el mundo sin barreras lingüísticas.",
+      "ogImageAlt": "Acerca de Meeshy"
+    },
+    "privacy": {
+      "title": "Política de privacidad - Meeshy",
+      "description": "Consulta nuestra política de privacidad. Descubre cómo Meeshy protege tus datos personales y respeta tu privacidad.",
+      "ogImageAlt": "Política de privacidad de Meeshy"
+    },
+    "login": {
+      "title": "Iniciar sesión - Meeshy",
+      "description": "Inicia sesión en tu cuenta de Meeshy y accede a tus conversaciones multilingües en tiempo real.",
+      "ogImageAlt": "Iniciar sesión en Meeshy"
+    },
+    "terms": {
+      "title": "Términos de servicio - Meeshy",
+      "description": "Consulta los términos de servicio de Meeshy. Descubre las reglas y responsabilidades al usar nuestra plataforma de mensajería multilingüe.",
+      "ogImageAlt": "Términos de servicio de Meeshy"
+    },
+    "partners": {
+      "title": "Socios - Meeshy",
+      "ogTitle": "Programa de socios - Meeshy",
+      "description": "Únete al programa de socios de Meeshy. Amplía tu red y disfruta de ventajas exclusivas convirtiéndote en embajador de la mensajería multilingüe.",
+      "ogImageAlt": "Programa de socios de Meeshy"
+    },
+    "signup": {
+      "title": "Registro - Meeshy",
+      "description": "Crea tu cuenta de Meeshy y únete a la comunidad mundial de mensajería multilingüe en tiempo real."
+    },
+    "chat": {
+      "title": "Chat - Meeshy",
+      "ogTitle": "Chat en tiempo real - Meeshy",
+      "description": "Chatea en tiempo real con traducción automática. Intercambia mensajes en tu idioma materno sin barreras lingüísticas.",
+      "ogImageAlt": "Chat de Meeshy"
+    },
+    "groupDetail": {
+      "title": "Grupo - Meeshy",
+      "ogTitle": "Grupo de discusión - Meeshy",
+      "description": "Únete a este grupo multilingüe y conecta con miembros de todo el mundo en tu idioma materno gracias a la traducción automática.",
+      "ogImageAlt": "Grupo de Meeshy"
+    },
+    "userProfile": {
+      "meTitle": "Mi perfil - Meeshy",
+      "meDescription": "Gestiona tu perfil en Meeshy",
+      "title": "{name} (@{username}) - Meeshy",
+      "description": "Perfil de {name} en Meeshy. Descubre las conversaciones y la actividad de este usuario.",
+      "ogImageAlt": "Perfil de {name}",
+      "defaultDisplayName": "Usuario",
+      "fallbackTitle": "Perfil de usuario - Meeshy",
+      "fallbackDescription": "Descubre el perfil de este usuario en Meeshy, la plataforma de mensajería multilingüe en tiempo real.",
+      "fallbackOgDescription": "Descubre perfiles y conecta con usuarios de todo el mundo en Meeshy.",
+      "fallbackOgImageAlt": "Meeshy - Mensajería multilingüe"
+    },
+    "conversationDetail": {
+      "title": "Conversación {title}",
+      "description": "Únete a esta conversación en Meeshy, la plataforma de mensajería multilingüe en tiempo real.",
+      "ogImageAlt": "Conversación {title}",
+      "defaultTitle": "Meeshy",
+      "imageSubtitle": "Únete a la conversación",
+      "defaultUserName": "Usuario"
+    },
+    "join": {
+      "title": "Unirse a \"{title}\" - Meeshy",
+      "descriptionWithDescription": "{description} - Invitación de {creator}",
+      "descriptionDefault": "{creator} te invita a unirte a \"{title}\" en Meeshy",
+      "ogImageAlt": "Invitación - {title}",
+      "someone": "Un usuario",
+      "untitled": "Sin nombre",
+      "imageMessage": "Únete a esta conversación en Meeshy",
+      "participants": "{count} participantes",
+      "types": {
+        "group": "Grupo",
+        "direct": "Mensaje directo",
+        "public": "Público",
+        "global": "Global",
+        "default": "Conversación"
+      },
+      "fallbackTitle": "Unirse a una conversación - Meeshy",
+      "fallbackDescription": "Has sido invitado a unirte a una conversación en Meeshy, la plataforma de mensajería multilingüe en tiempo real.",
+      "fallbackOgDescription": "Únete a conversaciones multilingües en tiempo real en Meeshy.",
+      "fallbackOgImageAlt": "Meeshy - Mensajería multilingüe"
+    },
+    "affiliate": {
+      "title": "Únete a Meeshy - Mensajería multilingüe",
+      "description": "Descubre Meeshy, la plataforma de mensajería que rompe las barreras lingüísticas. Comunícate en tiempo real con personas de todo el mundo, cada una en su idioma preferido.",
+      "ogImageAlt": "Meeshy - Mensajería multilingüe",
+      "imageTitle": "Únete a Meeshy",
+      "imageSubtitle": "Mensajería multilingüe en tiempo real",
+      "imageUserName": "Más de 100 idiomas admitidos",
+      "keywords": [
+        "mensajería multilingüe",
+        "traducción en tiempo real",
+        "comunicación internacional",
+        "chat multilingüe",
+        "Meeshy",
+        "aplicación de mensajería",
+        "plataforma de chat"
+      ]
+    }
+  }
+}

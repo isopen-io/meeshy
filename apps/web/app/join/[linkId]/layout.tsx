@@ -1,13 +1,31 @@
 import { Metadata } from 'next';
 import { ReactNode } from 'react';
+import { getServerLocale } from '@/lib/i18n/server-locale';
+import { composeMetadata, getMetadataPage, interpolate, pageMap, pageString } from '@/lib/i18n/metadata';
+import type { InterfaceLocale } from '@/lib/i18n/locale-config';
 
 interface JoinLayoutProps {
   children: ReactNode;
   params: Promise<{ linkId: string }>; // Next.js 15: params est une Promise
 }
 
+function buildFallbackMetadata(locale: InterfaceLocale, frontendUrl: string): Metadata {
+  const meta = getMetadataPage(locale, 'join');
+  return composeMetadata({
+    locale,
+    title: pageString(meta, 'fallbackTitle'),
+    description: pageString(meta, 'fallbackDescription'),
+    ogDescription: pageString(meta, 'fallbackOgDescription'),
+    url: `${frontendUrl}/join`,
+    image: `${frontendUrl}/og-image-meeshy.png`,
+    imageAlt: pageString(meta, 'fallbackOgImageAlt'),
+  });
+}
+
 export async function generateMetadata({ params }: JoinLayoutProps): Promise<Metadata> {
   const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3100';
+  const locale = await getServerLocale();
+  const meta = getMetadataPage(locale, 'join');
 
   try {
     const { linkId } = await params;
@@ -28,131 +46,52 @@ export async function generateMetadata({ params }: JoinLayoutProps): Promise<Met
       if (result.success && result.data) {
         const link = result.data;
         const conversation = link.conversation;
+        const types = pageMap(meta, 'types');
 
-        // Déterminer le type de conversation pour le badge
-        const getConversationType = (type: string | undefined) => {
-          switch (type) {
-            case 'group': return 'Groupe';
-            case 'direct': return 'Discussion directe';
-            case 'public': return 'Public';
-            case 'global': return 'Global';
-            default: return 'Conversation';
-          }
-        };
-
-        const conversationType = getConversationType(conversation?.type);
-        const conversationTitle = conversation?.title || 'Sans nom';
+        const conversationType = types[conversation?.type as string] || types.default;
+        const conversationTitle = conversation?.title || pageString(meta, 'untitled');
         const creatorName = link.creator
           ? (link.creator.displayName || `${link.creator.firstName || ''} ${link.creator.lastName || ''}`.trim() || link.creator.username)
-          : 'Un utilisateur';
+          : pageString(meta, 'someone');
 
-        const title = `Rejoindre "${conversationTitle}" - Meeshy`;
+        const title = interpolate(pageString(meta, 'title'), { title: conversationTitle });
         const description = link.description
-          ? `${link.description} - Invitation de ${creatorName}`
-          : `${creatorName} vous invite à rejoindre "${conversationTitle}" sur Meeshy`;
+          ? interpolate(pageString(meta, 'descriptionWithDescription'), { description: link.description, creator: creatorName })
+          : interpolate(pageString(meta, 'descriptionDefault'), { creator: creatorName, title: conversationTitle });
+        const imageAlt = interpolate(pageString(meta, 'ogImageAlt'), { title: conversationTitle });
+
+        const participantsCount = link.stats?.totalParticipants || 0;
+        const participantsLabel = interpolate(pageString(meta, 'participants'), { count: participantsCount });
 
         // Construire l'URL de l'image dynamique
         const imageParams = new URLSearchParams({
           type: 'invitation',
           title: conversationTitle,
-          subtitle: `${conversationType} • ${link.stats?.totalParticipants || 0} participant${(link.stats?.totalParticipants || 0) > 1 ? 's' : ''}`,
+          subtitle: `${conversationType} • ${participantsLabel}`,
           userName: creatorName,
-          message: link.description || `Rejoignez cette conversation sur Meeshy`
+          message: link.description || pageString(meta, 'imageMessage')
         });
 
         const dynamicImageUrl = `${frontendUrl}/api/og-image-dynamic?${imageParams.toString()}`;
 
-        return {
+        return composeMetadata({
+          locale,
           title,
           description,
-          openGraph: {
-            title,
-            description,
-            url: `${frontendUrl}/join/${linkId}`,
-            siteName: 'Meeshy',
-            images: [
-              {
-                url: dynamicImageUrl,
-                width: 1200,
-                height: 630,
-                alt: `Invitation - ${conversationTitle}`,
-              },
-            ],
-            locale: 'fr_FR',
-            type: 'website',
-          },
-          twitter: {
-            card: 'summary_large_image',
-            title,
-            description,
-            images: [dynamicImageUrl],
-            creator: '@meeshy_app',
-          },
-          alternates: {
-            canonical: `${frontendUrl}/join/${linkId}`,
-          },
-        };
+          url: `${frontendUrl}/join/${linkId}`,
+          image: dynamicImageUrl,
+          imageAlt,
+          canonical: `${frontendUrl}/join/${linkId}`,
+        });
       }
     }
 
     // Fallback metadata si l'appel API échoue
-    return {
-      title: 'Rejoindre une conversation - Meeshy',
-      description: 'Vous avez été invité à rejoindre une conversation sur Meeshy, la plateforme de messagerie multilingue en temps réel.',
-      openGraph: {
-        title: 'Rejoindre une conversation - Meeshy',
-        description: 'Rejoignez des conversations multilingues en temps réel sur Meeshy.',
-        url: `${frontendUrl}/join`,
-        siteName: 'Meeshy',
-        images: [
-          {
-            url: `${frontendUrl}/og-image-meeshy.png`,
-            width: 1200,
-            height: 630,
-            alt: 'Meeshy - Messagerie multilingue',
-          },
-        ],
-        locale: 'fr_FR',
-        type: 'website',
-      },
-      twitter: {
-        card: 'summary_large_image',
-        title: 'Rejoindre une conversation - Meeshy',
-        description: 'Rejoignez des conversations multilingues en temps réel sur Meeshy.',
-        images: [`${frontendUrl}/og-image-meeshy.png`],
-        creator: '@meeshy_app',
-      },
-    };
+    return buildFallbackMetadata(locale, frontendUrl);
   } catch (error) {
     console.error('[generateMetadata] Erreur critique:', error);
     // Fallback metadata en cas d'erreur critique (même si params échoue)
-    return {
-      title: 'Rejoindre une conversation - Meeshy',
-      description: 'Vous avez été invité à rejoindre une conversation sur Meeshy, la plateforme de messagerie multilingue en temps réel.',
-      openGraph: {
-        title: 'Rejoindre une conversation - Meeshy',
-        description: 'Rejoignez des conversations multilingues en temps réel sur Meeshy.',
-        url: `${frontendUrl}/join`,
-        siteName: 'Meeshy',
-        images: [
-          {
-            url: `${frontendUrl}/og-image-meeshy.png`,
-            width: 1200,
-            height: 630,
-            alt: 'Meeshy - Messagerie multilingue',
-          },
-        ],
-        locale: 'fr_FR',
-        type: 'website',
-      },
-      twitter: {
-        card: 'summary_large_image',
-        title: 'Rejoindre une conversation - Meeshy',
-        description: 'Rejoignez des conversations multilingues en temps réel sur Meeshy.',
-        images: [`${frontendUrl}/og-image-meeshy.png`],
-        creator: '@meeshy_app',
-      },
-    };
+    return buildFallbackMetadata(locale, frontendUrl);
   }
 }
 

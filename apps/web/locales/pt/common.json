@@ -150,6 +150,15 @@
         "message": "Se você acha que deveria ter acesso a este recurso, tente fazer login ou entre em contato com o administrador."
       }
     },
+    "authGuard": {
+      "checking": "Verificando...",
+      "deniedTitle": "Acesso negado",
+      "deniedDescription": "Você precisa estar conectado para acessar esta página",
+      "signIn": "Entrar",
+      "accountRequiredTitle": "Conta necessária",
+      "accountRequiredDescription": "Esta página requer uma conta permanente",
+      "createAccount": "Criar uma conta"
+    },
     "redirecting": "Redirecionando...",
     "featureGate": {
       "title": "Funcionalidade temporariamente indisponível",
