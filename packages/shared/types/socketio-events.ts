@@ -169,6 +169,7 @@ export const SERVER_EVENTS = {
   CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
   CONVERSATION_PARTICIPANT_BANNED: 'conversation:participant-banned',
   CONVERSATION_CLOSED: 'conversation:closed',
+  CONVERSATION_DELETED: 'conversation:deleted',
   CONVERSATION_PARTICIPANT_UNBANNED: 'conversation:participant-unbanned',
   ATTACHMENT_STATUS_UPDATED: 'attachment-status:updated',
   /**
@@ -886,6 +887,17 @@ export interface CategoriesReorderedEventData {
     readonly categoryId: string;
     readonly order: number;
   }>;
+}
+
+/**
+ * Émis par `DELETE /conversations/:id/delete-for-me` vers la room de
+ * l'utilisateur, pour que ses autres appareils retirent la conversation
+ * de leur liste (per-user soft delete). Consommé iOS par
+ * `ConversationStore.applyConversationDeleted`.
+ */
+export interface ConversationDeletedEventData {
+  readonly userId: string;
+  readonly conversationId: string;
 }
 
 /**

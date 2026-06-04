@@ -2,7 +2,7 @@ import { FastifyInstance } from 'fastify'
 import type { PrismaClient } from '@meeshy/shared/prisma/client'
 import { UnifiedAuthRequest } from '../../middleware/auth'
 import { sendSuccess, sendNotFound } from '../../utils/response'
-import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events'
+import { SERVER_EVENTS, ROOMS, type ConversationDeletedEventData } from '@meeshy/shared/types/socketio-events'
 import { resolveConversationId } from '../../utils/conversation-id-cache'
 
 export function registerDeleteForMeRoutes(
@@ -110,6 +110,11 @@ export function registerDeleteForMeRoutes(
         for (const s of userSockets) {
           s.leave(ROOMS.conversation(conversationId))
         }
+        // Notify the user's other devices so they drop the conversation from
+        // their local store/list (per-user soft delete). Consumed iOS-side by
+        // ConversationStore.applyConversationDeleted.
+        const deletedPayload: ConversationDeletedEventData = { userId, conversationId }
+        io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.CONVERSATION_DELETED, deletedPayload)
       }
 
       return sendSuccess(reply, { conversationId, deletedAt: now.toISOString() })
