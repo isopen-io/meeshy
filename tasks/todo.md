@@ -86,22 +86,22 @@ In `packages/MeeshySDK/Sources/MeeshySDK/Store/ConversationStore.swift`:
 - [x] State: `conversations: [String: MeeshyConversation]`, per-conv `CurrentValueSubject`, `listSubject`
 - [ ] Injectables (default `.shared`): `CacheCoordinator`, `ConversationStateOutbox`, `PreferenceServiceProviding`, `ConversationServiceProviding`
 - [x] Read API: `conversation(id:)`, `publisher(for:)`, `listPublisher()`
-- [ ] Hydration (SWR) — handle each `CacheResult` case explicitly, NEVER `.value`:
-  - [ ] `hydrate(_:)`, `hydrateList(_:)`, `hydrateFromCache()`
+- [x] Hydration (SWR) — handle each `CacheResult` case explicitly, NEVER `.value`:
+  - [x] `hydrate(_:)`, `hydrateList(_:)`, `hydrateFromCache()` <!-- hydrateFromCache 2026-06-04 (SWR clé "list") -->
 - [x] `apply(_:for:)` pipeline (§6):
   - [x] Snapshot → optimistic mutation → `version += 1` candidate → publish
   - [x] Enqueue in outbox → dispatch
   - [x] ACK → overwrite with authoritative `version` from server response, set `lastSyncedAt`
   - [x] 4xx → rollback snapshot, `outbox.markFailed`, rethrow
   - [x] Transient (5xx / network) → leave in outbox, no rollback
-- [ ] Composite helpers:
+- [x] Composite helpers:
   - [x] `createSectionAndAssign(name:color:icon:toConversation:)` <!-- 2026-06-04 -->
-  - [ ] `reorderConversations(_:)` <!-- différé : endpoint REST reorder batch pas exposé client -->
+  - [x] `reorderConversations(_:)` <!-- 2026-06-04 : POST /user-preferences/reorder + optimistic/rollback -->
 - [x] Remote application:
   - [x] `applyRemote(UserPreferencesUpdatedEvent)` — ignore if `event.version <= local.version`; reset:true → defaults; else apply + bump + publish + cache.save
   - [x] `applyReadReceipt(ReadStatusEvent)` — monotone `lastReadAt`; trust server `unreadCount` <!-- 2026-06-04 -->
   - [x] `applyConversationDeleted(_:)` — remove from store <!-- 2026-06-04 -->
-- [ ] _reste Phase 4 bis : `hydrateFromCache()` (schéma clé cache), `reorderConversations` (endpoint), wiring socket ci-dessous_
+- [ ] _reste Phase 4 bis : wiring socket ci-dessous (publishers `userPreferencesReordered` + `conversationDeleted`)_
 - [x] `flushOutbox()` — call on app foreground + network reachability change
 - [ ] Wire `MessageSocketManager` publishers (add if missing): `userPreferencesUpdated`, `userPreferencesReordered`, `readStatus`, `conversationDeleted`
 - [x] Tests per §10 SDK section:

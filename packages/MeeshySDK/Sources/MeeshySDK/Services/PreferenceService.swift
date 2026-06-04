@@ -93,6 +93,21 @@ public final class PreferenceService: PreferenceServiceProviding, @unchecked Sen
         )
     }
 
+    /// Batch drag-to-reorder. `POST /user-preferences/reorder` with
+    /// `{ updates: [{ conversationId, orderInCategory }] }`. Server broadcasts
+    /// `USER_PREFERENCES_REORDERED` and returns `{ message }`.
+    public func reorderConversations(_ updates: [(conversationId: String, orderInCategory: Int)]) async throws {
+        struct Item: Encodable {
+            let conversationId: String
+            let orderInCategory: Int
+        }
+        struct Body: Encodable { let updates: [Item] }
+        let body = Body(updates: updates.map { Item(conversationId: $0.conversationId, orderInCategory: $0.orderInCategory) })
+        let _: APIResponse<[String: String]> = try await api.post(
+            endpoint: "/user-preferences/reorder", body: body
+        )
+    }
+
     public func patchCategory(id: String, isExpanded: Bool) async throws {
         let body = ["isExpanded": isExpanded]
         let _: APIResponse<[String: String]> = try await api.patch(

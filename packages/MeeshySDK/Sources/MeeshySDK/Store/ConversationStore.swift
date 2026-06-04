@@ -14,6 +14,17 @@ public protocol ConversationPreferenceWriting: Sendable {
         conversationId: String,
         request: UpdateConversationPreferencesRequest
     ) async throws -> APIConversationPreferences
+
+    /// Batch reorder (`POST /user-preferences/conversations/reorder`). Used by
+    /// the Store's `reorderConversations` composite (drag-to-reorder).
+    func reorderConversations(_ updates: [(convId: String, orderInCategory: Int)]) async throws
+}
+
+/// Read seam for cache hydration (`hydrateFromCache`). Default adapter reads
+/// the cached conversation list (`CacheCoordinator.conversations`, key "list");
+/// tests stub a `CacheResult` directly.
+public protocol ConversationCacheReading: Sendable {
+    func loadConversationList() async -> CacheResult<[MeeshyConversation]>
 }
 
 /// Subset of `ConversationServiceProviding` used by the Store.
@@ -87,16 +98,15 @@ public enum ConversationStoreError: Error, Sendable {
 /// - `flushOutbox` to dispatch queued writes (foregrounded by the app
 ///   shell at scene-active / reachability changes)
 ///
-/// Phase 4 bis (this increment):
-/// - `applyReadReceipt` (monotone), `applyConversationDeleted`
-/// - composite helper `createSectionAndAssign`
+/// Phase 4 bis (complete): `applyReadReceipt` (monotone),
+/// `applyConversationDeleted`, `createSectionAndAssign`, `reorderConversations`
+/// (batch via `POST /user-preferences/reorder`), `hydrateFromCache` (SWR from
+/// the conversation cache, key "list").
 ///
 /// Still deferred:
-/// - `reorderConversations` (needs the batch reorder REST endpoint on the
-///   PreferenceService seam — not yet exposed client-side)
-/// - `hydrateFromCache` via `CacheCoordinator` (conversation cache key scheme)
 /// - Socket listener wiring on `MessageSocketManager` (maps socket events to
-///   `applyRemote` / `applyReadReceipt` / `applyConversationDeleted`)
+///   `applyRemote` / `applyReadReceipt` / `applyConversationDeleted` /
+///   reordered) — Phase 5/6 glue.
 public actor ConversationStore {
 
     // MARK: - State
@@ -107,6 +117,7 @@ public actor ConversationStore {
     private let preferenceService: ConversationPreferenceWriting
     private let conversationService: ConversationLifecycleWriting
     private let categoryService: ConversationCategoryCreating
+    private let cache: ConversationCacheReading
     private let outbox: ConversationStateOutbox
 
     // MARK: - Init
@@ -117,6 +128,7 @@ public actor ConversationStore {
         self.preferenceService = DefaultPreferenceWritingAdapter()
         self.conversationService = DefaultConversationLifecycleAdapter()
         self.categoryService = DefaultCategoryCreatingAdapter()
+        self.cache = DefaultCacheReadingAdapter()
         self.outbox = ConversationStateOutbox.shared
     }
 
@@ -124,11 +136,13 @@ public actor ConversationStore {
         preferenceService: ConversationPreferenceWriting,
         conversationService: ConversationLifecycleWriting,
         outbox: ConversationStateOutbox,
-        categoryService: ConversationCategoryCreating = DefaultCategoryCreatingAdapter()
+        categoryService: ConversationCategoryCreating = DefaultCategoryCreatingAdapter(),
+        cache: ConversationCacheReading = DefaultCacheReadingAdapter()
     ) {
         self.preferenceService = preferenceService
         self.conversationService = conversationService
         self.categoryService = categoryService
+        self.cache = cache
         self.outbox = outbox
     }
 
@@ -167,6 +181,19 @@ public actor ConversationStore {
             }
         }
         publishList()
+    }
+
+    /// Seed the store from the L2 conversation cache (Stale-While-Revalidate):
+    /// both `.fresh` and `.stale` snapshots hydrate immediately so the UI
+    /// paints from cache without a spinner; `.expired` / `.empty` are no-ops
+    /// (the caller's network fetch will hydrate later).
+    public func hydrateFromCache() async {
+        switch await cache.loadConversationList() {
+        case .fresh(let convs, _), .stale(let convs, _):
+            hydrateList(convs)
+        case .expired, .empty:
+            break
+        }
     }
 
     // MARK: - Apply (optimistic + outbox + dispatch)
@@ -350,6 +377,33 @@ public actor ConversationStore {
         }
         let category = try await categoryService.create(name: name, color: color, icon: icon)
         try await apply(.setSection(categoryId: category.id), for: convId)
+    }
+
+    /// Batch drag-to-reorder. Applies the new `orderInCategory` to every
+    /// affected conversation optimistically (single publish per conv), then
+    /// commits via the batch reorder endpoint. On failure the whole batch is
+    /// rolled back to its pre-reorder snapshot and the error is rethrown.
+    /// Order does not participate in the per-field outbox/version path — it is
+    /// a direct composite write (matches the gateway's batch endpoint).
+    public func reorderConversations(_ updates: [(convId: String, orderInCategory: Int)]) async throws {
+        var snapshots: [String: ConversationUserState] = [:]
+        for update in updates {
+            guard var conv = conversations[update.convId] else { continue }
+            snapshots[update.convId] = conv.userState
+            conv.userState.orderInCategory = update.orderInCategory
+            commit(conv)
+        }
+        do {
+            try await preferenceService.reorderConversations(updates)
+        } catch {
+            for (id, snapshot) in snapshots {
+                if var conv = conversations[id] {
+                    conv.userState = snapshot
+                    commit(conv)
+                }
+            }
+            throw error
+        }
     }
 
     // MARK: - Private helpers
@@ -618,6 +672,19 @@ struct DefaultPreferenceWritingAdapter: ConversationPreferenceWriting {
         return try await PreferenceService.shared.getConversationPreferences(
             conversationId: conversationId
         )
+    }
+
+    func reorderConversations(_ updates: [(convId: String, orderInCategory: Int)]) async throws {
+        try await PreferenceService.shared.reorderConversations(
+            updates.map { (conversationId: $0.convId, orderInCategory: $0.orderInCategory) }
+        )
+    }
+}
+
+public struct DefaultCacheReadingAdapter: ConversationCacheReading {
+    public init() {}
+    public func loadConversationList() async -> CacheResult<[MeeshyConversation]> {
+        await CacheCoordinator.shared.conversations.load(for: "list")
     }
 }
 

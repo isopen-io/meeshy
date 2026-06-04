@@ -7,7 +7,9 @@ import Combine
 final class MockPreferenceWriter: ConversationPreferenceWriting, @unchecked Sendable {
     var stubbedResponse: APIConversationPreferences = APIConversationPreferences(version: 1)
     var errorToThrow: Error?
+    var reorderError: Error?
     private(set) var calls: [(String, UpdateConversationPreferencesRequest)] = []
+    private(set) var reorderCalls: [[(convId: String, orderInCategory: Int)]] = []
 
     func updateConversationPreferences(
         conversationId: String,
@@ -16,6 +18,21 @@ final class MockPreferenceWriter: ConversationPreferenceWriting, @unchecked Send
         calls.append((conversationId, request))
         if let e = errorToThrow { throw e }
         return stubbedResponse
+    }
+
+    func reorderConversations(_ updates: [(convId: String, orderInCategory: Int)]) async throws {
+        reorderCalls.append(updates)
+        if let e = reorderError { throw e }
+    }
+}
+
+final class MockCacheReading: ConversationCacheReading, @unchecked Sendable {
+    var stubbed: CacheResult<[MeeshyConversation]> = .empty
+    private(set) var loadCalls = 0
+
+    func loadConversationList() async -> CacheResult<[MeeshyConversation]> {
+        loadCalls += 1
+        return stubbed
     }
 }
 
@@ -458,6 +475,93 @@ final class ConversationStoreTests: XCTestCase {
             // expected
         }
         XCTAssertEqual(category.createCalls.count, 0, "must not create a category for an unknown conversation")
+    }
+
+    // MARK: - hydrateFromCache
+
+    private func makeStoreWithCache(_ cache: MockCacheReading) -> ConversationStore {
+        let outboxPath = FileManager.default.temporaryDirectory
+            .appendingPathComponent("store-outbox-\(UUID().uuidString).db").path
+        return ConversationStore(
+            preferenceService: MockPreferenceWriter(),
+            conversationService: MockLifecycleWriter(),
+            outbox: ConversationStateOutbox(dbPath: outboxPath),
+            cache: cache
+        )
+    }
+
+    func test_hydrateFromCache_fresh_hydratesList() async {
+        let cache = MockCacheReading()
+        cache.stubbed = .fresh([makeConv(id: "c1"), makeConv(id: "c2")], age: 1)
+        let store = makeStoreWithCache(cache)
+        await store.hydrateFromCache()
+        let list: [MeeshyConversation] = store.listPublisher().value() ?? []
+        XCTAssertEqual(Set(list.map(\.id)), ["c1", "c2"])
+    }
+
+    func test_hydrateFromCache_stale_hydratesList() async {
+        let cache = MockCacheReading()
+        cache.stubbed = .stale([makeConv(id: "c1")], age: 99)
+        let store = makeStoreWithCache(cache)
+        await store.hydrateFromCache()
+        let stored = await store.conversation(id: "c1")
+        XCTAssertNotNil(stored, "stale cache must still hydrate the store (serve immediately)")
+    }
+
+    func test_hydrateFromCache_empty_noop() async {
+        let cache = MockCacheReading()
+        cache.stubbed = .empty
+        let store = makeStoreWithCache(cache)
+        await store.hydrateFromCache()
+        let list: [MeeshyConversation] = store.listPublisher().value() ?? []
+        XCTAssertTrue(list.isEmpty)
+    }
+
+    // MARK: - reorderConversations (optimistic + rollback)
+
+    private func makeStoreWithPrefs(_ prefs: MockPreferenceWriter) -> ConversationStore {
+        let outboxPath = FileManager.default.temporaryDirectory
+            .appendingPathComponent("store-outbox-\(UUID().uuidString).db").path
+        return ConversationStore(
+            preferenceService: prefs,
+            conversationService: MockLifecycleWriter(),
+            outbox: ConversationStateOutbox(dbPath: outboxPath)
+        )
+    }
+
+    func test_reorderConversations_appliesOrderOptimisticallyAndCallsService() async throws {
+        let prefs = MockPreferenceWriter()
+        let store = makeStoreWithPrefs(prefs)
+        await store.hydrate(makeConv(id: "c1"))
+        await store.hydrate(makeConv(id: "c2"))
+
+        try await store.reorderConversations([(convId: "c1", orderInCategory: 1), (convId: "c2", orderInCategory: 0)])
+
+        let c1 = await store.conversation(id: "c1")!
+        let c2 = await store.conversation(id: "c2")!
+        XCTAssertEqual(c1.userState.orderInCategory, 1)
+        XCTAssertEqual(c2.userState.orderInCategory, 0)
+        XCTAssertEqual(prefs.reorderCalls.count, 1)
+        XCTAssertEqual(prefs.reorderCalls.first?.count, 2)
+    }
+
+    func test_reorderConversations_serviceFailure_rollsBack() async {
+        let prefs = MockPreferenceWriter()
+        prefs.reorderError = MeeshyError.server(statusCode: 500, message: "boom")
+        let store = makeStoreWithPrefs(prefs)
+        var conv = makeConv(id: "c1")
+        conv.userState.orderInCategory = 5
+        await store.hydrate(conv)
+
+        do {
+            try await store.reorderConversations([(convId: "c1", orderInCategory: 9)])
+            XCTFail("expected throw on service failure")
+        } catch {
+            // expected
+        }
+
+        let after = await store.conversation(id: "c1")!
+        XCTAssertEqual(after.userState.orderInCategory, 5, "a failed reorder must roll back to the prior order")
     }
 }
 
