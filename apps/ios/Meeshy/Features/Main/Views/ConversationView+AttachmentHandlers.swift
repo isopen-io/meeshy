@@ -28,8 +28,8 @@ extension ConversationView {
         }
         let durationMs = Int(audioRecorder.duration * 1000)
         let url = audioRecorder.stopRecording()
-        composerState.pendingAudioURL = url
         let audioAttachment = MessageAttachment.audio(durationMs: durationMs, color: accentColor)
+        composerState.pendingMediaFiles[audioAttachment.id] = url
         composerState.pendingAttachments.append(audioAttachment)
         return true
     }
@@ -51,17 +51,20 @@ extension ConversationView {
         let replyId = isStory ? nil : refId
         let storyReplyId = isStory ? refId : nil
         let storyRef = isStory ? pendingRef : nil
-        let content = text
 
         let attachments = composerState.pendingAttachments
-        let audioURL = composerState.pendingAudioURL
         let mediaFiles = composerState.pendingMediaFiles
+        let lang = composerState.selectedLanguage
 
-        let hasFiles = audioURL != nil || !mediaFiles.isEmpty
-        if !hasFiles || attachments.isEmpty {
+        let plan = MultiAttachmentSendPlanner.plan(
+            attachments: attachments,
+            text: text,
+            hasReply: refId != nil
+        )
+
+        if attachments.isEmpty {
             // Text-only send: clear UI immediately
             composerState.pendingAttachments.removeAll()
-            composerState.pendingAudioURL = nil
             composerState.pendingMediaFiles.removeAll()
             composerState.pendingThumbnails.removeAll()
             messageText = ""
@@ -69,8 +72,7 @@ extension ConversationView {
                 .clear(pendingReplyReference: &composerState.pendingReplyReference)
             viewModel.stopTypingEmission()
             HapticFeedback.light()
-            let lang = composerState.selectedLanguage
-            Task { await viewModel.sendMessage(content: content, replyToId: replyId, storyReplyToId: storyReplyId, storyReplyReference: storyRef, originalLanguage: lang) }
+            Task { await viewModel.sendMessage(content: text, replyToId: replyId, storyReplyToId: storyReplyId, storyReplyReference: storyRef, originalLanguage: lang) }
             return
         }
 
@@ -82,95 +84,76 @@ extension ConversationView {
         composerState.isUploading = true
         HapticFeedback.light()
 
-        // --- Optimistic media insert: show bubble immediately with local files ---
-        // Persist via GRDB (insertOptimisticMediaMessage) so the row survives
-        // the next MessageStore observation refresh. A direct
-        // `viewModel.messages.append` would only live in memory and be wiped
-        // the moment any other GRDB write fires `messagesDidChange` (e.g. a
-        // status update or another conversation receiving a message).
+        // --- Precompute sendable media groups: each paired with a stable tempId ---
+        // Both the optimistic phase and the upload phase iterate this SAME list
+        // so that tempIds never desync (Issue 1: empty-locals groups must be
+        // excluded from BOTH phases, not just the optimistic insert).
+        struct MediaGroupSend {
+            let group: MultiAttachmentSendPlanner.PlannedMessage
+            let tempId: String
+            let locals: [MeeshyMessageAttachment]   // non-empty; already cache-seeded
+        }
+
         let currentUserId = AuthManager.shared.currentUser?.id ?? ""
         let senderName = AuthManager.shared.currentUser?.displayName
         let senderColor = DynamicColorGenerator.colorForName(senderName ?? "?")
+        let thumbnails = composerState.pendingThumbnails
 
-        var previewAttachments: [MeeshyMessageAttachment] = []
-        for att in attachments where att.type != .audio {
-            if let fileURL = mediaFiles[att.id] {
+        // Build the list once. Side effects (image cache seeding) happen here.
+        let mediaGroupSends: [MediaGroupSend] = plan.filter { $0.kind != .text }.compactMap { group in
+            let locals: [MeeshyMessageAttachment] = group.attachments.compactMap { att in
+                guard let fileURL = mediaFiles[att.id] else { return nil }
                 let isImage = att.mimeType.hasPrefix("image/")
-                if isImage,
-                   let data = try? Data(contentsOf: fileURL),
-                   let image = UIImage(data: data) {
+                if isImage, let data = try? Data(contentsOf: fileURL), let image = UIImage(data: data) {
+                    // Seed in-memory NSCache + on-disk image cache so the
+                    // optimistic bubble keeps the picture across navigation
+                    // until the server `message:new` reconciliation lands.
                     DiskCacheStore.cacheImageForPreview(image, key: fileURL.absoluteString)
-                    // `cacheImageForPreview` only seeds the in-memory NSCache,
-                    // which is evicted as soon as the user leaves the
-                    // conversation. On return the optimistic bubble would then
-                    // fall back to its coloured placeholder square (a magenta
-                    // tile) until the server `message:new` reconciliation
-                    // lands. Persisting the bytes to the on-disk image cache
-                    // keeps the picture visible across navigation.
                     let persistKey = fileURL.absoluteString
                     Task { await CacheCoordinator.shared.images.save(data, for: persistKey) }
                 }
-                // A video's file:// URL points at an .mp4 — it cannot be
-                // decoded as a still image. Seed a ThumbHash from the generated
-                // thumbnail so the bubble shows a recognisable preview instantly
-                // (ProgressiveCachedImage decodes ThumbHash with zero I/O).
-                // Images render straight from the cache seeded just above.
-                let optimisticThumbHash = isImage
-                    ? nil
-                    : composerState.pendingThumbnails[att.id]?.toThumbHash()
-                previewAttachments.append(MeeshyMessageAttachment(
+                // A video/audio file:// URL cannot be decoded as a still — seed
+                // a ThumbHash from the generated thumbnail so the bubble shows a
+                // recognisable preview instantly. Images render from the cache.
+                let optimisticThumbHash = isImage ? nil : thumbnails[att.id]?.toThumbHash()
+                return MeeshyMessageAttachment(
                     id: att.id,
-                    mimeType: att.mimeType,
+                    mimeType: att.mimeType.isEmpty ? "application/octet-stream" : att.mimeType,
                     fileUrl: fileURL.absoluteString,
                     width: att.width,
                     height: att.height,
                     thumbnailUrl: isImage ? fileURL.absoluteString : nil,
                     thumbHash: optimisticThumbHash,
+                    duration: att.duration,
                     uploadedBy: currentUserId,
                     thumbnailColor: senderColor
-                ))
+                )
             }
+            guard !locals.isEmpty else { return nil }
+            // Phase 4 §6.2 — `cid_<uuid v4 lowercase>` so the gateway accepts
+            // the value as `clientMessageId` (the legacy `temp_<UUID>` prefix
+            // fails the strict wire regex).
+            return MediaGroupSend(group: group, tempId: ClientMessageId.generate(), locals: locals)
         }
 
-        // Synthesize a local audio attachment so the bubble can render the
-        // waveform/player against the file:// URL while the upload runs.
-        // The server message:new reconciliation will overwrite this with the
-        // canonical fileUrl once the upload completes.
-        var localAudioPreview: MeeshyMessageAttachment?
-        if let audioURL,
-           let audioAttachment = attachments.first(where: { $0.type == .audio }) {
-            localAudioPreview = MeeshyMessageAttachment(
-                id: audioAttachment.id,
-                mimeType: audioAttachment.mimeType.isEmpty ? "audio/mp4" : audioAttachment.mimeType,
-                fileUrl: audioURL.absoluteString,
-                duration: audioAttachment.duration,
-                uploadedBy: currentUserId,
-                thumbnailColor: senderColor
-            )
-        }
-
-        let allLocalAttachments: [MeeshyMessageAttachment] = previewAttachments + (localAudioPreview.map { [$0] } ?? [])
-        // Phase 4 §6.2 — must use the canonical `cid_<uuid v4 lowercase>`
-        // format so the gateway accepts the value as `clientMessageId`. The
-        // legacy `temp_<UUID>` prefix would fail the strict regex on the
-        // wire and silently break every image / video / file attachment
-        // send (the audio path goes through `sendWithAttachmentsAsync`
-        // which generates its own cid).
-        let tempId = ClientMessageId.generate()
-
-        if !allLocalAttachments.isEmpty {
-            let msgType: Message.MessageType = audioURL != nil ? .audio
-                : (previewAttachments.first?.mimeType.hasPrefix("video/") == true ? .video : .image)
-
+        // --- Optimistic media insert: one bubble per sendable group ---
+        // Persist via GRDB (insertOptimisticMediaMessage) so the row survives
+        // the next MessageStore observation refresh. A direct
+        // `viewModel.messages.append` would only live in memory and be wiped
+        // the moment any other GRDB write fires `messagesDidChange`.
+        for send in mediaGroupSends {
+            let msgType: Message.MessageType = send.group.kind == .audio
+                ? .audio
+                : (send.locals.first?.mimeType.hasPrefix("video/") == true ? .video : .image)
             viewModel.insertOptimisticMediaMessage(
-                tempId: tempId,
-                content: content,
-                attachments: allLocalAttachments,
+                tempId: send.tempId,
+                content: "",
+                attachments: send.locals,
                 messageType: msgType,
-                replyToId: replyId,
-                storyReplyToId: storyReplyId,
-                replyReference: storyRef,
-                originalLanguage: composerState.selectedLanguage
+                replyToId: send.group.carriesReply ? replyId : nil,
+                storyReplyToId: send.group.carriesReply ? storyReplyId : nil,
+                replyReference: send.group.carriesReply ? storyRef : nil,
+                originalLanguage: lang
             )
         }
 
@@ -179,106 +162,118 @@ extension ConversationView {
         // --- End optimistic media insert ---
 
         Task {
-            do {
-                // Phase 4 §6.3 audio offline write-ahead. If the user is
-                // offline AND the only attachment is audio, persist the
-                // recording to `Documents/pending-audio/<cid>.m4a` and
-                // queue an `OutboxRecord` referencing that path. The
-                // dispatcher (`OutboxDispatcher.dispatchSendMessage` audio
-                // branch) will TUS-upload the file and emit
-                // `message:send-with-attachments` over the socket on the
-                // next reconnect, so the gateway audio pipeline (Whisper
-                // transcription + NLLB + TTS) runs as if the user had
-                // sent online. Other attachment types fall through to the
-                // online TUS upload path because they would lose their
-                // local URL across an app restart.
-                let isOffline = NetworkMonitor.shared.isOffline
-                let onlyAudio = audioURL != nil
-                    && attachments.allSatisfy { $0.type == .audio }
-                if isOffline && onlyAudio, let audioURL {
+            defer {
+                Task { @MainActor in
+                    composerState.pendingMediaFiles.removeAll()
+                    composerState.uploadProgress = nil
+                    composerState.isUploading = false
+                }
+            }
+            let serverOrigin = MeeshyConfig.shared.serverOrigin
+            guard let baseURL = URL(string: serverOrigin),
+                  let token = APIClient.shared.authToken else {
+                await MainActor.run {
+                    composerState.isUploading = false
+                    FeedbackToastManager.shared.showError("Échec de l'envoi de la pièce jointe")
+                }
+                return
+            }
+            let uploader = TusUploadManager(baseURL: baseURL)
+            var progressCancellable: AnyCancellable?
+            progressCancellable = uploader.progressPublisher
+                .receive(on: DispatchQueue.main)
+                .sink { [progressCancellable] progress in
+                    _ = progressCancellable
+                    composerState.uploadProgress = progress
+                }
+
+            var anySuccess = false
+
+            // Upload media groups — same iteration order as the optimistic phase,
+            // using the precomputed tempId for each (Issue 1 fix: no tempIdx desync).
+            for send in mediaGroupSends {
+                // A3 — Audio offline write-ahead: short-circuit to OfflineQueue
+                // when the device is offline, instead of attempting a TUS upload
+                // that will fail immediately.
+                if send.group.kind == .audio, NetworkMonitor.shared.isOffline {
+                    let urls = send.group.attachments.compactMap { mediaFiles[$0.id] }
+                    // Offline: NEVER fall through to the TUS path (it would just
+                    // fail). A race-to-online between this check and the GRDB
+                    // write is handled by the flusher, which drains the queue
+                    // on the next cycle.
+                    guard !urls.isEmpty else {
+                        Logger.messages.warning("Audio group offline but no source URLs — skipping \(send.tempId)")
+                        continue
+                    }
                     do {
-                        _ = try await OfflineQueue.shared.enqueueAudio(
-                            sourceAudioURL: audioURL,
+                        _ = try await OfflineQueue.shared.enqueueAudios(
+                            sourceAudioURLs: urls,
                             conversationId: viewModel.conversationId,
-                            content: content.isEmpty ? nil : content,
-                            clientMessageId: tempId,
-                            originalLanguage: composerState.selectedLanguage,
-                            replyToId: replyId,
-                            forwardedFromId: nil,
-                            forwardedFromConversationId: nil
+                            content: nil,
+                            clientMessageId: send.tempId,
+                            originalLanguage: lang,
+                            replyToId: send.group.carriesReply ? replyId : nil
                         )
-                        await MainActor.run { composerState.isUploading = false }
-                        Logger.messages.info("Audio queued offline for \(tempId)")
-                        return
+                        anySuccess = true
+                        Logger.messages.info("Audio group queued offline for \(send.tempId)")
                     } catch {
                         Logger.messages.error("Audio offline enqueue failed: \(error.localizedDescription)")
                         await MainActor.run {
-                            composerState.isUploading = false
-                            viewModel.error = "Échec de la mise en file du message vocal"
+                            FeedbackToastManager.shared.showError("Échec de la mise en file du message vocal")
                         }
-                        ToastManager.shared.showError("Échec de la mise en file du message vocal")
-                        return
                     }
+                    continue   // skip the online TUS path for this group
                 }
 
-                // Reconnect socket if disconnected
-                if !MessageSocketManager.shared.isConnected {
-                    MessageSocketManager.shared.connect()
-                    try await Task.sleep(nanoseconds: 1_000_000_000)
-                }
-
-                let serverOrigin = MeeshyConfig.shared.serverOrigin
-                guard let baseURL = URL(string: serverOrigin),
-                      let token = APIClient.shared.authToken else {
-                    await MainActor.run { composerState.isUploading = false }
-                    return
-                }
-
-                let uploader = TusUploadManager(baseURL: baseURL)
-
-                // Subscribe to progress updates
-                var progressCancellable: AnyCancellable?
-                progressCancellable = uploader.progressPublisher
-                    .receive(on: DispatchQueue.main)
-                    .sink { [progressCancellable] progress in
-                        _ = progressCancellable
-                        composerState.uploadProgress = progress
+                // S7b ST2 — visual-media (photo/video/file) offline write-ahead:
+                // short-circuit to enqueueMedia (durable — survives an app kill
+                // and auto-resends on flush via the ST3 dispatcher branch)
+                // instead of the TUS path that throws offline. Mirrors the audio
+                // branch; the optimistic bubble stays durably `.sending`.
+                if send.group.kind == .visual, NetworkMonitor.shared.isOffline {
+                    let pairs: [(url: URL, kind: String)] = send.group.attachments.compactMap { att in
+                        guard let url = mediaFiles[att.id] else { return nil }
+                        let kind = AttachmentKind(mimeType: MimeTypeResolver.mimeType(forURL: url)).rawValue
+                        return (url, kind)
                     }
-
-                var uploadedIds: [String] = []
-                var localAttachments: [MeeshyMessageAttachment] = []
-
-                if let audioURL {
-                    let audioData = try? Data(contentsOf: audioURL)
-                    let result = try await uploader.uploadFile(
-                        fileURL: audioURL, mimeType: "audio/mp4", token: token
-                    )
-                    uploadedIds.append(result.id)
-                    if let audioData {
-                        // Seed under the exact key the renderer resolves to so
-                        // the optimistic→confirmed transition reads a hot cache
-                        // and never re-downloads our own upload. See RC3.3.
-                        let renderKey = MeeshyConfig.resolveMediaURL(result.fileUrl)?.absoluteString ?? result.fileUrl
-                        await CacheCoordinator.shared.audio.store(audioData, for: renderKey)
-                        // Also seed under the local `file://` key. Mirrors how
-                        // images cache under their `file://` URL (line 102): a
-                        // defence-in-depth so the optimistic GRDB row (which
-                        // still carries the `file://` URL until reconciliation)
-                        // resolves to a cached blob if the on-disk file is
-                        // cleaned up before the URL flips to https.
-                        await CacheCoordinator.shared.audio.store(audioData, for: audioURL.absoluteString)
+                    guard !pairs.isEmpty else {
+                        Logger.messages.warning("Visual group offline but no source URLs — skipping \(send.tempId)")
+                        continue
                     }
-                    let userId = AuthManager.shared.currentUser?.id ?? ""
-                    localAttachments.append(result.toMessageAttachment(uploadedBy: userId))
+                    do {
+                        _ = try await OfflineQueue.shared.enqueueMedia(
+                            sourceMediaURLs: pairs.map { $0.url },
+                            kinds: pairs.map { $0.kind },
+                            conversationId: viewModel.conversationId,
+                            content: nil,
+                            clientMessageId: send.tempId,
+                            originalLanguage: lang,
+                            replyToId: send.group.carriesReply ? replyId : nil
+                        )
+                        anySuccess = true
+                        Logger.messages.info("Visual group queued offline for \(send.tempId)")
+                    } catch {
+                        // enqueueMedia's copy-error path already flips the bubble
+                        // (emits retryExhausted) + marks the row terminal; surface
+                        // a toast too. Mirrors the audio offline branch.
+                        Logger.messages.error("Visual offline enqueue failed: \(error.localizedDescription)")
+                        await MainActor.run {
+                            FeedbackToastManager.shared.showError("Échec de la mise en file du média")
+                        }
+                    }
+                    continue   // skip the online TUS path for this group
                 }
 
-                let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-                for attachment in attachments where attachment.type != .audio {
-                    if let fileURL = mediaFiles[attachment.id] {
+                do {
+                    var uploadedIds: [String] = []
+                    var localAttachments: [MeeshyMessageAttachment] = []
+                    for att in send.group.attachments {
+                        guard let fileURL = mediaFiles[att.id] else { continue }
                         let fileData = try? Data(contentsOf: fileURL)
-                        let thumbHash = composerState.pendingThumbnails[attachment.id]?.toThumbHash()
+                        let thumbHash = thumbnails[att.id]?.toThumbHash()
+                        let mime = send.group.kind == .audio ? "audio/mp4" : att.mimeType
                         let result = try await uploader.uploadFile(
-                            fileURL: fileURL, mimeType: attachment.mimeType, token: token, thumbHash: thumbHash
+                            fileURL: fileURL, mimeType: mime, token: token, thumbHash: thumbHash
                         )
                         uploadedIds.append(result.id)
                         if let fileData {
@@ -287,25 +282,26 @@ extension ConversationView {
                             // server URL) reads a hot cache and never
                             // re-downloads our own upload. See RC3.3.
                             let renderKey = MeeshyConfig.resolveMediaURL(result.fileUrl)?.absoluteString ?? result.fileUrl
-                            if attachment.mimeType.hasPrefix("image/") {
+                            let effectiveType: MeeshyMessageAttachment.AttachmentType = send.group.kind == .audio ? .audio : att.type
+                            switch effectiveType {
+                            case .audio:
+                                await CacheCoordinator.shared.audio.store(fileData, for: renderKey)
+                                await CacheCoordinator.shared.audio.store(fileData, for: fileURL.absoluteString)
+                            case .image:
                                 await CacheCoordinator.shared.images.store(fileData, for: renderKey)
-                                // Pre-seed the in-memory UIImage cache under the
-                                // SAME key so ProgressiveCachedImage reads it
-                                // synchronously on the confirmed render — no
-                                // decode, no shimmer.
                                 if let image = UIImage(data: fileData) {
                                     DiskCacheStore.cacheImageForPreview(image, key: renderKey)
                                 }
-                            } else {
-                                // Video / file: route to the video store — the
-                                // same store checkCache(.video) and the badge
-                                // downloader read — so a confirmed own video
-                                // resolves as cached and never offers a
-                                // re-download of media we just uploaded.
+                            default:
                                 await CacheCoordinator.shared.video.store(fileData, for: renderKey)
                             }
-                            if let thumbUrl = result.thumbnailUrl,
-                               let thumbImage = composerState.pendingThumbnails[attachment.id],
+                            // Seed server-returned thumbnail so the confirmed
+                            // bubble renders from cache (no network flash on
+                            // optimistic→server URL reconciliation). Only for
+                            // non-audio groups which carry a thumbnailUrl.
+                            if effectiveType != .audio,
+                               let thumbUrl = result.thumbnailUrl,
+                               let thumbImage = thumbnails[att.id],
                                let thumbData = thumbImage.jpegData(compressionQuality: 0.8) {
                                 let thumbKey = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString ?? thumbUrl
                                 await CacheCoordinator.shared.thumbnails.store(thumbData, for: thumbKey)
@@ -314,77 +310,60 @@ extension ConversationView {
                         }
                         localAttachments.append(result.toMessageAttachment(uploadedBy: currentUserId))
                     }
-                }
-
-                progressCancellable?.cancel()
-
-                var sendSuccess = false
-                let lang = composerState.selectedLanguage
-
-                // Audio, image, vidéo et fichier empruntent tous le même envoi
-                // REST `viewModel.sendMessage`. Le pipeline audio gateway
-                // (Whisper/NLLB/TTS) se déclenche aussi via REST. En cas
-                // d'échec REST, `sendMessage` bascule automatiquement sur le
-                // socket avec le même clientMessageId (dedup → pas de doublon).
-                if !uploadedIds.isEmpty || !content.isEmpty {
-                    sendSuccess = await viewModel.sendMessage(
-                        content: content,
-                        replyToId: replyId,
-                        storyReplyToId: storyReplyId,
-                        storyReplyReference: storyRef,
+                    let ok = await viewModel.sendMessage(
+                        content: "",
+                        replyToId: send.group.carriesReply ? replyId : nil,
+                        storyReplyToId: send.group.carriesReply ? storyReplyId : nil,
+                        storyReplyReference: send.group.carriesReply ? storyRef : nil,
                         attachmentIds: uploadedIds.isEmpty ? nil : uploadedIds,
                         localAttachments: localAttachments.isEmpty ? nil : localAttachments,
                         originalLanguage: lang,
-                        existingTempId: tempId
+                        existingTempId: send.tempId
                     )
+                    anySuccess = anySuccess || ok
+                } catch {
+                    Logger.messages.error("Group upload failed (\(String(describing: send.group.kind))): \(error.localizedDescription)")
+                    // S7 — flip the optimistic bubble to .failed so it stops
+                    // showing a permanent .sending spinner and offers a retry,
+                    // instead of a silent ghost (the offline-visual path reaches
+                    // here because the TUS upload throws with no durable queue).
+                    await viewModel.markOptimisticMediaFailed(
+                        tempId: send.tempId, reason: error.localizedDescription)
                 }
+            }
 
-                // Clear UI after upload+send and clean up local files
-                await MainActor.run {
-                    for (_, url) in mediaFiles { try? FileManager.default.removeItem(at: url) }
-                    // Audio: defer disk deletion.
-                    //
-                    // The optimistic GRDB record's audio attachment carries the
-                    // `file://` URL until the `message:new` socket echo flips it
-                    // to the canonical `https://` URL (~100-500ms after REST
-                    // returns). During that reconciliation window the bubble's
-                    // play tap routes to `AudioPlayerView.playLocal` which
-                    // reads from disk — deleting the file eagerly here made the
-                    // player silently fail (the "I can't listen to my own audio
-                    // immediately after sending" bug). The bytes are already
-                    // cached under the canonical https key (seeded above), so
-                    // once reconciled the play works via the cache without any
-                    // disk read. A 10s delay covers worst-case socket latency
-                    // with ample margin while keeping Documents/ small.
-                    if let audioURL {
-                        Task {
-                            try? await Task.sleep(nanoseconds: 10_000_000_000)
-                            try? FileManager.default.removeItem(at: audioURL)
-                        }
-                    }
-                    composerState.pendingMediaFiles.removeAll()
-                    composerState.pendingAudioURL = nil
-                    composerState.uploadProgress = nil
-                    composerState.isUploading = false
-                    if sendSuccess {
-                        HapticFeedback.success()
-                    } else {
-                        HapticFeedback.error()
+            // Send text group last (preserves original planner ordering intent).
+            if let textGroup = plan.first(where: { $0.kind == .text }) {
+                let ok = await viewModel.sendMessage(
+                    content: textGroup.text ?? "",
+                    replyToId: textGroup.carriesReply ? replyId : nil,
+                    storyReplyToId: textGroup.carriesReply ? storyReplyId : nil,
+                    storyReplyReference: textGroup.carriesReply ? storyRef : nil,
+                    originalLanguage: lang
+                )
+                anySuccess = anySuccess || ok
+            }
+
+            progressCancellable?.cancel()
+
+            // Clean up local files. Audio: defer disk deletion — the optimistic
+            // GRDB row carries the file:// URL until the socket echo flips it to
+            // https (~100-500ms); the play tap reads from disk in that window.
+            let audioURLs = plan.filter { $0.kind == .audio }.flatMap { $0.attachments }.compactMap { mediaFiles[$0.id] }
+            let visualURLs = plan.filter { $0.kind == .visual }.flatMap { $0.attachments }.compactMap { mediaFiles[$0.id] }
+            await MainActor.run {
+                for url in visualURLs { try? FileManager.default.removeItem(at: url) }
+                if !audioURLs.isEmpty {
+                    Task {
+                        try? await Task.sleep(nanoseconds: 10_000_000_000)
+                        for url in audioURLs { try? FileManager.default.removeItem(at: url) }
                     }
                 }
-            } catch {
-                await MainActor.run {
-                    composerState.pendingAttachments.removeAll()
-                    composerState.pendingAudioURL = nil
-                    composerState.pendingMediaFiles.removeAll()
-                    composerState.pendingThumbnails.removeAll()
-                    composerState.uploadProgress = nil
-                    composerState.isUploading = false
-                    for (_, url) in mediaFiles { try? FileManager.default.removeItem(at: url) }
-                    if let audioURL { try? FileManager.default.removeItem(at: audioURL) }
-                    viewModel.error = "Echec de l'envoi du media: \(error.localizedDescription)"
+                if anySuccess {
+                    HapticFeedback.success()
+                } else {
                     HapticFeedback.error()
-                    ToastManager.shared.showError("Echec de l'envoi de la piece jointe")
+                    FeedbackToastManager.shared.showError("Échec de l'envoi de la pièce jointe")
                 }
             }
         }
@@ -517,7 +496,7 @@ extension ConversationView {
                 HapticFeedback.success()
             case .failure(.preparationFailed(let message)):
                 HapticFeedback.error()
-                ToastManager.shared.showError(message)
+                FeedbackToastManager.shared.showError(message)
             }
             composerState.preparingAttachments.removeAll { $0.id == prep.id }
         }

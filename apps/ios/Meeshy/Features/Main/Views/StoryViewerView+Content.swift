@@ -517,7 +517,15 @@ extension StoryViewerView {
     ///   (timer-only — le canvas continue à jouer).
     /// - `isLongPressPaused` : toggle long-press utilisateur (timer + canvas
     ///   gelés ensemble via `.storyPlayerPause`).
-    private var shouldPauseTimer: Bool {
+    /// Internal car lu depuis `StoryViewerView.swift` (cross-file extension) :
+    /// le helper `storyCard(geometry:)` passe cette valeur à `StoryCardView`
+    /// pour propager la pause au canvas via `StoryReaderRepresentable.isPaused`.
+    /// Composers + pickers + transitions pause the slide timer. Comments
+    /// overlay does NOT (the user wants to read comments while the story
+    /// keeps playing/looping behind). Focus on the comment composer engages
+    /// `isComposerEngaged` which DOES pause — that's the intended trigger,
+    /// not the overlay visibility alone (user spec 2026-05-28).
+    var shouldPauseTimer: Bool {
         isPaused
         || isLongPressPaused
         || isComposerEngaged
@@ -527,6 +535,11 @@ extension StoryViewerView {
         || showTextEmojiPicker
         || showLanguageOptions
         || showFullLanguagePicker
+        // L'overlay commentaires ouvert met la story en pause : lire / répondre à
+        // un commentaire ne doit pas laisser la slide auto-avancer sous l'overlay
+        // (bug 2026-06-01 — l'utilisateur lit les commentaires et la story passe
+        // à la slide suivante). Parité Instagram : ouvrir les commentaires gèle
+        // la lecture (timer + médias via `isCanvasPlaybackPaused`).
         || showCommentsOverlay
         || isTransitioning
         || isDismissing
@@ -538,71 +551,64 @@ extension StoryViewerView {
         isContentReady = false
         hasFiredFadeOut = false
         hasFiredNextPrefetch = false
+        lastPlaybackTime = 0
         showCommentsOverlay = false
         replyingToStoryComment = nil
         storyCommentRepliesMap = [:]
         storyCommentExpandedThreads = []
         storyCommentLoadingReplies = []
+        // Slide changed → drop previous slide's comment list, like overrides, and
+        // any in-flight heart taps. Without this, `isStoryCommentsEmpty` stays
+        // false in the sidebar tap path (Sidebar:277) and the overlay re-opens
+        // with the prior slide's comments without ever refetching.
+        storyComments = []
+        storyCommentLikedIds = []
+        storyCommentLikeDelta = [:]
+        heartInFlightIds = []
+        isLoadingComments = false
         loadStoryCommentCount()
         storyReactionCount = currentStory?.reactionCount ?? 0
+        storyCurrentUserReactions = currentStory?.currentUserReactions ?? []
         updateStoryDuration()
         let duration = computedStoryDuration
-        let fadeOutThreshold = max(0, 1.0 - (2.0 / duration))
         // Seuil d'amorçage du prefetch de la slide suivante : 5 secondes avant
-        // la fin de la slide en cours (clamp à 0 pour les slides ≤ 5 s, où
-        // le prefetch s'arme dès l'apparition). Ça donne ~5 s de marge réseau
-        // au décodeur pour avoir au moins quelques secondes de la prochaine
-        // vidéo prêtes en mémoire / cache disk avant la transition, ce qui
-        // élimine le loader 0% lors du switch.
-        let nextPrefetchThreshold = max(0, 1.0 - (5.0 / duration))
+        // la fin de la slide en cours, borné à 50 % minimum. Sur une slide 6 s
+        // ce ratio donne 50 % (≈ 3 s avant la fin) au lieu de 17 % (≈ 5 s avant
+        // la fin → quasi immédiatement, ce qui faisait fire le prefetch sur la
+        // slide précédente et masquait le diagnostic du cache miss). Le bornage
+        // garantit qu'on reste cohérent avec l'intent « pré-charger pendant la
+        // 2ᵉ moitié de la slide » quelle que soit la durée.
+        let nextPrefetchThreshold = max(0.5, 1.0 - (5.0 / duration))
 
-        // Drive the progress bar from a CADisplayLink instead of `Timer.publish(every: 0.03)`.
-        // Two wins:
-        // (a) CADisplayLink syncs to the display refresh, auto-pauses when the
-        //     app backgrounds, and stops cleanly when invalidated. The Combine
-        //     timer kept ticking on background and accumulated wake-ups.
-        // (b) A diff-guarded write only commits `progress` when the bar would
-        //     visually advance by at least 1/300 (≈1 pixel on a 300pt-wide
-        //     viewer). On a 5s story that's ~60 commits total instead of ~165
-        //     timer fires — a 2.5x reduction in body re-evaluations of the
-        //     storyCard ZStack (audit E1: ~10% CPU continuous).
-        //
-        // Elapsed time is a PAUSE-AWARE ACCUMULATOR rather than raw wall-clock:
-        // each frame adds its delta to `accumulated` ONLY while the timer is not
-        // paused AND the slide's real media has loaded (`isContentReady`). This
-        // gates the progress bar on content readiness (it stays at 0 until the
-        // canvas signals `onContentReady`) and fixes the legacy pause-jump bug
-        // where wall-clock kept running behind a sheet/composer/drag pause.
-        let accumulated = StoryProgressDisplayLinkProxy.MutableDouble(0)
-        let lastFrame = StoryProgressDisplayLinkProxy.MutableDouble(CACurrentMediaTime())
+        // PROGRESS BAR = wall-clock CACurrentMediaTime accumulator aligné sur
+        // `computedStoryDuration`. Gate `isContentReady` empêche le timer de
+        // démarrer avant que le canvas n'ait fait fire `onContentReady`
+        // (bg image / video / color settled, fg vidéos en .readyToPlay).
+        // Une fois armé, le wall-clock roule indépendamment du canvas tick
+        // — il est l'autorité de la durée slide.
         let lastCommitted = StoryProgressDisplayLinkProxy.MutableDouble(0)
+        let elapsedAccumulator = StoryProgressDisplayLinkProxy.MutableDouble(0)
+        let lastTickTime = StoryProgressDisplayLinkProxy.MutableDouble(0)
+        let hasFiredGoToNext = StoryProgressDisplayLinkProxy.MutableDouble(0)
         let proxy = StoryProgressDisplayLinkProxy { [self] in
+            guard hasFiredGoToNext.value == 0 else { return }
             let now = CACurrentMediaTime()
-            let delta = now - lastFrame.value
-            lastFrame.value = now
+            let dt: Double = lastTickTime.value > 0 ? (now - lastTickTime.value) : 0
+            lastTickTime.value = now
             guard !shouldPauseTimer, isContentReady else { return }
-            accumulated.value += delta
-            let raw = min(1.0, CGFloat(accumulated.value / duration))
+            elapsedAccumulator.value += dt
+            let elapsed = elapsedAccumulator.value
+            let raw = min(1.0, CGFloat(elapsed / duration))
             if abs(raw - CGFloat(lastCommitted.value)) >= 1.0 / 300.0 || raw >= 1.0 {
                 lastCommitted.value = Double(raw)
                 progress = raw
             }
-            if raw >= fadeOutThreshold && !hasFiredFadeOut {
-                hasFiredFadeOut = true
-                NotificationCenter.default.post(name: .storyAudioFadeOut, object: nil)
-            }
-            // Prefetch de la slide suivante 5 secondes avant la fin. On laisse
-            // ainsi au décodeur le temps de mettre en cache disk au moins les
-            // premières secondes (typiquement 5 s suffisent même sur 4G) avant
-            // que l'utilisateur transitionne — la prochaine ouverture est alors
-            // instantanée. Idempotent via `hasFiredNextPrefetch` : un seul
-            // déclenchement par slide. Sécurisé en bout de groupe (prefetchStory
-            // borne l'index et `prefetchAllMedia` est un no-op si déjà en cache).
             if raw >= nextPrefetchThreshold && !hasFiredNextPrefetch {
                 hasFiredNextPrefetch = true
                 _ = prefetchStory(at: currentStoryIndex + 1)
             }
-            if raw >= 1.0 {
+            if elapsed >= duration {
+                hasFiredGoToNext.value = 1
                 goToNext()
             }
         }
@@ -628,131 +634,41 @@ extension StoryViewerView {
     }
 
     /// Calcule la durée du slide courant en fonction des médias (vidéo/audio).
-    /// Minimum 12s pour les slides texte/image seules — l'ancien 5s coupait
-    /// trop tôt la lecture des captions et stickers.
+    /// Minimum 6s pour les slides texte/image seules — parité Instagram/Snapchat,
+    /// abaissé depuis 12s après retour utilisateur « les stories durent trop ».
     ///
-    /// Spec: la story dure `max(longest_media_end_time, configured_slideDuration, 12s_minimum)`.
+    /// Spec: la story dure `max(longest_media_end_time, configured_slideDuration, 6s_minimum)`,
+    /// puis arrondie au multiple supérieur de chaque période de loop bg pour
+    /// que la vidéo/audio bg ne soit JAMAIS coupée au milieu d'un cycle.
     /// Avant ce fix, `effects.slideDuration` early-returned et les médias plus longs
     /// que la durée configurée étaient coupés (la vidéo apparaissait quelques
     /// secondes puis disparaissait alors que le son continuait — typique d'un
     /// timer de slide expirant avant la fin du média).
+    /// SINGLE SOURCE OF TRUTH pour la durée du slide.
+    /// User spec 2026-05-27 :
+    /// - Slide statique → 6 s
+    /// - Slide avec vidéo OU audio bg → durée du media (loopé si < 6 s)
+    /// - `storyEffects.slideDuration` configuré prime quand > 0
+    ///
+    /// Délégation à `StorySlide.toRenderableSlide(...).computedTotalDuration()`
+    /// pour aligner exactement avec la durée que pilote le canvas
+    /// (`StoryCanvasUIView.displayLinkTick.effectiveDuration`). Garantit que
+    /// progress bar (wall-clock viewer-side) et auto-advance (canvas-side)
+    /// utilisent la MÊME valeur.
+    static let defaultSlideDuration: Double = 6.0
+
     private func updateStoryDuration() {
         guard let story = currentStory else {
-            computedStoryDuration = 12.0
+            computedStoryDuration = Self.defaultSlideDuration
             return
         }
-        var maxDuration: Double = 12.0
-        let effects = story.storyEffects
-
-        // Configured timeline duration is one CANDIDATE — not authoritative.
-        // We always pick the largest of (configured, longest media, minimum).
-        if let authoritative = effects?.slideDuration, authoritative > 0 {
-            maxDuration = max(maxDuration, Double(authoritative))
-        }
-
-        // Durées des médias foreground (composer écrit `placement: "media"`, jamais
-        // `"foreground"` — le filtre legacy laissait passer aucun élément, écrasant la
-        // durée à 5s pour toute vidéo > 5s). On s'aligne sur les accesseurs partagés.
-        for obj in effects?.resolvedForegroundMediaObjects ?? [] {
-            let startOffset = Double(obj.startTime ?? 0)
-            if let feedMedia = story.media.first(where: { $0.id == obj.postMediaId }),
-               let dur = feedMedia.duration, dur > 0 {
-                maxDuration = max(maxDuration, startOffset + Double(dur))
-            } else if let objDur = obj.duration {
-                maxDuration = max(maxDuration, startOffset + Double(objDur))
-            }
-        }
-
-        // Durées des audio players foreground — même correctif.
-        for obj in effects?.resolvedForegroundAudioPlayers ?? [] {
-            let startOffset = Double(obj.startTime ?? 0)
-            if let feedMedia = story.media.first(where: { $0.id == obj.postMediaId }),
-               let dur = feedMedia.duration, dur > 0 {
-                maxDuration = max(maxDuration, startOffset + Double(dur))
-            } else if let objDur = obj.duration {
-                maxDuration = max(maxDuration, startOffset + Double(objDur))
-            }
-        }
-
-        // Durées des text objects — startTime + duration
-        for obj in effects?.textObjects ?? [] {
-            let startOffset = obj.startTime ?? 0
-            if let dur = obj.duration {
-                maxDuration = max(maxDuration, startOffset + dur)
-            }
-
-            // Extension dynamique basée sur la longueur du texte (Section 5 de la review)
-            // Les textes longs de plus de 30 mots devraient rajouter 1 seconde de plus à la story
-            // pour chaque 6 mots supplémentaire.
-            let words = obj.text.split(separator: " ").count
-            if words > 30 {
-                let extraWords = words - 30
-                let extraSeconds = Double(extraWords) / 6.0
-                // L'extension s'applique sur la durée de base du slide (floor)
-                let base = effects?.slideDuration.map { Double($0) } ?? 12.0
-                maxDuration = max(maxDuration, base + extraSeconds)
-            }
-        }
-
-        // Background loop periods — collected here as a separate signal because
-        // they DON'T extend the story directly to their full duration (bg
-        // audio/video loop). Instead we round the foreground baseline up to
-        // the next multiple of each loop period below, so the loop completes
-        // its Nth cycle before the slide advances. Without this, a 12s slide
-        // with a 5s bg video would cut at 12s mid-third-loop; with it, the
-        // slide extends to 15s (3 full cycles).
-        var bgLoopPeriods: [Double] = []
-        if let bgMedia = effects?.resolvedBackgroundMedia, bgMedia.kind == .video,
-           let dur = story.media.first(where: { $0.id == bgMedia.postMediaId })?.duration, dur > 0 {
-            bgLoopPeriods.append(Double(dur))
-        }
-        // Legacy background video (when no canvas mediaObjects).
-        if (effects?.mediaObjects ?? []).isEmpty,
-           let legacyMedia = story.media.first,
-           legacyMedia.type == .video,
-           let dur = legacyMedia.duration, dur > 0 {
-            bgLoopPeriods.append(Double(dur))
-        }
-        // Background audio (trimmed range or full clip).
-        if let bgAudioId = effects?.backgroundAudioId {
-            if let start = effects?.backgroundAudioStart, let end = effects?.backgroundAudioEnd, end > start {
-                bgLoopPeriods.append(end - start)
-            } else if let feedMedia = story.media.first(where: { $0.id == bgAudioId }),
-                      let dur = feedMedia.duration, dur > 0 {
-                bgLoopPeriods.append(Double(dur))
-            }
-        }
-
-        // Pour les vidéos/audios locales en preview, utiliser AVURLAsset si FeedMedia.duration est nil
-        if isPreviewMode {
-            let capturedVideoURLs = preloadedVideoURLs
-            let capturedAudioURLs = preloadedAudioURLs
-            let capturedMaxDuration = maxDuration
-            let capturedBgPeriods = bgLoopPeriods
-            Task { @MainActor in
-                var asyncMax = capturedMaxDuration
-                for (_, url) in capturedVideoURLs {
-                    let asset = AVURLAsset(url: url)
-                    if let cmDur = try? await asset.load(.duration) {
-                        let dur = CMTimeGetSeconds(cmDur)
-                        if dur > 0 && dur.isFinite { asyncMax = max(asyncMax, dur) }
-                    }
-                }
-                for (_, url) in capturedAudioURLs {
-                    let asset = AVURLAsset(url: url)
-                    if let cmDur = try? await asset.load(.duration) {
-                        let dur = CMTimeGetSeconds(cmDur)
-                        if dur > 0 && dur.isFinite { asyncMax = max(asyncMax, dur) }
-                    }
-                }
-                computedStoryDuration = Self.roundedUpToBgLoops(baseDuration: asyncMax,
-                                                                bgLoopPeriods: capturedBgPeriods)
-            }
-            return
-        }
-
-        computedStoryDuration = Self.roundedUpToBgLoops(baseDuration: maxDuration,
-                                                        bgLoopPeriods: bgLoopPeriods)
+        // `preferredLanguages: []` — la résolution de langue n'affecte
+        // pas la durée (computedTotalDuration ne consulte plus le texte
+        // résolu depuis sa simplification single-source-of-truth).
+        // Évite la dépendance sur `resolvedViewerLanguageChain` (private
+        // dans StoryViewerView.swift, inaccessible depuis cette extension).
+        let renderable = story.toRenderableSlide(preferredLanguages: [])
+        computedStoryDuration = renderable.computedTotalDuration()
     }
 
     /// For each background loop period, round the base duration up to the
@@ -999,6 +915,15 @@ extension StoryViewerView {
                     _ = await imageStore.image(for: urlString)
                 }
             }
+            // Pre-probe foreground video audio tracks so `storyHasAudibleSound`
+            // resolves to its final value before the slide is rendered —
+            // without this, the sound button « apparait après quelques 100 ms »
+            // when the story carries a video with audio (user bug 2026-05-28
+            // « le calcul pour savoir si on affiche le bouton son doit se
+            // faire avant qu'on affiche la story »). The probe lives in
+            // `StoryViewerView.swift` so it can touch the private @State /
+            // private resolveVideoURL helpers directly.
+            await self.preProbeVideoAudio(for: story)
         }
     }
 
@@ -1192,258 +1117,259 @@ struct StoryCommentsOverlayView: View {
     let storyCommentLoadingReplies: Set<String>
     let isLoadingComments: Bool
     let userLang: String
-    let composerAccentColor: String
 
     @Binding var showCommentsOverlay: Bool
+    /// Réservation visuelle. Quand non-nil, le composer principal (un
+    /// `StoryComposerBarView` rendu dans la canvas « Bottom area ») affiche
+    /// sa reply banner. L'overlay s'en sert seulement pour étirer sa
+    /// `composerSpaceReservation` afin que la liste ne passe pas sous la
+    /// banner.
     @Binding var replyingToStoryComment: FeedComment?
-    @Binding var composerLanguage: String
-    @Binding var commentEffects: MessageEffects
-    @Binding var commentBlurEnabled: Bool
+
+    /// Drives the dynamic max-height of the comment list — with keyboard the
+    /// list expands toward the top, without it the list caps at ~50 % of the
+    /// screen so the underlying story stays manipulable above the list.
+    @ObservedObject var keyboard: KeyboardObserver
+
+    /// Vrai safe area bas lu sur la keyWindow par le parent
+    /// (`StoryViewerView.windowBottomInset`). Necessaire parce que cet
+    /// overlay est rendu dans le ZStack canvas qui herite du
+    /// `.ignoresSafeArea()` root — `geometry.safeAreaInsets.bottom` y vaut 0.
+    /// Sans cette valeur, `composerSpaceReservation` retombait sur une
+    /// constante hardcodee (54pt pour iPhone Pro) qui derivait sur iPhone
+    /// SE / iPad / pliables (bug 2026-05-28 : « le commentaire sort du
+    /// viewport EXACTEMENT comme la zone de composition »).
+    let safeBottom: CGFloat
 
     let makeStoryCommentRow: (FeedComment, String) -> StoryCommentRowView
     let toggleStoryCommentThread: (String) async -> Void
-    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?) -> Void
 
     private var topLevelComments: [FeedComment] {
         storyComments.filter { $0.parentId == nil }
     }
 
+    /// Instagram-style top fade — older comments dissolve toward the middle
+    /// of the screen as the user scrolls up. Bottom stays solid so the row
+    /// touching the composer is fully legible.
+    private var listFadeMask: LinearGradient {
+        LinearGradient(
+            stops: [
+                .init(color: .clear, location: 0.0),
+                .init(color: .black.opacity(0.4), location: 0.12),
+                .init(color: .black, location: 0.30),
+                .init(color: .black, location: 1.0)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
+    /// Cap the comment list to ~half the screen when the keyboard is hidden
+    /// so the rest of the story (head, mid-frame) stays visible and tappable.
+    /// When the keyboard rises the list can grow into the space the keyboard
+    /// uncovered.
+    private var listMaxHeight: CGFloat {
+        let screen = UIScreen.main.bounds.height
+        return keyboard.isVisible ? screen * 0.62 : screen * 0.42
+    }
+
+    /// Instagram-style overlay: comments float above the composer with a top
+    /// fade, the story behind stays visible AND interactable (no opaque
+    /// background catching taps). Composer alone wears a subtle glass strip so
+    /// the input is legible against any background.
+    ///
+    /// No global scrim behind the list — each individual `StoryCommentRowView`
+    /// carries its own dark bubble for legibility (user spec 2026-05-28:
+    /// « enlève le fond dégradé noir sur le composant de listing »). The
+    /// `listFadeMask` keeps fading rows out at the top so older comments
+    /// dissolve into the story above as the user scrolls up.
     var body: some View {
         VStack(spacing: 0) {
-            // Tap-to-dismiss upper half
-            Color.black.opacity(0.3)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showCommentsOverlay = false
-                        replyingToStoryComment = nil
-                    }
-                }
-                .frame(maxHeight: .infinity)
+            Spacer(minLength: 0)
+            commentsList
+                .frame(maxHeight: listMaxHeight)
+                .mask(listFadeMask)
+                // Réserve l'espace occupé par le composer principal rendu
+                // dans la canvas « Bottom area » (cf. `StoryComposerBarView`
+                // à canvas line ~1078). Sans cette réservation, les derniers
+                // commentaires de la liste passeraient SOUS le composer
+                // (bug user 2026-05-28 « deuxième instance de composer
+                // apparaît et fait disparaître l'autre »). On unifie sur
+                // UN SEUL composer (le principal) et on laisse la liste
+                // s'arrêter juste au-dessus.
+                .padding(.bottom, composerSpaceReservation)
+        }
+        // **CRITIQUE** : forcer la VStack à remplir toute la hauteur du
+        // canvas. Sans `.frame(maxHeight: .infinity)`, le `Spacer(minLength:
+        // 0)` collapse à 0pt et la liste se positionne au TOP de la VStack
+        // intrinsèque (~150-200pt) qui se centre dans le canvas ZStack →
+        // les commentaires apparaissent dans le tiers supérieur de l'écran
+        // au lieu de juste au-dessus du composer (bug user 2026-05-28
+        // « la zone de commentaire est coupé »). Auparavant `composerStrip`
+        // avec son `Rectangle.ignoresSafeArea(.bottom)` étirait
+        // implicitement la VStack ; maintenant il faut le déclarer.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .animation(.easeInOut(duration: 0.25), value: keyboard.isVisible)
+        .animation(.easeInOut(duration: 0.2), value: replyingToStoryComment?.id)
+    }
 
-            // Comment panel — bottom half
-            VStack(spacing: 0) {
-                // Header
-                HStack {
-                    Text(String(localized: "story.viewer.commentsCount", defaultValue: "\(storyCommentCount) commentaire\(storyCommentCount > 1 ? "s" : "")", bundle: .main))
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.white)
+    /// Hauteur réservée pour le composer principal (StoryComposerBarView)
+    /// + son safe area / sa montée clavier. La liste s'arrête au MILIEU du
+    /// composer (et non au-dessus) pour que les nouveaux commentaires
+    /// paraissent « émerger » de la zone de composition au scroll — le
+    /// composer recouvre visuellement la moitié inférieure de la liste,
+    /// et la masque-gradient `listFadeMask` cache déjà les rows arrivant
+    /// par le haut. User spec 2026-05-28 : « le composant pour remonter
+    /// les commentaires doit débuter en milieu de la zone de composition
+    /// […] on verra les commentaires sortir de cette zone ».
+    /// - clavier visible : `keyboard.height` + composer ~ 92pt (sans banner)
+    ///   ou ~140pt (avec reply banner)
+    /// - clavier caché : safe area ~34pt + 20pt breathing room + composer/2.
+    private var composerSpaceReservation: CGFloat {
+        let composerHeight: CGFloat = replyingToStoryComment != nil ? 142 : 92
+        // Mirror `composerBottomPadding(geometry:)` cote canvas : safe area
+        // reel + 20pt breathing room quand clavier cache, sinon hauteur clavier.
+        // `safeBottom` arrive du parent via `windowBottomInset` (keyWindow),
+        // pas via `geometry.safeAreaInsets.bottom` qui vaut 0 sous
+        // `.ignoresSafeArea()` (bug 2026-05-28).
+        let bottomPadding: CGFloat = keyboard.isVisible
+            ? keyboard.height
+            : safeBottom + 20
+        // Half-composer overlap — list ends at composer.middle, the lower
+        // half is the « emerge » zone where new rows transition into view.
+        return composerHeight / 2 + bottomPadding
+    }
 
-                    Spacer()
+    // MARK: - Comments List
 
-                    Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            showCommentsOverlay = false
-                            replyingToStoryComment = nil
+    private var commentsList: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array(topLevelComments.enumerated()), id: \.element.id) { idx, comment in
+                        // Separator between top-level comments — `Divider()`
+                        // SwiftUI natif (1pt, white opacity ~15%) au lieu de la
+                        // RoundedRectangle box autour de chaque row (user spec
+                        // 2026-05-28 : « alignés et séparés par des ---- »).
+                        if idx > 0 {
+                            Divider()
+                                .overlay(Color.white.opacity(0.18))
+                                .padding(.vertical, 4)
                         }
-                    } label: {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white.opacity(0.6))
-                            .frame(width: 28, height: 28)
-                            .background(Circle().fill(Color.white.opacity(0.1)))
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
 
-                Divider()
-                    .background(Color.white.opacity(0.1))
+                        makeStoryCommentRow(comment, userLang)
+                            .id(comment.id)
 
-                // Scrollable comments
-                ScrollViewReader { proxy in
-                    ScrollView(.vertical, showsIndicators: false) {
-                        LazyVStack(alignment: .leading, spacing: 6) {
-                            ForEach(topLevelComments) { comment in
-                                makeStoryCommentRow(comment, userLang)
-                                    .id(comment.id)
-
-                                let replies = storyCommentRepliesMap[comment.id] ?? []
-                                let autoPreview = Array(replies.prefix(2))
-                                if !autoPreview.isEmpty && !storyCommentExpandedThreads.contains(comment.id) {
-                                    ForEach(autoPreview) { reply in
-                                        makeStoryCommentRow(reply, userLang)
-                                            .padding(.leading, 32)
-                                            .id(reply.id)
-                                    }
-                                }
-
-                                if comment.replies > 2 {
-                                    Button {
-                                        HapticFeedback.light()
-                                        Task { await toggleStoryCommentThread(comment.id) }
-                                    } label: {
-                                        HStack(spacing: 4) {
-                                            Image(systemName: storyCommentExpandedThreads.contains(comment.id) ? "chevron.up" : "chevron.down")
-                                                .font(.system(size: 9, weight: .bold))
-                                            let remaining = max(0, comment.replies - 2)
-                                            Text(storyCommentExpandedThreads.contains(comment.id)
-                                                 ? "Masquer"
-                                                 : "Voir \(remaining) autre\(remaining > 1 ? "s" : "") r\u{00E9}ponse\(remaining > 1 ? "s" : "")")
-                                                .font(.system(size: 11, weight: .semibold))
-                                        }
-                                        .foregroundColor(Color(hex: comment.authorColor))
-                                        .padding(.leading, 40)
-                                        .padding(.vertical, 4)
-                                    }
-                                }
-
-                                if storyCommentExpandedThreads.contains(comment.id) {
-                                    if storyCommentLoadingReplies.contains(comment.id) && replies.isEmpty {
-                                        HStack {
-                                            Spacer()
-                                            ProgressView().tint(.white.opacity(0.5)).scaleEffect(0.7)
-                                            Spacer()
-                                        }
-                                        .padding(.leading, 32)
-                                        .padding(.vertical, 4)
-                                    }
-
-                                    ForEach(replies) { reply in
-                                        makeStoryCommentRow(reply, userLang)
-                                            .padding(.leading, 32)
-                                            .id(reply.id)
-                                    }
-                                }
+                        let replies = storyCommentRepliesMap[comment.id] ?? []
+                        let autoPreview = Array(replies.prefix(2))
+                        if !autoPreview.isEmpty && !storyCommentExpandedThreads.contains(comment.id) {
+                            ForEach(autoPreview) { reply in
+                                makeStoryCommentRow(reply, userLang)
+                                    .padding(.leading, 32)
+                                    .id(reply.id)
                             }
+                        }
 
-                            if isLoadingComments {
+                        if comment.replies > 2 {
+                            Button {
+                                HapticFeedback.light()
+                                Task { await toggleStoryCommentThread(comment.id) }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: storyCommentExpandedThreads.contains(comment.id) ? "chevron.up" : "chevron.down")
+                                        .font(.system(size: 9, weight: .bold))
+                                    let remaining = max(0, comment.replies - 2)
+                                    Text(storyCommentExpandedThreads.contains(comment.id)
+                                         ? "Masquer"
+                                         : "Voir \(remaining) autre\(remaining > 1 ? "s" : "") r\u{00E9}ponse\(remaining > 1 ? "s" : "")")
+                                        .font(.system(size: 11, weight: .semibold))
+                                }
+                                .foregroundColor(Color(hex: comment.authorColor))
+                                .padding(.leading, 40)
+                                .padding(.vertical, 4)
+                            }
+                        }
+
+                        if storyCommentExpandedThreads.contains(comment.id) {
+                            if storyCommentLoadingReplies.contains(comment.id) && replies.isEmpty {
                                 HStack {
                                     Spacer()
-                                    ProgressView()
-                                        .tint(.white.opacity(0.6))
+                                    ProgressView().tint(.white.opacity(0.5)).scaleEffect(0.7)
                                     Spacer()
                                 }
-                                .padding(.vertical, 8)
+                                .padding(.leading, 32)
+                                .padding(.vertical, 4)
                             }
 
-                            if topLevelComments.isEmpty && !isLoadingComments {
-                                VStack(spacing: 8) {
-                                    Image(systemName: "bubble.left.and.bubble.right")
-                                        .font(.system(size: 28))
-                                        .foregroundColor(.white.opacity(0.3))
-                                    Text(String(localized: "story.viewer.comments.empty", defaultValue: "Pas encore de commentaires", bundle: .main))
-                                        .font(.system(size: 13, weight: .semibold))
-                                        .foregroundColor(.white.opacity(0.5))
-                                    Text(String(localized: "story.viewer.comments.beFirst", defaultValue: "Soyez le premier \u{00E0} commenter !", bundle: .main))
-                                        .font(.system(size: 11))
-                                        .foregroundColor(.white.opacity(0.3))
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 32)
-                            }
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.top, 8)
-                        .padding(.bottom, 12)
-                    }
-                    .adaptiveOnChange(of: storyComments.count) { _, _ in
-                        if let last = storyComments.last {
-                            withAnimation(.easeOut(duration: 0.3)) {
-                                proxy.scrollTo(last.id, anchor: .bottom)
+                            ForEach(replies) { reply in
+                                makeStoryCommentRow(reply, userLang)
+                                    .padding(.leading, 32)
+                                    .id(reply.id)
                             }
                         }
                     }
-                    .adaptiveOnChange(of: replyingToStoryComment?.id) { _, newId in
-                        // Bring the target into view so the user sees what they're
-                        // replying to even if it was off-screen.
-                        guard let id = newId else { return }
-                        withAnimation(.easeOut(duration: 0.3)) {
-                            proxy.scrollTo(id, anchor: .center)
+
+                    if isLoadingComments {
+                        HStack {
+                            Spacer()
+                            ProgressView().tint(.white.opacity(0.6))
+                            Spacer()
                         }
+                        .padding(.vertical, 8)
+                    }
+
+                    if topLevelComments.isEmpty && !isLoadingComments {
+                        emptyPlaceholder
                     }
                 }
-
-                // Inline composer for story comments (reply banner attached inside)
-                storyCommentComposerBar
+                // **Aligned with composer's 28pt outer padding** (cf.
+                // canvas line 1108). Le commentaire-row visuel commence
+                // exactement au même `leading` que la rangée de saisie du
+                // composer → plus de désalignement entre la liste
+                // commentaires et la zone Commenter / reply banner (bug
+                // user 2026-05-28). Trailing 80pt préserve le dégagement
+                // sidebar (Layer 8 ~56+6=62pt depuis le bord droit).
+                .padding(.leading, 28)
+                .padding(.trailing, 80)
+                .padding(.top, 24)
+                .padding(.bottom, 12)
             }
-            .frame(maxHeight: min(UIScreen.main.bounds.height * 0.5, 520))
-            .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .fill(Color.black.opacity(0.6))
-                    )
-                    .ignoresSafeArea(edges: .bottom)
-            )
+            .adaptiveOnChange(of: storyComments.count) { _, _ in
+                if let last = storyComments.last {
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        proxy.scrollTo(last.id, anchor: .bottom)
+                    }
+                }
+            }
+            .adaptiveOnChange(of: replyingToStoryComment?.id) { _, newId in
+                // Bring the target into view so the user sees what they're
+                // replying to even if it was off-screen.
+                guard let id = newId else { return }
+                withAnimation(.easeOut(duration: 0.3)) {
+                    proxy.scrollTo(id, anchor: .center)
+                }
+            }
         }
     }
 
-    // MARK: - Story Comment Composer
+    // MARK: - Empty State
 
-    private var storyCommentComposerBar: some View {
-        let replyContext = replyingToStoryComment
-        return UniversalComposerBar(
-            style: .dark,
-            mode: .comment,
-            accentColor: replyContext?.authorColor ?? composerAccentColor,
-            selectedLanguage: composerLanguage,
-            onLanguageChange: { composerLanguage = $0 },
-            onSend: { text in
-                let effects = commentEffects
-                let blur = commentBlurEnabled
-                commentEffects = .none
-                commentBlurEnabled = false
-                let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
-                let effectFlags = flags > 0 ? Int(flags) : nil
-                let parentId = replyingToStoryComment?.id
-                replyingToStoryComment = nil
-                sendComment(text, effectFlags, parentId)
-            },
-            replyBanner: replyContext.map { reply in
-                AnyView(
-                    HStack(spacing: 8) {
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color(hex: reply.authorColor))
-                            .frame(width: 3, height: 30)
-
-                        VStack(alignment: .leading, spacing: 1) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "arrowshape.turn.up.left.fill")
-                                    .font(.system(size: 9, weight: .semibold))
-                                    .foregroundColor(Color(hex: reply.authorColor))
-                                Text(String(localized: "story.viewer.replyTo", defaultValue: "R\u{00E9}ponse \u{00E0} \(reply.author)", bundle: .main))
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundColor(Color(hex: reply.authorColor))
-                            }
-                            Text(reply.displayContent)
-                                .font(.system(size: 11))
-                                .foregroundColor(.white.opacity(0.6))
-                                .lineLimit(1)
-                        }
-
-                        Spacer()
-
-                        Button {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                replyingToStoryComment = nil
-                            }
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(.white.opacity(0.6))
-                                .frame(width: 22, height: 22)
-                                .background(Circle().fill(Color.white.opacity(0.12)))
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color(hex: reply.authorColor).opacity(0.18))
-                    .overlay(
-                        Rectangle()
-                            .fill(Color(hex: reply.authorColor).opacity(0.35))
-                            .frame(height: 0.5),
-                        alignment: .bottom
-                    )
-                )
-            },
-            isBlurEnabled: $commentBlurEnabled,
-            pendingEffects: $commentEffects
-        )
-        .padding(.horizontal, 8)
-        .padding(.bottom, 4)
+    private var emptyPlaceholder: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "bubble.left.and.bubble.right")
+                .font(.system(size: 28))
+                .foregroundColor(.white.opacity(0.5))
+            Text(String(localized: "story.viewer.comments.empty", defaultValue: "Pas encore de commentaires", bundle: .main))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(.white.opacity(0.7))
+            Text(String(localized: "story.viewer.comments.beFirst", defaultValue: "Soyez le premier \u{00E0} commenter !", bundle: .main))
+                .font(.system(size: 11))
+                .foregroundColor(.white.opacity(0.5))
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 32)
     }
+
 }
 
 extension StoryViewerView {
@@ -1481,7 +1407,8 @@ extension StoryViewerView {
                     content: c.content, timestamp: c.createdAt,
                     likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                     parentId: commentId,
-                    originalLanguage: c.originalLanguage, translatedContent: translated
+                    originalLanguage: c.originalLanguage, translatedContent: translated,
+                    currentUserReactions: c.currentUserReactions
                 )
             }
             storyCommentRepliesMap[commentId] = replies
@@ -1511,6 +1438,62 @@ extension StoryViewerView {
     }
 
     // MARK: - Story Comment Reactions
+
+    /// Applique un événement socket `comment:reaction-added` ou
+    /// `comment:reaction-removed` en utilisant l'agrégation server-authoritative
+    /// (`event.aggregation.count` + `event.aggregation.hasCurrentUser`).
+    ///
+    /// Avant 2026-05-28, le code maintenait deux états locaux séparés —
+    /// `storyCommentLikedIds` (set d'ids likés par l'utilisateur) et
+    /// `storyCommentLikeDelta` (offset depuis le count serveur) — et appliquait
+    /// l'événement socket en patchant le delta selon `event.userId ==
+    /// currentUserId`. Ce design dérivait facilement :
+    ///   - Si `currentUserId` était nil ou mal formaté, l'événement propre était
+    ///     traité comme « autre utilisateur » → delta double-comptait.
+    ///   - Si le serveur émettait un `comment:reaction-removed` parasite (ex :
+    ///     idempotence côté gateway), le delta repassait à 0 et le count
+    ///     « disparaissait » à l'écran (bug user 2026-05-28).
+    ///
+    /// La solution : faire confiance à `event.aggregation` qui porte le state
+    /// global (count total + flag `hasCurrentUser`) après application de
+    /// l'événement. On met à jour `storyComments[i].likes` à ce count, on
+    /// réinitialise le delta à 0, et on synchronise `storyCommentLikedIds`
+    /// depuis `hasCurrentUser`. Le résultat affiché — `comment.likes + delta`
+    /// — converge vers la vérité serveur sans flicker.
+    func applyCommentReactionEvent(_ event: SocketCommentReactionUpdateEvent) {
+        // 2026-05-29 : on ne gate plus sur `showCommentsOverlay` — l'état doit
+        // rester aligné sur le serveur même quand l'overlay est fermé.
+        // Si `storyComments` est vide (overlay jamais ouvert), `firstIndex(where:)`
+        // plus bas retourne nil et on skip silencieusement ; on se ré-aligne
+        // au prochain load via `computeLikedIds(fromCachedComments:)` (Task 3).
+        guard event.postId == currentStory?.id else { return }
+        guard event.emoji == Self.heartEmoji else { return }
+
+        let commentId = event.commentId
+        let serverCount = event.aggregation.count
+        let userHasReacted = event.aggregation.hasCurrentUser
+
+        // Mise à jour de likedIds depuis l'agrégat (source de vérité) — peu
+        // importe que ce soit l'événement de l'utilisateur courant ou d'un
+        // autre, l'agrégat décrit l'état global.
+        if userHasReacted {
+            storyCommentLikedIds.insert(commentId)
+        } else {
+            storyCommentLikedIds.remove(commentId)
+        }
+
+        // Reset du delta et propagation du count serveur dans la liste pour
+        // que la prochaine reaction parte d'une baseline propre.
+        storyCommentLikeDelta[commentId] = 0
+        if let idx = storyComments.firstIndex(where: { $0.id == commentId }) {
+            storyComments[idx].likes = serverCount
+        } else if let parentId = storyComments.first(where: { storyCommentRepliesMap[$0.id]?.contains(where: { $0.id == commentId }) == true })?.id,
+                  var replies = storyCommentRepliesMap[parentId],
+                  let replyIdx = replies.firstIndex(where: { $0.id == commentId }) {
+            replies[replyIdx].likes = serverCount
+            storyCommentRepliesMap[parentId] = replies
+        }
+    }
 
     func toggleStoryCommentLike(_ comment: FeedComment) async {
         let id = comment.id
@@ -1560,6 +1543,17 @@ extension StoryViewerView {
         )
     }
 
+    /// Overload pour le chemin cache : `FeedComment` (déjà mappé) porte maintenant
+    /// `currentUserReactions` (cf. `FeedModels.swift`). Permet de restaurer
+    /// `storyCommentLikedIds` au cold start sans round-trip réseau.
+    static func computeLikedIds(fromCachedComments comments: [FeedComment]) -> Set<String> {
+        return Set(
+            comments
+                .filter { $0.currentUserReactions?.contains(StoryViewerView.heartEmoji) == true }
+                .map { $0.id }
+        )
+    }
+
     func loadStoryComments() {
         guard let story = currentStory, !isLoadingComments else { return }
         Task { await loadStoryCommentsAsync(story: story) }
@@ -1569,14 +1563,21 @@ extension StoryViewerView {
         let cacheKey = "post-\(story.id)"
 
         let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
+        // Stale-write guard: drop the result ONLY if the viewer has CLEARLY
+        // swiped to a different known story. A transient `currentStory == nil`
+        // (group/index race during socket updates) must NOT drop the response
+        // — otherwise the overlay stays empty for a story that has comments.
+        if let now = currentStory?.id, now != story.id { return }
         switch cached {
         case .fresh(let comments, _):
             storyComments = comments
+            storyCommentLikedIds = Self.computeLikedIds(fromCachedComments: comments)
             let topAll = comments.filter { $0.parentId == nil }
             storyCommentCount = topAll.count + topAll.reduce(0) { $0 + $1.replies }
             return
         case .stale(let comments, _):
             storyComments = comments
+            storyCommentLikedIds = Self.computeLikedIds(fromCachedComments: comments)
             let topAll = comments.filter { $0.parentId == nil }
             storyCommentCount = topAll.count + topAll.reduce(0) { $0 + $1.replies }
         case .expired, .empty:
@@ -1591,6 +1592,9 @@ extension StoryViewerView {
         let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
         do {
             let response = try await PostService.shared.getComments(postId: story.id, cursor: nil, limit: 50)
+            // Stale-write guard: drop ONLY if user has clearly swiped to a
+            // different known story (tolerate transient nil reads).
+            if let now = currentStory?.id, now != story.id { return }
             let comments = response.data.map { c -> FeedComment in
                 let translated: String? = {
                     guard let dict = c.translations else { return nil }
@@ -1605,7 +1609,8 @@ extension StoryViewerView {
                     content: c.content, timestamp: c.createdAt,
                     likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
                     parentId: c.parentId,
-                    originalLanguage: c.originalLanguage, translatedContent: translated
+                    originalLanguage: c.originalLanguage, translatedContent: translated,
+                    currentUserReactions: c.currentUserReactions
                 )
             }
             storyComments = comments
@@ -1623,6 +1628,15 @@ extension StoryViewerView {
         } catch {}
     }
 
+    /// Seeds `storyCommentCount` for the slide that just became visible.
+    ///
+    /// Uses the count baked into the story payload as the authoritative number
+    /// (the gateway feed pipeline writes it on every read), then opportunistically
+    /// reconciles with the local comments cache if one exists. **Never** hits
+    /// the network here — fetching the comment list at every slide change just
+    /// to recompute a counter was an `O(N stories)` cost on swipe and is exactly
+    /// what `loadStoryComments()` already covers when the user opens the panel
+    /// (bug 2026-05-28).
     func loadStoryCommentCount() {
         guard let story = currentStory else {
             storyCommentCount = 0
@@ -1635,28 +1649,15 @@ extension StoryViewerView {
         Task {
             let cacheKey = "post-\(story.id)"
             let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
+            if let now = currentStory?.id, now != story.id { return }
             switch cached {
-            case .fresh(let comments, _):
-                let top = comments.filter { $0.parentId == nil }
-                let total = top.count + top.reduce(0) { $0 + $1.replies }
-                if total != storyCommentCount { storyCommentCount = total }
-                return
-            case .stale(let comments, _):
+            case .fresh(let comments, _), .stale(let comments, _):
                 let top = comments.filter { $0.parentId == nil }
                 let total = top.count + top.reduce(0) { $0 + $1.replies }
                 if total != storyCommentCount { storyCommentCount = total }
             case .expired, .empty:
                 break
             }
-            do {
-                let response = try await PostService.shared.getComments(postId: story.id, cursor: nil, limit: 50)
-                if response.success {
-                    let top = response.data.filter { $0.parentId == nil }
-                    let totalReplies = top.reduce(0) { $0 + ($1.replyCount ?? 0) }
-                    let total = top.count + totalReplies
-                    if total != storyCommentCount { storyCommentCount = total }
-                }
-            } catch {}
         }
     }
 }
@@ -1700,8 +1701,21 @@ struct StoryCommentRowView: View, Equatable {
 
     private var bubbleColor: Color { Color(hex: comment.authorColor) }
 
+    /// Flat row sans box : sliver vertical coloré à gauche (identité auteur)
+    /// + avatar + VStack {header, contenu, actions}. Pas de RoundedRectangle
+    /// background, pas de strokeBorder — les rows sont séparées par un
+    /// `Divider()` côté `StoryCommentsOverlayView.commentsList`
+    /// (user spec 2026-05-28 : « les commentaires ne doivent pas être dans
+    /// des box mais alignés et séparés par des ---- uniquement »).
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
+            // Sliver vertical d'accent : identité couleur de l'auteur,
+            /// extrait du background pour ne pas avoir à wrapper la row.
+            Capsule(style: .continuous)
+                .fill(bubbleColor)
+                .frame(width: 3)
+                .padding(.vertical, 6)
+
             avatar
 
             VStack(alignment: .leading, spacing: 4) {
@@ -1713,15 +1727,7 @@ struct StoryCommentRowView: View, Equatable {
             Spacer(minLength: 0)
         }
         .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(
-            ZStack {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(bubbleColor.opacity(0.18))
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(bubbleColor.opacity(0.35), lineWidth: 0.5)
-            }
-        )
+        .padding(.trailing, 12)
     }
 
     @ViewBuilder
@@ -1914,17 +1920,24 @@ struct StoryActionButton: View {
                         .foregroundColor(isActive ? activeColor : .white)
                         .adaptiveSymbolBounce(value: isActive)
                 }
+                // Halo sombre sous l'icône — lisibilité garantie sur N'IMPORTE QUEL
+                // fond de story (clair comme foncé), sans voile ni gros cartouche
+                // (style flottant Instagram/TikTok). Sur fond clair, le `white.opacity(0.08)`
+                // du disque disparaît : c'est ce halo (et celui du label) qui porte le
+                // contraste. Actif → glow coloré (demande user 2026-06-03 : contraste élégant).
                 .shadow(
-                    color: isActive ? (activeGlow ?? activeColor).opacity(0.3) : .black.opacity(0.2),
+                    color: isActive ? (activeGlow ?? activeColor).opacity(0.45) : .black.opacity(0.55),
                     radius: isActive ? 8 : 4,
-                    y: isActive ? 0 : 2
+                    y: isActive ? 0 : 1
                 )
 
                 Text(label)
                     .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white.opacity(isActive ? 0.95 : 0.65))
+                    .foregroundColor(.white.opacity(isActive ? 0.98 : 0.85))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
+                    // Même halo pour le label : blanc sur fond clair sinon illisible.
+                    .shadow(color: .black.opacity(0.55), radius: 2, y: 1)
             }
             .frame(width: 56)
         }

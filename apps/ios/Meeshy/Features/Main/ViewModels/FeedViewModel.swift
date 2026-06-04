@@ -25,6 +25,7 @@ class FeedViewModel: ObservableObject {
 
     private var nextCursor: String?
     private let api: APIClientProviding
+    private let offlineQueue: OfflineQueueing
     private let limit = 20
     private var cancellables = Set<AnyCancellable>()
     /// Subscriptions owned by `subscribeToSocketEvents()` only — kept
@@ -53,12 +54,14 @@ class FeedViewModel: ObservableObject {
         api: APIClientProviding = APIClient.shared,
         socialSocket: SocialSocketProviding = SocialSocketManager.shared,
         postService: PostServiceProviding = PostService.shared,
-        languageProvider: LanguageProviding = AuthManagerLanguageProvider()
+        languageProvider: LanguageProviding = AuthManagerLanguageProvider(),
+        offlineQueue: OfflineQueueing = OfflineQueue.shared
     ) {
         self.api = api
         self.socialSocket = socialSocket
         self.postService = postService
         self.languageProvider = languageProvider
+        self.offlineQueue = offlineQueue
         observePreferredLanguageChanges()
     }
 
@@ -306,37 +309,85 @@ class FeedViewModel: ObservableObject {
     func likePost(_ postId: String) async {
         guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
 
+        // Snapshot pre-mutation state so both the synchronous enqueue-refusal
+        // path and the async `.exhausted` observer roll back to the exact prior
+        // state (the feed may mutate across the enqueue await).
+        let wasLiked = posts[index].isLiked
+        let priorLikes = posts[index].likes
+
         // Optimistic update — batch mutations to trigger a single objectWillChange
         var post = posts[index]
         post.isLiked.toggle()
         post.likes += post.isLiked ? 1 : -1
         posts[index] = post
 
+        // T10b — route the like through the durable outbox (survives offline +
+        // app kill, flushes on reconnect via T10) instead of a direct REST call
+        // that was lost when offline. Mirrors PostDetailViewModel.likePost and
+        // this VM's own toggleLikeComment; the dispatcher sends POST/DELETE
+        // /posts/:id/like per `liked`.
+        let liked = posts[index].isLiked
+        let cmid = ClientMutationId.generate()
+        let payload = ToggleLikePostPayload(
+            clientMutationId: cmid,
+            postId: postId,
+            liked: liked
+        )
         do {
-            if posts[index].isLiked {
-                let _: SimpleAPIResponse = try await api.request(
-                    endpoint: "/posts/\(postId)/like",
-                    method: "POST"
-                )
-            } else {
-                let _ = try await api.delete(endpoint: "/posts/\(postId)/like")
-            }
+            try await offlineQueue.enqueue(.toggleLikePost, payload: payload, conversationId: nil)
             debouncedCacheSave()
 
-            // Sync like state to GRDB
+            // Sync optimistic like state to GRDB so the feed cache matches.
             if let persistence = feedPersistence {
-                let liked = posts[index].isLiked
                 let count = posts[index].likes
                 Task.detached(priority: .utility) {
                     try? await persistence.updateLikeCount(postId: postId, count: count, isLikedByMe: liked)
                 }
             }
+
+            // R7 — roll back the optimistic like if the outbox exhausts its
+            // retry budget (server permanently rejects). Without this the toggle
+            // stays stuck "liked" forever even though the server never accepted it.
+            observeOutcome(cmid: cmid, rollback: { [weak self] in
+                self?.restoreLike(postId: postId, isLiked: wasLiked, likes: priorLikes)
+            }, toast: "Erreur lors du like")
         } catch {
-            // Revert on failure — batch mutations
-            var revert = posts[index]
-            revert.isLiked.toggle()
-            revert.likes += revert.isLiked ? 1 : -1
-            posts[index] = revert
+            // Roll back optimistic state if the outbox refuses the row.
+            restoreLike(postId: postId, isLiked: wasLiked, likes: priorLikes)
+        }
+    }
+
+    /// Restores a post's like state to a captured snapshot, re-resolving the
+    /// index since the feed may have mutated during an `await`. Shared by the
+    /// synchronous enqueue-refusal path and the async `.exhausted` observer.
+    private func restoreLike(postId: String, isLiked: Bool, likes: Int) {
+        guard let i = posts.firstIndex(where: { $0.id == postId }) else { return }
+        var revert = posts[i]
+        revert.isLiked = isLiked
+        revert.likes = likes
+        posts[i] = revert
+        debouncedCacheSave()
+    }
+
+    /// Subscribes to the injected queue's `outcomeStream(for: cmid)` and runs
+    /// `rollback` if the OutboxFlusher escalates the row to `.exhausted` (retry
+    /// budget spent — the server permanently rejected it). `.applied` is a no-op
+    /// (the optimistic state is already final). Fire-and-forget Task; the stream
+    /// is single-shot so the for-await ends after one event.
+    private func observeOutcome(
+        cmid: String,
+        rollback: @escaping @MainActor () -> Void,
+        toast: String
+    ) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let stream = await self.offlineQueue.outcomeStream(for: cmid)
+            for await event in stream {
+                if case .exhausted = event {
+                    rollback()
+                    FeedbackToastManager.shared.showError(toast)
+                }
+            }
         }
     }
 
@@ -367,7 +418,7 @@ class FeedViewModel: ObservableObject {
             updated.insert(post, at: 0)
             try? await CacheCoordinator.shared.feed.save(updated, for: bookmarksKey)
         }
-        ToastManager.shared.showSuccess(String(localized: "Ajoute aux favoris", defaultValue: "Ajoute aux favoris"))
+        FeedbackToastManager.shared.showSuccess(String(localized: "Ajoute aux favoris", defaultValue: "Ajoute aux favoris"))
 
         do {
             let _: APIResponse<[String: Bool]> = try await api.request(
@@ -377,13 +428,32 @@ class FeedViewModel: ObservableObject {
         } catch {
             // Rollback the optimistic cache insertion.
             try? await CacheCoordinator.shared.feed.save(snapshot, for: bookmarksKey)
-            ToastManager.shared.showError("Erreur lors de l'enregistrement")
+            FeedbackToastManager.shared.showError("Erreur lors de l'enregistrement")
         }
     }
 
     func createPost(content: String? = nil, type: String = "POST", visibility: String = "PUBLIC", mediaIds: [String]? = nil, audioUrl: String? = nil, audioDuration: Int? = nil, originalLanguage: String? = nil, mobileTranscription: MobileTranscriptionPayload? = nil) async {
         publishError = nil
         publishSuccess = false
+
+        // U1 ST3 — a text-only POST routes through the durable outbox so it
+        // survives offline + app kill (the direct postService.create below was
+        // silently lost when offline). Media / audio posts stay on the direct
+        // path for now (their assets are not yet durably queued — U1b). The
+        // gateway only echoes the cmid on the POST branch of post:created, so
+        // only type == "POST" can be reconciled by FeedViewModel.postCreated.
+        let hasMedia = !(mediaIds?.isEmpty ?? true)
+        let isDurableTextOnly = type == "POST"
+            && !hasMedia
+            && audioUrl == nil
+            && mobileTranscription == nil
+        if isDurableTextOnly,
+           let text = content,
+           !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            await enqueueDurableTextPost(content: text, visibility: visibility, originalLanguage: originalLanguage)
+            return
+        }
+
         do {
             let apiPost = try await postService.create(
                 content: content,
@@ -413,33 +483,182 @@ class FeedViewModel: ObservableObject {
         }
     }
 
-    func sendComment(postId: String, content: String, parentId: String? = nil, effectFlags: Int? = nil) async {
-        do {
-            let apiComment = try await postService.addComment(postId: postId, content: content, parentId: parentId, effectFlags: effectFlags)
-            if let index = posts.firstIndex(where: { $0.id == postId }) {
-                let feedComment = FeedComment(
-                    id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
-                    authorAvatarURL: apiComment.author.avatar,
-                    content: apiComment.content, timestamp: apiComment.createdAt,
-                    likes: 0, replies: 0,
-                    parentId: parentId,
-                    effectFlags: apiComment.effectFlags ?? effectFlags ?? 0
-                )
-                posts[index].comments.insert(feedComment, at: 0)
-                posts[index].commentCount += 1
+    /// U1 ST3 — inserts an optimistic post keyed by a fresh cmid and enqueues a
+    /// durable `.createPost` row. The post appears instantly; the OutboxFlusher
+    /// dispatches it (POST /posts with `X-Client-Mutation-Id`) and the gateway
+    /// echoes the cmid on `post:created`, where FeedViewModel reconciles the
+    /// optimistic post in place (cmid -> server id). Rolls back if the outbox
+    /// refuses the row synchronously, or later exhausts its retry budget.
+    private func enqueueDurableTextPost(content: String, visibility: String, originalLanguage: String?) async {
+        let cmid = ClientMutationId.generate()
+        let currentUser = AuthManager.shared.currentUser
+        let optimistic = FeedPost(
+            id: cmid,
+            author: currentUser?.displayName ?? currentUser?.username ?? "",
+            authorId: currentUser?.id ?? "",
+            authorUsername: currentUser?.username,
+            authorAvatarURL: currentUser?.avatar,
+            type: "POST",
+            content: content,
+            timestamp: Date(),
+            originalLanguage: originalLanguage
+        )
+        posts.insert(optimistic, at: 0)
+        debouncedCacheSave()
 
-                // Persist comment + updated count to GRDB
-                if let persistence = feedPersistence,
-                   let record = CommentRecord(from: apiComment, postId: postId) {
-                    let newCount = posts[index].commentCount
-                    Task.detached(priority: .utility) {
-                        try? await persistence.insertComment(record)
-                        try? await persistence.updateCommentCount(postId: postId, count: newCount)
-                    }
-                }
-            }
+        let payload = CreatePostPayload(
+            clientMutationId: cmid,
+            content: content,
+            attachmentIds: [],
+            visibility: visibility,
+            originalLanguage: originalLanguage
+        )
+        do {
+            try await offlineQueue.enqueue(.createPost, payload: payload, conversationId: nil)
+            publishSuccess = true
+            observeOutcome(cmid: cmid, rollback: { [weak self] in
+                self?.removeOptimisticPost(id: cmid)
+            }, toast: "Erreur lors de la publication")
         } catch {
-            ToastManager.shared.showError("Erreur lors de l'envoi du commentaire")
+            removeOptimisticPost(id: cmid)
+            publishError = error.localizedDescription
+        }
+    }
+
+    /// Removes an optimistic post by id (re-resolving the index since the feed
+    /// may mutate across an `await`). Rolls back a queued create the outbox
+    /// refused or exhausted.
+    private func removeOptimisticPost(id: String) {
+        guard let i = posts.firstIndex(where: { $0.id == id }) else { return }
+        posts.remove(at: i)
+        debouncedCacheSave()
+    }
+
+    /// U1b — durably publishes an OFFLINE media post. Inserts an optimistic post
+    /// keyed by a fresh cmid (rendering the picked files as a local-URL preview)
+    /// and routes the media through `enqueuePostMedia` (relocate + write-ahead
+    /// `.createPost`). The OutboxFlusher uploads the files via TUS on reconnect
+    /// and creates the post; the gateway echoes the cmid on `post:created`, where
+    /// the reconcile (U1 ST2) swaps the optimistic post for the server one (no
+    /// duplicate). Rolls back on synchronous enqueue refusal or `.exhausted`.
+    /// Falls back to the text-only path when there are no media URLs.
+    func createOfflineMediaPost(
+        localMediaURLs: [URL],
+        content: String?,
+        visibility: String = "PUBLIC",
+        originalLanguage: String? = nil
+    ) async {
+        publishError = nil
+        publishSuccess = false
+        guard !localMediaURLs.isEmpty else {
+            await enqueueDurableTextPost(
+                content: content ?? "",
+                visibility: visibility,
+                originalLanguage: originalLanguage
+            )
+            return
+        }
+
+        let cmid = ClientMutationId.generate()
+        let currentUser = AuthManager.shared.currentUser
+        let optimistic = FeedPost(
+            id: cmid,
+            author: currentUser?.displayName ?? currentUser?.username ?? "",
+            authorId: currentUser?.id ?? "",
+            authorUsername: currentUser?.username,
+            authorAvatarURL: currentUser?.avatar,
+            type: "POST",
+            content: content ?? "",
+            timestamp: Date(),
+            media: localMediaURLs.map(Self.optimisticFeedMedia(forLocalURL:)),
+            originalLanguage: originalLanguage
+        )
+        posts.insert(optimistic, at: 0)
+        debouncedCacheSave()
+
+        do {
+            _ = try await offlineQueue.enqueuePostMedia(
+                sourceMediaURLs: localMediaURLs,
+                clientMutationId: cmid,
+                content: content,
+                visibility: visibility,
+                originalLanguage: originalLanguage
+            )
+            publishSuccess = true
+            observeOutcome(cmid: cmid, rollback: { [weak self] in
+                self?.removeOptimisticPost(id: cmid)
+            }, toast: "Erreur lors de la publication")
+        } catch {
+            removeOptimisticPost(id: cmid)
+            publishError = error.localizedDescription
+        }
+    }
+
+    /// Builds the optimistic `FeedMedia` for a not-yet-uploaded local file,
+    /// deriving the type from its extension so the preview renders as image vs
+    /// video. The `file://` URL is replaced by the server media URL on reconcile.
+    private static func optimisticFeedMedia(forLocalURL url: URL) -> FeedMedia {
+        let mime = MimeTypeResolver.mimeType(forExtension: url.pathExtension)
+        let type: FeedMediaType
+        switch AttachmentKind(mimeType: mime) {
+        case .video: type = .video
+        case .audio: type = .audio
+        default: type = .image
+        }
+        return FeedMedia(type: type, url: url.absoluteString)
+    }
+
+    func sendComment(postId: String, content: String, parentId: String? = nil, effectFlags: Int? = nil) async {
+        guard let index = posts.firstIndex(where: { $0.id == postId }) else { return }
+        // T10c — optimistic insert + durable outbox enqueue (survives offline +
+        // app kill, flushes on reconnect via T10) instead of the direct
+        // postService call that silently lost the comment offline. The real
+        // server comment reconciles via `comment:added` / a feed refresh.
+        // Mirrors PostDetailViewModel.sendComment.
+        let cmid = ClientMutationId.generate()
+        let snapshot = posts[index].comments
+        let snapshotCount = posts[index].commentCount
+        let currentUser = AuthManager.shared.currentUser
+        let optimistic = FeedComment(
+            id: cmid,
+            author: currentUser?.displayName ?? currentUser?.username ?? "",
+            authorId: currentUser?.id ?? "",
+            authorAvatarURL: currentUser?.avatar,
+            content: content,
+            timestamp: Date(),
+            likes: 0, replies: 0,
+            parentId: parentId,
+            effectFlags: effectFlags ?? 0
+        )
+        posts[index].comments.insert(optimistic, at: 0)
+        posts[index].commentCount += 1
+
+        let payload = CreateCommentPayload(
+            clientMutationId: cmid,
+            postId: postId,
+            parentCommentId: parentId,
+            content: content
+        )
+        do {
+            try await offlineQueue.enqueue(.createComment, payload: payload, conversationId: postId)
+
+            // R7 — roll back the optimistic comment if the outbox exhausts its
+            // retry budget (server permanently rejects). The synchronous catch
+            // below only covers an enqueue refusal; without this observer a
+            // permanently-failing comment stays in the feed forever.
+            observeOutcome(cmid: cmid, rollback: { [weak self] in
+                guard let self, let i = self.posts.firstIndex(where: { $0.id == postId }) else { return }
+                self.posts[i].comments = snapshot
+                self.posts[i].commentCount = snapshotCount
+            }, toast: "Erreur lors de l'envoi du commentaire")
+        } catch {
+            // Roll back the optimistic comment if the outbox refuses the row
+            // (re-resolve the index — the feed may have mutated during the await).
+            if let i = posts.firstIndex(where: { $0.id == postId }) {
+                posts[i].comments = snapshot
+                posts[i].commentCount = snapshotCount
+            }
+            FeedbackToastManager.shared.showError("Erreur lors de l'envoi du commentaire")
         }
     }
 
@@ -455,9 +674,9 @@ class FeedViewModel: ObservableObject {
             liked: true
         )
         do {
-            try await OfflineQueue.shared.enqueue(.toggleLikeComment, payload: payload, conversationId: postId)
+            try await offlineQueue.enqueue(.toggleLikeComment, payload: payload, conversationId: postId)
         } catch {
-            ToastManager.shared.showError("Erreur lors du like")
+            FeedbackToastManager.shared.showError("Erreur lors du like")
         }
     }
 
@@ -470,7 +689,7 @@ class FeedViewModel: ObservableObject {
                 isQuote: isQuote ? (content != nil) : false
             )
         } catch {
-            ToastManager.shared.showError("Erreur lors du repost")
+            FeedbackToastManager.shared.showError("Erreur lors du repost")
         }
     }
 
@@ -505,7 +724,7 @@ class FeedViewModel: ObservableObject {
             )
             return response.data.shortUrl
         } catch {
-            ToastManager.shared.showError("Erreur lors du partage")
+            FeedbackToastManager.shared.showError("Erreur lors du partage")
             return nil
         }
     }
@@ -525,19 +744,19 @@ class FeedViewModel: ObservableObject {
                 }
             }
 
-            ToastManager.shared.showSuccess("Post supprime")
+            FeedbackToastManager.shared.showSuccess("Post supprime")
         } catch {
             posts = snapshot
-            ToastManager.shared.showError("Erreur lors de la suppression")
+            FeedbackToastManager.shared.showError("Erreur lors de la suppression")
         }
     }
 
     func reportPost(_ postId: String) async {
         do {
             try await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
-            ToastManager.shared.showSuccess("Signalement envoye")
+            FeedbackToastManager.shared.showSuccess("Signalement envoye")
         } catch {
-            ToastManager.shared.showError("Erreur lors du signalement")
+            FeedbackToastManager.shared.showError("Erreur lors du signalement")
         }
     }
 
@@ -567,23 +786,23 @@ class FeedViewModel: ObservableObject {
                 posts[newIdx] = updated.toFeedPost(preferredLanguages: preferredLanguages)
                 debouncedCacheSave()
             }
-            ToastManager.shared.showSuccess(String(localized: "Post modifie", defaultValue: "Post modifie"))
+            FeedbackToastManager.shared.showSuccess(String(localized: "Post modifie", defaultValue: "Post modifie"))
         } catch {
             // Rollback the optimistic snapshot.
             if let rollbackIdx = posts.firstIndex(where: { $0.id == postId }) {
                 posts[rollbackIdx] = snapshot
                 debouncedCacheSave()
             }
-            ToastManager.shared.showError(String(localized: "Erreur lors de la modification", defaultValue: "Erreur lors de la modification"))
+            FeedbackToastManager.shared.showError(String(localized: "Erreur lors de la modification", defaultValue: "Erreur lors de la modification"))
         }
     }
 
     func pinPost(_ postId: String) async {
         do {
             try await postService.pinPost(postId: postId)
-            ToastManager.shared.showSuccess("Post epingle")
+            FeedbackToastManager.shared.showSuccess("Post epingle")
         } catch {
-            ToastManager.shared.showError("Erreur lors de l'epinglage")
+            FeedbackToastManager.shared.showError("Erreur lors de l'epinglage")
         }
     }
 
@@ -621,9 +840,22 @@ class FeedViewModel: ObservableObject {
         // --- post:created ---
         socialSocket.postCreated
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] apiPost in
+            .sink { [weak self] payload in
                 guard let self else { return }
-                let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
+                let feedPost = payload.post.toFeedPost(preferredLanguages: preferredLanguages)
+                // U1 — reconcile an offline-created optimistic post: it was
+                // inserted with the cmid as its id (U1 ST3), so the server echo
+                // (carrying that cmid) replaces it in place — swapping cmid →
+                // server id — instead of inserting a duplicate. Preserve local-
+                // only state (isLiked) across the swap, like postUpdated.
+                if let cmid = payload.clientMutationId,
+                   let idx = self.posts.firstIndex(where: { $0.id == cmid }) {
+                    var merged = feedPost
+                    merged.isLiked = self.posts[idx].isLiked
+                    self.posts[idx] = merged
+                    self.debouncedCacheSave()
+                    return
+                }
                 if !self.posts.contains(where: { $0.id == feedPost.id }) {
                     self.posts.insert(feedPost, at: 0)
                     self.newPostsCount += 1

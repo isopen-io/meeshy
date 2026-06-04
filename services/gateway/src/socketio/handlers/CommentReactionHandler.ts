@@ -298,12 +298,30 @@ export class CommentReactionHandler {
     emoji: string,
     reactorUserId: string
   ): Promise<void> {
-    const comment = await this.prisma.postComment.findUnique({
-      where: { id: commentId },
-      select: { authorId: true },
-    });
+    // Fetch comment + post in parallel pour récupérer le contexte nécessaire
+    // à un body riche : "[reactor] a réagi [emoji] à votre commentaire sur la
+    // story de [story_author]" (spec user 2026-05-28 — la notif sommaire
+    // actuelle « XXX » + emoji nu n'expose pas le contexte du commentaire).
+    const [comment, post] = await Promise.all([
+      this.prisma.postComment.findUnique({
+        where: { id: commentId },
+        select: { authorId: true, content: true },
+      }),
+      this.prisma.post.findUnique({
+        where: { id: postId },
+        select: {
+          type: true,
+          author: { select: { displayName: true, username: true } },
+        },
+      }),
+    ]);
 
     if (!comment?.authorId) return;
+
+    const postAuthorName = post?.author?.displayName?.trim()
+      || post?.author?.username?.trim()
+      || '';
+    const isStory = post?.type === 'STORY';
 
     this.notificationService
       .createCommentReactionNotification({
@@ -312,6 +330,9 @@ export class CommentReactionHandler {
         commentId,
         postId,
         reactionEmoji: emoji,
+        commentPreview: comment.content?.slice(0, 80) ?? '',
+        postAuthorName,
+        isStory,
       })
       .catch((error) => {
         this.logger.error('[CommentReactionHandler] Failed to create comment reaction notification', error, { reactorUserId, commentId, postId, emoji });

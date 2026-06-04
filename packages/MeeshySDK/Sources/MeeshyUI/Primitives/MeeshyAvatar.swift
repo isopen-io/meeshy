@@ -5,7 +5,7 @@ import MeeshySDK
 
 public enum AvatarContext: Sendable {
     // Stories
-    case storyTray              // 44pt
+    case storyTray              // 88pt (doubled 2026-05-27 — story trail = primary CTA)
     case storyViewer            // 44pt
 
     // Feed
@@ -41,7 +41,8 @@ public enum AvatarContext: Sendable {
 
     public var size: CGFloat {
         switch self {
-        case .storyTray, .storyViewer, .conversationHeaderCollapsed,
+        case .storyTray: return 88  // doubled 2026-05-27 (user request — trail = primary CTA)
+        case .storyViewer, .conversationHeaderCollapsed,
              .conversationHeaderExpanded, .postAuthor, .userListItem, .notification:
             return 44
         case .conversationList: return 52
@@ -154,7 +155,17 @@ public enum AvatarContext: Sendable {
         default: return size <= 32 ? 1.5 : 2.5
         }
     }
-    public var badgeSize: CGFloat { size * 0.42 }
+    public var badgeSize: CGFloat {
+        // storyTray — user request 2026-05-28 « emoji mood = x0.8 du
+        // bouton (+) d'ajout de story ». Le (+) fait 40pt (cf.
+        // StoryTrayView), donc badge = 32pt fixes. S'applique au mood
+        // placeholder ET à l'emoji animé pour garder la parité visuelle
+        // entre les deux états (avant/après set du mood).
+        switch self {
+        case .storyTray: return 32
+        default: return size * 0.42
+        }
+    }
     public var onlineDotSize: CGFloat { size * 0.26 }
 }
 
@@ -428,10 +439,16 @@ public struct MeeshyAvatar: View {
     }
 
     private func moodBadge(emoji: String) -> some View {
+        // Frame explicite = `context.badgeSize` pour éviter le collapse du
+        // GeometryReader en overlay context (sans frame, le reader peut
+        // s'effondrer à 0×0 selon le contexte parent → emoji invisible).
+        // Le glyphe Text est rendu à `badgeSize × 0.65` ; le frame de la
+        // bounding box vaut badgeSize pour donner au glyph la place
+        // visuelle complète + la hit area du tap mood.
         GeometryReader { geo in
             Text(emoji)
                 .font(.system(size: context.badgeSize * 0.65))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(width: context.badgeSize, height: context.badgeSize)
                 .scaleEffect(moodScale)
                 .contentShape(Circle())
                 .onTapGesture {

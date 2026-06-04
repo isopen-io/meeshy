@@ -96,4 +96,33 @@ final class LocallyHiddenMessagesStoreTests: XCTestCase {
         XCTAssertFalse(store2.isHidden("msg3"))
         store2.clearAll()
     }
+
+    // MARK: - migrate (S11) — temp id reconciles to server id
+
+    func test_migrate_hiddenTempId_movesToServerId() {
+        let sut = makeSUT()
+        sut.hide("temp_1")
+
+        sut.migrate(from: "temp_1", to: "srv_1")
+
+        XCTAssertFalse(sut.isHidden("temp_1"),
+            "the pre-reconciliation temp id must no longer be tracked")
+        XCTAssertTrue(sut.isHidden("srv_1"),
+            "the hidden state must follow the temp->server reconciliation")
+        // Survives reinstantiation (persisted under the server id).
+        let reloaded = LocallyHiddenMessagesStore(userDefaults: UserDefaults(suiteName: "LocallyHiddenStoreTests")!)
+        XCTAssertTrue(reloaded.isHidden("srv_1"))
+        reloaded.clearAll()
+    }
+
+    func test_migrate_unhiddenId_isNoOp() {
+        let sut = makeSUT()
+        sut.hide("other")
+
+        sut.migrate(from: "temp_1", to: "srv_1")
+
+        XCTAssertFalse(sut.isHidden("srv_1"),
+            "migrating an id that was never hidden must not hide the new id")
+        XCTAssertTrue(sut.isHidden("other"), "unrelated hidden ids are untouched")
+    }
 }

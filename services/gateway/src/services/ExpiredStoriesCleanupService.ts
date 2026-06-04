@@ -98,15 +98,38 @@ export class ExpiredStoriesCleanupService {
       if (toDelete.length > 0) {
         const ids = toDelete.map((p) => p.id);
 
-        // Cascade-delete reposts that reference these expired stories.
-        // A repost of a story that's been dead for 7+ days has no value —
-        // stories are ephemeral by design. Deleting the children first
-        // satisfies the PostReposts FK constraint (onDelete: NoAction).
-        const repostResult = await this.prisma.post.deleteMany({
+        // Reposts that reference these expired stories are deleted too — a
+        // repost of a story dead for 7+ days has no value (stories are
+        // ephemeral). Their comments share the same self-relation hazard,
+        // so clear them in the same pass.
+        const repostRows = await this.prisma.post.findMany({
           where: { repostOfId: { in: ids } },
+          select: { id: true },
         });
-        if (repostResult.count > 0) {
-          log.info('cascade-deleted reposts of expired stories', { count: repostResult.count });
+        const repostIds = repostRows.map((p) => p.id);
+        const allPostIds = [...ids, ...repostIds];
+
+        // Clear PostComments BEFORE deleting the posts. The cascade from
+        // Post→PostComment would otherwise hit the `CommentReplies`
+        // self-relation (onDelete: NoAction): Prisma's MongoDB referential
+        // emulation refuses to delete a parent comment still referenced by a
+        // reply (P2014). Nulling parentId first breaks the relation at any
+        // depth, then deleteMany is unconstrained.
+        await this.prisma.postComment.updateMany({
+          where: { postId: { in: allPostIds }, parentId: { not: null } },
+          data: { parentId: null },
+        });
+        await this.prisma.postComment.deleteMany({
+          where: { postId: { in: allPostIds } },
+        });
+
+        if (repostIds.length > 0) {
+          const repostResult = await this.prisma.post.deleteMany({
+            where: { id: { in: repostIds } },
+          });
+          if (repostResult.count > 0) {
+            log.info('cascade-deleted reposts of expired stories', { count: repostResult.count });
+          }
         }
 
         // Now safe to delete the parent stories.

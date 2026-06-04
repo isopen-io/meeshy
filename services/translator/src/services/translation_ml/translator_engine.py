@@ -95,7 +95,10 @@ def smart_split_text(text: str, max_chars: int = 200) -> List[str]:
     if remaining:
         chunks.append(remaining)
 
-    return chunks
+    # Ne jamais émettre de chunk vide (ex. texte uniquement composé d'espaces :
+    # les .strip() laissaient un "" en tête) — un chunk vide gaspille/troublerait
+    # un appel de traduction NLLB.
+    return [chunk for chunk in chunks if chunk]
 
 # Import conditionnel des dépendances ML
 ML_AVAILABLE = False

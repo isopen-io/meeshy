@@ -9,7 +9,11 @@ jest.mock('@meeshy/shared/utils/conversation-helpers', () => ({
 }));
 
 jest.mock('@meeshy/shared/types/socketio-events', () => ({
-  SERVER_EVENTS: { PARTICIPANT_ROLE_UPDATED: 'participant:role-updated' },
+  SERVER_EVENTS: {
+    PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
+    CONVERSATION_JOINED: 'conversation:joined',
+    CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
+  },
   ROOMS: { conversation: (id: string) => `conversation:${id}` },
 }));
 
@@ -741,6 +745,49 @@ describe('registerParticipantsRoutes', () => {
       );
     });
 
+    it('should broadcast conversation:joined to the room on success (R6-1)', async () => {
+      const route = getRoute(mockFastify, 'POST', '/participants');
+      const io = createMockIO();
+      const request = createPostRequest({ server: { io, notificationService: createMockNotificationService() } });
+      mockPrisma.participant.findFirst
+        .mockResolvedValueOnce(createParticipant({ role: 'admin' }))
+        .mockResolvedValueOnce(null);
+      mockPrisma.user.findFirst.mockResolvedValue({
+        id: TARGET_USER_ID, username: 'target', displayName: 'Target',
+        firstName: null, lastName: null, avatar: null, systemLanguage: 'en',
+      });
+      mockPrisma.participant.create.mockResolvedValue({});
+      mockPrisma.participant.findMany.mockResolvedValue([]);
+      const reply = createMockReply();
+
+      await route.handler(request, reply);
+
+      expect(io.to).toHaveBeenCalledWith(`conversation:${VALID_CONV_ID}`);
+      expect(io._emit).toHaveBeenCalledWith('conversation:joined', {
+        conversationId: VALID_CONV_ID,
+        userId: TARGET_USER_ID,
+      });
+    });
+
+    it('should not crash when io is undefined (R6-1 graceful)', async () => {
+      const route = getRoute(mockFastify, 'POST', '/participants');
+      const request = createPostRequest({ server: { notificationService: createMockNotificationService() } });
+      mockPrisma.participant.findFirst
+        .mockResolvedValueOnce(createParticipant({ role: 'admin' }))
+        .mockResolvedValueOnce(null);
+      mockPrisma.user.findFirst.mockResolvedValue({
+        id: TARGET_USER_ID, username: 'target', displayName: 'Target',
+        firstName: null, lastName: null, avatar: null, systemLanguage: 'en',
+      });
+      mockPrisma.participant.create.mockResolvedValue({});
+      mockPrisma.participant.findMany.mockResolvedValue([]);
+      const reply = createMockReply();
+
+      await route.handler(request, reply);
+
+      expect(reply.send).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    });
+
     it('should use username when displayName is null', async () => {
       const route = getRoute(mockFastify, 'POST', '/participants');
       const targetUser = {
@@ -1127,6 +1174,26 @@ describe('registerParticipantsRoutes', () => {
       expect(reply.send).toHaveBeenCalledWith(
         expect.objectContaining({ success: true })
       );
+    });
+
+    it('should broadcast conversation:participant-left to the room on removal (R6-2)', async () => {
+      const route = getRoute(mockFastify, 'DELETE', '/participants');
+      const io = createMockIO();
+      const request = createDeleteRequest({ server: { io, notificationService: createMockNotificationService() } });
+      mockPrisma.participant.findFirst.mockResolvedValue(createCreatorParticipant());
+      mockPrisma.participant.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.participant.findMany.mockResolvedValue([]);
+      const reply = createMockReply();
+
+      await route.handler(request, reply);
+
+      expect(io.to).toHaveBeenCalledWith(`conversation:${VALID_CONV_ID}`);
+      expect(io._emit).toHaveBeenCalledWith('conversation:participant-left', expect.objectContaining({
+        conversationId: VALID_CONV_ID,
+        userId: TARGET_USER_ID,
+        displayName: 'TestUser',
+        leftAt: expect.any(String),
+      }));
     });
 
     it('should soft delete the participant when authorized as ADMIN user role', async () => {

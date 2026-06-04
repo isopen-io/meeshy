@@ -25,6 +25,12 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
     public let forwardedFromId: String?
     public let forwardedFromConversationId: String?
     public let attachmentIds: [String]?
+    /// Raw values of `AttachmentKind` aligned with `attachmentIds` by index.
+    /// `nil` when the queue item was created before this field existed (old
+    /// on-disk rows decoded after a SDK upgrade) — the mapper falls back to
+    /// `.image` per spec §4.2 in that case. Optional so the synthesized
+    /// `Decodable` keeps reading legacy payloads without migration.
+    public let attachmentKinds: [String]?
     /// Local filesystem path to a pending audio file kept under
     /// `Documents/pending-audio/<clientMessageId>.m4a` while the message
     /// waits for upload. `nil` for non-audio messages. The pattern is
@@ -33,6 +39,20 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
     /// Boot recovery (`OfflineQueue.bootRecovery`) detects records whose
     /// referenced file is missing and marks them `.failed`.
     public let localAudioPath: String?
+    /// Relative paths to N pending audio files for a MULTI-TRACK audio message,
+    /// stored under `Documents/pending-audio/<clientMessageId>/<index>.m4a`.
+    /// `nil` for non-audio and for legacy single-audio messages (which use
+    /// `localAudioPath`). Decoded with `decodeIfPresent` so on-disk rows
+    /// written before this field existed keep decoding without migration.
+    public let localAudioPaths: [String]?
+    /// Relative paths to N pending VISUAL media files (image/video) for an
+    /// offline photo/video message, under
+    /// `Documents/pending-media/<clientMessageId>/<index>.<ext>`. The original
+    /// file extension is PRESERVED so the dispatcher can derive the upload MIME
+    /// per file. `nil` for non-visual messages. Decoded with `decodeIfPresent`
+    /// so on-disk rows written before this field existed keep decoding without
+    /// migration (S7b — durable offline media, parity with `localAudioPaths`).
+    public let localMediaPaths: [String]?
     public let createdAt: Date
 
     public init(
@@ -44,7 +64,10 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         forwardedFromId: String? = nil,
         forwardedFromConversationId: String? = nil,
         attachmentIds: [String]? = nil,
-        localAudioPath: String? = nil
+        attachmentKinds: [String]? = nil,
+        localAudioPath: String? = nil,
+        localAudioPaths: [String]? = nil,
+        localMediaPaths: [String]? = nil
     ) {
         self.id = UUID().uuidString
         self.clientMessageId = clientMessageId ?? ClientMessageId.generate()
@@ -55,7 +78,10 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.forwardedFromId = forwardedFromId
         self.forwardedFromConversationId = forwardedFromConversationId
         self.attachmentIds = attachmentIds
+        self.attachmentKinds = attachmentKinds
         self.localAudioPath = localAudioPath
+        self.localAudioPaths = localAudioPaths
+        self.localMediaPaths = localMediaPaths
         self.createdAt = Date()
     }
 
@@ -71,7 +97,10 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         forwardedFromId: String?,
         forwardedFromConversationId: String?,
         attachmentIds: [String]?,
+        attachmentKinds: [String]? = nil,
         localAudioPath: String?,
+        localAudioPaths: [String]? = nil,
+        localMediaPaths: [String]? = nil,
         createdAt: Date
     ) {
         self.id = id
@@ -83,8 +112,64 @@ public struct OfflineQueueItem: Codable, Identifiable, Sendable {
         self.forwardedFromId = forwardedFromId
         self.forwardedFromConversationId = forwardedFromConversationId
         self.attachmentIds = attachmentIds
+        self.attachmentKinds = attachmentKinds
         self.localAudioPath = localAudioPath
+        self.localAudioPaths = localAudioPaths
+        self.localMediaPaths = localMediaPaths
         self.createdAt = createdAt
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case clientMessageId
+        case conversationId
+        case content
+        case originalLanguage
+        case replyToId
+        case forwardedFromId
+        case forwardedFromConversationId
+        case attachmentIds
+        case attachmentKinds
+        case localAudioPath
+        case localAudioPaths
+        case localMediaPaths
+        case createdAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(String.self, forKey: .id)
+        self.clientMessageId = try c.decode(String.self, forKey: .clientMessageId)
+        self.conversationId = try c.decode(String.self, forKey: .conversationId)
+        self.content = try c.decode(String.self, forKey: .content)
+        self.originalLanguage = try c.decodeIfPresent(String.self, forKey: .originalLanguage) ?? nil
+        self.replyToId = try c.decodeIfPresent(String.self, forKey: .replyToId) ?? nil
+        self.forwardedFromId = try c.decodeIfPresent(String.self, forKey: .forwardedFromId) ?? nil
+        self.forwardedFromConversationId = try c.decodeIfPresent(String.self, forKey: .forwardedFromConversationId) ?? nil
+        self.attachmentIds = try c.decodeIfPresent([String].self, forKey: .attachmentIds) ?? nil
+        self.attachmentKinds = try c.decodeIfPresent([String].self, forKey: .attachmentKinds) ?? nil
+        self.localAudioPath = try c.decodeIfPresent(String.self, forKey: .localAudioPath) ?? nil
+        self.localAudioPaths = try c.decodeIfPresent([String].self, forKey: .localAudioPaths) ?? nil
+        self.localMediaPaths = try c.decodeIfPresent([String].self, forKey: .localMediaPaths) ?? nil
+        self.createdAt = try c.decode(Date.self, forKey: .createdAt)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(clientMessageId, forKey: .clientMessageId)
+        try c.encode(conversationId, forKey: .conversationId)
+        try c.encode(content, forKey: .content)
+        try c.encodeIfPresent(originalLanguage, forKey: .originalLanguage)
+        try c.encodeIfPresent(replyToId, forKey: .replyToId)
+        try c.encodeIfPresent(forwardedFromId, forKey: .forwardedFromId)
+        try c.encodeIfPresent(forwardedFromConversationId, forKey: .forwardedFromConversationId)
+        try c.encodeIfPresent(attachmentIds, forKey: .attachmentIds)
+        try c.encodeIfPresent(attachmentKinds, forKey: .attachmentKinds)
+        try c.encodeIfPresent(localAudioPath, forKey: .localAudioPath)
+        try c.encodeIfPresent(localAudioPaths, forKey: .localAudioPaths)
+        try c.encodeIfPresent(localMediaPaths, forKey: .localMediaPaths)
+        try c.encode(createdAt, forKey: .createdAt)
     }
 }
 
@@ -315,9 +400,41 @@ public protocol OfflineQueueing: Sendable {
     ) async throws -> String
 
     func outcomeStream(for cmid: String) async -> AsyncStream<OutboxOutcome>
+
+    /// U1b — durable write-ahead enqueue for an OFFLINE media post. Relocates the
+    /// source files + inserts the `.createPost` row referencing them; the
+    /// dispatcher replays the TUS upload on reconnect. On the protocol so
+    /// ViewModels can route offline media posts through an injected (mockable)
+    /// queue, like the generic `enqueue`.
+    @discardableResult
+    func enqueuePostMedia(
+        sourceMediaURLs: [URL],
+        clientMutationId: String,
+        content: String?,
+        visibility: String,
+        originalLanguage: String?
+    ) async throws -> OfflineQueue.EnqueueMediaResult
 }
 
 extension OfflineQueue: OfflineQueueing {}
+
+/// Test seam for the message-centric `enqueue(_:)` path used by
+/// `ConversationViewModel.sendMessage`. Naming avoids collision with
+/// `OfflineQueueProviding` (story-specific) and `OfflineQueueing` (generic
+/// non-message payload). Conforming types own the `OfflineQueueItem`
+/// coalescing semantics so callers can `await` the persistence write before
+/// reporting success to the user.
+public protocol OfflineMessageQueueing: Sendable {
+    func enqueue(_ item: OfflineQueueItem) async throws
+    /// Durable offline message EDIT (T11). Coalesces with a pending send/edit
+    /// for the same `clientMessageId` (see `enqueueEdit` impl).
+    func enqueueEdit(_ payload: OfflineEditPayload) async throws
+    /// Durable offline message DELETE (T11). Cancels a pending send / supersedes
+    /// a pending edit for the same `clientMessageId` (see `enqueueDelete` impl).
+    func enqueueDelete(_ payload: OfflineDeletePayload) async throws
+}
+
+extension OfflineQueue: OfflineMessageQueueing {}
 
 // MARK: - Offline Queue
 
@@ -346,6 +463,29 @@ public actor OfflineQueue {
     /// on first connect.
     public nonisolated var pendingCountPublisher: AnyPublisher<Int, Never> {
         pendingCountSubject.publisher
+    }
+
+    /// Backing subject for `pendingUIItemsPublisher`. Mirrors the
+    /// `.pending`/`.inflight`/`.failed` outbox rows as `OutboxUIItem` snapshots
+    /// for the `SyncPill` UI. Kept `nonisolated` so SwiftUI bodies can read it
+    /// without hopping into the actor.
+    private nonisolated let pendingUIItemsSubject = SendableCurrentValueSubject<[OutboxUIItem]>([])
+
+    /// Cap on the number of `OutboxUIItem` snapshots surfaced through the
+    /// publisher. The pill UI only renders the head of the queue; an unbounded
+    /// fetch on a large backlog would burn memory and decode time for rows the
+    /// user can never see.
+    private static let pendingUIItemsLimit = 50
+
+    /// Publishes the current pending outbox UI snapshot and every subsequent
+    /// change. Rows are ordered by `createdAt` ascending and filtered to
+    /// `.pending` / `.inflight` / `.failed` statuses (drained rows are deleted
+    /// from the table — there is no `.applied` status to exclude). Emits the
+    /// latest value immediately on subscription.
+    public nonisolated var pendingUIItemsPublisher: AnyPublisher<[OutboxUIItem], Never> {
+        pendingUIItemsSubject.publisher
+            .removeDuplicates()
+            .eraseToAnyPublisher()
     }
 
     private static let maxQueueSize = 100
@@ -527,9 +667,12 @@ public actor OfflineQueue {
     /// Counts rows currently in `.pending` or `.inflight` state and updates
     /// `pendingCountSubject`. Called after every enqueue/dequeue/retryItem
     /// touchpoint. Falls back to the in-memory mirror if no pool is wired.
+    /// Also refreshes the `pendingUIItemsSubject` snapshot so the SyncPill UI
+    /// re-renders on the same touchpoints.
     private func refreshPendingCount() async {
         guard let pool = outboxPool else {
             pendingCountSubject.send(items.count)
+            pendingUIItemsSubject.send([])
             return
         }
         // Seules les opérations qui justifient l'indicateur « Synchronisation… »
@@ -546,6 +689,37 @@ public actor OfflineQueue {
                 .fetchCount(db)
         }) ?? items.count
         pendingCountSubject.send(count)
+        await refreshPendingUIItems()
+    }
+
+    /// Reads the head of the outbox table (rows in `.pending`, `.inflight` or
+    /// `.failed` ordered by `createdAt` ascending, capped at
+    /// `pendingUIItemsLimit`) and pushes the corresponding `OutboxUIItem`
+    /// snapshots onto `pendingUIItemsSubject`. Decoding cost is paid once on
+    /// each outbox mutation, never on the SwiftUI render path.
+    private func refreshPendingUIItems() async {
+        guard let pool = outboxPool else {
+            pendingUIItemsSubject.send([])
+            return
+        }
+        let limit = Self.pendingUIItemsLimit
+        let records: [OutboxRecord] = (try? await pool.read { db in
+            try OutboxRecord
+                .filter([
+                    OutboxStatus.pending.rawValue,
+                    OutboxStatus.inflight.rawValue,
+                    OutboxStatus.failed.rawValue,
+                    // T14b — surface permanently-failed (`.exhausted`) rows so the
+                    // SyncPill can show a non-message mutation that gave up; the
+                    // T14 GC bounds how long they linger.
+                    OutboxStatus.exhausted.rawValue
+                ].contains(Column("status")))
+                .order(Column("createdAt").asc)
+                .limit(limit)
+                .fetchAll(db)
+        }) ?? []
+        let items = records.map(OutboxUIItem.from(record:))
+        pendingUIItemsSubject.send(items)
     }
 
     // MARK: - Queue Operations
@@ -743,9 +917,30 @@ public actor OfflineQueue {
         let outboxId = "ofqm_\(cmid)"
         let anchor = conversationId ?? Self.globalConversationSentinel
         let now = Date()
+        let shouldCoalesce = Self.coalescesByAnchor(kind: kind)
 
         do {
             try await pool.write { db in
+                if shouldCoalesce {
+                    // Latest-state-wins kinds (e.g. `markAsRead`): drop every
+                    // earlier `.pending` / `.failed` row for the same anchor
+                    // before writing the new one. The newer payload always
+                    // supersedes (reading up to msg N also covers 1..N-1) —
+                    // so letting them pile up burns bandwidth and inflates
+                    // the SyncPill rotation with 17 duplicates for 4 convs.
+                    let stale: [OutboxRecord] = try OutboxRecord
+                        .filter(Column("kind") == kind.rawValue)
+                        .filter(Column("conversationId") == anchor)
+                        .filter([OutboxStatus.pending.rawValue, OutboxStatus.failed.rawValue]
+                            .contains(Column("status")))
+                        .fetchAll(db)
+                    if !stale.isEmpty {
+                        let staleIds = stale.map(\.id)
+                        try OutboxRecord
+                            .filter(staleIds.contains(Column("id")))
+                            .deleteAll(db)
+                    }
+                }
                 try OutboxRecord(
                     id: outboxId,
                     kind: kind,
@@ -765,6 +960,30 @@ public actor OfflineQueue {
         logger.info("Enqueued \(kind.rawValue, privacy: .public) outbox row \(outboxId, privacy: .public)")
         await refreshPendingCount()
         return outboxId
+    }
+
+    /// Whether the given `OutboxKind` should coalesce-on-enqueue: every new
+    /// row for the same conversationId anchor supersedes earlier
+    /// `.pending` / `.failed` rows of the same kind. Reserved for kinds
+    /// whose payload is **monotonically idempotent** — applying only the
+    /// latest one alone is equivalent to applying every intermediate one
+    /// in sequence.
+    ///
+    /// Currently includes only `.markAsRead`: reading up to message N
+    /// implicitly marks 1..N-1 as well, so a busy group conversation that
+    /// fires `markAsRead` on every inbound message can collapse 17 stacked
+    /// rows into a single one carrying the highest `upToMessageId` with
+    /// no observable difference server-side. Other latest-state kinds
+    /// (profile / settings / conversation updates) might be added later,
+    /// but each needs a case-by-case audit to confirm intermediate states
+    /// can be safely dropped.
+    private static func coalescesByAnchor(kind: OutboxKind) -> Bool {
+        switch kind {
+        case .markAsRead:
+            return true
+        default:
+            return false
+        }
     }
 
     /// Reads the top-level `clientMutationId` field from a JSON-encoded
@@ -802,21 +1021,34 @@ public actor OfflineQueue {
         public let localAudioPath: String
     }
 
+    /// Result of an `enqueueAudios` call (multi-track). `localAudioPaths`
+    /// holds the N stable relative paths (under
+    /// `Documents/pending-audio/<clientMessageId>/<index>.m4a`) the caller
+    /// can use to reference the persisted tracks in its optimistic UI.
+    public struct EnqueueAudiosResult: Sendable {
+        public let outboxId: String
+        public let localAudioPaths: [String]
+    }
+
     /// Phase 4 §6.3 audio offline write-ahead. Atomicity between the SQLite
     /// outbox row and the on-disk audio file is impossible (two persistence
     /// systems), so we do it in two ordered phases :
     ///
     /// 1. Phase A — INSERT `OutboxRecord` referencing
-    ///    `Documents/pending-audio/<clientMessageId>.m4a`. The record is
-    ///    `.pending` and the file does NOT exist yet.
+    ///    `Documents/pending-audio/<clientMessageId>/0.m4a` (single-track is a
+    ///    degenerate multi-track message routed through `enqueueAudios`, which
+    ///    stores under the per-message subdir and records the path in
+    ///    `localAudioPaths`). The record is `.pending` and the file does NOT
+    ///    exist yet.
     /// 2. Phase B — `FileManager.copyItem` the source audio into that
     ///    pending path. On failure we UPDATE the outbox row to `.failed`
     ///    so the flusher does not retry against a missing file.
     /// 3. Phase C — best-effort delete the original `tmp/` source.
     ///
     /// Crash recovery between Phase A and Phase B is handled by
-    /// `bootRecovery()` which sweeps `.pending` records whose
-    /// `localAudioPath` does not exist on disk and marks them `.failed`.
+    /// `bootRecovery()` which sweeps `.pending` records whose referenced audio
+    /// paths (`localAudioPath` and/or `localAudioPaths`) do not exist on disk
+    /// and marks them `.failed`.
     /// The `clientMessageId` end-to-end dedup contract guarantees that an
     /// audio that actually reached the server before the crash will not
     /// produce a duplicate when the flusher replays whatever survived.
@@ -831,10 +1063,52 @@ public actor OfflineQueue {
         forwardedFromId: String? = nil,
         forwardedFromConversationId: String? = nil
     ) async throws -> EnqueueAudioResult {
+        // Single-track audio is a degenerate multi-track message. Routing it
+        // through `enqueueAudios([url], …)` keeps the write-ahead invariants
+        // (outbox row first, files second, `.failed` on copy error) in one
+        // place. The stored path lives under the per-message subdir
+        // (`pending-audio/<cid>/0.m4a`) — `absoluteAudioPath(forStored:)`
+        // resolves it identically, so existing readers keep working.
+        let result = try await enqueueAudios(
+            sourceAudioURLs: [sourceAudioURL],
+            conversationId: conversationId,
+            content: content,
+            clientMessageId: clientMessageId,
+            originalLanguage: originalLanguage,
+            replyToId: replyToId,
+            forwardedFromId: forwardedFromId,
+            forwardedFromConversationId: forwardedFromConversationId
+        )
+        return EnqueueAudioResult(
+            outboxId: result.outboxId,
+            localAudioPath: result.localAudioPaths.first ?? ""
+        )
+    }
+
+    /// Multi-track variant of `enqueueAudio`: persists N audio files as a
+    /// SINGLE `OutboxRecord` (one logical message carrying N audio tracks).
+    /// Same write-ahead ordering as the single-file path — the outbox row is
+    /// inserted first (Phase A), then each source URL is copied into
+    /// `Documents/pending-audio/<clientMessageId>/<index>.m4a` (Phase B). A
+    /// copy failure on any track flips the row to `.failed` so the flusher
+    /// never replays against a missing file. Boot recovery handles a crash
+    /// between phases.
+    @discardableResult
+    public func enqueueAudios(
+        sourceAudioURLs: [URL],
+        conversationId: String,
+        content: String?,
+        clientMessageId: String,
+        originalLanguage: String? = nil,
+        replyToId: String? = nil,
+        forwardedFromId: String? = nil,
+        forwardedFromConversationId: String? = nil
+    ) async throws -> EnqueueAudiosResult {
         guard let pool = outboxPool else { throw EnqueueAudioError.poolNotConfigured }
 
-        let relativePath = try Self.pendingAudioRelativePath(for: clientMessageId)
-        let absolutePath = Self.absoluteAudioPath(forStored: relativePath)
+        let relativePaths: [String] = try sourceAudioURLs.indices.map { index in
+            try Self.pendingAudioRelativePath(for: clientMessageId, index: index)
+        }
         let outboxId = "ofq_\(UUID().uuidString)"
         let now = Date()
 
@@ -848,7 +1122,9 @@ public actor OfflineQueue {
             forwardedFromId: forwardedFromId,
             forwardedFromConversationId: forwardedFromConversationId,
             attachmentIds: nil,
-            localAudioPath: relativePath,
+            attachmentKinds: Array(repeating: AttachmentKind.audio.rawValue, count: sourceAudioURLs.count),
+            localAudioPath: nil,
+            localAudioPaths: relativePaths,
             createdAt: now
         )
 
@@ -859,7 +1135,7 @@ public actor OfflineQueue {
             throw EnqueueAudioError.outboxWriteFailed(underlying: error)
         }
 
-        // Phase A — INSERT outbox row first. If this throws, the file is
+        // Phase A — INSERT outbox row first. If this throws, the files are
         // still untouched on disk and the caller can retry.
         do {
             try await pool.write { db in
@@ -878,16 +1154,25 @@ public actor OfflineQueue {
             throw EnqueueAudioError.outboxWriteFailed(underlying: error)
         }
 
-        // Phase B — copy the audio into the pending directory. On failure,
-        // mark the row `.failed` so the flusher does not retry against a
-        // missing file. We must NOT throw before that update lands.
+        // Phase B — copy each audio into the per-message pending subdir. On
+        // any failure, mark the row `.failed` so the flusher does not retry
+        // against a missing file. We must NOT throw before that update lands.
         do {
-            let dst = URL(fileURLWithPath: absolutePath)
-            if FileManager.default.fileExists(atPath: absolutePath) {
-                try FileManager.default.removeItem(at: dst)
+            for (source, relativePath) in zip(sourceAudioURLs, relativePaths) {
+                let absolutePath = Self.absoluteAudioPath(forStored: relativePath)
+                let dst = URL(fileURLWithPath: absolutePath)
+                if FileManager.default.fileExists(atPath: absolutePath) {
+                    try FileManager.default.removeItem(at: dst)
+                }
+                try FileManager.default.copyItem(at: source, to: dst)
             }
-            try FileManager.default.copyItem(at: sourceAudioURL, to: dst)
         } catch {
+            // S6 — a copy failure is permanent (the source bytes are
+            // unreadable), so the row is TERMINAL: mark `.exhausted`
+            // (GC-eligible via purgeExhaustedOlderThan) rather than `.failed`,
+            // which the flusher never picks up and the GC never reclaims, so it
+            // would leak in the outbox + SyncPill across every session.
+            let copyError = error
             do {
                 try await pool.write { db in
                     try db.execute(sql: """
@@ -895,22 +1180,35 @@ public actor OfflineQueue {
                         SET status = ?, lastError = ?, updatedAt = ?
                         WHERE id = ?
                         """, arguments: [
-                            OutboxStatus.failed.rawValue,
-                            "Audio copy failed: \(error.localizedDescription)",
+                            OutboxStatus.exhausted.rawValue,
+                            "Audio copy failed: \(copyError.localizedDescription)",
                             Date(),
                             outboxId
                         ])
                 }
             } catch {
-                logger.error("Failed to mark audio outbox row .failed after copy error: \(error.localizedDescription, privacy: .public)")
+                logger.error("Failed to mark audio outbox row .exhausted after copy error: \(error.localizedDescription, privacy: .public)")
             }
-            throw EnqueueAudioError.audioCopyFailed(underlying: error)
+            // Best-effort clean any partially-copied tracks so they don't leak.
+            for relativePath in relativePaths {
+                try? FileManager.default.removeItem(atPath: Self.absoluteAudioPath(forStored: relativePath))
+            }
+            // Terminal signal so a live ViewModel resolves the optimistic bubble.
+            emitRetryExhausted(OfflineRetryExhausted(
+                kind: .sendMessage,
+                clientMessageId: clientMessageId,
+                conversationId: conversationId,
+                lastError: "Audio copy failed: \(copyError.localizedDescription)"
+            ))
+            throw EnqueueAudioError.audioCopyFailed(underlying: copyError)
         }
 
-        // Phase C — best-effort cleanup of the original tmp file. A failure
-        // here is benign: the file lives in `tmp/` and the OS will reclaim
-        // it on its own schedule.
-        try? FileManager.default.removeItem(at: sourceAudioURL)
+        // Phase C — best-effort cleanup of the original tmp files. A failure
+        // here is benign: the files live in `tmp/` and the OS reclaims them
+        // on its own schedule.
+        for source in sourceAudioURLs {
+            try? FileManager.default.removeItem(at: source)
+        }
 
         // Mirror the new item into the in-memory queue so the hot retry
         // path picks it up on the next reconnect without re-reading the
@@ -919,10 +1217,248 @@ public actor OfflineQueue {
             items.removeFirst()
         }
         items.append(item)
-        logger.info("Enqueued audio for conversation \(conversationId, privacy: .public), path \(relativePath, privacy: .public)")
+        logger.info("Enqueued \(sourceAudioURLs.count) audio track(s) for conversation \(conversationId, privacy: .public), message \(clientMessageId, privacy: .public)")
         await refreshPendingCount()
 
-        return EnqueueAudioResult(outboxId: outboxId, localAudioPath: relativePath)
+        return EnqueueAudiosResult(outboxId: outboxId, localAudioPaths: relativePaths)
+    }
+
+    public struct EnqueueMediaResult: Sendable {
+        public let outboxId: String
+        public let localMediaPaths: [String]
+
+        public init(outboxId: String, localMediaPaths: [String]) {
+            self.outboxId = outboxId
+            self.localMediaPaths = localMediaPaths
+        }
+    }
+
+    public enum EnqueueMediaError: Error, Sendable {
+        case poolNotConfigured
+        case outboxWriteFailed(underlying: Error)
+        case mediaCopyFailed(underlying: Error)
+    }
+
+    /// S7b — durable write-ahead for an OFFLINE visual-media (photo/video)
+    /// message, the parity twin of `enqueueAudios`. Phase A inserts the
+    /// `.pending` outbox row referencing relative `localMediaPaths`; Phase B
+    /// copies each source file under `Documents/pending-media/` (preserving the
+    /// extension so the dispatcher can derive the MIME). A copy failure is
+    /// permanent (the source bytes are unreadable) so the row is flipped
+    /// `.exhausted` + cleaned + a terminal signal emitted (cf. S6), rather than
+    /// retried against a missing file. The dispatcher (ST3) replays
+    /// `localMediaPaths` via TUS on flush; until that lands this method has no
+    /// caller, so no row can mis-dispatch.
+    @discardableResult
+    public func enqueueMedia(
+        sourceMediaURLs: [URL],
+        kinds: [String],
+        conversationId: String,
+        content: String?,
+        clientMessageId: String,
+        originalLanguage: String? = nil,
+        replyToId: String? = nil,
+        forwardedFromId: String? = nil,
+        forwardedFromConversationId: String? = nil
+    ) async throws -> EnqueueMediaResult {
+        guard let pool = outboxPool else { throw EnqueueMediaError.poolNotConfigured }
+
+        let relativePaths: [String] = try sourceMediaURLs.indices.map { index in
+            try Self.pendingMediaRelativePath(
+                for: clientMessageId, index: index, ext: sourceMediaURLs[index].pathExtension)
+        }
+        let outboxId = "ofq_\(UUID().uuidString)"
+        let now = Date()
+
+        let item = OfflineQueueItem(
+            id: UUID().uuidString,
+            clientMessageId: clientMessageId,
+            conversationId: conversationId,
+            content: content ?? "",
+            originalLanguage: originalLanguage,
+            replyToId: replyToId,
+            forwardedFromId: forwardedFromId,
+            forwardedFromConversationId: forwardedFromConversationId,
+            attachmentIds: nil,
+            attachmentKinds: kinds,
+            localAudioPath: nil,
+            localAudioPaths: nil,
+            localMediaPaths: relativePaths,
+            createdAt: now
+        )
+
+        let payload: Data
+        do {
+            payload = try encoder.encode(item)
+        } catch {
+            throw EnqueueMediaError.outboxWriteFailed(underlying: error)
+        }
+
+        // Phase A — INSERT outbox row first (write-ahead). If this throws, the
+        // source files are still untouched and the caller can retry.
+        do {
+            try await pool.write { db in
+                try OutboxRecord(
+                    id: outboxId,
+                    kind: .sendMessage,
+                    conversationId: conversationId,
+                    messageLocalId: clientMessageId,
+                    clientMessageId: clientMessageId,
+                    payload: payload,
+                    status: .pending,
+                    createdAt: now
+                ).insert(db)
+            }
+        } catch {
+            throw EnqueueMediaError.outboxWriteFailed(underlying: error)
+        }
+
+        // Phase B — copy each media file into the per-message pending subdir.
+        do {
+            try Self.copyPendingMediaFiles(sources: sourceMediaURLs, to: relativePaths)
+        } catch {
+            // S6 — a copy failure is permanent; mark the row terminal so it
+            // doesn't leak, clean partial copies, and emit the terminal signal.
+            let copyError = error
+            do {
+                try await pool.write { db in
+                    try db.execute(sql: """
+                        UPDATE outbox SET status = ?, lastError = ?, updatedAt = ? WHERE id = ?
+                        """, arguments: [
+                            OutboxStatus.exhausted.rawValue,
+                            "Media copy failed: \(copyError.localizedDescription)",
+                            Date(),
+                            outboxId
+                        ])
+                }
+            } catch {
+                logger.error("Failed to mark media outbox row .exhausted after copy error: \(error.localizedDescription, privacy: .public)")
+            }
+            for relativePath in relativePaths {
+                try? FileManager.default.removeItem(atPath: Self.absoluteMediaPath(forStored: relativePath))
+            }
+            emitRetryExhausted(OfflineRetryExhausted(
+                kind: .sendMessage,
+                clientMessageId: clientMessageId,
+                conversationId: conversationId,
+                lastError: "Media copy failed: \(copyError.localizedDescription)"
+            ))
+            throw EnqueueMediaError.mediaCopyFailed(underlying: copyError)
+        }
+
+        // Phase C — best-effort cleanup of the original tmp sources.
+        for source in sourceMediaURLs {
+            try? FileManager.default.removeItem(at: source)
+        }
+
+        if items.count >= Self.maxQueueSize {
+            items.removeFirst()
+        }
+        items.append(item)
+        logger.info("Enqueued \(sourceMediaURLs.count) media file(s) for conversation \(conversationId, privacy: .public), message \(clientMessageId, privacy: .public)")
+        await refreshPendingCount()
+
+        return EnqueueMediaResult(outboxId: outboxId, localMediaPaths: relativePaths)
+    }
+
+    /// Phase B of a write-ahead media enqueue: copies each source file to its
+    /// pending-media destination (overwriting a stale file at the same key).
+    /// Shared by `enqueueMedia` (messages) and `enqueuePostMedia` (posts). Throws
+    /// on the first copy failure — the caller flips the row terminal (S6).
+    static func copyPendingMediaFiles(sources: [URL], to relativePaths: [String]) throws {
+        for (source, relativePath) in zip(sources, relativePaths) {
+            let absolutePath = absoluteMediaPath(forStored: relativePath)
+            let dst = URL(fileURLWithPath: absolutePath)
+            if FileManager.default.fileExists(atPath: absolutePath) {
+                try FileManager.default.removeItem(at: dst)
+            }
+            try FileManager.default.copyItem(at: source, to: dst)
+        }
+    }
+
+    /// U1b — durable write-ahead for an OFFLINE media POST, the parity twin of
+    /// `enqueueMedia` (messages). Computes the pending paths, inserts the
+    /// `.createPost` row referencing them via the generic enqueue (write-ahead),
+    /// then copies each source under `Documents/pending-media/<cmid>/` (extension
+    /// preserved so the dispatcher derives the MIME per file). A copy failure is
+    /// permanent → the row is flipped `.exhausted` + cleaned + a terminal signal
+    /// emitted (S6), rather than retried against a missing file. The dispatcher
+    /// (U1b ST1) replays `localMediaPaths` via TUS on flush. Until the caller
+    /// (ST2b) wires it, this has no caller, so no row can mis-dispatch.
+    @discardableResult
+    public func enqueuePostMedia(
+        sourceMediaURLs: [URL],
+        clientMutationId cmid: String,
+        content: String?,
+        visibility: String,
+        originalLanguage: String? = nil
+    ) async throws -> EnqueueMediaResult {
+        guard let pool = outboxPool else { throw EnqueueMediaError.poolNotConfigured }
+
+        let relativePaths: [String] = try sourceMediaURLs.indices.map { index in
+            try Self.pendingMediaRelativePath(
+                for: cmid, index: index, ext: sourceMediaURLs[index].pathExtension)
+        }
+        let payload = CreatePostPayload(
+            clientMutationId: cmid,
+            content: content ?? "",
+            attachmentIds: [],
+            visibility: visibility,
+            originalLanguage: originalLanguage,
+            localMediaPaths: relativePaths
+        )
+
+        // Phase A — write-ahead INSERT of the `.createPost` row (referencing the
+        // not-yet-copied paths) via the generic enqueue, so a crash mid-copy
+        // leaves a recoverable row (the dispatcher skips missing files).
+        let outboxId: String
+        do {
+            _ = try await enqueue(.createPost, payload: payload, conversationId: nil)
+            outboxId = "ofqm_\(cmid)"
+        } catch {
+            throw EnqueueMediaError.outboxWriteFailed(underlying: error)
+        }
+
+        // Phase B — copy each source into the per-cmid pending subdir.
+        do {
+            try Self.copyPendingMediaFiles(sources: sourceMediaURLs, to: relativePaths)
+        } catch {
+            // S6 — a copy failure is permanent; flip the row terminal so it
+            // doesn't leak, clean partial copies, and emit the terminal signal.
+            let copyError = error
+            do {
+                try await pool.write { db in
+                    try db.execute(sql: """
+                        UPDATE outbox SET status = ?, lastError = ?, updatedAt = ? WHERE id = ?
+                        """, arguments: [
+                            OutboxStatus.exhausted.rawValue,
+                            "Post media copy failed: \(copyError.localizedDescription)",
+                            Date(),
+                            outboxId
+                        ])
+                }
+            } catch {
+                logger.error("Failed to mark post-media outbox row .exhausted after copy error: \(error.localizedDescription, privacy: .public)")
+            }
+            for relativePath in relativePaths {
+                try? FileManager.default.removeItem(atPath: Self.absoluteMediaPath(forStored: relativePath))
+            }
+            emitRetryExhausted(OfflineRetryExhausted(
+                kind: .createPost,
+                clientMessageId: cmid,
+                conversationId: "",
+                lastError: "Post media copy failed: \(copyError.localizedDescription)"
+            ))
+            throw EnqueueMediaError.mediaCopyFailed(underlying: copyError)
+        }
+
+        // Phase C — best-effort cleanup of the original tmp sources.
+        for source in sourceMediaURLs {
+            try? FileManager.default.removeItem(at: source)
+        }
+
+        logger.info("Enqueued \(sourceMediaURLs.count) media file(s) for offline post, cmid \(cmid, privacy: .public)")
+        return EnqueueMediaResult(outboxId: outboxId, localMediaPaths: relativePaths)
     }
 
     /// Persists an `editMessage` request, applying the coalescing rules from
@@ -982,7 +1518,9 @@ public actor OfflineQueue {
                         forwardedFromId: item.forwardedFromId,
                         forwardedFromConversationId: item.forwardedFromConversationId,
                         attachmentIds: item.attachmentIds,
+                        attachmentKinds: item.attachmentKinds,
                         localAudioPath: item.localAudioPath,
+                        localAudioPaths: item.localAudioPaths,
                         createdAt: item.createdAt
                     )
                     let mergedPayload = (try? enc.encode(merged)) ?? send.payload
@@ -1421,21 +1959,31 @@ public actor OfflineQueue {
                     .fetchAll(db)
                 let fm = FileManager.default
                 for record in pendingSends {
-                    guard let item = try? dec.decode(OfflineQueueItem.self, from: record.payload),
-                          let path = item.localAudioPath, !path.isEmpty else { continue }
-                    let absolute = Self.absoluteAudioPath(forStored: path)
-                    if !fm.fileExists(atPath: absolute) {
+                    guard let item = try? dec.decode(OfflineQueueItem.self, from: record.payload) else { continue }
+                    // Single-track legacy path + multi-track paths are both
+                    // checked: any referenced file missing on disk means the
+                    // pre-crash copy never landed → the audio bytes are gone, so
+                    // the row can never succeed. S6 — mark it `.exhausted`
+                    // (terminal + GC-eligible via purgeExhaustedOlderThan), NOT
+                    // `.failed`, which the flusher never picks up and the GC
+                    // never reclaims, so it would leak in the outbox + SyncPill
+                    // across every session.
+                    let referencedPaths = ([item.localAudioPath].compactMap { $0 } + (item.localAudioPaths ?? []))
+                        .filter { !$0.isEmpty }
+                    guard !referencedPaths.isEmpty else { continue }
+                    let anyMissing = referencedPaths.contains { !fm.fileExists(atPath: Self.absoluteAudioPath(forStored: $0)) }
+                    if anyMissing {
                         try db.execute(sql: """
                             UPDATE outbox
                             SET status = ?, lastError = ?, updatedAt = ?
                             WHERE id = ?
                             """, arguments: [
-                                OutboxStatus.failed.rawValue,
+                                OutboxStatus.exhausted.rawValue,
                                 "Audio file missing after crash",
                                 Date(),
                                 record.id
                             ])
-                        log.warning("Audio file missing for OutboxRecord \(record.id, privacy: .public), marked .failed")
+                        log.warning("Audio file missing for OutboxRecord \(record.id, privacy: .public), marked .exhausted")
                         local.audioOrphanFailed += 1
                     }
                 }
@@ -1477,6 +2025,50 @@ public actor OfflineQueue {
             try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         }
         return "\(pendingAudioDirectoryName)/\(clientMessageId).m4a"
+    }
+
+    /// Builds the canonical relative path under
+    /// `Documents/pending-audio/<clientMessageId>/<index>.m4a` for a single
+    /// track of a multi-track audio message. Creates the per-message
+    /// subdirectory if needed so the subsequent `copyItem` finds a destination
+    /// directory. Resolves to the right absolute file via
+    /// `absoluteAudioPath(forStored:)` (which simply prepends `Documents/`).
+    public static func pendingAudioRelativePath(for clientMessageId: String, index: Int) throws -> String {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let dir = documents
+            .appendingPathComponent(pendingAudioDirectoryName, isDirectory: true)
+            .appendingPathComponent(clientMessageId, isDirectory: true)
+        if !FileManager.default.fileExists(atPath: dir.path) {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        return "\(pendingAudioDirectoryName)/\(clientMessageId)/\(index).m4a"
+    }
+
+    // MARK: - S7b — pending visual-media paths
+
+    public static let pendingMediaDirectoryName = "pending-media"
+
+    /// Resolve a stored media relative path (under `Documents/`) to absolute —
+    /// same Documents-relative resolution as audio.
+    public static func absoluteMediaPath(forStored relativePath: String) -> String {
+        absoluteAudioPath(forStored: relativePath)
+    }
+
+    /// Canonical relative path under
+    /// `Documents/pending-media/<clientMessageId>/<index>.<ext>` for one track of
+    /// an offline visual-media message. The original extension is PRESERVED so
+    /// the dispatcher can derive the upload MIME per file. Creates the
+    /// per-message subdir so the subsequent `copyItem` finds a destination.
+    public static func pendingMediaRelativePath(for clientMessageId: String, index: Int, ext: String) throws -> String {
+        let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let dir = documents
+            .appendingPathComponent(pendingMediaDirectoryName, isDirectory: true)
+            .appendingPathComponent(clientMessageId, isDirectory: true)
+        if !FileManager.default.fileExists(atPath: dir.path) {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        let safeExt = ext.isEmpty ? "bin" : ext.lowercased()
+        return "\(pendingMediaDirectoryName)/\(clientMessageId)/\(index).\(safeExt)"
     }
 
     // MARK: - Retry Logic
@@ -1684,4 +2276,63 @@ public actor OfflineQueue {
             try? FileManager.default.removeItem(at: url)
         }
     }
+
+#if DEBUG
+    // MARK: - Test Seams
+    //
+    // Narrow helpers used by the publisher refresh tests. They short-circuit
+    // the production drain paths (`OutboxFlusher`, `retryAll()`) which would
+    // require a far heavier test rig for what we only need: prove the
+    // publisher reacts when outbox rows are deleted or flipped to `.failed`.
+
+    /// Forces a refresh of both `pendingCountSubject` and
+    /// `pendingUIItemsSubject` from the current outbox table state. Used by
+    /// tests that mutate the table directly (bypassing `enqueue`) and need to
+    /// observe the resulting snapshot.
+    public func refreshForTesting() async {
+        await refreshPendingCount()
+    }
+
+    /// Exposes the configured outbox pool so tests can read back the persisted
+    /// `OutboxRecord` rows (and decode their payloads) without reaching into
+    /// the actor's private state.
+    public var outboxPoolForTesting: (any DatabaseWriter)? {
+        outboxPool
+    }
+
+    /// Deletes every outbox row whose `clientMessageId` matches `cmid`,
+    /// simulating a successful drain (the production drain path in
+    /// `OutboxFlusher` and `retryAll()` also deletes the row outright since
+    /// `OutboxStatus` has no `.applied` case).
+    public func deleteForTesting(clientMessageId cmid: String) async throws {
+        guard let pool = outboxPool else { throw OfflineQueueError.poolNotConfigured }
+        try await pool.write { db in
+            try OutboxRecord
+                .filter(Column("clientMessageId") == cmid)
+                .deleteAll(db)
+        }
+        await refreshPendingCount()
+    }
+
+    /// Flips every outbox row whose `clientMessageId` matches `cmid` to
+    /// `.failed`, stamping `lastError` with `reason`. Mirrors what
+    /// `OutboxFlusher` does after exceeding the retry budget without
+    /// requiring a full flusher setup in the test.
+    public func markFailedForTesting(clientMessageId cmid: String, reason: String) async throws {
+        guard let pool = outboxPool else { throw OfflineQueueError.poolNotConfigured }
+        try await pool.write { db in
+            try db.execute(sql: """
+                UPDATE outbox
+                SET status = ?, lastError = ?, updatedAt = ?
+                WHERE clientMessageId = ?
+                """, arguments: [
+                    OutboxStatus.failed.rawValue,
+                    reason,
+                    Date(),
+                    cmid
+                ])
+        }
+        await refreshPendingCount()
+    }
+#endif
 }

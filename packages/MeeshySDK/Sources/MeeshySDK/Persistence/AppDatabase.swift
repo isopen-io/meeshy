@@ -14,75 +14,113 @@ public final class AppDatabase: @unchecked Sendable {
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "grdb")
 
     private init() {
+        // makeWriter opens, migrates, AND recovers from corruption internally,
+        // so the writer it returns is always a fully-migrated, usable store.
         let (writer, ephemeral) = Self.makeWriter()
         self.databaseWriter = writer
         self.isEphemeral = ephemeral
+    }
 
+    /// Build a fully-migrated GRDB writer that never crashes the host app.
+    /// Opens the on-disk store, runs migrations, and on an unusable file
+    /// (SQLITE_CORRUPT / SQLITE_NOTADB / migration failure) deletes it and
+    /// recreates once; if that still fails, falls back to an in-memory queue
+    /// so the L2 cache is degraded but the app stays alive — critical when the
+    /// OS wakes us for a silent push or background task and disk access
+    /// transiently fails.
+    private static func makeWriter() -> (any DatabaseWriter, Bool) {
+        let logger = Logger(subsystem: "com.meeshy.sdk", category: "grdb")
+        let databaseURL: URL
         do {
-            try Self.runMigrations(on: writer)
+            databaseURL = try resolveDatabaseURL()
         } catch {
-            Logger(subsystem: "com.meeshy.sdk", category: "grdb")
-                .error("Migration failed, continuing with ephemeral writer: \(error.localizedDescription, privacy: .public)")
+            logger.error("Failed to resolve on-disk DB location, using in-memory: \(error.localizedDescription, privacy: .public)")
+            return inMemoryWriter()
+        }
+        return openOrRecover(at: databaseURL)
+    }
+
+    /// Open + migrate the store at `databaseURL`. A `DatabasePool` opens
+    /// lazily, so a corrupt file only throws (SQLITE_CORRUPT / SQLITE_NOTADB)
+    /// at migration time — the first real query. We run migrations HERE so
+    /// corruption is caught while we can still recover, instead of leaving a
+    /// broken pool in use for the whole session (and across relaunches). On
+    /// failure: drop the file (+ WAL/SHM sidecars) and retry once; then
+    /// in-memory. Internal for tests.
+    static func openOrRecover(at databaseURL: URL) -> (any DatabaseWriter, Bool) {
+        let logger = Logger(subsystem: "com.meeshy.sdk", category: "grdb")
+        do {
+            let pool = try openPool(at: databaseURL)
+            try runMigrations(on: pool)
+            return (pool, false)
+        } catch {
+            logger.error("On-disk DB unusable (\(error.localizedDescription, privacy: .public)); deleting and recreating")
+            removeDatabaseFiles(at: databaseURL)
+            do {
+                let pool = try openPool(at: databaseURL)
+                try runMigrations(on: pool)
+                logger.info("Recovered on-disk DB by recreating the store")
+                return (pool, false)
+            } catch {
+                logger.error("DB recreate failed (\(error.localizedDescription, privacy: .public)); using in-memory")
+                return inMemoryWriter()
+            }
         }
     }
 
-    /// Build a GRDB writer that never crashes the host app. On failure we log
-    /// and fall back to an in-memory queue so the L2 cache is degraded but
-    /// the app stays alive — critical when the OS wakes us for a silent push
-    /// or background task and disk access transiently fails.
-    private static func makeWriter() -> (any DatabaseWriter, Bool) {
-        let logger = Logger(subsystem: "com.meeshy.sdk", category: "grdb")
-        do {
-            let fileManager = FileManager.default
-            let appSupportDir = try fileManager.url(
-                for: .applicationSupportDirectory,
-                in: .userDomainMask,
-                appropriateFor: nil,
-                create: true
-            )
-            let directoryURL = appSupportDir.appendingPathComponent("Database", isDirectory: true)
-
-            if !fileManager.fileExists(atPath: directoryURL.path) {
-                try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-            }
-
-            // Apply iOS Data Protection: the SQLite file and its directory are
-            // encrypted by the OS when the device is locked. This is equivalent
-            // to `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` for the
-            // Keychain — the DB is readable after the first unlock each boot
-            // (required for background tasks and NSE) but fully encrypted at
-            // rest and excluded from unencrypted backups.
-            try (directoryURL as NSURL).setResourceValue(
+    /// Resolve (and create) the on-disk SQLite URL with iOS Data Protection:
+    /// the SQLite file and its directory are encrypted by the OS when the
+    /// device is locked (readable after the first unlock each boot — required
+    /// for background tasks and NSE — but encrypted at rest and excluded from
+    /// unencrypted backups).
+    private static func resolveDatabaseURL() throws -> URL {
+        let fileManager = FileManager.default
+        let appSupportDir = try fileManager.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let directoryURL = appSupportDir.appendingPathComponent("Database", isDirectory: true)
+        if !fileManager.fileExists(atPath: directoryURL.path) {
+            try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        }
+        try (directoryURL as NSURL).setResourceValue(
+            URLFileProtection.completeUntilFirstUserAuthentication,
+            forKey: .fileProtectionKey
+        )
+        let databaseURL = directoryURL.appendingPathComponent("meeshy.sqlite")
+        if fileManager.fileExists(atPath: databaseURL.path) {
+            try (databaseURL as NSURL).setResourceValue(
                 URLFileProtection.completeUntilFirstUserAuthentication,
                 forKey: .fileProtectionKey
             )
-
-            let databaseURL = directoryURL.appendingPathComponent("meeshy.sqlite")
-
-            // Mark the database file itself (if it already exists) with the
-            // same protection level so pre-existing installs pick up the
-            // encryption retroactively.
-            if fileManager.fileExists(atPath: databaseURL.path) {
-                try (databaseURL as NSURL).setResourceValue(
-                    URLFileProtection.completeUntilFirstUserAuthentication,
-                    forKey: .fileProtectionKey
-                )
-            }
-
-            var configuration = Configuration()
-            configuration.prepareDatabase { db in
-                db.trace { _ in }
-            }
-
-            let pool = try DatabasePool(path: databaseURL.path, configuration: configuration)
-            return (pool, false)
-        } catch {
-            logger.error("Failed to open on-disk GRDB, falling back to in-memory: \(error.localizedDescription, privacy: .public)")
-            // In-memory DatabaseQueue() is trivially constructible; the only
-            // realistic failure would be a hard OOM which the OS handles.
-            let queue = try! DatabaseQueue()  // swiftlint:disable:this force_try
-            return (queue, true)
         }
+        return databaseURL
+    }
+
+    private static func openPool(at databaseURL: URL) throws -> DatabasePool {
+        var configuration = Configuration()
+        configuration.prepareDatabase { db in
+            db.trace { _ in }
+        }
+        return try DatabasePool(path: databaseURL.path, configuration: configuration)
+    }
+
+    /// Delete the SQLite file and its WAL/SHM sidecars so a recreate starts clean.
+    private static func removeDatabaseFiles(at databaseURL: URL) {
+        let fileManager = FileManager.default
+        for suffix in ["", "-wal", "-shm"] {
+            try? fileManager.removeItem(at: URL(fileURLWithPath: databaseURL.path + suffix))
+        }
+    }
+
+    private static func inMemoryWriter() -> (any DatabaseWriter, Bool) {
+        // swiftlint:disable:next force_try
+        let queue = try! DatabaseQueue()
+        // The ephemeral DB still needs the schema so reads/writes don't throw.
+        try? runMigrations(on: queue)
+        return (queue, true)
     }
 
     static func runMigrations(on writer: any DatabaseWriter) throws {

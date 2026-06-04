@@ -618,6 +618,8 @@ final class MessagePersistenceActorTests: XCTestCase {
         clientMessageId: String? = nil,
         isEncrypted: Bool = false,
         attachments: [[String: Any]] = [],
+        reactionSummary: [String: Int]? = nil,
+        currentUserReactions: [String]? = nil,
         createdAt: Date = Date()
     ) -> APIMessage {
         var json: [String: Any] = [
@@ -631,6 +633,8 @@ final class MessagePersistenceActorTests: XCTestCase {
         if let clientMessageId { json["clientMessageId"] = clientMessageId }
         if isEncrypted { json["isEncrypted"] = true }
         if !attachments.isEmpty { json["attachments"] = attachments }
+        if let reactionSummary { json["reactionSummary"] = reactionSummary }
+        if let currentUserReactions { json["currentUserReactions"] = currentUserReactions }
         let data = try! JSONSerialization.data(withJSONObject: json)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
@@ -998,5 +1002,207 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertNil(att2.transcription,
                      "att_2 transcription must remain nil — enrichment targets att_1 only")
         XCTAssertNil(att2.audioTranslations)
+    }
+
+    // MARK: - T7 — reaction ownership (current user's userId, not author participantId)
+
+    /// Pure helper: only the FIRST row of an emoji the current user reacted
+    /// with is tagged with `currentUserId`; every other synthetic row (further
+    /// counts of the same emoji, and emojis the user didn't react with) carries
+    /// no ownership.
+    func test_reconstructFromSummary_tagsOnlyCurrentUserFirstRow() {
+        let reactions = MeeshyReaction.reconstructFromSummary(
+            messageId: "m1",
+            reactionSummary: ["👍": 3, "❤️": 1],
+            currentUserReactions: ["👍"],
+            currentUserId: "me"
+        )
+
+        XCTAssertEqual(reactions.count, 4)
+        let owned = reactions.filter { $0.participantId == "me" }
+        XCTAssertEqual(owned.count, 1, "only the first 👍 row is owned by the current user")
+        XCTAssertEqual(owned.first?.emoji, "👍")
+        XCTAssertTrue(
+            reactions.filter { $0.emoji == "❤️" }.allSatisfy { $0.participantId == nil },
+            "an emoji the user didn't react with carries no ownership"
+        )
+        XCTAssertEqual(
+            reactions.filter { $0.emoji == "👍" && $0.participantId == nil }.count, 2,
+            "the 2nd and 3rd 👍 rows are other reactors — no ownership"
+        )
+    }
+
+    /// Regression for the local-first bug: during REST ingestion the current
+    /// user's own reaction must be tagged with their userId, NOT the message
+    /// author's participantId (`api.senderId`). Otherwise the
+    /// `participantId == currentUserId` ownership check fails after a cache
+    /// reload and the "I reacted" highlight disappears.
+    func test_upsertFromAPIMessages_tagsCurrentUserReactionWithUserId_notAuthorParticipantId() async throws {
+        let scopedActor = MessagePersistenceActor(dbWriter: dbQueue, currentUserId: "me_user_id")
+        let apiMsg = makeAPIMessage(
+            id: "srv_react_t7",
+            conversationId: "conv_t7",
+            senderId: "author_participant_id",
+            reactionSummary: ["👍": 2],
+            currentUserReactions: ["👍"]
+        )
+
+        try await scopedActor.upsertFromAPIMessages([apiMsg])
+
+        let rows = try scopedActor.messages(for: "conv_t7", limit: 10)
+        let json = try XCTUnwrap(rows.first?.reactionsJson,
+            "ingested reactions must be persisted to reactionsJson")
+        let reactions = try JSONDecoder().decode([MeeshyReaction].self, from: json)
+        let owned = reactions.filter { $0.participantId != nil }
+        XCTAssertEqual(owned.count, 1, "exactly the current user's first 👍 row carries ownership")
+        XCTAssertEqual(owned.first?.participantId, "me_user_id",
+            "current user's reaction must be tagged with their userId")
+        XCTAssertNotEqual(owned.first?.participantId, "author_participant_id",
+            "must NOT reuse the message author's participantId for the current user's reaction")
+    }
+
+    // MARK: - T13 — don't clobber a locally-mutated reaction with a stale REST snapshot
+
+    /// While a reaction toggle is still pending in the outbox, a REST refresh
+    /// that doesn't yet carry the (un-synced) reaction must NOT overwrite the
+    /// optimistic local reactionsJson — otherwise the reaction visibly reverts.
+    func test_upsertFromAPIMessages_preservesLocalReactions_whenReactionPendingInOutbox() async throws {
+        let conv = "c_t13"
+        let msgId = "m_t13"
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv)])
+        try await actor.appendReaction(localId: msgId, reactionId: "r1", messageId: msgId, participantId: "me", emoji: "👍")
+
+        // A reaction add for this message is still pending in the outbox.
+        let payload = try JSONEncoder().encode(ReactionOutboxPayload(
+            messageId: msgId, emoji: "👍", action: .add, conversationId: conv, clientMessageId: "cid_r1"))
+        let now = Date()
+        try await dbQueue.write { db in
+            try OutboxRecord(
+                id: "ofqr_t13", kind: .sendReaction, conversationId: conv,
+                clientMessageId: "cid_r1", payload: payload, status: .pending,
+                attempts: 0, lastError: nil, createdAt: now, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+
+        // REST refresh arrives WITHOUT the not-yet-synced reaction.
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv)])
+
+        let rows = try actor.messages(for: conv, limit: 10)
+        let json = try XCTUnwrap(rows.first?.reactionsJson, "local reaction must be preserved while pending")
+        let reactions = try JSONDecoder().decode([MeeshyReaction].self, from: json)
+        XCTAssertEqual(reactions.map(\.emoji), ["👍"],
+            "an optimistic reaction pending in the outbox must survive a stale REST snapshot")
+    }
+
+    /// With NO pending reaction mutation, the server snapshot is authoritative —
+    /// a refresh that drops a reaction must clobber the local copy (normal SWR).
+    func test_upsertFromAPIMessages_takesServerReactions_whenNothingPending() async throws {
+        let conv = "c_t13b"
+        let msgId = "m_t13b"
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv)])
+        try await actor.appendReaction(localId: msgId, reactionId: "r1", messageId: msgId, participantId: "me", emoji: "👍")
+
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv)])
+
+        let rows = try actor.messages(for: conv, limit: 10)
+        let reactions = (rows.first?.reactionsJson).flatMap { try? JSONDecoder().decode([MeeshyReaction].self, from: $0) } ?? []
+        XCTAssertTrue(reactions.isEmpty,
+            "with no pending mutation the server (empty) reaction state must win")
+    }
+
+    // MARK: - S2 — preserve optimistic edit/delete while pending in outbox
+
+    func test_upsertFromAPIMessages_preservesOptimisticEdit_whenEditPendingInOutbox() async throws {
+        let conv = "c_s2e"
+        let msgId = "m_s2e"
+        // Server message exists locally with its original content.
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv, content: "original")])
+        // User edits it offline → optimistic local content + a pending editMessage outbox row.
+        try await actor.markEdited(localId: msgId, newContent: "edited offline", editedAt: Date())
+        let payload = try JSONEncoder().encode(OfflineEditPayload(
+            messageId: msgId, clientMessageId: "cid_e1", content: "edited offline", conversationId: conv))
+        let now = Date()
+        try await dbQueue.write { db in
+            try OutboxRecord(
+                id: "ofqr_s2e", kind: .editMessage, conversationId: conv,
+                clientMessageId: "cid_e1", payload: payload, status: .pending,
+                attempts: 0, lastError: nil, createdAt: now, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+        // Stale REST refresh arrives with the PRE-edit content.
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv, content: "original")])
+
+        let rows = try actor.messages(for: conv, limit: 10)
+        XCTAssertEqual(rows.first?.content, "edited offline",
+            "an optimistic edit pending in the outbox must survive a stale REST snapshot")
+        XCTAssertEqual(rows.first?.isEdited, true,
+            "isEdited must stay true while the edit is pending")
+    }
+
+    func test_upsertFromAPIMessages_preservesOptimisticDelete_whenDeletePendingInOutbox() async throws {
+        let conv = "c_s2d"
+        let msgId = "m_s2d"
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv)])
+        try await actor.markDeleted(localId: msgId, deletedAt: Date())
+        let payload = try JSONEncoder().encode(OfflineDeletePayload(
+            messageId: msgId, clientMessageId: "cid_d1", conversationId: conv))
+        let now = Date()
+        try await dbQueue.write { db in
+            try OutboxRecord(
+                id: "ofqr_s2d", kind: .deleteMessage, conversationId: conv,
+                clientMessageId: "cid_d1", payload: payload, status: .pending,
+                attempts: 0, lastError: nil, createdAt: now, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+        // Stale REST refresh arrives with the message NOT deleted (deletedAt nil).
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv)])
+
+        let rows = try actor.messages(for: conv, limit: 10)
+        XCTAssertNotNil(rows.first?.deletedAt,
+            "an optimistic delete pending in the outbox must survive a stale REST snapshot")
+    }
+
+    /// Scoping guard: with NO pending edit mutation the server snapshot is
+    /// authoritative — a refresh must clobber a stale local content (normal SWR).
+    func test_upsertFromAPIMessages_takesServerContent_whenNoEditPending() async throws {
+        let conv = "c_s2n"
+        let msgId = "m_s2n"
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv, content: "original")])
+        try await actor.markEdited(localId: msgId, newContent: "local edit", editedAt: Date())
+        // No outbox row → not pending → server is authoritative.
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv, content: "server version")])
+
+        let rows = try actor.messages(for: conv, limit: 10)
+        XCTAssertEqual(rows.first?.content, "server version",
+            "with no pending edit the server snapshot must win")
+    }
+
+    // MARK: - T14 — GC of stale exhausted outbox rows
+
+    /// `.exhausted` rows older than the retention window are reclaimed so the
+    /// outbox can't grow without bound; recent exhausted (still retriable) and
+    /// non-terminal rows survive.
+    func test_purgeExhaustedOlderThan_deletesOldExhausted_keepsRecentAndNonTerminal() async throws {
+        let now = Date()
+        let old = now.addingTimeInterval(-10 * 86_400)   // 10 days ago
+        let recent = now.addingTimeInterval(-1 * 86_400) // 1 day ago
+        try await dbQueue.write { db in
+            try OutboxRecord(id: "ex_old", kind: .blockUser, conversationId: "c", clientMessageId: "c1",
+                             payload: Data(), status: .exhausted, attempts: 5, lastError: "x",
+                             createdAt: old, updatedAt: old, nextAttemptAt: old).insert(db)
+            try OutboxRecord(id: "ex_recent", kind: .blockUser, conversationId: "c", clientMessageId: "c2",
+                             payload: Data(), status: .exhausted, attempts: 5, lastError: "x",
+                             createdAt: recent, updatedAt: recent, nextAttemptAt: recent).insert(db)
+            try OutboxRecord(id: "pend_old", kind: .blockUser, conversationId: "c", clientMessageId: "c3",
+                             payload: Data(), status: .pending, attempts: 0, lastError: nil,
+                             createdAt: old, updatedAt: old, nextAttemptAt: old).insert(db)
+        }
+
+        let deleted = try await actor.purgeExhaustedOlderThan(days: 7)
+
+        XCTAssertEqual(deleted, 1, "only the old exhausted row is reclaimed")
+        let remaining = try await dbQueue.read { db in try OutboxRecord.fetchAll(db).map(\.id).sorted() }
+        XCTAssertEqual(remaining, ["ex_recent", "pend_old"],
+            "recent exhausted (still retriable) + old non-terminal rows must survive")
     }
 }

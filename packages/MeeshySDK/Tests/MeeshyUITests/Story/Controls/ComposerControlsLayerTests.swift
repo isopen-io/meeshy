@@ -69,12 +69,14 @@ final class ComposerControlsLayerTests: XCTestCase {
             viewModel: vm,
             bandStateMachine: .constant(BandStateMachine()),
             areFabsVisible: .constant(true),
-            drawingCanvas: .constant(.init()),
-            drawingTool: .constant(.pen),
             selectedFilter: .constant(nil),
             fgMediaItem: .constant(nil),
             showAudioDocumentPicker: .constant(false),
             showVoiceRecorderSheet: .constant(false),
+            resizableBandHeight: .constant(300),
+            bandMinHeight: 160,
+            bandMaxHeight: 540,
+            bandDrawerCollapsed: .constant(false),
             onOpenMediaCrop: { _ in }
         )
     }

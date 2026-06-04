@@ -862,7 +862,7 @@ public struct StorySlide: Identifiable, Codable, Sendable {
 
     public init(id: String = UUID().uuidString, mediaURL: String? = nil, mediaData: Data? = nil,
                 content: String? = nil, effects: StoryEffects = StoryEffects(),
-                duration: TimeInterval = 12, order: Int = 0) {
+                duration: TimeInterval = 6, order: Int = 0) {
         self.id = id; self.mediaURL = mediaURL; self.mediaData = mediaData
         self.content = content; self.effects = effects
         self.duration = duration; self.order = order
@@ -879,7 +879,7 @@ public struct StorySlide: Identifiable, Codable, Sendable {
         mediaData = nil
         content = try container.decodeIfPresent(String.self, forKey: .content)
         effects = try container.decodeIfPresent(StoryEffects.self, forKey: .effects) ?? StoryEffects()
-        duration = try container.decodeIfPresent(TimeInterval.self, forKey: .duration) ?? 12
+        duration = try container.decodeIfPresent(TimeInterval.self, forKey: .duration) ?? 6
         order = try container.decodeIfPresent(Int.self, forKey: .order) ?? 0
     }
 
@@ -895,100 +895,98 @@ public struct StorySlide: Identifiable, Codable, Sendable {
 }
 
 extension StorySlide {
-    /// Deterministic total slide duration covering every element on the timeline.
+    /// SINGLE SOURCE OF TRUTH pour la durée d'un slide story.
+    /// User spec 2026-05-28 : « rassembler les choses dans un seul lieu,
+    /// respecter les 6s pour les statics (sauf si trop de long texte) ».
     ///
-    /// Computed as the max of :
-    /// 1. The user-authored `slide.duration` (acts as the floor — the author
-    ///    can still pin a minimum length, e.g. for a static text-only slide).
-    /// 2. For every foreground media : `startTime + (duration ?? intrinsicDuration ?? 0)`.
-    /// 3. For every non-looped background media : same formula (a non-looping
-    ///    background video that runs past the user-set duration extends the
-    ///    slide so its tail isn't cut).
-    /// 4. For every non-looped audio (foreground or background) :
-    ///    `startTime + duration`.
-    /// 5. For every text object that declares an explicit `duration` :
-    ///    `startTime + duration`. (`duration == nil` means "permanent" — already
-    ///    covered by the slide-length floor.)
-    /// 6. For every clip transition : `start + duration` (implicit via the
-    ///    bounding media end-times — kept explicit for forward-compat).
+    /// PRIORITÉ (calculée from scratch — IGNORE `effects.slideDuration`
+    /// persisté car les anciennes stories backend portent des valeurs
+    /// arbitraires (12 s, etc.) issues du composer qui écrivait
+    /// `slides[i].effects.slideDuration = Float(slides[i].duration)` à
+    /// chaque publish, contournant cette source de vérité) :
     ///
-    /// The result is then rounded UP to a full repetition of any looping
-    /// background video so the loop never freezes on a partial cycle (Section
-    /// 3.6 of the Story Canvas Fidelity spec).
+    /// 1. Background vidéo OU audio présent → durée du media :
+    ///    - media ≥ 6 s → exact
+    ///    - media < 6 s → loop jusqu'à ≥ 6 s (`ceil(6 / dur) × dur`)
     ///
-    /// Use this everywhere a "story length" is needed — exporter, playhead,
-    /// progress bar, audio mixer fade envelope, AVPlayer composition.
-    /// `effectiveSlideDuration()` is now a thin alias kept for binary compat.
+    /// 2. Texte long (cumul mots > 30) → 6 s + (mots − 30) / 6 secondes
+    ///    (1 s par tranche de 6 mots au-delà de 30) pour donner au
+    ///    lecteur le temps de lire.
+    ///
+    /// 3. Slide statique sans long texte → 6 s strict.
+    ///
+    /// Cette fonction est l'UNIQUE point d'autorité. Utilisée par le
+    /// canvas displayLink (auto-advance), le viewer wall-clock (progress
+    /// bar) et l'exporter (composition AVFoundation). Personne ne lit
+    /// `effects.slideDuration` directement.
+    static let defaultStaticDuration: TimeInterval = 6.0
+    static let longTextThresholdWords: Int = 30
+    static let longTextSecondsPerWord: Double = 1.0 / 6.0
+
     public func computedTotalDuration() -> TimeInterval {
-        let baseDuration = duration
-        var bound = baseDuration
+        // PRIORITÉ 0 — autorité timeline (« la timeline EST la story »). Si l'auteur
+        // a configuré la durée du slide via le timeline editor, elle est AUTORITAIRE :
+        // elle gagne sur le contenu (un média plus long est rogné). Champ dédié
+        // `timelineDuration` (distinct du legacy `slideDuration` aux valeurs backend
+        // arbitraires) → `nil` pour tout l'existant = fallback contenu, zéro régression.
+        if let pinned = effects.timelineDuration, pinned > 0 {
+            return pinned
+        }
+        return contentDerivedDuration()
+    }
 
-        // Extension dynamique basée sur la longueur du texte (Section 5 de la review)
-        // Les textes longs de plus de 30 mots devraient rajouter 1 seconde de plus à la story
-        // pour chaque 6 mots supplémentaire.
-        for text in effects.textObjects {
-            let words = text.text.split(separator: " ").count
-            if words > 30 {
-                let extraWords = words - 30
-                let extraSeconds = Double(extraWords) / 6.0
-                bound = max(bound, baseDuration + extraSeconds)
+    /// Durée dérivée du CONTENU (bg media loop / texte long / 6 s statique), en
+    /// IGNORANT le pin timeline. Sert (1) de fallback à `computedTotalDuration()`
+    /// quand aucun pin n'est posé, et (2) de référence pour décider si une durée
+    /// configurée par le timeline est une vraie surcharge auteur (≠ contenu) ou
+    /// juste la valeur auto — cf. `TimelineProject.apply`.
+    public func contentDerivedDuration() -> TimeInterval {
+        // Règle : MAX(durée bg media, durée lecture texte, 6 s statique).
+        // Un bg audio de 4 s avec un texte long doit respecter la lecture
+        // du texte ; un bg vidéo de 12 s sans texte tient ses 12 s.
+
+        // Composante 1 : background vidéo/audio (auteur de durée naturelle).
+        let bgVideoDur = effects.mediaObjects?
+            .first(where: { $0.isBackground && $0.kind == .video })?
+            .duration
+        let bgAudioDur = effects.audioPlayerObjects?
+            .first(where: { $0.isBackground == true })?
+            .duration
+        let rawMediaDur = bgVideoDur ?? bgAudioDur.map { Double($0) }
+
+        // Composante 2 : texte long. >30 mots → 6 s + (mots-30)/6 secondes.
+        let totalWords = effects.textObjects.reduce(0) { acc, text in
+            acc + text.text.split(separator: " ").count
+        }
+        let textDur: TimeInterval = {
+            guard totalWords > Self.longTextThresholdWords else {
+                return Self.defaultStaticDuration
             }
-        }
+            let extraWords = totalWords - Self.longTextThresholdWords
+            return Self.defaultStaticDuration
+                + Double(extraWords) * Self.longTextSecondsPerWord
+        }()
 
-        for media in effects.mediaObjects ?? [] {
-            // Backgrounds NEVER extend the slide. Looped backgrounds are
-            // handled in the rounding step below; non-looped backgrounds
-            // are clipped (longer → exporter truncates to slide.duration)
-            // or padded (shorter → exporter pads tail frames) by the
-            // render pipeline. The user-authored slide.duration is the
-            // single authoritative length for everything behind the
-            // foreground layer.
-            if media.isBackground { continue }
-            let start = media.startTime ?? 0
-            let dur = media.duration ?? media.intrinsicDuration ?? 0
-            if dur > 0 { bound = max(bound, start + dur) }
-        }
+        // Cible = max(textDur, 6 s).
+        let target = max(textDur, Self.defaultStaticDuration)
 
-        for audio in effects.audioPlayerObjects ?? [] {
-            if audio.isBackground == true && audio.loop == true { continue }
-            let start = Double(audio.startTime ?? 0)
-            guard let dur = audio.duration, dur > 0 else { continue }
-            bound = max(bound, start + Double(dur))
-        }
+        // Background media bouclé pour atteindre la cible (ou sa durée naturelle si
+        // plus longue).
+        let bgResult: TimeInterval = {
+            guard let m = rawMediaDur, m > 0 else { return target }
+            if m >= target { return m }               // media ≥ cible → durée exacte
+            return ceil(target / m) * m                // sinon loop jusqu'à ≥ cible
+        }()
 
-        for text in effects.textObjects {
-            let start = text.startTime ?? 0
-            guard let dur = text.duration, dur > 0 else { continue }
-            bound = max(bound, start + dur)
-        }
+        // Foreground media (vidéos non-bg) : le slide doit au moins couvrir leur durée
+        // naturelle, sinon leur queue serait coupée (start=0 supposé ; un décalage précis
+        // se règle via le timeline, qui pose alors un pin `timelineDuration`).
+        let fgMediaMax = (effects.mediaObjects ?? [])
+            .filter { !$0.isBackground }
+            .compactMap { $0.duration }
+            .max() ?? 0
 
-        for transition in effects.clipTransitions ?? [] {
-            // Transitions span between two clips; their tail extends the
-            // implied end-time of the `toClip`, which is already counted via
-            // the media bound above. Kept defensive in case a transition is
-            // longer than its bounding clips for any reason.
-            bound = max(bound, Double(transition.duration))
-        }
-
-        // Background Looping: ensure duration is a multiple of the video/voice duration.
-        // If content didn't force us over baseDuration, we pick the largest multiple <= baseDuration.
-        // If it did, we pick the smallest multiple >= bound to avoid cutting content.
-        let loopVideoDuration = effects.mediaObjects?.first(where: { $0.isBackground && $0.loop })?.duration
-        let loopAudioDuration = effects.audioPlayerObjects?.first(where: { $0.isBackground == true && $0.loop == true })?.duration
-
-        let L = loopVideoDuration ?? Double(loopAudioDuration ?? 0)
-        if L > 0 {
-            // Spec §3.6: "the loop never freezes on a partial cycle". When
-            // the loop period doesn't divide the slide duration evenly we
-            // round UP to the next full repetition, even if that extends
-            // past the user-authored slide.duration. Rounding DOWN would
-            // truncate the slide below the duration the author chose.
-            let target = max(bound, baseDuration)
-            let repetitions = max(1, ceil(target / L))
-            bound = repetitions * L
-        }
-
-        return bound
+        return max(bgResult, fgMediaMax)
     }
 
     /// Effective slide duration that completes any background looping video to a full repetition.
@@ -1078,7 +1076,14 @@ public struct StoryEffects: Codable, Sendable {
     public var textOffsetY: CGFloat?
     public var stickerObjects: [StorySticker]?
     public var textPositionPoint: StoryTextPosition?
+    /// Legacy PencilKit `PKDrawing.dataRepresentation()` — conservé pour decode-only
+    /// (rétro-compat des stories publiées avant la refonte 2026-05-30). Le nouveau
+    /// format `drawingStrokes` est privilégié à la lecture comme à l'écriture.
     public var drawingData: Data?
+    /// Nouveau format de dessin : traits individuels éditables (couleur, épaisseur,
+    /// lissage) par le composer. Migration best-effort des `drawingData` legacy
+    /// effectuée à `init(from:)` quand seule l'ancienne clé est présente.
+    public var drawingStrokes: [StoryDrawingStroke]?
     // Background audio (bibliothèque ou enregistrement)
     public var backgroundAudioId: String?
     public var backgroundAudioVolume: Float?
@@ -1104,8 +1109,17 @@ public struct StoryEffects: Codable, Sendable {
     // Transform appliqué à l'image/vidéo de fond (scale, offset, rotation)
     public var backgroundTransform: StoryBackgroundTransform?
 
-    // Durée totale du slide (sérialisée au publish)
+    // Durée totale du slide (sérialisée au publish) — LEGACY : valeurs backend
+    // héritées arbitraires, IGNORÉE par `computedTotalDuration()` (cf. doc).
     public var slideDuration: Float?
+
+    /// Durée AUTORITAIRE configurée par le timeline editor (« la timeline EST la
+    /// story »). `nil` = aucune autorité timeline (vieilles stories, slide jamais
+    /// édité) → `computedTotalDuration()` retombe sur le contenu. Non-`nil` = durée
+    /// du slide imposée par le timeline, lue EN PRIORITÉ par `computedTotalDuration()`
+    /// (peut être < contenu : le média long est alors rogné). Champ dédié distinct du
+    /// legacy `slideDuration` pour ne pas hériter des valeurs backend arbitraires.
+    public var timelineDuration: Double?
 
     // Timeline V2 — transitions between adjacent clips of this slide
     public var clipTransitions: [StoryClipTransition]?
@@ -1123,6 +1137,7 @@ public struct StoryEffects: Codable, Sendable {
                 textAlign: String? = nil, textSize: CGFloat? = nil, textBg: String? = nil, textOffsetY: CGFloat? = nil,
                 stickerObjects: [StorySticker]? = nil, textPositionPoint: StoryTextPosition? = nil,
                 drawingData: Data? = nil,
+                drawingStrokes: [StoryDrawingStroke]? = nil,
                 backgroundAudioId: String? = nil, backgroundAudioVolume: Float? = nil,
                 backgroundAudioStart: TimeInterval? = nil, backgroundAudioEnd: TimeInterval? = nil,
                 voiceAttachmentId: String? = nil, voiceTranscriptions: [StoryVoiceTranscription]? = nil,
@@ -1133,12 +1148,14 @@ public struct StoryEffects: Codable, Sendable {
                 backgroundAudioVariants: [StoryAudioVariant]? = nil,
                 backgroundTransform: StoryBackgroundTransform? = nil,
                 slideDuration: Float? = nil,
+                timelineDuration: Double? = nil,
                 clipTransitions: [StoryClipTransition]? = nil) {
         self.background = background; self.textStyle = textStyle; self.textColor = textColor
         self.textPosition = textPosition; self.filter = filter; self.filterIntensity = filterIntensity; self.stickers = stickers
         self.textAlign = textAlign; self.textSize = textSize; self.textBg = textBg; self.textOffsetY = textOffsetY
         self.stickerObjects = stickerObjects; self.textPositionPoint = textPositionPoint
         self.drawingData = drawingData
+        self.drawingStrokes = drawingStrokes
         self.backgroundAudioId = backgroundAudioId
         self.backgroundAudioVolume = backgroundAudioVolume
         self.backgroundAudioStart = backgroundAudioStart
@@ -1153,6 +1170,7 @@ public struct StoryEffects: Codable, Sendable {
         self.backgroundAudioVariants = backgroundAudioVariants
         self.backgroundTransform = backgroundTransform
         self.slideDuration = slideDuration
+        self.timelineDuration = timelineDuration
         self.clipTransitions = clipTransitions
     }
 
@@ -1161,12 +1179,12 @@ public struct StoryEffects: Codable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case background, textStyle, textColor, textPosition, filter, filterIntensity
         case stickers, textAlign, textSize, textBg, textOffsetY
-        case stickerObjects, textPositionPoint, drawingData
+        case stickerObjects, textPositionPoint, drawingData, drawingStrokes
         case backgroundAudioId, backgroundAudioVolume, backgroundAudioStart, backgroundAudioEnd
         case voiceAttachmentId, voiceTranscriptions
         case opening, closing
         case textObjects, mediaObjects, audioPlayerObjects, backgroundAudioVariants
-        case thumbHash, backgroundTransform, slideDuration, clipTransitions
+        case thumbHash, backgroundTransform, slideDuration, timelineDuration, clipTransitions
         case musicTrackId, musicStartTime, musicEndTime
     }
 
@@ -1186,6 +1204,16 @@ public struct StoryEffects: Codable, Sendable {
         stickerObjects = try c.decodeIfPresent([StorySticker].self, forKey: .stickerObjects)
         textPositionPoint = try c.decodeIfPresent(StoryTextPosition.self, forKey: .textPositionPoint)
         drawingData = try c.decodeIfPresent(Data.self, forKey: .drawingData)
+        // Prisme migration : si le nouveau format est absent mais l'ancien existe,
+        // on convertit best-effort à la lecture. Les écritures futures émettront
+        // uniquement `drawingStrokes` (le composer remet `drawingData = nil`).
+        if let strokes = try c.decodeIfPresent([StoryDrawingStroke].self, forKey: .drawingStrokes) {
+            drawingStrokes = strokes
+        } else if let legacy = drawingData, !legacy.isEmpty {
+            drawingStrokes = StoryDrawingStroke.fromLegacyPKDrawing(legacy)
+        } else {
+            drawingStrokes = nil
+        }
         backgroundAudioId = try c.decodeIfPresent(String.self, forKey: .backgroundAudioId)
         backgroundAudioVolume = try c.decodeIfPresent(Float.self, forKey: .backgroundAudioVolume)
         backgroundAudioStart = try c.decodeIfPresent(TimeInterval.self, forKey: .backgroundAudioStart)
@@ -1201,6 +1229,7 @@ public struct StoryEffects: Codable, Sendable {
         thumbHash = try c.decodeIfPresent(String.self, forKey: .thumbHash)
         backgroundTransform = try c.decodeIfPresent(StoryBackgroundTransform.self, forKey: .backgroundTransform)
         slideDuration = try c.decodeIfPresent(Float.self, forKey: .slideDuration)
+        timelineDuration = try c.decodeIfPresent(Double.self, forKey: .timelineDuration)
         clipTransitions = try c.decodeIfPresent([StoryClipTransition].self, forKey: .clipTransitions)
         musicTrackId = try c.decodeIfPresent(String.self, forKey: .musicTrackId)
         musicStartTime = try c.decodeIfPresent(TimeInterval.self, forKey: .musicStartTime)
@@ -1223,6 +1252,7 @@ public struct StoryEffects: Codable, Sendable {
         try c.encodeIfPresent(stickerObjects, forKey: .stickerObjects)
         try c.encodeIfPresent(textPositionPoint, forKey: .textPositionPoint)
         try c.encodeIfPresent(drawingData, forKey: .drawingData)
+        try c.encodeIfPresent(drawingStrokes, forKey: .drawingStrokes)
         try c.encodeIfPresent(backgroundAudioId, forKey: .backgroundAudioId)
         try c.encodeIfPresent(backgroundAudioVolume, forKey: .backgroundAudioVolume)
         try c.encodeIfPresent(backgroundAudioStart, forKey: .backgroundAudioStart)
@@ -1238,6 +1268,7 @@ public struct StoryEffects: Codable, Sendable {
         try c.encodeIfPresent(thumbHash, forKey: .thumbHash)
         try c.encodeIfPresent(backgroundTransform, forKey: .backgroundTransform)
         try c.encodeIfPresent(slideDuration, forKey: .slideDuration)
+        try c.encodeIfPresent(timelineDuration, forKey: .timelineDuration)
         try c.encodeIfPresent(clipTransitions, forKey: .clipTransitions)
         try c.encodeIfPresent(musicTrackId, forKey: .musicTrackId)
         try c.encodeIfPresent(musicStartTime, forKey: .musicStartTime)
@@ -1282,6 +1313,17 @@ public struct StoryEffects: Codable, Sendable {
     public var resolvedBackgroundMedia: StoryMediaObject? {
         guard let objects = mediaObjects, !objects.isEmpty else { return nil }
         return objects.first(where: { $0.isBackground == true })
+    }
+
+    /// `true` quand la slide a un fond VISUEL (média image/vidéo en background).
+    /// Dans ce cas, aucun fond coloré (`background` solidColor/gradient) ne doit être
+    /// peint — le média couvre le canvas (reader, composer, mini-preview, preview).
+    /// Le fond coloré ne s'affiche QUE sans média de fond visuel (texte, dessin,
+    /// foreground media, son). Source de vérité unique du Prisme visuel des stories
+    /// (user 2026-06-03). NB : le fond legacy `StorySlide.mediaURL` est géré au niveau
+    /// `StorySlide`/`StoryRenderer.renderBackground` (cet `effects` ne le porte pas).
+    public var hasVisualBackgroundMedia: Bool {
+        resolvedBackgroundMedia != nil
     }
 
     /// Retourne tous les media foreground résolus (exclut le background déterminé par `resolvedBackgroundMedia`).
@@ -1413,6 +1455,7 @@ public struct StoryEffects: Codable, Sendable {
             }
         }
         if let sd = slideDuration { dict["slideDuration"] = sd }
+        if let td = timelineDuration { dict["timelineDuration"] = td }
         return dict
     }
 }
@@ -1460,6 +1503,29 @@ public struct StoryItem: Identifiable, Codable, Sendable {
     public var reactionCount: Int
     public var commentCount: Int
 
+    /// Count of forwards / external shares (Envoyer button label).
+    /// `nil` when the gateway payload pre-dates the enrichment.
+    public var shareCount: Int?
+
+    /// Count of viewers who opened this story (author-only "Vues" label).
+    /// `nil` for anonymous reads or legacy payloads.
+    public var viewCount: Int?
+
+    /// Count of reposts that pointed back to this story (Partager label).
+    /// `nil` when not yet enriched.
+    public var repostCount: Int?
+
+    /// Emojis the *current viewer* (logged-in user) has applied to this story.
+    /// `nil` for anonymous reads or for legacy payloads / caches that predate
+    /// the enrichment. Source of truth: gateway `PostFeedService.getStories`
+    /// — see `packages/shared/types/post.ts` `currentUserReactions`.
+    public var currentUserReactions: [String]?
+
+    /// True when the *current viewer* has personally reacted to this story.
+    /// Drives "is my heart active" UI affordances (sidebar, mini-status).
+    /// Distinct from `reactionCount > 0`, which counts ANY reaction by anyone.
+    public var currentUserHasReacted: Bool { !(currentUserReactions ?? []).isEmpty }
+
     public var timeAgo: String {
         let seconds = Int(-createdAt.timeIntervalSinceNow)
         if seconds < 60 { return "now" }
@@ -1491,7 +1557,9 @@ public struct StoryItem: Identifiable, Codable, Sendable {
                 originalRepostOfId: String? = nil, repostAuthorName: String? = nil,
                 visibility: String? = nil, audioUrl: String? = nil,
                 isViewed: Bool = false, translations: [StoryTranslation]? = nil, backgroundAudio: StoryBackgroundAudioEntry? = nil,
-                reactionCount: Int = 0, commentCount: Int = 0) {
+                reactionCount: Int = 0, commentCount: Int = 0,
+                shareCount: Int? = nil, viewCount: Int? = nil, repostCount: Int? = nil,
+                currentUserReactions: [String]? = nil) {
         self.id = id; self.content = content; self.media = media; self.storyEffects = storyEffects
         self.createdAt = createdAt; self.expiresAt = expiresAt; self.repostOfId = repostOfId
         self.originalRepostOfId = originalRepostOfId
@@ -1500,6 +1568,8 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         self.isViewed = isViewed
         self.translations = translations; self.backgroundAudio = backgroundAudio
         self.reactionCount = reactionCount; self.commentCount = commentCount
+        self.shareCount = shareCount; self.viewCount = viewCount; self.repostCount = repostCount
+        self.currentUserReactions = currentUserReactions
     }
 
     /// A5 — returns `true` when the story has aged past its visibility window.
@@ -1520,6 +1590,34 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         let twentyFourHoursAfterCreation = createdAt.addingTimeInterval(24 * 60 * 60)
         return twentyFourHoursAfterCreation <= now
     }
+
+    /// Prisme realtime : le gateway diffuse les traductions PAR text-object via
+    /// `story:translation-updated` (payload `{ postId, textObjectIndex, translations }`).
+    /// Retourne une copie de la story avec ces traductions fusionnées dans le
+    /// text-object à `index` (les langues existantes sont écrasées, les nouvelles
+    /// ajoutées). Index hors borne / pas d'effects / dict vide → `self` inchangé.
+    /// `storyEffects` étant immuable (`let`), on reconstruit la `StoryItem` via son
+    /// init mémberwise — aucune mutation en place.
+    public func mergingTextObjectTranslations(at index: Int, translations: [String: String]) -> StoryItem {
+        guard !translations.isEmpty, var effects = storyEffects,
+              index >= 0, index < effects.textObjects.count else { return self }
+        var object = effects.textObjects[index]
+        var merged = object.translations ?? [:]
+        for (language, text) in translations { merged[language] = text }
+        object.translations = merged
+        effects.textObjects[index] = object
+        return StoryItem(
+            id: id, content: content, media: media, storyEffects: effects,
+            createdAt: createdAt, expiresAt: expiresAt, repostOfId: repostOfId,
+            originalRepostOfId: originalRepostOfId, repostAuthorName: repostAuthorName,
+            visibility: visibility, audioUrl: audioUrl, isViewed: isViewed,
+            translations: self.translations,
+            backgroundAudio: backgroundAudio,
+            reactionCount: reactionCount, commentCount: commentCount,
+            shareCount: shareCount, viewCount: viewCount, repostCount: repostCount,
+            currentUserReactions: currentUserReactions
+        )
+    }
 }
 
 // MARK: - Story Group
@@ -1532,6 +1630,16 @@ public struct StoryGroup: Identifiable, Codable, Sendable, CacheIdentifiable {
 
     public var hasUnviewed: Bool { stories.contains { !$0.isViewed } }
     public var latestStory: StoryItem? { stories.last }
+
+    /// `true` quand TOUTES les stories du groupe sont expirées (ou le groupe est
+    /// vide). Le tray (app) filtre ces groupes : sans ce filtre, une vignette de
+    /// groupe entièrement expiré (cache TTL > 24h, ou story expirée en cours de
+    /// session sans re-fetch) ouvre puis ferme instantanément le viewer via
+    /// `skipExpiredStoriesIfNeeded` (tap-puis-flash). Pur + testable via `now`
+    /// explicite. Source de vérité d'expiration : `StoryItem.isExpired(at:)`.
+    public func isFullyExpired(at now: Date = Date()) -> Bool {
+        stories.allSatisfy { $0.isExpired(at: now) }
+    }
 
     public init(id: String, username: String, avatarColor: String, avatarURL: String? = nil, stories: [StoryItem]) {
         self.id = id; self.username = username; self.avatarColor = avatarColor; self.avatarURL = avatarURL; self.stories = stories
@@ -1597,7 +1705,14 @@ extension Array where Element == APIPost {
         for post in storyPosts {
             let authorId = post.author.id
             let media: [FeedMedia] = (post.media ?? []).map { m in
-                FeedMedia(id: m.id, type: m.mediaType, url: m.fileUrl, thumbnailColor: "4ECDC4",
+                // Propage `thumbnailUrl` + `thumbHash` du gateway — sinon le
+                // tray (`StoryTrayView.latestStoryThumbnailURL`) tombe sur
+                // `url` (souvent une vidéo) ou sur l'avatar du profil.
+                // Bug user-reporté 2026-05-27 « la tray doit montrer la
+                // miniature de la dernière story du groupe ».
+                FeedMedia(id: m.id, type: m.mediaType, url: m.fileUrl,
+                          thumbnailUrl: m.thumbnailUrl, thumbHash: m.thumbHash,
+                          thumbnailColor: "4ECDC4",
                           width: m.width, height: m.height, duration: m.duration.map { $0 / 1000 })
             }
             let storyTranslations: [StoryTranslation]? = post.translations.map { dict in
@@ -1616,7 +1731,11 @@ extension Array where Element == APIPost {
                                  audioUrl: post.audioUrl,
                                  isViewed: post.isViewedByMe ?? false,
                                  translations: storyTranslations,
-                                 reactionCount: totalReactions, commentCount: post.commentCount ?? 0)
+                                 reactionCount: totalReactions, commentCount: post.commentCount ?? 0,
+                                 shareCount: post.shareCount,
+                                 viewCount: post.viewCount,
+                                 repostCount: post.repostCount,
+                                 currentUserReactions: post.currentUserReactions)
             if var existing = grouped[authorId] {
                 existing.stories.append(item); grouped[authorId] = existing
             } else {
@@ -1775,7 +1894,35 @@ extension StoryItem {
     public func toRenderableSlide(preferredLanguages: [String]) -> StorySlide {
         let resolvedContent = self.resolvedContent(preferredLanguage: preferredLanguages.first)
                               ?? self.content
-        let effects = self.storyEffects ?? StoryEffects()
+        var effects = self.storyEffects ?? StoryEffects()
+
+        // Hydrate media durations depuis `self.media` (FeedMedia côté API)
+        // vers `StoryMediaObject.duration` quand celle-ci est nil. Sans
+        // ça, `StorySlide.computedTotalDuration()` ne voit pas la durée
+        // réelle du media bg pour les stories venues du backend (le
+        // composer remplit `StoryMediaObject.duration` localement mais
+        // le payload backend ne le réécrit pas — la durée vit dans
+        // `FeedMedia` côté API). Fix user-reporté 2026-05-28 « il n'y a
+        // plus le respect de la durée des média dynamique ».
+        if var medias = effects.mediaObjects, !medias.isEmpty {
+            for i in medias.indices where medias[i].duration == nil {
+                if let feed = self.media.first(where: { $0.id == medias[i].postMediaId }),
+                   let dur = feed.duration, dur > 0 {
+                    medias[i].duration = Double(dur)
+                }
+            }
+            effects.mediaObjects = medias
+        }
+        if var audios = effects.audioPlayerObjects, !audios.isEmpty {
+            for i in audios.indices where audios[i].duration == nil {
+                if let feed = self.media.first(where: { $0.id == audios[i].postMediaId }),
+                   let dur = feed.duration, dur > 0 {
+                    audios[i].duration = Float(dur)
+                }
+            }
+            effects.audioPlayerObjects = audios
+        }
+
         let legacyMediaURL: String? = effects.mediaObjects?.isEmpty == false
             ? nil
             : self.media.first?.url
@@ -1834,15 +1981,27 @@ public struct TimelineProject: Codable, Sendable {
         // `[]`, so `TimelineProject(from: slide).apply(to: &slide)` is a true
         // no-op when the slide had `nil` collections to begin with.
         //
-        // Update the slide's floor duration to match the project's duration.
-        // This allows shrinking the duration (e.g., from 12s to 5s) via the
-        // timeline tool, fulfilling the "redefine story running time" requirement.
+        // Update the slide's duration to match the project's duration. The timeline
+        // is AUTHORITATIVE (« la timeline EST la story ») : une durée EXPLICITEMENT
+        // configurée par l'auteur (≠ durée auto du contenu) est persistée dans
+        // `effects.timelineDuration`, lue EN PRIORITÉ par `computedTotalDuration()`
+        // (viewer + canvas + exporter) — permettant d'étendre ET de rogner (12s → 5s).
+        // Si la durée timeline == la durée auto du contenu, on NE pose PAS de pin
+        // (`nil`) : le slide reste auto-dérivé et se recalcule si le contenu change
+        // ensuite (évite un pin obsolète qui figerait une vieille valeur).
+        // `slide.duration` reste un miroir legacy.
         slide.duration = TimeInterval(slideDuration)
 
         slide.effects.mediaObjects = mediaObjects.isEmpty ? nil : mediaObjects
         slide.effects.audioPlayerObjects = audioPlayerObjects.isEmpty ? nil : audioPlayerObjects
         slide.effects.textObjects = textObjects
         slide.effects.clipTransitions = clipTransitions.isEmpty ? nil : clipTransitions
+
+        // Calculé APRÈS l'écriture des arrays pour que `contentDerivedDuration()`
+        // reflète le contenu du projet (et non l'ancien contenu du slide).
+        let content = slide.contentDerivedDuration()
+        slide.effects.timelineDuration =
+            (abs(Double(slideDuration) - content) > 0.05) ? Double(slideDuration) : nil
     }
 }
 

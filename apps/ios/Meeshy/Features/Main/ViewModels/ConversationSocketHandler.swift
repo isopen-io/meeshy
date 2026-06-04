@@ -13,7 +13,17 @@ protocol ConversationSocketDelegate: AnyObject {
     var lastUnreadMessage: Message? { get set }
     var messageTranslations: [String: [MessageTranslation]] { get set }
     var messageTranscriptions: [String: MessageTranscription] { get set }
+    /// Per-attachment transcription keyed by `attachmentId`. Mirrors
+    /// `ConversationViewModel.messageTranscriptionsByAttachment` so the
+    /// socket handler can write both dicts atomically in the
+    /// `transcription:ready` handler (multi-audio karaoke realtime fix).
+    var messageTranscriptionsByAttachment: [String: MessageTranscription] { get set }
     var messageTranslatedAudios: [String: [MessageTranslatedAudio]] { get set }
+    /// Per-attachment translated audios keyed by `attachmentId`. Mirrors
+    /// `ConversationViewModel.messageTranslatedAudiosByAttachment` so the
+    /// socket handler can write both dicts atomically in the audio
+    /// translation handler (multi-audio Prisme realtime fix).
+    var messageTranslatedAudiosByAttachment: [String: [MessageTranslatedAudio]] { get set }
     var activeLiveLocations: [ActiveLiveLocation] { get set }
     var isConversationClosed: Bool { get set }
     var pendingServerIds: [String: String] { get set }
@@ -92,7 +102,7 @@ final class ConversationSocketHandler {
         // Defer side-effects (socket join + notification updates) off the
         // current runloop tick. These calls mutate @Published state on
         // shared singletons (NotificationCoordinator.conversationUnreadCounts,
-        // NotificationManager.unreadCount). When ConversationSocketHandler
+        // NotificationToastManager.unreadCount). When ConversationSocketHandler
         // is created inside ConversationViewModel.init — which itself runs
         // during ConversationView's body evaluation as @StateObject is
         // bootstrapped — those synchronous @Published mutations trip
@@ -102,7 +112,7 @@ final class ConversationSocketHandler {
         let convId = conversationId
         DispatchQueue.main.async { [messageSocket] in
             messageSocket.joinConversation(convId)
-            NotificationManager.shared.onConversationOpened(convId)
+            NotificationToastManager.shared.onConversationOpened(convId)
             NotificationCoordinator.shared.markConversationRead(convId)
         }
     }
@@ -114,10 +124,10 @@ final class ConversationSocketHandler {
     }
 
     deinit {
-        print("[DIAG] ConversationSocketHandler deinit conv=\(conversationId)")
+        Logger.messages.debug("[DIAG] ConversationSocketHandler deinit conv=\(self.conversationId)")
         leaveRoom()
         Task { @MainActor in
-            NotificationManager.shared.onConversationClosed()
+            NotificationToastManager.shared.onConversationClosed()
         }
         typingTimer?.invalidate()
         typingIdleTimer?.invalidate()
@@ -143,10 +153,6 @@ final class ConversationSocketHandler {
     }
 
     // MARK: - Room Management
-
-    private func joinRoom() {
-        messageSocket.joinConversation(conversationId)
-    }
 
     private nonisolated func leaveRoom() {
         MessageSocketManager.shared.leaveConversation(conversationId)
@@ -683,7 +689,7 @@ final class ConversationSocketHandler {
                         speakerId: s.speakerId
                     )
                 }
-                delegate.messageTranscriptions[event.messageId] = MessageTranscription(
+                let transcription = MessageTranscription(
                     attachmentId: event.attachmentId,
                     text: event.transcription.text,
                     language: event.transcription.language,
@@ -692,6 +698,11 @@ final class ConversationSocketHandler {
                     segments: segments,
                     speakerCount: event.transcription.speakerCount
                 )
+                // Per-message dict (single-audio backward compat)
+                delegate.messageTranscriptions[event.messageId] = transcription
+                // Per-attachment dict (multi-audio karaoke realtime fix):
+                // mirrors how all 3 VM hydration sites populate both dicts.
+                delegate.messageTranscriptionsByAttachment[event.attachmentId] = transcription
             }
             .store(in: &cancellables)
 
@@ -722,6 +733,8 @@ final class ConversationSocketHandler {
                 ttsModel: event.translatedAudio.ttsModel,
                 segments: segments
             )
+            // Per-message dict (single-audio backward compat): dedup by
+            // targetLanguage only.
             var existing = delegate.messageTranslatedAudios[msgId] ?? []
             if let idx = existing.firstIndex(where: { $0.targetLanguage == audio.targetLanguage }) {
                 existing[idx] = audio
@@ -729,6 +742,17 @@ final class ConversationSocketHandler {
                 existing.append(audio)
             }
             delegate.messageTranslatedAudios[msgId] = existing
+            // Per-attachment dict (multi-audio Prisme realtime fix): dedup
+            // scoped to (attachmentId, targetLanguage) so each track keeps its
+            // own language buttons. Mirrors how the transcription handler
+            // populates `messageTranscriptionsByAttachment`.
+            var existingForAttachment = delegate.messageTranslatedAudiosByAttachment[event.attachmentId] ?? []
+            if let idx = existingForAttachment.firstIndex(where: { $0.targetLanguage == audio.targetLanguage }) {
+                existingForAttachment[idx] = audio
+            } else {
+                existingForAttachment.append(audio)
+            }
+            delegate.messageTranslatedAudiosByAttachment[event.attachmentId] = existingForAttachment
         }
 
         socketManager.audioTranslationReady

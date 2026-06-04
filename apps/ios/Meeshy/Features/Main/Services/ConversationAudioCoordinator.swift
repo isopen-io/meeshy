@@ -72,6 +72,13 @@ public final class ConversationAudioCoordinator: ObservableObject {
     }
 
     private var queue: [QueuedAudio] = []
+    /// BUG C — ids of attachments that have already finished/failed and been
+    /// removed from the head in `advanceQueue()`. `appendUpcoming` skips these
+    /// in addition to the live `queue`, closing the narrow window where a
+    /// re-emitted `$messages` could re-queue a just-finished audio before the
+    /// VM-side `listenedAttachmentIds` set updates. Cleared on a fresh
+    /// `play(...)` so replaying a track later in a new session still works.
+    private var consumedAttachmentIds: Set<String> = []
     private var currentName: String = ""
     private var currentArtwork: String?
     private var cancellables = Set<AnyCancellable>()
@@ -103,6 +110,16 @@ public final class ConversationAudioCoordinator: ObservableObject {
 
     public init(engine: AudioPlaybackEngineDriving = AudioPlaybackManager()) {
         self.engine = engine
+        // BUG A (round 4) — wire the app-side CallKit policy into the raw
+        // engine the bubbles talk to directly (`engineForBubble`). The bubble
+        // tap (and the lock-screen remote command) resolve to this concrete
+        // `AudioPlaybackManager` and call `togglePlayPause()` / `play()`
+        // straight on it, routing around the coordinator's own guards. Setting
+        // an opaque predicate on the engine closes that gap WITHOUT the SDK
+        // ever depending on `CallManager`.
+        if let manager = engine as? AudioPlaybackManager {
+            manager.playbackPermissionGuard = { !CallManager.shared.isCallActiveForAudioGuard }
+        }
         wireEngineForwarding()
         wireAuthLogoutHook()
         wireSocketLifecycleHooks()
@@ -120,12 +137,24 @@ public final class ConversationAudioCoordinator: ObservableObject {
         }
         queue = [current] + tail
         queueCount = queue.count
+        // BUG C — a fresh play session starts a new lifecycle: previously
+        // consumed ids must be forgotten so the user can replay them.
+        consumedAttachmentIds = []
         currentName = conversationName
         currentArtwork = conversationArtworkURL
         startCurrentHead()
     }
 
-    public func togglePlayPause() { engine.togglePlayPause() }
+    public func togglePlayPause() {
+        // BUG E fix — same CallKit guard as `play()`. Without it, toggling
+        // play on an already-loaded engine steals the VoIP audio session
+        // during a call.
+        guard !CallManager.shared.isCallActiveForAudioGuard else {
+            Self.log.info("togglePlayPause() ignored: a CallKit call is active")
+            return
+        }
+        engine.togglePlayPause()
+    }
     public func playNext() { advanceQueue() }
 
     public func close() {
@@ -141,6 +170,9 @@ public final class ConversationAudioCoordinator: ObservableObject {
 
     public func appendUpcoming(_ audio: QueuedAudio) {
         guard !queue.contains(where: { $0.attachmentId == audio.attachmentId }) else { return }
+        // BUG C — also skip ids already consumed (finished/failed) this session,
+        // even if they've already been removed from the live `queue`.
+        guard !consumedAttachmentIds.contains(audio.attachmentId) else { return }
         queue.append(audio)
         queueCount = queue.count
     }
@@ -152,6 +184,14 @@ public final class ConversationAudioCoordinator: ObservableObject {
     // MARK: - Internals
 
     private func startCurrentHead() {
+        // BUG E fix — guard auto-advance + initial play here (the single
+        // engine-start chokepoint reached by both `play()` and
+        // `advanceQueue()`). Without it, a track finishing during a call would
+        // auto-advance and steal the VoIP audio session.
+        guard !CallManager.shared.isCallActiveForAudioGuard else {
+            Self.log.info("startCurrentHead() ignored: a CallKit call is active")
+            return
+        }
         guard let head = queue.first else {
             activeContext = nil
             return
@@ -173,6 +213,9 @@ public final class ConversationAudioCoordinator: ObservableObject {
         if !queue.isEmpty { queue.removeFirst() }
         queueCount = queue.count
         if let finishedHead {
+            // BUG C — record the consumed id so a re-emitted `$messages` can't
+            // re-`appendUpcoming` it before the VM updates `listenedAttachmentIds`.
+            consumedAttachmentIds.insert(finishedHead.attachmentId)
             attachmentFinishedSubject.send(AttachmentFinishedEvent(
                 attachmentId: finishedHead.attachmentId,
                 conversationId: finishedHead.conversationId

@@ -111,21 +111,21 @@ extension BubbleContent {
 
         // --- Attachments ---
         let visual = message.attachments.filter { $0.type == .image || $0.type == .video }
-        let audio = message.attachments.first(where: { $0.type == .audio })
+        let audio = message.attachments.filter { $0.type == .audio }
         let nonMedia = message.attachments.filter { $0.type == .file || $0.type == .location }
 
         // Pure single-category cases route to dedicated enum variants. Anything
         // mixing two-or-more categories falls into `.mixed` which carries audio
         // alongside visual/nonMedia so legacy "image + audio + file" rendering
-        // is preserved. Audio is intentionally optional inside `.mixed` because
-        // visual+nonMedia without audio is also a valid mix.
-        switch (visual.isEmpty, audio == nil, nonMedia.isEmpty) {
+        // is preserved. `audio` carries ALL audio tracks of the message: one
+        // renders as the existing widget, several as `AudioCarouselView`.
+        switch (visual.isEmpty, audio.isEmpty, nonMedia.isEmpty) {
         case (true, true, true):
             self.attachments = .none
         case (false, true, true):
             self.attachments = .visualGrid(visual)
         case (true, false, true):
-            self.attachments = .audio(audio!)
+            self.attachments = .audio(audio)
         case (true, true, false):
             self.attachments = .nonMedia(nonMedia)
         default:

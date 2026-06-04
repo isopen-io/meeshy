@@ -124,6 +124,10 @@ protocol StoryComposerProviding: AnyObject {
     var loadedImages: [String: UIImage] { get set }
     var loadedVideoURLs: [String: URL] { get set }
     var loadedAudioURLs: [String: URL] { get set }
+    /// Cookie monotone à bumper après chaque édition utile d'un bitmap déjà
+    /// présent dans `loadedImages`. Lu par le `StoryComposerCanvasView` pour
+    /// déclencher un rebuild canvas. Cf. impl pour le rationale détaillé.
+    var loadedImagesVersion: UInt64 { get set }
     /// Captions de transcription (vidéo) produites par `MeeshyVideoEditorView`
     /// au confirm. Keyed par `StoryMediaObject.id`. Metadata render-time —
     /// pas persistée dans le slide model (cf. doc dans l'impl).
@@ -353,10 +357,50 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
 
     // MARK: - Drawing
 
-    @Published var drawingData: Data?
+    /// Données du dessin courant en design-coords (1080×1920) — écrites par le
+    /// délégué `PKCanvasView`. La source de vérité historique pour le rendu
+    /// canvas reste `currentSlide.effects.drawingData` (lu par `StoryRenderer`).
+    /// Le `didSet` ci-dessous propage chaque write vers la slide courante
+    /// sinon le canvas redessine la version persistée stale dès que l'overlay
+    /// PKCanvasView disparaît — bug "garde un des dessins non correspondant"
+    /// reporté 2026-05-27.
+    @Published var drawingData: Data? {
+        didSet {
+            guard oldValue != drawingData else { return }
+            guard slides.indices.contains(currentSlideIndex) else { return }
+            if currentEffects.drawingData != drawingData {
+                var effects = currentEffects
+                effects.drawingData = drawingData
+                currentEffects = effects
+            }
+        }
+    }
     @Published var drawingColor: Color = .white
     @Published var drawingWidth: CGFloat = 5
+    /// Pinceau actif pour la capture en mode dessin flottant (`StrokeCaptureLayer`).
+    /// La couleur et la largeur du pinceau réutilisent `drawingColor`/`drawingWidth`.
+    @Published var activeBrushTool: StrokeTool = .pen
+    @Published var activeBrushSmoothing: StrokeSmoothing = .raw
+    /// Mode d'édition de dessin flottant — contrôleurs posés sur `.ultraThinMaterial`
+    /// au-dessus du canvas. Orthogonal à `BandStateMachine`, mirror de `textEditingMode`.
+    /// Les traits éditables sont `drawingStrokes` (calculé sur `currentEffects`, cf.
+    /// `StoryComposerViewModel+DrawingEditing.swift`).
+    @Published var drawingEditingMode: DrawingEditingMode = .inactive
     var isDrawingActive: Bool { activeTool == .drawing }
+
+    /// Trait en cours de tracé (WYSIWYG, C4). Rendu live PAR-DESSUS `drawingStrokes` via
+    /// un `MeeshyStrokeCanvas` dédié dans `StoryComposerView`, avec notre moteur
+    /// largeur-variable — l'aperçu correspond EXACTEMENT au trait commité au lift-up.
+    /// `nil` quand aucun geste n'est en cours (effacé au commit/annulation).
+    @Published var activeStrokePreview: StoryDrawingStroke?
+
+    /// Pile de rétablissement (redo) du dessin. Les traits annulés via
+    /// `undoLastStroke()` y sont empilés et réappliqués par `redoLastStroke()`.
+    /// Vidée dès qu'un nouveau trait est dessiné (`commitStroke`) ou supprimé
+    /// manuellement (`deleteStroke`) — sémantique undo/redo standard. Stockée ici
+    /// (et non dans l'extension) car Swift interdit les propriétés stockées en
+    /// extension. Voir `StoryComposerViewModel+DrawingEditing.swift`.
+    @Published var drawingRedoStack: [StoryDrawingStroke] = []
 
     // MARK: - Background
 
@@ -396,6 +440,32 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     @Published var loadedImages: [String: UIImage] = [:]
     @Published var loadedVideoURLs: [String: URL] = [:]
     @Published var loadedAudioURLs: [String: URL] = [:]
+
+    /// The current slide's background bitmap used as the base for filter-tile
+    /// previews. Resolves the background media object (modern unified path,
+    /// `loadedImages[bgMedia.id]`) first, then falls back to the legacy
+    /// slide-level `slideImages` entry. `nil` for colour/gradient-only slides
+    /// (the grid then shows its gradient placeholders). Mirrors how
+    /// `SlideMiniPreview` and the canvas resolve the background image — passing
+    /// only `slideImages[slide.id]` left every photo-backed slide's tiles blank
+    /// because modern photos live in `mediaObjects`, not `slideImages`.
+    var currentSlideBackgroundImage: UIImage? {
+        if let bgId = currentSlide.effects.resolvedBackgroundMedia?.id,
+           let img = loadedImages[bgId] {
+            return img
+        }
+        return slideImages[currentSlide.id]
+    }
+
+    /// Cookie monotone bumpé à chaque édition d'un bitmap déjà présent dans
+    /// `loadedImages` (typiquement `MeeshyImageEditorView` onAccept qui
+    /// remplace la valeur sous une clé inchangée). Le `Coordinator` du
+    /// `StoryComposerCanvasView` compare ce cookie à `lastLoadedImagesVersion`
+    /// pour déclencher un rebuild des media layers — sans ça le canvas
+    /// principal restait stale après image edit (les dicts UIImage ne sont
+    /// pas Equatable et SwiftUI ne peut donc pas détecter une mutation
+    /// de valeur intra-clé). Cf. `ComposerImageCacheReader.version`.
+    @Published var loadedImagesVersion: UInt64 = 0
 
     /// Captions / transcription metadata produced by `MeeshyVideoEditorView`
     /// when the user transcribes a foreground video then taps « Terminer ».
@@ -659,11 +729,17 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     // MARK: - Slide Duration
 
     var currentSlideDuration: Float {
-        get { Float(currentSlide.duration) }
+        // Source de vérité = `effects.timelineDuration` (autoritaire, lu par
+        // `computedTotalDuration`). Régler explicitement la durée du slide via ce
+        // contrôle POSE donc un pin timeline — sinon le réglage serait ignoré au
+        // playback (la centralisation 28/05 ignore `slide.duration`). Le getter
+        // retombe sur la durée auto du contenu tant qu'aucun pin n'est posé.
+        get { Float(currentSlide.effects.timelineDuration ?? currentSlide.computedTotalDuration()) }
         set {
             let clamped = max(2, min(600, newValue))
             var slide = currentSlide
-            slide.duration = TimeInterval(clamped)
+            slide.duration = TimeInterval(clamped)            // miroir legacy
+            slide.effects.timelineDuration = Double(clamped)  // autoritaire
             currentSlide = slide
         }
     }
@@ -679,6 +755,11 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
             return currentSlideIndex
         }()
         guard slides.indices.contains(targetIndex) else { return }
+        // Miroir legacy : `slide.duration` n'est plus la source de vérité (ignoré par
+        // `computedTotalDuration`). Le contenu foreground est désormais couvert par
+        // `contentDerivedDuration()` (qui inclut les vidéos non-bg), et le timeline pose
+        // un pin `timelineDuration` quand l'auteur surcharge explicitement la durée — donc
+        // on n'écrit PAS de pin ici (éviterait un pin obsolète après suppression du média).
         let current = Float(slides[targetIndex].duration)
         if end > current {
             slides[targetIndex].duration = TimeInterval(min(600, end + 0.5))
@@ -770,6 +851,16 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         for id in audioIds {
             loadedAudioURLs.removeValue(forKey: id)
             zIndexMap.removeValue(forKey: id)
+        }
+        // Supprimer un slide AVANT le slide courant décale tout le contenu d'un
+        // cran vers la gauche : il faut décrémenter `currentSlideIndex` pour
+        // rester sur le MÊME slide que l'on éditait. Sans ça (l'ancien code ne
+        // faisait que clamper `>= count`), supprimer un slide antérieur via le
+        // menu contextuel d'une vignette faisait sauter l'édition au slide
+        // suivant (bug 2026-06-01). Le clamp couvre ensuite le cas « on a
+        // supprimé le dernier slide qui était le courant ».
+        if index < currentSlideIndex {
+            currentSlideIndex -= 1
         }
         if currentSlideIndex >= slides.count {
             currentSlideIndex = slides.count - 1
@@ -904,14 +995,25 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         nextZIndex = maxZ + 1
     }
 
+    /// Reorder slides. `destination` follows the SwiftUI `.onMove` / `.dropDestination`
+    /// convention (offset in the PRE-move array, so it may equal `slides.count` for
+    /// move-to-end) — identical to `moveMedia`, so the slide-strip drag wiring is
+    /// mutualized with the media-list reorder. `currentSlideIndex` tracks the slide the
+    /// user was EDITING by id (not the dropped slot), mirroring `removeSlide`'s
+    /// preserve-the-edited-slide philosophy. Side caches are keyed by slide/element id,
+    /// so a move needs no cache surgery — only `order` is reindexed. (it.37: was a
+    /// remove+insert with a `destination < count` guard that rejected move-to-end and
+    /// produced an off-by-one vs the drop offset; that path was also entirely unwired.)
     func moveSlide(from source: Int, to destination: Int) {
-        guard source < slides.count,
-              destination < slides.count,
-              source != destination else { return }
-        let slide = slides.remove(at: source)
-        slides.insert(slide, at: destination)
+        guard slides.indices.contains(source),
+              destination >= 0, destination <= slides.count,
+              source != destination, source != destination - 1 else { return }
+        let editedSlideId = slides[safe: currentSlideIndex]?.id
+        slides.move(fromOffsets: IndexSet(integer: source), toOffset: destination)
         reorderSlides()
-        currentSlideIndex = destination
+        if let editedSlideId, let newIndex = slides.firstIndex(where: { $0.id == editedSlideId }) {
+            currentSlideIndex = newIndex
+        }
     }
 
     private func reorderSlides() {
@@ -990,7 +1092,14 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
             scale: 1.0,
             rotation: 0,
             volume: 1.0,
+            // Bg media loops by default so a short video/asset covers the
+            // full slide duration. Without this, `StoryMediaObject.loop`
+            // defaults to false → `bgVideo.loop ?? true` in StoryRenderer
+            // never falls back to true → AVPlayerLooper never armed → video
+            // stops at its native end while the slide progress bar continues
+            // (user report 2026-05-27).
             isBackground: shouldBeBackground,
+            loop: shouldBeBackground,
             sourceLanguage: detectedKeyboardLanguage
         )
         var medias = targetEffects.mediaObjects ?? []
@@ -1165,6 +1274,11 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
             guard canAddMedia else { return }
             let newId = UUID().uuidString
             media.id = newId
+            // Le clone est TOUJOURS un foreground : dupliquer un média de fond
+            // créait un 2e background (invariant « au plus 1 background / slide »
+            // violé) qui remplit tout le canvas en ignorant l'offset → clone
+            // invisible (l'utilisateur ne voyait rien). Bug 2026-06-01.
+            media.isBackground = false
             media.x = min(1.0, media.x + 0.05)
             media.y = min(1.0, media.y + 0.05)
             effects.mediaObjects?.append(media)
@@ -1175,6 +1289,10 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
             guard canAddMedia else { return }
             let newId = UUID().uuidString
             audio.id = newId
+            // Idem média : le clone est foreground, sinon dupliquer l'audio de
+            // fond créait un 2e background audio (invariant « 1 audio de fond /
+            // slide » violé). Bug 2026-06-01.
+            audio.isBackground = false
             audio.x = min(1.0, audio.x + 0.05)
             audio.y = min(1.0, audio.y + 0.05)
             effects.audioPlayerObjects?.append(audio)
@@ -1394,10 +1512,10 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         let hasTransitions = !p.clipTransitions.isEmpty
         // `TimelineViewModel.init` seeds `slideDuration = 0` until
         // `bootstrap(project:)` runs, so a fresh composer would otherwise
-        // report `hasNonDefaultDuration == true` (|0 - 12| > 0.01) before
+        // report `hasNonDefaultDuration == true` (|0 - 6| > 0.01) before
         // any actual user customization. Treat the un-bootstrapped 0 as
         // the default value, not as a customization.
-        let hasNonDefaultDuration = p.slideDuration > 0 && abs(p.slideDuration - 12.0) > 0.01
+        let hasNonDefaultDuration = p.slideDuration > 0 && abs(p.slideDuration - 6.0) > 0.01
         return hasKeyframes || hasTransitions || hasNonDefaultDuration
     }
 
@@ -1505,6 +1623,9 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         drawingData = nil
         drawingColor = .white
         drawingWidth = 5
+        activeBrushTool = .pen
+        activeBrushSmoothing = .raw
+        drawingEditingMode = .inactive
         backgroundColor = "#\(StoryBackgroundPalette.randomBackgroundColor())"
         loadedImages = [:]
         loadedVideoURLs = [:]
@@ -1568,14 +1689,14 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
 
         // Convert StoryItem → StorySlide (composer's internal type). Lossy conversion:
         // we keep the first media URL, the content and the effects ; defaults for
-        // duration (12 s default for static reposts) and order (0).
+        // duration (6 s default for static reposts) and order (0).
         var cloned = StorySlide(
             id: UUID().uuidString,
             mediaURL: story.media.first?.url,
             mediaData: nil,
             content: story.content,
             effects: story.storyEffects ?? StoryEffects(),
-            duration: 12,
+            duration: 6,
             order: 0
         )
 
@@ -1600,7 +1721,14 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
             isLocked: true
         )
         var effects = cloned.effects
-        var texts = effects.textObjects
+        // Strip toute attribution verrouillée héritée de la source avant d'ajouter
+        // la nôtre : reposter un repost empilerait sinon deux badges locked qui se
+        // chevauchent au même point (x:0.5, y:0.92). Les text objects locked sont
+        // EXCLUSIVEMENT des badges d'attribution (ce site est l'unique producteur de
+        // `isLocked: true`), donc ce filtre ne touche jamais le texte éditable de
+        // l'auteur. Le nouveau badge attribue à la source immédiate (`authorHandle`) ;
+        // la racine reste tracée via `originalRepostOfId`.
+        var texts = effects.textObjects.filter { $0.isLocked != true }
         texts.append(badge)
         effects.textObjects = texts
         cloned.effects = effects

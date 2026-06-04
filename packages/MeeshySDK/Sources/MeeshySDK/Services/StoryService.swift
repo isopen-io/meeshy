@@ -34,7 +34,13 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
     }
 
     public func markViewed(storyId: String) async throws {
-        let _: APIResponse<[String: String]> = try await api.request(endpoint: "/posts/\(storyId)/view", method: "POST")
+        // Le gateway renvoie `{ viewed: true }` — une valeur **Bool**. Décoder en
+        // `[String: String]` faisait échouer le décodage à CHAQUE vue (Bool ≠
+        // String) ; l'exception était avalée par le `catch` silencieux côté
+        // ViewModel, masquant du même coup les vrais échecs réseau (la story
+        // pouvait alors réapparaître non-vue au prochain `list()`). On décode
+        // donc la forme réelle. (2026-06-01)
+        let _: APIResponse<[String: Bool]> = try await api.request(endpoint: "/posts/\(storyId)/view", method: "POST")
     }
 
     public func delete(storyId: String) async throws {

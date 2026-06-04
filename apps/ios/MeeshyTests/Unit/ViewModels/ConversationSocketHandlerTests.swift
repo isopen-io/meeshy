@@ -13,7 +13,9 @@ final class MockConversationSocketDelegate: ConversationSocketDelegate {
     var lastUnreadMessage: Message?
     var messageTranslations: [String: [MessageTranslation]] = [:]
     var messageTranscriptions: [String: MessageTranscription] = [:]
+    var messageTranscriptionsByAttachment: [String: MessageTranscription] = [:]
     var messageTranslatedAudios: [String: [MessageTranslatedAudio]] = [:]
+    var messageTranslatedAudiosByAttachment: [String: [MessageTranslatedAudio]] = [:]
     var activeLiveLocations: [ActiveLiveLocation] = []
     var isConversationClosed: Bool = false
 
@@ -1345,5 +1347,78 @@ final class ConversationSocketHandlerTests: XCTestCase {
         }
         XCTAssertEqual(row?.content, "message en clair",
             "an own E2EE message's optimistic plaintext must survive the encrypted server echo")
+    }
+
+    // MARK: - Audio translation per-attachment (multi-audio Prisme realtime fix)
+
+    // `AudioTranslationEvent` / `TranslatedAudioInfo` are `public` SDK structs
+    // with no public memberwise init, so the app test target can only build
+    // them by decoding the wire JSON (camelCase CodingKeys match the props).
+    private func makeAudioTranslationEvent(
+        messageId: String,
+        attachmentId: String,
+        targetLanguage: String,
+        url: String
+    ) -> AudioTranslationEvent {
+        JSONStub.decode("""
+        {
+            "messageId": "\(messageId)",
+            "attachmentId": "\(attachmentId)",
+            "conversationId": "\(conversationId)",
+            "language": "\(targetLanguage)",
+            "translatedAudio": {
+                "id": "\(attachmentId)_\(targetLanguage)",
+                "targetLanguage": "\(targetLanguage)",
+                "url": "\(url)",
+                "transcription": "t",
+                "durationMs": 1000,
+                "format": "mp3",
+                "cloned": false,
+                "quality": 0.9,
+                "ttsModel": "xtts"
+            }
+        }
+        """)
+    }
+
+    func test_audioTranslationReady_multiAttachment_keepsEachTrackInPerAttachmentDict() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        // Two attachments on the SAME message, each translated to "en".
+        socket.audioTranslationReady.send(
+            makeAudioTranslationEvent(messageId: "m1", attachmentId: "attA", targetLanguage: "en", url: "https://x/A_en.mp3")
+        )
+        socket.audioTranslationReady.send(
+            makeAudioTranslationEvent(messageId: "m1", attachmentId: "attB", targetLanguage: "en", url: "https://x/B_en.mp3")
+        )
+
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        // Per-attachment dict keeps BOTH tracks' audios (the carousel reads this).
+        XCTAssertEqual(delegate.messageTranslatedAudiosByAttachment["attA"]?.first?.url, "https://x/A_en.mp3")
+        XCTAssertEqual(delegate.messageTranslatedAudiosByAttachment["attB"]?.first?.url, "https://x/B_en.mp3")
+    }
+
+    func test_audioTranslationReady_perAttachment_dedupsBySameLanguage() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        socket.audioTranslationReady.send(
+            makeAudioTranslationEvent(messageId: "m1", attachmentId: "attA", targetLanguage: "en", url: "https://x/old.mp3")
+        )
+        socket.audioTranslationReady.send(
+            makeAudioTranslationEvent(messageId: "m1", attachmentId: "attA", targetLanguage: "en", url: "https://x/new.mp3")
+        )
+
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        // Dedup scoped to (attachmentId, targetLanguage): one entry, latest wins.
+        XCTAssertEqual(delegate.messageTranslatedAudiosByAttachment["attA"]?.count, 1)
+        XCTAssertEqual(delegate.messageTranslatedAudiosByAttachment["attA"]?.first?.url, "https://x/new.mp3")
     }
 }

@@ -112,7 +112,7 @@ Ces chantiers sont le point de levier : ils créent l'infrastructure que les cor
    ```
 2. **Points d'appel obligatoires** (chacun détaillé dans les sections par écran) :
    - `ConversationViewModel` : message reçu en foreground → `A11yAnnounce.say("\(sender): \(preview)")` ; échec d'envoi → annonce.
-   - `ToastManager` (toutes les entrées `show/showError/showSuccess/showInAppNotification`) → annonce du message (cf. §1.6).
+   - `FeedbackToastManager` (toutes les entrées `show/showError/showSuccess`) → annonce du message (cf. §1.6). ✅ implémenté via le funnel `present()`.
    - Appel entrant (`IncomingCallView.onAppear`) → `screenChanged("Appel entrant de \(caller)")`.
    - Perte/reprise de connexion (`ConnectionBanner`, `OfflineBanner`).
    - Succès/erreur de tout formulaire async (login, vérif email, magic link, reset MDP, save profil, export, suppression compte, 2FA, join flow, publication post/story).
@@ -146,11 +146,11 @@ Applique-le à tout bouton-icône / élément tappable. Garde le glyphe visuel p
 
 ## 1.6 — Toasts & feedback transitoire (P0 — le défaut le plus impactant)
 
-`ToastManager` + `ToastView` sont le canal principal de feedback succès/erreur/notification in-app, et ils sont **totalement invisibles à VoiceOver**.
+`FeedbackToastManager` + `FeedbackToastView` (renommés depuis `ToastManager`/`ToastView`) sont le canal principal de feedback succès/erreur d'actions locales, et étaient **totalement invisibles à VoiceOver**. (Les toasts issus d'évènements réseau passent par `NotificationToastManager`/`NotificationToastView` — voir item dédié plus bas.)
 
-- **`ToastManager.swift:145-152` + `ToastView.swift:51-88`** — P0 — Le toast est un `View` en `.overlay` (`MeeshyApp.swift:94-107`), jamais annoncé. **FIX** : dans chaque `ToastManager.show*`, après avoir posé `currentToast`, `A11yAnnounce.say(message)` (ou `.screenChanged` si tappable). Centralise pour couvrir `show/showError/showSuccess/showInAppNotification`.
-- **`ToastManager.swift:145` (durée 3 s fixe)** — P0 — Trop court pour VoiceOver (toast 2 lignes). **FIX** : si `UIAccessibility.isVoiceOverRunning`, durée ≥ 6 s (ou calculée selon longueur), comme les toasts tappables (6 s, lignes 58/108).
-- **`ToastView.swift:60,71`** — P1 — Icône + chevron exposés séparément. **FIX** : `.accessibilityElement(children:.combine)` + `.accessibilityLabel(toast.message)` + `.isButton` si tappable ; `.accessibilityHidden(true)` sur icône/chevron.
+- **`FeedbackToastManager.swift` + `FeedbackToastView.swift`** — P0 — ✅ **CORRIGÉ** — Le toast est un `View` en `.overlay` (`MeeshyApp.swift`), jamais annoncé. Le funnel `present(_:tapAction:)` poste désormais `AdaptiveAccessibility.announce(message, priority:)` (`.high` pour les erreurs, `.normal` sinon) après avoir posé `currentToast`, couvrant `show/showError/showSuccess`.
+- **Durée auto-dismiss fixe** — P0 — ✅ **CORRIGÉ** — `FeedbackToastManager.dismissDelay(isTappable:voiceOverRunning:)` : avec `UIAccessibility.isVoiceOverRunning`, tout toast reste ≥ 6 s pour laisser le temps d'entendre l'annonce et lire le message.
+- **`FeedbackToastView`** — P1 — ✅ **CORRIGÉ** — Icône + chevron exposés séparément. Désormais `.accessibilityElement(children:.ignore)` + `.accessibilityLabel(toast.message)` + `.isButton` si tappable.
 - **`NotificationToastView.swift:55-114`** — P0 — Même classe de défaut : non annoncé, non groupé. **FIX** : combine `authorName`+`conversationLabel`+`bodyText`, `.isButton`, annonce à l'apparition.
 - **`SkeletonView.swift:52-158`** — P1 — Aucun skeleton n'est `.accessibilityHidden(true)`, aucune annonce « Chargement ». VoiceOver lit un mur d'éléments vides au démarrage. **FIX** : `.accessibilityHidden(true)` sur tous les `Skeleton*` ; le conteneur expose un seul élément `.accessibilityLabel("Chargement")`.
 

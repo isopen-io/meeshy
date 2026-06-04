@@ -188,6 +188,102 @@ final class OfflineQueueOutcomeTests: XCTestCase {
         }
     }
 
+    // MARK: - markAsRead coalescing (latest-state-wins on enqueue)
+
+    /// Regression: a busy group conversation that fires markAsRead on every
+    /// inbound message must NOT accumulate one outbox row per fire. The
+    /// generic `enqueue<P>` collapses earlier `.pending` rows for the same
+    /// `(kind: .markAsRead, conversationId: anchor)` before inserting the
+    /// newer payload — only the latest upToMessageId is kept (subsumes all
+    /// previous reads by monotonic property).
+    func test_enqueueMarkAsRead_coalescesPendingForSameConversation() async throws {
+        let conv = "conv-coalesce-\(UUID().uuidString)"
+
+        for i in 0..<5 {
+            let payload = MarkAsReadPayload(
+                clientMutationId: ClientMutationId.generate(),
+                conversationId: conv,
+                upToMessageId: "msg-\(i)"
+            )
+            _ = try await queue.enqueue(.markAsRead, payload: payload, conversationId: conv)
+        }
+
+        let rows = try await pool.read { db in
+            try OutboxRecord
+                .filter(Column("kind") == OutboxKind.markAsRead.rawValue)
+                .filter(Column("conversationId") == conv)
+                .fetchAll(db)
+        }
+        XCTAssertEqual(rows.count, 1, "5 markAsRead enqueues for the same conversation must coalesce into 1 row")
+
+        // The surviving row must carry the LATEST payload (upToMessageId = msg-4)
+        let decoded = try JSONDecoder().decode(MarkAsReadPayload.self, from: rows[0].payload)
+        XCTAssertEqual(decoded.upToMessageId, "msg-4", "Surviving row must carry the latest upToMessageId")
+    }
+
+    /// Coalescing is scoped per conversation — enqueuing markAsRead for two
+    /// distinct conversations must keep both rows alive. The outbox is not
+    /// a single global drain queue, each conversation tracks its own read
+    /// cursor.
+    func test_enqueueMarkAsRead_keepsRowsAcrossDifferentConversations() async throws {
+        let convA = "conv-A-\(UUID().uuidString)"
+        let convB = "conv-B-\(UUID().uuidString)"
+
+        for _ in 0..<3 {
+            let payloadA = MarkAsReadPayload(
+                clientMutationId: ClientMutationId.generate(),
+                conversationId: convA,
+                upToMessageId: "msg-A"
+            )
+            _ = try await queue.enqueue(.markAsRead, payload: payloadA, conversationId: convA)
+        }
+        for _ in 0..<3 {
+            let payloadB = MarkAsReadPayload(
+                clientMutationId: ClientMutationId.generate(),
+                conversationId: convB,
+                upToMessageId: "msg-B"
+            )
+            _ = try await queue.enqueue(.markAsRead, payload: payloadB, conversationId: convB)
+        }
+
+        let rowsA = try await pool.read { db in
+            try OutboxRecord
+                .filter(Column("kind") == OutboxKind.markAsRead.rawValue)
+                .filter(Column("conversationId") == convA)
+                .fetchAll(db)
+        }
+        let rowsB = try await pool.read { db in
+            try OutboxRecord
+                .filter(Column("kind") == OutboxKind.markAsRead.rawValue)
+                .filter(Column("conversationId") == convB)
+                .fetchAll(db)
+        }
+        XCTAssertEqual(rowsA.count, 1, "Conversation A markAsRead must collapse to 1 row")
+        XCTAssertEqual(rowsB.count, 1, "Conversation B markAsRead must collapse to 1 row")
+    }
+
+    /// Other (non-coalescing) kinds must keep accumulating one row per
+    /// enqueue — only `.markAsRead` opts in. A friend-request burst must
+    /// preserve every payload because they are not monotonically idempotent
+    /// (each is a distinct action targeting a distinct user).
+    func test_enqueueNonCoalescingKind_accumulatesRows() async throws {
+        let userIds = ["u-1", "u-2", "u-3"]
+        for userId in userIds {
+            let payload = SendFriendRequestPayload(
+                clientMutationId: ClientMutationId.generate(),
+                targetUserId: userId
+            )
+            _ = try await queue.enqueue(.sendFriendRequest, payload: payload)
+        }
+
+        let rows = try await pool.read { db in
+            try OutboxRecord
+                .filter(Column("kind") == OutboxKind.sendFriendRequest.rawValue)
+                .fetchAll(db)
+        }
+        XCTAssertEqual(rows.count, 3, "Non-coalescing kinds (.sendFriendRequest) MUST keep every enqueue")
+    }
+
     // MARK: - Helpers
 
     /// Reads the current pending count after any setUp churn so subsequent

@@ -244,6 +244,10 @@ private enum StaticOnlyFixture {
         var effects = StoryEffects()
         effects.textObjects = [text]
         // Intentionally no mediaObjects — that's the whole point of the test.
+        // Durée AUTORITAIRE via le timeline (« la timeline EST la story ») : posée sur
+        // `timelineDuration`, lue en priorité par `computedTotalDuration()` (utilisé par
+        // l'exporter). Sans ce pin, un slide statique retombe sur le défaut 6 s.
+        effects.timelineDuration = staticBaseDuration
 
         return StorySlide(id: UUID().uuidString,
                           effects: effects,

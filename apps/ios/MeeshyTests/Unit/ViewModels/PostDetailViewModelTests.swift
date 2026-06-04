@@ -185,6 +185,86 @@ final class PostDetailViewModelTests: XCTestCase {
         XCTAssertEqual(sut.post?.likes, initialLikes)
     }
 
+    // MARK: - Outbox terminal outcome (R5) — rollback on .exhausted
+
+    func test_likePost_rollsBack_whenOutcomeExhausted() async {
+        // R5 — a like that enqueues successfully but later EXHAUSTS its retry
+        // budget (server permanently rejected it) must roll back. Before this
+        // fix nobody observed the outcome, so the like was stuck forever.
+        let queue = MockOfflineQueue()
+        let (sut, mock) = makeSUT(offlineQueue: queue)
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let initialLikes = sut.post?.likes ?? 0
+
+        await sut.likePost()
+        XCTAssertEqual(sut.post?.isLiked, true, "optimistic like applied")
+        XCTAssertEqual(sut.post?.likes, initialLikes + 1)
+
+        guard let payload = queue.enqueueCalls.first?.payload as? ToggleLikePostPayload else {
+            return XCTFail("no toggleLikePost enqueue")
+        }
+        try? await waitForContinuation(in: queue, for: payload.clientMutationId)
+        queue.emitOutcome(.exhausted(cmid: payload.clientMutationId), for: payload.clientMutationId)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.post?.isLiked, false, "exhausted outbox row must roll back the optimistic like")
+        XCTAssertEqual(sut.post?.likes, initialLikes, "like count must revert on exhausted")
+    }
+
+    func test_likePost_doesNotRollBack_whenOutcomeApplied() async {
+        let queue = MockOfflineQueue()
+        let (sut, mock) = makeSUT(offlineQueue: queue)
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+        let initialLikes = sut.post?.likes ?? 0
+
+        await sut.likePost()
+        guard let payload = queue.enqueueCalls.first?.payload as? ToggleLikePostPayload else {
+            return XCTFail("no toggleLikePost enqueue")
+        }
+        try? await waitForContinuation(in: queue, for: payload.clientMutationId)
+        queue.emitOutcome(.applied(cmid: payload.clientMutationId), for: payload.clientMutationId)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.post?.isLiked, true, "applied outcome keeps the optimistic like")
+        XCTAssertEqual(sut.post?.likes, initialLikes + 1)
+    }
+
+    func test_sendComment_rollsBack_whenOutcomeExhausted() async {
+        let queue = MockOfflineQueue()
+        let (sut, mock) = makeSUT(offlineQueue: queue)
+        mock.getPostResult = .success(Self.makeAPIPost(id: "p1"))
+        await sut.loadPost("p1")
+
+        await sut.sendComment("doomed comment")
+        XCTAssertEqual(sut.comments.count, 1, "optimistic comment inserted")
+        XCTAssertEqual(sut.comments[0].content, "doomed comment")
+
+        guard let payload = queue.enqueueCalls.first?.payload as? CreateCommentPayload else {
+            return XCTFail("no createComment enqueue")
+        }
+        try? await waitForContinuation(in: queue, for: payload.clientMutationId)
+        queue.emitOutcome(.exhausted(cmid: payload.clientMutationId), for: payload.clientMutationId)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertTrue(sut.comments.isEmpty, "optimistic comment must be removed on exhausted")
+    }
+
+    /// Polls the mock's continuation dict until the fire-and-forget observer
+    /// Task has registered its `outcomeStream` continuation for `cmid`. Times
+    /// out after 500 ms (50 × 10 ms).
+    private func waitForContinuation(
+        in queue: MockOfflineQueue,
+        for cmid: String
+    ) async throws {
+        for _ in 0..<50 {
+            if queue.outcomeContinuations[cmid] != nil { return }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTFail("Observer continuation never registered for cmid=\(cmid)")
+    }
+
     // MARK: - topLevelComments
 
     func test_topLevelComments_filtersParentComments() async {

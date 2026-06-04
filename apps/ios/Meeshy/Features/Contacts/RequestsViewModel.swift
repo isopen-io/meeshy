@@ -169,14 +169,14 @@ final class RequestsViewModel: ObservableObject {
         )
         do {
             try await OfflineQueue.shared.enqueue(.respondFriendRequest, payload: payload)
-            ToastManager.shared.showSuccess("Connexion acceptee")
+            FeedbackToastManager.shared.showSuccess("Connexion acceptee")
         } catch {
             receivedRequests = snapshot
             if let senderId {
                 FriendshipCache.shared.rollbackAccept(senderId: senderId, requestId: requestId)
             }
             HapticFeedback.error()
-            ToastManager.shared.showError("Impossible d'accepter")
+            FeedbackToastManager.shared.showError("Impossible d'accepter")
         }
     }
 
@@ -207,14 +207,14 @@ final class RequestsViewModel: ObservableObject {
         )
         do {
             try await OfflineQueue.shared.enqueue(.respondFriendRequest, payload: payload)
-            ToastManager.shared.showSuccess("Demande refusee")
+            FeedbackToastManager.shared.showSuccess("Demande refusee")
         } catch {
             receivedRequests = snapshot
             if let senderId {
                 FriendshipCache.shared.rollbackReject(senderId: senderId, requestId: requestId)
             }
             HapticFeedback.error()
-            ToastManager.shared.showError("Impossible de refuser")
+            FeedbackToastManager.shared.showError("Impossible de refuser")
         }
     }
 
@@ -234,7 +234,7 @@ final class RequestsViewModel: ObservableObject {
             for await event in stream {
                 if case .exhausted = event {
                     rollback()
-                    ToastManager.shared.showError(toast)
+                    FeedbackToastManager.shared.showError(toast)
                     HapticFeedback.error()
                 }
             }
@@ -256,14 +256,14 @@ final class RequestsViewModel: ObservableObject {
         HapticFeedback.medium()
         do {
             try await friendService.deleteRequest(requestId: requestId)
-            ToastManager.shared.showSuccess("Demande annulee")
+            FeedbackToastManager.shared.showSuccess("Demande annulee")
         } catch {
             sentRequests = snapshot
             if let receiverId {
                 FriendshipCache.shared.didSendRequest(to: receiverId, requestId: requestId)
             }
             HapticFeedback.error()
-            ToastManager.shared.showError("Impossible d'annuler")
+            FeedbackToastManager.shared.showError("Impossible d'annuler")
         }
     }
 

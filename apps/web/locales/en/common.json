@@ -150,6 +150,15 @@
         "message": "If you think you should have access to this resource, try logging in or contact the administrator."
       }
     },
+    "authGuard": {
+      "checking": "Checking...",
+      "deniedTitle": "Access denied",
+      "deniedDescription": "You must be signed in to access this page",
+      "signIn": "Sign in",
+      "accountRequiredTitle": "Account required",
+      "accountRequiredDescription": "This page requires a permanent account",
+      "createAccount": "Create an account"
+    },
     "redirecting": "Redirecting...",
     "featureGate": {
       "title": "Feature Temporarily Unavailable",

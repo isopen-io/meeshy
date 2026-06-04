@@ -331,6 +331,33 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 }
             }
 
+            // Targeted re-fetch of pages the fan-out dropped, BEFORE persisting,
+            // so an interior gap (a middle page that failed while later pages
+            // succeeded) is filled instead of silently swallowed — the
+            // sequential tail starts at `merged.count` and would skip a hole
+            // below that count, leaving the cached list permanently incomplete.
+            let fetchedIndices = Set(pages.map(\.0))
+            let droppedIndices = remainingPages.filter { !fetchedIndices.contains($0) }
+            if !droppedIndices.isEmpty {
+                var recoveredAll = true
+                for pageIndex in droppedIndices {
+                    do {
+                        let response = try await Self.fetchPageWithRetry(via: service, offset: pageIndex * stride, limit: pageSize)
+                        let items = response.data.map { $0.toConversation(currentUserId: userId) }
+                        for item in items where !uniqueById.contains(item.id) {
+                            uniqueById.insert(item.id)
+                            merged.append(item)
+                        }
+                    } catch {
+                        recoveredAll = false
+                    }
+                }
+                // Only stay failed if a targeted re-fetch still couldn't recover
+                // the page — a transient fan-out failure that the re-fetch fixed
+                // must NOT leave the list flagged incomplete.
+                succeeded = recoveredAll
+            }
+
             await saveSorted(merged, to: "list")
             await SearchIndex.shared.indexConversations(merged)
             _conversationsDidChange.send()

@@ -85,9 +85,10 @@ final class StoryViewerView_PrefetchTimerIntegrationTests: XCTestCase {
             isPresented: binding
         )
         view.currentStoryIndex = currentIndex
-        // `computedStoryDuration` defaults to `12.0` (see `StoryViewerView`
-        // `@State` declaration), so `currentSlideDuration` resolves to 12s
-        // — exactly the production default for a static-text slide.
+        // `computedStoryDuration` defaults to `6.0` (see `StoryViewerView`
+        // `@State` declaration). The test below advances the clock by 12s
+        // — well past the slide duration — to drive progress to 1.0
+        // deterministically, regardless of the exact production default.
         return (view, stories, binding)
     }
 

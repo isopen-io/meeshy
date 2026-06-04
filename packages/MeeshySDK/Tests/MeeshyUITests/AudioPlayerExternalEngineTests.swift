@@ -80,4 +80,59 @@ struct AudioPlayerExternalEngineTests {
         // fires synchronously on willSet of any @Published property.
         #expect(willChangeCount >= 1)
     }
+
+    // MARK: - Play tap delegation gate (regression: 2026-05-28)
+
+    /// Regression for the 2026-05-28 mini-player invisibility + background
+    /// stop bug : when the bubble is INACTIVE (no external engine injected),
+    /// any tap on Play MUST be delegated to the parent's `onPlayRequest`
+    /// so the coordinator can set `activeContext` and load the queue. The
+    /// previous gate only fired when `player.attachmentId != attachment.id`
+    /// — but `onAppear` writes `player.attachmentId = attachment.id` on the
+    /// owned local dummy, so the local match made the gate silently fall
+    /// through to `player.play(urlString:)` on the dummy, leaving the
+    /// coordinator unused.
+    @Test("Inactive bubble delegates play tap to parent even when local attachmentId matches")
+    @MainActor
+    func test_shouldDelegateToParent_inactiveBubble_alwaysDelegates() {
+        // Mimics the post-`onAppear` state where the owned dummy player has
+        // `attachmentId == attachment.id`. The pre-fix gate (which only
+        // checked the local mismatch) would return `false` and bypass the
+        // coordinator. The fix must return `true`.
+        #expect(AudioPlayerView.shouldDelegateToParent(
+            usesExternalPlayer: false,
+            playerAttachmentId: "att_42",
+            bubbleAttachmentId: "att_42"
+        ) == true)
+    }
+
+    @Test("Inactive bubble delegates even when local attachmentId is nil")
+    @MainActor
+    func test_shouldDelegateToParent_inactiveBubble_nilLocalId_delegates() {
+        #expect(AudioPlayerView.shouldDelegateToParent(
+            usesExternalPlayer: false,
+            playerAttachmentId: nil,
+            bubbleAttachmentId: "att_42"
+        ) == true)
+    }
+
+    @Test("Active bubble loaded with this attachment does NOT delegate (toggle pause/resume locally)")
+    @MainActor
+    func test_shouldDelegateToParent_activeBubble_sameAttachment_doesNotDelegate() {
+        #expect(AudioPlayerView.shouldDelegateToParent(
+            usesExternalPlayer: true,
+            playerAttachmentId: "att_42",
+            bubbleAttachmentId: "att_42"
+        ) == false)
+    }
+
+    @Test("Active bubble loaded with a different attachment delegates (parent rebuilds queue)")
+    @MainActor
+    func test_shouldDelegateToParent_activeBubble_differentAttachment_delegates() {
+        #expect(AudioPlayerView.shouldDelegateToParent(
+            usesExternalPlayer: true,
+            playerAttachmentId: "att_other",
+            bubbleAttachmentId: "att_42"
+        ) == true)
+    }
 }

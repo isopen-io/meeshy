@@ -125,14 +125,24 @@ struct StoryViewerView: View {
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
 
-    /// Durée dynamique du slide courant — max(12, durée max des médias vidéo/audio).
-    /// Static text/image slides default to 12s so the reader has time to take in
-    /// captions and stickers (the previous 5s default felt rushed for anything
-    /// beyond a single-emoji story).
-    @State var computedStoryDuration: Double = 12.0 // internal for cross-file extension access
+    /// Durée dynamique du slide courant — max(6, durée max des médias vidéo/audio).
+    /// Static text/image slides default to 6s (parité Instagram/Snapchat) — la
+    /// transition n'interrompt JAMAIS un média en cours : `updateStoryDuration`
+    /// retient `max(6, durée vidéo BG, durée vidéo FG, durée audio, words/6)` puis
+    /// arrondit à `ceil(base / loopPeriod) × loopPeriod` pour que chaque loop bg
+    /// termine son cycle avant l'avance.
+    @State var computedStoryDuration: Double = 6.0 // internal for cross-file extension access
     @State var timerCancellable: AnyCancellable? // internal for cross-file extension access
     @State var hasFiredFadeOut = false // internal for cross-file extension access
     @State var hasFiredNextPrefetch = false // déclencheur du prefetch de la slide N+1, armé à 5s de la fin de la slide en cours pour que la transition soit fluide.
+
+    /// Position de lecture (secondes) émise par le displayLink interne du canvas
+    /// via `StoryReaderRepresentable.onPlaybackTime`. Source de vérité unique
+    /// pour piloter la progress bar du viewer en sync EXACTE avec la timeline
+    /// canvas (vidéo BG + audio + keyframes). Aligné sur `computedStoryDuration`
+    /// qui inclut le roundup des cycles bg → la transition n'interrompt jamais
+    /// un loop mid-cycle. Reset à 0 à chaque slide change (cf. `startTimer`).
+    @State var lastPlaybackTime: Double = 0 // internal for cross-file extension access
 
     /// Visibilité du chrome (header, sidebar droite, composer) — animé par
     /// glissements directionnels. En mode normal `chromeVisible = true` au
@@ -183,6 +193,10 @@ struct StoryViewerView: View {
     @State var commentEffects: MessageEffects = .none // internal for cross-file extension access
     @State var showLanguageOptions = false // internal for cross-file extension access
     @State var showFullLanguagePicker = false // internal for cross-file extension access
+    /// Langue d'exploration choisie via le picker (Prisme « Exploration »). Prépendue à
+    /// `resolvedViewerLanguageChain` tant qu'elle est non-nil. Éphémère : réinitialisée au
+    /// changement de slide. `nil` = affichage selon les préférences de base uniquement.
+    @State var sessionLanguageOverride: String? = nil // internal for cross-file extension access
     @StateObject private var keyboard = KeyboardObserver()
     @Environment(\.scenePhase) private var scenePhase
 
@@ -236,6 +250,12 @@ struct StoryViewerView: View {
     @StateObject var exportShareViewModel = StoryExportShareViewModel()
     @State var showCommentsOverlay = false
     @State var storyReactionCount: Int = 0
+    /// Emojis the logged-in user has applied to the CURRENT story. Seeded from
+    /// `currentStory?.currentUserReactions` in `startTimer()` and bumped
+    /// optimistically by `triggerStoryReaction`. Drives the sidebar heart's
+    /// active state so it only lights up when *this* viewer has reacted —
+    /// not when somebody else has (bug 2026-05-28).
+    @State var storyCurrentUserReactions: [String] = []
     @State var storyComments: [FeedComment] = []
     @State var isLoadingComments = false
     @State var storyCommentCount: Int = 0
@@ -267,6 +287,20 @@ struct StoryViewerView: View {
             .first(where: { $0.activationState == .foregroundActive })?
             .windows.first(where: { $0.isKeyWindow })?
             .bounds.size ?? UIScreen.main.bounds.size
+    }
+
+    /// Bas du safe area lu directement sur la keyWindow. Necessaire parce que
+    /// le `GeometryReader` interne au viewer est rendu dans un contexte
+    /// `.ignoresSafeArea()` (cf. `viewerContent`), ce qui aplatit
+    /// `geometry.safeAreaInsets.bottom` a 0 — le composer et la liste de
+    /// commentaires se retrouvaient alors plaques sur le bord physique et
+    /// chevauchaient le home indicator + les coins arrondis (bug 2026-05-28).
+    var windowBottomInset: CGFloat { // internal for cross-file extension access
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first(where: { $0.activationState == .foregroundActive })?
+            .windows.first(where: { $0.isKeyWindow })?
+            .safeAreaInsets.bottom ?? 0
     }
 
     private var screenH: CGFloat { windowSize.height }
@@ -418,31 +452,29 @@ struct StoryViewerView: View {
             transitionPostRoom(from: previousStory, to: currentStory)
         }
         .onReceive(SocialSocketManager.shared.commentReactionAdded.receive(on: DispatchQueue.main)) { event in
-            guard showCommentsOverlay else { return }
-            guard event.postId == currentStory?.id else { return }
-            guard event.emoji == Self.heartEmoji else { return }
-            let currentUserId = AuthManager.shared.currentUser?.id
-            if event.userId == currentUserId {
-                storyCommentLikedIds.insert(event.commentId)
-            } else {
-                storyCommentLikeDelta[event.commentId] = (storyCommentLikeDelta[event.commentId] ?? 0) + 1
-            }
+            applyCommentReactionEvent(event)
         }
         .onReceive(SocialSocketManager.shared.commentReactionRemoved.receive(on: DispatchQueue.main)) { event in
-            guard showCommentsOverlay else { return }
-            guard event.postId == currentStory?.id else { return }
-            guard event.emoji == Self.heartEmoji else { return }
-            let currentUserId = AuthManager.shared.currentUser?.id
-            if event.userId == currentUserId {
-                storyCommentLikedIds.remove(event.commentId)
-            } else {
-                storyCommentLikeDelta[event.commentId] = (storyCommentLikeDelta[event.commentId] ?? 0) - 1
-            }
+            applyCommentReactionEvent(event)
+        }
+        // Realtime story reactions (it.23) : le `StoryViewModel` applique le delta
+        // `story:reacted`/`story:unreacted` sur l'item (`storyGroups` @Published). On
+        // re-dérive ici le @State affiché par la sidebar dès que le compteur de la story
+        // COURANTE change — sinon une réaction d'un autre viewer ne se voyait pas en direct.
+        .adaptiveOnChange(of: currentStory?.reactionCount) { _, newCount in
+            storyReactionCount = newCount ?? 0
+            storyCurrentUserReactions = currentStory?.currentUserReactions ?? []
         }
     }
 
     var body: some View {
         viewerContent
+        // Prisme « Exploration » : l'override de langue est éphémère — il se réinitialise
+        // dès qu'on change de story (slide ou groupe), de sorte que chaque story s'affiche
+        // d'abord dans la langue préférée de base. `adaptiveOnChange` = wrapper iOS 16.
+        .adaptiveOnChange(of: currentStory?.id) { _, _ in
+            if sessionLanguageOverride != nil { sessionLanguageOverride = nil }
+        }
         .sheet(isPresented: $showViewersSheet, onDismiss: { resumeTimer() }) {
             if let story = currentStory {
                 StoryViewersSheet(story: story, accentColor: Color(hex: "4ECDC4"))
@@ -507,9 +539,9 @@ struct StoryViewerView: View {
                             isQuote: !content.isEmpty
                         )
                         editAndRepostAsPostSource = nil
-                        ToastManager.shared.show("Publié")
+                        FeedbackToastManager.shared.show("Publié")
                     } catch {
-                        ToastManager.shared.showError("Échec de la publication")
+                        FeedbackToastManager.shared.showError("Échec de la publication")
                         throw error
                     }
                 },
@@ -548,7 +580,7 @@ struct StoryViewerView: View {
     /// so reading it here after `refreshPrefetchWindowAndTimer()` calls
     /// `updateStoryDuration()` indirectly via `startTimer()` is safe.
     var currentSlideDuration: TimeInterval {
-        computedStoryDuration > 0 ? computedStoryDuration : 12.0
+        computedStoryDuration > 0 ? computedStoryDuration : 6.0
     }
 
     /// Installs the prefetcher host pipeline once per viewer lifecycle. The
@@ -659,11 +691,21 @@ struct StoryViewerView: View {
                        preferredLanguages: chain)
 
         let current = stories[currentStoryIndex]
-        // Promote the current slide to `.play` and demote neighbours to
-        // `.edit`. Without this, all three prefetched canvases run in
-        // `.play` simultaneously, pre-caching + starting their audio at
-        // window mount time (NOT when the user actually arrives on the slide).
-        p.activate(currentId: current.id)
+        // PREFETCHER CANVASES RESTENT EN `.edit` (jamais promus en `.play`).
+        //
+        // Le promote-au-`.play` du canvas prefetcher du slide courant a été
+        // retiré 2026-05-28 : il créait une double-lecture parallèle avec le
+        // `StoryReaderRepresentable` visible (qui est, lui, instancié en
+        // `.play` par `makeUIView`). Chaque slide visible avait alors DEUX
+        // canvases qui démarraient leur AVPlayer bg + leur audio mixer + leurs
+        // AVPlayer FG. `PlaybackCoordinator` mutex-stoppait le second audio
+        // mixer mais ni les bg/FG AVPlayer ni leur piste audio embarquée
+        // (= bleed audio + bleed vidéo bg).
+        //
+        // Le prefetcher conserve son rôle de **cache chaud** : ses canvases
+        // restent en `.edit` à vie pour pré-décoder l'image bg, charger
+        // l'asset AVPlayer, etc. Le canvas visible (StoryReaderRepresentable)
+        // est la SEULE source de lecture média.
         t.setCurrentSlide(id: current.id, duration: currentSlideDuration)
 
         // Re-wire `onContentReady` on the prefetched canvas of the
@@ -756,19 +798,19 @@ struct StoryViewerView: View {
                 )
                 await MainActor.run {
                     HapticFeedback.success()
-                    ToastManager.shared.show("Republié dans ton feed")
+                    FeedbackToastManager.shared.show("Republié dans ton feed")
                 }
             } catch APIError.serverError(404, _) {
                 await MainActor.run {
-                    ToastManager.shared.showError("La story n'est plus disponible")
+                    FeedbackToastManager.shared.showError("La story n'est plus disponible")
                 }
             } catch APIError.serverError(403, _) {
                 await MainActor.run {
-                    ToastManager.shared.showError("Cette story ne peut pas être repartagée")
+                    FeedbackToastManager.shared.showError("Cette story ne peut pas être repartagée")
                 }
             } catch {
                 await MainActor.run {
-                    ToastManager.shared.showError("Échec de la republication")
+                    FeedbackToastManager.shared.showError("Échec de la republication")
                 }
             }
         }
@@ -819,6 +861,39 @@ struct StoryViewerView: View {
 
     private let quickEmojis = ["❤️", "😂", "😮", "🔥", "😢", "👏"]
 
+    // MARK: - Comments Overlay (Instagram-style)
+
+    /// Builds the floating comments overlay (`StoryCommentsOverlayView`).
+    /// Rendered by `StoryViewerContentView` as a sibling of the story card,
+    /// NOT inside it, so the overlay does not inherit the card's drag offset,
+    /// scale, or 3D rotation (bug 2026-05-28: overlay shifted left during
+    /// drag / scale transitions).
+    private func storyCommentsOverlay() -> StoryCommentsOverlayView {
+        // L'overlay commentaires n'embarque PLUS son propre composer. Il
+        // affiche uniquement : (1) la liste des commentaires, (2) les
+        // actions « Répondre » / « like » de chaque row qui mutent
+        // `replyingToStoryComment`. Le composer principal — toujours
+        // visible en bas via `StoryComposerBarView` rendu dans la canvas
+        // « Bottom area » — lit ce binding et affiche sa reply banner
+        // au-dessus de sa rangée de saisie. Spec user 2026-05-28 :
+        // « une seule zone de saisie de commentaire ».
+        StoryCommentsOverlayView(
+            storyComments: storyComments,
+            storyCommentCount: storyCommentCount,
+            storyCommentRepliesMap: storyCommentRepliesMap,
+            storyCommentExpandedThreads: storyCommentExpandedThreads,
+            storyCommentLoadingReplies: storyCommentLoadingReplies,
+            isLoadingComments: isLoadingComments,
+            userLang: AuthManager.shared.currentUser?.preferredContentLanguages.first ?? "fr",
+            showCommentsOverlay: $showCommentsOverlay,
+            replyingToStoryComment: $replyingToStoryComment,
+            keyboard: keyboard,
+            safeBottom: windowBottomInset,
+            makeStoryCommentRow: makeStoryCommentRow,
+            toggleStoryCommentThread: toggleStoryCommentThread
+        )
+    }
+
     // MARK: - Story Card
 
     /// Builds the story canvas for the supplied geometry. Extracted into the
@@ -852,13 +927,20 @@ struct StoryViewerView: View {
             bigReactionPhase: bigReactionPhase,
             heartBouncePulse: heartBouncePulse,
             storyReactionCount: storyReactionCount,
+            storyCurrentUserHasReacted: !storyCurrentUserReactions.isEmpty,
             storyCommentCount: storyCommentCount,
+            storyShareCount: currentStory?.shareCount ?? 0,
+            storyViewCount: currentStory?.viewCount ?? 0,
+            storyRepostCount: currentStory?.repostCount ?? 0,
             isStoryCommentsEmpty: storyComments.isEmpty,
             storyHasAudibleSound: storyHasAudibleSound,
             storyHasTranslatableContent: storyHasTranslatableContent,
             isGlobalMuted: isGlobalMuted,
             availableTranslationLanguages: availableTranslationLanguages,
             onReplyToStory: onReplyToStory,
+            onSelectLanguageOverride: { lang in
+                withAnimation(.easeInOut(duration: 0.2)) { sessionLanguageOverride = lang }
+            },
             composerAccentColor: currentGroup?.avatarColor ?? "6366F1",
             storyComments: storyComments,
             storyCommentRepliesMap: storyCommentRepliesMap,
@@ -894,6 +976,8 @@ struct StoryViewerView: View {
             chromeVisible: $chromeVisible,
             isFullscreenStorySession: $isFullscreenStorySession,
             isLongPressPaused: $isLongPressPaused,
+            lastPlaybackTime: $lastPlaybackTime,
+            isCanvasPlaybackPaused: shouldPauseTimer,
             keyboard: keyboard,
             triggerStoryReaction: { triggerStoryReaction($0) },
             pauseTimer: { pauseTimer() },
@@ -917,7 +1001,8 @@ struct StoryViewerView: View {
             reportStory: { storyId, reportType, reason in
                 try await ReportService.shared.reportStory(storyId: storyId, reportType: reportType, reason: reason)
             },
-            composerBottomPadding: { composerBottomPadding(geometry: $0) }
+            composerBottomPadding: { composerBottomPadding(geometry: $0) },
+            makeCommentsOverlay: { storyCommentsOverlay() }
         )
     }
 
@@ -939,6 +1024,16 @@ struct StoryViewerView: View {
 
     private func triggerStoryReaction(_ emoji: String) {
         HapticFeedback.medium()
+
+        // Full picker covers ENTIRE screen → must dismiss immediately so the
+        // big-reaction animation (`bigReactionEmoji`) is visible. Strip is a
+        // partial overlay → keep its 0.5s dismissal delay below (deliberate
+        // visual echo of the chosen emoji before the strip disappears).
+        if showFullEmojiPicker {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showFullEmojiPicker = false
+            }
+        }
 
         // Big floating emoji — dramatic 3-phase animation
         bigReactionEmoji = emoji
@@ -967,7 +1062,15 @@ struct StoryViewerView: View {
             }
         }
 
-        storyReactionCount += 1
+        // N'incrémenter le compteur QUE pour une réaction réellement nouvelle :
+        // re-taper le même emoji ne crée pas une nouvelle réaction côté serveur
+        // (l'array `storyCurrentUserReactions` est dédupliqué), donc l'ancien
+        // `+= 1` inconditionnel gonflait le compteur visible à chaque tap
+        // (incohérent jusqu'au refresh serveur). Bug 2026-06-01.
+        if !storyCurrentUserReactions.contains(emoji) {
+            storyCurrentUserReactions.append(emoji)
+            storyReactionCount += 1
+        }
         heartBouncePulse += 1
         sendReaction(emoji: emoji)
     }
@@ -975,15 +1078,20 @@ struct StoryViewerView: View {
     // MARK: - Computed Bottom Padding
 
     private func composerBottomPadding(geometry: GeometryProxy) -> CGFloat {
+        // `.ignoresSafeArea()` au root du viewer aplatit `geometry.safeAreaInsets.bottom`
+        // a 0 dans le `GeometryReader` interne. On retombe sur le vrai inset de la
+        // keyWindow (`windowBottomInset`) pour ne pas plaquer le composer sur le
+        // home indicator et les coins arrondis iPhone Pro (bug 2026-05-28).
+        let safeBottom = max(geometry.safeAreaInsets.bottom, windowBottomInset)
         if showTextEmojiPicker {
             // Emoji panel is showing — just need safe area below it
-            return geometry.safeAreaInsets.bottom
+            return safeBottom
         } else if keyboard.isVisible {
             // Keyboard is showing — push everything above it
             return keyboard.height
         } else {
             // Default — safe area + breathing room
-            return geometry.safeAreaInsets.bottom + 20
+            return safeBottom + 20
         }
     }
 
@@ -1010,8 +1118,24 @@ struct StoryViewerView: View {
     /// Chaine complete : systemLanguage → regionalLanguage → customDestinationLanguage → "fr"
     /// (cf. `MeeshyUser.preferredContentLanguages`). Utilisee par le reader pour resoudre
     /// les traductions selon le Prisme Linguistique.
+    ///
+    /// Quand l'utilisateur explore une autre langue via le picker (`sessionLanguageOverride`),
+    /// celle-ci est PRÉPENDUE à la chaine (priorité la plus haute) sans supprimer les
+    /// préférences de base — cf. Prisme « Exploration ». L'override est éphémère : il se
+    /// réinitialise au changement de slide (cf. `.onChange(of: currentStory?.id)`).
     private var resolvedViewerLanguageChain: [String] {
-        AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        Self.viewerLanguageChain(
+            base: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+            override: sessionLanguageOverride
+        )
+    }
+
+    /// Helper pur (testable) : prépend l'override langue à la chaine préférée, dédupliqué.
+    /// `nil`/vide → chaine de base inchangée. Sinon l'override passe en tête et est retiré
+    /// de sa position d'origine (jamais de doublon).
+    static func viewerLanguageChain(base: [String], override: String?) -> [String] {
+        guard let override, !override.isEmpty else { return base }
+        return [override] + base.filter { $0 != override }
     }
 
     /// Drives the sidebar sound/mute button. A silent video (muted by the author
@@ -1029,24 +1153,49 @@ struct StoryViewerView: View {
     /// `storyHasAudibleSound`, so the sound button never appears for a clip that
     /// turns out silent. A probe failure (unreachable URL, decode error) is
     /// treated as "no audio" — conservative, matching the no-false-button intent.
+    /// Backstop probe when `prefetchAllMedia` couldn't pre-resolve the audio
+    /// track presence (cold start on first slide, race after a rapid skip).
+    /// Merges into `videoAudioTrackPresence` instead of replacing — the dict
+    /// is shared across stories and entries seeded by `preProbeVideoAudio`
+    /// must not be wiped on slide change (regression 2026-05-28 « bouton son
+    /// apparait après affichage »).
     @MainActor
     private func refreshVideoAudioTrackPresence() async {
         let videos = StoryAudioAvailability.videosNeedingAudioProbe(effects: currentStory?.storyEffects)
-        guard let story = currentStory, !videos.isEmpty else {
-            videoAudioTrackPresence = [:]
-            return
-        }
-        var presence: [String: Bool] = [:]
+        guard let story = currentStory, !videos.isEmpty else { return }
         for video in videos {
+            // Already resolved (pre-probed during prefetch) — keep it.
+            if videoAudioTrackPresence[video.id] != nil { continue }
             guard let url = resolveVideoURL(for: video, in: story) else {
-                presence[video.id] = false
+                videoAudioTrackPresence[video.id] = false
                 continue
             }
             let tracks = try? await AVURLAsset(url: url).loadTracks(withMediaType: .audio)
-            presence[video.id] = (tracks?.isEmpty == false)
+            if Task.isCancelled { return }
+            videoAudioTrackPresence[video.id] = (tracks?.isEmpty == false)
         }
-        guard !Task.isCancelled else { return }
-        videoAudioTrackPresence = presence
+    }
+
+    /// Probes each foreground video of `story` for an audio track and merges
+    /// the result into `videoAudioTrackPresence`. Called from
+    /// `prefetchAllMedia` (in `+Content.swift`) so the sound-button
+    /// visibility is already settled by the time the slide becomes the
+    /// active `currentStory`. Idempotent — entries that are already resolved
+    /// are skipped, so re-prefetching the same story is cheap.
+    @MainActor
+    func preProbeVideoAudio(for story: StoryItem) async {
+        let videos = StoryAudioAvailability.videosNeedingAudioProbe(effects: story.storyEffects)
+        guard !videos.isEmpty else { return }
+        for video in videos {
+            if videoAudioTrackPresence[video.id] != nil { continue }
+            guard let url = resolveVideoURL(for: video, in: story) else {
+                videoAudioTrackPresence[video.id] = false
+                continue
+            }
+            let tracks = try? await AVURLAsset(url: url).loadTracks(withMediaType: .audio)
+            if Task.isCancelled { return }
+            videoAudioTrackPresence[video.id] = (tracks?.isEmpty == false)
+        }
     }
 
     /// Resolves the playable URL for a foreground video — mirrors the order used
@@ -1079,10 +1228,17 @@ struct StoryViewerView: View {
     var isContentTranslated: Bool { // internal for cross-file extension access
         guard storyHasTranslatableContent,
               let story = currentStory,
-              let viewerLang = resolvedViewerLanguage,
               let translations = story.translations,
-              !translations.isEmpty else { return false }
-        return translations.contains { $0.language == viewerLang }
+              !translations.isEmpty,
+              !resolvedViewerLanguageChain.isEmpty else { return false }
+        // Prisme : le contenu est affiché via la CHAÎNE préférée complète
+        // (systemLanguage > regionalLanguage > customDestination > deviceLocale)
+        // — `resolvedText` retourne une traduction dès qu'UNE langue de la chaîne
+        // a une entrée. Le badge « translate » doit donc refléter la même logique :
+        // tester la chaîne entière, pas seulement la première. Sinon un viewer
+        // voyant le contenu traduit dans sa langue SECONDAIRE ne voyait aucun
+        // indicateur (incohérent avec le texte/caption affichés — bug 2026-06-01).
+        return translations.contains { resolvedViewerLanguageChain.contains($0.language) }
     }
 
     // MARK: - Voice Caption
@@ -1092,9 +1248,20 @@ struct StoryViewerView: View {
               effects.voiceAttachmentId != nil,
               let transcriptions = effects.voiceTranscriptions,
               !transcriptions.isEmpty else { return nil }
-        let lang = resolvedViewerLanguage ?? "en"
-        return transcriptions.first { $0.language == lang }?.content
-            ?? transcriptions.first?.content
+        // Prisme Linguistique : on essaie la CHAÎNE complète des langues préférées
+        // (systemLanguage > regionalLanguage > customDestination > deviceLocale),
+        // pas seulement la première + défaut "en". Sans ça, un viewer dont la
+        // langue SECONDAIRE (ex. regionalLanguage) a une transcription mais pas
+        // la primaire voyait une langue arbitraire (la 1ʳᵉ entrée, souvent
+        // l'original parlé) au lieu de sa secondaire — violation du Prisme
+        // (bug 2026-06-01).
+        for lang in resolvedViewerLanguageChain {
+            if let t = transcriptions.first(where: { $0.language == lang })?.content { return t }
+        }
+        // Aucune langue préférée ne matche → transcription ORIGINALE (1ʳᵉ entrée =
+        // langue parlée d'origine par convention gateway). On ne choisit JAMAIS
+        // une traduction arbitraire d'une autre langue (règle Prisme).
+        return transcriptions.first?.content
     }
 
 

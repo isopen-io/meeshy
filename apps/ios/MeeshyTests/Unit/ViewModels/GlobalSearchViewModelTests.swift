@@ -35,7 +35,9 @@ final class GlobalSearchViewModelTests: XCTestCase {
     }
 
     private func makeSUT(
-        searchService: MessageSearchService? = nil
+        searchService: MessageSearchService? = nil,
+        messageSocket: MockMessageSocket? = nil,
+        socialSocket: MockSocialSocket? = nil
     ) throws -> (
         sut: GlobalSearchViewModel,
         mockAPI: MockAPIClientForApp,
@@ -50,9 +52,29 @@ final class GlobalSearchViewModelTests: XCTestCase {
             api: mockAPI,
             userService: mockUserService,
             authManager: mockAuthManager,
-            searchService: service
+            searchService: service,
+            messageSocket: messageSocket ?? MockMessageSocket(),
+            socialSocket: socialSocket ?? MockSocialSocket()
         )
         return (sut, mockAPI, mockUserService, mockAuthManager)
+    }
+
+    /// Drains the main dispatch queue deterministically: enqueues a continuation
+    /// AFTER any `.receive(on: DispatchQueue.main)` sink block already queued by
+    /// a preceding publisher `.send(...)`, so when it resumes those sinks have
+    /// run. Avoids `Task.sleep` flakiness for socket-driven cache invalidation.
+    private func drainMainQueue() async {
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            DispatchQueue.main.async { cont.resume() }
+        }
+    }
+
+    private static func makeConversationUpdatedEvent(conversationId: String) -> ConversationUpdatedEvent {
+        let json = """
+        {"conversationId":"\(conversationId)","title":"Renamed","updatedAt":"2026-06-02T00:00:00.000Z"}
+        """
+        let decoder = JSONDecoder()
+        return try! decoder.decode(ConversationUpdatedEvent.self, from: Data(json.utf8))
     }
 
     private func makeCurrentUser() -> MeeshyUser {
@@ -366,6 +388,65 @@ final class GlobalSearchViewModelTests: XCTestCase {
         XCTAssertEqual(
             secondCallCount - firstCallCount, firstCallCount,
             "Different query must replay the same number of calls — cache is keyed by query"
+        )
+    }
+
+    // MARK: - Message Query Cache invalidation (D2 — Round-5)
+
+    /// A `conversation:updated` (rename/avatar) can leave a cached search result
+    /// showing the stale title. The in-memory message-query cache must be cleared
+    /// so the next identical query re-fetches (full network replay, no savings).
+    func test_conversationUpdated_invalidatesMessageQueryCache() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT(messageSocket: messageSocket)
+        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
+        let convResponse: APIResponse<[APIConversation]> = JSONStub.decode("""
+        {"success":true,"data":[]}
+        """)
+        mockAPI.stub("/conversations/search", result: convResponse)
+        mockUserService.searchUsersResult = .success([])
+
+        await sut.performSearch(query: "swift")
+        let firstCallCount = mockAPI.requestEndpoints.filter { $0 == "/conversations/search" }.count
+        XCTAssertGreaterThanOrEqual(firstCallCount, 1)
+
+        messageSocket.conversationUpdated.send(Self.makeConversationUpdatedEvent(conversationId: "c1"))
+        await drainMainQueue()
+
+        await sut.performSearch(query: "swift")
+        let secondCallCount = mockAPI.requestEndpoints.filter { $0 == "/conversations/search" }.count
+
+        XCTAssertEqual(
+            secondCallCount - firstCallCount, firstCallCount,
+            "After conversation:updated the message-query cache must be cleared, so the same query replays the full network leg (no cache savings)"
+        )
+    }
+
+    /// A `conversation:deleted`/`closed` must invalidate the cache too — a cached
+    /// result for that conversation would otherwise linger as a dead row.
+    func test_conversationDeleted_invalidatesMessageQueryCache() async throws {
+        let socialSocket = MockSocialSocket()
+        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT(socialSocket: socialSocket)
+        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
+        let convResponse: APIResponse<[APIConversation]> = JSONStub.decode("""
+        {"success":true,"data":[]}
+        """)
+        mockAPI.stub("/conversations/search", result: convResponse)
+        mockUserService.searchUsersResult = .success([])
+
+        await sut.performSearch(query: "swift")
+        let firstCallCount = mockAPI.requestEndpoints.filter { $0 == "/conversations/search" }.count
+        XCTAssertGreaterThanOrEqual(firstCallCount, 1)
+
+        socialSocket.conversationDeleted.send("c1")
+        await drainMainQueue()
+
+        await sut.performSearch(query: "swift")
+        let secondCallCount = mockAPI.requestEndpoints.filter { $0 == "/conversations/search" }.count
+
+        XCTAssertEqual(
+            secondCallCount - firstCallCount, firstCallCount,
+            "After conversation:deleted the message-query cache must be cleared, so the same query replays the full network leg (no cache savings)"
         )
     }
 

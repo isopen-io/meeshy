@@ -1,13 +1,10 @@
 import SwiftUI
 import PhotosUI
-import PencilKit
 import MeeshySDK
 
 struct ComposerToolPanelHost: View {
     let tool: StoryToolMode
     @ObservedObject var viewModel: StoryComposerViewModel
-    @Binding var drawingCanvas: PKCanvasView
-    @Binding var drawingTool: DrawingTool
     @Binding var selectedFilter: StoryFilter?
     @Binding var fgMediaItem: PhotosPickerItem?
     @Binding var showAudioDocumentPicker: Bool
@@ -24,8 +21,19 @@ struct ComposerToolPanelHost: View {
     /// fermeture (flicker visible).
     var onDeleteText: ((String) -> Void)? = nil
     var onShowInTimeline: (() -> Void)? = nil
+    /// Hauteur redimensionnable du panneau (drag du grabber), pour TOUS les outils
+    /// (2026-06-02, plus seulement le dessin). Non-nil → remplace la hauteur fixe
+    /// `panelHeight` (`.frame(height: panelHeight - 50)`), donc le menu suit le grabber.
+    var panelHeightOverride: CGFloat? = nil
 
     @Environment(\.colorScheme) private var colorScheme
+
+    /// État local pour piloter le `PhotosPicker` programmatiquement quand on
+    /// entre dans l'outil media sur une slide vide. Pendant — comme le
+    /// `textPanel.onAppear` qui crée un texte vide + ouvre l'éditeur, l'outil
+    /// media ouvre directement le picker système quand l'utilisateur n'a
+    /// encore aucun media. Voir le `.onAppear` sur `mediaPanel`.
+    @State private var autoOpenMediaPicker: Bool = false
 
     // Texte adaptatif. Le bandeau étant désormais opaque (tint indigo950@92% dark
     // / white@92% light), on peut viser de vrais ratios de contraste WCAG-AA :
@@ -162,10 +170,16 @@ struct ComposerToolPanelHost: View {
     private var toolTitle: String { Self.title(for: tool) }
 
     private var panelHeight: CGFloat {
+        // Le grabber pilote la hauteur du panneau pour TOUS les outils (2026-06-02) :
+        // quand le band est redimensionnable, `panelHeightOverride` (= hauteur du band
+        // tirée par le grabber) prime sur la hauteur intrinsèque par défaut — sinon
+        // tirer la poignée ne rétrécissait PAS le menu hors dessin (le contenu gardait
+        // sa hauteur fixe). Le contenu scrolle s'il est plus grand que l'espace.
+        if let override = panelHeightOverride { return override }
         switch tool {
         case .media:    return 220
         case .audio:    return 220
-        case .drawing:  return 140
+        case .drawing:  return 280   // liste des traits
         case .text:     return 280
         case .texture:  return 160
         case .filters:  return 180
@@ -187,7 +201,15 @@ struct ComposerToolPanelHost: View {
         case .texture:
             texturePanel
         case .filters:
-            StoryFilterGridView(viewModel: viewModel, previewImage: nil)
+            // Feed the grid the current slide's background bitmap so each tile
+            // renders a real per-effect preview. Resolves the background MEDIA
+            // object (modern path) with a slideImages fallback — passing only
+            // `slideImages[slide.id]` left photo-backed slides' tiles blank
+            // because modern photos live in `mediaObjects`, not `slideImages`.
+            // The grid falls back to gradient placeholders only when this is nil
+            // (colour/gradient-only slides).
+            StoryFilterGridView(viewModel: viewModel,
+                                previewImage: viewModel.currentSlideBackgroundImage)
         case .timeline:
             EmptyView()
         }
@@ -226,6 +248,18 @@ struct ComposerToolPanelHost: View {
                     .padding(.horizontal, 12)
                 }
                 .frame(maxHeight: 150)
+            }
+        }
+        // Ouvrir l'outil Son sur une slide vierge déclenche directement le
+        // voice recorder — parité avec `textPanel.onAppear` qui ouvre
+        // l'éditeur de texte sans étape intermédiaire. Couvre les deux
+        // entrées : tap FAB son (band → audioPanel) et empty-state tile son.
+        // Si la slide a déjà au moins un audio, on respecte l'intent (l'user
+        // veut probablement gérer la liste existante).
+        .onAppear {
+            let isEmpty = (viewModel.currentEffects.audioPlayerObjects?.isEmpty ?? true)
+            if isEmpty && viewModel.canAddAudio && !showVoiceRecorderSheet {
+                showVoiceRecorderSheet = true
             }
         }
     }
@@ -291,6 +325,21 @@ struct ComposerToolPanelHost: View {
                     .padding(.horizontal, 12)
                 }
                 .frame(maxHeight: 150)
+            }
+        }
+        // Ouvrir l'outil Media sur une slide vierge déclenche directement le
+        // PhotosPicker — parité avec `textPanel.onAppear` et l'audioPanel
+        // qui ouvre le voice recorder. Couvre les deux entrées : tap FAB
+        // media (band → mediaPanel) et empty-state tile media.
+        .photosPicker(
+            isPresented: $autoOpenMediaPicker,
+            selection: $fgMediaItem,
+            matching: .any(of: [.images, .videos])
+        )
+        .onAppear {
+            let isEmpty = (viewModel.currentEffects.mediaObjects?.isEmpty ?? true)
+            if isEmpty && viewModel.canAddMedia && !autoOpenMediaPicker {
+                autoOpenMediaPicker = true
             }
         }
     }
@@ -394,27 +443,23 @@ struct ComposerToolPanelHost: View {
         .accessibilityLabel(tip)
     }
 
+    /// Le mode dessin n'utilise PAS ce panneau de bande : il a sa propre bande
+    /// redimensionnable dédiée (`DrawingBand`, pilotée par `StoryComposerView`),
+    /// affichée uniquement quand au moins un trait existe. Ici on reste `EmptyView`
+    /// pour satisfaire le `switch` exhaustif sur `StoryToolMode`.
+    /// Panneau DESSIN du band partagé : la liste éditable des traits (sélection /
+    /// suppression / recoloration par-trait). Le band `ComposerBottomBand` est
+    /// utilisé par TOUS les outils — le dessin l'affiche aussi (plus de 2ᵉ bande
+    /// dédiée `DrawingBand` qui doublonnait, bug user 2026-06-01). Les contrôleurs
+    /// de pinceau restent flottants sur le canvas (`StoryDrawingToolbar`).
     private var drawingPanel: some View {
-        DrawingToolbarPanel(
-            toolColor: $viewModel.drawingColor,
-            toolWidth: $viewModel.drawingWidth,
-            toolType: $drawingTool,
-            onUndo: {
-                drawingCanvas.undoManager?.undo()
-                viewModel.drawingData = drawingCanvas.drawing.dataRepresentation()
-                HapticFeedback.light()
-            },
-            onRedo: {
-                drawingCanvas.undoManager?.redo()
-                viewModel.drawingData = drawingCanvas.drawing.dataRepresentation()
-                HapticFeedback.light()
-            },
-            onClear: {
-                drawingCanvas.drawing = PKDrawing()
-                viewModel.drawingData = nil
-                HapticFeedback.medium()
-            }
-        )
+        // `Spacer` : quand la liste est vide, `DrawingStrokeList` rend un `EmptyView`
+        // dont SwiftUI ignore le `.frame(height:)` → le band collapserait à la barre
+        // de chips. Le `Spacer` (vue concrète) remplit la hauteur du panneau.
+        VStack(spacing: 0) {
+            DrawingStrokeList(viewModel: viewModel, maxListHeight: .infinity)
+            Spacer(minLength: 0)
+        }
     }
 
     @ViewBuilder

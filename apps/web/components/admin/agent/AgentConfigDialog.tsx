@@ -26,6 +26,7 @@ const AgentScheduleTimeline = dynamic(() => import('./AgentScheduleTimeline'), {
 import { UserDisplay } from './UserDisplay';
 import { UserPicker } from './UserPicker';
 import { ConversationPicker } from './ConversationPicker';
+import { mergeDefinedFields } from './config-form-merge';
 import { conversationsCrudService } from '@/services/conversations/crud.service';
 import type { Conversation } from '@meeshy/shared/types';
 import { toast } from 'sonner';
@@ -121,7 +122,10 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
         updatedAt: _updatedAt,
         ...upsertFields
       } = config;
-      setForm(upsertFields);
+      // Merge onto DEFAULTS so fields absent from older records (e.g.
+      // freshTopicProbability) keep a defined value and are never dropped from
+      // the PUT payload on save.
+      setForm(mergeDefinedFields(DEFAULTS, upsertFields));
     } else {
       setConversationId('');
       setForm({ ...DEFAULTS });

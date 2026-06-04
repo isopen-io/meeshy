@@ -16,6 +16,17 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     @Published public var isLoading = false
 
     public var onPlaybackFinished: (() -> Void)?
+
+    /// BUG A (round 4) — opaque permission predicate consulted BEFORE any
+    /// branch that *starts* or *resumes* playback (`play(urlString:)`,
+    /// `playLocal(url:)`, the resume branch of `togglePlayPause()`). The SDK
+    /// stays agnostic: it never imports app-side policy (e.g. `CallManager`).
+    /// The app wires this to its CallKit guard so resuming a paused voice note
+    /// during an active call — via the bubble tap, the lock-screen remote
+    /// command, or any direct engine path — cannot steal the VoIP audio
+    /// session. `nil` (default) means "always allowed". Returning `false`
+    /// blocks ONLY start/resume; stop/pause are never gated.
+    public var playbackPermissionGuard: (() -> Bool)?
     /// B3 fix — `@Published` so that observers (notably `AudioPlayerView` in
     /// the external-engine path) re-evaluate `handlePlayTap` gating logic
     /// the moment the coordinator swaps the loaded attachment. Without this,
@@ -24,10 +35,27 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     @Published public var attachmentId: String?
 
     private var player: AVAudioPlayer?
-    private var timer: Timer?
-    private var loadTask: Task<Void, Never>?
+    private var timer: Timer? {
+        didSet { cleanupHandle.timer = timer }
+    }
+    private var loadTask: Task<Void, Never>? {
+        didSet { cleanupHandle.loadTask = loadTask }
+    }
     public private(set) var currentUrl: String?
     private var listenStartTime: Date?
+
+    /// Holds thread-safe-to-cancel handles (`Timer.invalidate()` /
+    /// `Task.cancel()`) so `deinit` — which may run off the main thread — can
+    /// release them WITHOUT `MainActor.assumeIsolated` (a precondition crash
+    /// off-main, see lesson feedback_swift6_concurrency_pitfalls). Kept in
+    /// sync with the @MainActor stored props via their `didSet`. Marked
+    /// `nonisolated(unsafe)` because the contained operations are themselves
+    /// thread-safe and we only ever cancel/invalidate from deinit.
+    private final class CleanupHandle {
+        nonisolated(unsafe) var timer: Timer?
+        nonisolated(unsafe) var loadTask: Task<Void, Never>?
+    }
+    private let cleanupHandle = CleanupHandle()
 
     public override init() {
         super.init()
@@ -50,6 +78,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
 
     // MARK: - Play from remote URL (through cache)
     public func play(urlString: String) {
+        if let guardClosure = playbackPermissionGuard, !guardClosure() { return }
         PlaybackCoordinator.shared.willStartPlaying(audio: self)
         resetState()
         guard !urlString.isEmpty else { return }
@@ -86,6 +115,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
 
     // MARK: - Play from local file
     public func playLocal(url: URL) {
+        if let guardClosure = playbackPermissionGuard, !guardClosure() { return }
         PlaybackCoordinator.shared.willStartPlaying(audio: self)
         resetState()
         currentUrl = url.absoluteString
@@ -143,6 +173,11 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         isPlaying = false
         progress = 0
         currentTime = 0
+        // B2 fix — clear the listen analytics window so a fresh `play()` of a
+        // different track does not inherit the prior track's start time and
+        // post `reportListenProgress` against the wrong attachment. The new
+        // track's `listenStartTime` is set in `playData(_:)` on actual start.
+        listenStartTime = nil
         loadTask?.cancel()
         loadTask = nil
     }
@@ -160,6 +195,9 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             timer?.invalidate()
             reportListenProgress(complete: false)
         } else {
+            // BUG A (round 4) — gate ONLY the resume branch. Pausing is always
+            // allowed; resuming during a call must not steal the VoIP session.
+            if let guardClosure = playbackPermissionGuard, !guardClosure() { return }
             PlaybackCoordinator.shared.willStartPlaying(audio: self)
             player.rate = Float(speed.rawValue)
             player.play()
@@ -243,24 +281,50 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     }
 
     // MARK: - Timer
+    //
+    // Perf budget (2026-05-28): the previous 20 Hz tick (0.05 s) was the
+    // single biggest CPU drain during sustained audio playback because
+    // every wakeup re-published `currentTime` + `progress` through the
+    // coordinator cascade → invalidated every `@ObservedObject coordinator`
+    // observer (mini-player, etc.) at 20 Hz. Dropping to 10 Hz halves the
+    // wakeups and is visually indistinguishable on the waveform / progress
+    // chip (both round to 0.01-resolution display anyway). Additionally,
+    // we skip writes whose delta is below a perceptible threshold to
+    // collapse the Combine downstream into ~5 Hz of distinct values.
+    private static let progressTickInterval: TimeInterval = 0.1
+    /// `currentTime` is exposed in seconds with 100ms display granularity
+    /// (`formatMediaDuration` truncates below that). Any smaller delta is
+    /// invisible to the user and only generates wasted re-renders.
+    private static let currentTimeWriteThresholdSeconds: TimeInterval = 0.05
+    /// `progress` drives a 200-ish-pixel waveform; sub-half-pixel deltas
+    /// yield no visible change. 0.002 (=0.2%) is a comfortable cutoff.
+    private static let progressWriteThreshold: Double = 0.002
+
     private func startProgressTimer() {
         timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: Self.progressTickInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self = self, let player = self.player else { return }
-                if player.isPlaying {
-                    self.currentTime = player.currentTime
-                    self.progress = player.duration > 0 ? player.currentTime / player.duration : 0
+                guard player.isPlaying else { return }
+                let newTime = player.currentTime
+                let newProgress = player.duration > 0 ? newTime / player.duration : 0
+                if abs(newTime - self.currentTime) >= Self.currentTimeWriteThresholdSeconds {
+                    self.currentTime = newTime
+                }
+                if abs(newProgress - self.progress) >= Self.progressWriteThreshold {
+                    self.progress = newProgress
                 }
             }
         }
     }
 
+    // C fix — `Timer.invalidate()` and `Task.cancel()` are thread-safe, so we
+    // call them directly. `MainActor.assumeIsolated` from a non-main thread is
+    // a precondition crash (see lesson feedback_swift6_concurrency_pitfalls:
+    // @MainActor deinit pitfall) and the last release can happen off-main.
     deinit {
-        MainActor.assumeIsolated {
-            timer?.invalidate()
-            loadTask?.cancel()
-        }
+        cleanupHandle.timer?.invalidate()
+        cleanupHandle.loadTask?.cancel()
     }
 
     @MainActor public func unregisterFromCoordinator() {
@@ -547,26 +611,42 @@ public struct AudioPlayerView: View {
             if !usesExternalPlayer {
                 player.attachmentId = attachment.id
             }
-            let autoplayUrl = attachment.fileUrl
-            AudioPlaybackManager.registerAutoplay(url: autoplayUrl) { [player] in
-                // Optimistic local audio can never load through the cache
-                // (DiskCacheStore.data(for:) rejects file://) — autoplay it
-                // straight from disk. See Sprint 3 RC3.2.
-                if autoplayUrl.hasPrefix("file://"), let localURL = URL(string: autoplayUrl) {
-                    player.playLocal(url: localURL)
-                } else {
-                    player.play(urlString: autoplayUrl)
+            // BUG A fix — the legacy static autoplay registry is the
+            // auto-advance mechanism ONLY for the owned-engine path. When an
+            // external coordinator engine drives this view, the coordinator
+            // queue is the single source of auto-advance (`advanceQueue`).
+            // Registering here would make the registry stomp the coordinator's
+            // next head after a track finishes (double auto-advance → wrong
+            // track plays). Gate registration on `!usesExternalPlayer` so the
+            // two mechanisms never co-drive the same engine. Unregistration in
+            // `onDisappear` is gated symmetrically.
+            if !usesExternalPlayer {
+                let autoplayUrl = attachment.fileUrl
+                AudioPlaybackManager.registerAutoplay(url: autoplayUrl) { [player] in
+                    // Optimistic local audio can never load through the cache
+                    // (DiskCacheStore.data(for:) rejects file://) — autoplay it
+                    // straight from disk. See Sprint 3 RC3.2.
+                    if autoplayUrl.hasPrefix("file://"), let localURL = URL(string: autoplayUrl) {
+                        player.playLocal(url: localURL)
+                    } else {
+                        player.play(urlString: autoplayUrl)
+                    }
                 }
             }
             loadWaveformSamples()
         }
         .onDisappear {
-            AudioPlaybackManager.unregisterAutoplay(url: attachment.fileUrl)
-            // Symmetrical to onAppear: when an external engine is injected
-            // it is owned by the parent (e.g. ConversationAudioCoordinator)
-            // and survives view hierarchy churn. Unregistering it from
-            // PlaybackCoordinator on every scroll-off would break sibling
-            // bubbles + the coordinator itself.
+            // Symmetrical to onAppear (BUG A fix): only unregister the legacy
+            // autoplay closure if it was registered — i.e. only in the
+            // owned-engine path. Never registered when an external engine
+            // drives the view, so never unregister there.
+            if !usesExternalPlayer {
+                AudioPlaybackManager.unregisterAutoplay(url: attachment.fileUrl)
+            }
+            // When an external engine is injected it is owned by the parent
+            // (e.g. ConversationAudioCoordinator) and survives view hierarchy
+            // churn. Unregistering it from PlaybackCoordinator on every
+            // scroll-off would break sibling bubbles + the coordinator itself.
             if !usesExternalPlayer {
                 player.unregisterFromCoordinator()
             }
@@ -876,7 +956,14 @@ public struct AudioPlayerView: View {
             .animation(.easeInOut(duration: 0.15), value: isActive)
             .animation(.easeInOut(duration: 0.15), value: isPast)
         } else {
-            let activeIdx = segments.firstIndex { player.currentTime >= $0.startTime && player.currentTime < $0.endTime }
+            // BUG D fix — gate active-segment detection on `isPlaying`. On an
+            // idle carousel page `player.currentTime == 0` and segment 0 has
+            // `startTime == 0`, so the unguarded predicate false-highlighted
+            // segment 0 on every idle page. The single-segment branch above is
+            // already gated the same way.
+            let activeIdx = player.isPlaying
+                ? segments.firstIndex { player.currentTime >= $0.startTime && player.currentTime < $0.endTime }
+                : nil
             FlowLayout(spacing: 0) {
                 ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
                     let isActive = index == activeIdx
@@ -941,19 +1028,45 @@ public struct AudioPlayerView: View {
         return false
     }
 
+    /// Pure routing decision used by `handlePlayTap`. Extracted as a
+    /// `nonisolated static` helper so it can be unit-tested without a
+    /// SwiftUI render lifecycle. Returns `true` iff the play tap should be
+    /// delegated to `onPlayRequest` instead of touching the locally
+    /// resolved `player`.
+    nonisolated internal static func shouldDelegateToParent(
+        usesExternalPlayer: Bool,
+        playerAttachmentId: String?,
+        bubbleAttachmentId: String
+    ) -> Bool {
+        if !usesExternalPlayer { return true }
+        return playerAttachmentId != bubbleAttachmentId
+    }
+
     private func handlePlayTap() {
         // External-engine interception: when the parent injected an
-        // `onPlayRequest` handler AND the shared engine is not currently
-        // loaded with THIS attachment, defer to the parent so it can set up
-        // the queue / active-context BEFORE asking the engine to play.
-        // Without this gate, tapping play on a bubble while the coordinator
-        // is mid-playback of a different audio would call
-        // `engine.togglePlayPause()` and either pause that other audio
-        // (busy engine) or be a no-op (idle engine) — neither of which is
-        // what the user asked for. Once the engine IS loaded with this
-        // attachment, fall through to `togglePlayPause()` so subsequent
-        // play/pause taps are instantaneous and never rebuild the queue.
-        if let onPlayRequest, player.attachmentId != attachment.id {
+        // `onPlayRequest` handler, defer to it so the parent can set up the
+        // queue / active-context BEFORE asking the engine to play. Two
+        // cases short-circuit to the parent:
+        //  1. The bubble is INACTIVE (`!usesExternalPlayer`) — its
+        //     `ownedPlayer` is a dummy that must never produce sound. Even
+        //     though `onAppear` writes `player.attachmentId = attachment.id`
+        //     on the owned dummy (so other readers can introspect it), that
+        //     local match must NOT be used to gate the routing — otherwise
+        //     the first tap on every fresh bubble bypasses the coordinator
+        //     and plays via the dummy local engine, leaving `activeContext`
+        //     nil. That broke the mini-player + background continuation
+        //     (cf. 2026-05-28 bug report).
+        //  2. The bubble is ACTIVE but the shared engine is loaded with a
+        //     DIFFERENT attachment (`player.attachmentId != attachment.id`)
+        //     — the parent must rebuild the queue around this audio.
+        // Once the external engine IS loaded with this attachment, fall
+        // through to `togglePlayPause()` so subsequent play/pause taps are
+        // instantaneous and never rebuild the queue.
+        if let onPlayRequest, Self.shouldDelegateToParent(
+            usesExternalPlayer: usesExternalPlayer,
+            playerAttachmentId: player.attachmentId,
+            bubbleAttachmentId: attachment.id
+        ) {
             onPlayRequest()
             HapticFeedback.light()
             return

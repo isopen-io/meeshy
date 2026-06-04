@@ -2,20 +2,90 @@
  * Helpers utilitaires pour les conversations
  * Logique métier réutilisable entre Gateway et Frontend
  */
+import { normalizeLanguageCode } from './language-normalize.js';
+
+/**
+ * Options de résolution de langue. La locale appareil intervient en 4e priorité
+ * du Prisme Linguistique (2026-05-26) — elle ne supplante jamais les
+ * préférences in-app.
+ *
+ * @see docs/superpowers/specs/2026-05-26-device-locale-fourth-priority-design.md
+ */
+export type ResolveUserLanguageOpts = {
+  /**
+   * Locale appareil (`Locale.current.identifier` iOS, `Accept-Language` web).
+   * Normalisée en interne via {@link normalizeLanguageCode}.
+   */
+  deviceLocale?: string;
+};
 
 /**
  * Résout la langue préférée d'un utilisateur pour l'affichage de contenu.
- * Ordre : systemLanguage → regionalLanguage → customDestinationLanguage → 'fr'
+ *
+ * Ordre :
+ *   1. systemLanguage           (préférence in-app primaire)
+ *   2. regionalLanguage         (préférence in-app secondaire)
+ *   3. customDestinationLanguage (override personnalisé)
+ *   4. deviceLocale             (locale appareil — Prisme étendu 2026-05-26)
+ *   5. 'fr'                     (fallback ultime)
+ *
+ * L'option `deviceLocale` est facultative — les call sites legacy qui passent
+ * un seul argument restent valides.
+ *
+ * @see resolveUserLanguagesOrdered pour la liste complète (sans fallback 'fr')
  */
-export function resolveUserLanguage(user: {
-  systemLanguage?: string;
-  regionalLanguage?: string;
-  customDestinationLanguage?: string;
-}): string {
+export function resolveUserLanguage(
+  user: {
+    systemLanguage?: string | null;
+    regionalLanguage?: string | null;
+    customDestinationLanguage?: string | null;
+  },
+  opts: ResolveUserLanguageOpts = {}
+): string {
   if (user.systemLanguage) return user.systemLanguage;
   if (user.regionalLanguage) return user.regionalLanguage;
   if (user.customDestinationLanguage) return user.customDestinationLanguage;
+  const normalized = normalizeLanguageCode(opts.deviceLocale);
+  if (normalized) return normalized;
   return 'fr';
+}
+
+/**
+ * Liste ordonnée et dédupliquée des langues préférées d'un utilisateur.
+ * Utilisée pour itérer sur les traductions disponibles dans l'ordre de
+ * priorité du Prisme Linguistique :
+ *   systemLanguage → regionalLanguage → customDestinationLanguage → deviceLocale
+ *
+ * Les codes sont lowercased pour la déduplication. La locale appareil est
+ * normalisée via {@link normalizeLanguageCode} avant insertion.
+ *
+ * Cette fonction NE retourne PAS de fallback `'fr'` : si tout est vide, la
+ * liste est vide et le caller décide (afficher l'original, défaut métier, etc.).
+ */
+export function resolveUserLanguagesOrdered(
+  user: {
+    systemLanguage?: string | null;
+    regionalLanguage?: string | null;
+    customDestinationLanguage?: string | null;
+  },
+  opts: ResolveUserLanguageOpts = {}
+): string[] {
+  const candidates: Array<string | null | undefined> = [
+    user.systemLanguage,
+    user.regionalLanguage,
+    user.customDestinationLanguage,
+    normalizeLanguageCode(opts.deviceLocale),
+  ];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const c of candidates) {
+    if (!c) continue;
+    const lc = c.toLowerCase();
+    if (seen.has(lc)) continue;
+    seen.add(lc);
+    out.push(lc);
+  }
+  return out;
 }
 
 /**
@@ -79,8 +149,20 @@ export function generateConversationIdentifier(title?: string): string {
 }
 
 /**
- * Résout la langue préférée d'un participant unifié (user, anonymous, bot)
- * Applique le Prisme Linguistique : custom > regional > system > fallback language
+ * Résout la langue préférée d'un participant unifié (user, anonymous, bot).
+ *
+ * Applique l'ordre canonique du Prisme Linguistique étendu (2026-05-26) en
+ * déléguant à {@link resolveUserLanguage} :
+ *   1. systemLanguage
+ *   2. regionalLanguage
+ *   3. customDestinationLanguage
+ *   4. deviceLocale (si connu côté serveur)
+ *   5. participant.language (fallback métier — JAMAIS `'fr'` ici)
+ *
+ * Le fallback diffère de `resolveUserLanguage` parce qu'un participant non-user
+ * (anonymous, bot) ou un user sans préférence configurée doit retomber sur la
+ * langue déclarée par le call site (typiquement la langue de la conversation
+ * ou la langue déduite du message original), pas sur la default app `'fr'`.
  */
 type LanguageResolvable = {
   type: string
@@ -88,16 +170,21 @@ type LanguageResolvable = {
   user?: {
     customDestinationLanguage?: string | null
     regionalLanguage?: string | null
-    systemLanguage: string
+    systemLanguage?: string | null
+    deviceLocale?: string | null
   } | null
 }
 
 export function resolveParticipantLanguage(participant: LanguageResolvable): string {
-  if (participant.type === 'user' && participant.user) {
-    if (participant.user.customDestinationLanguage) return participant.user.customDestinationLanguage
-    if (participant.user.regionalLanguage) return participant.user.regionalLanguage
-    return participant.user.systemLanguage
+  if (participant.type !== 'user' || !participant.user) {
+    return participant.language
   }
+  const user = participant.user
+  if (user.systemLanguage) return user.systemLanguage
+  if (user.regionalLanguage) return user.regionalLanguage
+  if (user.customDestinationLanguage) return user.customDestinationLanguage
+  const normalizedDevice = normalizeLanguageCode(user.deviceLocale)
+  if (normalizedDevice) return normalizedDevice
   return participant.language
 }
 
@@ -170,23 +257,41 @@ export function generateDefaultConversationTitle(
 }
 
 /**
- * Calcule les langues requises pour une conversation
+ * Calcule les langues requises pour une conversation.
+ *
+ * Propage la locale appareil (`deviceLocale`) au calcul de résolution
+ * lorsqu'elle est connue côté serveur (cf. `User.deviceLocale`, Prisme
+ * étendu 2026-05-26). La locale appareil n'écrase jamais une préférence
+ * in-app sur le même membre.
+ *
+ * **Limite** : ce helper ne collecte qu'**une seule langue par membre** — la
+ * top-priority retournée par {@link resolveUserLanguage} (donc 1 seule des 4
+ * sources par membre). Un utilisateur avec `systemLanguage: 'fr'` et
+ * `deviceLocale: 'it'` ne contribuera que `'fr'` au résultat ; `'it'` n'apparaîtra
+ * pas dans la liste des destinations.
+ *
+ * Pour la liste complète des langues d'un membre (tous les niveaux du Prisme,
+ * dans l'ordre system → regional → custom → device), utiliser plutôt
+ * {@link resolveUserLanguagesOrdered}.
  */
 export function getRequiredLanguages(
   conversationMembers: Array<{
-    systemLanguage?: string;
-    regionalLanguage?: string;
-    customDestinationLanguage?: string;
+    systemLanguage?: string | null;
+    regionalLanguage?: string | null;
+    customDestinationLanguage?: string | null;
+    deviceLocale?: string | null;
   }>
 ): string[] {
   const languages = new Set<string>();
-  
+
   conversationMembers.forEach(user => {
-    const lang = resolveUserLanguage(user);
+    const lang = resolveUserLanguage(user, {
+      deviceLocale: user.deviceLocale ?? undefined,
+    });
     if (lang) {
       languages.add(lang);
     }
   });
-  
+
   return Array.from(languages);
 }

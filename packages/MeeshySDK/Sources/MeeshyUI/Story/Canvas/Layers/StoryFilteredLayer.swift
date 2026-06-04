@@ -1,6 +1,7 @@
 import QuartzCore
 import Metal
 import Foundation
+import MeeshySDK
 
 /// `CAMetalLayer` subclass that runs a custom Metal compute kernel on its
 /// `sourceTexture` and presents the result. Used for real-time filter previews
@@ -193,5 +194,35 @@ public final class StoryFilteredLayer: CAMetalLayer {
             return nil
         }
         return try? context.metalDevice.makeComputePipelineState(function: function)
+    }
+}
+
+// MARK: - StoryFilter → Kind bridge
+
+extension StoryFilteredLayer.Kind {
+    /// Bridges the persisted `StoryFilter` vocabulary (what `StoryEffects.filter`
+    /// actually stores — "vintage", "bw", … — written by the filter grid via
+    /// `applyFilter(filter.rawValue)`) to the Metal kernel `Kind`.
+    ///
+    /// The canvas previously did `Kind(rawValue: effects.filter)` *directly*, but a
+    /// `Kind`'s raw value is its Metal **function name** ("vintageFilter" /
+    /// "bwContrastFilter"), used to look up the kernel in the metal library — never
+    /// the value the grid persists. So the lookup was always `nil` and the filter
+    /// layer was always removed: no filter EVER rendered on the composer canvas or
+    /// the reader (fix 2026-06-01).
+    ///
+    /// Only `vintage` and `bw` ship a bundled kernel (see `StoryFilters.metal`);
+    /// every other `StoryFilter` returns `nil` (no Metal pass). Those six are
+    /// approximated in the grid (CoreImage via `StoryFilter.ciFilterName`) and the
+    /// mini-preview (SwiftUI) but have no GPU kernel yet — tracked in the story
+    /// filter backlog (canvas/viewer/thumbHash do not yet reflect them).
+    public init?(storyFilter raw: String?) {
+        guard let raw, let filter = StoryFilter(rawValue: raw) else { return nil }
+        switch filter {
+        case .vintage: self = .vintage
+        case .bw:      self = .bwContrast
+        case .warm, .cool, .dramatic, .vivid, .fade, .chrome:
+            return nil
+        }
     }
 }

@@ -8,6 +8,13 @@ final class FeedViewModelTests: XCTestCase {
 
     override func setUp() async throws {
         try await super.setUp()
+        // FeedViewModel persists the fetched feed to the process-global
+        // CacheCoordinator.shared.feed via a non-awaited Task.detached
+        // (fetchFeedFromNetwork). A prior test's late .utility save can repopulate
+        // "main-feed" AFTER this invalidate, so loadFeed() would serve a polluted
+        // .fresh cache and skip the API stub. Socket-handler tests therefore seed
+        // with loadFeed(forceRefresh: true) to bypass the cache read entirely; this
+        // invalidate still covers the common (unpolluted) case.
         await CacheCoordinator.shared.feed.invalidate(for: "main-feed")
     }
 
@@ -21,6 +28,7 @@ final class FeedViewModelTests: XCTestCase {
         api: MockAPIClientForApp? = nil,
         socialSocket: MockSocialSocket? = nil,
         postService: MockPostService? = nil,
+        offlineQueue: MockOfflineQueue? = nil,
         preferredLanguages: [String] = []
     ) -> (
         sut: FeedViewModel,
@@ -36,7 +44,8 @@ final class FeedViewModelTests: XCTestCase {
             api: api,
             socialSocket: socket,
             postService: postService,
-            languageProvider: languageProvider
+            languageProvider: languageProvider,
+            offlineQueue: offlineQueue ?? MockOfflineQueue()
         )
         return (sut, api, socket, postService)
     }
@@ -365,17 +374,19 @@ final class FeedViewModelTests: XCTestCase {
     }
 
     func test_likePost_failure_rollsBackIsLikedAndCount() async {
-        let (sut, api, _, _) = makeSUT()
+        // T10b — likePost now routes through the outbox, so "failure" means the
+        // enqueue is refused (not a direct API error). Rollback semantics unchanged.
+        let queue = MockOfflineQueue()
+        queue.enqueueResult = .failure(APIError.networkError(URLError(.timedOut)))
+        let (sut, api, _, _) = makeSUT(offlineQueue: queue)
         let post = Self.makeAPIPost(id: "rollback-test", likeCount: 5)
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [post]))
         await sut.loadFeed()
 
-        api.errorToThrow = APIError.networkError(URLError(.timedOut))
-
         await sut.likePost("rollback-test")
 
-        XCTAssertFalse(sut.posts[0].isLiked, "Should revert isLiked on failure")
-        XCTAssertEqual(sut.posts[0].likes, 5, "Should revert likes count on failure")
+        XCTAssertFalse(sut.posts[0].isLiked, "Should revert isLiked when the outbox refuses the row")
+        XCTAssertEqual(sut.posts[0].likes, 5, "Should revert likes count on enqueue failure")
     }
 
     func test_likePost_unlikeAlreadyLiked_decrementsCount() async {
@@ -420,40 +431,129 @@ final class FeedViewModelTests: XCTestCase {
 
     // MARK: - sendComment()
 
-    func test_sendComment_success_incrementsCommentCount() async {
-        let (sut, api, _, postService) = makeSUT()
+    func test_sendComment_success_enqueuesCreateComment_andOptimisticallyInserts() async {
+        // T10c — sendComment now routes through the outbox (durable offline)
+        // instead of calling postService directly.
+        let queue = MockOfflineQueue()
+        let (sut, api, _, _) = makeSUT(offlineQueue: queue)
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", commentCount: 3)]))
         await sut.loadFeed()
 
         await sut.sendComment(postId: "p1", content: "Nice post!")
 
         XCTAssertEqual(sut.posts[0].commentCount, 4)
-        XCTAssertEqual(postService.addCommentCallCount, 1)
-        XCTAssertEqual(postService.lastAddCommentPostId, "p1")
-        XCTAssertEqual(postService.lastAddCommentContent, "Nice post!")
-        XCTAssertNil(postService.lastAddCommentParentId)
+        XCTAssertEqual(sut.posts[0].comments.first?.content, "Nice post!", "optimistic comment inserted")
+        XCTAssertEqual(queue.enqueueCalls.count, 1)
+        XCTAssertEqual(queue.enqueueCalls.first?.kind, .createComment)
+        let payload = queue.enqueueCalls.first?.payload as? CreateCommentPayload
+        XCTAssertEqual(payload?.postId, "p1")
+        XCTAssertEqual(payload?.content, "Nice post!")
+        XCTAssertNil(payload?.parentCommentId)
     }
 
     func test_sendComment_withParentId_passesParentId() async {
-        let (sut, api, _, postService) = makeSUT()
+        let queue = MockOfflineQueue()
+        let (sut, api, _, _) = makeSUT(offlineQueue: queue)
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1")]))
         await sut.loadFeed()
 
         await sut.sendComment(postId: "p1", content: "reply", parentId: "c1")
 
-        XCTAssertEqual(postService.lastAddCommentParentId, "c1")
+        let payload = queue.enqueueCalls.first?.payload as? CreateCommentPayload
+        XCTAssertEqual(payload?.parentCommentId, "c1")
     }
 
-    func test_sendComment_failure_doesNotIncrementCommentCount() async {
-        let (sut, api, _, postService) = makeSUT()
+    func test_sendComment_failure_rollsBackOptimisticComment() async {
+        let queue = MockOfflineQueue()
+        queue.enqueueResult = .failure(APIError.networkError(URLError(.timedOut)))
+        let (sut, api, _, _) = makeSUT(offlineQueue: queue)
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", commentCount: 3)]))
         await sut.loadFeed()
 
-        postService.addCommentResult = .failure(APIError.networkError(URLError(.timedOut)))
-
         await sut.sendComment(postId: "p1", content: "failing comment")
 
-        XCTAssertEqual(sut.posts[0].commentCount, 3, "Comment count should not change on failure")
+        XCTAssertEqual(sut.posts[0].commentCount, 3, "comment count must roll back on enqueue failure")
+        XCTAssertTrue(sut.posts[0].comments.isEmpty, "optimistic comment must be removed on rollback")
+    }
+
+    // MARK: - Outbox terminal outcome (R7) — rollback on .exhausted
+
+    func test_likePost_rollsBack_whenOutcomeExhausted() async {
+        // R7 — a like that enqueues successfully but later EXHAUSTS its retry
+        // budget (server permanently rejected it) must roll back the optimistic
+        // toggle. Before this fix nobody observed the outcome, so the like was
+        // stuck "liked" forever even though the server never accepted it.
+        let queue = MockOfflineQueue()
+        let (sut, api, _, _) = makeSUT(offlineQueue: queue)
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", likeCount: 5)]))
+        await sut.loadFeed()
+
+        await sut.likePost("p1")
+        XCTAssertTrue(sut.posts[0].isLiked, "optimistic like applied")
+        XCTAssertEqual(sut.posts[0].likes, 6)
+
+        guard let payload = queue.enqueueCalls.first?.payload as? ToggleLikePostPayload else {
+            return XCTFail("no toggleLikePost enqueue")
+        }
+        try? await waitForContinuation(in: queue, for: payload.clientMutationId)
+        queue.emitOutcome(.exhausted(cmid: payload.clientMutationId), for: payload.clientMutationId)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertFalse(sut.posts[0].isLiked, "exhausted outbox row must roll back the optimistic like")
+        XCTAssertEqual(sut.posts[0].likes, 5, "like count must revert on exhausted")
+    }
+
+    func test_likePost_doesNotRollBack_whenOutcomeApplied() async {
+        let queue = MockOfflineQueue()
+        let (sut, api, _, _) = makeSUT(offlineQueue: queue)
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", likeCount: 5)]))
+        await sut.loadFeed()
+
+        await sut.likePost("p1")
+        guard let payload = queue.enqueueCalls.first?.payload as? ToggleLikePostPayload else {
+            return XCTFail("no toggleLikePost enqueue")
+        }
+        try? await waitForContinuation(in: queue, for: payload.clientMutationId)
+        queue.emitOutcome(.applied(cmid: payload.clientMutationId), for: payload.clientMutationId)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertTrue(sut.posts[0].isLiked, "applied outcome keeps the optimistic like")
+        XCTAssertEqual(sut.posts[0].likes, 6)
+    }
+
+    func test_sendComment_rollsBack_whenOutcomeExhausted() async {
+        let queue = MockOfflineQueue()
+        let (sut, api, _, _) = makeSUT(offlineQueue: queue)
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", commentCount: 3)]))
+        await sut.loadFeed()
+
+        await sut.sendComment(postId: "p1", content: "doomed comment")
+        XCTAssertEqual(sut.posts[0].commentCount, 4, "optimistic comment inserted")
+        XCTAssertEqual(sut.posts[0].comments.first?.content, "doomed comment")
+
+        guard let payload = queue.enqueueCalls.first?.payload as? CreateCommentPayload else {
+            return XCTFail("no createComment enqueue")
+        }
+        try? await waitForContinuation(in: queue, for: payload.clientMutationId)
+        queue.emitOutcome(.exhausted(cmid: payload.clientMutationId), for: payload.clientMutationId)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.posts[0].commentCount, 3, "comment count must revert on exhausted")
+        XCTAssertTrue(sut.posts[0].comments.isEmpty, "optimistic comment must be removed on exhausted")
+    }
+
+    /// Polls the mock's continuation dict until the fire-and-forget observer
+    /// Task has registered its `outcomeStream` continuation for `cmid`. Times
+    /// out after 500 ms (50 × 10 ms).
+    private func waitForContinuation(
+        in queue: MockOfflineQueue,
+        for cmid: String
+    ) async throws {
+        for _ in 0..<50 {
+            if queue.outcomeContinuations[cmid] != nil { return }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTFail("Observer continuation never registered for cmid=\(cmid)")
     }
 
     // MARK: - deletePost()
@@ -485,30 +585,129 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(sut.posts[0].id, "p1")
     }
 
-    // MARK: - createPost()
+    // MARK: - createPost() — U1 ST3: text-only routes through the durable outbox
 
-    func test_createPost_success_insertsAtIndexZeroAndSetsPublishSuccess() async {
-        let (sut, _, _, postService) = makeSUT()
-        postService.createResult = .success(Self.makeAPIPost(id: "created-1", content: "New creation"))
+    func test_createPost_textOnly_enqueuesCreatePostAndInsertsOptimisticPost() async {
+        let queue = MockOfflineQueue()
+        let (sut, _, _, postService) = makeSUT(offlineQueue: queue)
 
-        await sut.createPost(content: "New creation")
+        await sut.createPost(content: "New creation", originalLanguage: "en")
 
+        // Optimistic post inserted immediately (instant-app), keyed by the cmid.
         XCTAssertEqual(sut.posts.count, 1)
-        XCTAssertEqual(sut.posts[0].id, "created-1")
+        XCTAssertEqual(sut.posts[0].content, "New creation")
         XCTAssertTrue(sut.publishSuccess)
         XCTAssertNil(sut.publishError)
-        XCTAssertEqual(postService.createCallCount, 1)
+
+        // Routed through the durable outbox — NOT a direct postService.create
+        // (which silently lost the post when offline).
+        XCTAssertEqual(postService.createCallCount, 0, "text-only create must not hit postService directly")
+        XCTAssertEqual(queue.enqueueCalls.count, 1)
+        XCTAssertEqual(queue.enqueueCalls.first?.kind, .createPost)
+        let payload = queue.enqueueCalls.first?.payload as? CreatePostPayload
+        XCTAssertEqual(payload?.content, "New creation")
+        XCTAssertEqual(payload?.originalLanguage, "en", "originalLanguage must survive the outbox so the Prisme pipeline detects the source")
+        XCTAssertEqual(payload?.visibility, "PUBLIC")
+        XCTAssertTrue(payload?.attachmentIds.isEmpty ?? false)
+        // The optimistic post id == the payload cmid → ST2 reconciles it in place
+        // when post:created echoes that cmid.
+        XCTAssertEqual(sut.posts[0].id, payload?.clientMutationId, "optimistic post must be keyed by the cmid for ST2 reconcile")
     }
 
-    func test_createPost_failure_setsPublishError() async {
-        let (sut, _, _, postService) = makeSUT()
-        postService.createResult = .failure(APIError.networkError(URLError(.timedOut)))
+    func test_createPost_textOnly_enqueueRefused_rollsBackOptimisticPost() async {
+        let queue = MockOfflineQueue()
+        queue.enqueueResult = .failure(APIError.networkError(URLError(.timedOut)))
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
 
         await sut.createPost(content: "Failing post")
 
-        XCTAssertTrue(sut.posts.isEmpty)
+        XCTAssertTrue(sut.posts.isEmpty, "optimistic post must be removed when the outbox refuses the row")
         XCTAssertNotNil(sut.publishError)
         XCTAssertFalse(sut.publishSuccess)
+    }
+
+    func test_createPost_textOnly_outboxExhausted_rollsBackOptimisticPost() async {
+        let queue = MockOfflineQueue()
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
+
+        await sut.createPost(content: "Doomed post")
+        XCTAssertEqual(sut.posts.count, 1)
+        let cmid = sut.posts[0].id
+
+        // The OutboxFlusher exhausts its retry budget → the optimistic post must
+        // be rolled back (the server permanently rejected it). Wait for the
+        // observer to register before emitting, else the outcome is dropped.
+        try? await waitForContinuation(in: queue, for: cmid)
+        queue.emitOutcome(.exhausted(cmid: cmid), for: cmid)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertTrue(sut.posts.isEmpty, "exhausted outbox row must roll back the optimistic post")
+    }
+
+    func test_createPost_withMedia_usesDirectPostServicePath() async {
+        let queue = MockOfflineQueue()
+        let (sut, _, _, postService) = makeSUT(offlineQueue: queue)
+        postService.createResult = .success(Self.makeAPIPost(id: "media-1", content: "With media"))
+
+        await sut.createPost(content: "With media", mediaIds: ["att-1"])
+
+        // Online media posts take the direct path (TUS-uploaded ids → postService).
+        XCTAssertEqual(postService.createCallCount, 1)
+        XCTAssertTrue(queue.enqueueCalls.isEmpty, "online media create must not route through the outbox")
+        XCTAssertEqual(sut.posts.count, 1)
+        XCTAssertEqual(sut.posts[0].id, "media-1")
+    }
+
+    // MARK: - createOfflineMediaPost() — U1b ST2: durable offline media post
+
+    func test_createOfflineMediaPost_enqueuesPostMediaAndInsertsOptimisticPost() async {
+        let queue = MockOfflineQueue()
+        let (sut, _, _, postService) = makeSUT(offlineQueue: queue)
+        let urls = [URL(fileURLWithPath: "/tmp/a.jpg"), URL(fileURLWithPath: "/tmp/b.mp4")]
+
+        await sut.createOfflineMediaPost(localMediaURLs: urls, content: "Photo post", originalLanguage: "en")
+
+        // Optimistic post with a local-media preview, keyed by the cmid.
+        XCTAssertEqual(sut.posts.count, 1)
+        XCTAssertEqual(sut.posts[0].content, "Photo post")
+        XCTAssertEqual(sut.posts[0].media.count, 2, "optimistic local-media preview rendered before upload")
+        XCTAssertTrue(sut.publishSuccess)
+        XCTAssertNil(sut.publishError)
+
+        // Durable outbox path — NOT a direct postService.create (lost offline).
+        XCTAssertEqual(postService.createCallCount, 0, "offline media post must not hit postService directly")
+        XCTAssertEqual(queue.enqueuePostMediaCalls.count, 1)
+        let call = queue.enqueuePostMediaCalls.first
+        XCTAssertEqual(call?.sourceMediaURLs, urls)
+        XCTAssertEqual(call?.content, "Photo post")
+        XCTAssertEqual(call?.originalLanguage, "en")
+        XCTAssertEqual(call?.visibility, "PUBLIC")
+        XCTAssertEqual(sut.posts[0].id, call?.clientMutationId,
+            "optimistic post must be keyed by the cmid for ST2 reconcile")
+    }
+
+    func test_createOfflineMediaPost_enqueueRefused_rollsBackOptimisticPost() async {
+        let queue = MockOfflineQueue()
+        queue.enqueuePostMediaError = APIError.networkError(URLError(.timedOut))
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
+
+        await sut.createOfflineMediaPost(localMediaURLs: [URL(fileURLWithPath: "/tmp/a.jpg")], content: "Doomed")
+
+        XCTAssertTrue(sut.posts.isEmpty, "optimistic media post must be removed when the outbox refuses the row")
+        XCTAssertNotNil(sut.publishError)
+        XCTAssertFalse(sut.publishSuccess)
+    }
+
+    func test_createOfflineMediaPost_emptyURLs_fallsBackToTextOnly() async {
+        let queue = MockOfflineQueue()
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
+
+        await sut.createOfflineMediaPost(localMediaURLs: [], content: "Just text")
+
+        XCTAssertEqual(queue.enqueuePostMediaCalls.count, 0, "no media → no media enqueue")
+        XCTAssertEqual(queue.enqueueCalls.count, 1, "falls back to the durable text-only path")
+        XCTAssertEqual(queue.enqueueCalls.first?.kind, .createPost)
+        XCTAssertEqual(sut.posts.count, 1)
     }
 
     // MARK: - repostPost()
@@ -649,7 +848,7 @@ final class FeedViewModelTests: XCTestCase {
     func test_socketPostCreated_insertsAtIndexZeroAndIncrementsNewPostsCount() async {
         let (sut, api, socket, _) = makeSUT()
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "existing-1")]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         XCTAssertEqual(sut.posts.count, 1)
         XCTAssertEqual(sut.newPostsCount, 0)
@@ -671,7 +870,7 @@ final class FeedViewModelTests: XCTestCase {
     func test_socketPostCreated_deduplicatesExistingPost() async {
         let (sut, api, socket, _) = makeSUT()
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "dup-1")]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         sut.subscribeToSocketEvents()
 
@@ -685,12 +884,55 @@ final class FeedViewModelTests: XCTestCase {
         sut.unsubscribeFromSocketEvents()
     }
 
+    // MARK: - Socket.IO: post:created — U1 reconcile-by-cmid
+
+    func test_socketPostCreated_withMatchingCmid_reconcilesOptimisticPostInPlace() async {
+        let (sut, _, socket, _) = makeSUT()
+        // The offline author's optimistic post was inserted with the cmid as its
+        // id (U1 ST3). isLiked is local-only state that must survive the swap.
+        let cmid = "cmid_offline_1"
+        let optimistic = Self.makeFeedPost(id: cmid, content: "Offline draft", isLiked: true)
+        sut.posts = [optimistic]
+
+        sut.subscribeToSocketEvents()
+
+        let serverPost = Self.makeAPIPost(id: "server-1", content: "Offline draft")
+        socket.simulatePostCreated(serverPost, clientMutationId: cmid)
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(sut.posts.count, 1, "the echo must replace the optimistic post in place — no duplicate")
+        XCTAssertEqual(sut.posts[0].id, "server-1", "the cmid id is swapped to the authoritative server id")
+        XCTAssertTrue(sut.posts[0].isLiked, "local-only isLiked is preserved across the cmid→server-id swap")
+        XCTAssertEqual(sut.newPostsCount, 0, "reconciling the author's own post must not bump the new-posts counter")
+
+        sut.unsubscribeFromSocketEvents()
+    }
+
+    func test_socketPostCreated_withCmidButNoMatchingOptimistic_insertsNormally() async {
+        let (sut, _, socket, _) = makeSUT()
+        sut.subscribeToSocketEvents()
+
+        // A cmid arrives but no optimistic post with that id exists locally
+        // (e.g. the author created it on another device) → insert as fresh.
+        let serverPost = Self.makeAPIPost(id: "server-2", content: "From another device")
+        socket.simulatePostCreated(serverPost, clientMutationId: "cmid_unknown")
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(sut.posts.count, 1)
+        XCTAssertEqual(sut.posts[0].id, "server-2")
+        XCTAssertEqual(sut.newPostsCount, 1, "a non-reconciling create still counts as a new remote post")
+
+        sut.unsubscribeFromSocketEvents()
+    }
+
     // MARK: - Socket.IO: post:deleted
 
     func test_socketPostDeleted_removesPostFromList() async {
         let (sut, api, socket, _) = makeSUT()
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "delete-me")]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         sut.subscribeToSocketEvents()
 
@@ -709,7 +951,7 @@ final class FeedViewModelTests: XCTestCase {
         let (sut, api, socket, _) = makeSUT()
         let post = Self.makeAPIPost(id: "update-me", content: "Original", likeCount: 5)
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [post]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         // Simulate the user having liked this post locally
         sut.posts[0].isLiked = true
@@ -733,7 +975,7 @@ final class FeedViewModelTests: XCTestCase {
     func test_socketPostLiked_updatesLikeCount() async {
         let (sut, api, socket, _) = makeSUT()
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "liked-post", likeCount: 5)]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         sut.subscribeToSocketEvents()
 
@@ -752,7 +994,7 @@ final class FeedViewModelTests: XCTestCase {
     func test_socketPostUnliked_updatesLikeCount() async {
         let (sut, api, socket, _) = makeSUT()
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "unliked-post", likeCount: 10)]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         sut.subscribeToSocketEvents()
 
@@ -773,7 +1015,7 @@ final class FeedViewModelTests: XCTestCase {
     func test_socketCommentAdded_updatesCommentCount() async {
         let (sut, api, socket, _) = makeSUT()
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "commented-post", commentCount: 3)]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         sut.subscribeToSocketEvents()
 
@@ -792,7 +1034,7 @@ final class FeedViewModelTests: XCTestCase {
     func test_socketCommentDeleted_updatesCommentCount() async {
         let (sut, api, socket, _) = makeSUT()
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "comment-del-post", commentCount: 5)]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         sut.subscribeToSocketEvents()
 
@@ -855,7 +1097,7 @@ final class FeedViewModelTests: XCTestCase {
     func test_socketPostReposted_insertsRepostAndIncrementsNewPostsCount() async {
         let (sut, api, socket, _) = makeSUT()
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "existing")]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         sut.subscribeToSocketEvents()
 
@@ -1005,8 +1247,12 @@ final class FeedViewModelTests: XCTestCase {
     }
 
     func test_publishPost_error_setsPublishError() async {
-        let (sut, _, _, postService) = makeSUT()
-        postService.createResult = .failure(APIError.networkError(URLError(.timedOut)))
+        // U1 ST3 — a text-only publish now routes through the durable outbox, so
+        // "error" means the enqueue is refused (the direct postService.create is
+        // no longer on the text-only path). Rollback semantics unchanged.
+        let queue = MockOfflineQueue()
+        queue.enqueueResult = .failure(APIError.networkError(URLError(.timedOut)))
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
 
         await sut.createPost(content: "Failing publish")
 
@@ -1025,4 +1271,23 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertTrue(sut.publishSuccess)
         XCTAssertEqual(sut.posts.count, 1)
     }
+
+    // MARK: - likePost (T10b — routes through the durable outbox)
+
+    func test_likePost_enqueuesToggleLikePost_andOptimisticallyTogglesLike() async {
+        let queue = MockOfflineQueue()
+        let (sut, _, _, _) = makeSUT(offlineQueue: queue)
+        sut.posts = [Self.makeFeedPost(id: "lp1", likes: 5, isLiked: false)]
+
+        await sut.likePost("lp1")
+
+        XCTAssertEqual(queue.enqueueCalls.count, 1, "the like must be queued in the outbox, not lost on a direct REST call")
+        XCTAssertEqual(queue.enqueueCalls.first?.kind, .toggleLikePost)
+        let payload = queue.enqueueCalls.first?.payload as? ToggleLikePostPayload
+        XCTAssertEqual(payload?.postId, "lp1")
+        XCTAssertEqual(payload?.liked, true)
+        XCTAssertTrue(sut.posts[0].isLiked)
+        XCTAssertEqual(sut.posts[0].likes, 6)
+    }
+
 }

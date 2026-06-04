@@ -172,8 +172,13 @@ class AudioHandler:
 
             logger.info(f"[TRANSLATOR] Audio acquis via {audio_source}: {local_audio_path}")
 
-            # Flag pour savoir si on doit nettoyer le fichier temp après
-            should_cleanup_audio = audio_source in ('base64', 'url')
+            # Flag pour savoir si on doit nettoyer le fichier temp après.
+            # 'binary' (ZMQ multipart, le chemin PRIMAIRE) écrit aussi un fichier
+            # dans /tmp/meeshy_audio via _save_from_binary → doit être nettoyé,
+            # sinon chaque audio multipart fuit un fichier temp (disque qui se
+            # remplit). 'path' est exclu (fichier legacy pré-existant, pas à nous ;
+            # cleanup_temp_file garde de toute façon sur TEMP_AUDIO_DIR).
+            should_cleanup_audio = audio_source in ('base64', 'url', 'binary')
 
             # Préparer les métadonnées mobiles
             metadata = None

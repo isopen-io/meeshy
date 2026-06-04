@@ -199,6 +199,21 @@ Le SDK fournit les types API et la communication temps reel pour le prisme lingu
 
 **Resolution** : La logique de resolution de langue preferee est dans le ViewModel de l'app (pas dans le SDK). Le SDK fournit les donnees brutes, l'app decide de l'affichage.
 
+## Notifications In-App — Role du SDK
+
+Le SDK fournit **`NotificationToastManager`** (`Sources/MeeshySDK/Notifications/NotificationToastManager.swift`) pour afficher les toasts in-app declenches par des **evenements reseau** : push APN recus en foreground, evenement socket `notification:new`, etc.
+
+L'app (`apps/ios/`) fournit en complement `FeedbackToastManager` pour les feedbacks d'**actions utilisateur locales** (succes/erreur API apres tap). Les deux managers sont separes et ne doivent JAMAIS s'afficher en meme temps pour le meme evenement. Voir `apps/ios/CLAUDE.md` section "Notifications In-App" pour les 4 regles imperatives.
+
+Vue UI associee : `Sources/MeeshyUI/Notifications/NotificationToastView.swift` (avatar + nom expediteur + titre conv + tap = deep link).
+
+A ne pas confondre avec les composants qui gerent l'**entite** Notification (listing, prefs) :
+- `NotificationCoordinator` (unread count, badge, widget)
+- `PushNotificationManager` (APN/Firebase plumbing low-level)
+- `NotificationService` (REST CRUD)
+- `NotificationListView`, `NotificationRowView` (UI listing)
+- `UserNotificationPreferences+Filter`
+
 ## Visual Identity — Indigo Brand
 
 The Meeshy brand identity is built on an **Indigo gradient** derived from the logo SVGs.

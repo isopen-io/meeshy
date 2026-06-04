@@ -153,7 +153,26 @@ class ConversationViewModel: ObservableObject {
     @Published var messageTranscriptions: [String: MessageTranscription] = [:] {
         didSet { _allAudioItems = nil }
     }
+    /// Per-attachment transcription keyed by `attachmentId`. The per-message
+    /// `messageTranscriptions` slot only holds ONE transcription per message —
+    /// for a multi-audio message it is overwritten in the hydration loop so
+    /// only the LAST track survives. This dict keeps EACH track's own
+    /// transcription so the audio carousel can show per-page karaoke.
+    /// The single-audio path still reads `messageTranscriptions[msg.id]`.
+    @Published var messageTranscriptionsByAttachment: [String: MessageTranscription] = [:] {
+        didSet { _allAudioItems = nil }
+    }
     @Published var messageTranslatedAudios: [String: [MessageTranslatedAudio]] = [:] {
+        didSet { _allAudioItems = nil }
+    }
+    /// Per-attachment translated audios keyed by `attachmentId`. The per-message
+    /// `messageTranslatedAudios` slot only holds ONE attachment's audios per
+    /// message — for a multi-audio message it is overwritten in the hydration
+    /// loop so only the LAST track survives. This dict keeps EACH track's own
+    /// translated audios so the audio carousel can show per-page language
+    /// buttons (Prisme Linguistique). The single-audio path still falls back to
+    /// `messageTranslatedAudios[msg.id]`. Mirrors `messageTranscriptionsByAttachment`.
+    @Published var messageTranslatedAudiosByAttachment: [String: [MessageTranslatedAudio]] = [:] {
         didSet { _allAudioItems = nil }
     }
 
@@ -352,6 +371,14 @@ class ConversationViewModel: ObservableObject {
     func persistMessagesUsingServerIds() async {
         let convId = conversationId
         let mapping = pendingServerIds
+        // S11 — re-key any "Delete for me" hidden ids from the optimistic temp id
+        // to the reconciled server id. The row's display id flips temp→server at
+        // ack (toMessage = serverId ?? localId); without this the hidden-set
+        // still holds the temp id, the filter (keyed on message.id) stops
+        // matching, and the hidden message reappears (in-memory + at cold start).
+        for (tempId, serverId) in mapping {
+            LocallyHiddenMessagesStore.shared.migrate(from: tempId, to: serverId)
+        }
         let snapshot = messages
         let rewritten: [Message] = snapshot.map { msg -> Message in
             guard let serverId = mapping[msg.id] else { return msg }
@@ -514,8 +541,9 @@ class ConversationViewModel: ObservableObject {
                         id: att.id,
                         attachment: att,
                         message: msg,
-                        transcription: messageTranscriptions[msg.id],
-                        translatedAudios: messageTranslatedAudios[msg.id] ?? []
+                        transcription: messageTranscriptionsByAttachment[att.id] ?? messageTranscriptions[msg.id],
+                        translatedAudios: messageTranslatedAudiosByAttachment[att.id]
+                            ?? (messageTranslatedAudios[msg.id] ?? []).filter { $0.attachmentId == att.id }
                     )
                 }
         }
@@ -616,6 +644,8 @@ class ConversationViewModel: ObservableObject {
     private let syncEngine: ConversationSyncEngineProviding
     private let mentionService: MentionServiceProviding
     private let messageSocket: MessageSocketProviding
+    private let networkMonitor: NetworkMonitorProviding
+    private let offlineQueue: OfflineMessageQueueing
     private let decryptionActor = DecryptionActor(provider: LiveSessionProvider())
 
     private var currentUserId: String { authManager.currentUser?.id ?? "" }
@@ -739,7 +769,9 @@ class ConversationViewModel: ObservableObject {
         syncEngine: ConversationSyncEngineProviding = ConversationSyncEngine.shared,
         mentionService: MentionServiceProviding = MentionService.shared,
         messageSocket: MessageSocketProviding = MessageSocketManager.shared,
-        dependencies: ConversationDependencies = .live
+        dependencies: ConversationDependencies = .live,
+        networkMonitor: NetworkMonitorProviding = NetworkMonitor.shared,
+        offlineQueue: OfflineMessageQueueing = OfflineQueue.shared
     ) {
         self.conversationId = conversationId
         self.memberJoinedAt = memberJoinedAt
@@ -755,6 +787,8 @@ class ConversationViewModel: ObservableObject {
         self.syncEngine = syncEngine
         self.mentionService = mentionService
         self.messageSocket = messageSocket
+        self.networkMonitor = networkMonitor
+        self.offlineQueue = offlineQueue
         // Eagerly create GRDB persistence so messageStore is available at first paint.
         self.messagePersistence = dependencies.persistence
 
@@ -943,50 +977,66 @@ class ConversationViewModel: ObservableObject {
         OfflineQueue.shared.retryExhausted
             .receive(on: DispatchQueue.main)
             .sink { [weak self] payload in
-                guard let self, payload.conversationId == self.conversationId else { return }
-                switch payload.kind {
-                case .sendMessage:
-                    let localId = payload.tempId
-                    Task { [weak self] in
-                        _ = try? await self?.messagePersistence.applyEvent(
-                            localId: localId,
-                            event: .retryExhausted
-                        )
-                    }
-                case .sendReaction:
-                    guard let reaction = payload.reaction else { return }
-                    let participantId = self._resolvedParticipantId ?? self.currentUserId
-                    let localId = reaction.messageId
-                    let emoji = reaction.emoji
-                    switch reaction.action {
-                    case .add:
-                        // Optimistic add failed permanently — remove the
-                        // reaction we wrote.
-                        Task { [weak self] in
-                            try? await self?.messagePersistence.removeReaction(
-                                localId: localId, emoji: emoji, participantId: participantId
-                            )
-                        }
-                    case .remove:
-                        // Optimistic remove failed permanently — restore the
-                        // reaction we erased.
-                        let remoteId = self.serverId(for: localId)
-                        Task { [weak self] in
-                            try? await self?.messagePersistence.appendReaction(
-                                localId: localId, reactionId: UUID().uuidString,
-                                messageId: remoteId, participantId: participantId, emoji: emoji
-                            )
-                        }
-                    }
-                default:
-                    // Other outbox kinds (edit, delete, blockUser, etc.)
-                    // surface their own exhausted paths through dedicated
-                    // ViewModels ; this conversation-level subscription is
-                    // scoped to the optimistic message+reaction lifecycle.
-                    break
-                }
+                Task { [weak self] in await self?.handleRetryExhausted(payload) }
             }
             .store(in: &cancellables)
+    }
+
+    /// Reconcile an outbox row that the `OutboxFlusher` escalated to
+    /// `.exhausted` (5 attempts, or a permanent dispatcher rejection). We
+    /// dispatch on `kind` to apply the right rollback so the optimistic local
+    /// state does not diverge from the server forever. Scoped to THIS
+    /// conversation. Extracted from the Combine sink so it is directly
+    /// awaitable in tests.
+    func handleRetryExhausted(_ payload: OfflineRetryExhausted) async {
+        guard payload.conversationId == self.conversationId else { return }
+        switch payload.kind {
+        case .sendMessage:
+            _ = try? await messagePersistence.applyEvent(
+                localId: payload.tempId, event: .retryExhausted
+            )
+        case .sendReaction:
+            guard let reaction = payload.reaction else { return }
+            let participantId = _resolvedParticipantId ?? currentUserId
+            let localId = reaction.messageId
+            let emoji = reaction.emoji
+            switch reaction.action {
+            case .add:
+                // Optimistic add failed permanently — remove the reaction we wrote.
+                try? await messagePersistence.removeReaction(
+                    localId: localId, emoji: emoji, participantId: participantId
+                )
+            case .remove:
+                // Optimistic remove failed permanently — restore the reaction we erased.
+                let remoteId = serverId(for: localId)
+                try? await messagePersistence.appendReaction(
+                    localId: localId, reactionId: UUID().uuidString,
+                    messageId: remoteId, participantId: participantId, emoji: emoji
+                )
+            }
+        case .editMessage:
+            // S3 — an offline edit that exhausted its retries never reached the
+            // server; restore the pre-edit content (captured in EditHistoryStore
+            // when the edit was applied) and drop the phantom revision. Mirrors
+            // the online edit rollback in `editMessage`.
+            let localId = payload.tempId
+            let canonicalId = serverId(for: localId)
+            if let original = EditHistoryStore.shared.revisions(for: canonicalId).last?.content {
+                try? await messagePersistence.markEdited(
+                    localId: localId, newContent: original, editedAt: Date()
+                )
+                EditHistoryStore.shared.removeHistory(for: canonicalId)
+            }
+        case .deleteMessage:
+            // S3 — an offline delete that exhausted never reached the server;
+            // un-delete locally so the message stops showing as deleted on this
+            // device only. Mirrors the online delete rollback (`markUndeleted`).
+            try? await messagePersistence.markUndeleted(localId: payload.tempId)
+        default:
+            // Other outbox kinds (blockUser, friendRequest, etc.) reconcile
+            // through their own dedicated ViewModels.
+            break
+        }
     }
 
     /// Mirror the legacy `@Published var messages` into the new
@@ -1084,7 +1134,7 @@ class ConversationViewModel: ObservableObject {
         // « Échec · Réessayer · Supprimer » au lieu d'un spinner figé.
         await messagePersistence.reconcileFailedFromOutbox(conversationId: conversationId)
 
-        print("[DIAG] loadMessages start conv=\(conversationId) storeAtStart=\(messageStore.messages.count)")
+        Logger.messages.debug("[DIAG] loadMessages start conv=\(self.conversationId) storeAtStart=\(self.messageStore.messages.count)")
         let cached = await CacheCoordinator.shared.messages.load(for: conversationId)
         switch cached {
         case .fresh:
@@ -1164,7 +1214,7 @@ class ConversationViewModel: ObservableObject {
         // subscription setup blocking the first render.
         socketHandler?.armSocketSubscriptions()
 
-        print("[DIAG] loadMessages done conv=\(conversationId) messages=\(messages.count) storeMessages=\(messageStore.messages.count)")
+        Logger.messages.debug("[DIAG] loadMessages done conv=\(self.conversationId) messages=\(self.messages.count) storeMessages=\(self.messageStore.messages.count)")
         // Mark conversation as read + received (fire-and-forget)
         markAsRead()
         markAsReceived()
@@ -1640,19 +1690,24 @@ class ConversationViewModel: ObservableObject {
         // Debounce: a fast double-tap on the send button used to trigger two
         // concurrent `sendMessage` runs, both inserting their own optimistic
         // record with a fresh `tempId`, both POSTing the request — the user
-        // saw the same content twice in the bubble list. The `isSending`
-        // flag flips to `true` for the duration of the online send (cleared
-        // in both the success and failure paths), so the second tap exits
-        // early instead of duplicating. Retries from the offline / retry
-        // queues bypass this entry point — they call lower-level paths
-        // directly with the same `clientMessageId` already used by the
-        // original send.
+        // saw the same content twice in the bubble list. Lifted ABOVE the
+        // offline branch so a second tap while the first send is still
+        // `await`-ing on the outbox write exits early instead of inserting
+        // a parallel optimistic row + enqueuing twice.
         //
-        // Phase 4 §6.1 — the offline path runs BEFORE the debounce guard so
-        // a user typing quickly while disconnected (subway, airplane) can
-        // queue back-to-back messages without the second one being silently
-        // dropped. The offline branch is itself debounced inside `OfflineQueue`
-        // by the `clientMessageId` coalescing rules.
+        // Phase 4 §6.1 fix (Bug 1 — 2026-05-26): the legacy code ran the
+        // offline branch BEFORE the guard with a fire-and-forget
+        // `Task { try? await OfflineQueue.shared.enqueue(...) }`, so two
+        // rapid taps while offline could both reach the queue *or* the
+        // second one could be lost when the actor's pending-state machine
+        // observed a duplicate `clientMessageId` mid-enqueue. The guard
+        // now serializes both paths and the offline enqueue is awaited.
+        guard !isSending else { return false }
+        isSending = true
+        defer { isSending = false }
+
+        // Stop typing emission on send
+        socketHandler?.stopTypingEmission()
 
         // Offline: enqueue for later delivery + show optimistic message.
         // NOTE: we only gate on network availability here — NOT on socket
@@ -1660,8 +1715,12 @@ class ConversationViewModel: ObservableObject {
         // regardless of socket status. Routing through the offline queue when
         // the socket is still handshaking (common at startup) caused the clock
         // indicator to stay visible for seconds while waiting for retryAll().
-        if NetworkMonitor.shared.isOffline {
+        if !networkMonitor.isOnline {
             let offlineClientMessageId = existingTempId ?? ClientMessageId.generate()
+            // Spec §4.2 — record the AttachmentKind of each attachment so the
+            // SyncPill mapper picks .video / .file icons instead of always
+            // falling back to .image. Aligned with attachmentIds by index.
+            let offlineKinds = localAttachments?.map { $0.kind.rawValue }
             let queueItem = OfflineQueueItem(
                 conversationId: conversationId,
                 content: text,
@@ -1670,9 +1729,9 @@ class ConversationViewModel: ObservableObject {
                 replyToId: replyToId,
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,
-                attachmentIds: attachmentIds
+                attachmentIds: attachmentIds,
+                attachmentKinds: offlineKinds
             )
-            Task { try? await OfflineQueue.shared.enqueue(queueItem) }
 
             let offlineTempId = queueItem.tempId
             let offlineMessage = Message(
@@ -1723,9 +1782,19 @@ class ConversationViewModel: ObservableObject {
                 layoutVersion: 0, layoutMaxWidth: nil,
                 changeVersion: 0
             )
-            let persistence = messagePersistence
-            Task.detached(priority: .utility) {
-                try? await persistence.insertOptimistic(offlineRecord)
+
+            // `insertOptimistic` is a synchronous actor-isolated throw (no
+            // suspension point inside), so `try await` lands the GRDB write
+            // before the next runloop turn. The bubble is therefore in GRDB
+            // BEFORE we await the queue enqueue below — pixel repaint follows
+            // SwiftUI's next coalesced redraw, but the data is durable. If
+            // the queue throws, the catch path flips this row to `.failed`.
+            do {
+                try await messagePersistence.insertOptimistic(offlineRecord)
+            } catch {
+                Logger.messages.error("offline insertOptimistic failed: \(error.localizedDescription, privacy: .public)")
+                // Persistence is best-effort here — the outbox row below is
+                // the actual source of truth. Continue.
             }
 
             let convId = conversationId
@@ -1754,12 +1823,23 @@ class ConversationViewModel: ObservableObject {
                 )
             }
 
-            Logger.messages.info("Message enqueued for offline delivery")
-            return true
+            // AWAITED enqueue (Bug 1 fix). If the outbox write throws, flip
+            // the optimistic bubble to `.failed` so the user can retry — the
+            // old fire-and-forget `Task { try? ... }` silently dropped the
+            // message on disk-full / coding errors.
+            do {
+                try await offlineQueue.enqueue(queueItem)
+                Logger.messages.info("Message enqueued for offline delivery")
+                return true
+            } catch {
+                Logger.messages.error("offline enqueue failed: \(error.localizedDescription, privacy: .public)")
+                try? await messagePersistence.markOptimisticFailed(
+                    localId: offlineTempId,
+                    reason: error.localizedDescription
+                )
+                return false
+            }
         }
-
-        // Stop typing emission on send
-        socketHandler?.stopTypingEmission()
 
         // Resolve ephemeral: use explicit param or ViewModel state
         let resolvedExpiresAt = expiresAt ?? ephemeralDuration?.expiresAt
@@ -1771,14 +1851,6 @@ class ConversationViewModel: ObservableObject {
 
         // Resolve blur: use explicit param or ViewModel state
         let resolvedBlur = isBlurred ?? (isBlurEnabled ? true : nil)
-
-        // Phase 4 §6.1 — debounce only the ONLINE send path. The offline
-        // branch above already returned, so a fast double-tap while offline
-        // queues both messages (deduped server-side via `clientMessageId`).
-        // For online sends, two concurrent runs would each post an HTTP
-        // request — `isSending` blocks the second tap.
-        guard !isSending else { return false }
-        isSending = true
 
         // Build ReplyReference from quoted message or story via la helper
         // unifiee — meme logique que `insertOptimisticMediaMessage` pour
@@ -1853,9 +1925,9 @@ class ConversationViewModel: ObservableObject {
             )
             do {
                 try await persistence.insertOptimistic(optimisticRecord)
-                print("[SendFlow] insertOptimistic OK tempId=\(tempId) state=.sending convId=\(conversationId)")
+                Logger.messages.debug("SendFlow insertOptimistic OK tempId=\(tempId, privacy: .public) state=.sending convId=\(self.conversationId, privacy: .public)")
             } catch {
-                print("[SendFlow] insertOptimistic FAILED tempId=\(tempId) error=\(error.localizedDescription)")
+                Logger.messages.error("SendFlow insertOptimistic FAILED tempId=\(tempId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
             }
         }
 
@@ -1906,13 +1978,13 @@ class ConversationViewModel: ObservableObject {
             // investigation 2026-05-17). REST is direct (~25 ms server-side).
             // Re-enable the WebSocket-first path once the Socket.IO channel
             // is repaired and the `message:send` ACK round-trip is verified.
-            print("[SendFlow] POST /messages tempId=\(tempId) — awaiting response")
+            Logger.messages.debug("SendFlow POST /messages tempId=\(tempId, privacy: .public) — awaiting response")
             let responseData = try await messageService.send(
                 conversationId: conversationId, request: body
             )
             let serverId = responseData.id
             let serverCreatedAt = responseData.createdAt
-            print("[SendFlow] POST OK tempId=\(tempId) serverId=\(responseData.id) createdAt=\(responseData.createdAt)")
+            Logger.messages.debug("SendFlow POST OK tempId=\(tempId, privacy: .public) serverId=\(responseData.id, privacy: .public)")
 
             // Register tempId → serverId mapping so the socket handler can reconcile
             // the `message:new` broadcast without creating a duplicate row.
@@ -1928,7 +2000,7 @@ class ConversationViewModel: ObservableObject {
                 localId: tempId,
                 event: .serverAck(serverId: serverId, at: serverCreatedAt)
             )
-            print("[SendFlow] applyEvent serverAck tempId=\(tempId) → resultState=\(ackResult.map { String(describing: $0) } ?? "nil")")
+            Logger.messages.debug("SendFlow applyEvent serverAck tempId=\(tempId, privacy: .public) resultState=\(ackResult.map { String(describing: $0) } ?? "nil", privacy: .public)")
             let ackElapsedMs = Int(Date().timeIntervalSince(sendStartedAt) * 1000)
             Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(serverId, privacy: .public) transport=rest durationMs=\(ackElapsedMs, privacy: .public)")
 
@@ -1965,7 +2037,6 @@ class ConversationViewModel: ObservableObject {
                 pendingEffects = .none
             }
             mentionController.clearDraft()
-            isSending = false
             return true
         } catch {
             let failElapsedMs = Int(Date().timeIntervalSince(sendStartedAt) * 1000)
@@ -1999,7 +2070,6 @@ class ConversationViewModel: ObservableObject {
                         event: .serverAck(serverId: socketAck.messageId, at: socketAck.createdAt ?? Date())
                     )
                     Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(socketAck.messageId, privacy: .public) transport=socket-fallback durationMs=\(failElapsedMs, privacy: .public)")
-                    isSending = false
                     return true
                 }
             }
@@ -2019,17 +2089,35 @@ class ConversationViewModel: ObservableObject {
             // Wave 1 Task 3.6 — the deleted `MessageRetryQueue` used to own a
             // parallel retry loop ; both paths converged on the same outbox
             // table so behavior is preserved while LoC drops by ~600.
+            let retryKinds = localAttachments?.map { $0.kind.rawValue }
             let retryItem = OfflineQueueItem(
                 conversationId: conversationId,
                 content: text,
                 clientMessageId: tempId,
                 originalLanguage: originalLanguage ?? "fr",
                 replyToId: replyToId,
-                attachmentIds: attachmentIds
+                attachmentIds: attachmentIds,
+                attachmentKinds: retryKinds
             )
-            Task { try? await OfflineQueue.shared.enqueue(retryItem) }
 
-            isSending = false
+            // AWAITED enqueue (Bug 1 fix — online retry path, B2 2026-05-27).
+            // The legacy `Task { try? await OfflineQueue.shared.enqueue(...) }`
+            // fire-and-forgot the outbox write: the function returned before
+            // GRDB had committed the retry row, so a process kill or a fast
+            // second tap could silently drop the auto-retry. Mirror B1's
+            // offline-branch fix here — `await` the injected `offlineQueue`
+            // and flip the optimistic bubble to `.failed` on disk-full /
+            // coding errors so the user can manually retry.
+            do {
+                try await offlineQueue.enqueue(retryItem)
+            } catch {
+                Logger.messages.error("online retry enqueue failed: \(error.localizedDescription, privacy: .public)")
+                try? await messagePersistence.markOptimisticFailed(
+                    localId: tempId,
+                    reason: "online retry enqueue failed: \(error.localizedDescription)"
+                )
+            }
+
             return false
         }
     }
@@ -2130,6 +2218,15 @@ class ConversationViewModel: ObservableObject {
         )
     }
 
+    /// S7 — flip an optimistic media bubble to `.failed` so a stuck `.sending`
+    /// spinner resolves into a retryable failed state when its upload/send
+    /// fails (e.g. an offline visual attachment whose TUS upload threw). Without
+    /// this the bubble stays a permanent ghost spinner. Thin passthrough; the
+    /// store observation surfaces the new state.
+    func markOptimisticMediaFailed(tempId: String, reason: String) async {
+        try? await messagePersistence.markOptimisticFailed(localId: tempId, reason: reason)
+    }
+
     func insertOptimisticMediaMessage(
         tempId: String,
         content: String,
@@ -2185,12 +2282,14 @@ class ConversationViewModel: ObservableObject {
             changeVersion: 0
         )
         let persistence = messagePersistence
+        let recordConversationId = record.conversationId
+        let attachmentCount = attachments.count
         Task.detached(priority: .userInitiated) {
             do {
                 try await persistence.insertOptimistic(record)
-                print("[SendFlow] insertOptimisticMedia OK tempId=\(tempId) state=.sending convId=\(record.conversationId) attachments=\(attachments.count)")
+                Logger.messages.debug("SendFlow insertOptimisticMedia OK tempId=\(tempId, privacy: .public) convId=\(recordConversationId, privacy: .public) attachments=\(attachmentCount, privacy: .public)")
             } catch {
-                print("[SendFlow] insertOptimisticMedia FAILED tempId=\(tempId) error=\(error.localizedDescription)")
+                Logger.messages.error("SendFlow insertOptimisticMedia FAILED tempId=\(tempId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
             }
         }
     }
@@ -2395,6 +2494,19 @@ class ConversationViewModel: ObservableObject {
         case .everyone:
             // Optimistic: mark as deleted locally + blank content
             try? await messagePersistence.markDeleted(localId: messageId, deletedAt: Date())
+            // Offline: route the delete through the durable outbox (flushed on
+            // reconnect, T10) instead of losing it. `clientMessageId` is the
+            // message's local id so deleting a still-unsent offline message
+            // cancels its pending send (no wasted roundtrip). The delete sticks
+            // locally and reconciles when online — no rollback on the offline path.
+            if !networkMonitor.isOnline {
+                try? await offlineQueue.enqueueDelete(OfflineDeletePayload(
+                    messageId: serverId(for: messageId),
+                    clientMessageId: messageId,
+                    conversationId: conversationId
+                ))
+                return
+            }
             do {
                 try await messageService.delete(conversationId: conversationId, messageId: serverId(for: messageId))
             } catch {
@@ -2525,6 +2637,21 @@ class ConversationViewModel: ObservableObject {
         let editedAt = Date()
         try? await messagePersistence.markEdited(localId: messageId, newContent: trimmed, editedAt: editedAt)
 
+        // Offline: route the edit through the durable outbox (flushed on
+        // reconnect, T10) instead of losing it on the failed REST call.
+        // `clientMessageId` is the message's local id so an edit of a
+        // still-unsent offline message merges into its pending send. The
+        // optimistic content + recorded history stay applied (no rollback).
+        if !networkMonitor.isOnline {
+            try? await offlineQueue.enqueueEdit(OfflineEditPayload(
+                messageId: serverId(for: messageId),
+                clientMessageId: messageId,
+                content: trimmed,
+                conversationId: conversationId
+            ))
+            return
+        }
+
         editInProgress.insert(messageId)
         defer { editInProgress.remove(messageId) }
 
@@ -2597,6 +2724,12 @@ class ConversationViewModel: ObservableObject {
             )
             do {
                 try await OfflineQueue.shared.enqueue(.markAsRead, payload: payload, conversationId: convId)
+                // Mirror of ConversationCommandHandler.markAsRead: without
+                // an explicit flushNow() the markAsRead row sits .pending
+                // until an unrelated mutation (reaction, send, etc.) wakes
+                // the flusher up, leaving "Synchronisation des lus" stuck
+                // in the SyncPill indefinitely.
+                await OutboxFlushTrigger.flushNow()
             } catch {
                 await PendingStatusQueue.shared.enqueue(.init(
                     conversationId: convId, type: "read", timestamp: Date()
@@ -2616,20 +2749,55 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Reconnection Sync (called by ConversationSocketHandler)
 
     func syncMissedMessages() async {
-        guard !messages.isEmpty else { return }
+        // The high-water mark is the newest message we already hold. With no
+        // local messages there is nothing to backfill *from* — a full load
+        // happens on conversation open instead, so no-op rather than refetch
+        // from the top. `.max()` is order-independent (doesn't assume the
+        // store sort).
+        guard let newestLocal = messages.map(\.createdAt).max() else { return }
+
+        // Page size and total cap mirror the contiguous-backfill contract: a
+        // missed-message gap of any size is filled by paging forward, not just
+        // the most recent `limit` messages (the bug in the old offset:0 fetch,
+        // which could never recover a gap larger than one page).
+        let pageSize = 100
+        let maxTotal = 1000
+
+        // Back the watermark off by a sub-millisecond so a missed message that
+        // shares the newest local message's exact instant is not excluded by
+        // the gateway's strict `createdAt > after`; the boundary message simply
+        // re-surfaces and is deduped by id on merge.
+        var cursor = newestLocal.addingTimeInterval(-0.001)
+        var collected: [APIMessage] = []
 
         do {
-            let response = try await messageService.list(
-                conversationId: conversationId, offset: 0, limit: 30, includeReplies: true
-            )
+            while collected.count < maxTotal {
+                let response = try await messageService.listAfter(
+                    conversationId: conversationId, after: cursor, limit: pageSize,
+                    includeReplies: true, includeTranslations: true
+                )
+                let page = response.data  // ascending (oldest-after-watermark first), per gateway contract
+                guard !page.isEmpty else { break }
 
-            // Upsert missed messages to GRDB; store observation surfaces them automatically.
-            try? await messagePersistence.upsertFromAPIMessages(response.data)
-            extractAttachmentTranscriptions(from: response.data)
-            extractTextTranslations(from: response.data)
+                collected.append(contentsOf: page)
+
+                // Advance the watermark to the newest instant in this page.
+                guard let pageNewest = page.compactMap(\.createdAt).max() else { break }
+                cursor = pageNewest
+
+                if page.count < pageSize { break }  // last (partial) page → gap filled
+            }
+
+            guard !collected.isEmpty else { return }
+
+            // Upsert backfilled messages to GRDB; store observation surfaces them automatically.
+            try? await messagePersistence.upsertFromAPIMessages(collected)
+            extractAttachmentTranscriptions(from: collected)
+            extractTextTranslations(from: collected)
 
             let userId = currentUserId
-            let fetchedMessages = response.data.reversed().map { $0.toMessage(currentUserId: userId, currentUsername: self.currentUsername) }
+            // `listAfter` already returns ascending — no reversal needed (unlike the old DESC `list`).
+            let fetchedMessages = collected.map { $0.toMessage(currentUserId: userId, currentUsername: self.currentUsername) }
             let newMessages = fetchedMessages.filter { !self.containsMessage(id: $0.id) }
 
             if !newMessages.isEmpty {
@@ -2643,7 +2811,7 @@ class ConversationViewModel: ObservableObject {
                         return (cached + newOnly).sorted { $0.createdAt < $1.createdAt }
                     }
                 }
-                Logger.socket.info("Synced \(newMessages.count) missed message(s) for conversation \(self.conversationId)")
+                Logger.socket.info("Backfilled \(newMessages.count) missed message(s) via watermark for conversation \(self.conversationId)")
             }
         } catch {
             Logger.socket.error("Failed to sync missed messages: \(error)")
@@ -3080,7 +3248,7 @@ class ConversationViewModel: ObservableObject {
                             speakerId: $0.speakerId
                         )
                     }
-                    messageTranscriptions[msg.id] = MessageTranscription(
+                    let transcription = MessageTranscription(
                         attachmentId: att.id,
                         text: t.resolvedText,
                         language: t.language ?? "?",
@@ -3089,6 +3257,8 @@ class ConversationViewModel: ObservableObject {
                         segments: segments,
                         speakerCount: t.speakerCount
                     )
+                    messageTranscriptions[msg.id] = transcription
+                    messageTranscriptionsByAttachment[att.id] = transcription
                 }
                 if let translations = att.translations {
                     var audios: [MessageTranslatedAudio] = []
@@ -3119,6 +3289,7 @@ class ConversationViewModel: ObservableObject {
                     }
                     if !audios.isEmpty {
                         messageTranslatedAudios[msg.id] = audios
+                        messageTranslatedAudiosByAttachment[att.id] = audios
                     }
                 }
             }
@@ -3158,8 +3329,7 @@ class ConversationViewModel: ObservableObject {
 
             for att in attachments {
                 // Hydrate transcription
-                if let t = att.transcription,
-                   forceOverwrite || messageTranscriptions[msgId] == nil {
+                if let t = att.transcription {
                     let segments = (t.segments ?? []).map {
                         MessageTranscriptionSegment(
                             text: $0.text,
@@ -3168,7 +3338,7 @@ class ConversationViewModel: ObservableObject {
                             speakerId: $0.speakerId
                         )
                     }
-                    messageTranscriptions[msgId] = MessageTranscription(
+                    let transcription = MessageTranscription(
                         attachmentId: att.id,
                         text: t.text,
                         language: t.language,
@@ -3177,11 +3347,16 @@ class ConversationViewModel: ObservableObject {
                         segments: segments,
                         speakerCount: t.speakerCount
                     )
+                    if forceOverwrite || messageTranscriptions[msgId] == nil {
+                        messageTranscriptions[msgId] = transcription
+                    }
+                    if forceOverwrite || messageTranscriptionsByAttachment[att.id] == nil {
+                        messageTranscriptionsByAttachment[att.id] = transcription
+                    }
                 }
 
                 // Hydrate audio translations
-                if let translations = att.audioTranslations, !translations.isEmpty,
-                   forceOverwrite || messageTranslatedAudios[msgId] == nil {
+                if let translations = att.audioTranslations, !translations.isEmpty {
                     var audios: [MessageTranslatedAudio] = []
                     for (lang, trans) in translations {
                         let segments = (trans.segments ?? []).map {
@@ -3208,7 +3383,12 @@ class ConversationViewModel: ObservableObject {
                         ))
                     }
                     if !audios.isEmpty {
-                        messageTranslatedAudios[msgId] = audios
+                        if forceOverwrite || messageTranslatedAudios[msgId] == nil {
+                            messageTranslatedAudios[msgId] = audios
+                        }
+                        if forceOverwrite || messageTranslatedAudiosByAttachment[att.id] == nil {
+                            messageTranslatedAudiosByAttachment[att.id] = audios
+                        }
                     }
                 }
             }
@@ -3308,7 +3488,7 @@ extension ConversationViewModel: ConversationSocketDelegate {
                     speakerId: $0.speakerId
                 )
             }
-            messageTranscriptions[msgId] = MessageTranscription(
+            let transcription = MessageTranscription(
                 attachmentId: attachment.id,
                 text: t.transcribedText ?? t.text ?? "",
                 language: t.language ?? "?",
@@ -3317,6 +3497,8 @@ extension ConversationViewModel: ConversationSocketDelegate {
                 segments: segments,
                 speakerCount: t.speakerCount
             )
+            messageTranscriptions[msgId] = transcription
+            messageTranscriptionsByAttachment[attachment.id] = transcription
         }
         if let translations = attachment.translations, !translations.isEmpty {
             var audios: [MessageTranslatedAudio] = []
@@ -3347,6 +3529,7 @@ extension ConversationViewModel: ConversationSocketDelegate {
             }
             if !audios.isEmpty {
                 messageTranslatedAudios[msgId] = audios
+                messageTranslatedAudiosByAttachment[attachment.id] = audios
             }
         }
     }

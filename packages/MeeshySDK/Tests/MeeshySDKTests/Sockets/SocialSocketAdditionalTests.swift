@@ -50,15 +50,15 @@ final class SocialSocketAdditionalTests: XCTestCase {
         var receivedId: String?
 
         mock.postCreated
-            .sink { post in
-                receivedId = post.id
+            .sink { payload in
+                receivedId = payload.post.id
                 expectation.fulfill()
             }
             .store(in: &cancellables)
 
         let postJSON = minimalAPIPostJSON(id: "p1")
         let post = try! decoder.decode(APIPost.self, from: postJSON.data(using: .utf8)!)
-        mock.postCreated.send(post)
+        mock.postCreated.send(SocketPostCreatedData(post: post, clientMutationId: nil))
 
         wait(for: [expectation], timeout: 1.0)
         XCTAssertEqual(receivedId, "p1")

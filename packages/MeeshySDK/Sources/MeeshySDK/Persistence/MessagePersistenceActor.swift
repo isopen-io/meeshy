@@ -1,4 +1,5 @@
 import Foundation
+import os
 import GRDB
 
 /// Notification posted after MessagePersistenceActor commits a write that may
@@ -44,6 +45,15 @@ public actor MessagePersistenceActor {
     private let writeContinuation: AsyncStream<WriteOperation>.Continuation
     private var processorTask: Task<Void, Never>?
 
+    /// The authenticated user's id. The on-device DB has no userId column and
+    /// the aggregated reaction payload only flags WHICH emojis the current user
+    /// reacted with (`currentUserReactions`), not the reactor's id — so the
+    /// actor must know who "the current user" is to tag their reconstructed
+    /// reaction with the right owner. Set by the app at auth time (see
+    /// `DependencyContainer`); `nil` until then (cold-start reactions simply
+    /// carry no ownership until the next refresh, never the wrong owner).
+    private var currentUserId: String?
+
     enum WriteOperation: Sendable {
         case reconcileBatch([IncomingMessageData])
         /// Buffered ingestion of fully-decoded `APIMessage` payloads. Routes
@@ -82,12 +92,20 @@ public actor MessagePersistenceActor {
         }
     }
 
-    public init(dbWriter: any DatabaseWriter) {
+    public init(dbWriter: any DatabaseWriter, currentUserId: String? = nil) {
         self.dbWriter = dbWriter
+        self.currentUserId = currentUserId
         let (stream, continuation) = AsyncStream.makeStream(of: WriteOperation.self)
         self.writeStream = stream
         self.writeContinuation = continuation
         self.processorTask = nil
+    }
+
+    /// Update the authenticated user's id (login / account switch / logout=nil).
+    /// Used to tag the current user's own reactions during REST ingestion so the
+    /// "I reacted" highlight survives a cache reload.
+    public func setCurrentUserId(_ userId: String?) {
+        currentUserId = userId
     }
 
     // MARK: - Session quiesce (P1 Q3 — logout)
@@ -106,9 +124,58 @@ public actor MessagePersistenceActor {
         }
     }
 
+    /// Full purge of every on-device message table at logout. The persistence
+    /// DB has **no userId column** on any table (cf. `MessageDatabaseMigrations`)
+    /// and the file is shared across accounts, so the only safe-by-construction
+    /// boundary is to drop everything. Without this, the authoritative
+    /// `messages` table (received + optimistic bodies, read first by
+    /// `MessageStore.loadInitialSnapshot`) would render user A's content to
+    /// user B after a logout+login on the same device — the cache `msg`
+    /// namespace purged by `CacheCoordinator.reset()` is a SEPARATE store.
+    /// Atomic single transaction; child tables carry no FK constraints so order
+    /// is irrelevant. Supersedes `clearOutbox()` on the logout path. Wired from
+    /// `DependencyContainer.wireOutboxLogoutHook`.
+    public func clearAllMessagesForLogout() async throws {
+        try await dbWriter.write { db in
+            try db.execute(sql: "DELETE FROM message_translations")
+            try db.execute(sql: "DELETE FROM message_transcriptions")
+            try db.execute(sql: "DELETE FROM message_audio_translations")
+            try db.execute(sql: "DELETE FROM local_attachments")
+            try db.execute(sql: "DELETE FROM pending_ids")
+            try db.execute(sql: "DELETE FROM messages")
+            try db.execute(sql: "DELETE FROM outbox")
+        }
+    }
+
+    /// Retention window (days) for terminal `.exhausted` outbox rows. They are
+    /// kept briefly so the user can still see / manually retry a permanently
+    /// failed mutation, then GC'd — a row that hit `maxAttempts` is otherwise
+    /// only ever deleted at logout, so without this the outbox grows without
+    /// bound across sessions (T14).
+    public static let exhaustedRetentionDays = 7
+
+    /// Delete `.exhausted` outbox rows older than `days`, returning how many
+    /// were removed. Runs once at boot (see `start()`); cheap + idempotent.
+    /// Bounded retention rather than delete-on-exhaust so a recent permanent
+    /// failure stays visible/retriable for a week before it is reclaimed.
+    @discardableResult
+    public func purgeExhaustedOlderThan(days: Int = exhaustedRetentionDays) async throws -> Int {
+        let cutoff = Date().addingTimeInterval(-TimeInterval(days) * 86_400)
+        return try await dbWriter.write { db in
+            try OutboxRecord
+                .filter(Column("status") == OutboxStatus.exhausted.rawValue)
+                .filter(Column("createdAt") < cutoff)
+                .deleteAll(db)
+        }
+    }
+
     /// Call after init to start the background write processor.
     public func start() {
         guard processorTask == nil else { return }
+        // T14 — one-shot GC of stale terminal (`.exhausted`) outbox rows so the
+        // table can't grow without bound across sessions. Fire-and-forget: a
+        // failure here is non-fatal and retried next boot.
+        Task { [weak self] in try? await self?.purgeExhaustedOlderThan() }
         processorTask = Task { [weak self, writeStream] in
             for await op in writeStream {
                 guard let self else { break }
@@ -148,6 +215,27 @@ public actor MessagePersistenceActor {
         postMessageStoreRefresh(conversationIds: [r.conversationId])
     }
 
+    /// Flip an existing optimistic row to `.failed` after an offline-enqueue
+    /// or fire-and-forget write blew up. Mirrors the `.sendFailed` branch of
+    /// `applyEvent` but bypasses the state machine because the caller already
+    /// knows the row never reached the network and needs a deterministic
+    /// `.failed` regardless of `MessageState`'s monotone transitions.
+    public func markOptimisticFailed(localId: String, reason: String) throws {
+        var affectedConversationId: String?
+        try dbWriter.write { db in
+            guard var record = try MessageRecord.fetchOne(db, key: localId) else { return }
+            affectedConversationId = record.conversationId
+            record.state = .failed
+            record.lastError = reason
+            record.updatedAt = Date()
+            record.changeVersion += 1
+            try record.update(db)
+        }
+        if let convId = affectedConversationId {
+            postMessageStoreRefresh(conversationIds: [convId])
+        }
+    }
+
     public func applyEvent(localId: String, event: MessageEvent) throws -> MessageState? {
         // We need the record's conversationId outside the write block so we
         // can post a *targeted* refresh notification. MessageStore observers
@@ -162,7 +250,7 @@ public actor MessagePersistenceActor {
                 // (PK collision) or was reconciled away by the socket
                 // path before this applyEvent ran. Caller's `try?` would
                 // hide the nil return otherwise.
-                print("[StateMachine] applyEvent localId=\(localId) event=\(event) → record NOT FOUND in GRDB")
+                Logger.messages.error("[StateMachine] applyEvent localId=\(localId) event=\(String(describing: event)) → record NOT FOUND in GRDB")
                 return nil
             }
             affectedConversationId = record.conversationId
@@ -181,7 +269,7 @@ public actor MessagePersistenceActor {
                 // Transition rejected by the state machine — e.g. a stale
                 // .serverAck arriving on an already-sent record (no-op in
                 // theory but worth logging while we debug the ⏱→✓ flow).
-                print("[StateMachine] applyEvent localId=\(localId) event=\(event) → transition REJECTED from priorState=\(record.state)")
+                Logger.messages.warning("[StateMachine] applyEvent localId=\(localId) event=\(String(describing: event)) → transition REJECTED from priorState=\(String(describing: record.state))")
                 return nil
             }
 
@@ -215,7 +303,7 @@ public actor MessagePersistenceActor {
         // observers actually re-read. Skip when the row was missing or the
         // transition was rejected (no DB write happened).
         if let result, let convId = affectedConversationId, let prior = priorState {
-            print("[StateMachine] applyEvent localId=\(localId) event=\(event) → \(prior) → \(result) (conv=\(convId))")
+            Logger.messages.debug("[StateMachine] applyEvent localId=\(localId) event=\(String(describing: event)) → \(String(describing: prior)) → \(String(describing: result)) (conv=\(convId))")
             postMessageStoreRefresh(conversationIds: [convId])
         }
         return result
@@ -941,8 +1029,68 @@ public actor MessagePersistenceActor {
         guard !apiMessages.isEmpty else { return }
         let encoder = JSONEncoder()
         let convIds = Set(apiMessages.map(\.conversationId))
+        // Capture the actor-isolated current user id into a Sendable local so
+        // the GRDB write closure can tag the current user's own reactions
+        // without reaching back across the actor isolation boundary.
+        let currentUserId = self.currentUserId
         defer { postMessageStoreRefresh(conversationIds: convIds) }
         try await dbWriter.write { db in
+            // T13 — message ids whose reaction toggle is still pending in the
+            // outbox. Their local `reactionsJson` holds an optimistic add/remove
+            // not yet on the server, so a stale REST snapshot must NOT clobber
+            // it on upsert — otherwise the reaction visibly reverts until the
+            // next post-sync refresh. One query per batch (a handful of rows).
+            let pendingReactionMessageIds: Set<String> = {
+                guard let rows = try? OutboxRecord
+                    .filter(Column("kind") == OutboxKind.sendReaction.rawValue)
+                    .filter(Column("status") == OutboxStatus.pending.rawValue)
+                    .fetchAll(db) else { return [] }
+                let payloadDecoder = JSONDecoder()
+                payloadDecoder.dateDecodingStrategy = .iso8601
+                var ids = Set<String>()
+                for row in rows {
+                    if let payload = try? payloadDecoder.decode(ReactionOutboxPayload.self, from: row.payload) {
+                        ids.insert(payload.messageId)
+                    }
+                }
+                return ids
+            }()
+            // S2 — message ids whose edit/delete is still pending in the outbox.
+            // Their local content/editedAt/deletedAt hold an optimistic mutation
+            // not yet on the server, so a stale REST snapshot must NOT clobber
+            // them — otherwise the edit reverts to the old text / the delete
+            // un-deletes until the outbox drains (or forever if exhausted).
+            // Mirrors the reaction guard above (one query each per batch).
+            let pendingEditMessageIds: Set<String> = {
+                guard let rows = try? OutboxRecord
+                    .filter(Column("kind") == OutboxKind.editMessage.rawValue)
+                    .filter(Column("status") == OutboxStatus.pending.rawValue)
+                    .fetchAll(db) else { return [] }
+                let payloadDecoder = JSONDecoder()
+                payloadDecoder.dateDecodingStrategy = .iso8601
+                var ids = Set<String>()
+                for row in rows {
+                    if let payload = try? payloadDecoder.decode(OfflineEditPayload.self, from: row.payload) {
+                        ids.insert(payload.messageId)
+                    }
+                }
+                return ids
+            }()
+            let pendingDeleteMessageIds: Set<String> = {
+                guard let rows = try? OutboxRecord
+                    .filter(Column("kind") == OutboxKind.deleteMessage.rawValue)
+                    .filter(Column("status") == OutboxStatus.pending.rawValue)
+                    .fetchAll(db) else { return [] }
+                let payloadDecoder = JSONDecoder()
+                payloadDecoder.dateDecodingStrategy = .iso8601
+                var ids = Set<String>()
+                for row in rows {
+                    if let payload = try? payloadDecoder.decode(OfflineDeletePayload.self, from: row.payload) {
+                        ids.insert(payload.messageId)
+                    }
+                }
+                return ids
+            }()
             for api in apiMessages {
                 let senderName = api.sender?.name
                 let senderUsername = api.sender?.username
@@ -1022,17 +1170,17 @@ public actor MessagePersistenceActor {
                     return try? encoder.encode(ui)
                 }()
 
-                let reactionSummary = api.reactionSummary ?? [:]
-                let userReactions = Set(api.currentUserReactions ?? [])
-                let uiReactions: [MeeshyReaction] = reactionSummary.flatMap { emoji, count in
-                    (0..<count).map { index in
-                        MeeshyReaction(
-                            messageId: api.id,
-                            participantId: (userReactions.contains(emoji) && index == 0) ? api.senderId : nil,
-                            emoji: emoji
-                        )
-                    }
-                }
+                // The current user's own reaction is tagged with `currentUserId`
+                // (NOT `api.senderId`, the message author's participantId) so the
+                // downstream `participantId == currentUserId` ownership check
+                // survives a cache reload. Shared helper keeps this in lockstep
+                // with `APIMessage.toMessage(currentUserId:)`.
+                let uiReactions = MeeshyReaction.reconstructFromSummary(
+                    messageId: api.id,
+                    reactionSummary: api.reactionSummary,
+                    currentUserReactions: api.currentUserReactions,
+                    currentUserId: currentUserId
+                )
                 let reactionsJson: Data? = uiReactions.isEmpty ? nil : try? encoder.encode(uiReactions)
 
                 let replyToJson: Data? = {
@@ -1180,23 +1328,40 @@ public actor MessagePersistenceActor {
                     let keepLocalPlaintext = api.isEncrypted == true
                         && !existing.isEncrypted
                         && !(existing.content ?? "").isEmpty
+                    // S2 — an edit/delete still pending in the outbox holds an
+                    // optimistic mutation not yet on the server; a stale REST
+                    // snapshot must NOT revert the local content/edit flag or
+                    // un-delete the row.
+                    let pendingEdit = pendingEditMessageIds.contains(api.id)
+                    let pendingDelete = pendingDeleteMessageIds.contains(api.id)
                     // Update mutable fields; preserve layout cache.
-                    if !keepLocalPlaintext {
+                    if !keepLocalPlaintext && !pendingEdit && !pendingDelete {
                         existing.content = api.content
                     }
                     // Backfill the server id so future reconciliations can find
                     // the row via the serverId column or PendingIdRecord even
                     // if applyEvent(.serverAck) didn't run for some reason.
                     existing.serverId = api.id
-                    existing.isEdited = api.isEdited ?? false
-                    existing.editedAt = nil
-                    existing.deletedAt = api.deletedAt
+                    if !pendingEdit {
+                        existing.isEdited = api.isEdited ?? false
+                        existing.editedAt = nil
+                    }
+                    if !pendingDelete {
+                        existing.deletedAt = api.deletedAt
+                    }
                     // Preserve existing attachments when the payload carries
                     // none: a media echo that races server-side processing can
                     // arrive attachment-less, and a hard overwrite would blank
                     // the optimistic file:// preview into an empty bubble.
                     existing.attachmentsJson = attachmentsJson ?? existing.attachmentsJson
-                    existing.reactionsJson = reactionsJson
+                    // T13 — preserve a locally-mutated reactionsJson (+ count) while
+                    // its toggle is still pending in the outbox; otherwise this stale
+                    // REST snapshot reverts the optimistic reaction until the next
+                    // post-sync refresh. When nothing is pending, take the server state.
+                    if !pendingReactionMessageIds.contains(api.id) {
+                        existing.reactionsJson = reactionsJson
+                        existing.reactionCount = uiReactions.count
+                    }
                     if !keepLocalPlaintext {
                         // Keep the encryption flags coherent so the display
                         // pipeline knows to decrypt — a row first inserted via
@@ -1204,7 +1369,6 @@ public actor MessagePersistenceActor {
                         existing.isEncrypted = api.isEncrypted ?? existing.isEncrypted
                         existing.encryptionMode = api.encryptionMode ?? existing.encryptionMode
                     }
-                    existing.reactionCount = uiReactions.count
                     existing.deliveredCount = deliveredCount
                     existing.readCount = readCount
                     existing.deliveredToAllAt = api.deliveredToAllAt
@@ -1224,6 +1388,23 @@ public actor MessagePersistenceActor {
                     // refresh enrichi.
                     existing.replyToJson = replyToJson ?? existing.replyToJson
                     existing.forwardedFromJson = forwardedFromJson
+                    // Backfill forwarded-from IDs (bug user 2026-05-29) :
+                    // l'optimistic row inséré localement quand le user appuie
+                    // sur "Transférer" ne portait pas ces champs (cf.
+                    // `ForwardPickerSheet` qui POST /messages avec
+                    // `forwardedFromId` mais MessageStore append l'optimistic
+                    // avant la confirmation serveur). Sans ce backfill, le
+                    // check `BubbleContentBuilder.isForwarded =
+                    // message.forwardedFromId != nil` reste false sur le
+                    // forward de l'auteur lui-même → badge "Transferred"
+                    // jamais affiché. Coalescing : on garde la valeur
+                    // existante si l'API n'en renvoie pas (payload partiel).
+                    existing.forwardedFromId = api.forwardedFromId ?? existing.forwardedFromId
+                    existing.forwardedFromConversationId = api.forwardedFromConversationId ?? existing.forwardedFromConversationId
+                    // Symétrie pour replyToId — évite que les optimistic
+                    // replies perdent leur référence au msg cité au upsert.
+                    existing.replyToId = api.replyToId ?? existing.replyToId
+                    existing.storyReplyToId = api.storyReplyToId ?? existing.storyReplyToId
                     existing.mentionedUsersJson = mentionedUsersJson
                     existing.effectFlags = effectFlags
                     existing.updatedAt = api.updatedAt ?? Date()

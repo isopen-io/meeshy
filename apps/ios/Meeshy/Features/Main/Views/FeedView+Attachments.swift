@@ -63,7 +63,7 @@ extension FeedView {
                 HapticFeedback.success()
             case .failure(.preparationFailed(let message)):
                 HapticFeedback.error()
-                ToastManager.shared.showError(message)
+                FeedbackToastManager.shared.showError(message)
             }
             preparingAttachments.removeAll { $0.id == prep.id }
         }
@@ -145,6 +145,34 @@ extension FeedView {
             return
         }
 
+        // U1b — offline visual-media post → durable outbox (skip TUS). Audio
+        // posts keep the existing path (audio offline durability = future). The
+        // source URLs are captured before the UI reset (feedCleanupAttachments
+        // only clears the state arrays, not the temp files on disk) so
+        // enqueuePostMedia can relocate them; its Phase C deletes the sources.
+        // Text-only offline posts are already durable via createPost above.
+        if NetworkMonitor.shared.isOffline, audioURL == nil {
+            let sources = attachments.compactMap { mediaFiles[$0.id] }
+            let lang = composerLanguage
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                showComposer = false
+                isComposerFocused = false
+                composerText = ""
+            }
+            feedCleanupAttachments()
+            HapticFeedback.success()
+            FeedbackToastManager.shared.showSuccess("Post en attente d'envoi")
+            Task {
+                await viewModel.createOfflineMediaPost(
+                    localMediaURLs: sources,
+                    content: text,
+                    visibility: postVisibility,
+                    originalLanguage: lang
+                )
+            }
+            return
+        }
+
         isUploading = true
         HapticFeedback.light()
 
@@ -206,7 +234,7 @@ extension FeedView {
                     uploadProgress = nil
                     isUploading = false
                     HapticFeedback.success()
-                    ToastManager.shared.showSuccess("Post publie")
+                    FeedbackToastManager.shared.showSuccess("Post publie")
                 }
             } catch {
                 await MainActor.run {
@@ -216,7 +244,7 @@ extension FeedView {
                     for (_, url) in mediaFiles { try? FileManager.default.removeItem(at: url) }
                     if let audioURL { try? FileManager.default.removeItem(at: audioURL) }
                     HapticFeedback.error()
-                    ToastManager.shared.showError("Echec de la publication du post")
+                    FeedbackToastManager.shared.showError("Echec de la publication du post")
                 }
             }
         }
@@ -243,14 +271,14 @@ extension FeedView {
             await MainActor.run {
                 isUploading = false
                 HapticFeedback.success()
-                ToastManager.shared.showSuccess("Post audio publie")
+                FeedbackToastManager.shared.showSuccess("Post audio publie")
             }
         } catch {
             try? FileManager.default.removeItem(at: audioURL)
             await MainActor.run {
                 isUploading = false
                 HapticFeedback.error()
-                ToastManager.shared.showError("Echec de la publication du post audio")
+                FeedbackToastManager.shared.showError("Echec de la publication du post audio")
             }
         }
     }
@@ -989,7 +1017,7 @@ struct FeedComposerSheet: View {
                 HapticFeedback.success()
             case .failure(.preparationFailed(let message)):
                 HapticFeedback.error()
-                ToastManager.shared.showError(message)
+                FeedbackToastManager.shared.showError(message)
             }
             preparingAttachments.removeAll { $0.id == prep.id }
         }
@@ -1050,6 +1078,29 @@ struct FeedComposerSheet: View {
             return
         }
 
+        // U1b — offline: route the media post through the durable outbox instead
+        // of the TUS upload (which throws offline → the post would be lost). The
+        // post appears optimistically (local-media preview); the OutboxFlusher
+        // uploads + creates on reconnect, and the cmid echo reconciles it
+        // (U1 ST2). Mirrors the message offline-media gate. Text-only offline
+        // posts are already durable via createPost above (U1 ST3).
+        if NetworkMonitor.shared.isOffline {
+            let sources = attachments.compactMap { mediaFiles[$0.id] }
+            let lang = composerLanguage
+            onDismiss()
+            HapticFeedback.success()
+            FeedbackToastManager.shared.showSuccess("Post en attente d'envoi")
+            Task {
+                await viewModel.createOfflineMediaPost(
+                    localMediaURLs: sources,
+                    content: text,
+                    visibility: postVisibility,
+                    originalLanguage: lang
+                )
+            }
+            return
+        }
+
         isUploading = true
         HapticFeedback.light()
 
@@ -1089,7 +1140,7 @@ struct FeedComposerSheet: View {
                     uploadProgress = nil
                     onDismiss()
                     HapticFeedback.success()
-                    ToastManager.shared.showSuccess("Post publie")
+                    FeedbackToastManager.shared.showSuccess("Post publie")
                 }
             } catch {
                 await MainActor.run {
@@ -1097,7 +1148,7 @@ struct FeedComposerSheet: View {
                     uploadProgress = nil
                     for (_, url) in mediaFiles { try? FileManager.default.removeItem(at: url) }
                     HapticFeedback.error()
-                    ToastManager.shared.showError("Echec de la publication du post")
+                    FeedbackToastManager.shared.showError("Echec de la publication du post")
                 }
             }
         }
@@ -1120,13 +1171,13 @@ struct FeedComposerSheet: View {
                 isUploading = false
                 onDismiss()
                 HapticFeedback.success()
-                ToastManager.shared.showSuccess("Post audio publie")
+                FeedbackToastManager.shared.showSuccess("Post audio publie")
             }
         } catch {
             await MainActor.run {
                 isUploading = false
                 HapticFeedback.error()
-                ToastManager.shared.showError("Echec de la publication")
+                FeedbackToastManager.shared.showError("Echec de la publication")
             }
         }
     }

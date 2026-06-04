@@ -28,6 +28,61 @@ final class StoryComposerViewModelRepostTests: XCTestCase {
         XCTAssertTrue(badge.text.contains("@alice"))
     }
 
+    func test_init_reposting_repostOfRepost_doesNotStackAttributionBadges() {
+        // Source story is ITSELF a repost: ses effects portent déjà un badge
+        // d'attribution verrouillé ("Reposté de @alice", persisté en base car
+        // sanitizedForServerPublish ne strip pas les text objects locked).
+        // Reposter ce repost ne doit PAS empiler un 2e badge au même point
+        // (x:0.5, y:0.92) — un seul badge, attribuant à la source immédiate.
+        var effects = StoryEffects()
+        effects.textObjects = [
+            StoryTextObject(
+                id: "stale-badge",
+                text: "Reposté de @alice",
+                x: 0.5, y: 0.92,
+                scale: 1.0, rotation: 0,
+                fontSize: 14,
+                textStyle: "bold",
+                textColor: "FFFFFF",
+                textAlign: "center",
+                textBg: "6366F1",
+                isLocked: true
+            )
+        ]
+        let source = makeStoryItem(id: "repost-of-alice", storyEffects: effects)
+        let vm = StoryComposerViewModel(reposting: source, authorHandle: "bob")
+
+        let lockedBadges = vm.currentEffects.textObjects.filter { $0.isLocked == true }
+        XCTAssertEqual(lockedBadges.count, 1, "Reposting a repost must not stack attribution badges")
+        XCTAssertTrue(lockedBadges[0].text.contains("@bob"), "Le badge attribue à la source immédiate")
+        XCTAssertFalse(
+            vm.currentEffects.textObjects.contains { $0.text.contains("@alice") },
+            "Le badge @alice obsolète doit être strippé"
+        )
+    }
+
+    func test_init_reposting_preservesNonLockedTextObjects() {
+        // Les text objects ÉDITABLES de la source (légende de l'auteur) doivent
+        // survivre à l'import — seul le badge verrouillé est remplacé.
+        var effects = StoryEffects()
+        effects.textObjects = [
+            StoryTextObject(id: "caption", text: "Mon texte", x: 0.5, y: 0.3,
+                            scale: 1.0, rotation: 0, fontSize: 18, textStyle: "regular",
+                            textColor: "FFFFFF", textAlign: "center", textBg: nil, isLocked: nil),
+            StoryTextObject(id: "stale-badge", text: "Reposté de @alice", x: 0.5, y: 0.92,
+                            scale: 1.0, rotation: 0, fontSize: 14, textStyle: "bold",
+                            textColor: "FFFFFF", textAlign: "center", textBg: "6366F1", isLocked: true)
+        ]
+        let source = makeStoryItem(id: "repost-of-alice", storyEffects: effects)
+        let vm = StoryComposerViewModel(reposting: source, authorHandle: "bob")
+
+        XCTAssertTrue(
+            vm.currentEffects.textObjects.contains { $0.text == "Mon texte" && $0.isLocked != true },
+            "La légende éditable de la source doit être préservée"
+        )
+        XCTAssertEqual(vm.currentEffects.textObjects.filter { $0.isLocked == true }.count, 1)
+    }
+
     func test_init_reposting_propagatesIds_rootCase() {
         let story = makeStoryItem(id: "root-1", repostOfId: nil, originalRepostOfId: nil)
         let vm = StoryComposerViewModel(reposting: story, authorHandle: "alice")
@@ -64,13 +119,14 @@ final class StoryComposerViewModelRepostTests: XCTestCase {
         content: String? = "Hello",
         repostOfId: String? = nil,
         originalRepostOfId: String? = nil,
-        media: [FeedMedia] = []
+        media: [FeedMedia] = [],
+        storyEffects: StoryEffects? = nil
     ) -> StoryItem {
         StoryItem(
             id: id,
             content: content,
             media: media,
-            storyEffects: nil,
+            storyEffects: storyEffects,
             createdAt: Date(),
             expiresAt: nil,
             repostOfId: repostOfId,

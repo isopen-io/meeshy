@@ -26,31 +26,56 @@ struct MiniAudioPlayerBar: View {
 
     private let onTapBody: () -> Void
     private let routerForTesting: ((String) -> Void)?
+    /// When non-nil and the returned conversation id matches the
+    /// currently-playing audio's `conversationId`, the mini-player hides
+    /// itself. The bubble in the active conversation already exposes the
+    /// same controls, so overlapping the bar on top is redundant. Read as
+    /// a closure (not a value) so callers can wire the live `Router.path`
+    /// without forcing the parent to observe the coordinator at 20 Hz —
+    /// the closure is re-invoked on each body eval, which already runs
+    /// when `coordinator.activeContext` changes.
+    private let currentConversationId: () -> String?
 
     init(coordinatorForTesting: ConversationAudioCoordinator? = nil,
          onTapBody: @escaping () -> Void = {},
+         currentConversationId: @escaping () -> String? = { nil },
          routerForTesting: ((String) -> Void)? = nil) {
         self._coordinator = ObservedObject(
             wrappedValue: coordinatorForTesting ?? .shared
         )
         self.onTapBody = onTapBody
+        self.currentConversationId = currentConversationId
         self.routerForTesting = routerForTesting
     }
 
     var shouldDisplayForTesting: Bool {
-        coordinator.activeContext != nil
+        displayedContext != nil
     }
 
     var shouldDisplayDuringGraceForTesting: Bool {
-        coordinator.activeContext != nil || graceContext != nil
+        displayedContext != nil || graceContext != nil
     }
 
     var displayedContextForTesting: ActiveAudioContext? {
-        coordinator.activeContext ?? graceContext
+        displayedContext
+    }
+
+    /// `true` when the user is currently inside the same conversation
+    /// driving the playback. The mini-player MUST hide in this case — the
+    /// audio bubble in the conversation is the single source of UI truth.
+    private var isInsidePlayingConversation: Bool {
+        // Use the grace context as a fallback when the queue just finished
+        // (`activeContext` → nil during the ~5s grace window). Otherwise the bar
+        // fades in INSIDE the source conversation during the grace window,
+        // overlapping the in-conversation audio bubble it must defer to.
+        guard let active = coordinator.activeContext ?? graceContext,
+              let currentId = currentConversationId() else { return false }
+        return active.conversationId == currentId
     }
 
     private var displayedContext: ActiveAudioContext? {
-        coordinator.activeContext ?? graceContext
+        if isInsidePlayingConversation { return nil }
+        return coordinator.activeContext ?? graceContext
     }
 
     var body: some View {
@@ -60,8 +85,11 @@ struct MiniAudioPlayerBar: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        // Animate on the *displayed* context so the bar fades in/out when
+        // the user enters/leaves the playing conversation, not only when
+        // the coordinator itself swaps the active audio.
         .animation(.spring(response: 0.4, dampingFraction: 0.8),
-                   value: coordinator.activeContext)
+                   value: displayedContext)
         .onChange(of: coordinator.activeContext) { newValue in
             handleContextChange(newValue)
         }

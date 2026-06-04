@@ -30,6 +30,16 @@ jest.mock('@/lib/config', () => ({
   buildApiUrl: jest.fn((path: string) => `https://gate.meeshy.me${path}`),
 }));
 
+// `apiService` checks token freshness via `isJWTExpired` (from `@/utils/auth`),
+// NOT via the mocked `authManager.decodeJWT`. Tests historically mocked only
+// the latter, so every authenticated test now short-circuits with
+// `TOKEN_EXPIRED`. Mock both, defaulting to "fresh token" so the existing
+// describe blocks (and the new X-Device-Locale tests) can exercise real flows.
+let mockIsJWTExpired = jest.fn().mockReturnValue(false);
+jest.mock('@/utils/auth', () => ({
+  isJWTExpired: (...args: any[]) => mockIsJWTExpired(...args),
+}));
+
 // Mock fetch globally
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
@@ -42,7 +52,7 @@ class MockAbortController {
 }
 global.AbortController = MockAbortController as any;
 
-import { apiService, ApiServiceError } from '@/services/api.service';
+import { apiService, ApiService, ApiServiceError } from '@/services/api.service';
 
 describe('ApiService', () => {
   beforeEach(() => {
@@ -384,8 +394,7 @@ describe('ApiService', () => {
     });
 
     it('should refresh expired token before request', async () => {
-      mockDecodeJWT.mockReturnValue({ exp: Math.floor(Date.now() / 1000) - 100 }); // Already expired
-
+      mockIsJWTExpired.mockReturnValueOnce(true); // First call (pre-request) → expired
       mockRefreshToken.mockResolvedValueOnce({ success: true });
 
       mockFetch.mockResolvedValueOnce({
@@ -475,17 +484,100 @@ describe('ApiService', () => {
     });
   });
 
-  describe('Legacy methods', () => {
-    it('should warn when using deprecated setAuthToken', () => {
-      const consoleSpy = jest.spyOn(console, 'warn').mockImplementation();
+  describe('X-Device-Locale header (Plan B)', () => {
+    let originalLanguageDescriptor: PropertyDescriptor | undefined;
 
-      apiService.setAuthToken('new-token');
+    beforeEach(() => {
+      originalLanguageDescriptor = Object.getOwnPropertyDescriptor(navigator, 'language');
+    });
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('setAuthToken is deprecated')
+    afterEach(() => {
+      if (originalLanguageDescriptor) {
+        Object.defineProperty(navigator, 'language', originalLanguageDescriptor);
+      }
+    });
+
+    function stubLanguage(value: unknown) {
+      Object.defineProperty(navigator, 'language', { configurable: true, get: () => value });
+    }
+
+    it('forwards navigator.language as X-Device-Locale on standard requests', async () => {
+      stubLanguage('fr-FR');
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ data: 'ok' }),
+      });
+
+      const fresh = new ApiService();
+      await fresh.get('/users');
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://gate.meeshy.me/users',
+        expect.objectContaining({
+          headers: expect.objectContaining({ 'X-Device-Locale': 'fr-FR' }),
+        })
       );
+    });
 
-      consoleSpy.mockRestore();
+    it('omits X-Device-Locale when navigator.language is unavailable', async () => {
+      stubLanguage('');
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ data: 'ok' }),
+      });
+
+      const fresh = new ApiService();
+      await fresh.get('/users');
+
+      const sentHeaders = mockFetch.mock.calls[0][1].headers as Record<string, string>;
+      expect(sentHeaders['X-Device-Locale']).toBeUndefined();
+    });
+
+    it('forwards X-Device-Locale on getBlob calls', async () => {
+      stubLanguage('zh-Hant-HK');
+      const mockBlob = new Blob(['x'], { type: 'audio/m4a' });
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        blob: () => Promise.resolve(mockBlob),
+      });
+
+      const fresh = new ApiService();
+      await fresh.getBlob('/attachments/audio.m4a');
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://gate.meeshy.me/attachments/audio.m4a',
+        expect.objectContaining({
+          headers: expect.objectContaining({ 'X-Device-Locale': 'zh-Hant-HK' }),
+        })
+      );
+    });
+
+    it('forwards X-Device-Locale on uploadFile calls', async () => {
+      stubLanguage('pt-BR');
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 201,
+        json: () => Promise.resolve({ fileId: 'f-1' }),
+      });
+
+      const fresh = new ApiService();
+      const file = new File(['x'], 'a.pdf', { type: 'application/pdf' });
+      await fresh.uploadFile('/files/upload', file);
+
+      const sentHeaders = mockFetch.mock.calls[0][1].headers as Record<string, string>;
+      expect(sentHeaders['X-Device-Locale']).toBe('pt-BR');
+    });
+  });
+
+  describe('Legacy methods', () => {
+    it('setAuthToken is a no-op (legacy compat — authManager owns the token now)', () => {
+      // The method used to log a deprecation warning, but was simplified to
+      // a pure no-op once `authManager` became the single source of truth.
+      expect(() => apiService.setAuthToken('new-token')).not.toThrow();
+      expect(mockGetAuthToken).not.toHaveBeenCalledWith('new-token');
     });
 
     it('should return auth token from authManager', () => {

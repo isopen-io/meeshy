@@ -1,0 +1,95 @@
+import SwiftUI
+
+// MARK: - FeedbackToast Type
+
+public enum FeedbackToastType {
+    case success
+    case error
+    case info
+
+    public var color: Color {
+        switch self {
+        case .success: return MeeshyColors.green
+        case .error: return MeeshyColors.coral
+        case .info: return MeeshyColors.cyan
+        }
+    }
+
+    public var defaultIcon: String {
+        switch self {
+        case .success: return "checkmark.circle.fill"
+        case .error: return "xmark.circle.fill"
+        case .info: return "info.circle.fill"
+        }
+    }
+}
+
+// MARK: - FeedbackToast Data
+
+public struct FeedbackToast: Equatable {
+    public let id: UUID
+    public let message: String
+    public let type: FeedbackToastType
+    public let icon: String
+    public let isTappable: Bool
+
+    public init(message: String, type: FeedbackToastType, icon: String? = nil, isTappable: Bool = false) {
+        self.id = UUID()
+        self.message = message
+        self.type = type
+        self.icon = icon ?? type.defaultIcon
+        self.isTappable = isTappable
+    }
+
+    public static func == (lhs: FeedbackToast, rhs: FeedbackToast) -> Bool {
+        lhs.id == rhs.id
+    }
+}
+
+// MARK: - FeedbackToast View
+
+public struct FeedbackToastView: View {
+    let toast: FeedbackToast
+
+    public init(toast: FeedbackToast) {
+        self.toast = toast
+    }
+
+    public var body: some View {
+        HStack(spacing: MeeshySpacing.sm) {
+            Image(systemName: toast.icon)
+                .font(.system(size: MeeshyFont.headlineSize, weight: .semibold))
+                .foregroundColor(.white)
+
+            Text(toast.message)
+                .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                .foregroundColor(.white)
+                .lineLimit(2)
+
+            if toast.isTappable {
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.white.opacity(0.7))
+            }
+        }
+        .padding(.horizontal, MeeshySpacing.xl)
+        .padding(.vertical, MeeshySpacing.md)
+        .background(
+            Capsule()
+                .fill(toast.type.color.opacity(0.9))
+                .shadow(
+                    color: toast.type.color.opacity(0.3),
+                    radius: MeeshyShadow.medium.radius,
+                    y: MeeshyShadow.medium.y
+                )
+        )
+        // Collapse the icon + message (+ chevron) into one VoiceOver element so
+        // the toast reads as a single coherent string. The decorative status
+        // icon and chevron are dropped via `.ignore`; the spoken announcement
+        // itself is posted by `FeedbackToastManager` (see `AdaptiveAccessibility`).
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(toast.message)
+        .accessibilityAddTraits(toast.isTappable ? .isButton : [])
+    }
+}

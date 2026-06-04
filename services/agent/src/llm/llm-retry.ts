@@ -5,13 +5,19 @@ type RetryConfig = {
   maxRetries: number;
   baseDelayMs: number;
   timeoutMs: number;
+  webSearchTimeoutMs: number;
 };
 
 const DEFAULT_RETRY_CONFIG: RetryConfig = {
   maxRetries: env.LLM_MAX_RETRIES,
   baseDelayMs: env.LLM_BASE_DELAY_MS,
   timeoutMs: env.LLM_TIMEOUT_MS,
+  webSearchTimeoutMs: env.LLM_WEB_SEARCH_TIMEOUT_MS,
 };
+
+function usesWebSearch(params: LlmChatParams): boolean {
+  return (params.tools?.length ?? 0) > 0;
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -47,27 +53,39 @@ async function chatWithTimeout(
 }
 
 export function withRetry(provider: LlmProvider, config?: Partial<RetryConfig>): LlmProvider {
-  const { maxRetries, baseDelayMs, timeoutMs } = { ...DEFAULT_RETRY_CONFIG, ...config };
+  const { maxRetries, baseDelayMs, timeoutMs, webSearchTimeoutMs } = { ...DEFAULT_RETRY_CONFIG, ...config };
+
+  async function attemptWithRetries(params: LlmChatParams, callTimeoutMs: number): Promise<LlmChatResponse> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await chatWithTimeout(provider, params, callTimeoutMs);
+      } catch (error) {
+        lastError = error;
+        if (attempt < maxRetries && isRetryableError(error)) {
+          const delay = baseDelayMs * Math.pow(2, attempt) * (0.8 + Math.random() * 0.4);
+          console.warn(`[LLM] Retry ${attempt + 1}/${maxRetries} after ${Math.round(delay)}ms: ${error instanceof Error ? error.message : 'unknown'}`);
+          await sleep(delay);
+          continue;
+        }
+        break;
+      }
+    }
+    throw lastError;
+  }
 
   return {
     name: provider.name,
     async chat(params: LlmChatParams): Promise<LlmChatResponse> {
-      let lastError: unknown;
-      for (let attempt = 0; attempt <= maxRetries; attempt++) {
-        try {
-          return await chatWithTimeout(provider, params, timeoutMs);
-        } catch (error) {
-          lastError = error;
-          if (attempt < maxRetries && isRetryableError(error)) {
-            const delay = baseDelayMs * Math.pow(2, attempt) * (0.8 + Math.random() * 0.4);
-            console.warn(`[LLM] Retry ${attempt + 1}/${maxRetries} after ${Math.round(delay)}ms: ${error instanceof Error ? error.message : 'unknown'}`);
-            await sleep(delay);
-            continue;
-          }
-          break;
-        }
+      const webSearch = usesWebSearch(params);
+      try {
+        return await attemptWithRetries(params, webSearch ? webSearchTimeoutMs : timeoutMs);
+      } catch (error) {
+        if (!webSearch) throw error;
+        console.warn(`[LLM] Web search exhausted (${error instanceof Error ? error.message : 'unknown'}); degrading to a tool-free retry`);
+        const { tools: _tools, ...toolFree } = params;
+        return attemptWithRetries(toolFree, timeoutMs);
       }
-      throw lastError;
     },
   };
 }

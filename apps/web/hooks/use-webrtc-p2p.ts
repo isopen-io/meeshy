@@ -29,6 +29,7 @@ export interface UseWebRTCP2POptions {
 export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
   const {
     localStream,
+    iceServers,
     setLocalStream,
     addRemoteStream,
     addPeerConnection,
@@ -43,6 +44,19 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
   // Store WebRTC services per participant
   const webrtcServicesRef = useRef<Map<string, WebRTCService>>(new Map());
   const iceCandidateQueueRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
+  // Tracks participants whose remote description has been applied. A remote
+  // ICE candidate cannot be added before setRemoteDescription (it throws
+  // InvalidStateError), so candidates that arrive earlier MUST be buffered
+  // until the offer/answer has been set — not merely until the service exists.
+  const remoteDescriptionSetRef = useRef<Set<string>>(new Set());
+
+  const drainIceCandidateQueue = useCallback(async (peerId: string, service: WebRTCService) => {
+    const queuedCandidates = iceCandidateQueueRef.current.get(peerId) || [];
+    for (const candidate of queuedCandidates) {
+      await service.addIceCandidate(candidate);
+    }
+    iceCandidateQueueRef.current.delete(peerId);
+  }, []);
 
   /**
    * Get or create WebRTC service for a participant
@@ -144,12 +158,25 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
           },
         });
 
+        // Apply the server-provided ICE servers (STUN + time-limited TURN)
+        // BEFORE the RTCPeerConnection is created in createOffer/handleOffer.
+        // Without this the peer connection uses the STUN-only defaults and
+        // calls fail between peers behind symmetric NATs.
+        if (iceServers && iceServers.length > 0) {
+          service.setIceServers(iceServers);
+          logger.debug('[useWebRTCP2P]', 'Applied server ICE servers', {
+            participantId,
+            callId,
+            iceServersCount: iceServers.length,
+          });
+        }
+
         webrtcServicesRef.current.set(participantId, service);
       }
 
       return service;
     },
-    [callId, userId, addRemoteStream, setError, setConnecting, onError]  // CRITICAL: Added userId
+    [callId, userId, iceServers, addRemoteStream, setError, setConnecting, onError]  // CRITICAL: Added userId, iceServers
   );
 
   /**
@@ -312,8 +339,9 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
           service.addTrack(track, stream);
         });
 
-        // Create answer
+        // Create answer (this applies the remote description / offer)
         const answer = await service.createAnswer(offer);
+        remoteDescriptionSetRef.current.add(fromUserId);
 
         // Send answer via Socket.IO
         const socket = meeshySocketIOService.getSocket();
@@ -338,12 +366,8 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
           signal,
         } as CallSignalEvent, () => {});
 
-        // Process queued ICE candidates
-        const queuedCandidates = iceCandidateQueueRef.current.get(fromUserId) || [];
-        for (const candidate of queuedCandidates) {
-          await service.addIceCandidate(candidate);
-        }
-        iceCandidateQueueRef.current.delete(fromUserId);
+        // Drain any ICE candidates buffered before the remote description was set
+        await drainIceCandidateQueue(fromUserId, service);
 
         logger.info('[useWebRTCP2P]', 'Answer created and sent', { fromUserId, callId });
       } catch (error) {
@@ -356,7 +380,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         onError?.(error instanceof Error ? error : new Error(message));
       }
     },
-    [callId, ensureLocalStream, getWebRTCService, addPeerConnection, setConnecting, setError, onError, userId]
+    [callId, ensureLocalStream, getWebRTCService, addPeerConnection, setConnecting, setError, onError, userId, drainIceCandidateQueue]
   );
 
   /**
@@ -372,15 +396,12 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
           throw new Error('WebRTC service not found for participant');
         }
 
-        // Set remote description
+        // Set remote description (the answer)
         await service.setRemoteDescription(answer);
+        remoteDescriptionSetRef.current.add(fromUserId);
 
-        // Process queued ICE candidates
-        const queuedCandidates = iceCandidateQueueRef.current.get(fromUserId) || [];
-        for (const candidate of queuedCandidates) {
-          await service.addIceCandidate(candidate);
-        }
-        iceCandidateQueueRef.current.delete(fromUserId);
+        // Drain any ICE candidates buffered before the remote description was set
+        await drainIceCandidateQueue(fromUserId, service);
 
         logger.info('[useWebRTCP2P]', 'Answer handled successfully', { fromUserId, callId });
       } catch (error) {
@@ -392,7 +413,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         onError?.(error instanceof Error ? error : new Error(message));
       }
     },
-    [callId, setError, onError]
+    [callId, setError, onError, drainIceCandidateQueue]
   );
 
   /**
@@ -404,12 +425,16 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         logger.debug('[useWebRTCP2P]', 'Handling ICE candidate', { fromUserId, callId });
 
         const service = webrtcServicesRef.current.get(fromUserId);
-        if (!service) {
-          // Queue candidate if peer connection not ready yet
+        // Buffer the candidate until BOTH the service exists AND its remote
+        // description has been applied. Adding a candidate before
+        // setRemoteDescription throws InvalidStateError and the candidate is
+        // lost, which on the offerer side (service exists but the answer has
+        // not yet arrived) can prevent the connection from ever establishing.
+        if (!service || !remoteDescriptionSetRef.current.has(fromUserId)) {
           const queue = iceCandidateQueueRef.current.get(fromUserId) || [];
           queue.push(candidate);
           iceCandidateQueueRef.current.set(fromUserId, queue);
-          logger.debug('[useWebRTCP2P]', 'ICE candidate queued', { fromUserId });
+          logger.debug('[useWebRTCP2P]', 'ICE candidate queued (remote description not set yet)', { fromUserId });
           return;
         }
 
@@ -439,6 +464,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
 
     webrtcServicesRef.current.clear();
     iceCandidateQueueRef.current.clear();
+    remoteDescriptionSetRef.current.clear();
 
     logger.info('[useWebRTCP2P]', 'Cleanup completed', { callId });
   }, [callId, removePeerConnection]);
@@ -465,6 +491,7 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         });
         currentServices.clear();
         iceCandidateQueueRef.current.clear();
+        remoteDescriptionSetRef.current.clear();
       }
     }
   }, [userId, callId, removePeerConnection]);

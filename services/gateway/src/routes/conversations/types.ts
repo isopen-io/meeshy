@@ -57,6 +57,7 @@ export interface MessagesQuery {
   limit?: string;
   offset?: string;
   before?: string; // messageId pour pagination
+  after?: string; // ISO8601 watermark: messages créés strictement après cet instant (backfill incrémental local-first)
   around?: string; // messageId pour charger les messages autour d'un message spécifique
   include_reactions?: string;
   include_translations?: string;

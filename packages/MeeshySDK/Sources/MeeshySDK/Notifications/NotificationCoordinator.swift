@@ -60,6 +60,9 @@ public final class NotificationCoordinator: ObservableObject {
     public weak var widgetSink: NotificationWidgetSink?
     private let badgeWriter: NotificationBadgeWriting
     private let appGroupDefaults: UserDefaults?
+    /// Resolves the current user's id so the read-status reset only fires for
+    /// OUR own reads. Injectable for tests; defaults to the auth singleton.
+    private let currentUserIdProvider: @MainActor () -> String?
 
     private var cancellables = Set<AnyCancellable>()
     private var debounceTask: Task<Void, Never>?
@@ -68,10 +71,12 @@ public final class NotificationCoordinator: ObservableObject {
 
     public init(
         badgeWriter: NotificationBadgeWriting = SystemNotificationBadgeWriter(),
-        appGroupSuiteName: String = "group.me.meeshy.apps"
+        appGroupSuiteName: String = "group.me.meeshy.apps",
+        currentUserIdProvider: @escaping @MainActor () -> String? = { AuthManager.shared.currentUser?.id }
     ) {
         self.badgeWriter = badgeWriter
         self.appGroupDefaults = UserDefaults(suiteName: appGroupSuiteName)
+        self.currentUserIdProvider = currentUserIdProvider
     }
 
     // MARK: - Lifecycle
@@ -188,6 +193,22 @@ public final class NotificationCoordinator: ObservableObject {
         scheduleSync()
     }
 
+    /// U2 — reset a conversation's badge when THIS user reads it. The gateway
+    /// broadcasts `conversation:unread-updated` to every recipient regardless of
+    /// who has the conversation open (so the badge climbs while the user reads),
+    /// and the mark-read route emits only `read-status:updated`, never an
+    /// unread-updated=0. So the coordinator must zero the count on the read
+    /// event. CRITICAL gate (mirrors ConversationSyncEngine.handleReadStatusUpdated):
+    /// only on `type == "read"` by the current user — a `"received"` event means
+    /// "the message reached this device", NOT "the user opened the conversation",
+    /// and wiping on it would re-introduce the unread-badge flicker.
+    public func handleReadStatusUpdated(_ event: ReadStatusUpdateEvent) {
+        let me = currentUserIdProvider()
+        let eventUser = event.userId ?? event.participantId
+        guard event.type == "read", eventUser == me else { return }
+        markConversationRead(event.conversationId)
+    }
+
     /// Apply the `notification:counts` event from the gateway — mirrors the API bell count.
     public func applyInAppNotificationCounts(total: Int, unread: Int) {
         inAppNotificationUnread = max(unread, 0)
@@ -228,6 +249,13 @@ public final class NotificationCoordinator: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 self?.applyInAppNotificationCounts(total: event.total, unread: event.unread)
+            }
+            .store(in: &cancellables)
+
+        socket.readStatusUpdated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.handleReadStatusUpdated(event)
             }
             .store(in: &cancellables)
     }

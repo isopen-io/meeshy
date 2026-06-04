@@ -5,6 +5,7 @@ import Foundation
 public protocol MessageServiceProviding: Sendable {
     func list(conversationId: String, offset: Int, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse
     func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse
+    func listAfter(conversationId: String, after: Date, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse
     func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse
     func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData
     func edit(messageId: String, content: String) async throws -> APIMessage
@@ -19,6 +20,20 @@ public protocol MessageServiceProviding: Sendable {
 public final class MessageService: MessageServiceProviding, @unchecked Sendable {
     public static let shared = MessageService()
     private let api: APIClientProviding
+
+    /// ISO8601 with fractional seconds so a millisecond-precise watermark is
+    /// not truncated to the whole second on the wire — the gateway compares
+    /// with strict `createdAt > after`, so losing the milliseconds would
+    /// re-surface (or, worse, skip) boundary messages.
+    /// `nonisolated(unsafe)` is safe here: the formatter is configured once and
+    /// only ever read from (`string(from:)`), which Foundation guarantees is
+    /// thread-safe for ISO8601DateFormatter. Same pattern as other shared
+    /// read-only statics in the SDK.
+    nonisolated(unsafe) private static let watermarkFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
 
     init(api: APIClientProviding = APIClient.shared) {
         self.api = api
@@ -46,6 +61,26 @@ public final class MessageService: MessageServiceProviding, @unchecked Sendable 
             endpoint: "/conversations/\(conversationId)/messages",
             queryItems: [
                 URLQueryItem(name: "before", value: before),
+                URLQueryItem(name: "limit", value: "\(limit)"),
+                URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
+                URLQueryItem(name: "include_translations", value: "\(includeTranslations)"),
+            ]
+        )
+    }
+
+    /// Forward watermark backfill (local-first gap recovery, T9). Returns
+    /// messages created strictly *after* `after`, oldest-first (ascending) per
+    /// the gateway contract (`buildAfterWatermarkClause`, T8). Unlike
+    /// `list(offset:)`, which can only ever surface the newest `limit`
+    /// messages, paging this method forward by the high-water mark fills a
+    /// missed-message gap of any size contiguously. The instant is serialized
+    /// with fractional seconds so a millisecond-precise watermark survives the
+    /// round trip.
+    public func listAfter(conversationId: String, after: Date, limit: Int = 30, includeReplies: Bool = true, includeTranslations: Bool = true) async throws -> MessagesAPIResponse {
+        try await api.request(
+            endpoint: "/conversations/\(conversationId)/messages",
+            queryItems: [
+                URLQueryItem(name: "after", value: Self.watermarkFormatter.string(from: after)),
                 URLQueryItem(name: "limit", value: "\(limit)"),
                 URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
                 URLQueryItem(name: "include_translations", value: "\(includeTranslations)"),
@@ -140,6 +175,13 @@ public extension MessageServiceProviding {
     func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse {
         try await listBefore(
             conversationId: conversationId, before: before, limit: limit,
+            includeReplies: includeReplies, includeTranslations: true
+        )
+    }
+
+    func listAfter(conversationId: String, after: Date, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse {
+        try await listAfter(
+            conversationId: conversationId, after: after, limit: limit,
             includeReplies: includeReplies, includeTranslations: true
         )
     }

@@ -23,6 +23,18 @@ public nonisolated enum BandState: Equatable, Sendable {
         case .toolPanel(let t): return t.bandCategory
         }
     }
+
+    /// Whether the bottom band can be dragged via its grabber to resize and
+    /// collapse to a handle (canvas-full) — for ANY tool panel, not just drawing.
+    /// Historically only `.drawing` was resizable; the user wants the retract
+    /// handle on every editing tool (2026-06-02). The format sub-panel and the
+    /// hidden state keep their non-resizable behaviour.
+    public var allowsCollapsibleDrawer: Bool {
+        switch self {
+        case .toolPanel: return true
+        case .hidden, .formatPanel: return false
+        }
+    }
 }
 
 // MARK: - StoryToolMode.bandCategory

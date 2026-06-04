@@ -204,14 +204,18 @@ describe('useVideoCall', () => {
         await result.current.startCall();
       });
 
-      expect(mockEmit).toHaveBeenCalledWith(CLIENT_EVENTS.CALL_INITIATE, {
-        conversationId: mockDirectConversation.id,
-        type: 'video',
-        settings: {
-          screenShareEnabled: true,
-          translationEnabled: true,
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_INITIATE,
+        {
+          conversationId: mockDirectConversation.id,
+          type: 'video',
+          settings: {
+            screenShareEnabled: true,
+            translationEnabled: true,
+          },
         },
-      });
+        expect.any(Function)
+      );
     });
 
     it('should show success toast after initiating call', async () => {
@@ -453,11 +457,15 @@ describe('useVideoCall', () => {
       });
 
       // Call should still complete based on original conversation
-      expect(mockEmit).toHaveBeenCalledWith(CLIENT_EVENTS.CALL_INITIATE, {
-        conversationId: mockDirectConversation.id,
-        type: 'video',
-        settings: expect.any(Object),
-      });
+      expect(mockEmit).toHaveBeenCalledWith(
+        CLIENT_EVENTS.CALL_INITIATE,
+        {
+          conversationId: mockDirectConversation.id,
+          type: 'video',
+          settings: expect.any(Object),
+        },
+        expect.any(Function)
+      );
     });
   });
 });

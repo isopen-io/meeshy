@@ -166,6 +166,26 @@ describe('LanguageCache', () => {
       expect(cache.get('conv-2')).toEqual(['fr']);
       expect(cache.get('conv-3')).toEqual(['es']);
     });
+
+    it('purges an expired entry before evicting a still-valid (recently refreshed) one', () => {
+      cache = new LanguageCache(1000, 3); // TTL 1s, maxSize 3
+
+      cache.set('a', ['fr']);          // t=0, position 0
+      cache.set('b', ['en']);          // t=0, position 1
+      jest.advanceTimersByTime(1200);  // t=1200 : 'a' et 'b' expirées
+      // re-set 'a' alors que le cache n'est PAS plein (2<3) → Map.set garde la
+      // position 0 d'origine mais rafraîchit le timestamp (conversation active).
+      cache.set('a', ['fr2']);         // t=1200, fraîche, toujours position 0
+      cache.set('d', ['de']);          // t=1200, position 2 → cache plein (3)
+      jest.advanceTimersByTime(500);   // t=1700 : 'a' valide (500ms), 'b' expirée (1700ms), 'd' valide
+
+      cache.set('e', ['it']);          // plein → doit purger 'b' (expirée), PAS évincer 'a' (fraîche, position 0)
+
+      expect(cache.get('a')).toEqual(['fr2']); // conversation active : survit
+      expect(cache.get('b')).toBeNull();        // entrée expirée : évincée
+      expect(cache.get('d')).toEqual(['de']);
+      expect(cache.get('e')).toEqual(['it']);
+    });
   });
 
   describe('delete', () => {

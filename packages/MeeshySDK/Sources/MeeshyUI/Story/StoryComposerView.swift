@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
+import os
 import PhotosUI
-import PencilKit
 import UniformTypeIdentifiers
 import AVFoundation
 import MeeshySDK
@@ -80,10 +80,8 @@ public struct StoryComposerView: View {
 
     @Environment(\.colorScheme) private var colorScheme
 
-    // MARK: - Canvas-local state (PKCanvasView must be @State)
+    // MARK: - Canvas-local state
 
-    @State private var drawingCanvas = PKCanvasView()
-    @State private var drawingTool: DrawingTool = .pen
     @State private var selectedFilter: StoryFilter?
     @State private var selectedImage: UIImage?
     @State private var stickerObjects: [StorySticker] = []
@@ -192,6 +190,21 @@ public struct StoryComposerView: View {
     @State private var areFabsVisible: Bool = true
     @State private var bandStateMachine: BandStateMachine = BandStateMachine()
 
+    /// Hauteur (redimensionnable) du panneau DESSIN du band partagé, pilotée par le
+    /// drag du grabber (`ComposerBottomBand`). Tirer vers le haut agrandit le panneau
+    /// (liste des traits) ; vers le bas le réduit. En mode dessin (Option A) le canvas
+    /// reste PLEIN — ce drawer flotte par-dessus, il ne rétrécit plus le canvas.
+    @State private var composerBandHeight: CGFloat = 280
+
+    /// Drawer d'outil replié « totalement » : seul le grabber reste visible et le
+    /// canvas est 100 % visible. Vaut pour TOUS les outils (2026-06-02) — replier ne
+    /// quitte pas l'outil actif (en dessin, le contrôleur flottant `StoryDrawingToolbar`
+    /// persiste en plus). Re-déplier via le grabber.
+    @State private var bandDrawerCollapsed = false
+
+    /// Hauteur du drawer dessin une fois replié (poignée seule).
+    static let drawingDrawerGrabberHeight: CGFloat = 38
+
     @State private var showDiscardAlert = false
     @State private var showRestoreDraftAlert = false
     @State private var isLoadingMedia = false
@@ -294,16 +307,56 @@ public struct StoryComposerView: View {
             // a tool is selected OR a slide has any content.
             // Hidden (non-interactive) while the floating text editor is open.
             bottomRegion
-                .opacity(viewModel.textEditingMode == .inactive ? 1 : 0)
-                .allowsHitTesting(viewModel.textEditingMode == .inactive)
+                .opacity(isFloatingEditorActive ? 0 : 1)
+                .allowsHitTesting(!isFloatingEditorActive)
 
             // Floating text edit overlay — sits above every composer control.
             // Empty view when `textEditingMode == .inactive`.
             StoryTextEditToolbar(viewModel: viewModel)
                 .padding(.bottom, keyboardHeight)
+
+            // Le dessin utilise le band PARTAGÉ (`ComposerBottomBand` →
+            // `drawingPanel` = liste éditable des traits), comme tous les autres
+            // outils — plus de bande dédiée `DrawingBand` qui doublonnait
+            // (2 sheets, l'une au grabber occulté/inactif — bug user 2026-06-01).
+
+            // Floating drawing controls — mirror du toolbar texte. Vide quand
+            // `drawingEditingMode == .inactive`. Les bulles (pinceau/couleur/
+            // épaisseur/lissage) flottent sur le canvas, levées au-dessus du band
+            // partagé (`bottomInset`).
+            StoryDrawingToolbar(viewModel: viewModel, bottomInset: presentedSheetHeight)
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.85),
                    value: viewModel.textEditingMode)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85),
+                   value: viewModel.drawingEditingMode)
+        .adaptiveOnChange(of: viewModel.activeTool) { _, newTool in
+            // Changer d'outil ré-affiche toujours le drawer déplié : sinon l'état
+            // replié d'un outil précédent (poignée seule) persisterait sur le
+            // nouvel outil et son panneau resterait caché (2026-06-02, le repli
+            // s'applique désormais à tous les outils).
+            bandDrawerCollapsed = false
+            // Le mode dessin flottant suit l'outil actif : entrer expose les
+            // contrôleurs flottants (bulles) ; quitter les masque. La liste des
+            // traits vit dans le band PARTAGÉ (`ComposerBottomBand.drawingPanel`)
+            // — comme tous les outils. On garantit donc que le band affiche le
+            // panneau dessin quand on entre (peu importe le chemin d'entrée :
+            // FAB, tuile, restauration), et qu'il se referme quand on sort
+            // (sinon une sheet dessin vide resterait / réapparaîtrait à la
+            // fermeture — bug user 2026-06-01).
+            if newTool == .drawing {
+                viewModel.enterDrawingEditingMode()
+                if bandStateMachine.state.activeCategory != .drawing {
+                    bandStateMachine.tapTile(.drawing)
+                }
+                areFabsVisible = true
+            } else {
+                viewModel.exitDrawingEditingMode()
+                if bandStateMachine.state.activeCategory == .drawing {
+                    bandStateMachine.reset()
+                }
+            }
+        }
         .statusBarHidden()
         .ignoresSafeArea(.keyboard)
         .onAppear {
@@ -355,6 +408,12 @@ public struct StoryComposerView: View {
             canvasEditShift = 0
         }
         .adaptiveOnChange(of: viewModel.textEditingMode) { _, _ in recomputeCanvasShift() }
+        // Quand le canvas se carde/décarde, sa frame présentée change (post-scale) ;
+        // on re-aligne l'éditeur texte inline APRÈS que la carte se soit posée
+        // (ressort 0.32s) pour que `canvasEditShift` se base sur le rect final.
+        .adaptiveOnChange(of: canvasIsCarded) { _, _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.34) { recomputeCanvasShift() }
+        }
         .granularCanvasSync(
             filter: selectedFilter?.rawValue,
             hasImage: selectedImage != nil,
@@ -471,6 +530,13 @@ public struct StoryComposerView: View {
                 context: .story,
                 onAccept: { edited in
                     viewModel.loadedImages[item.elementId] = edited
+                    // Bump version pour signaler au `StoryComposerCanvasView`
+                    // qu'un bitmap intra-clé a muté. SwiftUI ne peut pas
+                    // détecter ce genre de mutation sur un `[String: UIImage]`
+                    // (UIImage non Equatable). Sans ce bump, le main canvas
+                    // ne re-stampait jamais l'image éditée et restait stale
+                    // (bug 2026-05-27). Cf. `StoryComposerCanvasView.Coordinator`.
+                    viewModel.loadedImagesVersion &+= 1
                     editingElementImage = nil
                 },
                 onCancel: { editingElementImage = nil }
@@ -515,7 +581,13 @@ public struct StoryComposerView: View {
                     //    courante du clip édité (utilisée par le composer
                     //    tray, l'export et le placeholder).
                     let thumbnail = Self.generateVideoThumbnail(url: cachedURL)
-                    if let thumbnail { viewModel.loadedImages[item.elementId] = thumbnail }
+                    if let thumbnail {
+                        viewModel.loadedImages[item.elementId] = thumbnail
+                        // Bump version : même rationale que le bloc image
+                        // editor — la vignette vidéo est une mutation
+                        // intra-clé non détectable par SwiftUI.
+                        viewModel.loadedImagesVersion &+= 1
+                    }
 
                     // 3. Si l'utilisateur a transcrit la piste audio, on
                     //    propage les sous-titres comme **metadata** de la
@@ -552,7 +624,11 @@ public struct StoryComposerView: View {
         } message: {
             Text(String(localized: "story.composer.unpublishedDraft", defaultValue: "Vous avez un brouillon non publie.", bundle: .module))
         }
-        .alert(String(localized: "story.composer.quitWithoutPublishing", defaultValue: "Quitter sans publier ?", bundle: .module), isPresented: $showDiscardAlert) {
+        .confirmationDialog(
+            String(localized: "story.composer.quitWithoutPublishing", defaultValue: "Quitter sans publier ?", bundle: .module),
+            isPresented: $showDiscardAlert,
+            titleVisibility: .visible
+        ) {
             Button(String(localized: "story.composer.save", defaultValue: "Sauvegarder", bundle: .module)) { saveDraftAndDismiss() }
             Button(String(localized: "story.composer.quit", defaultValue: "Quitter", bundle: .module), role: .destructive) { cancelAndDismiss() }
             Button(String(localized: "story.composer.cancelAction", defaultValue: "Annuler", bundle: .module), role: .cancel) { }
@@ -594,12 +670,14 @@ public struct StoryComposerView: View {
                     viewModel: viewModel,
                     bandStateMachine: $bandStateMachine,
                     areFabsVisible: $areFabsVisible,
-                    drawingCanvas: $drawingCanvas,
-                    drawingTool: $drawingTool,
                     selectedFilter: $selectedFilter,
                     fgMediaItem: $fgMediaItem,
                     showAudioDocumentPicker: $showAudioDocumentPicker,
                     showVoiceRecorderSheet: $showVoiceRecorderSheet,
+                    resizableBandHeight: $composerBandHeight,
+                    bandMinHeight: Self.composerBandMinHeight,
+                    bandMaxHeight: Self.composerBandMaxHeight,
+                    bandDrawerCollapsed: $bandDrawerCollapsed,
                     onOpenMediaCrop: { id in openMediaEditor(elementId: id) }
                 )
             }
@@ -825,6 +903,28 @@ public struct StoryComposerView: View {
                 Label(String(localized: "story.composer.duplicateSlide", defaultValue: "Dupliquer", bundle: .module), systemImage: "doc.on.doc")
             }
         }
+        // Réordonner les slides par glisser-déposer (long-press natif), MÊME mécanisme
+        // que la liste des médias (`.draggable` + `.dropDestination`) — convention
+        // `.onMove` (offset post-cible). Câble enfin `moveSlide` (it.37).
+        .draggable(slide.id) {
+            SlideMiniPreview(effects: slide.effects, bgImage: viewModel.slideImages[slide.id],
+                             drawingData: drawData, loadedImages: viewModel.loadedImages, index: index)
+                .frame(width: thumbW, height: thumbH)
+                .clipShape(RoundedRectangle(cornerRadius: 3))
+        }
+        .dropDestination(for: String.self) { items, _ in
+            guard let sourceId = items.first,
+                  let sourceIdx = viewModel.slides.firstIndex(where: { $0.id == sourceId }),
+                  let targetIdx = viewModel.slides.firstIndex(where: { $0.id == slide.id }),
+                  sourceIdx != targetIdx else { return false }
+            // Offset `.onMove` : après la cible si on descend, avant si on monte.
+            let destination = sourceIdx < targetIdx ? targetIdx + 1 : targetIdx
+            syncCurrentSlideEffects()
+            viewModel.moveSlide(from: sourceIdx, to: destination)
+            restoreCanvas(from: viewModel.currentSlide)
+            HapticFeedback.light()
+            return true
+        }
     }
 
     // MARK: - Empty-State Large Picker
@@ -846,6 +946,17 @@ public struct StoryComposerView: View {
     /// set therefore tells us nothing about user intent — only explicit
     /// content additions (text / media / sticker / drawing) flip the slide
     /// out of empty state.
+    /// L'éditeur de TEXTE flottant occupe tout le bas de l'écran → le band compact
+    /// standard est alors masqué et non-interactif. Le DESSIN, lui, utilise le band
+    /// PARTAGÉ (`ComposerBottomBand` → `drawingPanel` = liste des traits) comme tous
+    /// les autres outils + des bulles flottantes au-dessus : on NE masque donc PAS
+    /// le band pendant le dessin (correctif user 2026-06-01 « dessin devrait afficher
+    /// le ComposerBottomBand aussi » ; plus de bande dédiée `DrawingBand`).
+    private var isFloatingEditorActive: Bool {
+        viewModel.textEditingMode != .inactive
+    }
+
+
     private var isComposerEmpty: Bool {
         let slidesEmpty = viewModel.slides.allSatisfy { slide in
             slide.content == nil
@@ -854,10 +965,12 @@ public struct StoryComposerView: View {
                 && (slide.effects.mediaObjects ?? []).isEmpty
                 && (slide.effects.stickerObjects ?? []).isEmpty
                 && slide.effects.drawingData == nil
+                && (slide.effects.drawingStrokes ?? []).isEmpty
         }
         return slidesEmpty
             && stickerObjects.isEmpty
             && viewModel.drawingData == nil
+            && viewModel.drawingStrokes.isEmpty
     }
 
     private var shouldShowEmptyStateLargePicker: Bool {
@@ -1134,41 +1247,171 @@ public struct StoryComposerView: View {
     /// doesn't time out on the parent body.
     @ViewBuilder
     private var canvasComposerLayer: some View {
-        canvasCore
-            .scaleEffect(viewModel.canvasScale * viewportPinchDelta)
-            .offset(
-                x: viewModel.canvasOffset.width + viewportDragDelta.width,
-                y: viewModel.canvasOffset.height + viewportDragDelta.height
-            )
-            // Le pinch viewport (zoom canvas) est maintenant un pinch 3 doigts
-            // géré par `ThreeFingerPinchGestureRecognizer` côté UIKit, routé
-            // via `onCanvasZoomScaleChanged`. Sans ça, l'ancien
-            // `MagnificationGesture` SwiftUI 2-doigts firait en parallèle du
-            // pinch d'élément UIKit → tout le canvas scalait.
-            .gesture(isCanvasGestureEnabled && isPanEnabled ? viewportDragGesture : nil)
-            .overlay { mediaLoadingOverlay }
-            .overlay(alignment: .topTrailing) { canvasZoomResetButton }
-            .overlay(alignment: .top) {
-                CanvasLayerIndicator(layer: manipulationLayer)
-                    .padding(.top, 6)
-                    .allowsHitTesting(false)
-            }
-            .ignoresSafeArea()
-            .background(
-                GeometryReader { proxy in
-                    Color.clear
-                        .onAppear { canvasNaturalFrame = proxy.frame(in: .global) }
-                        .adaptiveOnChange(of: proxy.frame(in: .global)) { _, f in
-                            canvasNaturalFrame = f
-                        }
+        // **Parité 9:16 composer ↔ reader / preview / export (2026-06-01).**
+        // Le canvas d'édition était auparavant plein écran (`.ignoresSafeArea()`
+        // sans contrainte de ratio), donc plus haut que 9:16 sur la plupart des
+        // iPhone (ex. 402×874 sur iPhone 16 Pro). Le reader, lui, contraint le
+        // canvas à 9:16 (402×714). Comme `StoryRenderer` projette en design→écran
+        // sur la largeur (`scaleFactor = width/1080`), texte/média round-trippaient
+        // (même largeur) mais : (1) le **dessin** (projection bounds non-uniforme
+        // `1920/bounds.height`, cf. `StrokeCaptureLayer`) se compressait du ratio
+        // `714/874` au reader et se détachait du texte qu'il entourait ; (2) le
+        // contenu placé dans la hauteur excédentaire du composer était rogné par
+        // le reader 9:16. On contraint donc le canvas à `aspectFitSize` (source de
+        // vérité partagée avec le reader), centré dans la zone disponible — les
+        // bandes letterbox haut/bas accueillent la top bar et le toolbar flottant.
+        GeometryReader { proxy in
+            // Le canvas garde des bounds intrinsèques 9:16 FIXES (`aspectFitSize` du
+            // viewport PLEIN) — on n'anime JAMAIS la frame de la
+            // `UIViewRepresentable` (sinon `layoutSubviews → rebuildLayers()` à
+            // chaque frame = tempête perf). Le placement « cardé au-dessus de la
+            // sheet » est rendu UNIQUEMENT par le container SwiftUI qui applique
+            // `scaleEffect`/`offset`/`clipShape` calculés par `StoryCanvasFraming`.
+            // La sheet (band/dessin/éditeur texte) est épinglée en bas ; le canvas
+            // se rétracte au-dessus d'elle (`bottomInset = presentedSheetHeight`)
+            // au lieu de la chevaucher (ancienne Option A).
+            let headerInset = max(proxy.safeAreaInsets.top, 59) + 12
+            // Marge basse minimale même sheet repliée → la carte reste détachée du bas du
+            // viewport (et de la poignée), sinon elle touchait quasi le bord en collapse.
+            let bottomInset = max(presentedSheetHeight, 16) + max(proxy.safeAreaInsets.bottom, 0)
+            let framing = StoryCanvasFraming.resolve(.init(
+                viewport: proxy.size,
+                headerInset: headerInset,
+                bottomInset: bottomInset,
+                // Marge latérale : la carte canvas reste toujours détachée des bords du
+                // viewport (spec user 2026-06-02 « une marge suffisante pour être distingué
+                // du viewport »), pour tous les outils (dessin inclus).
+                sideInset: 14,
+                state: canvasIsCarded ? .carded : .free,
+                cardedCornerRadius: 22))
+            let fit = CanvasGeometry.aspectFitSize(in: proxy.size)
+            // Rayon compensé par `framing.scale` : la carte est rendue à sa taille
+            // intrinsèque `fit` PUIS réduite par `.scaleEffect(framing.scale)`, donc
+            // un rayon UIKit de `cornerRadius / scale` atterrit à ~22pt à l'écran.
+            // La rondeur doit vivre sur le layer UIKit : le `.clipShape` SwiftUI
+            // ci-dessous ne masque pas l'arbre CALayer embarqué.
+            canvasCore(cornerRadius: framing.scale > 0 ? framing.cornerRadius / framing.scale : 0)
+                .frame(width: fit.width, height: fit.height)
+                .scaleEffect(viewModel.canvasScale * viewportPinchDelta)
+                .offset(
+                    x: viewModel.canvasOffset.width + viewportDragDelta.width,
+                    y: viewModel.canvasOffset.height + viewportDragDelta.height
+                )
+                // Le pinch viewport (zoom canvas) est maintenant un pinch 3 doigts
+                // géré par `ThreeFingerPinchGestureRecognizer` côté UIKit, routé
+                // via `onCanvasZoomScaleChanged`. Sans ça, l'ancien
+                // `MagnificationGesture` SwiftUI 2-doigts firait en parallèle du
+                // pinch d'élément UIKit → tout le canvas scalait.
+                .gesture(isCanvasGestureEnabled && isPanEnabled ? viewportDragGesture : nil)
+                .overlay { mediaLoadingOverlay }
+                .overlay(alignment: .topTrailing) { canvasZoomResetButton }
+                .overlay(alignment: .top) {
+                    CanvasLayerIndicator(layer: manipulationLayer)
+                        .padding(.top, 6)
+                        .allowsHitTesting(false)
                 }
-            )
-            .offset(y: -canvasEditShift)
-            .animation(.spring(response: 0.32, dampingFraction: 0.85), value: canvasEditShift)
+                // Mesure la frame globale du canvas 9:16 PRÉSENTÉE (post-scale) —
+                // `canvasNaturalFrame` pilote l'évitement clavier `canvasEditShift`
+                // qui projette `textObj.y * canvasNaturalFrame.height`. Attaché
+                // AVANT le container transform pour rapporter le rect réellement
+                // affiché (le canvas cardé), donc le calcul reste exact.
+                .background(
+                    GeometryReader { p in
+                        Color.clear
+                            .onAppear { canvasNaturalFrame = p.frame(in: .global) }
+                            .adaptiveOnChange(of: p.frame(in: .global)) { _, f in
+                                canvasNaturalFrame = f
+                            }
+                    }
+                )
+                // ── Container transform (A4) : placement « carte au-dessus de la
+                // sheet ». Seules ces 3 modifications réagissent au carding ; les
+                // bounds intrinsèques (`fit`) restent FIXES (jamais animées).
+                .scaleEffect(framing.scale)
+                .offset(framing.offset)
+                .clipShape(RoundedRectangle(cornerRadius: framing.cornerRadius, style: .continuous))
+                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .center)
+                .offset(y: -canvasEditShift)
+                .animation(.spring(response: 0.32, dampingFraction: 0.85), value: framing)
+                .animation(.spring(response: 0.32, dampingFraction: 0.85), value: canvasEditShift)
+        }
+        .ignoresSafeArea()
+    }
+
+    /// Le mode DESSIN est actif (contrôleurs flottants OU machine d'état sur dessin).
+    /// En dessin (Option A, spec user 2026-06-01) le canvas reste PLEIN et seul un
+    /// top reserve + l'arrondi s'appliquent (le drawer flotte par-dessus le bas du
+    /// canvas — il ne le rétrécit plus). C'est ce qui rend le dessin WYSIWYG avec la
+    /// preview/le reader (le drawing remplit tout le viewport).
+    private var canvasIsInset: Bool {
+        viewModel.drawingEditingMode.isActive
+            || bandStateMachine.state.activeCategory == .drawing
+    }
+
+    /// Hauteur visible du drawer dessin (band partagé) — sert UNIQUEMENT à lever les
+    /// contrôleurs flottants (`StoryDrawingToolbar`) juste au-dessus du drawer. Replié
+    /// « totalement » = poignée seule ; déplié = panneau (liste des traits) + chrome.
+    /// Ne rétrécit PLUS le canvas (Option A).
+    private var drawingDrawerHeight: CGFloat {
+        guard canvasIsInset else { return 0 }
+        return bandDrawerCollapsed ? Self.drawingDrawerGrabberHeight : composerBandHeight + 40
+    }
+
+    static let composerBandMinHeight: CGFloat = 160
+    static let composerBandMaxHeight: CGFloat = 540
+
+    /// Vrai dès qu'un panneau (band partagé, mode dessin, ou éditeur texte) est
+    /// présenté : le canvas se carde alors en rectangle arrondi AU-DESSUS de la
+    /// sheet (plus de chevauchement Option A). Truth-table dans `StoryCanvasFraming`.
+    private var canvasIsCarded: Bool {
+        let bandPresent = bandStateMachine.state != .hidden
+        let drawingActive = viewModel.drawingEditingMode.isActive
+        let textActive = viewModel.textEditingMode != .inactive
+        return StoryCanvasFraming.isCarded(
+            bandPresent: bandPresent,
+            drawingActive: drawingActive,
+            textActive: textActive
+        )
+    }
+
+    /// Hauteur (en points) de la sheet actuellement présentée, telle que le canvas
+    /// doit la réserver en bas pour ne PAS la chevaucher. Source INTÉRIMAIRE
+    /// (lot B4 remplacera la source par un modèle par-outil) : band/dessin →
+    /// `composerBandHeight` cappé ; éditeur texte → `keyboardHeight + 132` (barre
+    /// bulles). Hors carding → `0` (canvas plein écran).
+    private var presentedSheetHeight: CGFloat {
+        guard canvasIsCarded else { return 0 }
+        let cap = cappedSheetMaxHeight(screenHeight: composerScreenHeight)
+        if viewModel.textEditingMode != .inactive {
+            return min(cap, keyboardHeight + 132)
+        }
+        // Drawer replié (tout outil) → seul le grabber est présenté : le canvas ne
+        // réserve que sa hauteur, au lieu de la pleine hauteur du band. Sans ça la
+        // réservation (composerBandHeight) ne matchait pas la sheet visible (poignée
+        // seule) → canvas mal cadré + écart sous le canvas (bug user 2026-06-02).
+        if bandDrawerCollapsed {
+            return Self.drawingDrawerGrabberHeight
+        }
+        return min(cap, composerBandHeight)
+    }
+
+    /// Plafond de hauteur de sheet : ~42 % de l'écran, borné à 540 pt — garde le
+    /// canvas cardé toujours visible (jamais écrasé sous la sheet).
+    private func cappedSheetMaxHeight(screenHeight: CGFloat) -> CGFloat {
+        min(540, screenHeight * 0.42)
+    }
+
+    /// Hauteur de la fenêtre active (et non `UIScreen.main.bounds`) — identique au
+    /// calcul de `recomputeCanvasShift`, pour respecter split-screen / Stage Manager.
+    private var composerScreenHeight: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first(where: { $0.isKeyWindow })?.bounds.height
+            ?? UIScreen.main.bounds.height
     }
 
     @ViewBuilder
-    private var canvasCore: some View {
+    private func canvasCore(cornerRadius: CGFloat) -> some View {
         StoryComposerCanvasView(
             slide: $viewModel.currentSlide,
             onItemTapped: { id, kind in
@@ -1276,19 +1519,59 @@ public struct StoryComposerView: View {
                     videoFitMode: transform.videoFitMode
                 )
                 viewModel.saveBackgroundTransform()
-            }
+            },
+            // Quand le drawing overlay est actif, le canvas doit supprimer
+            // son drawingLayer persisté — sinon double rendu (ancien drawing
+            // au mauvais endroit dans le design space + nouveau drawing live
+            // du PKCanvasView en bounds space). Bug "écrit en double", 2026-05-27.
+            isDrawingOverlayActive: viewModel.isDrawingActive,
+            // Pont vers `StoryCanvasUIView.readerContext.imageCache` —
+            // `StoryMediaLayer.configureImage` consulte d'abord ce cache
+            // (clé = media.id) avant le file:// path, donc le main canvas
+            // reflète immédiatement les éditions image (bug 2026-05-27).
+            // La version sert de cookie au Coordinator pour ne déclencher
+            // un rebuild qu'aux mutations utiles.
+            loadedImages: viewModel.loadedImages,
+            loadedImagesVersion: viewModel.loadedImagesVersion,
+            canvasCornerRadius: cornerRadius
         )
         .allowsHitTesting(!viewModel.isDrawingActive)
         .overlay {
             if viewModel.isDrawingActive {
-                DrawingOverlayView(
-                    drawingData: $viewModel.drawingData,
-                    isActive: .constant(true),
-                    canvasView: $drawingCanvas,
-                    toolColor: $viewModel.drawingColor,
-                    toolWidth: $viewModel.drawingWidth,
-                    toolType: $drawingTool
-                )
+                // Refonte dessin (2026-05-30) : capture single-stroke (PencilKit) +
+                // rendu live des traits éditables (avec halo sélection). Le canvas
+                // sous-jacent suppress son propre drawingLayer pendant ce temps
+                // (`suppressDrawingOverlay`), donc pas de double rendu.
+                ZStack {
+                    MeeshyStrokeCanvas(
+                        strokes: viewModel.drawingStrokes,
+                        selectedId: viewModel.drawingEditingMode.selectedStrokeId
+                    )
+                    .equatable()
+                    // Aperçu WYSIWYG du trait en cours (C4) : rendu PAR-DESSUS les
+                    // traits commités, par notre moteur largeur-variable, donc identique
+                    // au trait finalement commité au lift-up.
+                    if let preview = viewModel.activeStrokePreview {
+                        MeeshyStrokeCanvas(strokes: [preview], selectedId: nil)
+                    }
+                    StrokeCaptureLayer(
+                        activeTool: viewModel.activeBrushTool,
+                        activeColorHex: DrawingEditToolOptions.hex(of: viewModel.drawingColor),
+                        activeWidth: Double(viewModel.drawingWidth),
+                        activeSmoothing: viewModel.activeBrushSmoothing,
+                        onStrokeInProgress: { viewModel.activeStrokePreview = $0 },
+                        onStrokeCommitted: { stroke in
+                            // `commitStroke` ajoute le trait ET vide la pile de redo
+                            // (un nouveau trait rend le « rétablir » caduc).
+                            viewModel.commitStroke(stroke)
+                            viewModel.activeStrokePreview = nil
+                        },
+                        onEraseGesture: { points in
+                            eraseStrokes(near: points)
+                            viewModel.activeStrokePreview = nil
+                        }
+                    )
+                }
             }
         }
         .overlay { audioForegroundOverlay }
@@ -1483,8 +1766,6 @@ public struct StoryComposerView: View {
         selectedFilter = nil
         selectedImage = nil
         stickerObjects = []
-        drawingCanvas = PKCanvasView()
-        drawingTool = .pen
 
         // Transitions (read by buildEffects)
         openingEffect = nil
@@ -1522,10 +1803,10 @@ public struct StoryComposerView: View {
         audioVolume = e.backgroundAudioVolume ?? 0.7
         audioTrimStart = e.backgroundAudioStart ?? 0
         audioTrimEnd = e.backgroundAudioEnd ?? 0
-        drawingCanvas = PKCanvasView()
-        if let data = e.drawingData, let drawing = try? PKDrawing(data: data) {
-            drawingCanvas.drawing = drawing
-        }
+        // Refonte dessin (2026-05-30) : le dessin est porté par `currentEffects`
+        // (`drawingStrokes` moderne + `drawingData` legacy decode-only). Le composer
+        // ne maintient plus de `PKCanvasView` local — la capture passe par
+        // `StrokeCaptureLayer` et le rendu par `MeeshyStrokeCanvas` / `StoryRenderer`.
         viewModel.drawingData = e.drawingData
         if let bt = e.backgroundTransform {
             viewModel.backgroundTransform = StoryComposerViewModel.BackgroundTransform(
@@ -1535,6 +1816,29 @@ public struct StoryComposerView: View {
             )
         } else {
             viewModel.backgroundTransform = StoryComposerViewModel.BackgroundTransform()
+        }
+    }
+
+    /// Gomme par hit-test : supprime tout trait dont un point de rendu (espace
+    /// design) tombe dans le rayon du geste de gomme. Pas d'effacement pixel-par-pixel
+    /// (le modèle est vectoriel) — on supprime le trait entier croisé, UX acceptable
+    /// (cf. Risque #2 du plan).
+    private func eraseStrokes(near erasePoints: [CGPoint]) {
+        guard !erasePoints.isEmpty else { return }
+        let eraseRadius: CGFloat = 28  // design px
+        let survivors = viewModel.drawingStrokes.filter { stroke in
+            let reach = CGFloat(stroke.width) / 2 + eraseRadius
+            let points = StrokePathBuilder.renderPoints(for: stroke)
+            for sp in points {
+                for ep in erasePoints where hypot(sp.x - ep.x, sp.y - ep.y) <= reach {
+                    return false
+                }
+            }
+            return true
+        }
+        if survivors.count != viewModel.drawingStrokes.count {
+            viewModel.drawingStrokes = survivors
+            HapticFeedback.light()
         }
     }
 
@@ -1557,11 +1861,22 @@ public struct StoryComposerView: View {
         let current = viewModel.currentEffects
         return StoryEffects(
             background: bgHex,
-            filter: selectedFilter?.rawValue,
-            filterIntensity: selectedFilter != nil ? viewModel.filterIntensity : nil,
+            // Read the filter from `currentEffects` (the authoritative source the
+            // active filter grid writes via `viewModel.applyFilter`), NOT the
+            // View-local `@State selectedFilter` which only the vestigial legacy
+            // picker updates. Reading the stale @State made `buildEffects()`
+            // overwrite the slide's effects with `filter: nil`, so the Play
+            // preview (and publish) lost the effect even though the composer
+            // canvas showed it. Bug « effet pas préservé dans le preview » 2026-06-03.
+            filter: current.filter,
+            filterIntensity: current.filterIntensity,
             stickers: stickerObjects.isEmpty ? nil : stickerObjects.map(\.emoji),
             stickerObjects: stickerObjects.isEmpty ? nil : stickerObjects,
             drawingData: viewModel.drawingData,
+            // Refonte dessin (2026-05-30) : `drawingStrokes` est la source de vérité
+            // moderne. `buildEffects` reconstruit l'effet from scratch, donc on doit
+            // ré-émettre les traits sinon ils sont effacés à chaque sync de slide.
+            drawingStrokes: viewModel.drawingStrokes.isEmpty ? nil : viewModel.drawingStrokes,
             backgroundAudioId: selectedAudioId,
             backgroundAudioVolume: selectedAudioId != nil ? audioVolume : nil,
             backgroundAudioStart: selectedAudioId != nil ? audioTrimStart : nil,
@@ -1575,7 +1890,12 @@ public struct StoryComposerView: View {
             audioPlayerObjects: current.audioPlayerObjects,
             backgroundAudioVariants: current.backgroundAudioVariants,
             backgroundTransform: bgTransform.isIdentity ? nil : bgTransform,
-            slideDuration: Float(viewModel.currentSlideDuration)
+            // `slideDuration: nil` — la durée n'est plus stockée dans
+            // `effects`. Le viewer la recalcule from-scratch via
+            // `StorySlide.computedTotalDuration()` (cf. centralisation
+            // 2026-05-28). Évite que les vieilles valeurs persistées
+            // (12 s, etc.) écrasent le défaut 6 s pour les statics.
+            slideDuration: nil
         )
     }
 
@@ -1671,7 +1991,7 @@ public struct StoryComposerView: View {
                         }
                     }
                 } catch {
-                    print("[StoryComposer] Video write error: \(error)")
+                    Logger.media.error("[StoryComposer] Video write error: \(error.localizedDescription)")
                 }
             } else {
                 // ImageIO downsample for foreground images (max 1080px)
@@ -1797,12 +2117,16 @@ public struct StoryComposerView: View {
         if idx < slides.count {
             slides[idx].effects = buildEffects()
         }
-        // Propage la duree authoritative de chaque slide vers effects.slideDuration —
-        // sinon les slides jamais activees (donc jamais passees par buildEffects)
-        // gardent un slideDuration nil et le viewer retombe sur le minimum 5s.
-        for i in slides.indices {
-            slides[i].effects.slideDuration = Float(slides[i].duration)
-        }
+        // NB : on n'écrit plus `effects.slideDuration` à chaque publish
+        // depuis la centralisation 2026-05-28. La durée est entièrement
+        // dérivée from-scratch côté lecteur par
+        // `StorySlide.computedTotalDuration()` (bg media duration loop /
+        // texte long / défaut 6s). Le champ `effects.slideDuration` reste
+        // dans le schema pour compat backend mais le viewer ne le lit
+        // plus — il est ignoré. Si un jour on veut une vraie surcharge
+        // explicite par l'auteur, ce sera un champ dédié (ex:
+        // `effects.authorPinnedDuration`) lu en priorité dans
+        // `computedTotalDuration`.
         // ThumbHash composite par slide (bg + texte + média + stickers) — sync.
         for i in slides.indices {
             let bgImage = viewModel.slideImages[slides[i].id]
@@ -1879,7 +2203,8 @@ public struct StoryComposerView: View {
                 || slide.effects.background != nil
                 || !slide.effects.textObjects.isEmpty
                 || !(slide.effects.mediaObjects ?? []).isEmpty
-        } || !stickerObjects.isEmpty || viewModel.drawingData != nil
+                || !(slide.effects.drawingStrokes ?? []).isEmpty
+        } || !stickerObjects.isEmpty || viewModel.drawingData != nil || !viewModel.drawingStrokes.isEmpty
 
         if hasContent { showDiscardAlert = true }
         else { publishTask?.cancel(); publishTask = nil; clearAllDrafts(); onDismiss() }

@@ -5,8 +5,52 @@ import os
 import MeeshySDK
 import MeeshyUI
 
+/// Local-first story-cover thumbnail (hybrid Phase 1).
+///
+/// The story tray/feed normally shows a SERVER-generated `thumbnailUrl` built from
+/// the raw background asset — which can never contain the composer's text/drawing
+/// overlays (those live as JSON effects, never baked: RAW-publish / Prisme). So on
+/// send we render the FULL slide composite (bg incl. video frame + text + drawing +
+/// media + stickers + filter, via `StorySlideRenderer.renderComposite`) and cache it
+/// locally, keyed by the published story id. The tray prefers this local cover for
+/// the author's own stories — instant, no backend, no baked upload. Other viewers
+/// keep the server thumbnail until Phase 2 (baked cover upload) ships.
+enum StoryCoverThumbnail {
+    /// Pixel size of the cached cover — 9:16, crisp enough for the tray ring avatar.
+    static let renderSize = CGSize(width: 270, height: 480)
+
+    /// Disk-cache key (in `CacheCoordinator.thumbnails`) for a story's local cover.
+    /// Synthetic scheme so it never collides with a media-URL cache entry.
+    static func cacheKey(storyId: String) -> String { "story-cover:\(storyId)" }
+
+    /// Tray cover resolution order: locally-rendered composite (captures every layer)
+    /// → server thumbnail → raw media URL → author avatar. Pure + testable.
+    static func preferredCoverURLString(
+        localCover: URL?,
+        serverThumbnailUrl: String?,
+        mediaUrl: String?,
+        avatarURL: String?
+    ) -> String? {
+        if let localCover { return localCover.absoluteString }
+        if let t = serverThumbnailUrl, !t.isEmpty { return t }
+        if let u = mediaUrl, !u.isEmpty { return u }
+        return avatarURL
+    }
+}
+
 @MainActor
 class StoryViewModel: ObservableObject, StoryPublishExecutor {
+    /// Versioned cache key for the home tray story list. Bump the suffix
+    /// whenever `StoryItem` / `StoryGroup` gains a non-optional field or a
+    /// formerly-dropped enrichment becomes load-bearing — the previous
+    /// version's serialized JSON would deserialize with that field missing.
+    /// One-shot invalidation, no perma-refetch noise.
+    /// `_v2` (2026-05-28): forces a re-fetch so `visibility`, `shareCount`,
+    /// `viewCount`, `repostCount`, `currentUserReactions` reach clients that
+    /// cached stories before `toStoryGroups` started propagating them
+    /// (Partager button stayed hidden on PUBLIC stories until this).
+    static let storiesCacheKey = "recent_tray_v2"
+
     @Published var storyGroups: [StoryGroup] = []
     @Published var isLoading = false
     @Published var isPublishing = false
@@ -196,15 +240,17 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             return
         }
 
-        let cached = await CacheCoordinator.shared.stories.load(for: "recent_tray")
+        let cached = await CacheCoordinator.shared.stories.load(for: Self.storiesCacheKey)
         switch cached {
         case .fresh(let data, _):
             storyGroups = data
-            prefetchAllStoryMedia(data)
+            sortStoryGroupsInPlace()
+            prefetchAllStoryMedia(storyGroups)
             return
         case .stale(let data, _):
             storyGroups = data
-            prefetchAllStoryMedia(data)
+            sortStoryGroupsInPlace()
+            prefetchAllStoryMedia(storyGroups)
             Task { [weak self] in await self?.fetchStoriesFromNetwork() }
             return
         case .expired, .empty:
@@ -236,8 +282,15 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 }
 
                 storyGroups = groups
-                try? await CacheCoordinator.shared.stories.save(groups, for: "recent_tray")
-                prefetchAllStoryMedia(groups)
+                // Tri unifié (ma story d'abord > non-vues > récence), identique au
+                // chemin socket. `toStoryGroups()` est appelé sans `currentUserId`
+                // ici, donc sans ce re-tri la story « Moi » n'arrivait pas en tête
+                // au chargement réseau/cold-start — incohérent avec le tri appliqué
+                // par les events socket (2026-06-01). On sauve la version triée pour
+                // que les chemins .fresh/.stale servent déjà le bon ordre.
+                sortStoryGroupsInPlace()
+                try? await CacheCoordinator.shared.stories.save(storyGroups, for: Self.storiesCacheKey)
+                prefetchAllStoryMedia(storyGroups)
             }
         } catch {
             Logger.messages.error("[StoryVM] Failed to load stories: \(error.localizedDescription)")
@@ -334,28 +387,31 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     // MARK: - Mark Story as Viewed
 
     func markViewed(storyId: String) {
-        // Fire & forget
+        // Fire & forget : l'état « vu » local est posé optimistiquement (local-first).
+        // L'échec réseau ne déclenche PAS de toast (marquer-vu est un effet de bord de
+        // fond, pas une action utilisateur attendant un feedback — un toast serait du
+        // bruit), mais il est désormais LOGGÉ (avant : catch vide → échec invisible,
+        // ring « vu » localement mais jamais côté serveur → revert au prochain fetch).
         Task {
             do {
                 try await storyService.markViewed(storyId: storyId)
             } catch {
-                // Silent failure
+                Logger.stories.error(
+                    "markViewed failed for \(storyId, privacy: .public): \(error.localizedDescription, privacy: .public)")
             }
         }
 
-        // Update local state
+        // Update local state — `isViewed` est un `var` : on le flippe EN PLACE.
+        // (Avant : reconstruction via init partiel qui droppait ~13 champs à leur
+        // défaut — translations [Prisme cassé après visionnage], currentUserReactions,
+        // chaîne de repost repostOfId/originalRepostOfId/repostAuthorName, audioUrl,
+        // backgroundAudio, reaction/comment/share/view/repostCount. Et persistStoryCache
+        // gravait l'état corrompu en cache → survie au cold-start.) Même pattern que
+        // fetchStoriesFromNetwork (`var copy = story; copy.isViewed = true`).
         for i in storyGroups.indices {
             if let j = storyGroups[i].stories.firstIndex(where: { $0.id == storyId }) {
                 var updated = storyGroups[i].stories
-                updated[j] = StoryItem(
-                    id: updated[j].id,
-                    content: updated[j].content,
-                    media: updated[j].media,
-                    storyEffects: updated[j].storyEffects,
-                    createdAt: updated[j].createdAt,
-                    expiresAt: updated[j].expiresAt,
-                    isViewed: true
-                )
+                updated[j].isViewed = true
                 storyGroups[i] = storyGroups[i].with(stories: updated)
                 persistStoryCache()
                 return
@@ -431,10 +487,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                                      storyEffects: effects, createdAt: post.createdAt, isViewed: true)
             insertOrAppendStoryItem(newItem, forAuthor: post.author)
             showStoryComposer = false
-            ToastManager.shared.showSuccess("Story publiee")
+            FeedbackToastManager.shared.showSuccess("Story publiee")
         } catch {
             publishError = "Failed to publish story"
-            ToastManager.shared.showError("Echec de la publication de la story")
+            FeedbackToastManager.shared.showError("Echec de la publication de la story")
         }
 
         isPublishing = false
@@ -660,7 +716,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         guard let payload = try? encoder.encode(slides) else {
-            ToastManager.shared.showError(String(
+            FeedbackToastManager.shared.showError(String(
                 localized: "story.publish.queue.encodeError",
                 defaultValue: "Impossible d'enregistrer la story pour publication différée"
             ))
@@ -681,7 +737,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         // 5. User feedback. The PendingStoryBanner mounted in RootView
         //    reflects the new pending count via StoryPublishService.
         HapticFeedback.success()
-        ToastManager.shared.showSuccess(String(
+        FeedbackToastManager.shared.showSuccess(String(
             localized: "story.publish.queue.enqueued",
             defaultValue: "Story enregistrée — publication au retour en ligne"
         ))
@@ -714,11 +770,11 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 self.activeUpload = nil
                 self.uploadTask = nil
                 HapticFeedback.success()
-                ToastManager.shared.showSuccess("Story publiee")
+                FeedbackToastManager.shared.showSuccess("Story publiee")
             } catch {
                 if !Task.isCancelled {
                     self.activeUpload?.phase = .failed(error.localizedDescription)
-                    ToastManager.shared.showError("Echec de la publication de la story")
+                    FeedbackToastManager.shared.showError("Echec de la publication de la story")
                     // Don't cleanup temp files on failure — retry may need them
                 }
             }
@@ -895,6 +951,23 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             )
 
             newPostIds.append(post.id)
+
+            // Local-first cover (hybrid Phase 1): render the FULL composite of this
+            // slide — text + drawing + media + stickers + filter, including a video
+            // background's poster frame (it.26) — and cache it under the published
+            // story id. The tray prefers it so the author instantly sees their fully
+            // composed story, instead of the server thumbnail (raw bg, no overlays).
+            if let cover = StorySlideRenderer.renderComposite(
+                slide: slide,
+                bgImage: upload.slideImages[slide.id],
+                loadedImages: upload.loadedImages,
+                size: StoryCoverThumbnail.renderSize
+            ), let jpeg = cover.jpegData(compressionQuality: 0.85) {
+                await CacheCoordinator.shared.thumbnails.store(
+                    jpeg, for: StoryCoverThumbnail.cacheKey(storyId: post.id)
+                )
+            }
+
             let media = buildFeedMedia(from: post, fallback: uploadResult)
             let newItem = StoryItem(
                 id: post.id, content: post.content, media: media,
@@ -1097,6 +1170,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 for i in self.storyGroups.indices {
                     if let j = self.storyGroups[i].stories.firstIndex(where: { $0.id == viewedData.storyId }) {
                         var updatedStories = self.storyGroups[i].stories
+                        // viewCount = total autoritatif porté par l'event ; toujours appliqué.
+                        // (Avant : ignoré → le compteur de vues restait stale chez l'auteur
+                        // qui regarde sa propre story pendant que des viewers arrivent.)
+                        updatedStories[j].viewCount = viewedData.viewCount
                         updatedStories[j].isViewed = true
                         self.storyGroups[i] = self.storyGroups[i].with(stories: updatedStories)
                         // Re-sort: `hasUnviewed` may flip when the last
@@ -1120,12 +1197,46 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     var stories = self.storyGroups[groupIdx].stories
                     for newStory in updatedGroup.stories {
                         if let storyIdx = stories.firstIndex(where: { $0.id == newStory.id }) {
-                            stories[storyIdx] = newStory
+                            var replacement = newStory
+                            // Local-first : `isViewed` est posé en optimiste par markViewed
+                            // (fire-and-forget) ; le serveur peut lagger → un `isViewedByMe`
+                            // stale dans story:updated reverterait l'anneau en « non-vu ».
+                            // Viewed est MONOTONE (une fois vu, reste vu). Même garde que
+                            // fetchStoriesFromNetwork (buildLocallyViewedSet) appliquée ici
+                            // au chemin socket pour éviter la divergence REST/temps-réel.
+                            if stories[storyIdx].isViewed && !replacement.isViewed {
+                                replacement.isViewed = true
+                            }
+                            stories[storyIdx] = replacement
                         }
                     }
                     self.storyGroups[groupIdx] = self.storyGroups[groupIdx].with(stories: stories)
                 }
                 self.persistStoryCache()
+            }
+            .store(in: &cancellables)
+
+        // Prisme realtime : traductions de texte de story par text-object.
+        // Le gateway diffuse `story:translation-updated` (postId + textObjectIndex
+        // + translations) après avoir traduit un overlay. On fusionne dans la story
+        // en cache pour que le reader (qui résout via la chaine préférée) bascule
+        // sur la langue demandée dès l'arrivée — branche le picker langue d'« Exploration »
+        // au-delà des traductions déjà en cache (parité avec `storyUpdated`).
+        socialSocket.storyTranslationUpdated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] payload in
+                guard let self else { return }
+                for groupIdx in self.storyGroups.indices {
+                    var stories = self.storyGroups[groupIdx].stories
+                    guard let storyIdx = stories.firstIndex(where: { $0.id == payload.postId }) else { continue }
+                    stories[storyIdx] = stories[storyIdx].mergingTextObjectTranslations(
+                        at: payload.textObjectIndex,
+                        translations: payload.translations
+                    )
+                    self.storyGroups[groupIdx] = self.storyGroups[groupIdx].with(stories: stories)
+                    self.persistStoryCache()
+                    return
+                }
             }
             .store(in: &cancellables)
 
@@ -1150,7 +1261,146 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 }
             }
             .store(in: &cancellables)
+
+        // === Real-time counter sync (user spec 2026-05-28) ===
+        // When anyone comments / reacts to a story we already have in the
+        // tray, update its denormalized counters in place. Without these
+        // sinks the sidebar `storyCommentCount` / `storyReactionCount`
+        // reset to the cached `StoryItem` value on every slide change —
+        // the « brayan a commenté Belva mais on voit comments=0 »
+        // symptom.
+
+        socialSocket.commentAdded
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] data in
+                self?.applyStoryCommentCountDelta(postId: data.postId, newCount: data.commentCount)
+            }
+            .store(in: &cancellables)
+
+        socialSocket.commentDeleted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] data in
+                // `commentCount` autoritatif porté par l'event (parité avec commentAdded).
+                // Avant : `-1` local qui dérivait sur events manqués / hors-ordre / doublons,
+                // et asymétrique avec commentAdded (qui utilise déjà data.commentCount).
+                self?.applyStoryCommentCountDelta(postId: data.postId, newCount: data.commentCount)
+            }
+            .store(in: &cancellables)
+
+        socialSocket.postReactionSync
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] sync in
+                guard let self else { return }
+                self.mutateStoryItem(byPostId: sync.postId) { item in
+                    item.reactionCount = sync.totalCount
+                    item.currentUserReactions = sync.userReactions
+                }
+            }
+            .store(in: &cancellables)
+
+        // Optimistic deltas — the SDK ack already mutates the post, but
+        // peers don't get a sync event; the *-added/*-removed broadcast is
+        // their only signal. We use totalCount when present, otherwise we
+        // step the counter ±1 around the user's currentUserReactions.
+        socialSocket.postReactionAdded
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.applyPostReactionDelta(event: event, delta: +1)
+            }
+            .store(in: &cancellables)
+
+        socialSocket.postReactionRemoved
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.applyPostReactionDelta(event: event, delta: -1)
+            }
+            .store(in: &cancellables)
+
+        // Realtime story reactions : le gateway émet `story:reacted`/`story:unreacted`
+        // À LA STORY ROOM (viewers) — fan-out distinct des events POST (cf.
+        // routes/posts/interactions.ts). Sans ces sinks, le compteur de réactions
+        // d'une story en cours de visionnage ne bougeait pas en temps réel quand un
+        // autre utilisateur réagissait/dé-réagissait (bug it.23, callback non branché).
+        socialSocket.storyReacted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.applyStoryReactionDelta(storyId: event.storyId, userId: event.userId,
+                                              emoji: event.emoji, delta: +1)
+            }
+            .store(in: &cancellables)
+
+        socialSocket.storyUnreacted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.applyStoryReactionDelta(storyId: event.storyId, userId: event.userId,
+                                              emoji: event.emoji, delta: -1)
+            }
+            .store(in: &cancellables)
     }
+
+    /// Apply an authoritative `commentCount` snapshot to the matching story.
+    /// Called by `comment:added` sinks — the gateway already incremented
+    /// the denormalized counter and broadcast the new total.
+    private func applyStoryCommentCountDelta(postId: String, newCount: Int) {
+        mutateStoryItem(byPostId: postId) { item in
+            item.commentCount = newCount
+        }
+    }
+
+    /// Increment or decrement the story's `reactionCount` and toggle the
+    /// current viewer's emoji presence in `currentUserReactions` if the
+    /// event was triggered by this device.
+    private func applyPostReactionDelta(event: SocketPostReactionUpdateEvent, delta: Int) {
+        let myId = AuthManager.shared.currentUser?.id
+        mutateStoryItem(byPostId: event.postId) { item in
+            item.reactionCount = max(0, item.reactionCount + delta)
+            if let myId, event.userId == myId {
+                var mine = item.currentUserReactions ?? []
+                if delta > 0 {
+                    if !mine.contains(event.emoji) { mine.append(event.emoji) }
+                } else {
+                    mine.removeAll { $0 == event.emoji }
+                }
+                item.currentUserReactions = mine
+            }
+        }
+    }
+
+    /// Realtime delta for a STORY reaction (`story:reacted`/`story:unreacted` — fan-out
+    /// distinct des events POST). La réaction propre est fire-and-forget (`sendReaction`
+    /// n'incrémente pas en optimiste), donc l'écho de sa propre action fournit le +1 sans
+    /// double-compte. Non-`private` pour permettre la vérification unitaire.
+    func applyStoryReactionDelta(storyId: String, userId: String, emoji: String, delta: Int) {
+        let myId = AuthManager.shared.currentUser?.id
+        mutateStoryItem(byPostId: storyId) { item in
+            item.reactionCount = max(0, item.reactionCount + delta)
+            if let myId, userId == myId {
+                var mine = item.currentUserReactions ?? []
+                if delta > 0 {
+                    if !mine.contains(emoji) { mine.append(emoji) }
+                } else {
+                    mine.removeAll { $0 == emoji }
+                }
+                item.currentUserReactions = mine
+            }
+        }
+    }
+
+    /// Locates the `StoryItem` carrying `postId` in any group and applies
+    /// `mutation` in place. Persists the cache so the next cold start
+    /// reflects the live counter. No-op when the story isn't in the tray
+    /// (e.g. the user's own post that never feeds back into `getStories`).
+    private func mutateStoryItem(byPostId postId: String, _ mutation: (inout StoryItem) -> Void) {
+        for i in storyGroups.indices {
+            guard let j = storyGroups[i].stories.firstIndex(where: { $0.id == postId }) else { continue }
+            var stories = storyGroups[i].stories
+            mutation(&stories[j])
+            storyGroups[i] = storyGroups[i].with(stories: stories)
+            persistStoryCache()
+            return
+        }
+    }
+
 
     // MARK: - Helpers
 
@@ -1171,7 +1421,15 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     private func insertOrAppendStoryItem(_ item: StoryItem, forAuthor author: APIAuthor) {
         if let idx = storyGroups.firstIndex(where: { $0.id == author.id }) {
             var updated = storyGroups[idx].stories
-            updated.append(item)
+            // Déduplication par id : un insert optimiste suivi de l'écho serveur /
+            // socket (ou d'un 2e chemin de publish) ne doit JAMAIS produire deux
+            // entrées identiques dans le groupe — sinon le viewer affiche la même
+            // story deux fois (2 segments de progression identiques).
+            if let existing = updated.firstIndex(where: { $0.id == item.id }) {
+                updated[existing] = item
+            } else {
+                updated.append(item)
+            }
             storyGroups[idx] = storyGroups[idx].with(stories: updated)
         } else {
             storyGroups.insert(StoryGroup(
@@ -1187,6 +1445,6 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
     private func persistStoryCache() {
         let snapshot = storyGroups
-        Task { try? await CacheCoordinator.shared.stories.save(snapshot, for: "recent_tray") }
+        Task { try? await CacheCoordinator.shared.stories.save(snapshot, for: Self.storiesCacheKey) }
     }
 }

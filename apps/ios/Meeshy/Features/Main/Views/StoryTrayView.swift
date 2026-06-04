@@ -50,7 +50,7 @@ struct StoryTrayView: View {
                 storyScrollView
             }
         }
-        .frame(height: 72)
+        .frame(height: 120)
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
@@ -148,7 +148,7 @@ struct StoryTrayView: View {
                 myStoryButton
                     .bounceOnAppear(delay: 0)
 
-                ForEach(Array(viewModel.storyGroups.filter { $0.id != currentUserId }.enumerated()), id: \.element.id) { visibleIndex, group in
+                ForEach(Array(viewModel.storyGroups.filter { $0.id != currentUserId && !$0.isFullyExpired() }.enumerated()), id: \.element.id) { visibleIndex, group in
                     Group {
                         if visibleIndex < staggerCap {
                             storyRing(group: group, userId: group.id)
@@ -188,7 +188,7 @@ struct StoryTrayView: View {
                     name: group.username,
                     context: .storyTray,
                     accentColor: group.avatarColor,
-                    avatarURL: group.avatarURL,
+                    avatarURL: latestStoryThumbnailURL(group),
                     storyState: group.hasUnviewed ? .unread : .read,
                     moodEmoji: statusViewModel.statusForUser(userId: group.id)?.moodEmoji,
                     presenceState: presenceManager.presenceState(for: group.id),
@@ -214,7 +214,7 @@ struct StoryTrayView: View {
                 .font(.system(size: 10, weight: group.hasUnviewed ? .semibold : .medium))
                 .foregroundColor(group.hasUnviewed ? .white : theme.textMuted)
                 .lineLimit(1)
-                .frame(width: 56)
+                .frame(width: 96)
         }
     }
 
@@ -237,6 +237,32 @@ struct StoryTrayView: View {
 
 }
 
+// MARK: - Thumbnail Helper
+
+/// URL de la miniature de la dernière story du groupe — user request
+/// 2026-05-27 « dans la tray il faut mettre la vue miniature de la
+/// dernière story du groupe ». `stories` est trié ascendant par
+/// `createdAt` (cf. `FeedDataResponse.toStoryGroups`), donc `last` =
+/// plus récente. Préfère `thumbnailUrl` (servi optimisé par le
+/// gateway) au full `url` si dispo. Fallback sur l'avatar du profil
+/// pour les stories text-only (pas de media). Helper fileprivate
+/// pour pouvoir s'appeler depuis `MyStoryButton` aussi.
+fileprivate func latestStoryThumbnailURL(_ group: StoryGroup) -> String? {
+    guard let lastStory = group.stories.last else { return group.avatarURL }
+    // Local-first: a composite cover rendered at publish (text + drawing + all
+    // layers) wins over the server thumbnail (raw bg, no overlays). Synchronous
+    // existence check — no actor hop, safe in the View body.
+    let localCover = CacheCoordinator.thumbnailLocalFileURL(
+        for: StoryCoverThumbnail.cacheKey(storyId: lastStory.id)
+    )
+    return StoryCoverThumbnail.preferredCoverURLString(
+        localCover: localCover,
+        serverThumbnailUrl: lastStory.media.first?.thumbnailUrl,
+        mediaUrl: lastStory.media.first?.url,
+        avatarURL: group.avatarURL
+    )
+}
+
 // MARK: - My Story Button (extracted struct to avoid PAC issues with @ViewBuilder + @EnvironmentObject)
 
 private struct MyStoryButton: View {
@@ -252,7 +278,10 @@ private struct MyStoryButton: View {
     var body: some View {
         let currentUser = AuthManager.shared.currentUser
         let userId = currentUser?.id ?? ""
-        let myGroup = viewModel.storyGroupForUser(userId: userId)
+        // Un groupe entièrement expiré est traité comme « pas de story » : on
+        // affiche le bouton d'ajout, jamais un anneau dont le viewer se fermerait
+        // aussitôt (`skipExpiredStoriesIfNeeded`). Cohérent avec le filtre du tray.
+        let myGroup = viewModel.storyGroupForUser(userId: userId).flatMap { $0.isFullyExpired() ? nil : $0 }
         let hasMyStory = myGroup != nil
         let userName = currentUser?.displayName ?? currentUser?.username ?? "Moi"
         let accentColor = DynamicColorGenerator.colorForName(currentUser?.username ?? "")
@@ -265,7 +294,7 @@ private struct MyStoryButton: View {
                     name: userName,
                     context: .storyTray,
                     accentColor: accentColor,
-                    avatarURL: currentUser?.avatar,
+                    avatarURL: myGroup.flatMap { latestStoryThumbnailURL($0) } ?? currentUser?.avatar,
                     storyState: storyState,
                     moodEmoji: myMoodEmoji,
                     presenceState: .offline,
@@ -307,9 +336,13 @@ private struct MyStoryButton: View {
                             onAddStatus?()
                             HapticFeedback.medium()
                         } label: {
+                            // user request 2026-05-28 — placeholder = x0.8 du
+                            // bouton (+) (40pt) → 32pt frame, glyph à 0.65×
+                            // pour garder la parité avec l'emoji mood animé
+                            // (cf. MeeshyAvatar.badgeSize .storyTray).
                             Text("\u{1F4AD}")
-                                .font(.system(size: 14))
-                                .frame(width: 20, height: 20)
+                                .font(.system(size: 20))
+                                .frame(width: 32, height: 32)
                                 .background(Circle().fill(theme.backgroundPrimary))
                         }
                         .buttonStyle(.plain)
@@ -327,20 +360,25 @@ private struct MyStoryButton: View {
                             viewModel.showStoryComposer = true
                             HapticFeedback.medium()
                         } label: {
+                            // x2 — user request 2026-05-27 « augmente le (+)
+                            // d'ajouter une story ». Avant : font 11 / frame
+                            // 20×20 / offset (-2,-2). Maintenant doublé pour
+                            // matcher la taille trail (avatars passés à 88pt
+                            // en ab691abaf).
                             Image(systemName: "plus")
-                                .font(.system(size: 11, weight: .bold))
+                                .font(.system(size: 22, weight: .bold))
                                 .foregroundStyle(Color.white)
-                                .frame(width: 20, height: 20)
+                                .frame(width: 40, height: 40)
                                 .background(
                                     Circle()
                                         .fill(MeeshyColors.brandGradient)
-                                        .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2))
+                                        .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 3))
                                 )
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(String(localized: "story.tray.addStory",
                                                    defaultValue: "Ajouter une story"))
-                        .offset(x: -2, y: -2)
+                        .offset(x: -4, y: -4)
                     }
                 }
                 .overlay {

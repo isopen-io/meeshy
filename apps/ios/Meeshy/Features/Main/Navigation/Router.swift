@@ -109,7 +109,7 @@ extension Route {
 final class Router: ObservableObject {
     @Published var path: [Route] = [] {
         didSet {
-            print("[DIAG] Router.path didSet count=\(path.count) last=\(String(describing: path.last))")
+            Logger.messages.debug("[DIAG] Router.path didSet count=\(self.path.count) last=\(String(describing: self.path.last))")
             AnalyticsManager.shared.trackRoute(path.last)
         }
     }
@@ -133,6 +133,21 @@ final class Router: ObservableObject {
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "router")
 
     var currentRoute: Route? { path.last }
+
+    /// Conversation id at the top of the navigation stack, if the active
+    /// route is `.conversation(...)`. Used by the floating mini audio
+    /// player to hide itself when the user is already inside the
+    /// conversation that's driving playback. Returns `nil` for any other
+    /// route — settings, profile, communities, etc. — so the bar stays
+    /// visible there. Does not cross iPad two-column boundaries: on iPad
+    /// the active conversation is owned by `iPadRootView.activeConversation`
+    /// instead of `Router.path`.
+    var currentConversationId: String? {
+        if case let .conversation(conv) = path.last {
+            return conv.id
+        }
+        return nil
+    }
 
     var sceneTitle: String {
         currentRoute?.displayTitle ?? "Conversations"
@@ -271,7 +286,7 @@ final class Router: ObservableObject {
             Self.logger.info("Deep link navigated to conversation \(conversationId)")
         } catch {
             Self.logger.error("Failed to load conversation for deep link: \(error.localizedDescription)")
-            ToastManager.shared.showError("Impossible d'ouvrir la conversation")
+            FeedbackToastManager.shared.showError("Impossible d'ouvrir la conversation")
         }
     }
 
@@ -281,10 +296,10 @@ final class Router: ObservableObject {
         await AuthManager.shared.validateMagicLink(token: token)
 
         if AuthManager.shared.isAuthenticated {
-            ToastManager.shared.showSuccess("Connexion reussie !")
+            FeedbackToastManager.shared.showSuccess("Connexion reussie !")
             Self.logger.info("Magic link validated successfully")
         } else {
-            ToastManager.shared.showError(AuthManager.shared.errorMessage ?? "Lien invalide ou expire")
+            FeedbackToastManager.shared.showError(AuthManager.shared.errorMessage ?? "Lien invalide ou expire")
             Self.logger.error("Magic link validation failed")
         }
     }

@@ -20,51 +20,36 @@ import { FirebaseInitializer } from "@/components/providers/FirebaseInitializer"
 import { ServiceWorkerInitializer } from "@/components/providers/ServiceWorkerInitializer";
 import { HtmlLangSync } from "@/components/common/HtmlLangSync";
 import { SystemStatusBanner } from "@/components/common/SystemStatusBanner";
+import { buildPageMetadata, getMetadataBundle } from "@/lib/i18n/metadata";
+import { getServerLocale } from "@/lib/i18n/server-locale";
 import "@/utils/console-override"; // 🔇 Désactive console.log en production
 
-export const metadata: Metadata = {
-  title: 'Meeshy - Messagerie multilingue en temps réel',
-  description: 'Discutez avec le monde entier dans votre langue. Traduction automatique en temps réel pour plus de 100 langues. Rejoignez des conversations mondiales sans barrière linguistique.',
-  formatDetection: {
-    email: false,
-    address: false,
-    telephone: false,
-  },
-  icons: {
-    icon: [
-      { url: '/favicon.ico', sizes: 'any' },
-      { url: '/favicon.svg', type: 'image/svg+xml' },
-      { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
-      { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
-    ],
-    apple: [
-      { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
-    ],
-  },
-  openGraph: {
-    type: 'website',
-    locale: 'fr_FR',
+export async function generateMetadata(): Promise<Metadata> {
+  const base = await buildPageMetadata('home', {
     url: 'https://meeshy.me',
-    siteName: 'Meeshy',
-    title: 'Meeshy - Messagerie multilingue en temps réel',
-    description: 'Discutez avec le monde entier dans votre langue. Traduction automatique en temps réel pour plus de 100 langues. Rejoignez des conversations mondiales sans barrière linguistique.',
-    images: [
-      {
-        url: 'https://meeshy.me/images/meeshy-og-welcome.jpg',
-        width: 1200,
-        height: 630,
-        alt: 'Meeshy - Bienvenue dans la messagerie multilingue',
-      },
-    ],
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: 'Meeshy - Messagerie multilingue en temps réel',
-    description: 'Discutez avec le monde entier dans votre langue. Traduction automatique en temps réel pour plus de 100 langues.',
-    images: ['https://meeshy.me/images/meeshy-og-welcome.jpg'],
-    creator: '@meeshy_app',
-  },
-};
+    image: 'https://meeshy.me/images/meeshy-og-welcome.jpg',
+  });
+
+  return {
+    ...base,
+    formatDetection: {
+      email: false,
+      address: false,
+      telephone: false,
+    },
+    icons: {
+      icon: [
+        { url: '/favicon.ico', sizes: 'any' },
+        { url: '/favicon.svg', type: 'image/svg+xml' },
+        { url: '/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
+        { url: '/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
+      ],
+      apple: [
+        { url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
+      ],
+    },
+  };
+}
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -72,20 +57,23 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const locale = await getServerLocale();
+  const skipToContent = getMetadataBundle(locale).skipToContent;
+
   return (
-    <html lang="fr" suppressHydrationWarning>
+    <html lang={locale} suppressHydrationWarning>
       <body className={`${getAllFontVariables()} antialiased font-nunito`}>
         {/* Skip link for keyboard navigation (WCAG 2.4.1) */}
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[9999] focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
         >
-          Aller au contenu principal
+          {skipToContent}
         </a>
 
         {/* Recovery automatique pour chunks obsoletes apres deploiement */}

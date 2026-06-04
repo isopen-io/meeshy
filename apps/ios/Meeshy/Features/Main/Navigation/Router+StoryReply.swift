@@ -43,7 +43,7 @@ extension Router {
                 pendingReplyContext = context
                 navigateToConversation(conv)
             } catch {
-                ToastManager.shared.showError("Impossible d'ouvrir la conversation")
+                FeedbackToastManager.shared.showError("Impossible d'ouvrir la conversation")
             }
         }
     }

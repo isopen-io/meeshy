@@ -1322,6 +1322,13 @@ export interface SocketIOUser {
   readonly systemLanguage: string;
   readonly regionalLanguage: string;
   readonly customDestinationLanguage?: string;
+  /**
+   * Locale appareil persistée par le gateway (Prisme Linguistique étendu —
+   * 4e priorité). Normalisée en ISO 639-1 par `normalizeLanguageCode`.
+   * Source du write : header `X-Device-Locale` envoyé par les clients
+   * (iOS `Locale.current.identifier`, web `navigator.language`).
+   */
+  readonly deviceLocale?: string;
   readonly autoTranslateEnabled: boolean;
 
   // Account status

@@ -206,7 +206,7 @@ struct ReportUserView: View {
                     reason: details.isEmpty ? nil : details
                 )
                 HapticFeedback.success()
-                ToastManager.shared.showSuccess(String(localized: "report.user.success", defaultValue: "Signalement envoye", bundle: .main))
+                FeedbackToastManager.shared.showSuccess(String(localized: "report.user.success", defaultValue: "Signalement envoye", bundle: .main))
                 dismiss()
             } catch {
                 HapticFeedback.error()

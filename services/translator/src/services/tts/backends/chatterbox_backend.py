@@ -21,6 +21,7 @@ from typing import Optional, Any, Tuple
 from concurrent.futures import ThreadPoolExecutor
 
 from ..base import BaseTTSBackend
+from ..synth_watchdog import with_synth_watchdog
 from config.settings import get_settings
 from services.voice_analyzer_service import VoiceAnalyzerService, VoiceCharacteristics
 from ...model_manager import TTSBackend as TTSBackendEnum
@@ -491,6 +492,8 @@ class ChatterboxBackend(BaseTTSBackend):
         # VERROU: ChatterBox n'est pas thread-safe, sérialisation des appels
         # NOTE: Utilisation de threading.Lock() pour compatibilité ThreadPoolExecutor
         # ═══════════════════════════════════════════════════════════════════
+        synth_label = f"chatterbox:{'multi' if use_multilingual else 'mono'}:{lang_code}"
+
         try:
             with self._synthesis_lock:
                 if use_multilingual:
@@ -506,35 +509,26 @@ class ChatterboxBackend(BaseTTSBackend):
                     if _conditionals is not None:
                         logger.info("[CHATTERBOX] 🎤 Utilisation des conditionals pré-calculés")
                         _model.conds = _conditionals
-                        wav = await loop.run_in_executor(
-                            None,
-                            lambda: _model.generate(
-                                text=_text,
-                                language_id=_lang_code,
-                                exaggeration=_exp,
-                                cfg_weight=_cfg
-                            )
+                        gen_fn = lambda: _model.generate(
+                            text=_text,
+                            language_id=_lang_code,
+                            exaggeration=_exp,
+                            cfg_weight=_cfg
                         )
                     elif speaker_audio_path and os.path.exists(speaker_audio_path):
-                        wav = await loop.run_in_executor(
-                            None,
-                            lambda: _model.generate(
-                                text=_text,
-                                audio_prompt_path=_speaker,
-                                language_id=_lang_code,
-                                exaggeration=_exp,
-                                cfg_weight=_cfg
-                            )
+                        gen_fn = lambda: _model.generate(
+                            text=_text,
+                            audio_prompt_path=_speaker,
+                            language_id=_lang_code,
+                            exaggeration=_exp,
+                            cfg_weight=_cfg
                         )
                     else:
-                        wav = await loop.run_in_executor(
-                            None,
-                            lambda: _model.generate(
-                                text=_text,
-                                language_id=_lang_code,
-                                exaggeration=_exp,
-                                cfg_weight=_cfg
-                            )
+                        gen_fn = lambda: _model.generate(
+                            text=_text,
+                            language_id=_lang_code,
+                            exaggeration=_exp,
+                            cfg_weight=_cfg
                         )
 
                     sample_rate = model_multi.sr
@@ -550,36 +544,34 @@ class ChatterboxBackend(BaseTTSBackend):
                     if _conditionals is not None:
                         logger.info("[CHATTERBOX] 🎤 Utilisation des conditionals pré-calculés")
                         _model.conds = _conditionals
-                        wav = await loop.run_in_executor(
-                            None,
-                            lambda: _model.generate(
-                                _text,
-                                exaggeration=_exp,
-                                cfg_weight=_cfg
-                            )
+                        gen_fn = lambda: _model.generate(
+                            _text,
+                            exaggeration=_exp,
+                            cfg_weight=_cfg
                         )
                     elif speaker_audio_path and os.path.exists(speaker_audio_path):
-                        wav = await loop.run_in_executor(
-                            None,
-                            lambda: _model.generate(
-                                _text,
-                                audio_prompt_path=_speaker,
-                                exaggeration=_exp,
-                                cfg_weight=_cfg
-                            )
+                        gen_fn = lambda: _model.generate(
+                            _text,
+                            audio_prompt_path=_speaker,
+                            exaggeration=_exp,
+                            cfg_weight=_cfg
                         )
                     else:
-                        wav = await loop.run_in_executor(
-                            None,
-                            lambda: _model.generate(
-                                _text,
-                                exaggeration=_exp,
-                                cfg_weight=_cfg
-                            )
+                        gen_fn = lambda: _model.generate(
+                            _text,
+                            exaggeration=_exp,
+                            cfg_weight=_cfg
                         )
 
                     sample_rate = model_mono.sr
                     logger.debug(f"[TTS] Synthèse monolingual: en")
+
+                # Watchdog: borne chaque génération pour qu'un segment bloqué
+                # libère le verrou de synthèse au lieu de figer tous les workers.
+                wav = await with_synth_watchdog(
+                    loop.run_in_executor(None, gen_fn),
+                    label=synth_label,
+                )
 
                 await loop.run_in_executor(
                     None,

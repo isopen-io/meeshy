@@ -277,6 +277,10 @@ struct ConversationListHeaderOverlay: View {
             },
             trailing: {
                 HStack(spacing: 12) {
+                    // Tailles header revenues à la base après itération
+                    // user 2026-05-28 « réduire /2 les icones (+) et (link)
+                    // de la liste de conversation ». Précédent essai à
+                    // 40/44pt (e1bf90029) jugé trop gros — retour 20/22pt.
                     Button {
                         showShareLinkSheet = true
                     } label: {

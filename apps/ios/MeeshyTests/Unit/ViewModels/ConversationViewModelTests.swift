@@ -144,7 +144,8 @@ final class ConversationViewModelTests: XCTestCase {
         reactions: [Reaction] = [],
         pinnedAt: Date? = nil,
         pinnedBy: String? = nil,
-        deletedAt: Date? = nil
+        deletedAt: Date? = nil,
+        createdAt: Date = Date()
     ) -> Message {
         Message(
             id: id,
@@ -154,11 +155,26 @@ final class ConversationViewModelTests: XCTestCase {
             deletedAt: deletedAt,
             pinnedAt: pinnedAt,
             pinnedBy: pinnedBy,
-            createdAt: Date(),
-            updatedAt: Date(),
+            createdAt: createdAt,
+            updatedAt: createdAt,
             reactions: reactions,
             isMe: isMe
         )
+    }
+
+    /// Builds a `MessagesAPIResponse` with `count` synthetic messages for the
+    /// reconnect-backfill (`listAfter`) path. Lets a test return a full page
+    /// (== the VM's page size) followed by a partial page to drive the
+    /// watermark forward-paging loop.
+    private func makeBackfillResponse(idPrefix: String, count: Int, createdAtISO: String) -> MessagesAPIResponse {
+        let items = (0..<count).map { i in
+            """
+            {"id":"\(idPrefix)-\(i)","conversationId":"\(testConversationId)","senderId":"\(testUserId)","content":"m\(i)","createdAt":"\(createdAtISO)"}
+            """
+        }
+        return JSONStub.decode("""
+        {"success":true,"data":[\(items.joined(separator: ","))],"pagination":null,"cursorPagination":null,"hasNewer":null}
+        """)
     }
 
     // MARK: - loadMessages Tests
@@ -248,6 +264,66 @@ final class ConversationViewModelTests: XCTestCase {
         await sut.loadMessages()
 
         await fulfillment(of: [marked], timeout: 1.0)
+    }
+
+    // MARK: - syncMissedMessages (T9 — reconnect gap recovery via watermark)
+
+    /// The backfill must ask the gateway for messages created *after* the
+    /// newest message currently held locally — that high-water mark is what
+    /// makes the recovery incremental and contiguous.
+    func test_syncMissedMessages_usesNewestLocalMessageAsWatermark() async throws {
+        let sut = makeSUT()
+        let older = Date(timeIntervalSince1970: 1_750_000_000)
+        let newest = older.addingTimeInterval(3600)
+        sut.messages = [
+            makeMessage(id: "m-old", createdAt: older),
+            makeMessage(id: "m-new", createdAt: newest),
+        ]
+        mockMessageService.listAfterResult = .success(makeMessagesResponse())  // empty page → loop stops after 1 fetch
+
+        await sut.syncMissedMessages()
+
+        XCTAssertEqual(mockMessageService.listAfterCallCount, 1)
+        XCTAssertEqual(mockMessageService.listCallCount, 0, "reconnect backfill must use the watermark path, not offset-based list()")
+        let after = try XCTUnwrap(mockMessageService.lastListAfterAfter)
+        // The watermark is the newest local message (modulo a sub-millisecond
+        // tie backoff so a same-instant missed message isn't excluded by the
+        // gateway's strict `createdAt > after`).
+        XCTAssertLessThanOrEqual(after, newest)
+        XCTAssertGreaterThan(after, newest.addingTimeInterval(-0.01))
+    }
+
+    /// The core bug fix: a missed-message gap larger than one page must be
+    /// filled. The old code fetched `offset:0,limit:30` once and could never
+    /// recover a >30-message gap. The watermark loop pages forward until a
+    /// page comes back shorter than the page size.
+    func test_syncMissedMessages_pagesForwardUntilGapSmallerThanPage() async {
+        let sut = makeSUT()
+        sut.messages = [makeMessage(id: "local-newest", createdAt: Date(timeIntervalSince1970: 1_750_000_000))]
+        // First page is FULL (== the VM's 100-message page size) so the loop
+        // must fetch again; the second page is partial so it then stops.
+        mockMessageService.listAfterResults = [
+            makeBackfillResponse(idPrefix: "p1", count: 100, createdAtISO: "2026-06-01T10:00:00.000Z"),
+            makeBackfillResponse(idPrefix: "p2", count: 5, createdAtISO: "2026-06-01T11:00:00.000Z"),
+        ]
+
+        await sut.syncMissedMessages()
+
+        XCTAssertEqual(mockMessageService.listAfterCallCount, 2, "must page past the first full page to fill a gap larger than one page")
+        XCTAssertEqual(mockMessageService.listCallCount, 0, "must not fall back to offset-based list()")
+    }
+
+    /// With no local messages there is no high-water mark to backfill from —
+    /// a full load happens on conversation open instead, so the reconnect
+    /// path must no-op rather than refetch from the top.
+    func test_syncMissedMessages_withNoLocalMessages_doesNotFetch() async {
+        let sut = makeSUT()
+        sut.messages = []
+
+        await sut.syncMissedMessages()
+
+        XCTAssertEqual(mockMessageService.listAfterCallCount, 0)
+        XCTAssertEqual(mockMessageService.listCallCount, 0)
     }
 
     // MARK: - sendMessage Tests
@@ -637,6 +713,44 @@ final class ConversationViewModelTests: XCTestCase {
         )
         XCTAssertNil(restored?.deletedAt, "Delete failure must roll back deletedAt in GRDB")
         XCTAssertNotNil(sut.error)
+    }
+
+    /// S11 — a "Delete for me" hide keyed on a temp id must follow the
+    /// temp->server reconciliation, so the hidden message stays hidden instead
+    /// of reappearing once its display id flips to the server id.
+    func test_persistMessagesUsingServerIds_migratesHiddenTempIdToServerId() async {
+        let sut = makeSUT(conversationId: "c_s11")
+        LocallyHiddenMessagesStore.shared.clearAll()
+        defer { LocallyHiddenMessagesStore.shared.clearAll() }
+        LocallyHiddenMessagesStore.shared.hide("temp_s11")
+        sut.pendingServerIds = ["temp_s11": "srv_s11"]
+
+        await sut.persistMessagesUsingServerIds()
+
+        XCTAssertFalse(LocallyHiddenMessagesStore.shared.isHidden("temp_s11"),
+            "the temp id must be migrated away once reconciled")
+        XCTAssertTrue(LocallyHiddenMessagesStore.shared.isHidden("srv_s11"),
+            "the hidden state must follow temp->server so the message stays hidden")
+    }
+
+    /// S7 — an optimistic media bubble whose upload/send fails must flip to
+    /// `.failed` (retryable) rather than stay a permanent `.sending` ghost.
+    func test_markOptimisticMediaFailed_flipsRowToFailed() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+        let record = MessageStoreObservationHelper.makeRecord(
+            localId: "media-s7", conversationId: testConversationId,
+            senderId: testUserId, content: ""
+        )
+        try await persistence.insertOptimistic(record)
+
+        await sut.markOptimisticMediaFailed(tempId: "media-s7", reason: "upload failed")
+
+        let row = try await MessageStoreObservationHelper.fetchRecord(localId: "media-s7", from: pool)
+        XCTAssertEqual(row?.state, .failed,
+            "a failed-upload media bubble must flip to .failed, not stay .sending")
+        XCTAssertEqual(row?.lastError, "upload failed")
     }
 
     // MARK: - toggleReaction Tests

@@ -13,7 +13,7 @@ final class EditProfileViewModelTests: XCTestCase {
         let uploader: MockAttachmentUploader
         let cache: MockProfileCacheWriter
         let sleeper: TestSleeper
-        let toast: MockToast
+        let toast: MockFeedbackToast
         let haptics: MockHaptic
     }
 
@@ -38,7 +38,7 @@ final class EditProfileViewModelTests: XCTestCase {
         let uploader = MockAttachmentUploader()
         let cache = MockProfileCacheWriter()
         let sleeper = TestSleeper()
-        let toast = MockToast()
+        let toast = MockFeedbackToast()
         let haptics = MockHaptic()
         let sut = EditProfileViewModel(
             authManager: auth, offlineQueue: queue, attachmentUploader: uploader,

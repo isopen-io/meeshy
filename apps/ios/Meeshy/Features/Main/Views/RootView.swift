@@ -31,14 +31,14 @@ private enum AudioOverlayConstants {
 
 struct RootView: View {
     @StateObject private var theme = ThemeManager.shared
-    @StateObject private var toastManager = ToastManager.shared
+    @StateObject private var toastManager = FeedbackToastManager.shared
     @StateObject private var storyViewModel = StoryViewModel()
     @StateObject private var statusViewModel = StatusViewModel()
     @StateObject private var conversationViewModel = ConversationListViewModel()
     @StateObject private var router = Router()
     @ObservedObject private var callManager = CallManager.shared
     @StateObject private var connectionStatus = ConnectionStatusViewModel()
-    @ObservedObject private var notificationManager = NotificationManager.shared
+    @ObservedObject private var notificationManager = NotificationToastManager.shared
     @EnvironmentObject private var deepLinkRouter: DeepLinkRouter
     @Environment(\.colorScheme) private var systemColorScheme
     @State private var showFeed = false
@@ -129,7 +129,7 @@ struct RootView: View {
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
-                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
+                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(onItemTap: handleSyncPillTap) }
                     case .communityDetail(let communityId):
                         CommunityDetailView(
                             communityId: communityId,
@@ -150,7 +150,7 @@ struct RootView: View {
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
-                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
+                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(onItemTap: handleSyncPillTap) }
                     case .communityCreate:
                         CommunityCreateView(
                             onCreated: { community in
@@ -184,7 +184,7 @@ struct RootView: View {
                             onDismiss: { router.pop() }
                         )
                         .navigationBarHidden(true)
-                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner() }
+                        .safeAreaInset(edge: .top, spacing: 0) { ConnectionBanner(onItemTap: handleSyncPillTap) }
                         .onDisappear {
                             Task { await notificationManager.refreshUnreadCount() }
                         }
@@ -269,21 +269,13 @@ struct RootView: View {
                 menuLadder
             }
 
-            // 7. Offline banner — source unique : ConnectionStatusViewModel.
-            // Quand le réseau revient, `status` cesse d'être `.offline` et la
-            // bannière disparaît immédiatement ; les sockets se reconnectent
-            // en parallèle (cf. NetworkMonitor → forceReconnect dans le SDK).
-            if connectionStatus.status == .offline {
-                VStack {
-                    OfflineBanner()
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                    Spacer()
-                }
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: connectionStatus.status)
-                .zIndex(190)
-            } else {
-                pendingSettingsBannerOverlay
-            }
+            // 7. Offline state — surfaced as a discreet inline chip inside
+            // `ConnectionBanner` (the safe-area inset at the top of every
+            // NavigationStack content view). The legacy full-width red
+            // `OfflineBanner` was retired 2026-05-27 — the offline state
+            // is just one of {.syncing, .offline, .disconnected} that the
+            // small ConnectionBanner pill rotates through.
+            pendingSettingsBannerOverlay
 
             // 8. Toast overlay — handled at MeeshyApp level to avoid duplicates
 
@@ -317,6 +309,11 @@ struct RootView: View {
         .environmentObject(statusViewModel)
         .environmentObject(conversationViewModel)
         .environmentObject(storyViewerCoordinator)
+        // Propagate story viewer presentation state down to chrome (sync
+        // pill, etc.) so they can skip rendering while a `fullScreenCover`
+        // story is on top. Read by `ConnectionBanner` via
+        // `@Environment(\.isStoryViewerPresenting)`. Cf. bug 2026-05-27.
+        .environment(\.isStoryViewerPresenting, storyViewerCoordinator.pendingRequest != nil)
         .adaptiveOnChange(of: router.sceneTitle) { _, title in
             UIApplication.shared.connectedScenes
                 .compactMap { $0 as? UIWindowScene }
@@ -387,6 +384,12 @@ struct RootView: View {
             .environmentObject(router)
             .environmentObject(statusViewModel)
             .environmentObject(conversationViewModel)
+            // Re-inject le flag isStoryViewerPresenting — fullScreenCover
+            // n'hérite pas non plus des `Environment` values du parent,
+            // donc le `StoryViewerContainer.ConnectionBanner` interne au
+            // cover ne pouvait pas se cacher sans ça. Bug sync pill
+            // chevauche header 2026-05-27.
+            .environment(\.isStoryViewerPresenting, true)
         }
         // Call presentation is split between fullScreen and PiP modes so the
         // user can keep using the rest of the app during an active call:
@@ -411,6 +414,10 @@ struct RootView: View {
             FloatingCallPillView()
                 .padding(.top, 8)
         }
+        // SyncPill is mounted INSIDE ConnectionBanner (replacing the legacy
+        // single-label "Synchronisation..." pill) via .safeAreaInset on the
+        // NavigationStack root. Same emplacement, same chrome dimensions —
+        // see ConnectionBanner.syncingPill / SyncPillContent.
         // B4 — Mini audio player floats above the tab bar. Mounted HERE
         // (not in `AdaptiveRootView`) so the tap-body handler can reach
         // the `router` via the local `@StateObject` — `AdaptiveRootView`
@@ -420,11 +427,19 @@ struct RootView: View {
         // links and push notifications), so the cache-first resolution +
         // navigation retry logic is shared.
         .overlay(alignment: .bottom) {
-            MiniAudioPlayerBar(onTapBody: {
-                guard let convId = ConversationAudioCoordinator.shared
-                    .activeContext?.conversationId else { return }
-                navigateToConversationById(convId)
-            })
+            MiniAudioPlayerBar(
+                onTapBody: {
+                    guard let convId = ConversationAudioCoordinator.shared
+                        .activeContext?.conversationId else { return }
+                    navigateToConversationById(convId)
+                },
+                // Hide the bar whenever the user is already inside the
+                // conversation playing the audio — the in-place audio
+                // bubble owns the controls there. Captures `router` so
+                // every `router.path` mutation propagates through to the
+                // bar's next body eval via the parent re-render chain.
+                currentConversationId: { router.currentConversationId }
+            )
             .padding(.bottom, AudioOverlayConstants.iPhoneBottomPadding)
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showFeed)
@@ -466,7 +481,7 @@ struct RootView: View {
                     let conv = apiConv.toConversation(currentUserId: currentUserId)
                     router.navigateToConversation(conv)
                 } catch {
-                    ToastManager.shared.showError(String(localized: "root.create_conversation.error", defaultValue: "Impossible de creer la conversation", bundle: .main))
+                    FeedbackToastManager.shared.showError(String(localized: "root.create_conversation.error", defaultValue: "Impossible de creer la conversation", bundle: .main))
                 }
             }
         }
@@ -582,6 +597,33 @@ struct RootView: View {
         }
     }
 
+    // MARK: - Sync Pill Tap
+
+    /// Tap handler wired into the `ConnectionBanner` → `SyncPill` chain.
+    /// Routes each `OutboxUIItem.Source` to the appropriate destination
+    /// using the local `router` + cached `conversations` list. Logs and
+    /// no-ops when the source can't be resolved (e.g. a conversation
+    /// that hasn't been hydrated into the cache yet).
+    private func handleSyncPillTap(_ source: OutboxUIItem.Source) {
+        switch source {
+        case .conversation(let id):
+            guard let conv = conversationViewModel.conversations.first(where: { $0.id == id }) else {
+                Logger.messages.info("syncPill tap: conversation \(id, privacy: .public) not in cache, skipping")
+                return
+            }
+            router.push(.conversation(conv))
+        case .post(let id):
+            router.push(.postDetail(id, nil, showComments: false))
+        case .story:
+            // V1 no-op — opening a story requires a StoryIntent +
+            // StoryNotificationContext that the inline pill does not
+            // carry. The status row is enough acknowledgement.
+            Logger.messages.info("syncPill tap: story open not yet supported")
+        case .unknown:
+            break
+        }
+    }
+
     // MARK: - Deep Link Handling
 
     private func handleDeepLink(_ deepLink: DeepLink?) {
@@ -673,9 +715,9 @@ struct RootView: View {
                 default:
                     message = error.errorDescription ?? String(localized: "Impossible d'ouvrir le lien", defaultValue: "Impossible d'ouvrir le lien")
                 }
-                ToastManager.shared.showError(message)
+                FeedbackToastManager.shared.showError(message)
             } catch {
-                ToastManager.shared.showError(
+                FeedbackToastManager.shared.showError(
                     String(localized: "Impossible d'ouvrir le lien", defaultValue: "Impossible d'ouvrir le lien")
                 )
             }
@@ -1011,7 +1053,7 @@ struct RootView: View {
             }
             let underlying = (lastError as? LocalizedError)?.errorDescription ?? lastError?.localizedDescription
             let detail = underlying.map { " (\($0))" } ?? ""
-            ToastManager.shared.showError(
+            FeedbackToastManager.shared.showError(
                 String(localized: "Impossible d'ouvrir la conversation", defaultValue: "Impossible d'ouvrir la conversation") + detail
             )
         }

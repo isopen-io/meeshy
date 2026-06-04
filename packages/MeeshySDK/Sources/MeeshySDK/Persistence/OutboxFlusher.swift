@@ -32,23 +32,43 @@ internal func reactionContext(for record: OutboxRecord) -> OfflineRetrySuccess.R
 /// accumulate orphan `.m4a` files indefinitely for messages that never made
 /// it to the server.
 ///
-/// Currently covers `sendMessage` payloads (the one kind that carries a
-/// `localAudioPath`). Other kinds either don't reference local files, or
-/// their files (TUS upload checkpoints) are managed by their own GC path.
+/// Covers `sendMessage` payloads carrying either a scalar `localAudioPath`
+/// (single-track rows) or an array `localAudioPaths` (multi-track rows).
+/// Both fields are swept; the now-empty per-message subdirectory is removed
+/// as a best-effort final step. Other payload kinds either don't reference
+/// local files, or their files (TUS upload checkpoints) are managed by
+/// their own GC path.
 @inline(__always)
 internal func cleanupLocalFiles(for record: OutboxRecord) {
     guard record.kind == .sendMessage else { return }
     let decoder = JSONDecoder()
     decoder.dateDecodingStrategy = .iso8601
-    guard let item = try? decoder.decode(OfflineQueueItem.self, from: record.payload),
-          let relativePath = item.localAudioPath, !relativePath.isEmpty else {
-        return
+    guard let item = try? decoder.decode(OfflineQueueItem.self, from: record.payload) else { return }
+    // S7b — sweep audio (pending-audio/) AND visual media (pending-media/)
+    // paths; both relocate bytes under Documents/ and would leak if a
+    // terminated row didn't clean them. `absoluteAudioPath` is a generic
+    // Documents-relative resolver, so it resolves both correctly.
+    let relativePaths: [String] = (
+        [item.localAudioPath].compactMap { $0 }
+        + (item.localAudioPaths ?? [])
+        + (item.localMediaPaths ?? [])
+    ).filter { !$0.isEmpty }
+    guard !relativePaths.isEmpty else { return }
+    var parentDirs = Set<String>()
+    for rel in relativePaths {
+        let abs = OfflineQueue.absoluteAudioPath(forStored: rel)
+        // Silent: it's normal for the file to already be gone (cancelled send,
+        // adoption already moved it, another sweep ran first). The whole point
+        // is to plug the leak, not to gate on file existence.
+        try? FileManager.default.removeItem(atPath: abs)
+        parentDirs.insert((abs as NSString).deletingLastPathComponent)
     }
-    let absolutePath = OfflineQueue.absoluteAudioPath(forStored: relativePath)
-    // Silent: it's normal for the file to already be gone (cancelled send,
-    // adoption already moved it, another sweep ran first). The whole point
-    // is to plug the leak, not to gate on file existence.
-    try? FileManager.default.removeItem(atPath: absolutePath)
+    // Best-effort: remove the now-empty per-message subdir (pending-audio/<cid>/).
+    for dir in parentDirs {
+        if let contents = try? FileManager.default.contentsOfDirectory(atPath: dir), contents.isEmpty {
+            try? FileManager.default.removeItem(atPath: dir)
+        }
+    }
 }
 
 /// Drains the `outbox` table FIFO, dispatching each pending item via the
@@ -134,14 +154,34 @@ public actor OutboxFlusher {
         return earliestDeferred?.nextAttemptAt
     }
 
+    /// S1 — atomically claim a pending row for dispatch. Flips pending→inflight
+    /// ONLY while the row is still pending; returns false when another flusher
+    /// already claimed it (the conditional UPDATE matched 0 rows). Because GRDB
+    /// serializes writes, two concurrent flushers reduce to two sequential
+    /// claims and exactly one wins — closing the double-dispatch race the old
+    /// unconditional `update(db)` left open (multiple lifecycle triggers each
+    /// build their own OutboxFlusher over the shared pool, so actor isolation
+    /// alone did not serialize them).
+    func claimPending(_ record: OutboxRecord) async -> Bool {
+        let now = Date()
+        return (try? await pool.write { db -> Bool in
+            try OutboxRecord
+                .filter(Column("id") == record.id)
+                .filter(Column("status") == OutboxStatus.pending.rawValue)
+                .updateAll(
+                    db,
+                    Column("status").set(to: OutboxStatus.inflight.rawValue),
+                    Column("updatedAt").set(to: now)
+                ) == 1
+        }) ?? false
+    }
+
     private func processRecord(_ record: OutboxRecord) async {
+        // S1 — claim atomically; skip dispatch if another flusher beat us to it.
+        guard await claimPending(record) else { return }
         var current = record
         current.status = .inflight
         current.updatedAt = Date()
-        let inflightSnapshot = current
-        try? await pool.write { db in
-            try inflightSnapshot.update(db)
-        }
 
         do {
             try await dispatcher.dispatch(current)

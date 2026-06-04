@@ -285,6 +285,60 @@ final class AudioQueueBuilderTests: XCTestCase {
         XCTAssertEqual(queue.map(\.attachmentId), ["azz", "abb", "amm"])
     }
 
+    // MARK: - 8b. Cursor message exemption: self-authored multi-audio tail (BUG F)
+
+    func test_build_selfAuthoredCursorMessage_includesSiblingTail() {
+        let mine = makeAudioMessage(
+            id: "m1",
+            senderId: "bob",
+            senderName: "Bob",
+            attachments: [
+                makeAudioAttachment(id: "a1"),
+                makeAudioAttachment(id: "a2"),
+                makeAudioAttachment(id: "a3")
+            ],
+            createdAt: date(1000)
+        )
+
+        let queue = AudioQueueBuilder.build(
+            from: [mine],
+            startingAfterAttachmentId: "a1",
+            currentUserId: "bob",
+            listenedAttachmentIds: []
+        )
+
+        XCTAssertEqual(queue.map(\.attachmentId), ["a2", "a3"])
+    }
+
+    func test_build_selfAuthoredCursorMessage_otherSelfMessagesStillExcluded() {
+        let cursorMsg = makeAudioMessage(
+            id: "m1",
+            senderId: "bob",
+            senderName: "Bob",
+            attachments: [
+                makeAudioAttachment(id: "a1"),
+                makeAudioAttachment(id: "a2")
+            ],
+            createdAt: date(1000)
+        )
+        let otherSelfMsg = makeAudioMessage(
+            id: "m2",
+            senderId: "bob",
+            senderName: "Bob",
+            attachments: [makeAudioAttachment(id: "a3")],
+            createdAt: date(2000)
+        )
+
+        let queue = AudioQueueBuilder.build(
+            from: [cursorMsg, otherSelfMsg],
+            startingAfterAttachmentId: "a1",
+            currentUserId: "bob",
+            listenedAttachmentIds: []
+        )
+
+        XCTAssertEqual(queue.map(\.attachmentId), ["a2"])
+    }
+
     // MARK: - 9. Empty input → empty output
 
     func test_build_empty_returnsEmpty() {

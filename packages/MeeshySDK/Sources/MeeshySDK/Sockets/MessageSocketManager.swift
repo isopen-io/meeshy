@@ -1126,16 +1126,34 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         socket?.connect()
     }
 
-    public func disconnect() {
+    /// Transport-only teardown shared by `disconnect()`, `prepareForBackground()`
+    /// and `forceReconnect()`. Tears down the live socket + heartbeat (so a stale
+    /// `isConnected` flag can never suppress the next reconnect) but DELIBERATELY
+    /// preserves the session-level state — `hadPreviousConnection` (so the next
+    /// `.connect` reports `wasReconnect == true` and fires `didReconnect`, the
+    /// sole trigger for the open conversation's missed-message backfill +
+    /// queued-receipt flush) AND `joinedConversations` / `activeConversationId`
+    /// (so the `.connect` re-join loop restores the rooms active-first, and
+    /// `leaveConversation` / typing accounting stays accurate after resume).
+    /// Contrast `disconnect()`, the logout/cold reset, which additionally clears
+    /// all of that so the next login is a genuine cold connect with no rooms.
+    private func suspendTransport() {
         stopHeartbeat()
-        joinedConversations.removeAll()
-        activeConversationId = nil
         socket?.disconnect()
         socket = nil
         manager = nil
         isConnected = false
         connectionState = .disconnected
         reconnectAttempt = 0
+    }
+
+    public func disconnect() {
+        suspendTransport()
+        // Logout / cold reset: forget the prior connection AND the joined rooms
+        // so the next `.connect` is a cold first connect (no spurious backfill,
+        // no stale room re-joins under a different account).
+        joinedConversations.removeAll()
+        activeConversationId = nil
         hadPreviousConnection = false
     }
 
@@ -1150,8 +1168,11 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// `if !isConnected { connect() }` would never reconnect and the app
     /// would appear authenticated but receive zero real-time events.
     public func prepareForBackground() {
-        stopHeartbeat()
-        disconnect()
+        // Transport-only teardown: drop the socket so a stale `isConnected`
+        // cannot fool the resume path, but KEEP `hadPreviousConnection` so the
+        // foreground-resume `.connect` fires `didReconnect` (missed-message
+        // backfill + queued read/received-receipt flush).
+        suspendTransport()
     }
 
     /// Called when the app comes back to `.active`. Since
@@ -1169,8 +1190,44 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// the potentially stale `isConnected` flag. `disconnect()` clears
     /// the flag and nils the underlying socket; `connect()` rebuilds it.
     public func forceReconnect() {
-        disconnect()
+        // Suspend (not full disconnect) so `hadPreviousConnection` survives: this
+        // rebuild is a reconnect (resume / network-back / re-auth), and the next
+        // `.connect` must fire `didReconnect`.
+        suspendTransport()
         connect()
+    }
+
+    /// Connection-handshake bookkeeping, extracted from the `.connect` handler
+    /// so the reconnect-vs-cold decision is unit-testable without driving a live
+    /// socket. Records that we have now connected, resets the retry counter,
+    /// and — when this connection follows a previous one (network blip,
+    /// foreground resume, re-auth) — fires `didReconnect` so the app backfills
+    /// the open conversation and flushes queued read/received receipts. Returns
+    /// whether it was a reconnect for the caller's logging/re-join branch.
+    @discardableResult
+    func handleConnectionEstablished() -> Bool {
+        let wasReconnect = hadPreviousConnection
+        hadPreviousConnection = true
+        reconnectAttempt = 0
+        if wasReconnect {
+            DispatchQueue.main.async { [weak self] in self?.didReconnect.send(()) }
+        }
+        return wasReconnect
+    }
+
+    /// The conversation rooms to (re)join on connect, active-first for fastest
+    /// UX. Extracted from the `.connect` handler so the re-join set — preserved
+    /// across a background suspend (`suspendTransport`) and only cleared on
+    /// logout (`disconnect`) — is unit-testable without a live socket.
+    func roomsToRejoinOnConnect() -> [String] {
+        var rooms: [String] = []
+        if let activeId = activeConversationId, joinedConversations.contains(activeId) {
+            rooms.append(activeId)
+        }
+        for convId in joinedConversations where convId != activeConversationId {
+            rooms.append(convId)
+        }
+        return rooms
     }
 
     // MARK: - Heartbeat
@@ -1245,11 +1302,16 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     static let translationBufferTTL: TimeInterval = 60
 
     public func requestTranslation(messageId: String, targetLanguage: String) {
-        if socket?.status == .connected {
-            socket?.emit("translation:request", ["messageId": messageId, "targetLanguage": targetLanguage])
-            Logger.socket.info("Requested translation for \(messageId) -> \(targetLanguage)")
-            return
-        }
+        // U4 — ALWAYS buffer, in addition to emitting when connected. The
+        // gateway's `message:translation` completion broadcast is fire-and-forget
+        // with no ack/replay, so if the socket drops between this request and the
+        // broadcast (a multi-second Whisper/NLLB window), the result is dropped
+        // and reconnect never re-asks (syncMissedMessages only re-fetches NEWER
+        // messages; flushBufferedTranslationRequests previously replayed only the
+        // disconnected buffer). Buffering unconditionally lets the reconnect
+        // replay re-ask; the gateway request is idempotent (returns the cached
+        // translation) so a redundant replay is harmless, and TTL(60s)+dedup+cap
+        // bound the buffer.
         bufferTranslationRequest(
             PendingTranslationRequest(
                 messageId: messageId,
@@ -1257,6 +1319,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                 queuedAt: Date()
             )
         )
+        if isConnected {
+            socket?.emit("translation:request", ["messageId": messageId, "targetLanguage": targetLanguage])
+            Logger.socket.info("Requested translation for \(messageId) -> \(targetLanguage)")
+        }
     }
 
     private func bufferTranslationRequest(_ request: PendingTranslationRequest) {
@@ -1272,7 +1338,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             let dropCount = pendingTranslationRequests.count - Self.translationBufferMaxSize
             pendingTranslationRequests.removeFirst(dropCount)
         }
-        Logger.socket.info("[RT-DIAG] translation:request BUFFERED (socket not connected) msg=\(request.messageId, privacy: .public) target=\(request.targetLanguage, privacy: .public) queued=\(self.pendingTranslationRequests.count, privacy: .public)")
+        Logger.socket.info("[RT-DIAG] translation:request BUFFERED (replay safety net) msg=\(request.messageId, privacy: .public) target=\(request.targetLanguage, privacy: .public) queued=\(self.pendingTranslationRequests.count, privacy: .public)")
     }
 
     /// Flush queued translation requests that are still fresh enough to
@@ -1749,9 +1815,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         socket.on(clientEvent: .connect) { [weak self] _, _ in
             guard let self else { return }
-            let wasReconnect = self.hadPreviousConnection
-            self.hadPreviousConnection = true
-            self.reconnectAttempt = 0
+            let wasReconnect = self.handleConnectionEstablished()
             Logger.socket.info("[RT-DIAG] socket CONNECT wasReconnect=\(wasReconnect, privacy: .public)")
 
             DispatchQueue.main.async {
@@ -1761,12 +1825,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
             self.startHeartbeat()
 
-            // Re-join all tracked conversations
-            // Priority: active conversation first for fastest UX
-            if let activeId = self.activeConversationId, self.joinedConversations.contains(activeId) {
-                self.socket?.emit("conversation:join", ["conversationId": activeId])
-            }
-            for convId in self.joinedConversations where convId != self.activeConversationId {
+            // Re-join all tracked conversations (active-first for fastest UX).
+            for convId in self.roomsToRejoinOnConnect() {
                 self.socket?.emit("conversation:join", ["conversationId": convId])
             }
 
@@ -1777,7 +1837,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
             if wasReconnect {
                 Logger.socket.info("MessageSocket reconnected — re-joined \(self.joinedConversations.count) room(s)")
-                DispatchQueue.main.async { self.didReconnect.send(()) }
             } else {
                 Logger.socket.info("MessageSocket connected")
             }

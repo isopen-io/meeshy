@@ -64,6 +64,58 @@ final class NotificationCoordinatorTests: XCTestCase {
         return (sut, writer, sink, suite)
     }
 
+    private func makeReadEvent(conversationId: String, userId: String?, type: String) -> ReadStatusUpdateEvent {
+        ReadStatusUpdateEvent(
+            conversationId: conversationId,
+            participantId: userId ?? "p_\(conversationId)",
+            userId: userId,
+            type: type,
+            updatedAt: Date(),
+            summary: ReadStatusSummary(totalMembers: 2, deliveredCount: 1, readCount: 1)
+        )
+    }
+
+    private func makeSUTWithUser(_ userId: String?) -> NotificationCoordinator {
+        let suite = "group.test.meeshy.coordinator.\(UUID().uuidString)"
+        createdSuiteNames.append(suite)
+        UserDefaults(suiteName: suite)?.removePersistentDomain(forName: suite)
+        return NotificationCoordinator(badgeWriter: MockBadgeWriter(), appGroupSuiteName: suite,
+                                       currentUserIdProvider: { userId })
+    }
+
+    // MARK: - U2 — read-status resets the open-conversation badge
+
+    func test_handleReadStatusUpdated_currentUserReadEvent_resetsConversationBadge() {
+        let sut = makeSUTWithUser("me")
+        sut.applyConversationUnread(conversationId: "c1", unreadCount: 3)
+        XCTAssertEqual(sut.conversationUnreadTotal, 3)
+
+        sut.handleReadStatusUpdated(makeReadEvent(conversationId: "c1", userId: "me", type: "read"))
+
+        XCTAssertEqual(sut.conversationUnreadTotal, 0,
+            "the current user reading must reset the conversation's badge")
+    }
+
+    func test_handleReadStatusUpdated_receivedEvent_doesNotReset() {
+        let sut = makeSUTWithUser("me")
+        sut.applyConversationUnread(conversationId: "c1", unreadCount: 3)
+
+        sut.handleReadStatusUpdated(makeReadEvent(conversationId: "c1", userId: "me", type: "received"))
+
+        XCTAssertEqual(sut.conversationUnreadTotal, 3,
+            "a 'received' (delivery) event must NOT reset the badge — only an actual read")
+    }
+
+    func test_handleReadStatusUpdated_otherUserRead_doesNotReset() {
+        let sut = makeSUTWithUser("me")
+        sut.applyConversationUnread(conversationId: "c1", unreadCount: 3)
+
+        sut.handleReadStatusUpdated(makeReadEvent(conversationId: "c1", userId: "other", type: "read"))
+
+        XCTAssertEqual(sut.conversationUnreadTotal, 3,
+            "another participant's read receipt must NOT reset MY unread badge")
+    }
+
     /// Wait until `condition()` returns true or the timeout expires. Unlike
     /// `Task.sleep`, this polls the Combine-driven debounce machinery on the
     /// main run loop, which is the iOS test-guide's preferred pattern.

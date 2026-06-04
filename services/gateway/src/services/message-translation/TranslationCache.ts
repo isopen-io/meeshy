@@ -26,20 +26,34 @@ export class TranslationCache {
    * Ajoute un résultat au cache avec éviction LRU
    */
   set(key: string, result: TranslationResult): void {
-    // Si le cache est plein, supprimer la plus ancienne entrée
-    if (this.cache.size >= this.maxSize) {
-      const firstKey = this.cache.keys().next().value;
-      this.cache.delete(firstKey);
+    // Ré-insérer une clé existante la déplace en position "plus récente"
+    // (Map conserve l'ordre d'insertion → delete+set = move-to-end).
+    if (this.cache.has(key)) {
+      this.cache.delete(key);
+    } else if (this.cache.size >= this.maxSize) {
+      // Cache plein : évincer le moins récemment utilisé (tête de Map).
+      const lruKey = this.cache.keys().next().value;
+      if (lruKey !== undefined) {
+        this.cache.delete(lruKey);
+      }
     }
 
     this.cache.set(key, result);
   }
 
   /**
-   * Récupère un résultat depuis le cache
+   * Récupère un résultat depuis le cache. Un hit rafraîchit la récence de
+   * l'entrée (vrai LRU) — sinon une entrée chaude insérée tôt serait évincée.
    */
   get(key: string): TranslationResult | null {
-    return this.cache.get(key) || null;
+    const result = this.cache.get(key);
+    if (result === undefined) {
+      return null;
+    }
+    // Move-to-end : marque l'entrée comme la plus récemment utilisée.
+    this.cache.delete(key);
+    this.cache.set(key, result);
+    return result;
   }
 
   /**

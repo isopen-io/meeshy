@@ -1,6 +1,4 @@
 import SwiftUI
-import CoreImage
-import CoreImage.CIFilterBuiltins
 import MeeshySDK
 
 struct StoryFilterGridView: View {
@@ -8,6 +6,9 @@ struct StoryFilterGridView: View {
     var previewImage: UIImage?
 
     @Environment(\.colorScheme) private var colorScheme
+    /// Tile-sized downsample of `previewImage`, computed once per slide so each
+    /// tile's `StoryFilterProcessor.apply` runs on a small bitmap (cheap + cached).
+    @State private var thumbnailBase: UIImage?
 
     var body: some View {
         // Header interne + background ultraThinMaterial retires : le bandeau parent
@@ -29,6 +30,9 @@ struct StoryFilterGridView: View {
                 intensitySlider
             }
         }
+        .task(id: thumbnailTaskKey) {
+            await prepareThumbnailBase()
+        }
     }
 
     @ViewBuilder
@@ -41,8 +45,12 @@ struct StoryFilterGridView: View {
         } label: {
             VStack(spacing: 4) {
                 Group {
-                    if let image = previewImage {
-                        Image(uiImage: applyFilter(to: image, storyFilter: filter))
+                    if let base = thumbnailBase {
+                        // Same recipe the canvas uses (full strength on tiles, à la
+                        // Instagram) — cached by slide id + filter so this is computed
+                        // once per slide. The intensity slider only drives the canvas.
+                        Image(uiImage: StoryFilterProcessor.apply(filter, to: base,
+                                                                  imageId: viewModel.currentSlide.id))
                             .resizable()
                             .scaledToFill()
                     } else {
@@ -105,41 +113,23 @@ struct StoryFilterGridView: View {
         .padding(.horizontal, 16)
     }
 
-    private func applyFilter(to image: UIImage, storyFilter: StoryFilter?) -> UIImage {
-        guard let storyFilter, let ciImage = CIImage(image: image) else { return image }
+    private var thumbnailTaskKey: String {
+        "\(viewModel.currentSlide.id)_\(previewImage != nil)"
+    }
 
-        let context = CIContext()
-        var outputImage: CIImage?
-        let ciName = storyFilter.ciFilterName
-
-        switch ciName {
-        case "CIColorControls":
-            let filter = CIFilter.colorControls()
-            filter.inputImage = ciImage
-            filter.saturation = Float(1.0 + 0.5 * viewModel.filterIntensity)
-            outputImage = filter.outputImage
-
-        case "CIPhotoEffectMono", "CIPhotoEffectTransfer", "CIPhotoEffectFade", "CIPhotoEffectChrome", "CIPhotoEffectProcess":
-            guard let filter = CIFilter(name: ciName) else { return image }
-            filter.setValue(ciImage, forKey: kCIInputImageKey)
-            outputImage = filter.outputImage
-
-        case "CITemperatureAndTint":
-            let filter = CIFilter.temperatureAndTint()
-            filter.inputImage = ciImage
-            let shift = Float(viewModel.filterIntensity * 2000)
-            let direction: CGFloat = storyFilter == .warm ? 1 : -1
-            filter.neutral = CIVector(x: 6500 + direction * CGFloat(shift), y: 0)
-            outputImage = filter.outputImage
-
-        default:
-            return image
+    /// Downsamples `previewImage` to a tile-sized square once per slide so each
+    /// tile's `StoryFilterProcessor.apply` runs on a small bitmap. Mirrors the
+    /// proven `StoryFilterPicker.generateThumbnails` pattern (off-main downsample).
+    private func prepareThumbnailBase() async {
+        guard let source = previewImage else {
+            thumbnailBase = nil
+            return
         }
-
-        guard let output = outputImage,
-              let cgImage = context.createCGImage(output, from: ciImage.extent) else {
-            return image
-        }
-        return UIImage(cgImage: cgImage)
+        let target = CGSize(width: 128, height: 128)
+        let small = await Task.detached(priority: .userInitiated) {
+            let renderer = UIGraphicsImageRenderer(size: target)
+            return renderer.image { _ in source.draw(in: CGRect(origin: .zero, size: target)) }
+        }.value
+        thumbnailBase = small
     }
 }

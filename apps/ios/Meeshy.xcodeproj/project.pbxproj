@@ -39,6 +39,7 @@
 		MASP0002000200020002F001 /* MeeshyAppScenePhaseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MASP0001000100010001F001 /* MeeshyAppScenePhaseTests.swift */; };
 		CVAT0002000200020002F001 /* ConversationViewModelAudioTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CVAT0001000100010001F001 /* ConversationViewModelAudioTests.swift */; };
 		ABRT0002000200020002F001 /* AudioBubbleRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABRT0001000100010001F001 /* AudioBubbleRouter.swift */; };
+		ACRV0002000200020002F001 /* AudioCarouselView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACRV0001000100010001F001 /* AudioCarouselView.swift */; };
 		ABTT0002000200020002F001 /* AudioBubbleRouterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABTT0001000100010001F001 /* AudioBubbleRouterTests.swift */; };
 		24AFF57E3E63AF37DB547005 /* UserProfileViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FF8351314E9A302F775DBCE /* UserProfileViewModelTests.swift */; };
 		24DF5E35B0F37E09512E704E /* VoIPDedupRingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66F7B674B538960BE3F198D4 /* VoIPDedupRingTests.swift */; };
@@ -153,6 +154,8 @@
 		AA3000000000002FA3 /* MediaCompressor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA3000000000001FA3 /* MediaCompressor.swift */; };
 		AA5000000000002FA5 /* VideoPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5000000000001FA5 /* VideoPreviewView.swift */; };
 		AA6000000000002FA6 /* AttachmentSendService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA6000000000001FA6 /* AttachmentSendService.swift */; };
+		A2865F6E1A1E4E36BC9FD24A /* MultiAttachmentSendPlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A27F2AB5AC64E0CA5724730 /* MultiAttachmentSendPlanner.swift */; };
+		4C0EC0CEF9C548759E9BDEA2 /* MultiAttachmentSendPlannerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F36B09C9B8644F8B375AA65 /* MultiAttachmentSendPlannerTests.swift */; };
 		AABB001100220033 /* MeeshySDK in Frameworks */ = {isa = PBXBuildFile; productRef = AABB001100220066 /* MeeshySDK */; };
 		AABB001100220044 /* MeeshyUI in Frameworks */ = {isa = PBXBuildFile; productRef = AABB001100220077 /* MeeshyUI */; };
 		AABB00110022FF01 /* PresenceManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB00110022EE01 /* PresenceManager.swift */; };
@@ -234,6 +237,7 @@
 		CC2000000000002F20 /* CameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2000000000001F20 /* CameraView.swift */; };
 		CC2100000000002F21 /* ReportMessageSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2100000000001F21 /* ReportMessageSheet.swift */; };
 		CC2200000000002F22 /* MessageDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2200000000001F22 /* MessageDetailSheet.swift */; };
+		MDSTAB0000000004F01 /* MessageDetailSentimentTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = MDSTAB0000000003F01 /* MessageDetailSentimentTab.swift */; };
 		CC2300000000002F23 /* ConversationLockSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2300000000001F23 /* ConversationLockSheet.swift */; };
 		CC2400000000002F24 /* ConversationLockManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2400000000001F24 /* ConversationLockManager.swift */; };
 		CC4000000000002F40 /* ContactCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC4000000000001F40 /* ContactCardView.swift */; };
@@ -420,6 +424,15 @@
 		MOCK000A000A000A000A001 /* MockUserService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK000A000A000A000A000 /* MockUserService.swift */; };
 		MOCK000B000B000B000B001 /* MockBlockService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK000B000B000B000B000 /* MockBlockService.swift */; };
 		MOCK000C000C000C000C001 /* MockLanguageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK000C000C000C000C000 /* MockLanguageProvider.swift */; };
+		FOMQ000D000D000D000D001 /* FakeOfflineMessageQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = FOMQ000D000D000D000D000 /* FakeOfflineMessageQueue.swift */; };
+		FNMN000E000E000E000E001 /* FakeNetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = FNMN000E000E000E000E000 /* FakeNetworkMonitor.swift */; };
+		CVOQ000F000F000F000F001 /* ConversationViewModelOfflineQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CVOQ000F000F000F000F000 /* ConversationViewModelOfflineQueueTests.swift */; };
+		SPVM0001000100010001PRD1 /* SyncPillViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPVM0001000100010001PRD0 /* SyncPillViewModel.swift */; };
+		SPVT0001000100010001TST1 /* SyncPillViewModelDeriveTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPVT0001000100010001TST0 /* SyncPillViewModelDeriveTests.swift */; };
+		SPRT0001000100010001PRD1 /* SyncPillRotator.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPRT0001000100010001PRD0 /* SyncPillRotator.swift */; };
+		SPRT0001000100010001TST1 /* SyncPillRotatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPRT0001000100010001TST0 /* SyncPillRotatorTests.swift */; };
+		SPVW0001000100010001PRD1 /* SyncPill.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPVW0001000100010001PRD0 /* SyncPill.swift */; };
+		SPLB0001000100010001PRD1 /* SyncPillLabels.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPLB0001000100010001PRD0 /* SyncPillLabels.swift */; };
 		MPHK000000002F01 /* MediaPipelineHook.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPHK000000001F01 /* MediaPipelineHook.swift */; };
 		MPHT000000002F01 /* MediaPipelineHookTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MPHT000000001F01 /* MediaPipelineHookTests.swift */; };
 		MSTS02002002002002001 /* MessageStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MSTS01001001001001001 /* MessageStoreTests.swift */; };
@@ -440,7 +453,6 @@
 		OAA0000000000002F02 /* OptimisticAttachmentAdopterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OAA0000000000001F02 /* OptimisticAttachmentAdopterTests.swift */; };
 		OB2900000000002F29 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OB2900000000001F29 /* OnboardingView.swift */; };
 		OBDP01A1A1A1A1A1A1A10001 /* OutboxDispatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = OBDP01A1A1A1A1A1A1A10002 /* OutboxDispatcher.swift */; };
-		OF3000000000002F30 /* OfflineBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = OF3000000000001F30 /* OfflineBanner.swift */; };
 		P2PWRTC000000002F01 /* P2PWebRTCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = P2PWRTC000000001F01 /* P2PWebRTCClient.swift */; };
 		PDTL0001000100010001001 /* PostDetailViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = PDTL0001000100010001000 /* PostDetailViewModelTests.swift */; };
 		PP2500000000002F25 /* ParticipantsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = PP2500000000001F25 /* ParticipantsView.swift */; };
@@ -468,6 +480,8 @@
 		SESVT00000000002F28 /* StoryExportShareViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SESVT00000000001F28 /* StoryExportShareViewModelTests.swift */; };
 		SETT002A002A002A002A0002 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SETT001A001A001A001A0001 /* SettingsView.swift */; };
 		SGDT0001000100010001002 /* StoryGestureDecisionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SGDT0001000100010001001 /* StoryGestureDecisionsTests.swift */; };
+		SVRF0001000100010001002 /* StoryViewerReactionFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SVRF0001000100010001001 /* StoryViewerReactionFlowTests.swift */; };
+		SVLO0001000100010001002 /* StoryViewerLanguageOverrideTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SVLO0001000100010001001 /* StoryViewerLanguageOverrideTests.swift */; };
 		SKLN0001000100010001BLD /* SkeletonVisibilityResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = SKLN0001000100010001REF /* SkeletonVisibilityResolver.swift */; };
 		SKLN0002000100010001BLD /* SkeletonProfileHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = SKLN0002000100010001REF /* SkeletonProfileHeader.swift */; };
 		SKLN0003000100010001BLD /* SkeletonStoryThumb.swift in Sources */ = {isa = PBXBuildFile; fileRef = SKLN0003000100010001REF /* SkeletonStoryThumb.swift */; };
@@ -508,11 +522,11 @@
 		TFA0VT01A001A001A001A001 /* TwoFactorViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TFA0VT01B001B001B001B001 /* TwoFactorViewModelTests.swift */; };
 		THSM0001000100010001B001 /* ThermalStateMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = THSM0001000100010001F001 /* ThermalStateMonitorTests.swift */; };
 		TL6001A001A001A001A00001 /* TrackingLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TL6002A002A002A002A00002 /* TrackingLinksView.swift */; };
-		TM2800000000002F28 /* ToastManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = TM2800000000001F28 /* ToastManager.swift */; };
+		TM2800000000002F28 /* FeedbackToastManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = TM2800000000001F28 /* FeedbackToastManager.swift */; };
 		TNAV0001000100010001001 /* TabNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TNAV0001000100010001000 /* TabNavigationTests.swift */; };
 		TOSV002A002A002A002A0002 /* TermsOfServiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TOSV001A001A001A001A0001 /* TermsOfServiceView.swift */; };
-		TSSU00200000000001F00 /* ToastSurfacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = TSSU00100000000001F00 /* ToastSurfacing.swift */; };
-		TSTM0001000100010001B001 /* ToastManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TSTM0001000100010001F001 /* ToastManagerTests.swift */; };
+		TSSU00200000000001F00 /* FeedbackToastSurfacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = TSSU00100000000001F00 /* FeedbackToastSurfacing.swift */; };
+		TSTM0001000100010001B001 /* FeedbackToastManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TSTM0001000100010001F001 /* FeedbackToastManagerTests.swift */; };
 		VF4200000000002F42 /* VideoFiltersPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = VF4200000000001F42 /* VideoFiltersPanel.swift */; };
 		VOIP0001000100010001B001 /* VoIPPushManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = VOIP0001000100010001F001 /* VoIPPushManagerTests.swift */; };
 		VP01000000000002F001 /* VoiceProfileWizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = VP01000000000001F001 /* VoiceProfileWizardView.swift */; };
@@ -669,6 +683,7 @@
 		MASP0001000100010001F001 /* MeeshyAppScenePhaseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyAppScenePhaseTests.swift; sourceTree = "<group>"; };
 		CVAT0001000100010001F001 /* ConversationViewModelAudioTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModelAudioTests.swift; sourceTree = "<group>"; };
 		ABRT0001000100010001F001 /* AudioBubbleRouter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AudioBubbleRouter.swift; sourceTree = "<group>"; };
+		ACRV0001000100010001F001 /* AudioCarouselView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AudioCarouselView.swift; sourceTree = "<group>"; };
 		ABTT0001000100010001F001 /* AudioBubbleRouterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioBubbleRouterTests.swift; sourceTree = "<group>"; };
 		7B489B1DA15CF189E770686F /* UserProfileViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = UserProfileViewModel.swift; sourceTree = "<group>"; };
 		7D674426B581D850405E32AE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -729,6 +744,8 @@
 		AA5000000000001FA5 /* VideoPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPreviewView.swift; sourceTree = "<group>"; };
 		AA5D13830922E297A0AF6C50 /* VideoFilterPipeline.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoFilterPipeline.swift; sourceTree = "<group>"; };
 		AA6000000000001FA6 /* AttachmentSendService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentSendService.swift; sourceTree = "<group>"; };
+		7A27F2AB5AC64E0CA5724730 /* MultiAttachmentSendPlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MultiAttachmentSendPlanner.swift; sourceTree = "<group>"; };
+		7F36B09C9B8644F8B375AA65 /* MultiAttachmentSendPlannerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MultiAttachmentSendPlannerTests.swift; sourceTree = "<group>"; };
 		AA7E08B0D1609D24446F93BE /* AnonymousSessionStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymousSessionStoreTests.swift; sourceTree = "<group>"; };
 		AABB00110022EE01 /* PresenceManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresenceManager.swift; sourceTree = "<group>"; };
 		AABB00110023EE01 /* PresenceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PresenceService.swift; sourceTree = "<group>"; };
@@ -828,6 +845,7 @@
 		CC2000000000001F20 /* CameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraView.swift; sourceTree = "<group>"; };
 		CC2100000000001F21 /* ReportMessageSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportMessageSheet.swift; sourceTree = "<group>"; };
 		CC2200000000001F22 /* MessageDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageDetailSheet.swift; sourceTree = "<group>"; };
+		MDSTAB0000000003F01 /* MessageDetailSentimentTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageDetailSentimentTab.swift; sourceTree = "<group>"; };
 		CC2300000000001F23 /* ConversationLockSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationLockSheet.swift; sourceTree = "<group>"; };
 		CC2400000000001F24 /* ConversationLockManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationLockManager.swift; sourceTree = "<group>"; };
 		CC2A08DB67EE64A4EEE71EBC /* AudioBubbleCell.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AudioBubbleCell.swift; sourceTree = "<group>"; };
@@ -991,6 +1009,15 @@
 		MOCK000A000A000A000A000 /* MockUserService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockUserService.swift; sourceTree = "<group>"; };
 		MOCK000B000B000B000B000 /* MockBlockService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBlockService.swift; sourceTree = "<group>"; };
 		MOCK000C000C000C000C000 /* MockLanguageProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockLanguageProvider.swift; sourceTree = "<group>"; };
+		FOMQ000D000D000D000D000 /* FakeOfflineMessageQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FakeOfflineMessageQueue.swift; sourceTree = "<group>"; };
+		FNMN000E000E000E000E000 /* FakeNetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FakeNetworkMonitor.swift; sourceTree = "<group>"; };
+		CVOQ000F000F000F000F000 /* ConversationViewModelOfflineQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationViewModelOfflineQueueTests.swift; sourceTree = "<group>"; };
+		SPVM0001000100010001PRD0 /* SyncPillViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillViewModel.swift; sourceTree = "<group>"; };
+		SPVT0001000100010001TST0 /* SyncPillViewModelDeriveTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillViewModelDeriveTests.swift; sourceTree = "<group>"; };
+		SPRT0001000100010001PRD0 /* SyncPillRotator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillRotator.swift; sourceTree = "<group>"; };
+		SPRT0001000100010001TST0 /* SyncPillRotatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillRotatorTests.swift; sourceTree = "<group>"; };
+		SPVW0001000100010001PRD0 /* SyncPill.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPill.swift; sourceTree = "<group>"; };
+		SPLB0001000100010001PRD0 /* SyncPillLabels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncPillLabels.swift; sourceTree = "<group>"; };
 		MPHK000000001F01 /* MediaPipelineHook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipelineHook.swift; sourceTree = "<group>"; };
 		MPHT000000001F01 /* MediaPipelineHookTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipelineHookTests.swift; sourceTree = "<group>"; };
 		MSTS01001001001001001 /* MessageStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageStoreTests.swift; sourceTree = "<group>"; };
@@ -1009,7 +1036,6 @@
 		OAA0000000000001F02 /* OptimisticAttachmentAdopterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptimisticAttachmentAdopterTests.swift; sourceTree = "<group>"; };
 		OB2900000000001F29 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		OBDP01A1A1A1A1A1A1A10002 /* OutboxDispatcher.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OutboxDispatcher.swift; sourceTree = "<group>"; };
-		OF3000000000001F30 /* OfflineBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OfflineBanner.swift; sourceTree = "<group>"; };
 		P2PWRTC000000001F01 /* P2PWebRTCClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = P2PWebRTCClient.swift; sourceTree = "<group>"; };
 		PDTL0001000100010001000 /* PostDetailViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostDetailViewModelTests.swift; sourceTree = "<group>"; };
 		PP2500000000001F25 /* ParticipantsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParticipantsView.swift; sourceTree = "<group>"; };
@@ -1037,6 +1063,8 @@
 		SESVT00000000001F28 /* StoryExportShareViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryExportShareViewModelTests.swift; sourceTree = "<group>"; };
 		SETT001A001A001A001A0001 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		SGDT0001000100010001001 /* StoryGestureDecisionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryGestureDecisionsTests.swift; sourceTree = "<group>"; };
+		SVRF0001000100010001001 /* StoryViewerReactionFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerReactionFlowTests.swift; sourceTree = "<group>"; };
+		SVLO0001000100010001001 /* StoryViewerLanguageOverrideTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerLanguageOverrideTests.swift; sourceTree = "<group>"; };
 		SKLN0001000100010001REF /* SkeletonVisibilityResolver.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Skeletons/SkeletonVisibilityResolver.swift; sourceTree = SOURCE_ROOT; };
 		SKLN0002000100010001REF /* SkeletonProfileHeader.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Skeletons/SkeletonProfileHeader.swift; sourceTree = SOURCE_ROOT; };
 		SKLN0003000100010001REF /* SkeletonStoryThumb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Skeletons/SkeletonStoryThumb.swift; sourceTree = SOURCE_ROOT; };
@@ -1077,11 +1105,11 @@
 		TFA0VT01B001B001B001B001 /* TwoFactorViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TwoFactorViewModelTests.swift; sourceTree = "<group>"; };
 		THSM0001000100010001F001 /* ThermalStateMonitorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThermalStateMonitorTests.swift; sourceTree = "<group>"; };
 		TL6002A002A002A002A00002 /* TrackingLinksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingLinksView.swift; sourceTree = "<group>"; };
-		TM2800000000001F28 /* ToastManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastManager.swift; sourceTree = "<group>"; };
+		TM2800000000001F28 /* FeedbackToastManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackToastManager.swift; sourceTree = "<group>"; };
 		TNAV0001000100010001000 /* TabNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabNavigationTests.swift; sourceTree = "<group>"; };
 		TOSV001A001A001A001A0001 /* TermsOfServiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TermsOfServiceView.swift; sourceTree = "<group>"; };
-		TSSU00100000000001F00 /* ToastSurfacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastSurfacing.swift; sourceTree = "<group>"; };
-		TSTM0001000100010001F001 /* ToastManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastManagerTests.swift; sourceTree = "<group>"; };
+		TSSU00100000000001F00 /* FeedbackToastSurfacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackToastSurfacing.swift; sourceTree = "<group>"; };
+		TSTM0001000100010001F001 /* FeedbackToastManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackToastManagerTests.swift; sourceTree = "<group>"; };
 		TSTS000A000A000A000A001 /* MeeshyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MeeshyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		VF4200000000001F42 /* VideoFiltersPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFiltersPanel.swift; sourceTree = "<group>"; };
 		VOIP0001000100010001F001 /* VoIPPushManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoIPPushManagerTests.swift; sourceTree = "<group>"; };
@@ -1183,6 +1211,7 @@
 				CC1700000000001F17 /* MessageOverlayMenu.swift */,
 				CC2100000000001F21 /* ReportMessageSheet.swift */,
 				CC2200000000001F22 /* MessageDetailSheet.swift */,
+				MDSTAB0000000003F01 /* MessageDetailSentimentTab.swift */,
 				CC1800000000001F18 /* MessageInfoSheet.swift */,
 				CC1900000000001F19 /* ForwardPickerSheet.swift */,
 				CC1900000000003F19 /* ConversationInfoSheet.swift */,
@@ -1204,7 +1233,6 @@
 				EF01020304050607080900AB /* EffectsPickerView.swift */,
 				CC2300000000001F23 /* ConversationLockSheet.swift */,
 				PP2600000000001F26 /* AddParticipantSheet.swift */,
-				OF3000000000001F30 /* OfflineBanner.swift */,
 				CB3100000000001F31 /* ConnectionBanner.swift */,
 				CRS00100010001000100F001 /* CrashReportSheet.swift */,
 				A356FD5DE5874BCEFB9139C4 /* SecurityVerificationView.swift */,
@@ -1216,6 +1244,9 @@
 				MNSP0001000100010001REF /* MentionSuggestionPanel.swift */,
 				48CE3690D4CCEEC41757B801 /* EditPostSheet.swift */,
 				MAPB0001000100010001F001 /* MiniAudioPlayerBar.swift */,
+				SPRT0001000100010001PRD0 /* SyncPillRotator.swift */,
+				SPVW0001000100010001PRD0 /* SyncPill.swift */,
+				SPLB0001000100010001PRD0 /* SyncPillLabels.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -1263,11 +1294,20 @@
 				239EA92B51CC63E846FDE461 /* Components */,
 				DD00AA11BB22CC33EE44FF01 /* Models */,
 				RR1100000000003F01 /* Navigation */,
+				SPRG0001000100010001GRP /* Routing */,
 				AABB00110022DD01 /* Services */,
+				THMG0001000100010001GRP /* Theming */,
 				B8C9D0E1F2A3B4C5D6E7F8A9 /* ViewModels */,
 				937EE8EE8FCFAC22BCD07F51 /* Views */,
 			);
 			path = Main;
+			sourceTree = "<group>";
+		};
+		THMG0001000100010001GRP /* Theming */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = Theming;
 			sourceTree = "<group>";
 		};
 		437B1D92F1A225C5E1B044C2 /* Meeshy */ = {
@@ -1497,9 +1537,10 @@
 				APREPS01000000000000F001 /* AttachmentPreparationService.swift */,
 				OAA0000000000001F01 /* OptimisticAttachmentAdopter.swift */,
 				AA6000000000001FA6 /* AttachmentSendService.swift */,
+				7A27F2AB5AC64E0CA5724730 /* MultiAttachmentSendPlanner.swift */,
 				PQ7000000000001FPQ /* PendingStatusQueue.swift */,
 				CC2400000000001F24 /* ConversationLockManager.swift */,
-				TM2800000000001F28 /* ToastManager.swift */,
+				TM2800000000001F28 /* FeedbackToastManager.swift */,
 				SPS2800000000001F28 /* StoryPublishService.swift */,
 				SVES000000000001F28 /* StoryVideoExportService.swift */,
 				CM3600000000001F36 /* CallManager.swift */,
@@ -1541,7 +1582,7 @@
 				LANG0010010010010010001 /* LanguageProviding.swift */,
 				7EE5D71D9A67552B9345231E /* ConversationPreferencesBroadcaster.swift */,
 				SLEP00100000000001F00 /* Sleeping.swift */,
-				TSSU00100000000001F00 /* ToastSurfacing.swift */,
+				TSSU00100000000001F00 /* FeedbackToastSurfacing.swift */,
 				HPSU00100000000001F00 /* HapticSurfacing.swift */,
 				ATUP00100000000001F00 /* AttachmentUploader.swift */,
 				BDE7BECE4410F852255F0BFD /* ConversationCreator.swift */,
@@ -1580,6 +1621,7 @@
 				12EC32EE90955ED041C92F06 /* ConversationViewModelTests.swift */,
 				D3AD91E4BFD44CDA82DEAD02 /* ConversationViewModelOtherUnreadTests.swift */,
 				CVAT0001000100010001F001 /* ConversationViewModelAudioTests.swift */,
+				CVOQ000F000F000F000F000 /* ConversationViewModelOfflineQueueTests.swift */,
 				7789A854759F389975CB9906 /* FeedViewModelTests.swift */,
 				E5AC4E027FC1B934E44A48FD /* GlobalSearchViewModelTests.swift */,
 				E4A4562A9E8160E9EF7098B7 /* StatusViewModelTests.swift */,
@@ -1600,6 +1642,7 @@
 				A6D1738BD9811301B9F54CC3 /* NewConversationViewModelTests.swift */,
 				F724878269B34D64666FE22F /* SharePickerViewModelTests.swift */,
 				58E474C4D36CC00D6996402D /* ActiveSessionsViewModelTests.swift */,
+				SPVT0001000100010001TST0 /* SyncPillViewModelDeriveTests.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -1627,6 +1670,7 @@
 				22A41274BF8D576660206AD8 /* NewConversationViewModel.swift */,
 				917EA2F73850B030DA882892 /* SharePickerViewModel.swift */,
 				279C3702E1E676F9B782AA66 /* ActiveSessionsViewModel.swift */,
+				SPVM0001000100010001PRD0 /* SyncPillViewModel.swift */,
 				0839132BDE66F1FFD67D64A7 /* Conversation */,
 			);
 			path = ViewModels;
@@ -1648,6 +1692,7 @@
 				BBLY0001000100010001REF /* BubbleQuotedReply.swift */,
 				BBLZ0001000100010001REF /* BubbleAttachmentView.swift */,
 				ABRT0001000100010001F001 /* AudioBubbleRouter.swift */,
+				ACRV0001000100010001F001 /* AudioCarouselView.swift */,
 				BBLX0001000100010001REF /* BubbleExpandableText.swift */,
 				BBLV0001000100010001REF /* BubbleSystemViews.swift */,
 				BBLD0001000100010001REF /* BubbleStandardLayout.swift */,
@@ -1870,6 +1915,8 @@
 				BE78D3B42AA19F0490A676B0 /* MockVoIPTokenStore.swift */,
 				45DFAB2ED859C2AA5B59F337 /* MockSessionService.swift */,
 				MAPE0001000100010001F001 /* MockAudioPlaybackEngine.swift */,
+				FOMQ000D000D000D000D000 /* FakeOfflineMessageQueue.swift */,
+				FNMN000E000E000E000E000 /* FakeNetworkMonitor.swift */,
 			);
 			path = Mocks;
 			sourceTree = "<group>";
@@ -1987,6 +2034,8 @@
 			children = (
 				TSTRN0001000100010001000 /* Notifications */,
 				SGDT0001000100010001001 /* StoryGestureDecisionsTests.swift */,
+				SVRF0001000100010001001 /* StoryViewerReactionFlowTests.swift */,
+				SVLO0001000100010001001 /* StoryViewerLanguageOverrideTests.swift */,
 			);
 			path = Stories;
 			sourceTree = "<group>";
@@ -2015,6 +2064,7 @@
 				GSTC005A3B4C5D6E7F890100 /* Views */,
 				33668F4D121C1D11C8401A08 /* Models */,
 				MABT000C000C000C000C001 /* Components */,
+				SPTG0001000100010001GRP /* Routing */,
 			);
 			path = Unit;
 			sourceTree = "<group>";
@@ -2023,6 +2073,7 @@
 			isa = PBXGroup;
 			children = (
 				MABT0001000100010001F001 /* MiniAudioPlayerBarTests.swift */,
+				SPRT0001000100010001TST0 /* SyncPillRotatorTests.swift */,
 			);
 			path = Components;
 			sourceTree = "<group>";
@@ -2058,7 +2109,7 @@
 				CTRS0001000100010001F001 /* CallTranscriptionServiceTests.swift */,
 				PSQU0001000100010001F001 /* PendingStatusQueueTests.swift */,
 				SBCT0001000100010001F001 /* StatusBubbleControllerTests.swift */,
-				TSTM0001000100010001F001 /* ToastManagerTests.swift */,
+				TSTM0001000100010001F001 /* FeedbackToastManagerTests.swift */,
 				SPST0001000100010001F001 /* StoryPublishServiceTests.swift */,
 				SVET0001000100010001F001 /* StoryVideoExportServiceTests.swift */,
 				WDGM0001000100010001F001 /* WidgetDataManagerTests.swift */,
@@ -2078,6 +2129,7 @@
 				CDPF000000001F01 /* CodecPreferencesTests.swift */,
 				ATUT00100000000001F00 /* AttachmentUploaderTests.swift */,
 				APREPT01000000000000F001 /* AttachmentPreparationServiceTests.swift */,
+				7F36B09C9B8644F8B375AA65 /* MultiAttachmentSendPlannerTests.swift */,
 				4955C8F3EA2744580E65FF10 /* ConversationCreatorTests.swift */,
 				A6004F67A016838BA122ED6E /* ReplyThreadLoaderTests.swift */,
 				A97823C39C2E89910B2CBD31 /* StoryInteractionServiceTests.swift */,
@@ -2353,6 +2405,10 @@
 				AA11BB22CC33DD44EE55FF02 /* StoryViewModel.swift in Sources */,
 				AA11BB22CC33DD44EE55FF03 /* StatusViewModel.swift in Sources */,
 				CSVM470A470A470A470A4701 /* ConnectionStatusViewModel.swift in Sources */,
+				SPVM0001000100010001PRD1 /* SyncPillViewModel.swift in Sources */,
+				SPRT0001000100010001PRD1 /* SyncPillRotator.swift in Sources */,
+				SPVW0001000100010001PRD1 /* SyncPill.swift in Sources */,
+				SPLB0001000100010001PRD1 /* SyncPillLabels.swift in Sources */,
 				AA11BB22CC33DD44EE55FF04 /* StoryTrayView.swift in Sources */,
 				AA11BB22CC33DD44EE55FF05 /* StoryViewerView.swift in Sources */,
 				D974F1384869B32923B076E7 /* StoryViewerContainer.swift in Sources */,
@@ -2377,6 +2433,7 @@
 				CC1700000000002F17 /* MessageOverlayMenu.swift in Sources */,
 				CC2100000000002F21 /* ReportMessageSheet.swift in Sources */,
 				CC2200000000002F22 /* MessageDetailSheet.swift in Sources */,
+				MDSTAB0000000004F01 /* MessageDetailSentimentTab.swift in Sources */,
 				CC1800000000002F18 /* MessageInfoSheet.swift in Sources */,
 				CC1900000000002F19 /* ForwardPickerSheet.swift in Sources */,
 				CC1900000000004F19 /* ConversationInfoSheet.swift in Sources */,
@@ -2393,6 +2450,7 @@
 				OAA0000000000002F01 /* OptimisticAttachmentAdopter.swift in Sources */,
 				AA5000000000002FA5 /* VideoPreviewView.swift in Sources */,
 				AA6000000000002FA6 /* AttachmentSendService.swift in Sources */,
+				A2865F6E1A1E4E36BC9FD24A /* MultiAttachmentSendPlanner.swift in Sources */,
 				PQ7000000000002FPQ /* PendingStatusQueue.swift in Sources */,
 				AABB00110022FF01 /* PresenceManager.swift in Sources */,
 				AABB00110023FF01 /* PresenceService.swift in Sources */,
@@ -2481,7 +2539,7 @@
 				PP2500000000002F25 /* ParticipantsView.swift in Sources */,
 				PP2600000000002F26 /* AddParticipantSheet.swift in Sources */,
 				ML2700000000002F27 /* MagicLinkView.swift in Sources */,
-				TM2800000000002F28 /* ToastManager.swift in Sources */,
+				TM2800000000002F28 /* FeedbackToastManager.swift in Sources */,
 				SPS2800000000002F28 /* StoryPublishService.swift in Sources */,
 				SVES000000000002F28 /* StoryVideoExportService.swift in Sources */,
 				SESH000000000002F28 /* StoryExportShareSheet.swift in Sources */,
@@ -2496,7 +2554,6 @@
 				STTS0001000100010001002 /* StoryNotificationTargetScreen.swift in Sources */,
 				PS3900000000002F39 /* ParticipantService.swift in Sources */,
 				OB2900000000002F29 /* OnboardingView.swift in Sources */,
-				OF3000000000002F30 /* OfflineBanner.swift in Sources */,
 				CB3100000000002F31 /* ConnectionBanner.swift in Sources */,
 				CRS00100010001000100B001 /* CrashReportSheet.swift in Sources */,
 				GS3200000000002F32 /* GlobalSearchView.swift in Sources */,
@@ -2585,6 +2642,7 @@
 				CANP0002000200020002F001 /* ConversationAudioCoordinator+NowPlaying.swift in Sources */,
 				MAPB0002000200020002F001 /* MiniAudioPlayerBar.swift in Sources */,
 				ABRT0002000200020002F001 /* AudioBubbleRouter.swift in Sources */,
+				ACRV0002000200020002F001 /* AudioCarouselView.swift in Sources */,
 				FCFL01A1A1A1A1A1A1A10001 /* MeeshyFocusFilter.swift in Sources */,
 				OBDP01A1A1A1A1A1A1A10001 /* OutboxDispatcher.swift in Sources */,
 				WDFL01B1B1B1B1B1B1B10001 /* WidgetActionFlusher.swift in Sources */,
@@ -2619,7 +2677,7 @@
 				DDE8B064EF5D6FAE5ACA40CF /* ConversationOptionsViewModel.swift in Sources */,
 				6D829DF9D5D32E88815DF3E9 /* ConversationPreferencesBroadcaster.swift in Sources */,
 				SLEP00200000000001F00 /* Sleeping.swift in Sources */,
-				TSSU00200000000001F00 /* ToastSurfacing.swift in Sources */,
+				TSSU00200000000001F00 /* FeedbackToastSurfacing.swift in Sources */,
 				HPSU00200000000001F00 /* HapticSurfacing.swift in Sources */,
 				ATUP00200000000001F00 /* AttachmentUploader.swift in Sources */,
 				EPVM00200000000001F00 /* EditProfileViewModel.swift in Sources */,
@@ -2667,6 +2725,11 @@
 				MOCK0007000700070007001 /* MockStoryService.swift in Sources */,
 				MOCK0008000800080008001 /* MockPostService.swift in Sources */,
 				MOCK000C000C000C000C001 /* MockLanguageProvider.swift in Sources */,
+				FOMQ000D000D000D000D001 /* FakeOfflineMessageQueue.swift in Sources */,
+				FNMN000E000E000E000E001 /* FakeNetworkMonitor.swift in Sources */,
+				CVOQ000F000F000F000F001 /* ConversationViewModelOfflineQueueTests.swift in Sources */,
+				SPVT0001000100010001TST1 /* SyncPillViewModelDeriveTests.swift in Sources */,
+				SPRT0001000100010001TST1 /* SyncPillRotatorTests.swift in Sources */,
 				MOCK0009000900090009001 /* MockStatusService.swift in Sources */,
 				MOCK000A000A000A000A001 /* MockUserService.swift in Sources */,
 				MOCK000B000B000B000B001 /* MockBlockService.swift in Sources */,
@@ -2730,7 +2793,7 @@
 				CTRS0001000100010001B001 /* CallTranscriptionServiceTests.swift in Sources */,
 				PSQU0001000100010001B001 /* PendingStatusQueueTests.swift in Sources */,
 				SBCT0001000100010001B001 /* StatusBubbleControllerTests.swift in Sources */,
-				TSTM0001000100010001B001 /* ToastManagerTests.swift in Sources */,
+				TSTM0001000100010001B001 /* FeedbackToastManagerTests.swift in Sources */,
 				SPST0001000100010001B001 /* StoryPublishServiceTests.swift in Sources */,
 				SVET0001000100010001B001 /* StoryVideoExportServiceTests.swift in Sources */,
 				WDGM0001000100010001B001 /* WidgetDataManagerTests.swift in Sources */,
@@ -2770,6 +2833,8 @@
 				STET0001000100010001002 /* StoryExpiredContentTests.swift in Sources */,
 				STAB0001000100010001002 /* StoryActiveBridgeTests.swift in Sources */,
 				SGDT0001000100010001002 /* StoryGestureDecisionsTests.swift in Sources */,
+				SVRF0001000100010001002 /* StoryViewerReactionFlowTests.swift in Sources */,
+				SVLO0001000100010001002 /* StoryViewerLanguageOverrideTests.swift in Sources */,
 				CLRT0001000100010001002 /* ComposerLanguageResolverTests.swift in Sources */,
 				AE6AF9B4AA7E4759A0A02D38 /* ThemedBackButtonTests.swift in Sources */,
 				STNF0001000100010001002 /* StoryNotificationFlowTests.swift in Sources */,
@@ -2789,6 +2854,7 @@
 				320813BE4021B286D9F68C98 /* ConversationOptionsViewModelTests.swift in Sources */,
 				ATUT00200000000001F00 /* AttachmentUploaderTests.swift in Sources */,
 				APREPT02000000000000F002 /* AttachmentPreparationServiceTests.swift in Sources */,
+				4C0EC0CEF9C548759E9BDEA2 /* MultiAttachmentSendPlannerTests.swift in Sources */,
 				MATU00200000000001F00 /* MockAttachmentUploader.swift in Sources */,
 				MEPD00200000000001F00 /* MockEditProfileDoubles.swift in Sources */,
 				EPVT00200000000001F00 /* EditProfileViewModelTests.swift in Sources */,
@@ -2846,7 +2912,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyWidgets/MeeshyWidgets.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 446;
+				CURRENT_PROJECT_VERSION = 462;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -2953,7 +3019,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 446;
+				CURRENT_PROJECT_VERSION = 462;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Meeshy/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Meeshy Dev";
@@ -3050,7 +3116,7 @@
 				CODE_SIGN_ENTITLEMENTS = Meeshy/Meeshy.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 446;
+				CURRENT_PROJECT_VERSION = 462;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Meeshy/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Meeshy;
@@ -3082,7 +3148,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 446;
+				CURRENT_PROJECT_VERSION = 462;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -3119,7 +3185,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 446;
+				CURRENT_PROJECT_VERSION = 462;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -3158,7 +3224,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyWidgets/MeeshyWidgets.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 446;
+				CURRENT_PROJECT_VERSION = 462;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;

@@ -19,6 +19,10 @@ import MeeshyUI
 struct StoryActionSidebarView: View {
     let isOwnStory: Bool
     let storyReactionCount: Int
+    /// True only when the *current viewer* has personally reacted to this
+    /// story — drives the heart's indigo active state. Decoupled from
+    /// `storyReactionCount > 0`, which is the global count (anyone).
+    let storyCurrentUserHasReacted: Bool
     /// Ticks on every reaction sent (any path). `.onChange` drives `bounceHeart()`.
     let heartBouncePulse: Int
     let quickEmojis: [String]
@@ -26,11 +30,21 @@ struct StoryActionSidebarView: View {
     let currentStory: StoryItem?
     let currentGroup: StoryGroup?
     let storyCommentCount: Int
+    /// Forward / external-share count for the Envoyer button label (user spec
+    /// 2026-05-28: non-author sees counts on Réact + Comments + Envoyer).
+    let storyShareCount: Int
+    /// Author-only viewers count for the Vues button label.
+    let storyViewCount: Int
+    /// Repost-of-this-story count for the Partager button label (non-author
+    /// + public stories only).
+    let storyRepostCount: Int
     let isStoryCommentsEmpty: Bool
     let storyHasAudibleSound: Bool
     let storyHasTranslatableContent: Bool
     let isGlobalMuted: Bool
     let availableTranslationLanguages: [TranslationLanguage]
+    /// Prisme « Exploration » : affiche la story dans la langue choisie (override éphémère).
+    let onSelectLanguageOverride: (String) -> Void
 
     @Binding var showEmojiStrip: Bool
     @Binding var showFullEmojiPicker: Bool
@@ -91,7 +105,7 @@ struct StoryActionSidebarView: View {
                 StoryActionButton(
                     icon: "heart.fill",
                     label: storyReactionCount > 0 ? "\(storyReactionCount)" : "React",
-                    isActive: showEmojiStrip || storyReactionCount > 0,
+                    isActive: showEmojiStrip || storyCurrentUserHasReacted,
                     activeColor: MeeshyColors.indigo500,
                     activeGlow: MeeshyColors.indigo500
                 ) {
@@ -161,10 +175,12 @@ struct StoryActionSidebarView: View {
                 }
             }
 
-            // 3. Forward (send to someone)
+            // 3. Forward (send to someone) — label = count when > 0
+            // (user spec 2026-05-28: « Compteur des react et des commentaires,
+            // envoyer uniquement » pour le non-auteur).
             StoryActionButton(
                 icon: "paperplane.fill",
-                label: "Envoyer"
+                label: storyShareCount > 0 ? "\(storyShareCount)" : "Envoyer"
             ) {
                 HapticFeedback.light()
                 pauseTimer()
@@ -179,7 +195,7 @@ struct StoryActionSidebarView: View {
             if !isOwnStory, currentStory?.isPublic == true {
                 StoryActionButton(
                     icon: "arrow.2.squarepath",
-                    label: "Partager"
+                    label: storyRepostCount > 0 ? "\(storyRepostCount)" : "Partager"
                 ) {
                     HapticFeedback.light()
                     pauseTimer()
@@ -193,7 +209,7 @@ struct StoryActionSidebarView: View {
             } else if isOwnStory {
                 StoryActionButton(
                     icon: "eye.fill",
-                    label: "Vues"
+                    label: storyViewCount > 0 ? "\(storyViewCount)" : "Vues"
                 ) {
                     HapticFeedback.light()
                     pauseTimer()
@@ -243,7 +259,11 @@ struct StoryActionSidebarView: View {
                 )
             }
 
-            // 5. Comments toggle
+            // 5. Comments toggle — visible only when count > 0. Below the
+            // sidebar the composer pill already gives an obvious affordance
+            // to write the first comment, so an extra empty button would just
+            // be visual noise (user spec 2026-05-28: « Inutile d'afficher à
+            // 0 […] la zone d'écriture en bas permet déjà de commenter »).
             if storyCommentCount > 0 {
                 StoryActionButton(
                     icon: "bubble.left.fill",
@@ -307,6 +327,9 @@ struct StoryActionSidebarView: View {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                                     showLanguageOptions = false
                                 }
+                                // Prisme « Exploration » : bascule l'affichage dans la
+                                // langue choisie (override) ; demande la traduction si absente.
+                                onSelectLanguageOverride(lang.id)
                                 guard let story = currentStory else { return }
                                 Task {
                                     await StoryInteractionService().requestTranslation(
@@ -408,7 +431,7 @@ struct StoryHeaderView: View {
             shareableStoryLink = ShareableLink(url: fallback)
             HapticFeedback.light()
         } else {
-            ToastManager.shared.showError("Lien indisponible")
+            FeedbackToastManager.shared.showError("Lien indisponible")
         }
     }
 
@@ -461,33 +484,22 @@ struct StoryHeaderView: View {
                                     .allowsHitTesting(false)
                             }
 
+                            // Pas de bordure gradient autour de l'avatar dans la
+                            // slide : on est déjà dans la story de l'utilisateur,
+                            // l'anneau « story dispo » serait redondant (cf. user
+                            // request 2026-05-27). Le contexte `.storyViewer` suffit
+                            // déjà à masquer l'anneau via `showsStoryRing == false`.
                             MeeshyAvatar(
                                 name: group.username,
                                 context: .storyViewer,
                                 accentColor: group.avatarColor,
+                                avatarURL: group.avatarURL,
                                 onViewProfile: { selectedProfileUser = .from(storyGroup: group) },
                                 contextMenuItems: [
                                     AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
                                         selectedProfileUser = .from(storyGroup: group)
                                     }
                                 ]
-                            )
-                            .overlay(
-                                Circle()
-                                    .stroke(
-                                        LinearGradient(
-                                            colors: [MeeshyColors.indigo500, MeeshyColors.indigo400],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        ),
-                                        lineWidth: avatarLongPressGlow ? 3 : 2
-                                    )
-                                    .frame(width: 44, height: 44)
-                                    .shadow(
-                                        color: avatarLongPressGlow ? MeeshyColors.indigo500.opacity(0.6) : .clear,
-                                        radius: 12,
-                                        y: 0
-                                    )
                             )
                             .scaleEffect(avatarLongPressGlow ? 1.05 : 1.0)
                         }

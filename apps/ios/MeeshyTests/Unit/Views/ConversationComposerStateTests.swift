@@ -17,7 +17,7 @@ final class ConversationComposerStateTests: XCTestCase {
         state.pendingAttachments = [
             MessageAttachment(id: attachmentId, mimeType: "audio/mp4", duration: durationMs, channels: 2)
         ]
-        state.pendingAudioURL = originalURL
+        state.pendingMediaFiles[attachmentId] = originalURL
         return state
     }
 
@@ -47,13 +47,12 @@ final class ConversationComposerStateTests: XCTestCase {
         XCTAssertEqual(state.pendingAttachments.first?.duration, 1800)
     }
 
-    func test_applyEditedAudio_routesAudioURLAndMediaFileToEditedFile() {
+    func test_applyEditedAudio_routesMediaFileToEditedFile() {
         let edited = URL(fileURLWithPath: "/tmp/edited.m4a")
         var state = makeStateWithAudio(attachmentId: "audio-1")
 
         state.applyEditedAudio(attachmentId: "audio-1", editedURL: edited, durationMs: 1800)
 
-        XCTAssertEqual(state.pendingAudioURL, edited)
         XCTAssertEqual(state.pendingMediaFiles["audio-1"], edited)
     }
 

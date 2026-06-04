@@ -1,6 +1,7 @@
 // packages/MeeshySDK/Tests/MeeshyUITests/Story/Reader/Background/StoryBackgroundLayerTests.swift
 import XCTest
 @testable import MeeshyUI
+@testable import MeeshySDK
 
 @MainActor
 final class StoryBackgroundLayerTests: XCTestCase {
@@ -31,6 +32,48 @@ final class StoryBackgroundLayerTests: XCTestCase {
         XCTAssertEqual(layer.transform.m11, 2.0, accuracy: 1e-9)
     }
 
+    /// Régression « saut au release » : déplacer/zoomer le fond pendant un
+    /// drag puis relâcher ne doit PAS faire revenir le fond à sa position
+    /// initiale sur le canvas. Pendant le drag, `updateManipulatedItemLayer`
+    /// appelle `applyContentTransform` qui pose un transform non-identité sur
+    /// `contentLayer` SANS toucher `transform3D`. Au `.ended`,
+    /// `rebuildLayers → configure` arrive dans le chemin `canReuseContent` :
+    /// s'il assigne `contentLayer.frame` alors que le layer est encore
+    /// transformé, le frame setter de CoreAnimation corrompt bounds/position
+    /// (le `frame` est indéfini sous un transform non-identité) → le fond saute
+    /// même si le modèle (mini-preview) est correct. Le sublayer de contenu doit
+    /// conserver des bounds canoniques (== render size du canvas) ; l'offset et
+    /// le scale sont portés UNIQUEMENT par le transform.
+    func test_configure_reuseContent_afterLiveDragTransform_keepsCanonicalContentBounds() throws {
+        let layer = StoryBackgroundLayer()
+        let size = CGSize(width: 412, height: 732)
+        let geom = CanvasGeometry(renderSize: size)
+
+        // Peinture initiale — le gradient crée un `contentLayer` réutilisable
+        // synchrone (pas d'async image), idéal pour exercer `canReuseContent`.
+        layer.configure(kind: .gradient(colors: [.red, .blue], direction: .topToBottom),
+                        transform: .identity, geometry: geom, resolver: nil, imageCache: nil)
+
+        // Drag live : zoom 2x + pan, appliqué directement au sublayer de contenu
+        // exactement comme `updateManipulatedItemLayer` le fait en cours de geste.
+        // Ne touche PAS `transform3D` — miroir fidèle du chemin runtime.
+        let dragged = BackgroundTransform(scale: 2.0, offsetX: 100, offsetY: 60)
+        layer.applyContentTransform(dragged.caTransform())
+
+        // Geste `.ended` → `rebuildLayers → configure` avec le transform commité
+        // (même identité gradient → chemin `canReuseContent`).
+        layer.configure(kind: .gradient(colors: [.red, .blue], direction: .topToBottom),
+                        transform: dragged, geometry: geom, resolver: nil, imageCache: nil)
+
+        let content = try XCTUnwrap(layer.contentLayer)
+        XCTAssertEqual(content.bounds.size.width, size.width, accuracy: 0.5,
+                       "Les bounds du contenu doivent rester canoniques (== canvas), pas être corrompus par un frame posé sur un layer transformé")
+        XCTAssertEqual(content.bounds.size.height, size.height, accuracy: 0.5,
+                       "Les bounds du contenu doivent rester canoniques (== canvas), pas être corrompus par un frame posé sur un layer transformé")
+        // Le transform résolu reste porté par le sublayer (offset + scale).
+        XCTAssertEqual(content.transform.m11, 2.0, accuracy: 1e-9)
+    }
+
     func test_configure_sameSolidColorTwice_isNoOp() throws {
         let layer = StoryBackgroundLayer()
         let geom = CanvasGeometry(renderSize: CGSize(width: 412, height: 732))
@@ -59,5 +102,63 @@ final class StoryBackgroundLayerTests: XCTestCase {
         XCTAssertEqual(g1, g2, accuracy: 1e-9)
         XCTAssertEqual(b1, b2, accuracy: 1e-9)
         XCTAssertEqual(a1, a2, accuracy: 1e-9)
+    }
+
+    // MARK: - Filter baking + in-place edit (2026-06-03 pivot)
+
+    /// Pivot : the story filter is BAKED into the background bitmap at stamp time
+    /// (no overlay). configure with a filter must stamp a DIFFERENT (filtered)
+    /// bitmap; without a filter it stamps the raw bitmap untouched. The composer
+    /// cache is keyed by the media id derived from the temp filename (ABC.jpg → ABC).
+    func test_configure_imageWithFilter_bakesFilteredBitmap() throws {
+        let geom = CanvasGeometry(renderSize: CGSize(width: 412, height: 732))
+        let raw = Self.solidImage(.red)
+        let url = "file:///tmp/ABC.jpg"
+
+        let noFilterLayer = StoryBackgroundLayer()
+        noFilterLayer.configure(kind: .image(postMediaId: url, thumbHash: nil), transform: .identity,
+                                geometry: geom, resolver: nil,
+                                imageCache: ComposerImageCacheReader(images: ["ABC": raw], version: 1),
+                                filter: nil, filterIntensity: 1.0, contentVersion: 1)
+        let unfiltered = try XCTUnwrap(noFilterLayer.contentLayer?.contents) as! CGImage
+        XCTAssertTrue(unfiltered === raw.cgImage!, "no filter → raw bitmap stamped as-is")
+
+        let filteredLayer = StoryBackgroundLayer()
+        filteredLayer.configure(kind: .image(postMediaId: url, thumbHash: nil), transform: .identity,
+                                geometry: geom, resolver: nil,
+                                imageCache: ComposerImageCacheReader(images: ["ABC": raw], version: 1),
+                                filter: .bw, filterIntensity: 1.0, contentVersion: 1)
+        let filtered = try XCTUnwrap(filteredLayer.contentLayer?.contents) as! CGImage
+        XCTAssertFalse(filtered === raw.cgImage!, "filter must be baked into the bitmap (B&W ≠ raw red)")
+    }
+
+    /// An in-place image edit (same media id, new bytes, bumped contentVersion)
+    /// must re-stamp the edited bitmap even though the media identity is unchanged
+    /// — the canvas was frozen on the original before the fix.
+    func test_configure_inPlaceEdit_reStampsEditedBitmap() throws {
+        let layer = StoryBackgroundLayer()
+        let geom = CanvasGeometry(renderSize: CGSize(width: 412, height: 732))
+        let original = Self.solidImage(.red)
+        let edited = Self.solidImage(.green)
+        let url = "file:///tmp/ABC.jpg"
+
+        layer.configure(kind: .image(postMediaId: url, thumbHash: nil), transform: .identity,
+                        geometry: geom, resolver: nil,
+                        imageCache: ComposerImageCacheReader(images: ["ABC": original], version: 1),
+                        contentVersion: 1)
+        XCTAssertTrue((try XCTUnwrap(layer.contentLayer?.contents) as! CGImage) === original.cgImage!)
+
+        layer.configure(kind: .image(postMediaId: url, thumbHash: nil), transform: .identity,
+                        geometry: geom, resolver: nil,
+                        imageCache: ComposerImageCacheReader(images: ["ABC": edited], version: 2),
+                        contentVersion: 2)
+        XCTAssertTrue((try XCTUnwrap(layer.contentLayer?.contents) as! CGImage) === edited.cgImage!,
+                      "in-place edit (bumped contentVersion) must re-stamp the edited bitmap")
+    }
+
+    private static func solidImage(_ color: UIColor, size: CGSize = CGSize(width: 32, height: 32)) -> UIImage {
+        UIGraphicsImageRenderer(size: size).image { ctx in
+            color.setFill(); ctx.fill(CGRect(origin: .zero, size: size))
+        }
     }
 }

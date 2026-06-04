@@ -120,6 +120,14 @@ public actor CacheCoordinator {
         shared.images.cachedFileURL(for: urlString)
     }
 
+    /// Synchronous local file URL for a `thumbnails`-store key — e.g. a story
+    /// cover composite rendered at publish (`StoryCoverThumbnail.cacheKey`). Lets
+    /// a View (MainActor) read the cover without an actor hop. Mirrors
+    /// `imageLocalFileURL` / `videoLocalFileURL`.
+    nonisolated public static func thumbnailLocalFileURL(for key: String) -> URL? {
+        shared.thumbnails.cachedFileURL(for: key)
+    }
+
     /// Configures memory caps for the image pipeline. Call once at app launch.
     ///
     /// Sets:
@@ -304,6 +312,16 @@ public actor CacheCoordinator {
         await blockedUsers.invalidateAll()
         await userSearch.invalidateAll()
         await timeline.invalidateAll()
+        // Preference stores are NOT userId-namespaced and the coordinator is a
+        // process-lifetime singleton, so their in-memory L1 would otherwise
+        // survive logout and expose user A's categories / tags / translation +
+        // theme prefs / per-conversation pin-mute-archive to user B on the next
+        // login. invalidateAll() also cancels their pending debounce task so a
+        // dirty pref can't be re-flushed to L2 after this reset.
+        await categories.invalidateAll()
+        await userTags.invalidateAll()
+        await userPreferences.invalidateAll()
+        await conversationPreferences.invalidateAll()
         await images.invalidateAll()
         await audio.invalidateAll()
         await video.invalidateAll()
@@ -647,6 +665,10 @@ public actor CacheCoordinator {
         await userSearch.invalidateAll()
         await communities.invalidateAll()
         await drafts.invalidateAll()
+        await categories.invalidateAll()
+        await userTags.invalidateAll()
+        await userPreferences.invalidateAll()
+        await conversationPreferences.invalidateAll()
         await images.invalidateAll()
         await audio.invalidateAll()
         await video.invalidateAll()

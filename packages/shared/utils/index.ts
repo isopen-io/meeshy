@@ -8,6 +8,7 @@ export * from './errors.js';
 export * from './validation.js';
 export * from './conversation-helpers.js';
 export * from './attachment-validators.js';
+export * from './language-normalize.js';
 export { getSenderUserId } from './sender-identity.js';
 export {
   generateClientMessageId,

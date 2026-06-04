@@ -356,6 +356,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
     // MARK: - Logout
 
     public func logout() async {
+        // U3 — drop any in-flight optimistic profile guard so it can't leak onto
+        // the next user's profile after a re-login.
+        pendingOptimisticProfile = nil
         guard let userId = activeUserId else {
             // Idempotent : peut être appelée plusieurs fois sans crash.
             // Garde un état cohérent même quand aucune session n'est active.
@@ -382,10 +385,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         // P1 reset des singletons SDK (cf. design doc D-13 + Q1-Q6).
         // Ordre : les services qui ne dépendent de rien d'autre d'abord,
-        // puis ceux qui consomment leurs publishers (NotificationManager
+        // puis ceux qui consomment leurs publishers (NotificationToastManager
         // observe NotificationCoordinator).
         NotificationCoordinator.shared.reset()
-        NotificationManager.shared.reset()
+        NotificationToastManager.shared.reset()
         PushNotificationManager.shared.resetSession()
         await BlockService.shared.reset()
         UserPreferencesManager.shared.resetSession()
@@ -409,7 +412,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         await CacheCoordinator.shared.reset()
 
         // En DERNIER : déclenche le router et tous les `wireAuthLogoutHook`
-        // app-side (ConversationAudioCoordinator, ToastManager, etc.).
+        // app-side (ConversationAudioCoordinator, FeedbackToastManager, etc.).
         isAuthenticated = false
     }
 
@@ -575,7 +578,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
         APIClient.shared.authToken = token
 
         upsertSavedAccount(from: user)
-        currentUser = user
+        // U3 — preserve an in-flight optimistic profile edit across a token
+        // refresh (applySession also runs on rotation). On a fresh login the
+        // pending guard is nil (cleared on logout), so this is a no-op.
+        let resolved = Self.resolveServerUserWithOptimistic(user, pending: pendingOptimisticProfile)
+        currentUser = resolved.user
+        if resolved.clearedPending { pendingOptimisticProfile = nil }
         isAuthenticated = true
 
         if isTokenRotation {
@@ -645,7 +653,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
             return
         }
         saveUserToKeychain(user, userId: userId)
-        self.currentUser = user
+        // U3 — don't clobber an in-flight optimistic profile edit with the
+        // revalidated server user; re-apply it (and drop the guard once the
+        // server already reflects the edit).
+        let resolved = Self.resolveServerUserWithOptimistic(user, pending: pendingOptimisticProfile)
+        self.currentUser = resolved.user
+        if resolved.clearedPending { pendingOptimisticProfile = nil }
         self.updateSavedAccountActivity(from: user)
     }
 
@@ -805,6 +818,12 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     // MARK: - Local Profile Mutation (optimistic)
 
+    /// U3 — the optimistic profile while an `updateProfile` outbox row is in
+    /// flight. A server revalidation (`/auth/me`) or token-refresh `applySession`
+    /// must NOT clobber it; `resolveServerUserWithOptimistic` re-applies these
+    /// fields onto the server user and self-clears once the server reflects them.
+    private var pendingOptimisticProfile: ProfileSnapshot?
+
     @discardableResult
     public func applyLocalProfileChanges(
         displayName: String?,
@@ -817,20 +836,54 @@ public final class AuthManager: ObservableObject, AuthManaging {
             avatarUrl: currentUser?.avatar
         )
         guard let user = currentUser else { return snapshot }
-        currentUser = user.withProfileChanges(
+        let updated = user.withProfileChanges(
             displayName: displayName,
             bio: bio,
             avatar: avatarUrl
         )
+        currentUser = updated
+        // U3 — remember the optimistic profile so a revalidation/refresh can't
+        // clobber it, and persist to the keychain so it survives a cold start
+        // (cold-start hydration reads currentUser from the keychain).
+        pendingOptimisticProfile = ProfileSnapshot(
+            displayName: updated.displayName, bio: updated.bio, avatarUrl: updated.avatar)
+        saveUserToKeychain(updated, userId: updated.id)
         return snapshot
     }
 
     public func restoreLocalProfileSnapshot(_ snapshot: ProfileSnapshot) {
         guard let user = currentUser else { return }
-        currentUser = user.withProfileChanges(
+        let reverted = user.withProfileChanges(
             displayName: snapshot.displayName,
             bio: snapshot.bio,
             avatar: snapshot.avatarUrl
+        )
+        currentUser = reverted
+        // U3 — the optimistic edit was rolled back; drop the guard + persist.
+        pendingOptimisticProfile = nil
+        saveUserToKeychain(reverted, userId: reverted.id)
+    }
+
+    /// U3 — merge any in-flight optimistic profile onto a freshly-fetched server
+    /// `user`. Returns the user to assign + whether the pending guard should be
+    /// cleared: `true` once the server already reflects the optimistic edit (the
+    /// `updateProfile` row propagated), so a later external profile change isn't
+    /// shadowed by a stale optimistic value. Pure + static for testability;
+    /// when `pending == nil` it returns the server user unchanged (the common
+    /// login/session path is unaffected).
+    static func resolveServerUserWithOptimistic(
+        _ server: MeeshyUser, pending: ProfileSnapshot?
+    ) -> (user: MeeshyUser, clearedPending: Bool) {
+        guard let pending else { return (server, false) }
+        if server.displayName == pending.displayName,
+           server.bio == pending.bio,
+           server.avatar == pending.avatarUrl {
+            return (server, true)
+        }
+        return (
+            server.withProfileChanges(
+                displayName: pending.displayName, bio: pending.bio, avatar: pending.avatarUrl),
+            false
         )
     }
 }

@@ -23,7 +23,10 @@ import { MultiLevelJobMappingCache } from '../MultiLevelJobMappingCache';
 import type { AttachmentTranscription, AttachmentTranslations, AttachmentTranslation, TranscriptionSegment } from '@meeshy/shared/types/attachment-audio';
 import { toSocketIOTranslation } from '@meeshy/shared/types/attachment-audio';
 import { createTranslationJSON, type MessageTranslationJSON } from '../../utils/translation-transformer';
+import { isBlankTranscriptionText } from '../../utils/transcription';
+import { KeyedMutex } from '../../utils/keyed-mutex';
 import { PostAudioService } from '../posts/PostAudioService';
+import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 
 const logger = enhancedLogger.child({ module: 'MessageTranslationService' });
 
@@ -63,6 +66,11 @@ export class MessageTranslationService extends EventEmitter {
   // Composition de modules
   private readonly translationCache: TranslationCache;
   private readonly languageCache: LanguageCache;
+  // Sérialise les updates de translations par attachment (évite le lost-update
+  // quand plusieurs langues complètent en concurrence sur le même attachment).
+  private readonly attachmentTranslationMutex = new KeyedMutex();
+  // Idem pour les traductions TEXTE par message (Message.translations).
+  private readonly messageTranslationMutex = new KeyedMutex();
   private readonly stats: TranslationStats;
   private readonly encryptionHelper: EncryptionHelper;
 
@@ -400,39 +408,41 @@ export class MessageTranslationService extends EventEmitter {
         return;
       }
 
-      // 2. CACHE-FIRST: Vérifier le cache pour chaque langue cible
+      // 2. CACHE-FIRST: mémoire d'abord (0 requête DB si tout est chaud), puis
+      // UN SEUL findUnique pour résoudre toutes les langues manquantes — au lieu
+      // de N findUnique identiques (le même doc message) en série.
       const cacheMisses: string[] = [];
       const cacheResults: Array<{ lang: string; result: TranslationResult }> = [];
+      const memoryMissed: string[] = [];
 
       for (const targetLang of filteredTargetLanguages) {
-        const cacheKey = TranslationCache.generateKey(
-          message.id,
-          targetLang,
-          message.originalLanguage
-        );
-
-        // Vérifier cache mémoire d'abord
-        let cached = this.translationCache.get(cacheKey);
-
-        // Si pas en cache mémoire, vérifier DB
-        if (!cached) {
-          cached = await this.getTranslation(message.id, targetLang, message.originalLanguage);
-
-          // Si trouvé en DB, mettre en cache mémoire pour les prochaines requêtes
-          if (cached) {
-            this.translationCache.set(cacheKey, cached);
-          }
-        }
-
+        const cacheKey = TranslationCache.generateKey(message.id, targetLang, message.originalLanguage);
+        const cached = this.translationCache.get(cacheKey);
         if (cached) {
-          // ✅ CACHE HIT
           cacheResults.push({ lang: targetLang, result: cached });
           this.stats.incrementCacheHits();
-          logger.info(`💾 [CACHE HIT] Message ${message.id} → ${targetLang} (0ms from cache)`);
         } else {
-          // ❌ CACHE MISS
-          cacheMisses.push(targetLang);
-          this.stats.incrementCacheMisses();
+          memoryMissed.push(targetLang);
+        }
+      }
+
+      if (memoryMissed.length > 0) {
+        // Un seul fetch du document, réutilisé pour chaque langue manquante.
+        const prefetched = await this.prisma.message.findUnique({
+          where: { id: message.id },
+          select: { originalLanguage: true, translations: true },
+        });
+
+        for (const targetLang of memoryMissed) {
+          // getTranslation peuple le cache mémoire en interne sur hit DB.
+          const stored = await this.getTranslation(message.id, targetLang, message.originalLanguage, prefetched);
+          if (stored) {
+            cacheResults.push({ lang: targetLang, result: stored });
+            this.stats.incrementCacheHits();
+          } else {
+            cacheMisses.push(targetLang);
+            this.stats.incrementCacheMisses();
+          }
         }
       }
 
@@ -546,26 +556,30 @@ export class MessageTranslationService extends EventEmitter {
       // 3. SUPPRIMER LES ANCIENNES TRADUCTIONS POUR LES LANGUES CIBLES
       // Cela permet de remplacer les traductions existantes par les nouvelles
       if (filteredTargetLanguages.length > 0) {
-        // Lire le message
-        const message = await this.prisma.message.findUnique({
-          where: { id: messageId },
-          select: { translations: true }
-        });
-
-        if (message?.translations) {
-          const translations = message.translations as unknown as Record<string, MessageTranslationJSON>;
-
-          // Supprimer les langues cibles du JSON
-          filteredTargetLanguages.forEach(lang => {
-            delete translations[lang];
-          });
-
-          // Sauvegarder
-          await this.prisma.message.update({
+        // Sérialisé par messageId (même mutex que _saveTranslationToDatabase) :
+        // ce read-modify-write peut sinon clobber des traductions en cours de
+        // complétion (lost update sur Message.translations).
+        await this.messageTranslationMutex.runExclusive(messageId, async () => {
+          const message = await this.prisma.message.findUnique({
             where: { id: messageId },
-            data: { translations: translations as any }
+            select: { translations: true }
           });
-        }
+
+          if (message?.translations) {
+            const translations = message.translations as unknown as Record<string, MessageTranslationJSON>;
+
+            // Supprimer les langues cibles du JSON
+            filteredTargetLanguages.forEach(lang => {
+              delete translations[lang];
+            });
+
+            // Sauvegarder
+            await this.prisma.message.update({
+              where: { id: messageId },
+              data: { translations: translations as any }
+            });
+          }
+        });
       }
       
       // 4. ENVOYER LA REQUÊTE DE RETRADUCTION VIA ZMQ
@@ -643,17 +657,23 @@ export class MessageTranslationService extends EventEmitter {
 
       for (const participant of participants) {
         if (participant.type === 'user' && participant.user) {
+          const u = participant.user;
           logger.info(
-            `   [LANG-TRACE] Registered: ${participant.user.username} (${participant.user.id}) | ` +
-            `systemLang=${participant.user.systemLanguage} | regionalLang=${participant.user.regionalLanguage}`
+            `   [LANG-TRACE] Registered: ${u.username} (${u.id}) | ` +
+            `systemLang=${u.systemLanguage} | regionalLang=${u.regionalLanguage} | ` +
+            `customDest=${u.customDestinationLanguage ?? '-'} | deviceLocale=${u.deviceLocale ?? '-'}`
           );
 
-          // autoTranslate ON → systemLanguage (toujours) + regionalLanguage (si configurée)
-          if (participant.user.systemLanguage) {
-            languages.add(participant.user.systemLanguage);
-          }
-          if (participant.user.regionalLanguage) {
-            languages.add(participant.user.regionalLanguage);
+          // Resolve via the shared 4-level priority helper:
+          //   systemLanguage > regionalLanguage > customDestinationLanguage > deviceLocale
+          // The helper deduplicates lowercase codes so two participants
+          // sharing the same locale only contribute once. deviceLocale is
+          // normalised via normalizeLanguageCode (`fr-FR` → `fr`).
+          const codes = resolveUserLanguagesOrdered(u, {
+            deviceLocale: u.deviceLocale ?? undefined,
+          });
+          for (const code of codes) {
+            languages.add(code);
           }
         } else {
           // Anonymous or bot participant — use participant.language
@@ -923,15 +943,20 @@ export class MessageTranslationService extends EventEmitter {
 
       logger.info(`✅ Transcription sauvegardée: ${data.transcription.language}`);
 
-      // 3. Construire la structure translations JSON
-      const existingTranslations = (attachment.translations as unknown as AttachmentTranslations) || {};
-      const translationsData: AttachmentTranslations = { ...existingTranslations };
+      // 3. Construire les NOUVELLES entrées de traduction (sauvegarde fichiers
+      // incluse). Le merge avec l'existant + l'update sont faits SOUS MUTEX
+      // plus bas (re-fetch dans le lock), pour éviter le lost-update avec le
+      // handler progressif _processTranslationEvent sur le même attachment.
+      const newTranslationEntries: AttachmentTranslations = {};
+
+      // Dossier de sortie commun : calculé + créé UNE seule fois (pas par langue).
+      const translatedDir = path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated');
+      let translatedDirEnsured = false;
 
       for (const translatedAudio of data.translatedAudios) {
         // Toujours générer le path et l'URL au format gateway (même sans binaire)
         const ext = translatedAudio.audioMimeType?.replace('audio/', '') || 'mp3';
         const expectedFilename = `${data.attachmentId}_${translatedAudio.targetLanguage}.${ext}`;
-        const translatedDir = path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated');
         let localAudioPath = path.resolve(translatedDir, expectedFilename);
         let localAudioUrl = `/api/v1/attachments/file/translated/${expectedFilename}`;
 
@@ -944,7 +969,10 @@ export class MessageTranslationService extends EventEmitter {
 
         if (audioBinary || audioBase64) {
           try {
-            await fs.mkdir(translatedDir, { recursive: true });
+            if (!translatedDirEnsured) {
+              await fs.mkdir(translatedDir, { recursive: true });
+              translatedDirEnsured = true;
+            }
 
             // Sauvegarder directement le buffer (multipart) ou décoder base64 (legacy)
             const audioBuffer = audioBinary || Buffer.from(audioBase64!, 'base64');
@@ -958,7 +986,7 @@ export class MessageTranslationService extends EventEmitter {
         }
 
         // Ajouter/mettre à jour la traduction dans le map avec segments (format BD)
-        translationsData[translatedAudio.targetLanguage] = {
+        newTranslationEntries[translatedAudio.targetLanguage] = {
           type: 'audio',
           transcription: translatedAudio.translatedText,
           path: localAudioPath,
@@ -977,19 +1005,36 @@ export class MessageTranslationService extends EventEmitter {
         logger.info(`✅ Audio traduit sauvegardé: ${translatedAudio.targetLanguage} | segments=${translatedAudio.segments?.length || 0}`);
       }
 
+      // 4. Update SÉRIALISÉ par attachment : re-fetch translations DANS le lock
+      // puis merge les nouvelles entrées (évite le lost-update avec le handler
+      // progressif _processTranslationEvent sur le même attachment). La
+      // transcription (champ séparé) est écrite dans le même update.
+      const translationsData = await this.attachmentTranslationMutex.runExclusive(
+        data.attachmentId,
+        async () => {
+          const fresh = await this.prisma.messageAttachment.findUnique({
+            where: { id: data.attachmentId },
+            select: { translations: true }
+          });
+          const merged: AttachmentTranslations = {
+            ...((fresh?.translations as unknown as AttachmentTranslations) || {}),
+            ...newTranslationEntries
+          };
+          await this.prisma.messageAttachment.update({
+            where: { id: data.attachmentId },
+            data: {
+              transcription: transcriptionData as any,
+              translations: merged as any
+            }
+          });
+          return merged;
+        }
+      );
+
       // Convertir les traductions BD vers format Socket.IO en utilisant la fonction officielle
       const savedTranslatedAudios = Object.entries(translationsData).map(([lang, translation]) =>
         toSocketIOTranslation(data.attachmentId, lang, translation)
       );
-
-      // 4. Mettre à jour l'attachment avec transcription et translations JSON
-      await this.prisma.messageAttachment.update({
-        where: { id: data.attachmentId },
-        data: {
-          transcription: transcriptionData as any,
-          translations: translationsData as any
-        }
-      });
 
       logger.info(`✅ Attachment mis à jour avec transcription et ${Object.keys(translationsData).length} traduction(s)`);
 
@@ -1161,6 +1206,14 @@ export class MessageTranslationService extends EventEmitter {
     try {
       const startTime = Date.now();
 
+      // No-speech audio (VAD removed everything): never persist a blank
+      // transcription — it surfaces as "undefined" in the UI. Leave the
+      // attachment without a transcription instead.
+      if (isBlankTranscriptionText(data.transcription?.text)) {
+        logger.info(`🔇 [TranslationService] Transcription vide ignorée: ${data.attachmentId} (no speech)`);
+        return;
+      }
+
       logger.info(
         `📝 [TranslationService] Transcription only completed: ${data.attachmentId} | ` +
         (data.transcription?.text ? `Text: "${data.transcription.text.substring(0, 50)}..." | ` : '') +
@@ -1301,6 +1354,13 @@ export class MessageTranslationService extends EventEmitter {
   }) {
     try {
       const startTime = Date.now();
+
+      // No-speech audio: skip a blank transcription so it is never stored or
+      // displayed as "undefined".
+      if (isBlankTranscriptionText(data.transcription?.text)) {
+        logger.info(`🔇 [TranslationService] Transcription ready vide ignorée: ${data.attachmentId} (no speech)`);
+        return;
+      }
 
       // Post audio requests have no messageAttachment — emit and return immediately
       // so MeeshySocketIOManager can route to PostAudioService.
@@ -1495,28 +1555,43 @@ export class MessageTranslationService extends EventEmitter {
         logger.warn(`   ⚠️ Aucun binaire disponible pour ${data.language}, path=${localAudioPath}, url=${localAudioUrl}`);
       }
 
-      // 2. Mettre à jour le champ translations JSON avec la nouvelle traduction
-      const existingTranslations = (attachment.translations as unknown as AttachmentTranslations) || {};
+      // 2. Mettre à jour translations JSON — SÉRIALISÉ par attachment.
+      // Plusieurs langues complètent en concurrence ; sans sérialisation, chaque
+      // handler lisait `translations` puis réécrivait l'objet ENTIER → lost
+      // update (langues écrasées, audios traduits manquants). On re-lit DANS le
+      // lock pour voir l'état committé des autres langues, puis on écrit.
+      const translationEntry = await this.attachmentTranslationMutex.runExclusive(
+        data.attachmentId,
+        async () => {
+          const fresh = await this.prisma.messageAttachment.findUnique({
+            where: { id: data.attachmentId },
+            select: { translations: true }
+          });
+          const existingTranslations = (fresh?.translations as unknown as AttachmentTranslations) || {};
 
-      existingTranslations[data.language] = {
-        type: 'audio',
-        transcription: data.translatedAudio.translatedText,
-        path: localAudioPath,  // Chemin local si sauvegardé
-        url: localAudioUrl,     // URL correcte si sauvegardé
-        durationMs: data.translatedAudio.durationMs,
-        format: data.translatedAudio.audioMimeType?.replace('audio/', '') || 'mp3',
-        cloned: data.translatedAudio.voiceCloned,
-        quality: data.translatedAudio.voiceQuality,
-        ttsModel: 'xtts',
-        segments: data.translatedAudio.segments as any,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      };
+          existingTranslations[data.language] = {
+            type: 'audio',
+            transcription: data.translatedAudio.translatedText,
+            path: localAudioPath,  // Chemin local si sauvegardé
+            url: localAudioUrl,     // URL correcte si sauvegardé
+            durationMs: data.translatedAudio.durationMs,
+            format: data.translatedAudio.audioMimeType?.replace('audio/', '') || 'mp3',
+            cloned: data.translatedAudio.voiceCloned,
+            quality: data.translatedAudio.voiceQuality,
+            ttsModel: 'xtts',
+            segments: data.translatedAudio.segments as any,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          };
 
-      await this.prisma.messageAttachment.update({
-        where: { id: data.attachmentId },
-        data: { translations: existingTranslations as any }
-      });
+          await this.prisma.messageAttachment.update({
+            where: { id: data.attachmentId },
+            data: { translations: existingTranslations as any }
+          });
+
+          return existingTranslations[data.language];
+        }
+      );
 
       logger.info(
         `✅ Traduction ${data.language} sauvegardée | ` +
@@ -1528,7 +1603,7 @@ export class MessageTranslationService extends EventEmitter {
       const translationSocketIO = toSocketIOTranslation(
         data.attachmentId,
         data.language,
-        existingTranslations[data.language]
+        translationEntry
       );
 
       this.emit(eventName, {
@@ -1783,14 +1858,17 @@ export class MessageTranslationService extends EventEmitter {
           durationMs: data.result.originalAudio.durationMs
         } : null;
 
-        // 3. Construire la structure translations JSON
-        const existingTranslations = (attachment.translations as unknown as AttachmentTranslations) || {};
-        const translationsData: AttachmentTranslations = { ...existingTranslations };
+        // 3. Construire les NOUVELLES entrées de traduction (sauvegarde fichiers
+        // incluse). Merge avec l'existant + update faits SOUS MUTEX plus bas.
+        const newTranslationEntries: AttachmentTranslations = {};
+
+        // Dossier de sortie commun : calculé + créé UNE seule fois (pas par langue).
+        const translatedDir = path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated');
+        let translatedDirEnsured = false;
 
         for (const translation of data.result.translations) {
           // TOUJOURS générer le path et l'URL au format gateway (même sans binaire)
           // Cela garantit que l'URL du translator (/outputs/audio/translated/) n'est jamais exposée
-          const translatedDir = path.join(process.env.UPLOAD_PATH || '/app/uploads', 'translated');
           const filename = `${jobMetadata.attachmentId}_${translation.targetLanguage}.mp3`;
           const localAudioPath = path.resolve(translatedDir, filename);
           const localAudioUrl = `/api/v1/attachments/file/translated/${filename}`;
@@ -1802,7 +1880,10 @@ export class MessageTranslationService extends EventEmitter {
 
           if (audioBinary || audioBase64) {
             try {
-              await fs.mkdir(translatedDir, { recursive: true });
+              if (!translatedDirEnsured) {
+                await fs.mkdir(translatedDir, { recursive: true });
+                translatedDirEnsured = true;
+              }
 
               // Sauvegarder directement le buffer (multipart) ou décoder base64 (legacy)
               const audioBuffer = audioBinary || Buffer.from(audioBase64!, 'base64');
@@ -1818,7 +1899,7 @@ export class MessageTranslationService extends EventEmitter {
           }
 
           // Ajouter/mettre à jour la traduction dans le map avec segments (format BD)
-          translationsData[translation.targetLanguage] = {
+          newTranslationEntries[translation.targetLanguage] = {
             type: 'audio',
             transcription: translation.translatedText,
             path: localAudioPath,
@@ -1837,19 +1918,40 @@ export class MessageTranslationService extends EventEmitter {
           logger.info(`✅ Audio traduit sauvegardé: ${translation.targetLanguage} | segments=${translation.segments?.length || 0}`);
         }
 
+        // 4. Update SÉRIALISÉ par attachment : re-fetch translations DANS le lock
+        // + merge les nouvelles entrées (évite le lost-update avec le handler
+        // progressif _processTranslationEvent sur le même attachment).
+        const attachmentIdForUpdate = jobMetadata.attachmentId;
+        const translationsData = await this.attachmentTranslationMutex.runExclusive(
+          attachmentIdForUpdate,
+          async () => {
+            const fresh = await this.prisma.messageAttachment.findUnique({
+              where: { id: attachmentIdForUpdate },
+              select: { translations: true }
+            });
+            const merged: AttachmentTranslations = {
+              ...((fresh?.translations as unknown as AttachmentTranslations) || {}),
+              ...newTranslationEntries
+            };
+            // N'écrire `transcription` QUE si présente : data.result.originalAudio
+            // peut être absent (transcriptionData=null) et écraser une
+            // transcription déjà stockée par un autre handler (data-loss).
+            const updateData: { translations: any; transcription?: any } = { translations: merged as any };
+            if (transcriptionData) {
+              updateData.transcription = transcriptionData as any;
+            }
+            await this.prisma.messageAttachment.update({
+              where: { id: attachmentIdForUpdate },
+              data: updateData
+            });
+            return merged;
+          }
+        );
+
         // Convertir les traductions BD vers format Socket.IO en utilisant la fonction officielle
         const savedTranslatedAudios = Object.entries(translationsData).map(([lang, translation]) =>
           toSocketIOTranslation(jobMetadata.attachmentId, lang, translation)
         );
-
-        // 4. Mettre à jour l'attachment avec transcription et translations JSON
-        await this.prisma.messageAttachment.update({
-          where: { id: jobMetadata.attachmentId },
-          data: {
-            transcription: transcriptionData as any,
-            translations: translationsData as any
-          }
-        });
 
         logger.info(`✅ Attachment mis à jour avec transcription et ${Object.keys(translationsData).length} traduction(s)`);
 
@@ -2641,33 +2743,40 @@ export class MessageTranslationService extends EventEmitter {
       // NOUVELLE ARCHITECTURE: Utiliser Message.translations (JSON)
       // Plus de doublons possibles, plus de contraintes uniques nécessaires
 
-      // 1. Lire le message actuel
-      const message = await this.prisma.message.findUnique({
-        where: { id: result.messageId },
-        select: { translations: true }
-      });
+      // Read-modify-write de Message.translations SÉRIALISÉ par messageId.
+      // Plusieurs langues complètent en concurrence (emit non sérialisé) ;
+      // sans lock, chaque handler lisait l'objet translations puis le réécrivait
+      // entier → lost update (traductions texte écrasées/manquantes). Le
+      // findUnique sert de re-lecture DANS le lock (état committé des autres).
+      await this.messageTranslationMutex.runExclusive(result.messageId, async () => {
+        // 1. Lire le message actuel
+        const message = await this.prisma.message.findUnique({
+          where: { id: result.messageId },
+          select: { translations: true }
+        });
 
-      // 2. Parser et mettre à jour les translations
-      const translations = (message?.translations as unknown as Record<string, MessageTranslationJSON>) || {};
+        // 2. Parser et mettre à jour les translations
+        const translations = (message?.translations as unknown as Record<string, MessageTranslationJSON>) || {};
 
-      // Préserver createdAt existant si présent (pour updatedAt correct)
-      const existingCreatedAt = translations[result.targetLanguage]?.createdAt;
+        // Préserver createdAt existant si présent (pour updatedAt correct)
+        const existingCreatedAt = translations[result.targetLanguage]?.createdAt;
 
-      translations[result.targetLanguage] = createTranslationJSON({
-        text: contentToStore,
-        translationModel: modelInfo as 'basic' | 'medium' | 'premium',
-        confidenceScore: confidenceScore,
-        isEncrypted: encryptionData.isEncrypted,
-        encryptionKeyId: encryptionData.encryptionKeyId,
-        encryptionIv: encryptionData.encryptionIv,
-        encryptionAuthTag: encryptionData.encryptionAuthTag,
-        preserveCreatedAt: existingCreatedAt
-      });
+        translations[result.targetLanguage] = createTranslationJSON({
+          text: contentToStore,
+          translationModel: modelInfo as 'basic' | 'medium' | 'premium',
+          confidenceScore: confidenceScore,
+          isEncrypted: encryptionData.isEncrypted,
+          encryptionKeyId: encryptionData.encryptionKeyId,
+          encryptionIv: encryptionData.encryptionIv,
+          encryptionAuthTag: encryptionData.encryptionAuthTag,
+          preserveCreatedAt: existingCreatedAt
+        });
 
-      // 3. Sauvegarder dans MongoDB
-      await this.prisma.message.update({
-        where: { id: result.messageId },
-        data: { translations: translations as any }
+        // 3. Sauvegarder dans MongoDB
+        await this.prisma.message.update({
+          where: { id: result.messageId },
+          data: { translations: translations as any }
+        });
       });
 
       const queryTime = Date.now() - startTime;
@@ -2681,79 +2790,21 @@ export class MessageTranslationService extends EventEmitter {
     }
   }
 
-  /**
-   * Méthode legacy de sauvegarde (fallback si upsert échoue)
-   * SECURITY: Also supports encrypted translation storage
-   */
-  private async _saveTranslationToDatabase_Legacy(result: TranslationResult, metadata?: any): Promise<string> {
-    try {
-      const modelInfo = result.translatorModel || result.modelType || 'basic';
-      const confidenceScore = result.confidenceScore || 0.9;
-
-      // SECURITY: Check if translation should be encrypted
-      const { shouldEncrypt, conversationId } = await this._shouldEncryptTranslation(result.messageId);
-
-      let contentToStore = result.translatedText;
-      let encryptionData: TranslationEncryptionData = {
-        isEncrypted: false,
-        encryptionKeyId: null,
-        encryptionIv: null,
-        encryptionAuthTag: null
-      };
-
-      if (shouldEncrypt && conversationId) {
-        const encrypted = await this._encryptTranslation(result.translatedText, conversationId);
-        contentToStore = encrypted.encryptedContent;
-        encryptionData = {
-          isEncrypted: encrypted.isEncrypted,
-          encryptionKeyId: encrypted.encryptionKeyId,
-          encryptionIv: encrypted.encryptionIv,
-          encryptionAuthTag: encrypted.encryptionAuthTag
-        };
-      }
-
-      // NOUVELLE ARCHITECTURE: Utiliser Message.translations (JSON)
-      // 1. Lire le message actuel
-      const message = await this.prisma.message.findUnique({
-        where: { id: result.messageId },
-        select: { translations: true }
-      });
-
-      // 2. Mettre à jour translations
-      const translations = (message?.translations as unknown as Record<string, MessageTranslationJSON>) || {};
-      const existingCreatedAt = translations[result.targetLanguage]?.createdAt;
-
-      translations[result.targetLanguage] = createTranslationJSON({
-        text: contentToStore,
-        translationModel: modelInfo as 'basic' | 'medium' | 'premium',
-        confidenceScore: confidenceScore,
-        isEncrypted: encryptionData.isEncrypted,
-        encryptionKeyId: encryptionData.encryptionKeyId,
-        encryptionIv: encryptionData.encryptionIv,
-        encryptionAuthTag: encryptionData.encryptionAuthTag,
-        preserveCreatedAt: existingCreatedAt
-      });
-
-      // 3. Sauvegarder
-      await this.prisma.message.update({
-        where: { id: result.messageId },
-        data: { translations: translations as any }
-      });
-
-      // Retourner ID synthétique pour compatibilité
-      return `${result.messageId}-${result.targetLanguage}`;
-    } catch (error) {
-      logger.error(`❌ [TranslationService] Erreur legacy: ${error}`);
-      throw error;
-    }
-  }
 
 
   /**
    * Get a translation from cache or database
    * SECURITY: Automatically decrypts encrypted translations
    */
-  async getTranslation(messageId: string, targetLanguage: string, sourceLanguage?: string): Promise<TranslationResult | null> {
+  async getTranslation(
+    messageId: string,
+    targetLanguage: string,
+    sourceLanguage?: string,
+    // Optional pre-fetched message (originalLanguage + translations JSON). When
+    // provided, skips the per-call DB read — lets callers resolve many target
+    // languages from a SINGLE findUnique instead of N identical queries.
+    prefetched?: { originalLanguage: string | null; translations: unknown } | null,
+  ): Promise<TranslationResult | null> {
     try {
       // Vérifier d'abord le cache mémoire
       const cacheKey = TranslationCache.generateKey(messageId, targetLanguage, sourceLanguage);
@@ -2763,14 +2814,17 @@ export class MessageTranslationService extends EventEmitter {
         return cachedResult;
       }
 
-      // Si pas en cache, chercher dans Message.translations (JSON)
-      const message = await this.prisma.message.findUnique({
-        where: { id: messageId },
-        select: {
-          originalLanguage: true,
-          translations: true
-        }
-      });
+      // Si pas en cache, chercher dans Message.translations (JSON) — sauf si le
+      // document a déjà été pré-récupéré par l'appelant.
+      const message = prefetched !== undefined
+        ? prefetched
+        : await this.prisma.message.findUnique({
+            where: { id: messageId },
+            select: {
+              originalLanguage: true,
+              translations: true
+            }
+          });
 
       if (message?.translations) {
         const translations = message.translations as unknown as Record<string, MessageTranslationJSON>;

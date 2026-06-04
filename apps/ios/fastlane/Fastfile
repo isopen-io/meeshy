@@ -61,6 +61,15 @@ platform :ios do
 
   desc "Run unit tests"
   lane :test do
+    # clean: false is REQUIRED, not an optimization. `clean: true` makes scan run
+    # `clean build test` in a SINGLE xcodebuild invocation, which races the Swift
+    # const-extraction protocol-list generation (App Intents / MeeshyIntents)
+    # against SwiftEmitModule. The compiler then reads a half-written
+    # <Target>_const_extract_protocols.json → "Corrupted JSON: unexpected end of
+    # file" → the test BUILD fails before a single test runs. Keep clean and build
+    # in separate xcodebuild invocations: run `fastlane clean` (or `meeshy.sh
+    # clean`) when a pristine slate is genuinely needed. build_production uses
+    # clean: false for the same reason.
     scan(
       project: "Meeshy.xcodeproj",
       scheme: "Meeshy",
@@ -69,7 +78,7 @@ platform :ios do
       code_coverage: true,
       output_directory: "./fastlane/test_output",
       output_types: "html,junit",
-      clean: true
+      clean: false
     )
   end
 

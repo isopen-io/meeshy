@@ -211,13 +211,23 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
     /// picks them up. A `nil` deadline matches the legacy unbounded
     /// behavior (used by the 2-second debounce path).
     public func flushDirtyKeys(deadline: Date?) async {
-        guard !dirtyKeys.isEmpty else { return }
+        guard !dirtyKeys.isEmpty else {
+            firstDirtyAt = nil
+            return
+        }
 
         let keysToFlush = dirtyKeys
 
         for key in keysToFlush {
             if let deadline, Date() >= deadline { break }
-            guard let l1 = memoryCache[key] else { continue }
+            guard let l1 = memoryCache[key] else {
+                // The key lost its L1 entry without being flushed. There is
+                // nothing to persist, so drop it from the dirty set rather than
+                // leaving it to leak `firstDirtyAt` and re-arm the debounce
+                // against a phantom key forever.
+                dirtyKeys.remove(key)
+                continue
+            }
             let keyStr = namespacedKey(key.description)
             let items = l1.items
 
@@ -258,8 +268,16 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
     }
 
     public func evictL1() {
+        // Flush any dirty mutations before dropping them from memory — a direct
+        // evictL1 (e.g. memory pressure) must not lose a mutation that landed
+        // after the caller's own flush. Snapshot the set since the flush
+        // mutates it.
+        for key in Array(dirtyKeys) {
+            flushDirtyKeyForEviction(key)
+        }
         memoryCache.removeAll()
         accessOrder.removeAll()
+        if dirtyKeys.isEmpty { firstDirtyAt = nil }
     }
 
     public func loadedKeys() -> [Key] {
@@ -296,7 +314,24 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
 
         while accessOrder.count > maxL1Keys, let evicted = accessOrder.first {
             accessOrder.removeFirst()
+            // Flush a dirty victim before dropping it from memory — otherwise a
+            // local mutation that hasn't reached its 2s debounce window is
+            // silently lost (it lived only in L1).
+            flushDirtyKeyForEviction(evicted)
             memoryCache.removeValue(forKey: evicted)
+        }
+    }
+
+    /// Flush a single dirty key to L2 then drop it from the dirty set. Called by
+    /// every eviction path (LRU in `touchKey`, bulk `evictL1`) so eviction never
+    /// silently loses a local mutation that hasn't reached its debounce window.
+    /// No-op when the key isn't dirty or has no L1 entry. A failed flush (e.g.
+    /// encryption failure) leaves the key dirty for `flushDirtyKeys` to retry or
+    /// GC. Uses `flushKeyToL2`, which preserves `lastFetchedAt`.
+    private func flushDirtyKeyForEviction(_ key: Key) {
+        guard dirtyKeys.contains(key), let entry = memoryCache[key] else { return }
+        if flushKeyToL2(keyStr: namespacedKey(key.description), items: entry.items) {
+            dirtyKeys.remove(key)
         }
     }
 
@@ -520,14 +555,22 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
                     try entry.save(db)
                 }
 
-                // Preserve cursor state across flushes — see writeToL2.
-                let existingCursor = try DBCacheMetadata.filter(Column("key") == keyStr).fetchOne(db)
+                // Preserve cursor state AND the network-fetch freshness clock
+                // across flushes. A dirty flush is triggered by purely-LOCAL
+                // mutations (update/upsert/mergeUpdate), so resetting
+                // `lastFetchedAt` to `now` here would make stale data read as
+                // `.fresh` after L1 eviction / restart and suppress the
+                // stale-while-revalidate refresh. Only `save()` (a genuine
+                // network fetch, see writeToL2) may advance lastFetchedAt; we
+                // fall back to `now` only when no prior metadata exists (a key
+                // created purely locally with no network counterpart).
+                let existingMeta = try DBCacheMetadata.filter(Column("key") == keyStr).fetchOne(db)
                 let meta = DBCacheMetadata(
                     key: keyStr,
-                    nextCursor: existingCursor?.nextCursor,
-                    hasMore: existingCursor?.hasMore ?? false,
+                    nextCursor: existingMeta?.nextCursor,
+                    hasMore: existingMeta?.hasMore ?? false,
                     totalCount: items.count,
-                    lastFetchedAt: now
+                    lastFetchedAt: existingMeta?.lastFetchedAt ?? now
                 )
                 try meta.save(db)
             }

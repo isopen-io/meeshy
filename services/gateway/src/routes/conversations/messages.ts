@@ -28,12 +28,31 @@ import type {
 } from './types';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { sendWithETag } from '../../utils/etag';
 import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
 
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
+
+/**
+ * Nested-user fields fetched for a message sender in the GET messages select.
+ *
+ * T16 — only the fields the response actually derives are fetched: the handler
+ * overlays the top-level sender username / displayName / avatar from this
+ * nested user (with the flat Participant fields as the primary). `firstName`,
+ * `lastName`, `systemLanguage` and `role` are NOT selected: the response schema
+ * (`messageSenderSchema`) strips the nested user entirely and never exposes
+ * systemLanguage/role, `firstName`/`lastName` are read by no client, so
+ * fetching them was pure per-message DB over-fetch.
+ */
+export const messageSenderUserSelect = {
+  id: true,
+  username: true,
+  displayName: true,
+  avatar: true
+} as const;
 
 // `content` est optionnel : un message média-seul (image/vidéo/fichier sans
 // légende) ou un forward arrive avec un contenu vide. Le `.refine()` final
@@ -163,6 +182,21 @@ function cleanAttachmentsForApi(attachments: any[]): any[] {
 }
 
 /**
+ * Forward watermark filter for GET messages. Given an ISO8601 `after`
+ * timestamp, returns a Prisma `createdAt > after` clause so a client can
+ * resume a missed-message gap from its per-conversation high-water mark
+ * (local-first incremental backfill) instead of refetching offset:0. Returns
+ * null when `after` is absent or unparseable — the caller then keeps its
+ * default offset/cursor paging and never builds an `Invalid Date` filter.
+ */
+export function buildAfterWatermarkClause(after?: string): { createdAt: { gt: Date } } | null {
+  if (!after) return null;
+  const d = new Date(after);
+  if (isNaN(d.getTime())) return null;
+  return { createdAt: { gt: d } };
+}
+
+/**
  * Enregistre les routes de base de gestion des messages (GET, POST, mark-read, mark-unread)
  */
 export function registerMessagesRoutes(
@@ -273,6 +307,7 @@ export function registerMessagesRoutes(
           limit: { type: 'string', description: 'Maximum number of messages to return (default 20)' },
           offset: { type: 'string', description: 'Number of messages to skip (default 0)' },
           before: { type: 'string', description: 'Cursor for pagination: get messages before this timestamp' },
+          after: { type: 'string', description: 'Forward watermark (ISO8601): get messages created strictly after this instant, ascending. For local-first incremental gap backfill.' },
           around: { type: 'string', description: 'Load messages around this messageId (for search jump)' },
           include_reactions: { type: 'string', enum: ['true', 'false'], description: 'Include detailed reactions list (default false). Note: reactionSummary and reactionCount are always included.' },
           include_translations: { type: 'string', enum: ['true', 'false'], description: 'Include translations (default true)' },
@@ -325,6 +360,7 @@ export function registerMessagesRoutes(
         limit: limitStr = '20',
         offset: offsetStr = '0',
         before,
+        after,
         around,
         include_reactions: includeReactionsStr = 'false',
         include_translations: includeTranslationsStr = 'true',
@@ -339,6 +375,14 @@ export function registerMessagesRoutes(
       const includeTranslations = includeTranslationsStr === 'true';
       const includeStatus = includeStatusStr === 'true';
       const includeReplies = includeRepliesStr === 'true';
+
+      // Forward watermark mode (local-first incremental gap backfill): fetch
+      // messages created strictly after the client's high-water mark, oldest
+      // first. Only active when not already paging backwards (before) or
+      // jumping to a search hit (around). Treated like a cursor read — no
+      // total COUNT, no offset pagination.
+      const afterClause = (!before && !around) ? buildAfterWatermarkClause(after) : null;
+      const afterMode = afterClause !== null;
 
       // Valider et parser les paramètres de pagination
       const { offset, limit } = validatePagination(offsetStr, limitStr, 50);
@@ -414,6 +458,11 @@ export function registerMessagesRoutes(
       // Apply history restriction if share link disallows viewing history
       if (historyStartDate) {
         whereClause.createdAt = { gte: historyStartDate };
+      }
+
+      // Forward watermark filter: createdAt > after (merged with any history gte).
+      if (afterMode && afterClause) {
+        whereClause.createdAt = { ...whereClause.createdAt, ...afterClause.createdAt };
       }
 
       if (before) {
@@ -546,16 +595,7 @@ export function registerMessagesRoutes(
             role: true,
             language: true,
             user: {
-              select: {
-                id: true,
-                username: true,
-                displayName: true,
-                firstName: true,
-                lastName: true,
-                avatar: true,
-                systemLanguage: true,
-                role: true
-              }
+              select: messageSenderUserSelect
             }
           }
         },
@@ -661,8 +701,8 @@ export function registerMessagesRoutes(
 
       t0 = performance.now();
       const [totalCount, messages, userPrefs] = await Promise.all([
-        // 1. Compter le total des messages (pour pagination) - skip when using cursor or around
-        (before || isAroundMode)
+        // 1. Compter le total des messages (pour pagination) - skip when using cursor, around, or forward watermark
+        (before || isAroundMode || afterMode)
           ? Promise.resolve(0)
           : prisma.message.count({
               where: {
@@ -674,12 +714,15 @@ export function registerMessagesRoutes(
         prisma.message.findMany({
           where: whereClause,
           select: messageSelect,
-          orderBy: { createdAt: 'desc' },
+          // Forward watermark backfill returns oldest-after-watermark first so
+          // the client can advance its high-water mark contiguously; all other
+          // modes return newest-first.
+          orderBy: { createdAt: afterMode ? 'asc' : 'desc' },
           // Cursor-based pagination (before): fetch limit+1 to detect hasMore
           // without an extra COUNT query. The extra row is trimmed before
           // returning to the client.
           take: isAroundMode ? limit + 1 : (before ? limit + 1 : limit),
-          skip: (before || isAroundMode) ? 0 : offset
+          skip: (before || isAroundMode || afterMode) ? 0 : offset
         }),
         // 3. Récupérer les préférences linguistiques (si authentifié)
         shouldFetchUserPrefs
@@ -730,7 +773,10 @@ export function registerMessagesRoutes(
         : 'fr';
 
       // DEBUG: Log détaillé pour vérifier les transcriptions audio
-      if (messages.length > 0) {
+      // Diagnostic audio verbeux (par message + par attachment) : coûteux sur ce
+      // hot-path (GET messages). Gardé derrière LOG_AUDIO_DIAG=true — OFF par
+      // défaut en prod. La boucle entière est court-circuitée quand désactivé.
+      if (process.env.LOG_AUDIO_DIAG === 'true' && messages.length > 0) {
         logger.info(`🔍 [CONVERSATIONS] Chargement de ${messages.length} messages pour conversation ${conversationId}`);
 
         // Compter les messages avec attachments audio
@@ -748,7 +794,8 @@ export function registerMessagesRoutes(
                 // Vérifier si l'audio a une transcription
                 if (att.transcription) {
                   audioWithTranscriptionCount++;
-                  const transcriptionText = (att.transcription.text || att.transcription.transcribedText)?.substring(0, 50) + '...';
+                  const rawTranscriptionText = att.transcription.text || att.transcription.transcribedText || '';
+                  const transcriptionText = rawTranscriptionText ? `${rawTranscriptionText.substring(0, 50)}...` : '(vide)';
 
                   // Vérifier speakerAnalysis AVANT nettoyage
                   let speakerAnalysisInfo = '';
@@ -896,8 +943,8 @@ export function registerMessagesRoutes(
           sender: message.sender ? {
             ...message.sender,
             username: message.sender.user?.username ?? message.sender.username ?? null,
-            firstName: message.sender.user?.firstName ?? null,
-            lastName: message.sender.user?.lastName ?? null,
+            // T16 — firstName/lastName were serialized but read by no client and
+            // are no longer fetched (messageSenderUserSelect trims them).
             displayName: message.sender.displayName ?? message.sender.user?.displayName ?? null,
             avatar: message.sender.avatar ?? message.sender.user?.avatar ?? null,
             isOnline: message.sender.user?.isOnline ?? message.sender.isOnline ?? null,
@@ -1060,21 +1107,24 @@ export function registerMessagesRoutes(
         }
       }
 
-      // Marquer les messages comme lus (optimisé - ne marquer que les messages non lus)
+      // Marquer les messages comme "reçus" — EFFET DE BORD (statut de livraison
+      // propagé aux autres participants via socket). La réponse (mappedMessages)
+      // n'en dépend PAS. Déféré en fire-and-forget : l'awaiter ajoutait
+      // 50-130ms à CHAQUE fetch de messages (l'endpoint le plus appelé).
       t0 = performance.now();
-      if (messages.length > 0 && !authRequest.authContext.isAnonymous) {
-        try {
-          const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
-          const readStatusService = new MessageReadStatusService(prisma);
-
-          if (currentParticipantId) {
-            await readStatusService.markMessagesAsReceived(currentParticipantId, conversationId);
+      if (messages.length > 0 && !authRequest.authContext.isAnonymous && currentParticipantId) {
+        const participantIdForReceipt = currentParticipantId;
+        void (async () => {
+          try {
+            const { MessageReadStatusService } = await import('../../services/MessageReadStatusService');
+            const readStatusService = new MessageReadStatusService(prisma);
+            await readStatusService.markMessagesAsReceived(participantIdForReceipt, conversationId);
+          } catch (error) {
+            logger.warn('Error marking messages as received:', error);
           }
-        } catch (error) {
-          logger.warn('Error marking messages as received:', error);
-        }
+        })();
       }
-      timings.markAsReceived = performance.now() - t0;
+      timings.markAsReceived = performance.now() - t0; // ~0 : dispatch non-bloquant désormais
 
       // Construire les métadonnées de cursor pagination
       // When using cursor-based pagination (before), we fetched limit+1 rows.
@@ -1119,7 +1169,7 @@ export function registerMessagesRoutes(
         }
       };
 
-      if (!before && !isAroundMode) {
+      if (!before && !isAroundMode && !afterMode) {
         responsePayload.pagination = buildPaginationMeta(totalCount, offset, limit, messages.length);
       }
 
@@ -1156,7 +1206,12 @@ export function registerMessagesRoutes(
         timings: Object.fromEntries(Object.entries(timings).map(([k, v]) => [k, Math.round(v)]))
       });
 
-      reply.header('Cache-Control', 'private, no-cache');
+      // T15 — ETag + If-None-Match→304: don't re-send an unchanged message
+      // page body. `sendWithETag` sets ETag + Cache-Control: private, no-cache
+      // and short-circuits with a body-less 304 on a match. The ETag reflects
+      // the filtered result, so it composes with the `after`/`before`/`around`
+      // delta-sync modes without special handling.
+      if (sendWithETag(request, reply, responsePayload)) return;
       reply.send(responsePayload);
 
     } catch (error) {

@@ -14,6 +14,7 @@ import { NotificationService, protectedPreview } from '../notifications/Notifica
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { AttachmentService } from '../attachments';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
+import { shouldProcessAudioAttachment } from '../../utils/transcription';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 // Logger dédié pour MessageProcessor
@@ -708,10 +709,22 @@ export class MessageProcessor {
     try {
       const attachments = await this.prisma.messageAttachment.findMany({
         where: { id: { in: attachmentIds } },
-        select: { id: true, mimeType: true, fileUrl: true, filePath: true, duration: true, metadata: true }
+        select: { id: true, mimeType: true, fileUrl: true, filePath: true, duration: true, metadata: true, transcription: true }
       });
 
-      const audioAttachments = attachments.filter(att => att.mimeType && att.mimeType.startsWith('audio/'));
+      // Idempotence : ne dispatcher au translator que les audios SANS
+      // transcription déjà stockée. Un handleAttachments rejoué (retry outbox,
+      // REST+socket pour le même message) ne relance donc pas le pipeline ML
+      // coûteux (Whisper→NLLB→TTS) sur un audio déjà traité.
+      const audioAttachments = attachments.filter(att => shouldProcessAudioAttachment(att));
+      const alreadyTranscribed = attachments.filter(
+        att => att.mimeType?.startsWith('audio/') && !shouldProcessAudioAttachment(att)
+      );
+      if (alreadyTranscribed.length > 0) {
+        logger.info(
+          `[MessageProcessor] Skip ${alreadyTranscribed.length} audio déjà transcrit(s) — idempotence (message ${messageId})`
+        );
+      }
 
       for (const audioAtt of audioAttachments) {
         let mobileTranscription: any = undefined;

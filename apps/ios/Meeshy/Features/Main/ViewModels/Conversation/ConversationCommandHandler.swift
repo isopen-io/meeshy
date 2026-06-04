@@ -155,6 +155,12 @@ final class ConversationCommandHandler {
             )
             do {
                 try await OfflineQueue.shared.enqueue(.markAsRead, payload: payload, conversationId: conversationId)
+                // Without flushNow() the row sits .pending until the next
+                // boot / background transition / unrelated mutation that
+                // happens to flush — the user sees "Synchronisation des
+                // lus" forever in the SyncPill even though the network is
+                // up. Same pattern used after reaction enqueue below.
+                await OutboxFlushTrigger.flushNow()
             } catch {
                 await PendingStatusQueue.shared.enqueue(.init(
                     conversationId: conversationId, type: "read", timestamp: Date()

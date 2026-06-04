@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 import MeeshySDK
 import os
 
@@ -346,26 +347,79 @@ struct OutboxDispatcher: OutboxDispatching {
     /// `mediaIds` at the wire boundary to match the gateway field name.
     private func dispatchCreatePost(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: CreatePostPayload.self)
+
+        // U1b — an OFFLINE media post carries local file paths; upload them via
+        // TUS on reconnect, then create the post with the resulting ids. Faithful
+        // twin of the message media replay (dispatchSendMessage). The within-
+        // session TUS checkpoint resume fires automatically on re-upload (same
+        // sha256 key), so a kill mid-upload resumes from the saved offset.
+        var resolvedMediaIds = payload.attachmentIds
+        var uploadedLocalPaths: [String] = []
+        if let pendingMediaPaths = payload.localMediaPaths, !pendingMediaPaths.isEmpty {
+            let serverOrigin = MeeshyConfig.shared.serverOrigin
+            guard let baseURL = URL(string: serverOrigin),
+                  let token = APIClient.shared.authToken else {
+                throw NSError(
+                    domain: "OutboxDispatcher",
+                    code: 401,
+                    userInfo: [NSLocalizedDescriptionKey: "No baseURL or auth token to upload post media"]
+                )
+            }
+            let uploader = TusUploadManager(baseURL: baseURL)
+            var uploadedIds: [String] = []
+            for stored in pendingMediaPaths {
+                let absolutePath = OfflineQueue.absoluteMediaPath(forStored: stored)
+                guard FileManager.default.fileExists(atPath: absolutePath) else {
+                    logger.error("Post media file missing on dispatch, path=\(stored, privacy: .public)")
+                    continue
+                }
+                do {
+                    let mime = MimeTypeResolver.mimeType(
+                        forExtension: URL(fileURLWithPath: absolutePath).pathExtension)
+                    let tusResult = try await uploader.uploadFile(
+                        fileURL: URL(fileURLWithPath: absolutePath),
+                        mimeType: mime,
+                        token: token
+                    )
+                    uploadedIds.append(tusResult.id)
+                    uploadedLocalPaths.append(absolutePath)
+                } catch {
+                    logger.error("Post media TUS upload failed (best-effort skip): \(error.localizedDescription, privacy: .public)")
+                }
+            }
+            guard !uploadedIds.isEmpty else {
+                throw NSError(
+                    domain: "OutboxDispatcher",
+                    code: 503,
+                    userInfo: [NSLocalizedDescriptionKey: "No media uploaded for offline post media dispatch"]
+                )
+            }
+            resolvedMediaIds = uploadedIds + payload.attachmentIds
+        }
+
         struct CreatePostBody: Encodable {
             let content: String?
             let mediaIds: [String]?
             let visibility: String
+            let originalLanguage: String?
 
             func encode(to encoder: Encoder) throws {
                 var container = encoder.container(keyedBy: CodingKeys.self)
                 if let content, !content.isEmpty { try container.encode(content, forKey: .content) }
                 if let mediaIds, !mediaIds.isEmpty { try container.encode(mediaIds, forKey: .mediaIds) }
                 try container.encode(visibility, forKey: .visibility)
+                if let originalLanguage, !originalLanguage.isEmpty { try container.encode(originalLanguage, forKey: .originalLanguage) }
             }
 
             enum CodingKeys: String, CodingKey {
-                case content, mediaIds, visibility
+                case content, mediaIds, visibility, originalLanguage
             }
         }
         let body = CreatePostBody(
             content: payload.content,
-            mediaIds: payload.attachmentIds.isEmpty ? nil : payload.attachmentIds,
-            visibility: payload.visibility
+            mediaIds: resolvedMediaIds.isEmpty ? nil : resolvedMediaIds,
+            visibility: payload.visibility,
+            originalLanguage: payload.originalLanguage
         )
         let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
             endpoint: "/posts",
@@ -374,6 +428,7 @@ struct OutboxDispatcher: OutboxDispatching {
             queryItems: nil,
             headers: ["X-Client-Mutation-Id": payload.clientMutationId]
         )
+        for path in uploadedLocalPaths { try? FileManager.default.removeItem(atPath: path) }
         logger.info("createPost dispatched cmid=\(payload.clientMutationId, privacy: .public)")
     }
 
@@ -532,26 +587,24 @@ struct OutboxDispatcher: OutboxDispatching {
                 return
             }
 
-            // Phase 4 §6.3 audio offline write-ahead replay path. If the item
-            // carries a `localAudioPath`, the audio bytes were preserved at
-            // enqueue time under `Documents/pending-audio/<cid>.m4a`. The
-            // dispatcher uploads them via TUS first (REST does NOT trigger
-            // the gateway audio pipeline — only `message:send-with-attachments`
-            // over the socket does), then sends through `sendWithAttachmentsAsync`
-            // so the gateway runs Whisper transcription + NLLB translation +
-            // Chatterbox TTS like an online send. The local file is deleted
-            // after the ACK lands.
-            if let localAudioPath = item.localAudioPath, !localAudioPath.isEmpty {
-                let absolutePath = OfflineQueue.absoluteAudioPath(forStored: localAudioPath)
-                guard FileManager.default.fileExists(atPath: absolutePath) else {
-                    logger.error("Audio file missing on dispatch for record \(record.id, privacy: .public), path=\(localAudioPath, privacy: .public)")
-                    throw NSError(
-                        domain: "OutboxDispatcher",
-                        code: 404,
-                        userInfo: [NSLocalizedDescriptionKey: "Audio file missing for offline send: \(localAudioPath)"]
-                    )
-                }
+            // A3 — multi-track audio offline write-ahead replay path.
+            // Task 4 routes single-audio enqueues through `enqueueAudios`, so
+            // the canonical field is `localAudioPaths` (array). Legacy rows
+            // written before Task 4 may still carry only `localAudioPath`
+            // (scalar). Both are resolved here so the dispatcher handles every
+            // row shape. Each track is uploaded via TUS independently; any
+            // track whose file is missing or whose upload throws is skipped
+            // (best-effort). All successfully-uploaded ids are sent in a
+            // single `message:send-with-attachments` socket event so the
+            // gateway runs Whisper transcription + NLLB translation +
+            // Chatterbox TTS exactly like an online multi-track send.
+            let pendingAudioPaths: [String] = {
+                if let many = item.localAudioPaths, !many.isEmpty { return many }
+                if let one = item.localAudioPath, !one.isEmpty { return [one] }
+                return []
+            }()
 
+            if !pendingAudioPaths.isEmpty {
                 let serverOrigin = MeeshyConfig.shared.serverOrigin
                 guard let baseURL = URL(string: serverOrigin),
                       let token = APIClient.shared.authToken else {
@@ -563,17 +616,40 @@ struct OutboxDispatcher: OutboxDispatching {
                 }
 
                 let uploader = TusUploadManager(baseURL: baseURL)
-                let audioFileURL = URL(fileURLWithPath: absolutePath)
-                let tusResult = try await uploader.uploadFile(
-                    fileURL: audioFileURL,
-                    mimeType: "audio/mp4",
-                    token: token
-                )
+                var uploadedIds: [String] = []
+                var uploadedPaths: [String] = []
+
+                for stored in pendingAudioPaths {
+                    let absolutePath = OfflineQueue.absoluteAudioPath(forStored: stored)
+                    guard FileManager.default.fileExists(atPath: absolutePath) else {
+                        logger.error("Audio file missing on dispatch, path=\(stored, privacy: .public)")
+                        continue
+                    }
+                    do {
+                        let tusResult = try await uploader.uploadFile(
+                            fileURL: URL(fileURLWithPath: absolutePath),
+                            mimeType: "audio/mp4",
+                            token: token
+                        )
+                        uploadedIds.append(tusResult.id)
+                        uploadedPaths.append(absolutePath)
+                    } catch {
+                        logger.error("Audio track TUS upload failed (best-effort skip): \(error.localizedDescription, privacy: .public)")
+                    }
+                }
+
+                guard !uploadedIds.isEmpty else {
+                    throw NSError(
+                        domain: "OutboxDispatcher",
+                        code: 503,
+                        userInfo: [NSLocalizedDescriptionKey: "No audio track uploaded for offline audio dispatch"]
+                    )
+                }
 
                 let ack = await MessageSocketManager.shared.sendWithAttachmentsAsync(
                     conversationId: item.conversationId,
                     content: item.content.isEmpty ? nil : item.content,
-                    attachmentIds: [tusResult.id],
+                    attachmentIds: uploadedIds,
                     replyToId: item.replyToId,
                     storyReplyToId: nil,
                     originalLanguage: item.originalLanguage,
@@ -587,10 +663,91 @@ struct OutboxDispatcher: OutboxDispatching {
                     )
                 }
 
-                // Best-effort cleanup of the persisted audio. Failure here is
-                // benign — the file is harmless extra bytes and a future
-                // `OfflineQueue.cleanupOrphanFiles()` sweep will reclaim it.
-                try? FileManager.default.removeItem(atPath: absolutePath)
+                // Best-effort cleanup of uploaded tracks. Failure here is
+                // benign — skipped (failed-but-present) track files are
+                // reclaimed by `OutboxFlusher.cleanupLocalFiles(for:)` when
+                // the outbox record terminates (applied or exhausted), which
+                // now sweeps both `localAudioPath` and `localAudioPaths`.
+                for path in uploadedPaths { try? FileManager.default.removeItem(atPath: path) }
+
+                await reconcileSuccessfulMessageSend(
+                    clientMessageId: item.clientMessageId,
+                    serverId: ack.messageId,
+                    conversationId: item.conversationId
+                )
+                return
+            }
+
+            // S7b ST3 — offline VISUAL-media (photo/video) replay, the parity
+            // twin of the audio branch above. Each pending file (relocated under
+            // Documents/pending-media/ by enqueueMedia) is uploaded via TUS with
+            // a MIME derived from its preserved extension (MimeTypeResolver —
+            // the audio branch hardcodes audio/mp4), then all ids go out in one
+            // message:send-with-attachments. The within-session TUS checkpoint
+            // resume fires automatically on re-upload (same sha256 key), so a
+            // kill mid-upload resumes from the saved offset (S8).
+            if let pendingMediaPaths = item.localMediaPaths, !pendingMediaPaths.isEmpty {
+                let serverOrigin = MeeshyConfig.shared.serverOrigin
+                guard let baseURL = URL(string: serverOrigin),
+                      let token = APIClient.shared.authToken else {
+                    throw NSError(
+                        domain: "OutboxDispatcher",
+                        code: 401,
+                        userInfo: [NSLocalizedDescriptionKey: "No baseURL or auth token to upload media"]
+                    )
+                }
+
+                let uploader = TusUploadManager(baseURL: baseURL)
+                var uploadedIds: [String] = []
+                var uploadedPaths: [String] = []
+
+                for stored in pendingMediaPaths {
+                    let absolutePath = OfflineQueue.absoluteMediaPath(forStored: stored)
+                    guard FileManager.default.fileExists(atPath: absolutePath) else {
+                        logger.error("Media file missing on dispatch, path=\(stored, privacy: .public)")
+                        continue
+                    }
+                    do {
+                        let mime = MimeTypeResolver.mimeType(
+                            forExtension: URL(fileURLWithPath: absolutePath).pathExtension)
+                        let tusResult = try await uploader.uploadFile(
+                            fileURL: URL(fileURLWithPath: absolutePath),
+                            mimeType: mime,
+                            token: token
+                        )
+                        uploadedIds.append(tusResult.id)
+                        uploadedPaths.append(absolutePath)
+                    } catch {
+                        logger.error("Media TUS upload failed (best-effort skip): \(error.localizedDescription, privacy: .public)")
+                    }
+                }
+
+                guard !uploadedIds.isEmpty else {
+                    throw NSError(
+                        domain: "OutboxDispatcher",
+                        code: 503,
+                        userInfo: [NSLocalizedDescriptionKey: "No media uploaded for offline media dispatch"]
+                    )
+                }
+
+                let ack = await MessageSocketManager.shared.sendWithAttachmentsAsync(
+                    conversationId: item.conversationId,
+                    content: item.content.isEmpty ? nil : item.content,
+                    attachmentIds: uploadedIds,
+                    replyToId: item.replyToId,
+                    storyReplyToId: nil,
+                    originalLanguage: item.originalLanguage,
+                    clientMessageId: item.clientMessageId
+                )
+                guard let ack else {
+                    throw NSError(
+                        domain: "OutboxDispatcher",
+                        code: 502,
+                        userInfo: [NSLocalizedDescriptionKey: "Socket ACK missing for offline media dispatch"]
+                    )
+                }
+
+                for path in uploadedPaths { try? FileManager.default.removeItem(atPath: path) }
 
                 await reconcileSuccessfulMessageSend(
                     clientMessageId: item.clientMessageId,
@@ -799,7 +956,30 @@ enum OutboxFlushTrigger {
 final class OutboxRetryScheduler {
     static let shared = OutboxRetryScheduler()
     private var timer: Task<Void, Never>?
+    private var networkCancellable: AnyCancellable?
     private init() {}
+
+    /// Réveille le flusher à chaque transition réseau offline→online (T10).
+    ///
+    /// `OutboxFlusher.flush()` est bandwidth-gated : une mutation enqueueée
+    /// hors-ligne court-circuite, et comme rien n'est différé, AUCUN timer de
+    /// backoff n'est armé (`schedule(at: nil)` annule le précédent). Sans ce
+    /// trigger, elle resterait `pending` jusqu'à un évènement de cycle de vie
+    /// incident (boot / retour au premier plan). On s'abonne à la MÊME source
+    /// d'état réseau que le gate du flusher (`NetworkConditionMonitor`) pour
+    /// garantir que trigger et gate s'accordent. Publisher + flush injectés
+    /// pour la testabilité ; à appeler une fois au démarrage de l'app.
+    func startObservingNetworkReconnect(
+        conditionPublisher: AnyPublisher<NetworkCondition, Never> = NetworkConditionMonitor.shared.$condition.eraseToAnyPublisher(),
+        flush: @escaping @MainActor () async -> Void = { await OutboxFlushTrigger.flushNow() }
+    ) {
+        networkCancellable = conditionPublisher
+            .map { $0 != .offline }
+            .removeDuplicates()
+            .dropFirst()            // ignore la valeur courante rejouée à l'abonnement
+            .filter { $0 }          // uniquement offline→online
+            .sink { _ in Task { @MainActor in await flush() } }
+    }
 
     /// (Ré)arme le timer pour rejouer un flush à `date`. `nil` annule le
     /// timer en attente (plus rien n'est différé).

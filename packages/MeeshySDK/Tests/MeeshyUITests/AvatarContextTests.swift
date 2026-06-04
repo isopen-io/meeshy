@@ -6,8 +6,9 @@ final class AvatarContextTests: XCTestCase {
 
     // MARK: - Size
 
-    func test_size_storyTray_returns44() {
-        XCTAssertEqual(AvatarContext.storyTray.size, 44)
+    func test_size_storyTray_returns88() {
+        // Doublé 2026-05-27 (demande user — le trail story = CTA principal).
+        XCTAssertEqual(AvatarContext.storyTray.size, 88)
     }
 
     func test_size_storyViewer_returns44() {
@@ -226,11 +227,11 @@ final class AvatarContextTests: XCTestCase {
     // MARK: - Derived Metrics (storyTray)
 
     func test_ringSize_storyTray_isSizePlus6() {
-        XCTAssertEqual(AvatarContext.storyTray.ringSize, 50) // 44 + 6
+        XCTAssertEqual(AvatarContext.storyTray.ringSize, 94) // 88 + 6 (size doublé 2026-05-27)
     }
 
     func test_initialFont_storyTray_isSizeTimes038() {
-        XCTAssertEqual(AvatarContext.storyTray.initialFont, 44 * 0.38, accuracy: 0.01)
+        XCTAssertEqual(AvatarContext.storyTray.initialFont, 88 * 0.38, accuracy: 0.01)
     }
 
     func test_ringWidth_storyTray_is07() {
@@ -243,10 +244,11 @@ final class AvatarContextTests: XCTestCase {
     }
 
     func test_badgeSize_storyTray() {
-        XCTAssertEqual(AvatarContext.storyTray.badgeSize, 44 * 0.42, accuracy: 0.01)
+        // Mood badge à taille fixe (32) depuis le doublement du trail 2026-05-27.
+        XCTAssertEqual(AvatarContext.storyTray.badgeSize, 32, accuracy: 0.01)
     }
 
     func test_onlineDotSize_storyTray() {
-        XCTAssertEqual(AvatarContext.storyTray.onlineDotSize, 44 * 0.26, accuracy: 0.01)
+        XCTAssertEqual(AvatarContext.storyTray.onlineDotSize, 88 * 0.26, accuracy: 0.01)
     }
 }

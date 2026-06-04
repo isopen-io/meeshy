@@ -81,7 +81,7 @@ final class StoryPublishService: ObservableObject {
         // Subscribe to the success / failure streams. The publishers are
         // exposed as nonisolated SendablePassthrough so we can subscribe
         // without entering the actor — the receive(on:) hop puts the toast
-        // calls on the main thread where ToastManager expects them.
+        // calls on the main thread where FeedbackToastManager expects them.
         StoryPublishQueue.shared.publishSucceeded.publisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] payload in
@@ -165,7 +165,7 @@ final class StoryPublishService: ObservableObject {
 
     private func handleSuccess(_ payload: StoryPublishSuccess) {
         logger.info("Story \(payload.tempStoryId, privacy: .public) published as \(payload.publishedStoryId, privacy: .public)")
-        ToastManager.shared.showSuccess(
+        FeedbackToastManager.shared.showSuccess(
             String(localized: "story.publish.queue.published",
                    defaultValue: "Story enfin publiée",
                    bundle: .main)
@@ -192,7 +192,7 @@ final class StoryPublishService: ObservableObject {
             )
         }
         logger.error("Story \(payload.tempStoryId, privacy: .public) publish failed : \(message, privacy: .public)")
-        ToastManager.shared.showError(message)
+        FeedbackToastManager.shared.showError(message)
         Task { await refreshPendingCount() }
     }
 

@@ -195,6 +195,62 @@ final class OutboxFlusherTests: XCTestCase {
         XCTAssertEqual(count, 0)
     }
 
+    // MARK: - S1 — atomic claim against concurrent flushers
+
+    /// The core protection: a second claim of an already-claimed (inflight) row
+    /// is rejected. Because GRDB serializes writes, two CONCURRENT flushers
+    /// reduce to two SEQUENTIAL claims at the DB layer, so this sequential test
+    /// faithfully models the race — exactly one flusher may dispatch a row.
+    func test_claimPending_rejectsSecondClaim_ofAlreadyClaimedRow() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        let now = Date()
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "1", kind: .sendMessage, conversationId: "c1",
+                clientMessageId: "cid_1", payload: Data(), status: .pending, attempts: 0,
+                lastError: nil, createdAt: now, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+        let flusher = OutboxFlusher(pool: pool, dispatcher: MockOutboxDispatcher())
+        let row = try await pool.read { db in try OutboxRecord.fetchOne(db, key: "1")! }
+
+        let first = await flusher.claimPending(row)
+        let second = await flusher.claimPending(row)
+
+        XCTAssertTrue(first, "the first flusher must claim the pending row")
+        XCTAssertFalse(second, "a second flusher must be rejected — the row is already inflight (no double-dispatch)")
+        let status = try await pool.read { db in try OutboxRecord.fetchOne(db, key: "1")!.status }
+        XCTAssertEqual(status, .inflight)
+    }
+
+    /// End-to-end: two flushers sharing the pool flush concurrently; the shared
+    /// row must be dispatched exactly once (with the atomic claim, deterministic
+    /// regardless of interleaving).
+    func test_concurrentFlushers_dispatchSharedRowExactlyOnce() async throws {
+        let pool = try makeFreshPool()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        let now = Date()
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "1", kind: .sendMessage, conversationId: "c1",
+                clientMessageId: "cid_1", payload: Data(), status: .pending, attempts: 0,
+                lastError: nil, createdAt: now, updatedAt: now, nextAttemptAt: now
+            ).insert(db)
+        }
+        let dispatcher = MockOutboxDispatcher()
+        let a = OutboxFlusher(pool: pool, dispatcher: dispatcher)
+        let b = OutboxFlusher(pool: pool, dispatcher: dispatcher)
+
+        async let ra: Void = { _ = await a.flush() }()
+        async let rb: Void = { _ = await b.flush() }()
+        _ = await (ra, rb)
+
+        let processed = await dispatcher.processedIds
+        XCTAssertEqual(processed.filter { $0 == "1" }.count, 1,
+            "two concurrent flushers must not double-dispatch the same row")
+    }
+
     private func makeFreshPool() throws -> DatabaseQueue {
         return try DatabaseQueue()
     }

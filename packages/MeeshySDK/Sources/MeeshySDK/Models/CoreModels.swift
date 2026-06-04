@@ -1175,6 +1175,43 @@ public struct MeeshyReaction: Identifiable, Codable, Sendable {
     public var userId: String? { participantId }
 }
 
+public extension MeeshyReaction {
+    /// Reconstruct synthetic per-reaction rows from the gateway's AGGREGATED
+    /// reaction payload (`reactionSummary` emoji→count + `currentUserReactions`
+    /// emojis the authenticated user reacted with). The aggregated payload does
+    /// not enumerate individual reactors, so each emoji yields `count` rows; the
+    /// FIRST row of an emoji the current user reacted with is tagged with the
+    /// current user's `currentUserId` so the downstream ownership check
+    /// (`participantId == currentUserId`) lights up "I reacted". Every other row
+    /// carries `nil` ownership (the payload can't attribute them).
+    ///
+    /// Single source of truth shared by both ingestion paths —
+    /// `APIMessage.toMessage(currentUserId:)` and
+    /// `MessagePersistenceActor.upsertFromAPIMessages` — so they can never
+    /// diverge again (T7: the persistence path used to tag the current user's
+    /// own reaction with the message AUTHOR's participantId, breaking the
+    /// "I reacted" highlight after a cache/REST reload).
+    static func reconstructFromSummary(
+        messageId: String,
+        reactionSummary: [String: Int]?,
+        currentUserReactions: [String]?,
+        currentUserId: String?
+    ) -> [MeeshyReaction] {
+        guard let summary = reactionSummary else { return [] }
+        let mine = Set(currentUserReactions ?? [])
+        return summary.flatMap { emoji, count -> [MeeshyReaction] in
+            let meReacted = mine.contains(emoji)
+            return (0..<count).map { index in
+                MeeshyReaction(
+                    messageId: messageId,
+                    participantId: (meReacted && index == 0) ? currentUserId : nil,
+                    emoji: emoji
+                )
+            }
+        }
+    }
+}
+
 // MARK: - Reaction Summary
 
 public struct MeeshyReactionSummary: Sendable {

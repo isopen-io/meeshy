@@ -212,6 +212,55 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertFalse(sut.storyGroups[0].stories[0].isViewed, "Should not modify unrelated stories")
     }
 
+    func test_markViewed_preservesAllStoryFields() {
+        // markViewed ne doit poser QUE isViewed=true. Avant le fix il reconstruisait
+        // le StoryItem via un init partiel → ~13 champs (translations, réactions,
+        // chaîne de repost, audio, compteurs) retombaient à leur défaut nil/0.
+        // Régressions : Prisme Linguistique cassé après visionnage, réaction perdue,
+        // attribution de repost effacée — et persistStoryCache gravait l'état corrompu.
+        let rich = StoryItem(
+            id: "rich",
+            content: "Bonjour",
+            media: [],
+            storyEffects: nil,
+            createdAt: Date(timeIntervalSince1970: 1_000_000),
+            expiresAt: Date(timeIntervalSince1970: 1_072_000),
+            repostOfId: "parent-1",
+            originalRepostOfId: "root-1",
+            repostAuthorName: "alice",
+            visibility: "PUBLIC",
+            audioUrl: "https://cdn/audio.m4a",
+            isViewed: false,
+            translations: [StoryTranslation(language: "fr", content: "Bonjour")],
+            backgroundAudio: nil,
+            reactionCount: 7,
+            commentCount: 3,
+            shareCount: 2,
+            viewCount: 42,
+            repostCount: 5,
+            currentUserReactions: ["❤️"]
+        )
+        let group = makeStoryGroup(userId: "u1", stories: [rich])
+        sut.storyGroups = [group]
+
+        sut.markViewed(storyId: "rich")
+
+        let updated = sut.storyGroups[0].stories[0]
+        XCTAssertTrue(updated.isViewed)
+        XCTAssertEqual(updated.translations?.first?.content, "Bonjour", "translations préservées (Prisme)")
+        XCTAssertEqual(updated.currentUserReactions, ["❤️"], "réaction utilisateur préservée")
+        XCTAssertEqual(updated.reactionCount, 7)
+        XCTAssertEqual(updated.commentCount, 3)
+        XCTAssertEqual(updated.shareCount, 2)
+        XCTAssertEqual(updated.viewCount, 42)
+        XCTAssertEqual(updated.repostCount, 5)
+        XCTAssertEqual(updated.repostOfId, "parent-1", "chaîne de repost préservée")
+        XCTAssertEqual(updated.originalRepostOfId, "root-1")
+        XCTAssertEqual(updated.repostAuthorName, "alice")
+        XCTAssertEqual(updated.audioUrl, "https://cdn/audio.m4a")
+        XCTAssertEqual(updated.visibility, "PUBLIC")
+    }
+
     // MARK: - deleteStory() Tests
 
     func test_deleteStory_removesStoryFromGroup() async {
@@ -333,6 +382,75 @@ final class StoryViewModelTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertEqual(sut.storyGroups[0].stories.count, 1, "Duplicate story should not be added")
+    }
+
+    // MARK: - socket storyUpdated tests
+
+    func test_socketStoryUpdated_preservesLocalViewedState() async {
+        // Local-first : la story s1 a été vue localement (markViewed optimiste,
+        // fire-and-forget). Un event story:updated (ex: bump de reactionCount)
+        // arrive avec isViewedByMe absent (→ false, serveur pas encore synchronisé).
+        // L'anneau « vu » ne doit PAS reverter — viewed est monotone.
+        let viewed = makeStoryItem(id: "s1", isViewed: true)
+        let group = makeStoryGroup(userId: "u1", username: "alice", stories: [viewed])
+        sut.storyGroups = [group]
+
+        sut.subscribeToSocketEvents()
+
+        let event: SocketStoryUpdatedData = JSONStub.decode("""
+        {"story":{"id":"s1","type":"STORY","content":"reaction bump","createdAt":"2026-01-15T12:00:00.000Z","author":{"id":"u1","username":"alice"}}}
+        """)
+        mockSocket.storyUpdated.send(event)
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertTrue(
+            sut.storyGroups[0].stories[0].isViewed,
+            "story:updated avec isViewedByMe stale ne doit pas reverter l'état vu local (monotone)"
+        )
+    }
+
+    func test_socketStoryViewed_appliesAuthoritativeViewCount() async {
+        // L'event story:viewed porte le viewCount autoritatif. Avant le fix il était
+        // ignoré → le compteur de vues (StoryViewerView lit currentStory?.viewCount)
+        // restait stale chez l'auteur pendant que des viewers arrivent en temps réel.
+        let item = makeStoryItem(id: "v1")
+        let group = makeStoryGroup(userId: "u1", stories: [item])
+        sut.storyGroups = [group]
+
+        sut.subscribeToSocketEvents()
+
+        let event: SocketStoryViewedData = JSONStub.decode("""
+        {"storyId":"v1","viewerId":"viewer","viewerUsername":"bob","viewCount":9}
+        """)
+        mockSocket.storyViewed.send(event)
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(sut.storyGroups[0].stories[0].viewCount, 9,
+                       "le viewCount realtime autoritatif doit être appliqué au temps réel")
+    }
+
+    func test_socketCommentDeleted_appliesAuthoritativeCommentCount() async {
+        // comment:deleted porte le commentCount autoritatif (comme comment:added).
+        // Avant le fix, le sink faisait `-1` → dérive sur events manqués/hors-ordre +
+        // asymétrie avec commentAdded. Ici la story a 5 commentaires, l'event annonce 3
+        // (suppression concurrente de 2) → on doit afficher 3, pas 4 (= 5-1).
+        let item = StoryItem(id: "c1", commentCount: 5)
+        let group = makeStoryGroup(userId: "u1", stories: [item])
+        sut.storyGroups = [group]
+
+        sut.subscribeToSocketEvents()
+
+        let event: SocketCommentDeletedData = JSONStub.decode("""
+        {"postId":"c1","commentId":"cm9","commentCount":3}
+        """)
+        mockSocket.commentDeleted.send(event)
+
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(sut.storyGroups[0].stories[0].commentCount, 3,
+                       "comment:deleted doit appliquer le commentCount autoritatif (pas un -1 qui dérive)")
     }
 
     // MARK: - Tray re-sort tests (sortStoryGroupsInPlace)
@@ -928,5 +1046,93 @@ final class StoryViewModelTests: XCTestCase {
             "Offline path must not touch activeUpload (no banner side-effect)")
 
         await StoryPublishQueue.shared.clearAll()
+    }
+
+    // MARK: - Realtime story reactions (it.23 — story:reacted/unreacted wiring)
+
+    func test_applyStoryReactionDelta_reacted_incrementsCount() {
+        var item = makeStoryItem(id: "react-me")
+        item.reactionCount = 2
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [item])]
+
+        sut.applyStoryReactionDelta(storyId: "react-me", userId: "other", emoji: "❤️", delta: +1)
+        XCTAssertEqual(sut.storyGroups[0].stories[0].reactionCount, 3,
+                       "story:reacted doit +1 le compteur en temps réel")
+    }
+
+    func test_applyStoryReactionDelta_unreacted_decrementsCount() {
+        var item = makeStoryItem(id: "react-me")
+        item.reactionCount = 2
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [item])]
+
+        sut.applyStoryReactionDelta(storyId: "react-me", userId: "other", emoji: "❤️", delta: -1)
+        XCTAssertEqual(sut.storyGroups[0].stories[0].reactionCount, 1,
+                       "story:unreacted doit -1 le compteur en temps réel")
+    }
+
+    func test_applyStoryReactionDelta_clampsAtZero() {
+        var item = makeStoryItem(id: "react-me")
+        item.reactionCount = 0
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [item])]
+
+        sut.applyStoryReactionDelta(storyId: "react-me", userId: "other", emoji: "❤️", delta: -1)
+        XCTAssertEqual(sut.storyGroups[0].stories[0].reactionCount, 0,
+                       "le compteur ne descend jamais sous 0")
+    }
+
+    func test_storyUnreacted_socketEvent_decrementsCount() {
+        var item = makeStoryItem(id: "react-me")
+        item.reactionCount = 3
+        sut.storyGroups = [makeStoryGroup(userId: "u1", stories: [item])]
+        sut.subscribeToSocketEvents()  // câble les sinks (la View l'appelle au onAppear)
+
+        // Vérifie le câblage complet : sink `storyUnreacted` → applyStoryReactionDelta.
+        let exp = expectation(description: "story:unreacted applied")
+        mockSocket.storyUnreacted.send(
+            SocketStoryUnreactedData(storyId: "react-me", userId: "other", emoji: "❤️"))
+        DispatchQueue.main.async { exp.fulfill() }  // après le hop receive(on:.main) du sink
+        wait(for: [exp], timeout: 1.0)
+
+        XCTAssertEqual(sut.storyGroups[0].stories[0].reactionCount, 2,
+                       "le sink story:unreacted doit décrémenter via applyStoryReactionDelta")
+    }
+
+    // MARK: - StoryCoverThumbnail (local-first tray cover, hybrid Phase 1)
+
+    func test_storyCoverThumbnail_cacheKey_isSyntheticAndStoryScoped() {
+        XCTAssertEqual(StoryCoverThumbnail.cacheKey(storyId: "abc123"), "story-cover:abc123")
+        // Distinct per story so covers never collide; synthetic scheme so it never
+        // collides with a media-URL cache entry.
+        XCTAssertNotEqual(StoryCoverThumbnail.cacheKey(storyId: "a"),
+                          StoryCoverThumbnail.cacheKey(storyId: "b"))
+    }
+
+    func test_preferredCoverURL_prefersLocalComposite_overServerThumbnail() {
+        let local = URL(fileURLWithPath: "/tmp/story-cover.jpg")
+        let resolved = StoryCoverThumbnail.preferredCoverURLString(
+            localCover: local, serverThumbnailUrl: "https://cdn/x.jpg",
+            mediaUrl: "https://cdn/raw.mp4", avatarURL: "https://cdn/avatar.png")
+        XCTAssertEqual(resolved, local.absoluteString,
+                       "local composite (captures text/drawing) must win over the server thumbnail")
+    }
+
+    func test_preferredCoverURL_fallbackChain_whenNoLocalCover() {
+        // server thumb wins when no local cover
+        XCTAssertEqual(
+            StoryCoverThumbnail.preferredCoverURLString(
+                localCover: nil, serverThumbnailUrl: "https://cdn/thumb.jpg",
+                mediaUrl: "https://cdn/raw.mp4", avatarURL: "av"),
+            "https://cdn/thumb.jpg")
+        // empty server thumb is skipped → media url
+        XCTAssertEqual(
+            StoryCoverThumbnail.preferredCoverURLString(
+                localCover: nil, serverThumbnailUrl: "",
+                mediaUrl: "https://cdn/raw.mp4", avatarURL: "av"),
+            "https://cdn/raw.mp4")
+        // nothing but avatar
+        XCTAssertEqual(
+            StoryCoverThumbnail.preferredCoverURLString(
+                localCover: nil, serverThumbnailUrl: nil, mediaUrl: nil, avatarURL: "av"),
+            "av")
     }
 }

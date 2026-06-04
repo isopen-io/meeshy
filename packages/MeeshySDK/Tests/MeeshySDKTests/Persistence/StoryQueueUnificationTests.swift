@@ -145,6 +145,33 @@ final class StoryQueueUnificationTests: XCTestCase {
         XCTAssertTrue(pending.isEmpty)
     }
 
+    // MARK: - reverse() robustesse (clés dupliquées décodées disque)
+
+    func test_reverse_duplicateElementIds_doesNotTrap_lastWins() {
+        // `reverse` consomme un StoryPublishQueueItem décodé du disque :
+        // mediaReferences = JSON sans invariant d'unicité. Deux refs partageant
+        // un elementId (image + video → toutes deux non-audio → fusionnées dans
+        // mediaPairs ; idem deux audio même id) ne doivent PAS faire trapper
+        // Dictionary(uniqueKeysWithValues:) → crash du chemin publish/pendingItems.
+        let item = StoryPublishQueueItem(
+            visibility: "PUBLIC",
+            slidesPayload: Data("{}".utf8),
+            mediaReferences: [
+                StoryMediaReference(elementId: "dup", mediaType: "image", localFilePath: "/tmp/a.jpg"),
+                StoryMediaReference(elementId: "dup", mediaType: "video", localFilePath: "/tmp/b.mp4"),
+                StoryMediaReference(elementId: "snd", mediaType: "audio", localFilePath: "/tmp/a.m4a"),
+                StoryMediaReference(elementId: "snd", mediaType: "audio", localFilePath: "/tmp/b.m4a")
+            ]
+        )
+
+        let legacy = StoryQueueItemConverter.reverse(item)
+
+        XCTAssertEqual(legacy.mediaURLPaths["dup"], "/tmp/b.mp4", "last-wins sur clé média dupliquée")
+        XCTAssertEqual(legacy.audioURLPaths["snd"], "/tmp/b.m4a", "last-wins sur clé audio dupliquée")
+        XCTAssertEqual(legacy.mediaURLPaths.count, 1)
+        XCTAssertEqual(legacy.audioURLPaths.count, 1)
+    }
+
     // MARK: - Migration
 
     func test_migration_drainsLegacyApplicationSupportFiles() async throws {

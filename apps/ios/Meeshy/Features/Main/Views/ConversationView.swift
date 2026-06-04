@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import os
 import PhotosUI
 import CoreLocation
 import AVFoundation
@@ -117,7 +118,6 @@ struct ConversationComposerState {
     
     // Attachment state
     var pendingAttachments: [MessageAttachment] = []
-    var pendingAudioURL: URL? = nil
     var pendingMediaFiles: [String: URL] = [:]
     var pendingThumbnails: [String: UIImage] = [:]
     var isLoadingMedia = false
@@ -168,9 +168,8 @@ extension ConversationComposerState {
     /// the caller can delete it from disk.
     @discardableResult
     mutating func applyEditedAudio(attachmentId: String, editedURL: URL, durationMs: Int) -> URL? {
-        let staleURL = pendingAudioURL
+        let staleURL = pendingMediaFiles[attachmentId]
         let duration = max(durationMs, 500)
-        pendingAudioURL = editedURL
         pendingMediaFiles[attachmentId] = editedURL
         if let index = pendingAttachments.firstIndex(where: { $0.id == attachmentId }) {
             pendingAttachments[index] = MessageAttachment(
@@ -734,7 +733,7 @@ struct ConversationView: View {
         bodyContent
             .background(InteractivePopEnabler())
             .task {
-                print("[DIAG] ConversationView.task ENTERED conv=\(viewModel.conversationId)")
+                Logger.messages.debug("[DIAG] ConversationView.task ENTERED conv=\(viewModel.conversationId)")
                 viewModel.observeSync()
                 await viewModel.loadMessages()
                 MessageSocketManager.shared.connect()
@@ -810,7 +809,7 @@ struct ConversationView: View {
                 }
             }
             .onDisappear {
-                print("[DIAG] ConversationView.onDisappear conv=\(viewModel.conversationId)")
+                Logger.messages.debug("[DIAG] ConversationView.onDisappear conv=\(viewModel.conversationId)")
                 typingDotConnection?.cancel()
                 typingDotConnection = nil
             }
@@ -838,9 +837,9 @@ struct ConversationView: View {
                 // ViewModel has already wiped per-conversation cache and
                 // local message state. We dismiss the screen here and
                 // surface a toast so the user knows why.
-                print("[DIAG] accessRevoked.onChange revoked=\(revoked)")
+                Logger.messages.debug("[DIAG] accessRevoked.onChange revoked=\(revoked)")
                 guard revoked else { return }
-                ToastManager.shared.showError(viewModel.error ?? "Vous n'avez plus acces a cette conversation")
+                FeedbackToastManager.shared.showError(viewModel.error ?? "Vous n'avez plus acces a cette conversation")
                 dismiss()
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
@@ -926,7 +925,7 @@ struct ConversationView: View {
                             scrollState.scrollToMessageTrigger += 1
                         case .notFound:
                             HapticFeedback.error()
-                            ToastManager.shared.show("Message introuvable", type: .info)
+                            FeedbackToastManager.shared.show("Message introuvable", type: .info)
                         }
                     }
                 },

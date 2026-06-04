@@ -7,7 +7,6 @@ import MeeshySDK
 public struct FontStylePicker: View {
     @Binding public var selectedStyle: StoryTextStyle
 
-    @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.colorScheme) private var colorScheme
 
     public init(selectedStyle: Binding<StoryTextStyle>) {

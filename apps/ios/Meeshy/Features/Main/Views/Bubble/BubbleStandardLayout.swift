@@ -146,8 +146,8 @@ struct BubbleStandardLayout: View {
 
     private var audioAttachments: [MessageAttachment] {
         switch content.attachments {
-        case .audio(let att): return [att]
-        case .mixed(_, let audio, _): return audio.map { [$0] } ?? []
+        case .audio(let atts): return atts
+        case .mixed(_, let audio, _): return audio
         case .none, .visualGrid, .nonMedia: return []
         }
     }
@@ -221,6 +221,31 @@ struct BubbleStandardLayout: View {
             && !content.hasTextOrNonMediaContent
             && content.reply == nil
             && !audioAttachments.isEmpty
+    }
+
+    /// True when the bubble carries an audio attachment AND text content
+    /// (the message body), without visual attachments competing for layout.
+    /// In that case the text is rendered as a CAPTION INSIDE the audio
+    /// widget's playerBackground — single unified bubble (caption pattern,
+    /// SOTA aligned with WhatsApp/Telegram/MIMI MultiPart processAll +
+    /// disposition inline). The legacy path rendered audio + textBubble as
+    /// two adjacent bubbles which broke visual atomicity (user feedback
+    /// 2026-05-29).
+    ///
+    /// Excludes :
+    /// - `audioHostsReply` : the reply citation already hosts the bottomSlot
+    ///   contract differently — caption + reply combo is rare and the existing
+    ///   topSlot reply UX takes priority for the moment.
+    /// - `visualGrid` slides : when an image/video is also present, the text
+    ///   becomes the visual grid caption (existing visualHostsReply path),
+    ///   not the audio's caption.
+    private var audioHostsCaption: Bool {
+        !audioAttachments.isEmpty
+            && !content.audioHostsReply
+            && !content.visualHostsReply
+            && content.hasTextOrNonMediaContent
+            && content.reply == nil
+            && visualAttachments.isEmpty
     }
 
     /// Whether the bubble's inner content stack (non-media attachments,
@@ -527,20 +552,93 @@ struct BubbleStandardLayout: View {
                 }
             }
 
-            // Audio standalone. Si `audioHostsReply`, la citation est rendue
-            // dans le topSlot du widget audio (pas de chat bubble englobante).
-            // Si `audioIsSoleContent` OU `audioHostsReply`, le footer est
-            // injecté en bottomSlot — un unique BubbleFooter intégré, jamais
-            // de meta-row dupliquée sous le widget.
-            ForEach(audioAttachments) { attachment in
-                let isLastAudio = attachment.id == audioAttachments.last?.id
-                let shouldInjectFooter = (audioIsSoleContent && isLastAudio) || content.audioHostsReply
-                mediaStandaloneView(
-                    attachment,
-                    injectFooter: shouldInjectFooter,
-                    replyReference: content.audioHostsReply ? content.reply?.reference : nil,
-                    replyIsStory: content.audioHostsReply ? (content.reply?.isStory ?? false) : false
+            // Audio standalone. Trois cas où le footer + caption sont
+            // injectés DANS le widget audio (single unified bubble) :
+            //   - `audioIsSoleContent` : audio seul, footer dans widget
+            //   - `audioHostsReply` : audio + reply, citation dans topSlot
+            //   - `audioHostsCaption` (NEW 2026-05-29) : audio + texte, le
+            //     texte devient le caption rendu DANS playerBackground via
+            //     `embedsCaptionInWidget` au lieu d'une bulle texte séparée.
+            if case .audio(let auds) = content.attachments, auds.count > 1 {
+                // Multi-track audio message → horizontal carousel (one page per
+                // track) with one shared footer. All tracks belong to the SAME
+                // message, so the footer model is constant across pages. The
+                // composer always sends multi-audio as a sole-content audio
+                // message (text/reply are separate messages, per Plan 1), so
+                // the message-level footer is always shown here.
+                //
+                // Gated to the PURE `.audio` enum case: a `.mixed` message that
+                // ever carried multi-audio (rare inbound MIMI) would render the
+                // carousel footer AND the visual grid footer → two footers, so
+                // it falls back to the stacked `ForEach` path below.
+                //
+                // Per-page transcription/translatedAudios are keyed by
+                // attachmentId from `allAudioItems` — each `AudioItem` already
+                // carries ITS OWN transcription (the VM populates
+                // `messageTranscriptionsByAttachment`). The single per-message
+                // `transcription` slot only holds the LAST track's data, so it
+                // can't be used to key the carousel.
+                let footer = resolvedFooter(includesTranslationControls: true)
+                let trackIDs = Set(auds.map(\.id))
+                let perPageTranscriptions = Dictionary(
+                    allAudioItems
+                        .filter { trackIDs.contains($0.id) }
+                        .compactMap { item in item.transcription.map { (item.id, $0) } },
+                    uniquingKeysWith: { first, _ in first }
                 )
+                // Per-page translated audios are keyed by attachmentId from
+                // `allAudioItems` — each `AudioItem` already carries ITS OWN
+                // translated audios (the VM populates
+                // `messageTranslatedAudiosByAttachment`). The single per-message
+                // `translatedAudios` array only holds the LAST track's audios,
+                // so it can't be used to key the carousel. Falls back to the
+                // grouped per-message array for safety (single-audio path).
+                let perAttachmentAudios = Dictionary(
+                    allAudioItems
+                        .filter { trackIDs.contains($0.id) }
+                        .map { ($0.id, $0.translatedAudios) },
+                    uniquingKeysWith: { first, _ in first }
+                )
+                let perPageTranslatedAudios = perAttachmentAudios.allSatisfy({ $0.value.isEmpty })
+                    ? Dictionary(grouping: translatedAudios, by: { $0.attachmentId })
+                    : perAttachmentAudios
+                AudioCarouselView(
+                    items: auds,
+                    message: message,
+                    contactColor: content.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
+                    isDark: isDark,
+                    accentColor: content.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
+                    transcriptions: perPageTranscriptions,
+                    translatedAudios: perPageTranslatedAudios,
+                    textTranslations: textTranslations,
+                    allAudioItems: allAudioItems,
+                    mentionDisplayNames: mentionDisplayNames,
+                    footerModel: footer.0,
+                    footerActions: footer.1,
+                    activeAudioLanguage: activeAudioLanguage,
+                    onScrollToMessage: onScrollToMessage,
+                    onShareFile: { url in
+                        shareURL = url
+                        showShareSheet = true
+                    },
+                    onShowTranslationDetail: onShowTranslationDetail,
+                    onRequestTranslation: onRequestTranslation,
+                    onPlayAudio: onPlayAudio
+                )
+            } else {
+                ForEach(audioAttachments) { attachment in
+                    let isLastAudio = attachment.id == audioAttachments.last?.id
+                    let shouldInjectFooter = (audioIsSoleContent && isLastAudio)
+                        || content.audioHostsReply
+                        || (audioHostsCaption && isLastAudio)
+                    mediaStandaloneView(
+                        attachment,
+                        injectFooter: shouldInjectFooter,
+                        replyReference: content.audioHostsReply ? content.reply?.reference : nil,
+                        replyIsStory: content.audioHostsReply ? (content.reply?.isStory ?? false) : false,
+                        embedsCaption: audioHostsCaption && isLastAudio
+                    )
+                }
             }
 
             // Emoji-only WITHOUT a reply: large emoji free-floating, no bubble.
@@ -550,12 +648,14 @@ struct BubbleStandardLayout: View {
             // (see `bubbleInnerContent`).
             if isEmojiOnly && content.reply == nil {
                 emojiOnlyContent
-            } else if content.hasTextOrNonMediaContent
-                || (content.reply != nil && !content.audioHostsReply && !content.visualHostsReply) {
+            } else if (content.hasTextOrNonMediaContent
+                || (content.reply != nil && !content.audioHostsReply && !content.visualHostsReply))
+                && !audioHostsCaption {
                 textBubbleContent
             }
-            // Audio-only / visual-only reply : leur citation est hébergée par
-            // le widget média lui-même — `textBubbleContent` est intentionnellement
+            // Audio-only / visual-only reply / audio caption pattern : la
+            // citation et/ou le texte sont hébergés par le widget média
+            // lui-même — `textBubbleContent` est intentionnellement
             // suppressed pour eviter la chat bubble parasite.
         }
         .blur(radius: shouldBlur ? 20 : 0)
@@ -943,7 +1043,8 @@ struct BubbleStandardLayout: View {
         _ attachment: MessageAttachment,
         injectFooter: Bool = false,
         replyReference: ReplyReference? = nil,
-        replyIsStory: Bool = false
+        replyIsStory: Bool = false,
+        embedsCaption: Bool = false
     ) -> some View {
         let isMe = content.isMe
         // Audio-only messages host the bubble footer inside the audio widget;
@@ -984,7 +1085,8 @@ struct BubbleStandardLayout: View {
                 parentIsMe: isMe,
                 onReplyTap: onReplyTap,
                 onStoryReplyTap: onStoryReplyTap,
-                onPlayAudio: onPlayAudio
+                onPlayAudio: onPlayAudio,
+                embedsCaptionInWidget: embedsCaption
             )
             .equatable()
 

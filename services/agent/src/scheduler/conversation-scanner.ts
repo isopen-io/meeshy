@@ -303,6 +303,19 @@ export class ConversationScanner {
 
   private async processConversation(conv: EligibleConversation, trigger: 'auto' | 'manual' = 'auto'): Promise<boolean> {
     const { conversationId } = conv;
+
+    // Lock PAR-CONVERSATION : scanConversation (manuel, déclenché par le bouton
+    // admin) ne prend aucun lock global, donc sans ce verrou il pourrait traiter
+    // la même conversation EN CONCURRENCE avec scanAll/scanSequentially → double
+    // run du strategist + doubles interventions enqueued (coût LLM x2, double-post).
+    // TTL 5 min = filet de sécurité si le process crashe mid-scan.
+    const lockKey = `agent:conv-processing:${conversationId}`;
+    const acquired = await this.redis.set(lockKey, '1', 'EX', 300, 'NX');
+    if (!acquired) {
+      console.log(`[Scanner] conv=${conversationId} déjà en cours de traitement, skip (lock par-conversation)`);
+      return false;
+    }
+
     await this.persistence.updateScanStatus(conversationId, new Date(), 'starting');
     const tracer = new ScanTracer(conversationId, trigger);
     this.tracerRef.current = tracer;
@@ -318,6 +331,7 @@ export class ConversationScanner {
         console.error(`[Scanner] Failed to clear scan status for conv=${conversationId}:`, err);
       });
       this.tracerRef.current = null;
+      await this.redis.del(lockKey).catch(() => {});
     }
   }
 

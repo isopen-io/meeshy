@@ -24,10 +24,19 @@ export class LanguageCache {
   set(conversationId: string, languages: string[]): void {
     const now = Date.now();
 
-    // Nettoyer le cache si trop grand
-    if (this.cache.size >= this.maxSize) {
-      const firstKey = this.cache.keys().next().value;
-      this.cache.delete(firstKey);
+    // Cache plein : purger d'abord les entrées EXPIRÉES (slots morts) avant
+    // d'évincer une entrée valide. Sinon une conversation active (re-set, donc
+    // fraîche, mais à une position Map précoce) serait évincée en FIFO pendant
+    // que des entrées expirées de conversations inactives occupent le cache.
+    if (this.cache.size >= this.maxSize && !this.cache.has(conversationId)) {
+      this.cleanExpired();
+      if (this.cache.size >= this.maxSize) {
+        // Toujours plein (que des entrées valides) → FIFO : évincer la plus ancienne.
+        const firstKey = this.cache.keys().next().value;
+        if (firstKey !== undefined) {
+          this.cache.delete(firstKey);
+        }
+      }
     }
 
     this.cache.set(conversationId, {

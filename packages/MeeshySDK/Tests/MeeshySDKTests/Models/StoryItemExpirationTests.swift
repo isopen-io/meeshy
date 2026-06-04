@@ -74,4 +74,46 @@ final class StoryItemExpirationTests: XCTestCase {
         let story = makeStory(createdAt: Date().addingTimeInterval(-60))
         XCTAssertFalse(story.isExpired())
     }
+
+    // MARK: - StoryGroup.isFullyExpired(at:)
+    //
+    // Le tray présente une vignette par groupe ; si TOUTES les stories d'un
+    // groupe sont expirées (cache TTL > 24h, ou story expirée en cours de
+    // session sans re-fetch), un tap ouvre puis ferme instantanément le viewer
+    // (`skipExpiredStoriesIfNeeded`). Le tray filtre donc ces groupes.
+
+    private func makeGroup(stories: [StoryItem]) -> StoryGroup {
+        StoryGroup(id: "g1", username: "Alice", avatarColor: "FFFFFF", stories: stories)
+    }
+
+    func test_isFullyExpired_allStoriesExpired_returnsTrue() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let group = makeGroup(stories: [
+            makeStory(createdAt: now.addingTimeInterval(-7200), expiresAt: now.addingTimeInterval(-100)),
+            makeStory(createdAt: now.addingTimeInterval(-3600), expiresAt: now.addingTimeInterval(-10))
+        ])
+        XCTAssertTrue(group.isFullyExpired(at: now))
+    }
+
+    func test_isFullyExpired_latestStoryStillActive_returnsFalse() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let group = makeGroup(stories: [
+            makeStory(createdAt: now.addingTimeInterval(-7200), expiresAt: now.addingTimeInterval(-100)),
+            makeStory(createdAt: now.addingTimeInterval(-60), expiresAt: now.addingTimeInterval(60))
+        ])
+        XCTAssertFalse(group.isFullyExpired(at: now))
+    }
+
+    func test_isFullyExpired_allStoriesActive_returnsFalse() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        let group = makeGroup(stories: [
+            makeStory(createdAt: now.addingTimeInterval(-60), expiresAt: now.addingTimeInterval(60))
+        ])
+        XCTAssertFalse(group.isFullyExpired(at: now))
+    }
+
+    func test_isFullyExpired_emptyStories_returnsTrue() {
+        let now = Date(timeIntervalSince1970: 1_000_000)
+        XCTAssertTrue(makeGroup(stories: []).isFullyExpired(at: now))
+    }
 }

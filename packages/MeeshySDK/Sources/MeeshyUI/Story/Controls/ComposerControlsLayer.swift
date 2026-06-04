@@ -1,7 +1,6 @@
 import SwiftUI
 import UIKit
 import PhotosUI
-import PencilKit
 import MeeshySDK
 
 public struct ComposerControlsLayer: View {
@@ -11,12 +10,20 @@ public struct ComposerControlsLayer: View {
     @Binding var bandStateMachine: BandStateMachine
     @Binding var areFabsVisible: Bool
 
-    @Binding var drawingCanvas: PKCanvasView
-    @Binding var drawingTool: DrawingTool
     @Binding var selectedFilter: StoryFilter?
     @Binding var fgMediaItem: PhotosPickerItem?
     @Binding var showAudioDocumentPicker: Bool
     @Binding var showVoiceRecorderSheet: Bool
+
+    /// Hauteur redimensionnable du panneau DESSIN (drag du grabber). En mode dessin
+    /// (Option A) le canvas reste PLEIN — ce drawer flotte par-dessus son bas.
+    @Binding var resizableBandHeight: CGFloat
+    let bandMinHeight: CGFloat
+    let bandMaxHeight: CGFloat
+
+    /// Drawer dessin replié « totalement » (poignée seule). Tirer le grabber sous le
+    /// min le replie (sans quitter le dessin) ; le tirer vers le haut le redéplie.
+    @Binding var bandDrawerCollapsed: Bool
 
     /// Ouvre l'éditeur d'image plein écran pour un média (recadrage/filtres/
     /// ajustements). Seul point d'entrée d'édition média — il n'y a plus de
@@ -27,31 +34,57 @@ public struct ComposerControlsLayer: View {
         viewModel: StoryComposerViewModel,
         bandStateMachine: Binding<BandStateMachine>,
         areFabsVisible: Binding<Bool>,
-        drawingCanvas: Binding<PKCanvasView>,
-        drawingTool: Binding<DrawingTool>,
         selectedFilter: Binding<StoryFilter?>,
         fgMediaItem: Binding<PhotosPickerItem?>,
         showAudioDocumentPicker: Binding<Bool>,
         showVoiceRecorderSheet: Binding<Bool>,
+        resizableBandHeight: Binding<CGFloat>,
+        bandMinHeight: CGFloat,
+        bandMaxHeight: CGFloat,
+        bandDrawerCollapsed: Binding<Bool>,
         onOpenMediaCrop: @escaping (String) -> Void
     ) {
         self.viewModel = viewModel
         self._bandStateMachine = bandStateMachine
         self._areFabsVisible = areFabsVisible
-        self._drawingCanvas = drawingCanvas
-        self._drawingTool = drawingTool
         self._selectedFilter = selectedFilter
         self._fgMediaItem = fgMediaItem
         self._showAudioDocumentPicker = showAudioDocumentPicker
         self._showVoiceRecorderSheet = showVoiceRecorderSheet
+        self._resizableBandHeight = resizableBandHeight
+        self.bandMinHeight = bandMinHeight
+        self.bandMaxHeight = bandMaxHeight
+        self._bandDrawerCollapsed = bandDrawerCollapsed
         self.onOpenMediaCrop = onOpenMediaCrop
+    }
+
+    /// Le grabber redimensionne ET replie le band pour TOUS les panneaux d'outil
+    /// (plus seulement DESSIN). L'utilisateur veut la poignée rétractable jusqu'à
+    /// se cacher entièrement sur chaque outil, comme le dessin (2026-06-02).
+    private var isBandResizable: Bool { effectiveBandState.allowsCollapsibleDrawer }
+
+    /// État effectif du band : le dessin utilise le band PARTAGÉ comme tous les
+    /// outils (`drawingPanel` = liste éditable des traits). On force donc l'affichage
+    /// du panneau dessin dès que l'outil dessin est actif, même si la machine d'état
+    /// est restée `.hidden` (chemin d'entrée FAB, état restauré…). Sans ça le band
+    /// partagé ne s'affichait pas pour le dessin (bug user 2026-06-01 « dessin devrait
+    /// afficher le ComposerBottomBand aussi »).
+    private var effectiveBandState: BandState {
+        // On se cale sur `drawingEditingMode.isActive` (et non `activeTool`) car
+        // c'est lui qui pilote l'affichage des contrôleurs flottants : tant que les
+        // bulles de dessin sont à l'écran, le band partagé doit l'être aussi —
+        // les deux états peuvent diverger selon le chemin d'entrée.
+        if viewModel.drawingEditingMode.isActive, bandStateMachine.state == .hidden {
+            return .toolPanel(.drawing)
+        }
+        return bandStateMachine.state
     }
 
     /// FABs are visible when the band is hidden; when a band panel is open,
     /// FABs hide to free space. Swiping down on the band dismisses it and
     /// restores FABs.
     private var shouldShowFABs: Bool {
-        areFabsVisible && bandStateMachine.state == .hidden
+        areFabsVisible && effectiveBandState == .hidden
     }
 
     public var body: some View {
@@ -69,7 +102,18 @@ public struct ComposerControlsLayer: View {
                         filtersBadge: filtersBadge,
                         timelineBadge: timelineBadge,
                         activeCategory: nil, // band is hidden so no active category
-                        onTap: { cat in bandStateMachine.tapFAB(cat) },
+                        onTap: { cat in
+                            // Le DESSIN n'a pas de panneau « tuiles » dans le band : son UI
+                            // est les contrôleurs flottants (bulles) + la liste des traits.
+                            // Tapper le FAB doit donc ACTIVER le mode dessin (`selectTool`)
+                            // — l'`adaptiveOnChange(activeTool)` ouvre alors bulles + band.
+                            // `tapFAB` seul ouvrait un band sans contrôles (bug user 2026-06-01).
+                            if cat == .drawing {
+                                viewModel.selectTool(.drawing)
+                            } else {
+                                bandStateMachine.tapFAB(cat)
+                            }
+                        },
                         onSwipeUp: { cat in bandStateMachine.swipeUpOnFAB(cat) },
                         onSwipeDownAny: { areFabsVisible = false }
                     )
@@ -80,12 +124,10 @@ public struct ComposerControlsLayer: View {
             }
 
             // Band — with swipe-down to dismiss
-            if bandStateMachine.state != .hidden {
+            if effectiveBandState != .hidden {
                 ComposerBottomBand(
-                    state: bandStateMachine.state,
+                    state: effectiveBandState,
                     viewModel: viewModel,
-                    drawingCanvas: $drawingCanvas,
-                    drawingTool: $drawingTool,
                     selectedFilter: $selectedFilter,
                     fgMediaItem: $fgMediaItem,
                     showAudioDocumentPicker: $showAudioDocumentPicker,
@@ -133,10 +175,30 @@ public struct ComposerControlsLayer: View {
                     },
                     onShowInTimeline: {
                         viewModel.isTimelineVisible = true
+                    },
+                    resizableHeight: isBandResizable ? $resizableBandHeight : nil,
+                    minHeight: bandMinHeight,
+                    maxHeight: bandMaxHeight,
+                    onResizeDismiss: {
+                        // Grabber tiré sous le min → on REPLIE le drawer (poignée
+                        // seule), pour TOUT outil : le canvas devient 100 % visible
+                        // et l'outil reste actif (en dessin, le contrôleur flottant
+                        // des bulles reste visible). Re-déplier via le grabber ; pour
+                        // fermer l'outil → chevron retour du band (2026-06-02, étend
+                        // le repli dessin à tous les outils).
+                        bandDrawerCollapsed = true
+                    },
+                    drawingCollapsed: isBandResizable && bandDrawerCollapsed,
+                    onExpandDrawer: {
+                        // Grabber (replié) tiré vers le haut → on redéplie le drawer.
+                        bandDrawerCollapsed = false
                     }
                 )
                 .transition(.move(edge: .bottom).combined(with: .opacity))
+                // En mode dessin le grabber pilote le RESIZE — on désarme le
+                // swipe-down/latéral du band entier pour ne pas le concurrencer.
                 .gesture(
+                    isBandResizable ? nil :
                     DragGesture(minimumDistance: 30)
                         .onEnded { value in
                             // Swipe down: dismiss band → show FABs

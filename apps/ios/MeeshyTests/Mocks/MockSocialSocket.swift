@@ -14,7 +14,7 @@ final class MockSocialSocket: SocialSocketProviding, @unchecked Sendable {
 
     // MARK: - Publishers
 
-    let postCreated = PassthroughSubject<APIPost, Never>()
+    let postCreated = PassthroughSubject<SocketPostCreatedData, Never>()
     let postUpdated = PassthroughSubject<APIPost, Never>()
     let postDeleted = PassthroughSubject<String, Never>()
     let postLiked = PassthroughSubject<SocketPostLikedData, Never>()
@@ -24,6 +24,7 @@ final class MockSocialSocket: SocialSocketProviding, @unchecked Sendable {
     let storyCreated = PassthroughSubject<APIPost, Never>()
     let storyViewed = PassthroughSubject<SocketStoryViewedData, Never>()
     let storyReacted = PassthroughSubject<SocketStoryReactedData, Never>()
+    let storyUnreacted = PassthroughSubject<SocketStoryUnreactedData, Never>()
     let statusCreated = PassthroughSubject<APIPost, Never>()
     let statusDeleted = PassthroughSubject<String, Never>()
     let statusUpdated = PassthroughSubject<APIPost, Never>()
@@ -98,8 +99,8 @@ final class MockSocialSocket: SocialSocketProviding, @unchecked Sendable {
 
     // MARK: - Simulation Helpers
 
-    func simulatePostCreated(_ post: APIPost) {
-        postCreated.send(post)
+    func simulatePostCreated(_ post: APIPost, clientMutationId: String? = nil) {
+        postCreated.send(SocketPostCreatedData(post: post, clientMutationId: clientMutationId))
     }
 
     func simulatePostDeleted(_ postId: String) {

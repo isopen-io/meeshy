@@ -70,7 +70,9 @@ export function registerCoreRoutes(
         } else if (postType === 'STATUS') {
           socialEvents.broadcastStatusCreated(broadcastPost, authContext.registeredUser.id).catch(() => {});
         } else {
-          socialEvents.broadcastPostCreated(broadcastPost, authContext.registeredUser.id).catch(() => {});
+          // U1 — echo the request cmid so an offline author reconciles its
+          // optimistic temp post (keyed by cmid) with this server post.
+          socialEvents.broadcastPostCreated(broadcastPost, authContext.registeredUser.id, request.clientMutationId).catch(() => {});
         }
       }
 

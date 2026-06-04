@@ -354,6 +354,11 @@ final class StoryModelsExtensionsTests: XCTestCase {
                                 fromClipId: "m1", toClipId: "m2",
                                 kind: .crossfade, duration: 0.4)
         ]
+        // Durée AUTORITAIRE via le timeline (« la timeline EST la story ») : le timeline
+        // editor configure la durée du slide, persistée sur `timelineDuration` et lue en
+        // priorité par `computedTotalDuration()`. `TimelineProject.init(from:)` la recharge
+        // donc à 8 s (et non la durée auto du contenu, qui serait 6 s).
+        effects.timelineDuration = 8.0
         return StorySlide(id: "slide-1", effects: effects, duration: 8.0, order: 0)
     }
 

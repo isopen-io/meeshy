@@ -17,6 +17,23 @@ struct BandStateMachineTests {
         #expect(sm.state == .toolPanel(.media))
     }
 
+    // MARK: - allowsCollapsibleDrawer (retract handle for ALL tools, user 2026-06-02)
+
+    @Test("every tool panel allows the collapsible drawer (not just drawing)")
+    func everyToolPanelAllowsCollapse() {
+        for tool in [StoryToolMode.media, .audio, .text, .drawing, .filters, .timeline, .texture] {
+            #expect(BandState.toolPanel(tool).allowsCollapsibleDrawer,
+                    "tool \(tool) drawer must be collapsible")
+        }
+    }
+
+    @Test("hidden and format panels are not collapsible drawers")
+    func hiddenAndFormatPanelNotCollapsible() {
+        #expect(BandState.hidden.allowsCollapsibleDrawer == false)
+        #expect(BandState.formatPanel(.text, elementId: "x").allowsCollapsibleDrawer == false)
+        #expect(BandState.formatPanel(.media, elementId: "y").allowsCollapsibleDrawer == false)
+    }
+
     @Test("tapFAB(.filters) from .hidden opens .toolPanel(.filters)")
     func tapFABFiltersFromHidden() {
         var sm = BandStateMachine()

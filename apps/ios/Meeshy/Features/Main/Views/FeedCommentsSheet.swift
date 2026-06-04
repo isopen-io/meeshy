@@ -406,7 +406,7 @@ struct CommentsSheetView: View {
             // A6 — hard timeout: protects against a hung SocialSocketManager
             // leaving the heart button locked forever (commentId stuck in
             // heartInFlightIds because defer only fires on Task completion).
-            try await withTaskTimeout(seconds: 12) {
+            try await withTaskTimeout(seconds: TaskTimeoutDefaults.socialReaction) {
                 if wasLiked {
                     _ = try await SocialSocketManager.shared.removeCommentReaction(
                         commentId: commentId, postId: post.id, emoji: StoryViewerView.heartEmoji
@@ -632,7 +632,7 @@ struct CommentsSheetView: View {
                         liveCommentCount = (liveCommentCount ?? post.comments.count) + 1
                         mentionController.clearDraft()
                     } catch {
-                        ToastManager.shared.showError(String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
+                        FeedbackToastManager.shared.showError(String(localized: "feed.comments.send_error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
                     }
                 }
             },

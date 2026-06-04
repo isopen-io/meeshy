@@ -23,6 +23,14 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
     private var backgroundFillLayer: CALayer?
     private var glassBackdropLayer: StoryGlassBackdropLayer?
 
+    /// Sous-calque de glyphes utilisée UNIQUEMENT pour le fond `.glass`. Un
+    /// `CATextLayer` peint son `string` dans son propre contenu, lequel passe
+    /// SOUS tout sous-calque (donc sous le backdrop glass). Pour garder les
+    /// glyphes lisibles, on les rend dans cette sous-calque posée AU-DESSUS du
+    /// backdrop, et on rend les glyphes propres du parent transparents. `nil`
+    /// pour `.none` / `.solid` (le parent peint alors lui-même ses glyphes).
+    private var glyphLayer: CATextLayer?
+
     /// Chaînes attribuées mémorisées par `configure`, permettant à
     /// `setGlyphsHidden` de basculer les glyphes sans toucher `bounds` ni les
     /// sous-calques de fond.
@@ -71,12 +79,7 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
         // taille de police design donne un pourcentage indépendant de la
         // résolution ET de l'échelle (le contour garde la même épaisseur design
         // quel que soit `text.scale`).
-        var strokeAttrs: [NSAttributedString.Key: Any] = [:]
-        if let borderHex = text.borderColor, let borderColor = parseHexColor(borderHex) {
-            let widthPx = CGFloat(text.borderWidth ?? 3.0)
-            strokeAttrs[.strokeColor] = borderColor.cgColor
-            strokeAttrs[.strokeWidth] = -(widthPx / max(designFontSize, 1)) * 100.0
-        }
+        let strokeAttrs = Self.strokeAttributes(for: text, designFontSize: designFontSize)
 
         // Measure in design space.
         let designAttr = NSAttributedString(string: text.text, attributes: [
@@ -142,9 +145,12 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
         if shouldRasterize { rasterizationScale = UIScreen.main.scale }
 
         // Install background fill / glass backdrop behind the text glyphs.
-        // The CATextLayer renders its `string` into its own contents; the
-        // background must live in a *sublayer* placed at zPosition < 0 so the
-        // CATextLayer's own drawn glyphs paint above it.
+        // The CATextLayer renders its `string` into its OWN contents. Un
+        // sous-calque composite TOUJOURS au-dessus du contenu propre du parent
+        // (son `zPosition` n'ordonne que les sous-calques entre eux, il ne le
+        // pousse PAS derrière les glyphes) — c'est pourquoi un fond SOLIDE doit
+        // être posé sur `backgroundColor` de la calque (peint avant le contenu),
+        // tandis que le GLASS reste un sous-calque (il fait du blur GPU).
         applyBackgroundStyle(text.resolvedBackgroundStyle, geometry: geometry)
     }
 
@@ -155,7 +161,13 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
     @MainActor
     public func setGlyphsHidden(_ hidden: Bool) {
         glyphsHidden = hidden
-        string = hidden ? hiddenString : visibleString
+        if let glyphLayer {
+            // Cas `.glass` : les glyphes visibles vivent dans la sous-calque
+            // au-dessus du backdrop. Le parent reste transparent en permanence.
+            glyphLayer.string = hidden ? hiddenString : visibleString
+        } else {
+            string = hidden ? hiddenString : visibleString
+        }
     }
 
     // MARK: - Background style
@@ -168,21 +180,29 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
         backgroundFillLayer = nil
         glassBackdropLayer?.removeFromSuperlayer()
         glassBackdropLayer = nil
+        glyphLayer?.removeFromSuperlayer()
+        glyphLayer = nil
+        // Reset le fond propre de la calque (cas `.none` / `.glass`, ou
+        // réutilisation d'instance) — sinon un ancien `backgroundColor` solide
+        // survivrait à un passage vers `.none`.
+        backgroundColor = nil
+        cornerRadius = 0
 
         switch style {
         case .none:
             return
 
         case .solid(let hex):
-            let fill = CALayer()
-            fill.frame = bounds
-            // Symmetric inset already baked into bounds via the +16 design-px pad.
-            fill.cornerRadius = max(4, bounds.height * 0.15)
-            fill.backgroundColor = (parseHexColor(hex) ?? .black.withAlphaComponent(0.5)).cgColor
-            fill.zPosition = -1
-            fill.contentsScale = UIScreen.main.scale
-            addSublayer(fill)
-            backgroundFillLayer = fill
+            // Fond solide posé sur le `backgroundColor` de la calque ELLE-MÊME
+            // (peint AVANT le contenu → les glyphes s'affichent par-dessus), et
+            // NON en sous-calque (qui composerait au-dessus des glyphes et les
+            // masquerait — régression « boîte noire vide » du 2026-06-01).
+            // L'inset symétrique est déjà intégré dans `bounds` via le pad de
+            // +16 design-px. `masksToBounds` reste false : `cornerRadius`
+            // arrondit le fond sans rogner les glyphes (le contenu n'est clippé
+            // que si `masksToBounds == true`).
+            backgroundColor = (parseHexColor(hex) ?? .black.withAlphaComponent(0.5)).cgColor
+            cornerRadius = max(4, bounds.height * 0.15)
 
         case .glass(let radius):
             let backdrop = StoryGlassBackdropLayer()
@@ -197,6 +217,25 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
             backdrop.configure(sigma: renderedSigma)
             addSublayer(backdrop)
             glassBackdropLayer = backdrop
+
+            // Z-order (suite de 104ff0387) : le backdrop ci-dessus est un
+            // sous-calque, donc composé AU-DESSUS du contenu propre du parent
+            // (ses glyphes). Pour rester lisibles, les glyphes visibles sont
+            // peints dans une sous-calque posée APRÈS le backdrop (sibling
+            // au-dessus, `zPosition` 0 > -1), et les glyphes propres du parent
+            // sont rendus transparents — sinon ils peindraient une 2e fois SOUS
+            // le verre, ré-introduisant le « blanc sur black » hors édition.
+            let glyphs = CATextLayer()
+            glyphs.frame = bounds
+            glyphs.contentsScale = UIScreen.main.scale
+            glyphs.alignmentMode = alignmentMode
+            glyphs.isWrapped = true
+            glyphs.truncationMode = .none
+            glyphs.zPosition = 0
+            glyphs.string = glyphsHidden ? hiddenString : visibleString
+            addSublayer(glyphs)
+            glyphLayer = glyphs
+            string = hiddenString
         }
     }
 
@@ -214,6 +253,31 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
     }
 
     // MARK: - Helpers
+
+    /// Calcule les attributs de stroke (`strokeColor`, `strokeWidth`) pour un
+    /// `StoryTextObject`. Retourne un dictionnaire VIDE si aucun stroke ne doit
+    /// être rendu :
+    /// - `borderColor == nil` → pas de couleur définie
+    /// - couleur invalide (hex non parsable) → on skip
+    /// - `borderWidth == nil` OU `borderWidth == 0` → 0 pixel ⇒ rien à dessiner
+    ///
+    /// Extracted as `nonisolated static` pour permettre tests unitaires sans
+    /// instancier de `StoryTextLayer` (qui requiert un context UIKit/CATransaction).
+    nonisolated static func strokeAttributes(
+        for text: StoryTextObject,
+        designFontSize: CGFloat
+    ) -> [NSAttributedString.Key: Any] {
+        var attrs: [NSAttributedString.Key: Any] = [:]
+        guard
+            let borderHex = text.borderColor,
+            let borderColor = parseHexColorNonisolated(borderHex)
+        else { return attrs }
+        let widthPx = CGFloat(text.borderWidth ?? 0)
+        guard widthPx > 0 else { return attrs }
+        attrs[.strokeColor] = borderColor.cgColor
+        attrs[.strokeWidth] = -(widthPx / max(designFontSize, 1)) * 100.0
+        return attrs
+    }
 
     @MainActor
     private func resolveFont(family: String, size: CGFloat) -> UIFont {
@@ -254,6 +318,12 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
 
     @MainActor
     private func parseHexColor(_ hex: String?) -> UIColor? {
+        return Self.parseHexColorNonisolated(hex)
+    }
+
+    /// Variante `nonisolated` du parser hex pour usage depuis les statics testables.
+    /// Logique identique à l'ancien `parseHexColor` MainActor.
+    nonisolated static func parseHexColorNonisolated(_ hex: String?) -> UIColor? {
         guard let hex else { return nil }
         var trimmed = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.hasPrefix("#") { trimmed.removeFirst() }

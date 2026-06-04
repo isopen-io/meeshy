@@ -147,10 +147,12 @@ export class SocialEventsHandler {
   // POST BROADCASTS
   // ==============================================
 
-  async broadcastPostCreated(post: Post, authorId: string): Promise<void> {
+  async broadcastPostCreated(post: Post, authorId: string, clientMutationId?: string): Promise<void> {
     const friendIds = await this.getFriendIds(authorId);
     logger.info(`📣 post:created fanout author=${authorId} postId=${(post as any).id} friends=${friendIds.length}`);
-    this.emitToFriends(friendIds, authorId, SERVER_EVENTS.POST_CREATED, { post });
+    // U1 — echo the cmid so the author's offline-created optimistic post (keyed
+    // by cmid) reconciles to the server id instead of duplicating.
+    this.emitToFriends(friendIds, authorId, SERVER_EVENTS.POST_CREATED, { post, clientMutationId });
   }
 
   async broadcastPostUpdated(post: Post, authorId: string): Promise<void> {

@@ -459,12 +459,23 @@ struct AudioMediaView: View, Equatable {
     /// re-evaluation on every refresh.
     var onPlayAudio: ((String) -> Void)? = nil
 
+    /// Caption pattern (MIMI-compatible, SOTA WhatsApp/Telegram) : quand le
+    /// message contient à la fois un audio attachment et du texte content,
+    /// le texte est rendu DANS le playerBackground d'AudioBubbleRouter
+    /// (au-dessus du footer, en dessous du player) — pas comme une bulle
+    /// texte séparée. `BubbleStandardLayout` set ce flag à true quand il
+    /// détecte audio + content, et SKIP son rendu textBubbleContent externe.
+    /// Référence : draft-ietf-mimi-content-08 §MultiPart processAll +
+    /// disposition inline (user feedback 2026-05-29).
+    var embedsCaptionInWidget: Bool = false
+
     static func == (lhs: AudioMediaView, rhs: AudioMediaView) -> Bool {
         lhs.attachment.id == rhs.attachment.id
             && lhs.attachment.fileUrl == rhs.attachment.fileUrl
             && lhs.message.id == rhs.message.id
             && lhs.message.deliveryStatus == rhs.message.deliveryStatus
             && lhs.message.updatedAt == rhs.message.updatedAt
+            && lhs.message.content == rhs.message.content
             && lhs.isDark == rhs.isDark
             && lhs.accentColor == rhs.accentColor
             && lhs.contactColor == rhs.contactColor
@@ -475,6 +486,11 @@ struct AudioMediaView: View, Equatable {
             && lhs.replyReference?.attachmentThumbnailUrl == rhs.replyReference?.attachmentThumbnailUrl
             && lhs.replyIsStory == rhs.replyIsStory
             && lhs.parentIsMe == rhs.parentIsMe
+            && lhs.embedsCaptionInWidget == rhs.embedsCaptionInWidget
+            && lhs.transcription?.text == rhs.transcription?.text
+            && lhs.transcription?.segments.count == rhs.transcription?.segments.count
+            && lhs.translatedAudios.count == rhs.translatedAudios.count
+            && lhs.translatedAudios.map(\.url) == rhs.translatedAudios.map(\.url)
     }
 
     @State private var resolvedAvailability: AudioAvailability = .needsDownload
@@ -552,7 +568,16 @@ struct AudioMediaView: View, Equatable {
         VStack(alignment: .leading, spacing: 4) {
             audioPlayer
 
-            if !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && visualAttachments.isEmpty {
+            // Legacy caption rendering OUTSIDE the playerBackground (faded,
+            // visually disconnected from the audio widget). Conservée pour le
+            // cas où le caller N'EST PAS BubbleStandardLayout (galeries,
+            // previews) qui n'utilise pas le flag `embedsCaptionInWidget`.
+            // Quand le flag est levé (caption pattern SOTA), le caption est
+            // rendu DANS playerBottomContent à la place — pas ici, sinon
+            // doublon visuel.
+            if !embedsCaptionInWidget
+                && !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && visualAttachments.isEmpty {
                 MessageTextRenderer.render(
                     message.content,
                     fontSize: 13,
@@ -800,14 +825,40 @@ struct AudioMediaView: View, Equatable {
         }
     }
 
+    /// Caption text rendered INSIDE the playerBackground when
+    /// `embedsCaptionInWidget == true` (caption pattern SOTA, MIMI-aligned).
+    /// Even fontSize and tinted color as the legacy external caption, but
+    /// rendered above the footer in the same RoundedRectangle background —
+    /// audio + text become one visual unit instead of two adjacent bubbles.
+    @ViewBuilder
+    private var inlineCaption: some View {
+        let trimmed = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        if embedsCaptionInWidget && !trimmed.isEmpty {
+            MessageTextRenderer.render(
+                message.content,
+                fontSize: 14,
+                color: isDark ? Color.white.opacity(0.92) : Color(hex: "1E1B4B").opacity(0.92),
+                mentionColor: Color(hex: "818CF8"),
+                accentColor: Color(hex: contactColor),
+                mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
+            )
+            .fixedSize(horizontal: false, vertical: true)
+            .tint(Color(hex: contactColor))
+        }
+    }
+
     /// Footer rendered inside the audio widget (`AudioPlayerView.bottomContent`):
     /// a single unified `BubbleFooter` — audio-language flags + translate on
-    /// the leading edge, timestamp + delivery pinned trailing.
+    /// the leading edge, timestamp + delivery pinned trailing. Combined with
+    /// `inlineCaption` when the caption pattern is active.
     @ViewBuilder
     private var playerBottomContent: some View {
-        if let (model, actions) = audioFooter {
-            BubbleFooter(model: model, actions: actions, style: .row, isDark: isDark)
-                .equatable()
+        VStack(alignment: .leading, spacing: 6) {
+            inlineCaption
+            if let (model, actions) = audioFooter {
+                BubbleFooter(model: model, actions: actions, style: .row, isDark: isDark)
+                    .equatable()
+            }
         }
     }
 

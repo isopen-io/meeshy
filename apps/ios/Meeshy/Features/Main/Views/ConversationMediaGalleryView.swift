@@ -71,7 +71,11 @@ struct ConversationMediaGalleryView: View {
             if oldIdx != newIdx {
                 let oldAtt = allAttachments[oldIdx]
                 if oldAtt.type == .video && videoManager.activeURL == oldAtt.fileUrl {
-                    videoManager.pause()
+                    // BUG B (round 4) — `release(urlString:)` (URL-gated) clears
+                    // `activeURL` so the underlying conversation bubble's footer
+                    // reappears once the gallery closes. Bare `pause()` left
+                    // `activeURL` set → `hasPlayingInlineVideo` stayed true.
+                    videoManager.release(urlString: oldAtt.fileUrl)
                 }
                 HapticFeedback.light()
             }
@@ -142,6 +146,7 @@ struct ConversationMediaGalleryView: View {
                     return
                 }
                 if scale <= 1.0 && abs(value.translation.height) > 150 {
+                    stopActiveVideoAudio()
                     dismiss()
                 } else {
                     withAnimation(.spring()) { offset = .zero }
@@ -230,7 +235,10 @@ struct ConversationMediaGalleryView: View {
     private var controlsOverlay: some View {
         VStack {
             HStack {
-                Button { dismiss() } label: {
+                Button {
+                    stopActiveVideoAudio()
+                    dismiss()
+                } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 28))
                         .foregroundColor(.white.opacity(0.8))
@@ -341,6 +349,26 @@ struct ConversationMediaGalleryView: View {
     }
 
     // MARK: - Actions
+
+    /// Stops the gallery's video audio when the gallery is dismissed via a path
+    /// that is NOT the swipe-down-to-PIP gesture (X button, image vertical
+    /// dismiss). `SharedAVPlayerManager` is process-wide, so without this the
+    /// AVPlayer keeps emitting audio with no visible player after the gallery is
+    /// gone. The PIP swipe path deliberately calls `startPip()` instead and must
+    /// never reach here — keeping the player alive for picture-in-picture.
+    private func stopActiveVideoAudio() {
+        guard currentIndex < allAttachments.count else { return }
+        let att = allAttachments[currentIndex]
+        guard att.type == .video, videoManager.activeURL == att.fileUrl else { return }
+        // BUG B (round 4) — `release(urlString:)` (URL-gated, safe no-op if
+        // another bubble took over) clears `activeURL` so the conversation
+        // bubble's footer (timestamp/delivery) reappears after the gallery
+        // closes via X-close or image vertical-dismiss. Bare `pause()` left
+        // `activeURL` set, keeping `hasPlayingInlineVideo` true and the footer
+        // hidden until re-mount. The swipe-down PIP path is unaffected: it
+        // calls `startPip()` and never reaches here.
+        videoManager.release(urlString: att.fileUrl)
+    }
 
     private func cacheAttachment(_ attachment: MessageAttachment?) {
         guard let attachment else { return }

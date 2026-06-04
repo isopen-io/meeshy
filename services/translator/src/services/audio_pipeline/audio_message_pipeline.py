@@ -33,6 +33,7 @@ from datetime import datetime
 from utils.audio_format_converter import convert_to_wav_if_needed
 
 # Import stages
+from .transcription_guards import is_blank_transcription
 from .transcription_stage import (
     TranscriptionStage,
     AudioMessageMetadata,
@@ -405,6 +406,27 @@ class AudioMessagePipeline:
             f"[PIPELINE] Transcribed: '{transcription.text[:50]}...' "
             f"(lang={transcription.language}, source={transcription.source})"
         )
+
+        # ═══════════════════════════════════════════════════════════════
+        # GARDE: transcription vide ("no speech" — VAD a tout retiré ou
+        # hallucinations toutes filtrées). On NE déclenche PAS le callback
+        # (sinon la gateway stocke une transcription `undefined`), ni la
+        # traduction NLLB / le TTS (clonage vocal de rien). On renvoie un
+        # résultat transcription-only à confidence 0.0.
+        # ═══════════════════════════════════════════════════════════════
+        if is_blank_transcription(transcription.text):
+            logger.info(
+                "[PIPELINE] 🔇 Transcription vide (no speech) — skip callback, traduction et TTS"
+            )
+            return self._build_transcription_only_result(
+                message_id=message_id,
+                attachment_id=attachment_id,
+                audio_path=audio_path,
+                audio_url=audio_url,
+                transcription=transcription,
+                sender_id=sender_id,
+                start_time=start_time,
+            )
 
         # ═══════════════════════════════════════════════════════════════
         # CALLBACK: Notify transcription ready (before translation)

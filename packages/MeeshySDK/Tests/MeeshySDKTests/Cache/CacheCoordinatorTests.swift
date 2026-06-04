@@ -533,6 +533,9 @@ private final class BareMessageService: MessageServiceProviding, @unchecked Send
     func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse {
         MessagesAPIResponse(success: true, data: [], pagination: nil, cursorPagination: nil, hasNewer: nil, meta: nil)
     }
+    func listAfter(conversationId: String, after: Date, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse {
+        MessagesAPIResponse(success: true, data: [], pagination: nil, cursorPagination: nil, hasNewer: nil, meta: nil)
+    }
     func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse { throw MeeshyError.network(.timeout) }
     func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData { throw MeeshyError.network(.timeout) }
     func edit(messageId: String, content: String) async throws -> APIMessage { throw MeeshyError.network(.timeout) }

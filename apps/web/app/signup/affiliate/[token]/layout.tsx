@@ -1,5 +1,7 @@
 import { Metadata } from 'next';
 import { ReactNode } from 'react';
+import { getServerLocale } from '@/lib/i18n/server-locale';
+import { composeMetadata, getMetadataPage, pageArray, pageString } from '@/lib/i18n/metadata';
 
 interface AffiliateLayoutProps {
   children: ReactNode;
@@ -9,58 +11,28 @@ interface AffiliateLayoutProps {
 export async function generateMetadata({ params }: AffiliateLayoutProps): Promise<Metadata> {
   const { token } = await params;
   const frontendUrl = process.env.NEXT_PUBLIC_FRONTEND_URL || 'http://localhost:3100';
-
-  const title = 'Rejoignez Meeshy - Messagerie Multilingue';
-  const description = 'Découvrez Meeshy, la plateforme de messagerie qui brise les barrières linguistiques. Communiquez en temps réel avec des personnes du monde entier, chacune dans sa langue préférée.';
+  const locale = await getServerLocale();
+  const meta = getMetadataPage(locale, 'affiliate');
 
   const imageParams = new URLSearchParams({
     type: 'affiliate',
-    title: 'Rejoignez Meeshy',
-    subtitle: 'Messagerie multilingue en temps réel',
-    userName: '100+ langues supportées'
+    title: pageString(meta, 'imageTitle'),
+    subtitle: pageString(meta, 'imageSubtitle'),
+    userName: pageString(meta, 'imageUserName'),
   });
 
   const dynamicImageUrl = `${frontendUrl}/api/og-image-dynamic?${imageParams.toString()}`;
 
-  return {
-    title,
-    description,
-    openGraph: {
-      title,
-      description,
-      url: `${frontendUrl}/signup/affiliate/${token}`,
-      siteName: 'Meeshy',
-      images: [
-        {
-          url: dynamicImageUrl,
-          width: 1200,
-          height: 630,
-          alt: 'Meeshy - Messagerie Multilingue',
-        },
-      ],
-      locale: 'fr_FR',
-      type: 'website',
-    },
-    twitter: {
-      card: 'summary_large_image',
-      title,
-      description,
-      images: [dynamicImageUrl],
-      creator: '@meeshy_app',
-    },
-    alternates: {
-      canonical: `${frontendUrl}/signup/affiliate/${token}`,
-    },
-    keywords: [
-      'messagerie multilingue',
-      'traduction en temps réel',
-      'communication internationale',
-      'chat multilingue',
-      'Meeshy',
-      'application de messagerie',
-      'plateforme de discussion',
-    ],
-  };
+  return composeMetadata({
+    locale,
+    title: pageString(meta, 'title'),
+    description: pageString(meta, 'description'),
+    url: `${frontendUrl}/signup/affiliate/${token}`,
+    image: dynamicImageUrl,
+    imageAlt: pageString(meta, 'ogImageAlt'),
+    canonical: `${frontendUrl}/signup/affiliate/${token}`,
+    keywords: pageArray(meta, 'keywords'),
+  });
 }
 
 export default function AffiliateLayout({ children }: AffiliateLayoutProps) {

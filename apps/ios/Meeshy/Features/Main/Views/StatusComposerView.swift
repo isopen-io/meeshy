@@ -81,15 +81,7 @@ struct StatusComposerView: View {
                     // Text Field
                     textInput
 
-                    // Preview
-                    if let emoji = selectedEmoji {
-                        previewPill(emoji: emoji)
-                    }
-
                     Spacer()
-
-                    // Publish Button
-                    publishButton
                 }
                 .padding(20)
             }
@@ -101,6 +93,9 @@ struct StatusComposerView: View {
                         dismiss()
                     }
                     .foregroundColor(theme.textSecondary)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    publishToolbarButton
                 }
             }
             .onAppear {
@@ -196,63 +191,9 @@ struct StatusComposerView: View {
             }
     }
 
-    // MARK: - Preview Pill
+    // MARK: - Publish Button (toolbar)
 
-    private func previewPill(emoji: String) -> some View {
-        VStack(spacing: 8) {
-            Text(String(localized: "status.composer.preview", defaultValue: "Aperçu", bundle: .main))
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(theme.textMuted)
-
-            // Rendu fidèle : avatar + badge emoji + nom + texte de statut
-            HStack(spacing: 12) {
-                // Avatar avec badge emoji en bas à droite (comme dans la liste de conversations)
-                ZStack(alignment: .bottomTrailing) {
-                    Circle()
-                        .fill(MeeshyColors.brandGradient)
-                        .frame(width: 44, height: 44)
-                        .overlay(
-                            Text(viewModel.currentUserInitial)
-                                .font(.system(size: 17, weight: .bold))
-                                .foregroundColor(.white)
-                        )
-
-                    Text(emoji)
-                        .font(.system(size: 13))
-                        .frame(width: 20, height: 20)
-                        .background(Circle().fill(theme.backgroundPrimary))
-                        .offset(x: 2, y: 2)
-                }
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(viewModel.currentUserDisplayName)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
-
-                    if !statusText.isEmpty {
-                        HStack(spacing: 4) {
-                            Text(emoji)
-                                .font(.system(size: 11))
-                            Text(statusText)
-                                .font(.system(size: 12))
-                                .foregroundColor(theme.textSecondary)
-                                .lineLimit(1)
-                        }
-                    }
-                }
-
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .glassCard(cornerRadius: 14)
-        }
-        .transition(.scale.combined(with: .opacity))
-    }
-
-    // MARK: - Publish Button
-
-    private var publishButton: some View {
+    private var publishToolbarButton: some View {
         Button {
             guard let emoji = selectedEmoji else { return }
             isPublishing = true
@@ -270,30 +211,17 @@ struct StatusComposerView: View {
                 dismiss()
             }
         } label: {
-            HStack(spacing: 8) {
-                if isPublishing {
-                    ProgressView()
-                        .tint(.white)
-                        .scaleEffect(0.8)
-                } else {
-                    Text(String(localized: "status.composer.publish", defaultValue: "Publier", bundle: .main))
-                        .font(.system(size: 16, weight: .bold))
-                }
+            if isPublishing {
+                ProgressView()
+                    .tint(MeeshyColors.indigo500)
+                    .scaleEffect(0.8)
+            } else {
+                Text(String(localized: "status.composer.publish", defaultValue: "Publier", bundle: .main))
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(selectedEmoji != nil ? MeeshyColors.brandGradient : LinearGradient(colors: [theme.textMuted], startPoint: .leading, endPoint: .trailing))
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 14)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(
-                        selectedEmoji != nil ?
-                            MeeshyColors.brandGradient :
-                            LinearGradient(colors: [Color.gray.opacity(0.3)], startPoint: .leading, endPoint: .trailing)
-                    )
-            )
-            .foregroundColor(.white)
         }
         .disabled(selectedEmoji == nil || isPublishing)
-        .opacity(selectedEmoji == nil ? 0.5 : 1)
     }
 
     // MARK: - Visibility Picker
