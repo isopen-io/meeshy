@@ -1291,13 +1291,17 @@ final class CallManager: ObservableObject {
                 try? await Task.sleep(nanoseconds: nanos)
                 guard !Task.isCancelled else { return }
                 guard let self, let callId = self.currentCallId else { return }
-                let fromId = AuthManager.shared.currentUser?.id ?? ""
-                let remoteId = self.remoteUserId ?? ""
-                MessageSocketManager.shared.emitCallSignal(
-                    callId: callId,
-                    type: "heartbeat",
-                    payload: ["from": fromId, "to": remoteId]
-                )
+                // Use the dedicated `call:heartbeat` event. The previous
+                // `call:signal` with a "heartbeat" type was rejected by the
+                // gateway's strict signal schema (type ∈ offer / answer /
+                // ice-candidate / ice-restart), so `recordHeartbeat` never fired
+                // for iOS participants: the gateway could not detect a dead iOS
+                // peer via heartbeat liveness and zombie calls lingered until the
+                // 2h GC (the reason startCall needs a call:force-leave preflight).
+                // `call:heartbeat` matches socketHeartbeatSchema and the gateway
+                // resolves the participant from the socket userId — no from/to
+                // payload needed. Mirrors the web client.
+                MessageSocketManager.shared.emitCallHeartbeat(callId: callId)
                 Logger.calls.debug("Heartbeat sent for call: \(callId)")
             }
         }

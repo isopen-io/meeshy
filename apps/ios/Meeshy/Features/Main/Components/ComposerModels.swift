@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshyUI
+import MeeshySDK
 import AVFoundation
 import Combine
 
@@ -82,18 +83,11 @@ struct LanguageOption: Identifiable {
     let name: String
     let flag: String
 
-    static let defaults: [LanguageOption] = [
-        LanguageOption(code: "fr", name: "Fran\u{00E7}ais", flag: "\u{1F1EB}\u{1F1F7}"),
-        LanguageOption(code: "en", name: "English", flag: "\u{1F1EC}\u{1F1E7}"),
-        LanguageOption(code: "es", name: "Espa\u{00F1}ol", flag: "\u{1F1EA}\u{1F1F8}"),
-        LanguageOption(code: "de", name: "Deutsch", flag: "\u{1F1E9}\u{1F1EA}"),
-        LanguageOption(code: "it", name: "Italiano", flag: "\u{1F1EE}\u{1F1F9}"),
-        LanguageOption(code: "pt", name: "Portugu\u{00EA}s", flag: "\u{1F1E7}\u{1F1F7}"),
-        LanguageOption(code: "ja", name: "\u{65E5}\u{672C}\u{8A9E}", flag: "\u{1F1EF}\u{1F1F5}"),
-        LanguageOption(code: "zh", name: "\u{4E2D}\u{6587}", flag: "\u{1F1E8}\u{1F1F3}"),
-        LanguageOption(code: "ko", name: "\u{D55C}\u{AD6D}\u{C5B4}", flag: "\u{1F1F0}\u{1F1F7}"),
-        LanguageOption(code: "ar", name: "\u{0627}\u{0644}\u{0639}\u{0631}\u{0628}\u{064A}\u{0629}", flag: "\u{1F1F8}\u{1F1E6}"),
-    ]
+    // Derived from the single translation base (LanguageData) — the composer
+    // pill shows the curated quick-translation subset. No hardcoded list here.
+    static let defaults: [LanguageOption] = LanguageData.quickTranslationLanguages.map {
+        LanguageOption(code: $0.code, name: $0.nativeName, flag: $0.flag)
+    }
 }
 
 // ============================================================================

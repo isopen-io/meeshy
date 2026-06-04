@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 public struct LanguageOption: Identifiable {
     public let id: String
@@ -23,28 +24,12 @@ public struct LanguageSelector: View {
         self.languages = languages ?? Self.defaultLanguages
     }
 
-    public static let defaultLanguages: [LanguageOption] = [
-        LanguageOption(id: "fr", name: "Francais", flag: "🇫🇷"),
-        LanguageOption(id: "en", name: "English", flag: "🇬🇧"),
-        LanguageOption(id: "es", name: "Espanol", flag: "🇪🇸"),
-        LanguageOption(id: "de", name: "Deutsch", flag: "🇩🇪"),
-        LanguageOption(id: "it", name: "Italiano", flag: "🇮🇹"),
-        LanguageOption(id: "pt", name: "Portugues", flag: "🇵🇹"),
-        LanguageOption(id: "ar", name: "العربية", flag: "🇸🇦"),
-        LanguageOption(id: "zh", name: "中文", flag: "🇨🇳"),
-        LanguageOption(id: "ja", name: "日本語", flag: "🇯🇵"),
-        LanguageOption(id: "ko", name: "한국어", flag: "🇰🇷"),
-        LanguageOption(id: "ru", name: "Русский", flag: "🇷🇺"),
-        LanguageOption(id: "tr", name: "Turkce", flag: "🇹🇷"),
-        LanguageOption(id: "nl", name: "Nederlands", flag: "🇳🇱"),
-        LanguageOption(id: "pl", name: "Polski", flag: "🇵🇱"),
-        LanguageOption(id: "sv", name: "Svenska", flag: "🇸🇪"),
-        LanguageOption(id: "hi", name: "हिन्दी", flag: "🇮🇳"),
-        LanguageOption(id: "th", name: "ไทย", flag: "🇹🇭"),
-        LanguageOption(id: "vi", name: "Tieng Viet", flag: "🇻🇳"),
-        LanguageOption(id: "uk", name: "Українська", flag: "🇺🇦"),
-        LanguageOption(id: "ro", name: "Romana", flag: "🇷🇴"),
-    ]
+    // Derived from the single translation base (LanguageData), common languages
+    // first then the rest — the onboarding content-language picker offers every
+    // supported language (searchable). No hardcoded list, no spelling drift.
+    public static let defaultLanguages: [LanguageOption] = LanguageData.allLanguagesCommonFirst.map {
+        LanguageOption(id: $0.code, name: $0.nativeName, flag: $0.flag)
+    }
 
     private var selected: LanguageOption? {
         languages.first { $0.id == selectedId }

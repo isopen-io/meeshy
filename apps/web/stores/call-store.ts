@@ -26,7 +26,15 @@ interface CallStoreState extends CallState {
   connectionQuality: ConnectionQualityLevel | null;
   isReconnecting: boolean;
 
+  // Server-provided ICE servers (STUN + time-limited TURN credentials).
+  // Supplied by the gateway via the initiate/join acks and the
+  // participant-joined event. MUST be applied to every RTCPeerConnection
+  // before it is created, otherwise calls fall back to STUN-only and fail
+  // between peers behind symmetric NATs.
+  iceServers: RTCIceServer[] | null;
+
   // Actions: Call management
+  setIceServers: (iceServers: RTCIceServer[]) => void;
   setCurrentCall: (call: CallSession | null) => void;
   updateCallStatus: (status: CallSession['status']) => void;
   addParticipant: (participant: CallParticipant) => void;
@@ -118,8 +126,11 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   reconnectAttempt: 0,
   connectionQuality: null,
   isReconnecting: false,
+  iceServers: null,
 
   // ===== CALL MANAGEMENT =====
+
+  setIceServers: (iceServers) => set({ iceServers }),
 
   setCurrentCall: (call) => {
     set({ currentCall: call });
@@ -438,6 +449,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
       reconnectAttempt: 0,
       connectionQuality: null,
       isReconnecting: false,
+      iceServers: null,
     });
   },
 }));

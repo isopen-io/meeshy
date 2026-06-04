@@ -32,6 +32,7 @@ export function CallManager() {
     isInCall,
     setCurrentCall,
     setInCall,
+    setIceServers,
     addParticipant,
     removeParticipant,
     updateParticipant,
@@ -183,6 +184,13 @@ export function CallManager() {
       // Clear timeout since someone joined
       clearCallTimeout();
 
+      // Apply the per-user ICE servers (STUN + time-limited TURN) the gateway
+      // attaches to participant-joined, so the initiator's RTCPeerConnection is
+      // built with TURN credentials before the SDP offer is created.
+      if (event.iceServers?.length) {
+        setIceServers(event.iceServers);
+      }
+
       // Add participant to call
       addParticipant(event.participant);
 
@@ -200,7 +208,7 @@ export function CallManager() {
 
       // Toast métier désactivé - utiliser le système de notifications v2
     },
-    [addParticipant, setCurrentCall, clearCallTimeout]
+    [addParticipant, setCurrentCall, setIceServers, clearCallTimeout]
   );
 
   /**
@@ -317,13 +325,24 @@ export function CallManager() {
         throw new Error('No socket connection');
       }
 
-      (socket as unknown).emit(CLIENT_EVENTS.CALL_JOIN, {
-        callId: incomingCall.callId,
-        settings: {
-          audioEnabled: true,
-          videoEnabled: true,
+      (socket as unknown).emit(
+        CLIENT_EVENTS.CALL_JOIN,
+        {
+          callId: incomingCall.callId,
+          settings: {
+            audioEnabled: true,
+            videoEnabled: true,
+          },
         },
-      });
+        // Apply the server-provided ICE servers (STUN + time-limited TURN) so
+        // the callee's RTCPeerConnection is built with TURN credentials before
+        // the incoming SDP offer is answered.
+        (ack: { success?: boolean; data?: { iceServers?: RTCIceServer[] } }) => {
+          if (ack?.success && ack.data?.iceServers?.length) {
+            setIceServers(ack.data.iceServers);
+          }
+        }
+      );
 
       // Create call session in store
       setCurrentCall({
@@ -348,7 +367,7 @@ export function CallManager() {
       toast.error('Failed to join call');
       setIncomingCall(null);
     }
-  }, [incomingCall, setCurrentCall, setInCall, clearCallTimeout]);
+  }, [incomingCall, setCurrentCall, setInCall, setIceServers, clearCallTimeout]);
 
   /**
    * Reject incoming call
