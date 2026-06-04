@@ -906,20 +906,25 @@ struct PostDetailView: View {
 
             // Audio URL (legacy story audio)
             if let audioUrl = repost.audioUrl, !audioUrl.isEmpty, !isStoryRepost {
-                AudioPlayerView(
-                    attachment: MeeshyMessageAttachment(
-                        id: "repost-audio-\(repost.id)",
-                        fileName: "audio.mp3",
-                        originalName: "audio.mp3",
-                        mimeType: "audio/mpeg",
-                        fileSize: 0,
-                        fileUrl: audioUrl,
-                        thumbnailColor: repost.authorColor
-                    ),
-                    context: .feedPost,
-                    accentColor: repost.authorColor,
-                    transcription: nil
+                let repostAudio = MeeshyMessageAttachment(
+                    id: "repost-audio-\(repost.id)",
+                    fileName: "audio.mp3",
+                    originalName: "audio.mp3",
+                    mimeType: "audio/mpeg",
+                    fileSize: 0,
+                    fileUrl: audioUrl,
+                    thumbnailColor: repost.authorColor
                 )
+                AudioAvailabilityResolver(attachment: repostAudio, autoDownload: true) { availability, onDownload in
+                    AudioPlayerView(
+                        attachment: repostAudio,
+                        context: .feedPost,
+                        accentColor: repost.authorColor,
+                        transcription: nil,
+                        availability: availability,
+                        onDownload: onDownload
+                    )
+                }
                 .clipShape(RoundedRectangle(cornerRadius: 10))
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)
@@ -1195,7 +1200,7 @@ struct PostDetailView: View {
 
         case .video:
             let attachment = media.toMessageAttachment()
-            VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
+            VideoAvailabilityResolver(attachment: attachment, autoDownload: true) { availability, onDownload in
                 MeeshyVideoPlayer(
                     attachment: attachment,
                     style: .inline,
@@ -1212,12 +1217,17 @@ struct PostDetailView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12))
 
         case .audio:
-            AudioPlayerView(
-                attachment: media.toMessageAttachment(),
-                context: .feedPost,
-                accentColor: media.thumbnailColor,
-                transcription: media.transcription
-            )
+            let audioAttachment = media.toMessageAttachment()
+            AudioAvailabilityResolver(attachment: audioAttachment, autoDownload: true) { availability, onDownload in
+                AudioPlayerView(
+                    attachment: audioAttachment,
+                    context: .feedPost,
+                    accentColor: media.thumbnailColor,
+                    transcription: media.transcription,
+                    availability: availability,
+                    onDownload: onDownload
+                )
+            }
             .clipShape(RoundedRectangle(cornerRadius: 12))
 
         case .document:
@@ -1246,9 +1256,6 @@ struct PostDetailView: View {
                     }
                 }
                 Spacer()
-                Image(systemName: "arrow.down.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundColor(Color(hex: media.thumbnailColor))
             }
             .padding(14)
             .background(

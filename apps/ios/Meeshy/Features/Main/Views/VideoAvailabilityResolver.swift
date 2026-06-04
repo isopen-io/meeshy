@@ -26,6 +26,13 @@ import MeeshyUI
 ///   }
 struct VideoAvailabilityResolver<Content: View>: View {
     let attachment: MessageAttachment
+    /// Quand `true`, bypasse la préférence réseau de l'utilisateur
+    /// (`MediaDownloadPreferencesStore`) et auto-télécharge toujours — sauf
+    /// hors-ligne. Réservé aux surfaces Feed/Posts où l'utilisateur attend que
+    /// le média apparaisse sans bouton (parité avec `ProgressiveCachedImage`
+    /// `autoLoad`). Les bulles de conversation gardent `false` : la politique
+    /// réseau (WiFi-only / data-saver) y est respectée.
+    let autoDownload: Bool
     let content: (VideoAvailability, @escaping () -> Void) -> Content
 
     @State private var resolvedAvailability: VideoAvailability = .needsDownload
@@ -43,9 +50,11 @@ struct VideoAvailabilityResolver<Content: View>: View {
 
     init(
         attachment: MessageAttachment,
+        autoDownload: Bool = false,
         @ViewBuilder content: @escaping (VideoAvailability, @escaping () -> Void) -> Content
     ) {
         self.attachment = attachment
+        self.autoDownload = autoDownload
         self.content = content
     }
 
@@ -60,13 +69,26 @@ struct VideoAvailabilityResolver<Content: View>: View {
                !downloader.isCached {
                 let condition = NetworkConditionMonitor.shared.condition
                 let prefs = MediaDownloadPreferencesStore.shared.preferences
-                if MediaDownloadPolicyEngine.shouldAutoDownload(
-                    kind: .video, condition: condition, prefs: prefs
-                ) {
+                if Self.shouldAutoStart(autoDownload: autoDownload, condition: condition, prefs: prefs) {
                     downloader.start(attachment: attachment, onShare: nil)
                 }
             }
         }
+    }
+
+    /// Décision pure d'auto-démarrage du téléchargement (testable sans hosting).
+    /// Hors-ligne : jamais (inutile de lancer un DL sans réseau). Sinon :
+    /// `autoDownload` (Feed/Posts) force le téléchargement, ou la politique
+    /// réseau de l'utilisateur l'autorise. `kind: .video` figé pour ce resolver.
+    static func shouldAutoStart(
+        autoDownload: Bool,
+        condition: NetworkCondition,
+        prefs: MediaDownloadPreferences
+    ) -> Bool {
+        guard condition != .offline else { return false }
+        return autoDownload || MediaDownloadPolicyEngine.shouldAutoDownload(
+            kind: .video, condition: condition, prefs: prefs
+        )
     }
 
     /// Static resolver helper, testable without SwiftUI hosting.

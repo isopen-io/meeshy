@@ -227,7 +227,7 @@ extension FeedPostCard {
 
     func videoMediaView(_ media: FeedMedia) -> some View {
         let attachment = media.toMessageAttachment()
-        return VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
+        return VideoAvailabilityResolver(attachment: attachment, autoDownload: true) { availability, onDownload in
             MeeshyVideoPlayer(
                 attachment: attachment,
                 style: .inline,
@@ -246,12 +246,16 @@ extension FeedPostCard {
 
     func audioMediaView(_ media: FeedMedia) -> some View {
         let attachment = media.toMessageAttachment()
-        return AudioPlayerView(
-            attachment: attachment,
-            context: .feedPost,
-            accentColor: media.thumbnailColor,
-            transcription: media.transcription
-        )
+        return AudioAvailabilityResolver(attachment: attachment, autoDownload: true) { availability, onDownload in
+            AudioPlayerView(
+                attachment: attachment,
+                context: .feedPost,
+                accentColor: media.thumbnailColor,
+                transcription: media.transcription,
+                availability: availability,
+                onDownload: onDownload
+            )
+        }
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 
@@ -294,11 +298,6 @@ extension FeedPostCard {
             }
 
             Spacer()
-
-            // Download button
-            Image(systemName: "arrow.down.circle.fill")
-                .font(.system(size: 28))
-                .foregroundColor(Color(hex: media.thumbnailColor))
         }
         .padding(14)
         .background(

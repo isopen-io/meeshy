@@ -107,3 +107,95 @@ final class AttachmentDownloaderTests: XCTestCase {
                        "The download badge must remain available for confirmed remote media")
     }
 }
+
+/// Feed/Posts auto-download decision — `autoDownload: true` (Feed/Posts surfaces)
+/// must force the download regardless of the user's per-network preference, while
+/// still never starting a download offline. `autoDownload: false` (conversation
+/// bubbles) must delegate entirely to `MediaDownloadPolicyEngine`, preserving the
+/// user's WiFi-only / data-saver UX.
+final class MediaAutoDownloadDecisionTests: XCTestCase {
+
+    // MARK: - Video resolver
+
+    func test_video_autoDownloadTrue_overridesWifiOnlyPrefOnCellular() {
+        let prefs = MediaDownloadPreferences(video: .wifiOnly)
+        XCTAssertTrue(
+            VideoAvailabilityResolver<EmptyView>.shouldAutoStart(
+                autoDownload: true, condition: .badCellular, prefs: prefs
+            ),
+            "Feed/Posts video must auto-download even when the user picked WiFi-only and is on cellular"
+        )
+    }
+
+    func test_video_autoDownloadTrue_offline_returnsFalse() {
+        let prefs = MediaDownloadPreferences(video: .always)
+        XCTAssertFalse(
+            VideoAvailabilityResolver<EmptyView>.shouldAutoStart(
+                autoDownload: true, condition: .offline, prefs: prefs
+            ),
+            "No download must start while offline, even with autoDownload forced"
+        )
+    }
+
+    func test_video_autoDownloadFalse_respectsPolicy_wifiOnly_onWifi() {
+        let prefs = MediaDownloadPreferences(video: .wifiOnly)
+        XCTAssertTrue(
+            VideoAvailabilityResolver<EmptyView>.shouldAutoStart(
+                autoDownload: false, condition: .wifi, prefs: prefs
+            )
+        )
+    }
+
+    func test_video_autoDownloadFalse_respectsPolicy_wifiOnly_onCellular() {
+        let prefs = MediaDownloadPreferences(video: .wifiOnly)
+        XCTAssertFalse(
+            VideoAvailabilityResolver<EmptyView>.shouldAutoStart(
+                autoDownload: false, condition: .badCellular, prefs: prefs
+            ),
+            "Conversation video (autoDownload=false) must honour the WiFi-only preference"
+        )
+    }
+
+    // MARK: - Audio resolver
+
+    func test_audio_autoDownloadTrue_overridesNeverPref() {
+        let prefs = MediaDownloadPreferences(audio: .never)
+        XCTAssertTrue(
+            AudioAvailabilityResolver<EmptyView>.shouldAutoStart(
+                autoDownload: true, condition: .wifi, prefs: prefs
+            ),
+            "Feed/Posts audio must auto-download even when the user set audio policy to never"
+        )
+    }
+
+    func test_audio_autoDownloadTrue_offline_returnsFalse() {
+        let prefs = MediaDownloadPreferences(audio: .always)
+        XCTAssertFalse(
+            AudioAvailabilityResolver<EmptyView>.shouldAutoStart(
+                autoDownload: true, condition: .offline, prefs: prefs
+            )
+        )
+    }
+
+    func test_audio_autoDownloadFalse_respectsPolicy_neverPref() {
+        let prefs = MediaDownloadPreferences(audio: .never)
+        XCTAssertFalse(
+            AudioAvailabilityResolver<EmptyView>.shouldAutoStart(
+                autoDownload: false, condition: .wifi, prefs: prefs
+            ),
+            "Conversation audio (autoDownload=false) must honour the never preference"
+        )
+    }
+
+    /// The audio resolver must read the per-kind `.audio` policy, never the
+    /// `.video` policy (regression guard for a copy-paste of the video helper).
+    func test_audio_autoDownloadFalse_usesAudioPolicyNotVideo() {
+        let prefs = MediaDownloadPreferences(audio: .always, video: .never)
+        XCTAssertTrue(
+            AudioAvailabilityResolver<EmptyView>.shouldAutoStart(
+                autoDownload: false, condition: .badCellular, prefs: prefs
+            ),
+            "Audio resolver must read the audio policy (.always), independent of the video policy (.never)"
+        )
+    }
+}
