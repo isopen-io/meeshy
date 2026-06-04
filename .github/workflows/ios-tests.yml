@@ -29,11 +29,25 @@ jobs:
 
       - name: Run SDK tests
         run: |
+          rm -rf TestResults.xcresult
           xcodebuild test \
             -scheme MeeshySDK-Package \
             -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            -resultBundlePath TestResults.xcresult \
             -quiet
         working-directory: packages/MeeshySDK
+
+      - name: Surface test failures
+        if: always()
+        working-directory: packages/MeeshySDK
+        run: |
+          BUNDLE=TestResults.xcresult
+          [ -d "$BUNDLE" ] || { echo "No result bundle produced."; exit 0; }
+          echo "::group::Test failure summary"
+          xcrun xcresulttool get test-results summary --path "$BUNDLE" 2>/dev/null \
+            || xcrun xcresulttool get --legacy --format json --path "$BUNDLE" 2>/dev/null | head -c 60000 \
+            || echo "xcresulttool could not read the bundle."
+          echo "::endgroup::"
 
   ios-tests:
     runs-on: macos-15
@@ -45,9 +59,22 @@ jobs:
 
       - name: Run iOS tests
         run: |
+          rm -rf TestResults.xcresult
           xcodebuild test \
             -project apps/ios/Meeshy.xcodeproj \
             -scheme Meeshy \
             -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
             -only-testing:MeeshyTests \
+            -resultBundlePath TestResults.xcresult \
             -quiet
+
+      - name: Surface test failures
+        if: always()
+        run: |
+          BUNDLE=TestResults.xcresult
+          [ -d "$BUNDLE" ] || { echo "No result bundle produced."; exit 0; }
+          echo "::group::Test failure summary"
+          xcrun xcresulttool get test-results summary --path "$BUNDLE" 2>/dev/null \
+            || xcrun xcresulttool get --legacy --format json --path "$BUNDLE" 2>/dev/null | head -c 60000 \
+            || echo "xcresulttool could not read the bundle."
+          echo "::endgroup::"
