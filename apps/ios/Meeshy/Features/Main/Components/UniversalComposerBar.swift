@@ -825,6 +825,13 @@ struct UniversalComposerBar: View {
             .scaleEffect(sendBounce ? 1.2 : 1)
         }
         .frame(width: 44, height: 44)
+        .accessibilityLabel(isEditMode
+            ? String(localized: "composer.send.editLabel", defaultValue: "Enregistrer les modifications", bundle: .main)
+            : String(localized: "composer.send.label", defaultValue: "Envoyer le message", bundle: .main))
+        .accessibilityHint(isEditMode
+            ? ""
+            : String(localized: "composer.send.hint", defaultValue: "Envoie le texte saisi", bundle: .main))
+        .accessibilityIdentifier(MeeshyA11yID.composerSend)
     }
 
     // ========================================================================

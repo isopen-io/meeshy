@@ -112,4 +112,35 @@ final class FeedbackToastManagerTests: XCTestCase {
         )
     }
 
+    // MARK: - Auto-dismiss delay (VoiceOver-aware, pure)
+
+    func test_dismissDelay_standardToast_voiceOverOff_is3s() {
+        XCTAssertEqual(
+            FeedbackToastManager.dismissDelay(isTappable: false, voiceOverRunning: false),
+            3_000_000_000
+        )
+    }
+
+    func test_dismissDelay_tappableToast_voiceOverOff_is6s() {
+        XCTAssertEqual(
+            FeedbackToastManager.dismissDelay(isTappable: true, voiceOverRunning: false),
+            6_000_000_000
+        )
+    }
+
+    func test_dismissDelay_standardToast_voiceOverOn_extendsTo6s() {
+        // VoiceOver users need time to hear the announcement + read the message.
+        XCTAssertEqual(
+            FeedbackToastManager.dismissDelay(isTappable: false, voiceOverRunning: true),
+            6_000_000_000
+        )
+    }
+
+    func test_dismissDelay_tappableToast_voiceOverOn_staysAtLeast6s() {
+        XCTAssertEqual(
+            FeedbackToastManager.dismissDelay(isTappable: true, voiceOverRunning: true),
+            6_000_000_000
+        )
+    }
+
 }

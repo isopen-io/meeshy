@@ -14,6 +14,7 @@ struct MeeshyApp: App {
     @StateObject private var pushManager = PushNotificationManager.shared
     @StateObject private var deepLinkRouter = DeepLinkRouter.shared
     @StateObject private var theme = ThemeManager.shared
+    @StateObject private var a11yPrefs = MeeshyAccessibilityPreferences.shared
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     // Splash : shown ALWAYS on cold start, regardless of auth state, until the
     // boot work in `.task` finishes (session check + conversations cache
@@ -102,6 +103,7 @@ struct MeeshyApp: App {
                                 }
                                 toastManager.dismiss()
                             }
+                            .accessibilityIdentifier(MeeshyA11yID.toastContainer)
                             .zIndex(999)
                     }
                 }
@@ -111,6 +113,7 @@ struct MeeshyApp: App {
                 }
                 .environmentObject(authManager)
                 .environmentObject(deepLinkRouter)
+                .environment(\.meeshyForceReduceMotion, a11yPrefs.reduceMotion)
                 .preferredColorScheme(theme.preferredColorScheme)
                 .onOpenURL { url in
                     let destination = DeepLinkParser.parse(url)

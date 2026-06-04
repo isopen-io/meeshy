@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import UIKit
 import MeeshySDK
 import MeeshyUI
 
@@ -43,38 +44,52 @@ final class FeedbackToastManager: ObservableObject {
     }
 
     func show(_ message: String, type: FeedbackToastType = .success) {
-        dismissTask?.cancel()
-        onTapAction = nil
-        currentToast = FeedbackToast(message: message, type: type)
         HapticFeedback.light()
-        scheduleDismiss()
+        present(FeedbackToast(message: message, type: type))
     }
 
     func show(_ message: String, type: FeedbackToastType = .success, tapAction: @escaping () -> Void) {
-        dismissTask?.cancel()
-        onTapAction = tapAction
-        currentToast = FeedbackToast(message: message, type: type, isTappable: true)
         HapticFeedback.light()
-        scheduleDismiss(duration: 6_000_000_000)
+        present(FeedbackToast(message: message, type: type, isTappable: true), tapAction: tapAction)
     }
 
     func showError(_ message: String) {
-        dismissTask?.cancel()
-        currentToast = FeedbackToast(message: message, type: .error)
         HapticFeedback.error()
-        scheduleDismiss()
+        present(FeedbackToast(message: message, type: .error))
     }
 
     func showSuccess(_ message: String) {
-        dismissTask?.cancel()
-        currentToast = FeedbackToast(message: message, type: .success)
         HapticFeedback.success()
-        scheduleDismiss()
+        present(FeedbackToast(message: message, type: .success))
     }
 
     func dismiss() {
         dismissTask?.cancel()
         currentToast = nil
+    }
+
+    /// Single funnel for surfacing a toast: cancels any pending dismiss, stores
+    /// the tap handler, posts a VoiceOver announcement, and schedules a
+    /// VoiceOver-aware auto-dismiss. Haptics stay at each entry point because
+    /// they differ by toast type.
+    private func present(_ toast: FeedbackToast, tapAction: (() -> Void)? = nil) {
+        dismissTask?.cancel()
+        onTapAction = tapAction
+        currentToast = toast
+        let priority: AdaptiveAccessibility.AnnouncementPriority = toast.type == .error ? .high : .normal
+        AdaptiveAccessibility.announce(toast.message, priority: priority)
+        scheduleDismiss(duration: Self.dismissDelay(
+            isTappable: toast.isTappable,
+            voiceOverRunning: UIAccessibility.isVoiceOverRunning
+        ))
+    }
+
+    /// Auto-dismiss delay (nanoseconds). Tappable toasts linger longer; with
+    /// VoiceOver on, every toast stays at least 6s so the user can hear the
+    /// announcement and read the message before it disappears.
+    static func dismissDelay(isTappable: Bool, voiceOverRunning: Bool) -> UInt64 {
+        let base: UInt64 = isTappable ? 6_000_000_000 : 3_000_000_000
+        return voiceOverRunning ? max(base, 6_000_000_000) : base
     }
 
     private func scheduleDismiss(duration: UInt64 = 3_000_000_000) {
