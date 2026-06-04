@@ -84,5 +84,12 @@ public struct ToastView: View {
                     y: MeeshyShadow.medium.y
                 )
         )
+        // Collapse the icon + message (+ chevron) into one VoiceOver element so
+        // the toast reads as a single coherent string. The decorative status
+        // icon and chevron are dropped via `.ignore`; the spoken announcement
+        // itself is posted by `ToastManager` (see `AdaptiveAccessibility`).
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(toast.message)
+        .accessibilityAddTraits(toast.isTappable ? .isButton : [])
     }
 }

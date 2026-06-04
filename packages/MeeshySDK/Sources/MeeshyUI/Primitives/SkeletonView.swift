@@ -5,9 +5,15 @@ import Combine
 
 public struct ShimmerModifier: ViewModifier {
     @State private var offset: CGFloat = -200
+    @Environment(\.accessibilityReduceMotion) private var systemReduce
+    @Environment(\.meeshyForceReduceMotion) private var userForced
     private let theme = ThemeManager.shared
 
     public init() {}
+
+    private var reduceMotion: Bool {
+        MeeshyMotion.shouldReduce(system: systemReduce, userForced: userForced)
+    }
 
     public func body(content: Content) -> some View {
         content
@@ -24,6 +30,9 @@ public struct ShimmerModifier: ViewModifier {
                 .frame(width: 120)
                 .offset(x: offset)
                 .onAppear {
+                    // Reduce Motion (system or in-app): keep a static placeholder
+                    // instead of a perpetual sweeping highlight.
+                    guard !reduceMotion else { return }
                     withAnimation(
                         .linear(duration: 1.5)
                         .repeatForever(autoreverses: false)
@@ -67,6 +76,7 @@ public struct SkeletonShape: View {
             .fill(theme.textMuted.opacity(0.12))
             .frame(width: width, height: height)
             .skeletonShimmer()
+            .accessibilityHidden(true)
     }
 }
 
@@ -113,6 +123,7 @@ public struct SkeletonConversationRow: View {
                         .stroke(theme.textMuted.opacity(0.06), lineWidth: 1)
                 )
         )
+        .accessibilityHidden(true)
     }
 }
 
@@ -154,5 +165,6 @@ public struct SkeletonMessageBubble: View {
 
             if isLeft { Spacer(minLength: 50) }
         }
+        .accessibilityHidden(true)
     }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import UIKit
 import MeeshySDK
 import MeeshyUI
 
@@ -43,33 +44,23 @@ final class ToastManager: ObservableObject {
     }
 
     func show(_ message: String, type: ToastType = .success) {
-        dismissTask?.cancel()
-        onTapAction = nil
-        currentToast = Toast(message: message, type: type)
         HapticFeedback.light()
-        scheduleDismiss()
+        present(Toast(message: message, type: type))
     }
 
     func show(_ message: String, type: ToastType = .success, tapAction: @escaping () -> Void) {
-        dismissTask?.cancel()
-        onTapAction = tapAction
-        currentToast = Toast(message: message, type: type, isTappable: true)
         HapticFeedback.light()
-        scheduleDismiss(duration: 6_000_000_000)
+        present(Toast(message: message, type: type, isTappable: true), tapAction: tapAction)
     }
 
     func showError(_ message: String) {
-        dismissTask?.cancel()
-        currentToast = Toast(message: message, type: .error)
         HapticFeedback.error()
-        scheduleDismiss()
+        present(Toast(message: message, type: .error))
     }
 
     func showSuccess(_ message: String) {
-        dismissTask?.cancel()
-        currentToast = Toast(message: message, type: .success)
         HapticFeedback.success()
-        scheduleDismiss()
+        present(Toast(message: message, type: .success))
     }
 
     /// Surface an in-app toast for a Socket.IO `notification:new` event.
@@ -101,17 +92,12 @@ final class ToastManager: ObservableObject {
             return false
         }
 
-        dismissTask?.cancel()
-        if let tapAction {
-            onTapAction = tapAction
-            currentToast = Toast(message: message, type: .info, isTappable: true)
-            scheduleDismiss(duration: 6_000_000_000)
-        } else {
-            onTapAction = nil
-            currentToast = Toast(message: message, type: .info)
-            scheduleDismiss()
-        }
         HapticFeedback.light()
+        if let tapAction {
+            present(Toast(message: message, type: .info, isTappable: true), tapAction: tapAction)
+        } else {
+            present(Toast(message: message, type: .info))
+        }
         return true
     }
 
@@ -140,6 +126,30 @@ final class ToastManager: ObservableObject {
     func dismiss() {
         dismissTask?.cancel()
         currentToast = nil
+    }
+
+    /// Single funnel for surfacing a toast: cancels any pending dismiss, stores
+    /// the tap handler, posts a VoiceOver announcement, and schedules a
+    /// VoiceOver-aware auto-dismiss. Haptics stay at each entry point because
+    /// they differ by toast type.
+    private func present(_ toast: Toast, tapAction: (() -> Void)? = nil) {
+        dismissTask?.cancel()
+        onTapAction = tapAction
+        currentToast = toast
+        let priority: AdaptiveAccessibility.AnnouncementPriority = toast.type == .error ? .high : .normal
+        AdaptiveAccessibility.announce(toast.message, priority: priority)
+        scheduleDismiss(duration: Self.dismissDelay(
+            isTappable: toast.isTappable,
+            voiceOverRunning: UIAccessibility.isVoiceOverRunning
+        ))
+    }
+
+    /// Auto-dismiss delay (nanoseconds). Tappable toasts linger longer; with
+    /// VoiceOver on, every toast stays at least 6s so the user can hear the
+    /// announcement and read the message before it disappears.
+    static func dismissDelay(isTappable: Bool, voiceOverRunning: Bool) -> UInt64 {
+        let base: UInt64 = isTappable ? 6_000_000_000 : 3_000_000_000
+        return voiceOverRunning ? max(base, 6_000_000_000) : base
     }
 
     private func scheduleDismiss(duration: UInt64 = 3_000_000_000) {
