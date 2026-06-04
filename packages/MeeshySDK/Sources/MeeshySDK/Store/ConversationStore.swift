@@ -24,6 +24,13 @@ public protocol ConversationLifecycleWriting: Sendable {
     func leave(conversationId: String) async throws
 }
 
+/// Category-creation seam used by the Store's `createSectionAndAssign`
+/// composite helper. Default adapter forwards to `UserCategoryStore.shared`;
+/// tests inject a mock so the composite can be verified without I/O.
+public protocol ConversationCategoryCreating: Sendable {
+    func create(name: String, color: String?, icon: String?) async throws -> ConversationCategory
+}
+
 // MARK: - Subject registry (Combine bridge)
 
 /// Combine `CurrentValueSubject`s aren't actor-safe to *create* lazily
@@ -80,11 +87,16 @@ public enum ConversationStoreError: Error, Sendable {
 /// - `flushOutbox` to dispatch queued writes (foregrounded by the app
 ///   shell at scene-active / reachability changes)
 ///
-/// Deferred to later phases:
-/// - `applyReadReceipt`, `applyConversationDeleted`, composite helpers
-///   (`createSectionAndAssign`, `reorderConversations`)
-/// - Socket listener wiring on `MessageSocketManager`
-/// - `hydrateFromCache` via `CacheCoordinator`
+/// Phase 4 bis (this increment):
+/// - `applyReadReceipt` (monotone), `applyConversationDeleted`
+/// - composite helper `createSectionAndAssign`
+///
+/// Still deferred:
+/// - `reorderConversations` (needs the batch reorder REST endpoint on the
+///   PreferenceService seam — not yet exposed client-side)
+/// - `hydrateFromCache` via `CacheCoordinator` (conversation cache key scheme)
+/// - Socket listener wiring on `MessageSocketManager` (maps socket events to
+///   `applyRemote` / `applyReadReceipt` / `applyConversationDeleted`)
 public actor ConversationStore {
 
     // MARK: - State
@@ -94,6 +106,7 @@ public actor ConversationStore {
 
     private let preferenceService: ConversationPreferenceWriting
     private let conversationService: ConversationLifecycleWriting
+    private let categoryService: ConversationCategoryCreating
     private let outbox: ConversationStateOutbox
 
     // MARK: - Init
@@ -103,16 +116,19 @@ public actor ConversationStore {
     private init() {
         self.preferenceService = DefaultPreferenceWritingAdapter()
         self.conversationService = DefaultConversationLifecycleAdapter()
+        self.categoryService = DefaultCategoryCreatingAdapter()
         self.outbox = ConversationStateOutbox.shared
     }
 
     public init(
         preferenceService: ConversationPreferenceWriting,
         conversationService: ConversationLifecycleWriting,
-        outbox: ConversationStateOutbox
+        outbox: ConversationStateOutbox,
+        categoryService: ConversationCategoryCreating = DefaultCategoryCreatingAdapter()
     ) {
         self.preferenceService = preferenceService
         self.conversationService = conversationService
+        self.categoryService = categoryService
         self.outbox = outbox
     }
 
@@ -284,6 +300,56 @@ public actor ConversationStore {
             conv.userState.lastSyncedAt = Date()
         }
         commit(conv)
+    }
+
+    /// Apply a read-receipt socket event. Read receipts are **monotone**:
+    /// `lastReadAt` only ever moves forward, so a receipt whose `lastReadAt`
+    /// is not strictly newer than the local one is dropped (stale broadcast).
+    /// `unreadCount` is server-authoritative and applied as-is when the
+    /// receipt is accepted. This path NEVER bumps `userState.version`
+    /// (versioning is reserved for the prefs path — §9 of the design).
+    public func applyReadReceipt(_ event: ReadStatusEvent) {
+        guard var conv = conversations[event.conversationId] else { return }
+        let isNewer: Bool
+        if let incoming = event.lastReadAt {
+            isNewer = conv.userState.lastReadAt.map { incoming > $0 } ?? true
+        } else {
+            isNewer = false
+        }
+        guard isNewer else { return }
+        conv.userState.lastReadAt = event.lastReadAt
+        conv.userState.unreadCount = event.unreadCount
+        commit(conv)
+    }
+
+    /// Apply a conversation-deleted socket event: drop the conversation from
+    /// the in-memory store, release its per-conv subject, and republish the
+    /// list. No-op for an unknown conversation.
+    public func applyConversationDeleted(_ event: ConversationDeletedEvent) {
+        guard conversations[event.conversationId] != nil else { return }
+        conversations.removeValue(forKey: event.conversationId)
+        subjects.remove(event.conversationId)
+        publishList()
+    }
+
+    // MARK: - Composite mutations
+
+    /// Create a new category (server round-trip) then assign `convId` to it.
+    /// The section assignment goes through the regular optimistic `apply`
+    /// path so it inherits outbox + version + rollback semantics. Throws
+    /// `unknownConversation` before creating the category if `convId` is
+    /// not hydrated (avoids orphan categories).
+    public func createSectionAndAssign(
+        name: String,
+        color: String?,
+        icon: String?,
+        toConversation convId: String
+    ) async throws {
+        guard conversations[convId] != nil else {
+            throw ConversationStoreError.unknownConversation(convId)
+        }
+        let category = try await categoryService.create(name: name, color: color, icon: icon)
+        try await apply(.setSection(categoryId: category.id), for: convId)
     }
 
     // MARK: - Private helpers
@@ -505,6 +571,29 @@ public struct RemotePreferencesPayload: Sendable, Hashable {
     }
 }
 
+/// Store-owned input for `applyReadReceipt`. Decoupled from the socket
+/// layer's `ReadStatusUpdateEvent` so the wiring layer maps socket → store.
+public struct ReadStatusEvent: Sendable, Hashable {
+    public let conversationId: String
+    public let unreadCount: Int
+    public let lastReadAt: Date?
+
+    public init(conversationId: String, unreadCount: Int, lastReadAt: Date?) {
+        self.conversationId = conversationId
+        self.unreadCount = unreadCount
+        self.lastReadAt = lastReadAt
+    }
+}
+
+/// Store-owned input for `applyConversationDeleted`.
+public struct ConversationDeletedEvent: Sendable, Hashable {
+    public let conversationId: String
+
+    public init(conversationId: String) {
+        self.conversationId = conversationId
+    }
+}
+
 // MARK: - Default service adapters
 //
 // Bridge the lean `ConversationPreferenceWriting` /
@@ -544,5 +633,12 @@ struct DefaultConversationLifecycleAdapter: ConversationLifecycleWriting {
     }
     func leave(conversationId: String) async throws {
         try await ConversationService.shared.leave(conversationId: conversationId)
+    }
+}
+
+public struct DefaultCategoryCreatingAdapter: ConversationCategoryCreating {
+    public init() {}
+    public func create(name: String, color: String?, icon: String?) async throws -> ConversationCategory {
+        try await UserCategoryStore.shared.create(name: name, color: color, icon: icon)
     }
 }

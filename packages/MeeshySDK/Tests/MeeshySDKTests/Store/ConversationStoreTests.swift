@@ -44,6 +44,18 @@ final class MockLifecycleWriter: ConversationLifecycleWriting, @unchecked Sendab
     }
 }
 
+final class MockCategoryCreating: ConversationCategoryCreating, @unchecked Sendable {
+    var stubbed = ConversationCategory(id: "cat-1", name: "Cat", color: nil, icon: nil, order: 0, isExpanded: true)
+    var errorToThrow: Error?
+    private(set) var createCalls: [(name: String, color: String?, icon: String?)] = []
+
+    func create(name: String, color: String?, icon: String?) async throws -> ConversationCategory {
+        createCalls.append((name, color, icon))
+        if let e = errorToThrow { throw e }
+        return stubbed
+    }
+}
+
 // MARK: - Tests
 
 final class ConversationStoreTests: XCTestCase {
@@ -333,6 +345,119 @@ final class ConversationStoreTests: XCTestCase {
         try await store.apply(.setPinned(true), for: "conv-1")
         await fulfillment(of: [exp], timeout: 2)
         XCTAssertTrue(received.contains(true), "publisher must surface the optimistic + final isPinned state")
+    }
+
+    // MARK: - applyReadReceipt (remote, monotone, no version bump)
+
+    func test_applyReadReceipt_newerLastReadAt_appliesUnreadAndReadAt() async {
+        let (store, _, _, _) = makeStore()
+        var conv = makeConv(version: 5)
+        conv.userState.unreadCount = 7
+        conv.userState.lastReadAt = Date(timeIntervalSince1970: 1_000)
+        await store.hydrate(conv)
+
+        let newer = Date(timeIntervalSince1970: 2_000)
+        await store.applyReadReceipt(ReadStatusEvent(conversationId: "conv-1", unreadCount: 0, lastReadAt: newer))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.userState.unreadCount, 0)
+        XCTAssertEqual(after.userState.lastReadAt, newer)
+    }
+
+    func test_applyReadReceipt_olderLastReadAt_ignored() async {
+        let (store, _, _, _) = makeStore()
+        var conv = makeConv()
+        conv.userState.unreadCount = 3
+        conv.userState.lastReadAt = Date(timeIntervalSince1970: 2_000)
+        await store.hydrate(conv)
+
+        await store.applyReadReceipt(ReadStatusEvent(conversationId: "conv-1", unreadCount: 0, lastReadAt: Date(timeIntervalSince1970: 1_000)))
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.userState.unreadCount, 3, "an older read receipt must be ignored (monotone)")
+        XCTAssertEqual(after.userState.lastReadAt, Date(timeIntervalSince1970: 2_000))
+    }
+
+    func test_applyReadReceipt_doesNotBumpVersion() async {
+        let (store, _, _, _) = makeStore()
+        await store.hydrate(makeConv(version: 9))
+        await store.applyReadReceipt(ReadStatusEvent(conversationId: "conv-1", unreadCount: 0, lastReadAt: Date(timeIntervalSince1970: 5_000)))
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.userState.version, 9, "read receipts must never touch the prefs version")
+    }
+
+    func test_applyReadReceipt_unknownConversation_noop() async {
+        let (store, _, _, _) = makeStore()
+        await store.applyReadReceipt(ReadStatusEvent(conversationId: "ghost", unreadCount: 0, lastReadAt: Date()))
+        let after = await store.conversation(id: "ghost")
+        XCTAssertNil(after)
+    }
+
+    // MARK: - applyConversationDeleted
+
+    func test_applyConversationDeleted_removesFromStoreAndList() async {
+        let (store, _, _, _) = makeStore()
+        await store.hydrate(makeConv(id: "conv-1"))
+        await store.hydrate(makeConv(id: "conv-2"))
+
+        await store.applyConversationDeleted(ConversationDeletedEvent(conversationId: "conv-1"))
+
+        let gone = await store.conversation(id: "conv-1")
+        XCTAssertNil(gone)
+        let list: [MeeshyConversation] = store.listPublisher().value() ?? []
+        XCTAssertEqual(list.map(\.id), ["conv-2"])
+    }
+
+    func test_applyConversationDeleted_unknownConversation_noop() async {
+        let (store, _, _, _) = makeStore()
+        await store.hydrate(makeConv(id: "conv-1"))
+        await store.applyConversationDeleted(ConversationDeletedEvent(conversationId: "ghost"))
+        let list: [MeeshyConversation] = store.listPublisher().value() ?? []
+        XCTAssertEqual(list.count, 1)
+    }
+
+    // MARK: - createSectionAndAssign (composite: create category + assign)
+
+    private func makeStoreWithCategory(
+        category: MockCategoryCreating,
+        prefs: MockPreferenceWriter = MockPreferenceWriter()
+    ) -> ConversationStore {
+        let outboxPath = FileManager.default.temporaryDirectory
+            .appendingPathComponent("store-outbox-\(UUID().uuidString).db").path
+        return ConversationStore(
+            preferenceService: prefs,
+            conversationService: MockLifecycleWriter(),
+            outbox: ConversationStateOutbox(dbPath: outboxPath),
+            categoryService: category
+        )
+    }
+
+    func test_createSectionAndAssign_createsCategoryThenAssignsSection() async throws {
+        let category = MockCategoryCreating()
+        category.stubbed = ConversationCategory(id: "cat-99", name: "Work", color: "#FF0000", icon: "star", order: 0, isExpanded: true)
+        let prefs = MockPreferenceWriter()
+        prefs.stubbedResponse = APIConversationPreferences(version: 6)
+        let store = makeStoreWithCategory(category: category, prefs: prefs)
+        await store.hydrate(makeConv(id: "conv-1"))
+
+        try await store.createSectionAndAssign(name: "Work", color: "#FF0000", icon: "star", toConversation: "conv-1")
+
+        XCTAssertEqual(category.createCalls.count, 1)
+        XCTAssertEqual(category.createCalls.first?.name, "Work")
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertEqual(after.userState.sectionId, "cat-99", "the conversation must be assigned to the freshly created category")
+    }
+
+    func test_createSectionAndAssign_unknownConversation_throwsAndDoesNotCreate() async {
+        let category = MockCategoryCreating()
+        let store = makeStoreWithCategory(category: category)
+        do {
+            try await store.createSectionAndAssign(name: "X", color: nil, icon: nil, toConversation: "ghost")
+            XCTFail("expected throw for unknown conversation")
+        } catch {
+            // expected
+        }
+        XCTAssertEqual(category.createCalls.count, 0, "must not create a category for an unknown conversation")
     }
 }
 
