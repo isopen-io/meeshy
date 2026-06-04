@@ -13,9 +13,12 @@ import UIKit
 /// ships for it, keeping the modern branch byte-for-byte the documented call:
 ///
 /// - **iOS 17 / 18 / 26+** : `AccessibilityNotification.Announcement` with an
-///   announcement *priority*. Priority is what makes the modern API worth using
-///   — VoiceOver will no longer silently drop the announcement when it is
-///   already mid-utterance, which is the long-standing failure mode of the
+///   announcement *priority*. The priority API shipped in iOS 17 and is still
+///   the current API on iOS 18 and iOS 26, so a single `#available(iOS 17.0, *)`
+///   branch correctly serves every modern OS — no per-version fork is needed
+///   until Apple actually changes the API. Priority is what makes the modern
+///   API worth using — VoiceOver will no longer silently drop the announcement
+///   when it is already mid-utterance, the long-standing failure mode of the
 ///   legacy post on a busy speech channel.
 /// - **iOS 16** : the still-supported (non-deprecated) `UIAccessibility.post(
 ///   notification: .announcement, argument:)`. Priority is unavailable, so it is
