@@ -43,87 +43,88 @@ In the categories route file (`/me/preferences/categories`):
 - [x] Widened `MeeshySocketIOService.onPreferencesUpdated` / `SocketIOOrchestrator.onPreferencesUpdated` listener type to the new union
 - [x] `use-socket-cache-sync.ts` narrows on `'category' in data` before invalidating React Query cache; conversation-scoped variant is currently ignored (consumed iOS-side in later phases; web wiring deferred)
 
-## Phase 2 — SDK Models (~0.5j, deployable, rétro-compat)
+## Phase 2 — SDK Models (~0.5j, deployable, rétro-compat)   <!-- ✅ DONE (10/10) -->
 
 In `packages/MeeshySDK/Sources/MeeshySDK/Models/`:
-- [ ] New file `ConversationUserState.swift` — struct per design §4.1 (Codable, Hashable, Sendable); include `version`, `lastSyncedAt`, `pendingMutationCount`, plus local-only `isLocked`, `hasDraft`, `draftPreview`
-- [ ] New file `UserStateMutation.swift` — enum per §4.2 with `Codable` round-trip + tolerant decoding for future cases
-- [ ] Modify `CoreModels.swift:92-328` `MeeshyConversation`:
-  - [ ] Add `public var userState: ConversationUserState`
-  - [ ] Convert each existing per-user `var` (lines 110, 140, 147-163) into a deprecated computed property forwarding to `userState`
-  - [ ] Update decoder so existing JSON keys still populate the nested struct
-- [ ] Unit tests:
-  - [ ] Codable round-trip with `.sortedKeys`
-  - [ ] Defaults
-  - [ ] Hashable / Equatable
-  - [ ] Tolerant decoding (unknown mutation case → skip without crash)
+- [x] New file `ConversationUserState.swift` — struct per design §4.1 (Codable, Hashable, Sendable); include `version`, `lastSyncedAt`, `pendingMutationCount`, plus local-only `isLocked`, `hasDraft`, `draftPreview`
+- [x] New file `UserStateMutation.swift` — enum per §4.2 with `Codable` round-trip + tolerant decoding for future cases
+- [x] Modify `CoreModels.swift:92-328` `MeeshyConversation`:
+  - [x] Add `public var userState: ConversationUserState`
+  - [x] Convert each existing per-user `var` (lines 110, 140, 147-163) into a deprecated computed property forwarding to `userState`
+  - [x] Update decoder so existing JSON keys still populate the nested struct
+- [x] Unit tests:
+  - [x] Codable round-trip with `.sortedKeys`
+  - [x] Defaults
+  - [x] Hashable / Equatable
+  - [x] Tolerant decoding (unknown mutation case → skip without crash)
 
-## Phase 3 — Outbox SQLite (~1j, deployable)
+## Phase 3 — Outbox SQLite (~1j, deployable)   <!-- ✅ DONE (14/15, schemaVersion drop test manquant) -->
 
 In `packages/MeeshySDK/Sources/MeeshySDK/Store/` (sibling of `StoryDraftStore.swift`):
-- [ ] `ConversationStateOutbox.swift` — `public actor` per §4.5
-- [ ] GRDB schema: `conversation_outbox_tasks(id TEXT PK, convId TEXT, mutationJSON TEXT, createdAt INTEGER, attempts INTEGER, nextRetryAt INTEGER NULL, schemaVersion INTEGER)`
-- [ ] `enqueue(_:)` coalescing rules per §4.5:
-  - [ ] Single-field mutations (pinned/muted/mentions/archived/customName/reaction/section/order) overwrite prior unsent tasks
-  - [ ] Tag mutations (`setTags`/`addTag`/`removeTag`) fuse to final `setTags(finalArray)`
-  - [ ] `markAsRead`/`markAsUnread` last-write-wins
-  - [ ] `deleteForUser`/`leave` NEVER coalesce
-- [ ] `flush(via:)` — pop ready tasks (`now ≥ nextRetryAt`), dispatch via closure
-- [ ] Retry backoff: `nextRetryAt = now + min(60s, 2^attempts × 5s)`
-- [ ] `markCompleted(_:)` / `markFailed(_:reason:)`
-- [ ] `pendingCount(for:)`
+- [x] `ConversationStateOutbox.swift` — `public actor` per §4.5
+- [x] GRDB schema: `conversation_outbox_tasks(id TEXT PK, convId TEXT, mutationJSON TEXT, createdAt INTEGER, attempts INTEGER, nextRetryAt INTEGER NULL, schemaVersion INTEGER)`
+- [x] `enqueue(_:)` coalescing rules per §4.5:
+  - [x] Single-field mutations (pinned/muted/mentions/archived/customName/reaction/section/order) overwrite prior unsent tasks
+  - [x] Tag mutations (`setTags`/`addTag`/`removeTag`) fuse to final `setTags(finalArray)`
+  - [x] `markAsRead`/`markAsUnread` last-write-wins
+  - [x] `deleteForUser`/`leave` NEVER coalesce
+- [x] `flush(via:)` — pop ready tasks (`now ≥ nextRetryAt`), dispatch via closure
+- [x] Retry backoff: `nextRetryAt = now + min(60s, 2^attempts × 5s)`
+- [x] `markCompleted(_:)` / `markFailed(_:reason:)`
+- [x] `pendingCount(for:)`
 - [ ] Tests:
-  - [ ] Enqueue/dequeue
-  - [ ] Each coalescing rule (one test per rule)
-  - [ ] Retry backoff math
-  - [ ] Kill-app-restart round-trip (in-memory then reload)
+  - [x] Enqueue/dequeue
+  - [x] Each coalescing rule (one test per rule)
+  - [x] Retry backoff math
+  - [x] Kill-app-restart round-trip (in-memory then reload)
   - [ ] `schemaVersion` mismatch → drop with log
 
-## Phase 4 — ConversationStore (~1.5j, deployable, not yet wired to UI)
+## Phase 4 — ConversationStore (~1.5j, deployable, not yet wired to UI)   <!-- ⏳ PARTIEL (18 done / 7 open ‘Phase 4 bis’ / 1 uncertain) -->
 
 In `packages/MeeshySDK/Sources/MeeshySDK/Store/ConversationStore.swift`:
-- [ ] `public actor ConversationStore` with `.shared` singleton (§4.3)
-- [ ] State: `conversations: [String: MeeshyConversation]`, per-conv `CurrentValueSubject`, `listSubject`
+- [x] `public actor ConversationStore` with `.shared` singleton (§4.3)
+- [x] State: `conversations: [String: MeeshyConversation]`, per-conv `CurrentValueSubject`, `listSubject`
 - [ ] Injectables (default `.shared`): `CacheCoordinator`, `ConversationStateOutbox`, `PreferenceServiceProviding`, `ConversationServiceProviding`
-- [ ] Read API: `conversation(id:)`, `publisher(for:)`, `listPublisher()`
+- [x] Read API: `conversation(id:)`, `publisher(for:)`, `listPublisher()`
 - [ ] Hydration (SWR) — handle each `CacheResult` case explicitly, NEVER `.value`:
   - [ ] `hydrate(_:)`, `hydrateList(_:)`, `hydrateFromCache()`
-- [ ] `apply(_:for:)` pipeline (§6):
-  - [ ] Snapshot → optimistic mutation → `version += 1` candidate → publish
-  - [ ] Enqueue in outbox → dispatch
-  - [ ] ACK → overwrite with authoritative `version` from server response, set `lastSyncedAt`
-  - [ ] 4xx → rollback snapshot, `outbox.markFailed`, rethrow
-  - [ ] Transient (5xx / network) → leave in outbox, no rollback
+- [x] `apply(_:for:)` pipeline (§6):
+  - [x] Snapshot → optimistic mutation → `version += 1` candidate → publish
+  - [x] Enqueue in outbox → dispatch
+  - [x] ACK → overwrite with authoritative `version` from server response, set `lastSyncedAt`
+  - [x] 4xx → rollback snapshot, `outbox.markFailed`, rethrow
+  - [x] Transient (5xx / network) → leave in outbox, no rollback
 - [ ] Composite helpers:
-  - [ ] `createSectionAndAssign(name:color:icon:toConversation:)`
-  - [ ] `reorderConversations(_:)`
-- [ ] Remote application:
-  - [ ] `applyRemote(UserPreferencesUpdatedEvent)` — ignore if `event.version <= local.version`; reset:true → defaults; else apply + bump + publish + cache.save
-  - [ ] `applyReadReceipt(ReadStatusEvent)` — monotone `lastReadAt`; trust server `unreadCount`
-  - [ ] `applyConversationDeleted(_:)` — remove from store
-- [ ] `flushOutbox()` — call on app foreground + network reachability change
+  - [x] `createSectionAndAssign(name:color:icon:toConversation:)` <!-- 2026-06-04 -->
+  - [ ] `reorderConversations(_:)` <!-- différé : endpoint REST reorder batch pas exposé client -->
+- [x] Remote application:
+  - [x] `applyRemote(UserPreferencesUpdatedEvent)` — ignore if `event.version <= local.version`; reset:true → defaults; else apply + bump + publish + cache.save
+  - [x] `applyReadReceipt(ReadStatusEvent)` — monotone `lastReadAt`; trust server `unreadCount` <!-- 2026-06-04 -->
+  - [x] `applyConversationDeleted(_:)` — remove from store <!-- 2026-06-04 -->
+- [ ] _reste Phase 4 bis : `hydrateFromCache()` (schéma clé cache), `reorderConversations` (endpoint), wiring socket ci-dessous_
+- [x] `flushOutbox()` — call on app foreground + network reachability change
 - [ ] Wire `MessageSocketManager` publishers (add if missing): `userPreferencesUpdated`, `userPreferencesReordered`, `readStatus`, `conversationDeleted`
-- [ ] Tests per §10 SDK section:
-  - [ ] `apply` optimistic visible immediately; version +1 candidate
-  - [ ] ACK overwrites version
-  - [ ] 4xx restores snapshot
-  - [ ] Transient retains in outbox
-  - [ ] `applyRemote` version gate (ignore stale)
-  - [ ] `applyRemote` reset:true defaults
-  - [ ] Multi-subscriber publisher cohérence
+- [x] Tests per §10 SDK section:
+  - [x] `apply` optimistic visible immediately; version +1 candidate
+  - [x] ACK overwrites version
+  - [x] 4xx restores snapshot
+  - [x] Transient retains in outbox
+  - [x] `applyRemote` version gate (ignore stale)
+  - [x] `applyRemote` reset:true defaults
+  - [x] Multi-subscriber publisher cohérence
 
-## Phase 5 — UserCategoryStore (~0.5j, deployable)
+## Phase 5 — UserCategoryStore (~0.5j, deployable)   <!-- ⏳ PARTIEL (13 done / 1 open: listeners socket) -->
 
 In `packages/MeeshySDK/Sources/MeeshySDK/Store/UserCategoryStore.swift`:
-- [ ] `public actor UserCategoryStore` with `.shared`
-- [ ] `categories()`, `publisher()`
-- [ ] CRUD: `create`, `rename`, `setColor`, `setIcon`, `setExpanded`, `delete`
-- [ ] `reorder(_:)`
-- [ ] `applyRemote(CategoryRemoteEvent)` — handle CREATED / UPDATED / DELETED / REORDERED
+- [x] `public actor UserCategoryStore` with `.shared`
+- [x] `categories()`, `publisher()`
+- [x] CRUD: `create`, `rename`, `setColor`, `setIcon`, `setExpanded`, `delete`
+- [x] `reorder(_:)`
+- [x] `applyRemote(CategoryRemoteEvent)` — handle CREATED / UPDATED / DELETED / REORDERED
 - [ ] Wire socket listeners on `MessageSocketManager`
-- [ ] Tests for each CRUD method + reorder + each remote event variant
+- [x] Tests for each CRUD method + reorder + each remote event variant
 
-## Phase 6 — Refactor iOS ViewModels (~1j, deployable)
+## Phase 6 — Refactor iOS ViewModels (~1j, deployable)   <!-- 🔲 OUVERT (0/11) — EN COURS -->
 
 In `apps/ios/Meeshy/Features/Main/ViewModels/`:
 - [ ] **`ConversationListViewModel.swift`** (~1595 lines today):
@@ -144,7 +145,7 @@ In `apps/ios/Meeshy/Features/Main/ViewModels/`:
   - [ ] Options VM debounce called 1× over 500ms window
   - [ ] Conv VM `markAsRead` triggers correctly on appear + scenePhase
 
-## Phase 7 — UI re-wiring (~0.5j, deployable)
+## Phase 7 — UI re-wiring (~0.5j, deployable)   <!-- 🔲 OUVERT (0/10) -->
 
 Per §7 matrix:
 - [ ] `ThemedConversationRow` reads snapshot from list VM mirror
@@ -160,10 +161,10 @@ Per §7 matrix:
   - [ ] `ThemedConversationRow` × {pinned, muted, archived, unread, customName, reaction, pendingSync, locked, draft}
   - [ ] `ConversationOptionsSheet` × {tous toggles, picker catégories, chips tags, vide, peuplé}
 
-## Phase 8 — Smoke + cleanup (~0.5j)
+## Phase 8 — Smoke + cleanup (~0.5j)   <!-- 🔲 OUVERT (1 done / gated sur 6-7) -->
 
 - [ ] Delete deprecated computed shims added in Phase 2
-- [ ] Sweep call sites still touching inline flags; rewrite to `userState.X`
+- [x] Sweep call sites still touching inline flags; rewrite to `userState.X`
 - [ ] Verify ~700 lines of obsolete mutation/optimistic/rollback removed (§13 criterion 6)
 - [ ] E2E smoke (XCUITest minimal, §10):
   - [ ] Pin from list → options sheet of same conv reflects without interaction (same Combine tick)
