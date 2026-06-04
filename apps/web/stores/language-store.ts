@@ -6,6 +6,23 @@ import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
 import { INTERFACE_LANGUAGES } from '@/types/frontend';
+import {
+  LOCALE_COOKIE_MAX_AGE,
+  LOCALE_COOKIE_NAME,
+  isSupportedLocale,
+} from '@/lib/i18n/locale-config';
+
+/**
+ * Mirrors the chosen interface language into a cookie so the SERVER can read it
+ * when rendering metadata and the `<html lang>` attribute. Without this bridge
+ * the language only lives in localStorage (client-only), and SSR cannot make
+ * `<html lang>` / `og:locale` / titles coherent with what the user sees.
+ */
+const persistLocaleCookie = (language: string): void => {
+  if (typeof document === 'undefined') return;
+  if (!isSupportedLocale(language)) return;
+  document.cookie = `${LOCALE_COOKIE_NAME}=${language}; path=/; max-age=${LOCALE_COOKIE_MAX_AGE}; samesite=lax`;
+};
 
 interface UserLanguageConfig {
   systemLanguage: string;
@@ -48,7 +65,7 @@ const DEFAULT_LANGUAGE_CONFIG: UserLanguageConfig = {
 };
 
 const initialState: LanguageState = {
-  currentInterfaceLanguage: 'fr', // Will be overridden by persisted state or browser detection
+  currentInterfaceLanguage: 'en', // Will be overridden by persisted state or browser detection (matches detectBrowserLanguage fallback + SSR default)
   availableLanguages: INTERFACE_LANGUAGES.map(lang => lang.code), // Langues d'interface avec traductions complètes
   userLanguageConfig: DEFAULT_LANGUAGE_CONFIG,
 };
@@ -70,6 +87,7 @@ export const useLanguageStore = create<LanguageStore>()(
           if (process.env.NODE_ENV === 'development') {
           }
           set({ currentInterfaceLanguage: language });
+          persistLocaleCookie(language);
         },
 
         setCustomDestinationLanguage: (language: string) => {
@@ -102,6 +120,7 @@ export const useLanguageStore = create<LanguageStore>()(
           set({
             currentInterfaceLanguage: browserLang,
           });
+          persistLocaleCookie(browserLang);
         },
 
         isLanguageSupported: (language: string): boolean => {
@@ -135,6 +154,13 @@ export const useLanguageStore = create<LanguageStore>()(
 
           // Version compatible, retourner tel quel
           return persistedState;
+        },
+        // Au retour d'hydratation, refléter la langue persistée dans le cookie
+        // pour que le SSR de la prochaine navigation soit cohérent (lang, og:locale, meta).
+        onRehydrateStorage: () => (state) => {
+          if (state?.currentInterfaceLanguage) {
+            persistLocaleCookie(state.currentInterfaceLanguage);
+          }
         },
       }
     ),

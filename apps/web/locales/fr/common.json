@@ -150,6 +150,15 @@
         "message": "Si vous pensez devoir avoir accès à cette ressource, essayez de vous connecter ou contactez l'administrateur."
       }
     },
+    "authGuard": {
+      "checking": "Vérification...",
+      "deniedTitle": "Accès refusé",
+      "deniedDescription": "Vous devez être connecté pour accéder à cette page",
+      "signIn": "Se connecter",
+      "accountRequiredTitle": "Compte requis",
+      "accountRequiredDescription": "Cette page nécessite un compte permanent",
+      "createAccount": "Créer un compte"
+    },
     "redirecting": "Redirection...",
     "featureGate": {
       "title": "Fonctionnalité temporairement indisponible",

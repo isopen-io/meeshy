@@ -14,7 +14,6 @@ function LandingPageContent() {
   const { state, authMode, setAuthMode } = useLandingAuth();
   const { t: tCommon } = useI18n('common');
   const { t: tAuth } = useI18n('auth');
-  const { locale, setLocale } = useI18n('landing');
 
   if (state.mode === 'checking') {
     return (
@@ -51,7 +50,7 @@ function LandingPageContent() {
           anonymousChatLink={state.anonymousChatLink}
         />
 
-        <LandingContent locale={locale} onLocaleChange={setLocale} />
+        <LandingContent />
 
         <Dialog open={authMode === 'login'} onOpenChange={(open) => setAuthMode(open ? 'login' : 'welcome')}>
           <DialogContent className="max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">

@@ -3,7 +3,6 @@
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { LanguageSelector } from '@/components/translation/language-selector';
 import {
   MessageSquare,
   Globe,
@@ -25,12 +24,7 @@ import {
 import Link from 'next/link';
 import { useI18n } from '@/hooks/useI18n';
 
-interface LandingContentProps {
-  locale: string;
-  onLocaleChange: (locale: string) => void;
-}
-
-export function LandingContent({ locale, onLocaleChange }: LandingContentProps) {
+export function LandingContent() {
   const { t } = useI18n('landing');
 
   return (
@@ -69,13 +63,6 @@ export function LandingContent({ locale, onLocaleChange }: LandingContentProps) 
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </Link>
-
-            <LanguageSelector
-              value={locale}
-              onValueChange={onLocaleChange}
-              interfaceOnly={true}
-              className="min-w-[150px]"
-            />
           </div>
         </div>
       </section>
