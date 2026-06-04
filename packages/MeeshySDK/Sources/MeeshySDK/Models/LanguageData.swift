@@ -160,6 +160,26 @@ public enum LanguageData {
             allLanguages.first(where: { $0.code == code })
         }
 
+    // MARK: - Common-First Ordering
+    //
+    // Full translation base reordered so the most frequently picked languages
+    // surface at the top of long pickers (onboarding content-language picker),
+    // with every other language following in its canonical order. Single base,
+    // single ordering — no truncation, nothing dropped.
+
+    public static let commonLanguageCodes: [String] =
+        ["fr", "en", "es", "de", "it", "pt", "ar", "zh", "ja", "ko",
+         "ru", "tr", "nl", "pl", "sv", "hi", "th", "vi", "uk", "ro"]
+
+    public static let allLanguagesCommonFirst: [LanguageInfo] = {
+        let commonSet = Set(commonLanguageCodes)
+        let common = commonLanguageCodes.compactMap { code in
+            allLanguages.first(where: { $0.code == code })
+        }
+        let rest = allLanguages.filter { !commonSet.contains($0.code) }
+        return common + rest
+    }()
+
     // MARK: - Lookup
 
     /// Canonical-code aliases so legacy/BCP-47 spellings resolve to the entry

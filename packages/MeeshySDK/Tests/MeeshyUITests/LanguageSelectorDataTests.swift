@@ -8,10 +8,24 @@ import XCTest
 @MainActor
 final class LanguageSelectorDataTests: XCTestCase {
 
-    func test_defaultLanguages_derivedFromAllLanguages() {
+    func test_defaultLanguages_derivedFromCommonFirstBase() {
         XCTAssertEqual(
             LanguageSelector.defaultLanguages.map(\.id),
-            LanguageData.allLanguages.map(\.code)
+            LanguageData.allLanguagesCommonFirst.map(\.code)
+        )
+    }
+
+    func test_defaultLanguages_commonLanguagesComeFirst() {
+        let leading = LanguageSelector.defaultLanguages
+            .prefix(LanguageData.commonLanguageCodes.count)
+            .map(\.id)
+        XCTAssertEqual(leading, LanguageData.commonLanguageCodes)
+    }
+
+    func test_defaultLanguages_keepsEveryLanguage_noneDropped() {
+        XCTAssertEqual(
+            Set(LanguageSelector.defaultLanguages.map(\.id)),
+            Set(LanguageData.allLanguages.map(\.code))
         )
     }
 

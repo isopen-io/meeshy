@@ -47,6 +47,32 @@ final class LanguageDataTests: XCTestCase {
         XCTAssertEqual(codes.count, Set(codes).count, "duplicate language codes in allLanguages")
     }
 
+    // MARK: - Common-first ordering
+
+    func test_allLanguagesCommonFirst_startsWithCommonCodes() {
+        XCTAssertEqual(
+            LanguageData.allLanguagesCommonFirst.prefix(LanguageData.commonLanguageCodes.count).map(\.code),
+            LanguageData.commonLanguageCodes
+        )
+    }
+
+    func test_allLanguagesCommonFirst_isAPermutationOfAllLanguages() {
+        XCTAssertEqual(
+            LanguageData.allLanguagesCommonFirst.count,
+            LanguageData.allLanguages.count
+        )
+        XCTAssertEqual(
+            Set(LanguageData.allLanguagesCommonFirst.map(\.code)),
+            Set(LanguageData.allLanguages.map(\.code))
+        )
+    }
+
+    func test_commonLanguageCodes_allExistInBase() {
+        for code in LanguageData.commonLanguageCodes {
+            XCTAssertNotNil(LanguageData.info(for: code), "common code \(code) missing from allLanguages")
+        }
+    }
+
     // MARK: - Quick translation base (composer pill)
 
     func test_quickTranslationLanguages_matchesCodesAndAllExist() {

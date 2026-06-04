@@ -24,10 +24,10 @@ public struct LanguageSelector: View {
         self.languages = languages ?? Self.defaultLanguages
     }
 
-    // Derived from the single translation base (LanguageData) — the onboarding
-    // content-language picker offers every supported language (searchable),
-    // matching the profile pickers. No hardcoded list, no spelling drift.
-    public static let defaultLanguages: [LanguageOption] = LanguageData.allLanguages.map {
+    // Derived from the single translation base (LanguageData), common languages
+    // first then the rest — the onboarding content-language picker offers every
+    // supported language (searchable). No hardcoded list, no spelling drift.
+    public static let defaultLanguages: [LanguageOption] = LanguageData.allLanguagesCommonFirst.map {
         LanguageOption(id: $0.code, name: $0.nativeName, flag: $0.flag)
     }
 
