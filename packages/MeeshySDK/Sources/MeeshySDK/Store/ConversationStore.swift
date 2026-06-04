@@ -406,6 +406,18 @@ public actor ConversationStore {
         }
     }
 
+    /// Apply a remote reorder broadcast (`USER_PREFERENCES_REORDERED` from
+    /// another device). Updates `orderInCategory` locally and republishes —
+    /// NO network round-trip (unlike `reorderConversations`) and no version
+    /// bump (order is not version-tracked). Unknown conversations are skipped.
+    public func applyRemoteReorder(_ updates: [(convId: String, orderInCategory: Int)]) {
+        for update in updates {
+            guard var conv = conversations[update.convId] else { continue }
+            conv.userState.orderInCategory = update.orderInCategory
+            commit(conv)
+        }
+    }
+
     // MARK: - Private helpers
 
     /// Apply a mutation to a `ConversationUserState` snapshot without

@@ -563,6 +563,31 @@ final class ConversationStoreTests: XCTestCase {
         let after = await store.conversation(id: "c1")!
         XCTAssertEqual(after.userState.orderInCategory, 5, "a failed reorder must roll back to the prior order")
     }
+
+    func test_applyRemoteReorder_updatesLocalOrderWithoutCallingService() async {
+        let prefs = MockPreferenceWriter()
+        let store = makeStoreWithPrefs(prefs)
+        await store.hydrate(makeConv(id: "c1"))
+        await store.hydrate(makeConv(id: "c2"))
+
+        await store.applyRemoteReorder([(convId: "c1", orderInCategory: 2), (convId: "c2", orderInCategory: 5)])
+
+        let c1 = await store.conversation(id: "c1")!
+        let c2 = await store.conversation(id: "c2")!
+        XCTAssertEqual(c1.userState.orderInCategory, 2)
+        XCTAssertEqual(c2.userState.orderInCategory, 5)
+        XCTAssertEqual(prefs.reorderCalls.count, 0, "a remote reorder must NOT call the reorder service")
+    }
+
+    func test_applyRemoteReorder_unknownConversation_skipped() async {
+        let store = makeStoreWithPrefs(MockPreferenceWriter())
+        await store.hydrate(makeConv(id: "c1"))
+        await store.applyRemoteReorder([(convId: "ghost", orderInCategory: 9), (convId: "c1", orderInCategory: 3)])
+        let c1 = await store.conversation(id: "c1")!
+        XCTAssertEqual(c1.userState.orderInCategory, 3)
+        let ghost = await store.conversation(id: "ghost")
+        XCTAssertNil(ghost)
+    }
 }
 
 // MARK: - Tiny helper to read CurrentValueSubject from a publisher

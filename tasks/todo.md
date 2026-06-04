@@ -101,9 +101,11 @@ In `packages/MeeshySDK/Sources/MeeshySDK/Store/ConversationStore.swift`:
   - [x] `applyRemote(UserPreferencesUpdatedEvent)` — ignore if `event.version <= local.version`; reset:true → defaults; else apply + bump + publish + cache.save
   - [x] `applyReadReceipt(ReadStatusEvent)` — monotone `lastReadAt`; trust server `unreadCount` <!-- 2026-06-04 -->
   - [x] `applyConversationDeleted(_:)` — remove from store <!-- 2026-06-04 -->
-- [ ] _reste Phase 4 bis : wiring socket ci-dessous (publishers `userPreferencesReordered` + `conversationDeleted`)_
+- [x] _Phase 4 bis : wiring socket via `ConversationStoreSocketBridge` (2026-06-04). Routés : `conversation:deleted`→applyConversationDeleted, `user:preferences-reordered`→applyRemoteReorder. **Déférés** (payload socket ≠ entrée store) : `user:preferences-updated` (pas de version/reset, shape plate) et `read-status:updated` (pas de lastReadAt/unreadCount par-user) — méthodes store prêtes, à wirer quand les payloads seront alignés._
 - [x] `flushOutbox()` — call on app foreground + network reachability change
-- [ ] Wire `MessageSocketManager` publishers (add if missing): `userPreferencesUpdated`, `userPreferencesReordered`, `readStatus`, `conversationDeleted`
+- [x] Wire `MessageSocketManager` publishers (add if missing): `userPreferencesUpdated`, `userPreferencesReordered`, `readStatus`, `conversationDeleted` <!-- 2026-06-04 : reordered + conversationDeleted + category:×4 ajoutés ; updated/readStatus existaient -->
+- [x] `ConversationStore.applyRemoteReorder` (reorder distant, local-only) + `ConversationStoreSocketBridge` (4 tests) <!-- 2026-06-04 -->
+- [x] Gateway émet `conversation:deleted` sur delete-for-me (2 tests jest) <!-- 2026-06-04 -->
 - [x] Tests per §10 SDK section:
   - [x] `apply` optimistic visible immediately; version +1 candidate
   - [x] ACK overwrites version
@@ -113,7 +115,7 @@ In `packages/MeeshySDK/Sources/MeeshySDK/Store/ConversationStore.swift`:
   - [x] `applyRemote` reset:true defaults
   - [x] Multi-subscriber publisher cohérence
 
-## Phase 5 — UserCategoryStore (~0.5j, deployable)   <!-- ⏳ PARTIEL (13 done / 1 open: listeners socket) -->
+## Phase 5 — UserCategoryStore (~0.5j, deployable)   <!-- ✅ DONE (14/14, listeners socket câblés via bridge 2026-06-04) -->
 
 In `packages/MeeshySDK/Sources/MeeshySDK/Store/UserCategoryStore.swift`:
 - [x] `public actor UserCategoryStore` with `.shared`
@@ -121,7 +123,7 @@ In `packages/MeeshySDK/Sources/MeeshySDK/Store/UserCategoryStore.swift`:
 - [x] CRUD: `create`, `rename`, `setColor`, `setIcon`, `setExpanded`, `delete`
 - [x] `reorder(_:)`
 - [x] `applyRemote(CategoryRemoteEvent)` — handle CREATED / UPDATED / DELETED / REORDERED
-- [ ] Wire socket listeners on `MessageSocketManager`
+- [x] Wire socket listeners on `MessageSocketManager` <!-- 2026-06-04 : category:×4 listeners + ConversationStoreSocketBridge -->
 - [x] Tests for each CRUD method + reorder + each remote event variant
 
 ## Phase 6 — Refactor iOS ViewModels (~1j, deployable)   <!-- 🔲 OUVERT (0/11) — EN COURS -->

@@ -102,6 +102,48 @@ public struct UserPreferencesUpdatedEvent: Decodable, Sendable {
     }
 }
 
+/// `conversation:deleted` — per-user soft delete broadcast to the user's room.
+/// Named `…SocketEvent` to avoid clashing with `ConversationDeletedEvent`
+/// (the store input type, same module).
+public struct ConversationDeletedSocketEvent: Decodable, Sendable {
+    public let userId: String
+    public let conversationId: String
+}
+
+/// `user:preferences-reordered` — batch drag-reorder broadcast.
+public struct UserPreferencesReorderedSocketEvent: Decodable, Sendable {
+    public struct Update: Decodable, Sendable {
+        public let conversationId: String
+        public let orderInCategory: Int
+    }
+    public let userId: String
+    public let updates: [Update]
+}
+
+/// `category:created` / `category:updated` — full category snapshot. The
+/// nested `category` object decodes straight into `ConversationCategory`
+/// (extra gateway keys userId/createdAt/updatedAt are ignored).
+public struct CategorySocketEvent: Decodable, Sendable {
+    public let userId: String
+    public let category: ConversationCategory
+}
+
+/// `category:deleted`.
+public struct CategoryDeletedSocketEvent: Decodable, Sendable {
+    public let userId: String
+    public let categoryId: String
+}
+
+/// `categories:reordered`.
+public struct CategoriesReorderedSocketEvent: Decodable, Sendable {
+    public struct Update: Decodable, Sendable {
+        public let categoryId: String
+        public let order: Int
+    }
+    public let userId: String
+    public let updates: [Update]
+}
+
 public struct ConversationStatsEvent: Decodable, Sendable {
     public let conversationId: String
     public let stats: ConversationStats
@@ -922,6 +964,14 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Combine publishers — user preferences
     public let userPreferencesUpdated = PassthroughSubject<UserPreferencesUpdatedEvent, Never>()
+    public let userPreferencesReordered = PassthroughSubject<UserPreferencesReorderedSocketEvent, Never>()
+    public let conversationDeleted = PassthroughSubject<ConversationDeletedSocketEvent, Never>()
+
+    // Combine publishers — user conversation categories
+    public let categoryCreated = PassthroughSubject<CategorySocketEvent, Never>()
+    public let categoryUpdated = PassthroughSubject<CategorySocketEvent, Never>()
+    public let categoryDeleted = PassthroughSubject<CategoryDeletedSocketEvent, Never>()
+    public let categoriesReordered = PassthroughSubject<CategoriesReorderedSocketEvent, Never>()
 
     // Combine publishers — conversation stats
     public let conversationStatsReceived = PassthroughSubject<ConversationStatsEvent, Never>()
@@ -2136,6 +2186,48 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(UserPreferencesUpdatedEvent.self, from: data) { [weak self] event in
                 self?.userPreferencesUpdated.send(event)
+            }
+        }
+
+        socket.on("user:preferences-reordered") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(UserPreferencesReorderedSocketEvent.self, from: data) { [weak self] event in
+                self?.userPreferencesReordered.send(event)
+            }
+        }
+
+        socket.on("conversation:deleted") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ConversationDeletedSocketEvent.self, from: data) { [weak self] event in
+                self?.conversationDeleted.send(event)
+            }
+        }
+
+        socket.on("category:created") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(CategorySocketEvent.self, from: data) { [weak self] event in
+                self?.categoryCreated.send(event)
+            }
+        }
+
+        socket.on("category:updated") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(CategorySocketEvent.self, from: data) { [weak self] event in
+                self?.categoryUpdated.send(event)
+            }
+        }
+
+        socket.on("category:deleted") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(CategoryDeletedSocketEvent.self, from: data) { [weak self] event in
+                self?.categoryDeleted.send(event)
+            }
+        }
+
+        socket.on("categories:reordered") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(CategoriesReorderedSocketEvent.self, from: data) { [weak self] event in
+                self?.categoriesReordered.send(event)
             }
         }
 
