@@ -337,6 +337,17 @@ export class AuthHandler {
         }
       });
 
+      // CALL-DIAG (temp instrumentation — remove on rollback): correlate double-cleanup race (RC-4)
+      if (activeParticipations.length > 0) {
+        console.log('🔬 [CALL-DIAG] disconnect-cleanup-path', JSON.stringify({
+          path: 'AuthHandler.handleDisconnection',
+          socketId: socket.id,
+          userId: userIdOrToken,
+          count: activeParticipations.length,
+          callIds: activeParticipations.map((p: any) => p.callSessionId)
+        }));
+      }
+
       for (const participation of activeParticipations) {
         try {
           await this.callService.leaveCall({
