@@ -1314,55 +1314,23 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Mark as Unread
 
     func markAsUnread(conversationId: String) async {
-        guard let index = convIndex(for: conversationId) else { return }
-        let previousCount = conversations[index].userState.unreadCount
-
-        // Optimistic update
-        if conversations[index].userState.unreadCount == 0 {
-            conversations[index].userState.unreadCount = 1
-        }
-
-        do {
-            try await conversationService.markUnread(conversationId: conversationId)
-        } catch {
-            conversations[index].userState.unreadCount = previousCount
-        }
+        guard convIndex(for: conversationId) != nil else { return }
+        // Store sets unreadCount ≥ 1 optimistically + dispatches markUnread.
+        try? await store.apply(.markAsUnread, for: conversationId)
     }
 
     // MARK: - Archive Conversation
 
     func archiveConversation(conversationId: String) async {
-        guard let index = convIndex(for: conversationId) else { return }
-        let wasArchived = conversations[index].userState.isArchived
-
-        conversations[index].userState.isArchived = true
-
-        do {
-            try await preferenceService.updateConversationPreferences(
-                conversationId: conversationId,
-                request: .init(isArchived: true)
-            )
-        } catch {
-            conversations[index].userState.isArchived = wasArchived
-        }
+        guard convIndex(for: conversationId) != nil else { return }
+        try? await store.apply(.setArchived(true), for: conversationId)
     }
 
     // MARK: - Unarchive Conversation
 
     func unarchiveConversation(conversationId: String) async {
-        guard let index = convIndex(for: conversationId) else { return }
-        let wasArchived = conversations[index].userState.isArchived
-
-        conversations[index].userState.isArchived = false
-
-        do {
-            try await preferenceService.updateConversationPreferences(
-                conversationId: conversationId,
-                request: .init(isArchived: false)
-            )
-        } catch {
-            conversations[index].userState.isArchived = wasArchived
-        }
+        guard convIndex(for: conversationId) != nil else { return }
+        try? await store.apply(.setArchived(false), for: conversationId)
     }
 
     // MARK: - Delete Conversation
@@ -1381,37 +1349,18 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Move to Section
 
     func moveToSection(conversationId: String, sectionId: String) {
-        guard let index = convIndex(for: conversationId) else { return }
-        let previousSectionId = conversations[index].userState.sectionId
+        guard convIndex(for: conversationId) != nil else { return }
         let newSectionId: String? = sectionId.isEmpty ? nil : sectionId
-        conversations[index].userState.sectionId = newSectionId
-
-        Task {
-            do {
-                try await preferenceService.updateConversationPreferences(
-                    conversationId: conversationId,
-                    request: .init(categoryId: newSectionId)
-                )
-            } catch {
-                conversations[index].userState.sectionId = previousSectionId
-            }
+        Task { [store] in
+            try? await store.apply(.setSection(categoryId: newSectionId), for: conversationId)
         }
     }
 
     // MARK: - Favorite Reaction
 
     func setFavoriteReaction(conversationId: String, emoji: String?) async {
-        guard let index = convIndex(for: conversationId) else { return }
-        let previous = conversations[index].userState.reaction
-        conversations[index].userState.reaction = emoji
-        do {
-            try await preferenceService.updateConversationPreferences(
-                conversationId: conversationId,
-                request: .init(reaction: emoji)
-            )
-        } catch {
-            conversations[index].userState.reaction = previous
-        }
+        guard convIndex(for: conversationId) != nil else { return }
+        try? await store.apply(.setReaction(emoji), for: conversationId)
     }
 
     // MARK: - Message Prefetch

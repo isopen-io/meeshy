@@ -69,14 +69,16 @@ final class ConversationListViewModelTests: XCTestCase {
     /// the global `.shared` singleton — prevents cross-test pollution.
     /// `prefError` makes the preference writer throw (e.g. a 4xx for a
     /// permanent-failure rollback test).
-    static func makeTestStore(prefError: Error? = nil) -> ConversationStore {
+    static func makeTestStore(prefError: Error? = nil, lifecycleError: Error? = nil) -> ConversationStore {
         let writer = ConvListTestPreferenceWriter()
         writer.errorToThrow = prefError
+        let lifecycle = ConvListTestLifecycleWriter()
+        lifecycle.errorToThrow = lifecycleError
         let outboxPath = FileManager.default.temporaryDirectory
             .appendingPathComponent("convlist-vm-outbox-\(UUID().uuidString).db").path
         return ConversationStore(
             preferenceService: writer,
-            conversationService: ConvListTestLifecycleWriter(),
+            conversationService: lifecycle,
             outbox: ConversationStateOutbox(dbPath: outboxPath)
         )
     }
@@ -88,6 +90,25 @@ final class ConversationListViewModelTests: XCTestCase {
         let exp = expectation(description: "main queue drained")
         DispatchQueue.main.async { exp.fulfill() }
         await fulfillment(of: [exp], timeout: 2.0)
+    }
+
+    /// Wait until the list reflects a userState predicate for `id`. Use for
+    /// fire-and-forget mutations (e.g. `moveToSection` spawns an internal Task)
+    /// where the result lands asynchronously via the store merge sink.
+    private func waitForListState(
+        _ sut: ConversationListViewModel,
+        id: String,
+        timeout: TimeInterval = 2.0,
+        _ predicate: @escaping (ConversationUserState) -> Bool
+    ) async {
+        let exp = expectation(description: "list user-state")
+        exp.assertForOverFulfill = false
+        var token: AnyCancellable?
+        token = sut.$conversations.sink { convs in
+            if let s = convs.first(where: { $0.id == id })?.userState, predicate(s) { exp.fulfill() }
+        }
+        await fulfillment(of: [exp], timeout: timeout)
+        token?.cancel()
     }
 
     private func makeConversation(
@@ -572,84 +593,101 @@ final class ConversationListViewModelTests: XCTestCase {
 
     // MARK: - markAsUnread
 
-    func test_markAsUnread_setsUnreadCountToOneWhenZero() async {
-        let (sut, _, _, _, _, _, _) = makeSUT()
-        sut.conversations = [makeConversation(id: "conv1", unreadCount: 0)]
+    func test_markAsUnread_setsUnreadCountToOneWhenZero() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1", unreadCount: 0)])
+        await sut.storeHydrationTask?.value
 
         await sut.markAsUnread(conversationId: "conv1")
+        await drainMainQueue()
 
-        XCTAssertEqual(sut.conversations[0].unreadCount, 1)
+        XCTAssertEqual(sut.conversations.first(where: { $0.id == "conv1" })?.userState.unreadCount, 1)
     }
 
-    func test_markAsUnread_rollsBackOnFailure() async {
-        let conversationService = MockConversationService()
-        conversationService.markUnreadResult = .failure(NSError(domain: "test", code: 500))
-        let (sut, _, _, _, _, _, _) = makeSUT(conversationService: conversationService)
-        sut.conversations = [makeConversation(id: "conv1", unreadCount: 0)]
+    func test_markAsUnread_rollsBackOnPermanentFailure() async throws {
+        let store = Self.makeTestStore(lifecycleError: MeeshyError.server(statusCode: 422, message: "bad"))
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1", unreadCount: 0)])
+        await sut.storeHydrationTask?.value
 
         await sut.markAsUnread(conversationId: "conv1")
+        await drainMainQueue()
 
-        XCTAssertEqual(sut.conversations[0].unreadCount, 0, "Should rollback on failure")
+        XCTAssertEqual(sut.conversations.first(where: { $0.id == "conv1" })?.userState.unreadCount, 0,
+                       "4xx must roll back the optimistic unread hint")
     }
 
     // MARK: - archiveConversation
 
-    func test_archiveConversation_setsIsArchivedByUserToTrue() async {
-        let (sut, _, _, preferenceService, _, _, _) = makeSUT()
-        sut.conversations = [makeConversation(id: "conv1", isActive: true)]
+    func test_archiveConversation_setsArchivedViaStore() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1", isActive: true)])
+        await sut.storeHydrationTask?.value
 
         await sut.archiveConversation(conversationId: "conv1")
+        await drainMainQueue()
 
-        XCTAssertTrue(sut.conversations[0].isArchivedByUser)
-        XCTAssertTrue(sut.conversations[0].isActive, "isActive (server-level) should NOT change when user archives")
-        XCTAssertEqual(preferenceService.updateConversationPreferencesCallCount, 1)
+        let row = sut.conversations.first(where: { $0.id == "conv1" })
+        XCTAssertTrue(row?.userState.isArchived ?? false)
+        XCTAssertTrue(row?.isActive ?? false, "isActive (server-level) should NOT change when user archives")
     }
 
-    func test_archiveConversation_rollsBackOnFailure() async {
-        let preferenceService = MockPreferenceService()
-        preferenceService.updateConversationPreferencesResult = .failure(NSError(domain: "test", code: 500))
-        let (sut, _, _, _, _, _, _) = makeSUT(preferenceService: preferenceService)
-        sut.conversations = [makeConversation(id: "conv1", isActive: true)]
+    func test_archiveConversation_rollsBackOnPermanentFailure() async throws {
+        let store = Self.makeTestStore(prefError: MeeshyError.server(statusCode: 422, message: "bad"))
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1", isActive: true)])
+        await sut.storeHydrationTask?.value
 
         await sut.archiveConversation(conversationId: "conv1")
+        await drainMainQueue()
 
-        XCTAssertFalse(sut.conversations[0].isArchivedByUser, "Should rollback on failure")
+        XCTAssertFalse(sut.conversations.first(where: { $0.id == "conv1" })?.userState.isArchived ?? true,
+                       "4xx must roll back the optimistic archive")
     }
 
     // MARK: - unarchiveConversation
 
-    func test_unarchiveConversation_setsIsArchivedByUserToFalse() async {
-        let (sut, _, _, _, _, _, _) = makeSUT()
+    func test_unarchiveConversation_setsArchivedFalseViaStore() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
         var conv = makeConversation(id: "conv1", isActive: true)
-        conv.isArchivedByUser = true
-        sut.conversations = [conv]
+        conv.userState.isArchived = true
+        sut.setConversations([conv])
+        await sut.storeHydrationTask?.value
 
         await sut.unarchiveConversation(conversationId: "conv1")
+        await drainMainQueue()
 
-        XCTAssertFalse(sut.conversations[0].isArchivedByUser)
+        XCTAssertFalse(sut.conversations.first(where: { $0.id == "conv1" })?.userState.isArchived ?? true)
     }
 
     // MARK: - setFavoriteReaction
 
-    func test_setFavoriteReaction_updatesReactionOptimistically() async {
-        let (sut, _, _, preferenceService, _, _, _) = makeSUT()
-        sut.conversations = [makeConversation(id: "conv1", reaction: nil)]
+    func test_setFavoriteReaction_updatesReactionViaStore() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1", reaction: nil)])
+        await sut.storeHydrationTask?.value
 
         await sut.setFavoriteReaction(conversationId: "conv1", emoji: "heart")
+        await drainMainQueue()
 
-        XCTAssertEqual(sut.conversations[0].reaction, "heart")
-        XCTAssertEqual(preferenceService.updateConversationPreferencesCallCount, 1)
+        XCTAssertEqual(sut.conversations.first(where: { $0.id == "conv1" })?.userState.reaction, "heart")
     }
 
-    func test_setFavoriteReaction_rollsBackOnFailure() async {
-        let preferenceService = MockPreferenceService()
-        preferenceService.updateConversationPreferencesResult = .failure(NSError(domain: "test", code: 500))
-        let (sut, _, _, _, _, _, _) = makeSUT(preferenceService: preferenceService)
-        sut.conversations = [makeConversation(id: "conv1", reaction: nil)]
+    func test_setFavoriteReaction_rollsBackOnPermanentFailure() async throws {
+        let store = Self.makeTestStore(prefError: MeeshyError.server(statusCode: 422, message: "bad"))
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1", reaction: nil)])
+        await sut.storeHydrationTask?.value
 
         await sut.setFavoriteReaction(conversationId: "conv1", emoji: "heart")
+        await drainMainQueue()
 
-        XCTAssertNil(sut.conversations[0].reaction, "Should rollback on failure")
+        XCTAssertNil(sut.conversations.first(where: { $0.id == "conv1" })?.userState.reaction,
+                     "4xx must roll back the optimistic reaction")
     }
 
     // MARK: - togglePin on unpinned -> pinned -> unpinned
@@ -978,31 +1016,41 @@ final class ConversationListViewModelTests: XCTestCase {
 
     // MARK: - moveToSection
 
-    func test_moveToSection_updatesSectionIdOptimistically() {
-        let (sut, _, _, _, _, _, _) = makeSUT()
-        sut.conversations = [makeConversation(id: "conv1")]
+    func test_moveToSection_updatesSectionIdViaStore() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1")])
+        await sut.storeHydrationTask?.value
 
         sut.moveToSection(conversationId: "conv1", sectionId: "cat-work")
+        await waitForListState(sut, id: "conv1") { $0.sectionId == "cat-work" }
 
-        XCTAssertEqual(sut.conversations[0].sectionId, "cat-work")
+        XCTAssertEqual(sut.conversations.first(where: { $0.id == "conv1" })?.userState.sectionId, "cat-work")
     }
 
-    func test_moveToSection_emptySectionIdSetsNil() {
-        let (sut, _, _, _, _, _, _) = makeSUT()
-        sut.conversations = [makeConversation(id: "conv1", sectionId: "cat-work")]
+    func test_moveToSection_emptySectionIdSetsNil() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1", sectionId: "cat-work")])
+        await sut.storeHydrationTask?.value
 
         sut.moveToSection(conversationId: "conv1", sectionId: "")
+        await waitForListState(sut, id: "conv1") { $0.sectionId == nil }
 
-        XCTAssertNil(sut.conversations[0].sectionId)
+        XCTAssertNil(sut.conversations.first(where: { $0.id == "conv1" })?.userState.sectionId)
     }
 
-    func test_moveToSection_ignoredForUnknownConversation() {
-        let (sut, _, _, preferenceService, _, _, _) = makeSUT()
-        sut.conversations = [makeConversation(id: "conv1")]
+    func test_moveToSection_ignoredForUnknownConversation() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1")])
+        await sut.storeHydrationTask?.value
 
         sut.moveToSection(conversationId: "unknown", sectionId: "cat-work")
+        await drainMainQueue()
 
-        XCTAssertEqual(preferenceService.updateConversationPreferencesCallCount, 0)
+        let unknown = await store.conversation(id: "unknown")
+        XCTAssertNil(unknown, "Unknown conversation is never created in the store")
     }
 
     // MARK: - totalUnreadCount edge cases
@@ -1072,28 +1120,33 @@ final class ConversationListViewModelTests: XCTestCase {
 
     // MARK: - markAsUnread: preserves existing unread count
 
-    func test_markAsUnread_preservesExistingNonZeroUnreadCount() async {
-        let (sut, _, _, _, _, _, _) = makeSUT()
-        sut.conversations = [makeConversation(id: "conv1", unreadCount: 5)]
+    func test_markAsUnread_preservesExistingNonZeroUnreadCount() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1", unreadCount: 5)])
+        await sut.storeHydrationTask?.value
 
         await sut.markAsUnread(conversationId: "conv1")
+        await drainMainQueue()
 
-        XCTAssertEqual(sut.conversations[0].unreadCount, 5)
+        XCTAssertEqual(sut.conversations.first(where: { $0.id == "conv1" })?.userState.unreadCount, 5)
     }
 
     // MARK: - unarchiveConversation: rollback on failure
 
-    func test_unarchiveConversation_rollsBackOnFailure() async {
-        let preferenceService = MockPreferenceService()
-        preferenceService.updateConversationPreferencesResult = .failure(NSError(domain: "test", code: 500))
-        let (sut, _, _, _, _, _, _) = makeSUT(preferenceService: preferenceService)
+    func test_unarchiveConversation_rollsBackOnPermanentFailure() async throws {
+        let store = Self.makeTestStore(prefError: MeeshyError.server(statusCode: 422, message: "bad"))
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
         var archived = makeConversation(id: "conv1", isActive: true)
-        archived.isArchivedByUser = true
-        sut.conversations = [archived]
+        archived.userState.isArchived = true
+        sut.setConversations([archived])
+        await sut.storeHydrationTask?.value
 
         await sut.unarchiveConversation(conversationId: "conv1")
+        await drainMainQueue()
 
-        XCTAssertTrue(sut.conversations[0].isArchivedByUser, "Should rollback to archived on failure")
+        XCTAssertTrue(sut.conversations.first(where: { $0.id == "conv1" })?.userState.isArchived ?? false,
+                      "4xx must roll back to archived")
     }
 
     // MARK: - loadConversations: concurrent guard
