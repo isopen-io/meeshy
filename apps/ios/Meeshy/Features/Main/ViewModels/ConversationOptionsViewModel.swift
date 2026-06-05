@@ -13,22 +13,24 @@ final class ConversationOptionsViewModel: ObservableObject {
     @Published var didDelete: Bool = false
     @Published var didLeave: Bool = false
 
-    private let conversationId: String
+    private let conversation: MeeshyConversation
+    private var conversationId: String { conversation.id }
+    private let store: ConversationStore
     private let preferenceService: PreferenceServiceProviding
-    private let conversationService: ConversationServiceProviding
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "conv-options")
 
     private let customNameSubject = PassthroughSubject<String, Never>()
     private var cancellables = Set<AnyCancellable>()
 
     init(
-        conversationId: String,
-        preferenceService: PreferenceServiceProviding = PreferenceService.shared,
-        conversationService: ConversationServiceProviding = ConversationService.shared
+        conversation: MeeshyConversation,
+        store: ConversationStore = .shared,
+        preferenceService: PreferenceServiceProviding = PreferenceService.shared
     ) {
-        self.conversationId = conversationId
+        self.conversation = conversation
+        self.store = store
         self.preferenceService = preferenceService
-        self.conversationService = conversationService
+        self.prefs = Self.prefs(from: conversation.userState)
         setupDebounce()
     }
 
@@ -37,41 +39,32 @@ final class ConversationOptionsViewModel: ObservableObject {
     }
 
     func load() async {
-        // Cache-first: paint immediately from L2 if any of the 3 cached
-        // payloads exist. The sheet opens to a fully-populated form on warm
-        // start instead of a "loading" placeholder. The revalidate that
-        // follows updates fields silently as fresh server data lands.
-        async let cachedPrefs = preferenceService.loadCachedConversationPreferences(conversationId: conversationId)
-        async let cachedCategories = preferenceService.loadCachedCategories()
-        async let cachedTags = preferenceService.loadCachedConversationTags()
-        let (cp, cc, ct) = await (cachedPrefs, cachedCategories, cachedTags)
-        if let cp { self.prefs = cp }
-        if let cc { self.categories = cc.sorted { ($0.order ?? 0) < ($1.order ?? 0) } }
-        if let ct { self.allTags = ct }
-        if cp != nil || cc != nil || ct != nil {
-            loadState = .loaded   // surface stale data immediately
-        } else {
-            loadState = .loading
+        // The store owns the mutable per-user state (pin/mute/archive/section/
+        // reaction/tags). Hydrate it (version-gated, so an in-flight optimistic
+        // mutation from the list isn't clobbered) then mirror it into `prefs`.
+        // Categories + the tag autocomplete corpus aren't in the store, so they
+        // keep their own cache-first load from PreferenceService.
+        await store.hydrateMetadata([conversation])
+        if let conv = await store.conversation(id: conversationId) {
+            prefs = Self.prefs(from: conv.userState)
         }
 
-        // Background revalidate. Same shape as the previous network-only
-        // load, but each `revalidate…` also persists to the L2 cache so
-        // the next session warms up instantly.
+        async let cachedCategories = preferenceService.loadCachedCategories()
+        async let cachedTags = preferenceService.loadCachedConversationTags()
+        let (cc, ct) = await (cachedCategories, cachedTags)
+        if let cc { categories = cc.sorted { ($0.order ?? 0) < ($1.order ?? 0) } }
+        if let ct { allTags = ct }
+        loadState = (cc != nil || ct != nil) ? .loaded : .loading
+
         do {
-            async let prefsCall = preferenceService.revalidateConversationPreferences(conversationId: conversationId)
             async let categoriesCall = preferenceService.revalidateCategories()
             async let tagsCall = preferenceService.revalidateConversationTags()
-            let (p, c, t) = try await (prefsCall, categoriesCall, tagsCall)
-            self.prefs = p
-            self.categories = c.sorted { ($0.order ?? 0) < ($1.order ?? 0) }
-            self.allTags = t
-            self.loadState = .loaded
+            let (c, t) = try await (categoriesCall, tagsCall)
+            categories = c.sorted { ($0.order ?? 0) < ($1.order ?? 0) }
+            allTags = t
+            loadState = .loaded
         } catch {
-            Self.logger.error("Failed to load options: \(error.localizedDescription)")
-            // If we already painted cached data above, keep it visible
-            // and surface the error silently — no sense flipping the
-            // whole sheet into an error state when the user can still
-            // interact with the cached prefs.
+            Self.logger.error("Failed to load options metadata: \(error.localizedDescription)")
             if loadState != .loaded {
                 loadState = .error(error.localizedDescription)
                 errorMessage = "Impossible de charger les préférences."
@@ -79,39 +72,36 @@ final class ConversationOptionsViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Setters with optimistic + rollback
+    // MARK: - Setters (optimistic display + store-backed persistence)
     //
-    // These setters mutate `prefs` SYNCHRONOUSLY on the MainActor so the UI
-    // reflects the change in the same render frame as the user's interaction.
-    // The server PUT runs in a detached Task; on failure the optimistic
-    // mutation is rolled back. The returned Task lets tests `await task.value`
-    // to wait for persistence to complete.
+    // Each setter mutates `prefs` SYNCHRONOUSLY for instant UI feedback in the
+    // same render frame as the tap, then persists through `ConversationStore`
+    // (optimistic + outbox offline replay + version + cross-surface sync). On a
+    // permanent (4xx) failure the store throws and we roll the display back; a
+    // transient failure keeps the optimistic value and retries via the outbox.
 
     @discardableResult
     func setPinned(_ value: Bool) -> Task<Void, Never> {
         let previous = prefs.isPinned
-        prefs.isPinned = value
-        return persistAsync(UpdateConversationPreferencesRequest(isPinned: value)) { [weak self] in
-            self?.prefs.isPinned = previous
-        }
+        return applyMutation(.setPinned(value),
+                             optimistic: { self.prefs.isPinned = value },
+                             rollback: { self.prefs.isPinned = previous })
     }
 
     @discardableResult
     func setMuted(_ value: Bool) -> Task<Void, Never> {
         let previous = prefs.isMuted
-        prefs.isMuted = value
-        return persistAsync(UpdateConversationPreferencesRequest(isMuted: value)) { [weak self] in
-            self?.prefs.isMuted = previous
-        }
+        return applyMutation(.setMuted(value),
+                             optimistic: { self.prefs.isMuted = value },
+                             rollback: { self.prefs.isMuted = previous })
     }
 
     @discardableResult
     func setMentionsOnly(_ value: Bool) -> Task<Void, Never> {
         let previous = prefs.mentionsOnly
-        prefs.mentionsOnly = value
-        return persistAsync(UpdateConversationPreferencesRequest(mentionsOnly: value)) { [weak self] in
-            self?.prefs.mentionsOnly = previous
-        }
+        return applyMutation(.setMentionsOnly(value),
+                             optimistic: { self.prefs.mentionsOnly = value },
+                             rollback: { self.prefs.mentionsOnly = previous })
     }
 
     func setCustomName(_ value: String) {
@@ -122,19 +112,17 @@ final class ConversationOptionsViewModel: ObservableObject {
     @discardableResult
     func setReaction(_ emoji: String?) -> Task<Void, Never> {
         let previous = prefs.reaction
-        prefs.reaction = emoji
-        return persistAsync(UpdateConversationPreferencesRequest(reaction: emoji)) { [weak self] in
-            self?.prefs.reaction = previous
-        }
+        return applyMutation(.setReaction(emoji),
+                             optimistic: { self.prefs.reaction = emoji },
+                             rollback: { self.prefs.reaction = previous })
     }
 
     @discardableResult
     func setCategory(_ id: String?) -> Task<Void, Never> {
         let previous = prefs.categoryId
-        prefs.categoryId = id
-        return persistAsync(UpdateConversationPreferencesRequest(categoryId: id)) { [weak self] in
-            self?.prefs.categoryId = previous
-        }
+        return applyMutation(.setSection(categoryId: id),
+                             optimistic: { self.prefs.categoryId = id },
+                             rollback: { self.prefs.categoryId = previous })
     }
 
     @discardableResult
@@ -143,32 +131,18 @@ final class ConversationOptionsViewModel: ObservableObject {
         guard !trimmed.isEmpty else { return Task {} }
         let current = prefs.tags ?? []
         guard !current.contains(trimmed) else { return Task {} }
-        let next = current + [trimmed]
-        let previous = current
-        prefs.tags = next
-        if !allTags.contains(trimmed) {
-            allTags.append(trimmed)
-            allTags.sort()
-        }
-        return persistAsync(UpdateConversationPreferencesRequest(tags: next)) { [weak self] in
-            self?.prefs.tags = previous
-        }
+        return setTags(current + [trimmed])
     }
 
     @discardableResult
     func removeTag(_ tag: String) -> Task<Void, Never> {
         let current = prefs.tags ?? []
-        let next = current.filter { $0 != tag }
-        let previous = current
-        prefs.tags = next
-        return persistAsync(UpdateConversationPreferencesRequest(tags: next)) { [weak self] in
-            self?.prefs.tags = previous
-        }
+        return setTags(current.filter { $0 != tag })
     }
 
-    /// Replace the entire tag set in one server call. Use this when the binding
-    /// emits a fully-resolved next state (e.g. TagInputField setter) to avoid the
-    /// last-write-wins race that fan-out add/remove tasks would create.
+    /// Replace the entire tag set in one mutation. Used by the tag field binding
+    /// (which emits a fully-resolved next state) to avoid the last-write-wins
+    /// race that fan-out add/remove would create.
     @discardableResult
     func setTags(_ next: [String]) -> Task<Void, Never> {
         let normalized = next
@@ -176,26 +150,25 @@ final class ConversationOptionsViewModel: ObservableObject {
             .filter { !$0.isEmpty }
         var seen = Set<String>()
         let deduped = normalized.filter { seen.insert($0).inserted }
-
         let previous = prefs.tags
-        prefs.tags = deduped
-        for tag in deduped where !allTags.contains(tag) {
-            allTags.append(tag)
-        }
-        allTags.sort()
-        return persistAsync(UpdateConversationPreferencesRequest(tags: deduped)) { [weak self] in
-            self?.prefs.tags = previous
-        }
+        return applyMutation(.setTags(deduped),
+                             optimistic: {
+                                 self.prefs.tags = deduped
+                                 for tag in deduped where !self.allTags.contains(tag) {
+                                     self.allTags.append(tag)
+                                 }
+                                 self.allTags.sort()
+                             },
+                             rollback: { self.prefs.tags = previous })
     }
 
     @discardableResult
     func toggleArchive() -> Task<Void, Never> {
         let next = !(prefs.isArchived ?? false)
         let previous = prefs.isArchived
-        prefs.isArchived = next
-        return persistAsync(UpdateConversationPreferencesRequest(isArchived: next)) { [weak self] in
-            self?.prefs.isArchived = previous
-        }
+        return applyMutation(.setArchived(next),
+                             optimistic: { self.prefs.isArchived = next },
+                             rollback: { self.prefs.isArchived = previous })
     }
 
     @discardableResult
@@ -219,7 +192,7 @@ final class ConversationOptionsViewModel: ObservableObject {
 
     func deleteForMe() async {
         do {
-            try await conversationService.deleteForMe(conversationId: conversationId)
+            try await store.apply(.deleteForUser, for: conversationId)
             didDelete = true
         } catch {
             Self.logger.error("deleteForMe failed: \(error.localizedDescription)")
@@ -229,7 +202,7 @@ final class ConversationOptionsViewModel: ObservableObject {
 
     func leave() async {
         do {
-            try await conversationService.leave(conversationId: conversationId)
+            try await store.apply(.leave, for: conversationId)
             didLeave = true
         } catch {
             Self.logger.error("leave failed: \(error.localizedDescription)")
@@ -239,59 +212,54 @@ final class ConversationOptionsViewModel: ObservableObject {
 
     // MARK: - Internals
 
+    /// Apply an optimistic display mutation, then persist via the store. Rolls
+    /// the display back only on a permanent (4xx) failure (the store throws);
+    /// transient failures keep the optimistic value (outbox retries).
+    @discardableResult
+    private func applyMutation(
+        _ mutation: UserStateMutation,
+        optimistic: @escaping () -> Void,
+        rollback: @escaping () -> Void
+    ) -> Task<Void, Never> {
+        optimistic()
+        let convId = conversationId
+        return Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await self.store.apply(mutation, for: convId)
+                self.errorMessage = nil
+            } catch {
+                rollback()
+                self.errorMessage = "Erreur lors de la sauvegarde."
+            }
+        }
+    }
+
     private func setupDebounce() {
         customNameSubject
             .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
             .sink { [weak self] value in
                 guard let self else { return }
-                let body = UpdateConversationPreferencesRequest(customName: value.isEmpty ? nil : value)
-                _ = self.persistAsync(body, rollback: nil)
+                let convId = self.conversationId
+                let name: String? = value.isEmpty ? nil : value
+                Task { try? await self.store.apply(.setCustomName(name), for: convId) }
             }
             .store(in: &cancellables)
     }
 
-    /// Schedules a server-side PUT of the given request and returns the Task so
-    /// callers can `await task.value` if they need to wait for completion. The
-    /// `rollback` closure runs on the MainActor on failure and may rewind the
-    /// optimistic mutation done by the caller.
-    @discardableResult
-    private func persistAsync(
-        _ request: UpdateConversationPreferencesRequest,
-        rollback: (@MainActor () -> Void)?
-    ) -> Task<Void, Never> {
-        let convId = conversationId
-        let service = preferenceService
-        return Task { @MainActor [weak self] in
-            do {
-                try await service.updateConversationPreferences(
-                    conversationId: convId,
-                    request: request
-                )
-                self?.errorMessage = nil
-                // Propagate the new prefs snapshot so the conversation list,
-                // section headers, and any other observer reflect the change
-                // immediately (instead of waiting for a refetch / socket
-                // event that may never arrive).
-                if let prefs = self?.prefs {
-                    ConversationPreferencesBroadcaster.shared.broadcast(
-                        conversationId: convId,
-                        prefs: prefs
-                    )
-                    // Persist the optimistic mutation to the L2 cache so a
-                    // subsequent revalidate-from-cold-start (or a sheet
-                    // re-open before the next revalidate runs) shows the
-                    // new value instead of the pre-mutation state.
-                    await service.persistConversationPreferences(
-                        conversationId: convId,
-                        prefs: prefs
-                    )
-                }
-            } catch {
-                Self.logger.error("persist failed: \(error.localizedDescription)")
-                rollback?()
-                self?.errorMessage = "Erreur lors de la sauvegarde."
-            }
-        }
+    private static func prefs(from s: ConversationUserState) -> APIConversationPreferences {
+        APIConversationPreferences(
+            isPinned: s.isPinned,
+            isMuted: s.isMuted,
+            isArchived: s.isArchived,
+            deletedForUserAt: s.deletedForUserAt,
+            tags: s.tags,
+            categoryId: s.sectionId,
+            reaction: s.reaction,
+            customName: s.customName,
+            mentionsOnly: s.mentionsOnly,
+            version: s.version
+        )
     }
 }
 

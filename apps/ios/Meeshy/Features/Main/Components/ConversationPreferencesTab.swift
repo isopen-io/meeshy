@@ -92,7 +92,7 @@ struct ConversationPreferencesTab: View {
         self.conversation = conversation
         self.participants = participants
         self.accentColor = accentColor
-        self._viewModel = StateObject(wrappedValue: ConversationOptionsViewModel(conversationId: conversation.id))
+        self._viewModel = StateObject(wrappedValue: ConversationOptionsViewModel(conversation: conversation))
     }
 
     var body: some View {

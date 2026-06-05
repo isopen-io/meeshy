@@ -11,18 +11,66 @@ final class ConversationOptionsViewModelTests: XCTestCase {
     private struct SUT {
         let vm: ConversationOptionsViewModel
         let prefs: MockPreferenceService
-        let conv: MockConversationService
+        let store: ConversationStore
     }
 
-    private func makeSUT() -> SUT {
-        let p = MockPreferenceService()
-        let c = MockConversationService()
-        let vm = ConversationOptionsViewModel(
-            conversationId: "conv-1",
-            preferenceService: p,
-            conversationService: c
+    private func makeSUT(
+        conversation: MeeshyConversation? = nil,
+        store: ConversationStore? = nil,
+        prefs: MockPreferenceService? = nil
+    ) -> SUT {
+        let conv = conversation ?? makeConversation()
+        let p = prefs ?? MockPreferenceService()
+        let s = store ?? makeOptionsStore()
+        let vm = ConversationOptionsViewModel(conversation: conv, store: s, preferenceService: p)
+        return SUT(vm: vm, prefs: p, store: s)
+    }
+
+    /// Isolated store with mock writers (reuses the seam mocks declared in
+    /// ConversationListViewModelTests — same test target).
+    private func makeOptionsStore(prefError: Error? = nil, lifecycleError: Error? = nil) -> ConversationStore {
+        let writer = ConvListTestPreferenceWriter()
+        writer.errorToThrow = prefError
+        let lifecycle = ConvListTestLifecycleWriter()
+        lifecycle.errorToThrow = lifecycleError
+        let outboxPath = FileManager.default.temporaryDirectory
+            .appendingPathComponent("options-vm-outbox-\(UUID().uuidString).db").path
+        return ConversationStore(
+            preferenceService: writer,
+            conversationService: lifecycle,
+            outbox: ConversationStateOutbox(dbPath: outboxPath)
         )
-        return SUT(vm: vm, prefs: p, conv: c)
+    }
+
+    private func makeConversation(
+        id: String = "conv-1",
+        isPinned: Bool = false,
+        isMuted: Bool = false,
+        isArchived: Bool = false,
+        mentionsOnly: Bool = false,
+        tags: [String] = [],
+        categoryId: String? = nil,
+        reaction: String? = nil,
+        customName: String? = nil,
+        version: Int = 0
+    ) -> MeeshyConversation {
+        MeeshyConversation(
+            id: id, identifier: id, type: .direct,
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_000_000),
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            userState: ConversationUserState(
+                isPinned: isPinned,
+                isMuted: isMuted,
+                mentionsOnly: mentionsOnly,
+                isArchived: isArchived,
+                customName: customName,
+                reaction: reaction,
+                tags: tags,
+                sectionId: categoryId,
+                version: version
+            )
+        )
     }
 
     private func makeCategory(id: String, name: String, order: Int = 0) -> ConversationCategory {
@@ -31,152 +79,208 @@ final class ConversationOptionsViewModelTests: XCTestCase {
 
     // MARK: - Load
 
-    func test_load_populatesPrefsCategoriesAndTags() async {
-        let s = makeSUT()
-        s.prefs.getConversationPreferencesResult = .success(APIConversationPreferences(
-            isPinned: true, isMuted: false, isArchived: false, deletedForUserAt: nil,
-            tags: ["urgent"], categoryId: "cat1", reaction: "🔥",
-            customName: "Mum", mentionsOnly: false))
-        s.prefs.getCategoriesResult = .success([
-            makeCategory(id: "cat1", name: "Family")
-        ])
-        s.prefs.getMyConversationTagsResult = .success(["urgent", "work"])
+    func test_load_mirrorsStoreUserStateAndLoadsCategoriesTags() async {
+        let conv = makeConversation(id: "conv-1", isPinned: true, tags: ["urgent"],
+                                    categoryId: "cat1", reaction: "🔥", customName: "Mum")
+        let p = MockPreferenceService()
+        p.getCategoriesResult = .success([makeCategory(id: "cat1", name: "Family")])
+        p.getMyConversationTagsResult = .success(["urgent", "work"])
+        let s = makeSUT(conversation: conv, prefs: p)
 
         await s.vm.load()
 
         XCTAssertEqual(s.vm.prefs.isPinned, true)
         XCTAssertEqual(s.vm.prefs.tags, ["urgent"])
         XCTAssertEqual(s.vm.prefs.customName, "Mum")
+        XCTAssertEqual(s.vm.prefs.categoryId, "cat1")
+        XCTAssertEqual(s.vm.prefs.reaction, "🔥")
         XCTAssertEqual(s.vm.categories.count, 1)
         XCTAssertEqual(s.vm.categories.first?.name, "Family")
         XCTAssertEqual(s.vm.allTags, ["urgent", "work"])
         XCTAssertEqual(s.vm.loadState, .loaded)
     }
 
-    func test_load_failure_setsErrorState() async {
-        let s = makeSUT()
-        s.prefs.getConversationPreferencesResult = .failure(NSError(domain: "x", code: 1))
+    func test_load_metadataFailure_setsErrorStateWhenNoCacheShown() async {
+        let p = MockPreferenceService()
+        p.getCategoriesResult = .failure(NSError(domain: "x", code: 1))
+        let s = makeSUT(prefs: p)
 
         await s.vm.load()
 
-        XCTAssertNotNil(s.vm.errorMessage)
         if case .error = s.vm.loadState {
             // expected
         } else {
             XCTFail("expected loadState .error, got \(s.vm.loadState)")
         }
-    }
-
-    // MARK: - Optimistic + persist
-
-    func test_setPinned_optimistic_persists() async {
-        let s = makeSUT()
-        await s.vm.setPinned(true).value
-        XCTAssertEqual(s.vm.prefs.isPinned, true)
-        XCTAssertEqual(s.prefs.updateConversationPreferencesCallCount, 1)
-        XCTAssertEqual(s.prefs.lastUpdateConversationPreferencesRequest?.isPinned, true)
-    }
-
-    func test_setPinned_rollsBackOnFailure() async {
-        let s = makeSUT()
-        s.prefs.updateConversationPreferencesResult = .failure(NSError(domain: "x", code: 0))
-        await s.vm.setPinned(true).value
-        XCTAssertEqual(s.vm.prefs.isPinned, false, "isPinned should roll back to false")
         XCTAssertNotNil(s.vm.errorMessage)
     }
 
-    func test_setMuted_persists() async {
-        let s = makeSUT()
+    // MARK: - Setters: optimistic + persists via store
+
+    func test_setPinned_optimisticAndPersistsViaStore() async {
+        let conv = makeConversation(id: "conv-1", isPinned: false)
+        let s = makeSUT(conversation: conv)
+        await s.store.hydrateMetadata([conv])
+
+        await s.vm.setPinned(true).value
+
+        XCTAssertEqual(s.vm.prefs.isPinned, true)
+        let stored = await s.store.conversation(id: "conv-1")
+        XCTAssertEqual(stored?.userState.isPinned, true)
+    }
+
+    func test_setPinned_rollsBackOnPermanentFailure() async {
+        let conv = makeConversation(id: "conv-1", isPinned: false)
+        let s = makeSUT(conversation: conv,
+                        store: makeOptionsStore(prefError: MeeshyError.server(statusCode: 422, message: "bad")))
+        await s.store.hydrateMetadata([conv])
+
+        await s.vm.setPinned(true).value
+
+        XCTAssertEqual(s.vm.prefs.isPinned, false, "4xx must roll back the optimistic pin")
+        XCTAssertNotNil(s.vm.errorMessage)
+    }
+
+    func test_setMuted_persistsViaStore() async {
+        let conv = makeConversation(id: "conv-1", isMuted: false)
+        let s = makeSUT(conversation: conv)
+        await s.store.hydrateMetadata([conv])
+
         await s.vm.setMuted(true).value
+
         XCTAssertEqual(s.vm.prefs.isMuted, true)
-        XCTAssertEqual(s.prefs.lastUpdateConversationPreferencesRequest?.isMuted, true)
+        let stored = await s.store.conversation(id: "conv-1")
+        XCTAssertEqual(stored?.userState.isMuted, true)
     }
 
-    func test_setMentionsOnly_persists() async {
-        let s = makeSUT()
+    func test_setMentionsOnly_persistsViaStore() async {
+        let conv = makeConversation(id: "conv-1")
+        let s = makeSUT(conversation: conv)
+        await s.store.hydrateMetadata([conv])
+
         await s.vm.setMentionsOnly(true).value
+
         XCTAssertEqual(s.vm.prefs.mentionsOnly, true)
+        let stored = await s.store.conversation(id: "conv-1")
+        XCTAssertEqual(stored?.userState.mentionsOnly, true)
     }
 
-    func test_setReaction_persists() async {
-        let s = makeSUT()
+    func test_setReaction_persistsViaStore() async {
+        let conv = makeConversation(id: "conv-1")
+        let s = makeSUT(conversation: conv)
+        await s.store.hydrateMetadata([conv])
+
         await s.vm.setReaction("🔥").value
+
         XCTAssertEqual(s.vm.prefs.reaction, "🔥")
-        XCTAssertEqual(s.prefs.lastUpdateConversationPreferencesRequest?.reaction, "🔥")
+        let stored = await s.store.conversation(id: "conv-1")
+        XCTAssertEqual(stored?.userState.reaction, "🔥")
     }
 
-    func test_setCategory_persists() async {
-        let s = makeSUT()
+    func test_setCategory_persistsViaStore() async {
+        let conv = makeConversation(id: "conv-1")
+        let s = makeSUT(conversation: conv)
+        await s.store.hydrateMetadata([conv])
+
         await s.vm.setCategory("cat1").value
+
         XCTAssertEqual(s.vm.prefs.categoryId, "cat1")
-        XCTAssertEqual(s.prefs.lastUpdateConversationPreferencesRequest?.categoryId, "cat1")
+        let stored = await s.store.conversation(id: "conv-1")
+        XCTAssertEqual(stored?.userState.sectionId, "cat1")
     }
 
     // MARK: - Tags
 
     func test_addTag_appendsAndPersists() async {
-        let s = makeSUT()
+        let conv = makeConversation(id: "conv-1")
+        let s = makeSUT(conversation: conv)
+        await s.store.hydrateMetadata([conv])
+
         await s.vm.addTag("urgent").value
+
         XCTAssertEqual(s.vm.prefs.tags, ["urgent"])
         XCTAssertTrue(s.vm.allTags.contains("urgent"))
-        XCTAssertEqual(s.prefs.lastUpdateConversationPreferencesRequest?.tags, ["urgent"])
+        let stored = await s.store.conversation(id: "conv-1")
+        XCTAssertEqual(stored?.userState.tags, ["urgent"])
     }
 
-    func test_addTag_dedupes() async {
-        let s = makeSUT()
-        s.vm.prefs.tags = ["urgent"]
+    func test_addTag_dedupes_noStoreMutation() async {
+        let conv = makeConversation(id: "conv-1", tags: ["urgent"])
+        let s = makeSUT(conversation: conv)
+        await s.store.hydrateMetadata([conv])
+
         await s.vm.addTag("urgent").value
+
         XCTAssertEqual(s.vm.prefs.tags, ["urgent"])
-        XCTAssertEqual(s.prefs.updateConversationPreferencesCallCount, 0)
+        let stored = await s.store.conversation(id: "conv-1")
+        XCTAssertEqual(stored?.userState.version, 0, "Dedupe must not apply a mutation")
     }
 
     func test_addTag_trimsWhitespace() async {
-        let s = makeSUT()
+        let conv = makeConversation(id: "conv-1")
+        let s = makeSUT(conversation: conv)
+        await s.store.hydrateMetadata([conv])
+
         await s.vm.addTag("  important  ").value
+
         XCTAssertEqual(s.vm.prefs.tags, ["important"])
     }
 
     func test_removeTag_persists() async {
-        let s = makeSUT()
-        s.vm.prefs.tags = ["urgent", "work"]
+        let conv = makeConversation(id: "conv-1", tags: ["urgent", "work"])
+        let s = makeSUT(conversation: conv)
+        await s.store.hydrateMetadata([conv])
+
         await s.vm.removeTag("urgent").value
+
         XCTAssertEqual(s.vm.prefs.tags, ["work"])
+        let stored = await s.store.conversation(id: "conv-1")
+        XCTAssertEqual(stored?.userState.tags, ["work"])
     }
 
-    func test_setTags_dedupesAndTrimsAndPersistsInOneCall() async {
-        let s = makeSUT()
+    func test_setTags_dedupesTrimsAndPersistsOnce() async {
+        let conv = makeConversation(id: "conv-1")
+        let s = makeSUT(conversation: conv)
+        await s.store.hydrateMetadata([conv])
+
         await s.vm.setTags(["urgent", " family ", "Urgent", "family", ""]).value
+
         XCTAssertEqual(s.vm.prefs.tags, ["urgent", "family", "Urgent"])
-        // setTags fires a single PUT regardless of how many entries
-        XCTAssertEqual(s.prefs.updateConversationPreferencesCallCount, 1)
-        XCTAssertEqual(s.prefs.lastUpdateConversationPreferencesRequest?.tags,
-                       ["urgent", "family", "Urgent"])
+        let stored = await s.store.conversation(id: "conv-1")
+        XCTAssertEqual(stored?.userState.tags, ["urgent", "family", "Urgent"])
+        XCTAssertEqual(stored?.userState.version, 1, "A single setTags applies exactly one mutation")
     }
 
-    func test_setTags_rollsBackOnFailure() async {
-        let s = makeSUT()
-        s.vm.prefs.tags = ["work"]
-        s.prefs.updateConversationPreferencesResult = .failure(NSError(domain: "x", code: 0))
+    func test_setTags_rollsBackOnPermanentFailure() async {
+        let conv = makeConversation(id: "conv-1", tags: ["work"])
+        let s = makeSUT(conversation: conv,
+                        store: makeOptionsStore(prefError: MeeshyError.server(statusCode: 422, message: "bad")))
+        await s.store.hydrateMetadata([conv])
+
         await s.vm.setTags(["work", "urgent"]).value
-        XCTAssertEqual(s.vm.prefs.tags, ["work"])
+
+        XCTAssertEqual(s.vm.prefs.tags, ["work"], "4xx must roll back tags")
         XCTAssertNotNil(s.vm.errorMessage)
     }
 
     // MARK: - Category creation
 
     func test_createCategoryAndSelect_addsAndAssigns() async {
-        let s = makeSUT()
+        let conv = makeConversation(id: "conv-1")
+        let p = MockPreferenceService()
         let created = ConversationCategory(id: "new1", name: "Family", color: nil, icon: nil, order: 0, isExpanded: true)
-        s.prefs.createCategoryResult = .success(created)
+        p.createCategoryResult = .success(created)
+        let s = makeSUT(conversation: conv, prefs: p)
+        await s.store.hydrateMetadata([conv])
 
         let result = await s.vm.createCategoryAndSelect(name: "Family")
 
         XCTAssertEqual(result?.id, "new1")
         XCTAssertTrue(s.vm.categories.contains(where: { $0.id == "new1" }))
         XCTAssertEqual(s.vm.prefs.categoryId, "new1")
-        XCTAssertEqual(s.prefs.createCategoryCallCount, 1)
-        XCTAssertEqual(s.prefs.lastCreateCategoryName, "Family")
-        XCTAssertEqual(s.prefs.lastUpdateConversationPreferencesRequest?.categoryId, "new1")
+        XCTAssertEqual(p.createCategoryCallCount, 1)
+        let stored = await s.store.conversation(id: "conv-1")
+        XCTAssertEqual(stored?.userState.sectionId, "new1")
     }
 
     func test_createCategoryAndSelect_emptyName_returnsNil() async {
@@ -187,8 +291,9 @@ final class ConversationOptionsViewModelTests: XCTestCase {
     }
 
     func test_createCategoryAndSelect_failure_setsError() async {
-        let s = makeSUT()
-        s.prefs.createCategoryResult = .failure(NSError(domain: "x", code: 0))
+        let p = MockPreferenceService()
+        p.createCategoryResult = .failure(NSError(domain: "x", code: 0))
+        let s = makeSUT(prefs: p)
         let result = await s.vm.createCategoryAndSelect(name: "Family")
         XCTAssertNil(result)
         XCTAssertNotNil(s.vm.errorMessage)
@@ -197,7 +302,10 @@ final class ConversationOptionsViewModelTests: XCTestCase {
     // MARK: - Archive
 
     func test_toggleArchive_flipsAndPersists() async {
-        let s = makeSUT()
+        let conv = makeConversation(id: "conv-1", isArchived: false)
+        let s = makeSUT(conversation: conv)
+        await s.store.hydrateMetadata([conv])
+
         XCTAssertEqual(s.vm.prefs.isArchived, false)
         await s.vm.toggleArchive().value
         XCTAssertEqual(s.vm.prefs.isArchived, true)
@@ -208,34 +316,46 @@ final class ConversationOptionsViewModelTests: XCTestCase {
     // MARK: - Deletion / Leave
 
     func test_deleteForMe_setsDidDelete() async {
-        let s = makeSUT()
+        let conv = makeConversation(id: "conv-1")
+        let s = makeSUT(conversation: conv)
+        await s.store.hydrateMetadata([conv])
+
         await s.vm.deleteForMe()
+
         XCTAssertTrue(s.vm.didDelete)
-        XCTAssertEqual(s.conv.deleteForMeCallCount, 1)
+        let stored = await s.store.conversation(id: "conv-1")
+        XCTAssertNotNil(stored?.userState.deletedForUserAt)
     }
 
-    func test_deleteForMe_failureSurfacesError() async {
-        let s = makeSUT()
-        s.conv.deleteForMeResult = .failure(NSError(domain: "x", code: 0))
+    func test_deleteForMe_permanentFailureSurfacesError() async {
+        let conv = makeConversation(id: "conv-1")
+        let s = makeSUT(conversation: conv,
+                        store: makeOptionsStore(lifecycleError: MeeshyError.server(statusCode: 422, message: "bad")))
+        await s.store.hydrateMetadata([conv])
+
         await s.vm.deleteForMe()
+
         XCTAssertFalse(s.vm.didDelete)
         XCTAssertNotNil(s.vm.errorMessage)
     }
 
     func test_leave_setsDidLeave() async {
-        let s = makeSUT()
+        let conv = makeConversation(id: "conv-1")
+        let s = makeSUT(conversation: conv)
+        await s.store.hydrateMetadata([conv])
+
         await s.vm.leave()
+
         XCTAssertTrue(s.vm.didLeave)
     }
 
-    // MARK: - Synchronous UI feedback (regression: toggle was reverting on tap)
+    // MARK: - Synchronous UI feedback (optimistic visible before the store Task)
 
     func test_setPinned_appliesSynchronouslyForUIFeedback() {
-        let s = makeSUT()
+        let conv = makeConversation(id: "conv-1", isPinned: false)
+        let s = makeSUT(conversation: conv)
         XCTAssertEqual(s.vm.prefs.isPinned, false)
         _ = s.vm.setPinned(true)
-        // The optimistic mutation is visible BEFORE the persist Task runs.
-        // SwiftUI's Binding read in the same render frame must see the new value.
         XCTAssertEqual(s.vm.prefs.isPinned, true)
     }
 
