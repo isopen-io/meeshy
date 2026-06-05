@@ -73,9 +73,9 @@ ConversationListView.swift: pin L375, mute L384, lock L393(sheet), archive/unarc
 | 1b-i | List VM observe store (dep + hydrate + observeStore/merge) | feat/conv-state-list-vm-observe | ✅ MERGÉ | `5e707b38e` |
 | 1b-ii-a | List VM : migrer togglePin/toggleMute → `store.apply` + réécrire 7 tests (drainMainQueue) | — | ✅ MERGÉ | `291c60cde` |
 | 1b-ii-b | List VM : migrer archive/unarchive/reaction/moveToSection/markAsUnread → `store.apply` + réécrire 12 tests (waitForListState, lifecycleError) | — | ✅ MERGÉ | `1d547d6a0` |
-| 1b-ii-c | List VM : migrer markAsRead (**edge: gate `showReadReceipts`** — ne pas envoyer le receipt si off ; garder `syncEngine.markConversationReadLocally`) + deleteConversation (**edge: `.deleteForUser` pose `deletedForUserAt` sans retirer → FILTRER `deletedForUserAt != nil` dans `filterConversations`**) + tests | — | 🔲 SUIVANT | — |
-| 1b-iii | Activer le bridge dans MeeshyApp (login/logout) + gérer removal `applyConversationDeleted` dans le merge | — | 🔲 | — |
-| 2 | Options VM → `store.apply` (hydrate depuis la conv, observe publisher(for:id), drop persistAsync/broadcaster/L2) ; supprimer abonnement broadcaster du list VM ; réécrire 22 tests | — | 🔲 | — |
+| 1b-ii-c | List VM : markAsRead (gate client `showReadReceipts` SUPPRIMÉ — serveur gate déjà le broadcast ; fixe sync cross-device) + deleteConversation (soft-delete `.deleteForUser` + filtre `deletedForUserAt` dans `filterConversations`) + tests | — | ✅ MERGÉ | `b2517737b` |
+| 1b-iii | Activer le bridge dans MeeshyApp (login/logout). **⚠️ BLOQUÉ : MeeshyApp.swift en cours d'édition par Codex (call-fix non-committé) — ne pas éditer le même fichier (règle worktree). Reprendre quand Codex aura committé/relâché MeeshyApp.swift.** Removal cross-device `applyConversationDeleted` : self-heal au refresh (le merge ne retire pas, mais le sync suivant drop la conv) — drop immédiat déféré. | — | 🔲 BLOQUÉ (Codex) | — |
+| 2 | Options VM → `store.apply` (hydrate depuis la conv, observe publisher(for:id), drop persistAsync/broadcaster/L2) ; supprimer abonnement broadcaster du list VM ; réécrire 22 tests. **Fichiers disjoints de Codex → DÉBLOQUÉ, prochain.** | — | 🔲 SUIVANT (débloqué) | — |
 | 3 | Conv header markAsRead via store + scenePhase | — | 🔲 | — |
 | 4 | Section headers → UserCategoryStore (reorder/expand) + UI pendingMutationCount | — | 🔲 | — |
 | 5 | Phase 8 : supprimer broadcaster + shims dépréciés, smoke, quality gate | — | 🔲 | — |
