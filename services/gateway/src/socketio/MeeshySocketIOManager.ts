@@ -186,7 +186,7 @@ export class MeeshySocketIOManager {
         credentials: true
       },
       // CORRECTION CRITIQUE: Configuration timeouts pour détecter déconnexions abruptes
-      pingTimeout: 10000,  // 10s - Temps d'attente pour le pong avant de considérer la connexion morte
+      pingTimeout: 20000,  // CALL-FIX 2026-06-06: 10s→20s. Le pong peut tarder >10s sous charge WebRTC (CPU saturé) → faux "ping timeout"/"transport close" qui tuaient le signaling d'appel. 20s = défaut Socket.IO, tolère le jitter.
       pingInterval: 25000, // 25s - Intervalle entre les pings (par défaut)
       connectTimeout: 45000, // 45s - Timeout pour la connexion initiale
       // Autoriser reconnexion rapide
