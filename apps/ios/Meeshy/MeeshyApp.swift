@@ -452,6 +452,12 @@ struct MeeshyApp: App {
                         // any stale state carried over from a prior session.
                         MessageSocketManager.shared.forceReconnect()
                         SocialSocketManager.shared.forceReconnect()
+                        // Route conversation/category socket events (deleted,
+                        // reordered, category:×4) into ConversationStore /
+                        // UserCategoryStore. Idempotent (re-wires cleanly) and
+                        // the 6 publishers live on the socket singleton, so a
+                        // single activation after login survives reconnects.
+                        ConversationStoreSocketBridge.shared.activate()
                         Task { await requestPushPermissionIfNeeded() }
                         Task { await NotificationToastManager.shared.refreshUnreadCount() }
                         pushManager.reRegisterTokenIfNeeded()
@@ -497,6 +503,9 @@ struct MeeshyApp: App {
                         Task { await CacheCoordinator.shared.reset() }
                         MessageSocketManager.shared.disconnect()
                         SocialSocketManager.shared.disconnect()
+                        // Drop the store subscriptions so an event from user A
+                        // can't mutate the store after logout.
+                        ConversationStoreSocketBridge.shared.deactivate()
                     }
                 }
                 .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink) { _, link in
