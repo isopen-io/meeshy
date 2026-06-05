@@ -462,11 +462,20 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         forceReconnect()
     }
 
+    /// CALL-FIX 2026-06-05 — app-injected "is a call active?" predicate (opaque
+    /// closure, SDK stays call-agnostic). When true, forceReconnect is suppressed
+    /// so a token rotation / re-auth never tears down the socket mid-call.
+    public var isCallActiveGuard: (@Sendable () -> Bool)?
+
     /// Unconditionally rebuild the socket. Safe to call from any lifecycle
     /// hook — used to bypass the stale `isConnected` flag. R1 — suspends the
     /// transport (not a full disconnect) so `hadPreviousConnection` survives
     /// the rebuild and the next `.connect` fires `didReconnect`.
     public func forceReconnect() {
+        if isCallActiveGuard?() == true {
+            Logger.socket.info("SocialSocket: forceReconnect suppressed — call active (keep signaling socket)")
+            return
+        }
         suspendTransport()
         connect()
     }

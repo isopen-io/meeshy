@@ -73,5 +73,21 @@ Web (DevTools + `chrome://webrtc-internals` ; code only si besoin):
 - Batch 1 (commit b541ba270) : I1 SDP/codecs/RED/ICE + I7 cleanup. LIVE.
 - Batch 2 (commit a5911897c, CI 27009097983) : raison disconnect (`disconnecting` handler) + livraison call:initiated info. EN DÉPLOIEMENT.
 
+## JALON 2026-06-05 : appels iOS→web FONCTIONNENT
+Capture live 10:41-42 : call:initiate→livraison→answer→SDP(Opus PT111+RED+H264/VP8/VP9/AV1)→ICE host/host connecté ~1s→**30s audio bidirectionnel stable**. Pipeline sain. Le churn socket intermittent est ce qui casse les appels *parfois*.
+
+## FIXES implémentés (2026-06-05)
+- [x] **Phantom-cleanup gateway** (commit e7bcc1225, DÉPLOYÉ prod) — chaque initiate force-termine les appels fantômes vivants de l'initiateur (CallService.initiateCall). Fini CALL_ALREADY_ACTIVE bloquant.
+- [x] **Fix #1 partie 1 (iOS)** — BackgroundTransitionCoordinator ne suspend/reconnect plus les sockets si `callState.isActive` (couvre ringing/connecting/connected). Socket signaling reste vivant en background pendant l'appel.
+- [x] **Fix #1 partie 2 (iOS)** — garde `isCallActiveGuard` injectée dans MessageSocket/SocialSocket : `forceReconnect()` suppressed pendant un appel (couvre token rotation/ré-auth, utile pour le Mac qui ne background pas). Flag `CallManager.isCallActiveFlag` nonisolated thread-safe, câblé dans MeeshyApp.init. Pureté SDK préservée (closure opaque).
+- [ ] **Fix #2 (gateway)** toggle/mute : handler toggle-audio/video relaie le vrai code/message (CALL_NOT_FOUND avalé par le web) au lieu du générique MEDIA_TOGGLE_FAILED. ⚠️ vérifier handling iOS de call:error avant. À FAIRE.
+- [ ] **Fix #3 (web)** v2 chats : crash repliedMessage (déclarer depuis msg.replyToId) + bouton appel mort (câbler useVideoCall().startCall). À FAIRE (redeploy web).
+- [ ] **Fix #4 (web)** role-gate canUseVideoCalls staff-only → ouvrir à tous les users authentifiés. ⚠️ décision produit (le user a demandé atabeth→MODERATOR en attendant). À FAIRE.
+
+## Causes racines confirmées (raisons disconnect capturées)
+- jcnm socket : `transport close`, `transport error` (long-poll erreur réseau), `client namespace disconnect` (app coupe via suspendTransport). Multi-sockets + reconnexions. INTERMITTENT.
+- Config socket gateway : pingTimeout 10s / pingInterval 25s (donc churn 5s ≠ ping timeout).
+- iOS `.forcePolling(true)` (long-polling only, pas de WebSocket) — fragile sous charge WebRTC.
+
 ## Review
 (à remplir en fin de loop)

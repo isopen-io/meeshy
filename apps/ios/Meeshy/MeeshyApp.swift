@@ -44,6 +44,15 @@ struct MeeshyApp: App {
         // application finishes launching" exception. The coordinator
         // submits the request later, when `willTerminate` fires.
         CacheBackgroundFlushTask().register()
+
+        // CALL-FIX 2026-06-05 — wire the "is a call active?" guard into both socket
+        // managers. While a call is active, `forceReconnect()` (token rotation,
+        // re-auth, lifecycle) is suppressed so the realtime socket carrying the
+        // WebRTC signaling is never torn down mid-call (which strands the call on
+        // "connecting" + leaves a phantom). The closure reads a thread-safe
+        // nonisolated flag — the SDK stays call-agnostic (SDK purity).
+        MessageSocketManager.shared.isCallActiveGuard = { CallManager.isCallActiveFlag }
+        SocialSocketManager.shared.isCallActiveGuard = { CallManager.isCallActiveFlag }
     }
 
     var body: some Scene {

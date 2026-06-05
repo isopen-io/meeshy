@@ -1235,11 +1235,23 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         forceReconnect()
     }
 
+    /// CALL-FIX 2026-06-05 — app-injected predicate: "is a call active right now?".
+    /// Kept as an opaque closure so the SDK stays call-agnostic (SDK purity rule).
+    /// The app wires it to `CallManager.isCallActiveFlag` (a thread-safe nonisolated
+    /// flag) at boot. When it returns true, `forceReconnect()` is suppressed so a
+    /// token rotation / re-auth never tears down the socket carrying live WebRTC
+    /// signaling, which would strand the call on "connecting".
+    public var isCallActiveGuard: (@Sendable () -> Bool)?
+
     /// Tear down and rebuild the socket unconditionally. Use this on
     /// foreground resume or after a token refresh so we never depend on
     /// the potentially stale `isConnected` flag. `disconnect()` clears
     /// the flag and nils the underlying socket; `connect()` rebuilds it.
     public func forceReconnect() {
+        if isCallActiveGuard?() == true {
+            Logger.socket.info("MessageSocket: forceReconnect suppressed — call active (keep signaling socket)")
+            return
+        }
         // Suspend (not full disconnect) so `hadPreviousConnection` survives: this
         // rebuild is a reconnect (resume / network-back / re-auth), and the next
         // `.connect` must fire `didReconnect`.

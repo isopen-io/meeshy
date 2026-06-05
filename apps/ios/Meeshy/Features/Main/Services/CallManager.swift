@@ -44,7 +44,9 @@ final class CallManager: ObservableObject {
 
     // MARK: - Published State
 
-    @Published private(set) var callState: CallState = .idle
+    @Published private(set) var callState: CallState = .idle {
+        didSet { CallManager.isCallActiveFlag = callState.isActive }
+    }
     @Published private(set) var transcriptionService = CallTranscriptionService()
     @Published private(set) var remoteUserId: String?
     @Published private(set) var remoteUsername: String?
@@ -79,6 +81,15 @@ final class CallManager: ObservableObject {
         #endif
         return callState.isActive
     }
+
+    /// Thread-safe, nonisolated mirror of `callState.isActive`, updated on every
+    /// `callState` change (see the `didSet`). CALL-FIX 2026-06-05: lets the SDK
+    /// socket managers (which must stay call-agnostic — SDK purity) consult
+    /// "is a call active?" from ANY thread via an injected closure, without
+    /// referencing CallManager or hopping to the MainActor. Used to suppress
+    /// `forceReconnect()` mid-call (token rotation / re-auth) so the WebRTC
+    /// signaling socket is never torn down during a call.
+    nonisolated(unsafe) static var isCallActiveFlag: Bool = false
 
     // MARK: - Internal
 
@@ -1582,7 +1593,14 @@ final class CallManager: ObservableObject {
         #if targetEnvironment(simulator)
         let port: AVAudioSession.PortOverride = .speaker
         #else
-        let port: AVAudioSession.PortOverride = speaker ? .speaker : .none
+        // CALL-FIX 2026-06-05 (macOS) — same failure as the simulator on
+        // iOS-app-on-Mac ("Designed for iPad", NOT Catalyst): there is no
+        // earpiece, so `.none` routes to a virtual port that doesn't exist →
+        // total silence even though the ADM is decoding. Force `.speaker` on Mac
+        // so the audio maps to the Mac's output. Runtime check (`isiOSAppOnMac`)
+        // because Mac uses the iphoneos slice, not a separate compile target.
+        let forceSpeakerForMac = ProcessInfo.processInfo.isiOSAppOnMac
+        let port: AVAudioSession.PortOverride = (speaker || forceSpeakerForMac) ? .speaker : .none
         #endif
 
         do {
