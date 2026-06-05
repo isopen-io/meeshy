@@ -20,7 +20,8 @@ final class ConversationListViewModelTests: XCTestCase {
         storyService: MockStoryService? = nil,
         syncEngine: MockConversationSyncEngine? = nil,
         messageNotificationPublisher: AnyPublisher<String, Never>? = nil,
-        draftStore: DraftStore? = nil
+        draftStore: DraftStore? = nil,
+        store: ConversationStore? = nil
     ) -> (
         sut: ConversationListViewModel,
         api: MockAPIClientForApp,
@@ -46,6 +47,7 @@ final class ConversationListViewModelTests: XCTestCase {
             store.clearAll()
             return store
         }()
+        let resolvedStore = store ?? Self.makeTestStore()
         let sut = ConversationListViewModel(
             api: api,
             conversationService: conversationService,
@@ -56,9 +58,23 @@ final class ConversationListViewModelTests: XCTestCase {
             storyService: storyService,
             syncEngine: syncEngine,
             messageNotificationPublisher: pushPublisher,
-            draftStore: resolvedDraftStore
+            draftStore: resolvedDraftStore,
+            store: resolvedStore
         )
         return (sut, api, conversationService, preferenceService, messageSocket, messageService, authManager)
+    }
+
+    /// Build an ISOLATED `ConversationStore` (own in-memory outbox + mock
+    /// writers) so each VM under test gets its own mutation store instead of
+    /// the global `.shared` singleton — prevents cross-test pollution.
+    static func makeTestStore() -> ConversationStore {
+        let outboxPath = FileManager.default.temporaryDirectory
+            .appendingPathComponent("convlist-vm-outbox-\(UUID().uuidString).db").path
+        return ConversationStore(
+            preferenceService: ConvListTestPreferenceWriter(),
+            conversationService: ConvListTestLifecycleWriter(),
+            outbox: ConversationStateOutbox(dbPath: outboxPath)
+        )
     }
 
     private func makeConversation(
@@ -2204,6 +2220,32 @@ final class ConversationListViewModelTests: XCTestCase {
         let b = ThemedConversationRow(conversation: conv, draftSummary: draft)
         XCTAssertEqual(a, b)
     }
+
+    // MARK: - ConversationStore observation (Strategy B foundation, 1b-i)
+
+    func test_storeApply_reflectsUserStateIntoConversations() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "000000000000000000000001", isPinned: false)])
+        // Deterministic: wait for the fire-and-forget hydration before driving
+        // a mutation (apply throws on an unhydrated conversation).
+        await sut.storeHydrationTask?.value
+
+        let exp = expectation(description: "pin reflects into list")
+        exp.assertForOverFulfill = false  // store emits twice (optimistic commit + ACK version swap)
+        var token: AnyCancellable?
+        token = sut.$conversations.sink { convs in
+            if convs.first(where: { $0.id == "000000000000000000000001" })?.userState.isPinned == true {
+                exp.fulfill()
+            }
+        }
+        try await store.apply(.setPinned(true), for: "000000000000000000000001")
+        await fulfillment(of: [exp], timeout: 2.0)
+        token?.cancel()
+
+        XCTAssertTrue(sut.conversations.first?.userState.isPinned ?? false,
+                      "A mutation applied to the store must reflect into the list via listPublisher")
+    }
 }
 
 // MARK: - ConversationUpdatedEvent factory
@@ -2238,4 +2280,29 @@ private func makeConversationUpdatedEvent(
         throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date")
     }
     return try! decoder.decode(ConversationUpdatedEvent.self, from: data)
+}
+
+// MARK: - ConversationStore seam mocks (app-side, mirror the SDK test doubles)
+
+final class ConvListTestPreferenceWriter: ConversationPreferenceWriting, @unchecked Sendable {
+    var stubbedResponse = APIConversationPreferences(version: 1)
+    var errorToThrow: Error?
+    func updateConversationPreferences(
+        conversationId: String,
+        request: UpdateConversationPreferencesRequest
+    ) async throws -> APIConversationPreferences {
+        if let e = errorToThrow { throw e }
+        return stubbedResponse
+    }
+    func reorderConversations(_ updates: [(convId: String, orderInCategory: Int)]) async throws {
+        if let e = errorToThrow { throw e }
+    }
+}
+
+final class ConvListTestLifecycleWriter: ConversationLifecycleWriting, @unchecked Sendable {
+    var errorToThrow: Error?
+    func markRead(conversationId: String) async throws { if let e = errorToThrow { throw e } }
+    func markUnread(conversationId: String) async throws { if let e = errorToThrow { throw e } }
+    func deleteForMe(conversationId: String) async throws { if let e = errorToThrow { throw e } }
+    func leave(conversationId: String) async throws { if let e = errorToThrow { throw e } }
 }

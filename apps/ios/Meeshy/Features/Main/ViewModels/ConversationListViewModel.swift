@@ -78,6 +78,13 @@ class ConversationListViewModel: ObservableObject {
     private let authManager: AuthManaging
     private let storyService: StoryServiceProviding
     private let syncEngine: ConversationSyncEngineProviding
+    /// Mutation source of truth for per-user conversation state (pin, mute,
+    /// archive, read, section, reaction, tags). The VM hydrates it from the
+    /// loaded list and observes it back so a mutation from any surface
+    /// (list swipe, context menu, options sheet) lands here optimistically
+    /// with outbox-backed offline replay. Metadata + ordering stay owned by
+    /// this VM (the store only sorts by `lastMessageAt`).
+    private let store: ConversationStore
     /// Publisher des notifications push « message » (conversationId). Injecté
     /// pour la testabilité ; en production, branché sur
     /// `PushNotificationManager.shared.messageNotificationReceived`.
@@ -133,7 +140,15 @@ class ConversationListViewModel: ObservableObject {
     func setConversations(_ items: [Conversation]) {
         let merged = mergePreservingRecentlyCreated(incoming: items, current: conversations, now: dateProvider())
         let drafts = draftSummaries
-        conversations = merged.sorted { Self.conversationsAreInOrder($0, $1, draftSummaries: drafts) }
+        let sorted = merged.sorted { Self.conversationsAreInOrder($0, $1, draftSummaries: drafts) }
+        conversations = sorted
+        // Hydrate the mutation store with the latest metadata snapshot.
+        // `hydrateMetadata` version-gates the per-user state so an in-flight
+        // optimistic mutation draining through the outbox is NOT clobbered by
+        // a concurrent server/cache refresh.
+        storeHydrationTask = Task { [store] in
+            await store.hydrateMetadata(sorted)
+        }
     }
 
     /// Local-creation registry: maps conversationId → insertion timestamp.
@@ -335,7 +350,8 @@ class ConversationListViewModel: ObservableObject {
         storyService: StoryServiceProviding = StoryService.shared,
         syncEngine: ConversationSyncEngineProviding = ConversationSyncEngine.shared,
         messageNotificationPublisher: AnyPublisher<String, Never> = PushNotificationManager.shared.messageNotificationReceived.eraseToAnyPublisher(),
-        draftStore: DraftStore = DraftStore.shared
+        draftStore: DraftStore = DraftStore.shared,
+        store: ConversationStore = .shared
     ) {
         self.api = api
         self.conversationService = conversationService
@@ -347,6 +363,7 @@ class ConversationListViewModel: ObservableObject {
         self.syncEngine = syncEngine
         self.messageNotificationPublisher = messageNotificationPublisher
         self.draftStore = draftStore
+        self.store = store
         reloadDraftSummaries()
         subscribeToSocketEvents()
         subscribeToPushNotifications()
@@ -355,7 +372,13 @@ class ConversationListViewModel: ObservableObject {
         setupBackgroundProcessing()
         observeMarkAsRead()
         observeSync()
+        observeStore()
     }
+
+    /// Latest store-hydration task spawned by `setConversations`
+    /// (fire-and-forget). Exposed `internal` so tests can await deterministic
+    /// hydration before driving `store.apply(...)`.
+    var storeHydrationTask: Task<Void, Never>?
 
     private var groupingTask: Task<Void, Never>?
     /// Fire-and-forget persistence of the merged list + cursor after a
@@ -517,6 +540,40 @@ class ConversationListViewModel: ObservableObject {
                 self?.applyPreferencesUpdate(event)
             }
             .store(in: &cancellables)
+    }
+
+    // MARK: - Conversation Store Observation
+
+    /// Subscribe to the mutation store and reconcile its per-user state back
+    /// into the displayed list. The store is the source of truth for
+    /// `userState` (pin/mute/archive/read/section/reaction/tags); this VM keeps
+    /// ownership of metadata + ordering. A mutation from ANY surface that calls
+    /// `store.apply(...)` lands here in the same Combine tick.
+    private func observeStore() {
+        store.listPublisher()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] snapshot in
+                self?.mergeUserStateFromStore(snapshot)
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Graft the store's `userState` onto the matching rows. Metadata and
+    /// ordering are untouched. Guarded so an echo of an unchanged snapshot
+    /// (e.g. the publish that follows our own hydration) doesn't churn the
+    /// grouping pipeline.
+    private func mergeUserStateFromStore(_ snapshot: [MeeshyConversation]) {
+        guard !conversations.isEmpty else { return }
+        var stateById = [String: ConversationUserState](minimumCapacity: snapshot.count)
+        for conv in snapshot { stateById[conv.id] = conv.userState }
+        var updated = conversations
+        var changed = false
+        for i in updated.indices {
+            guard let newState = stateById[updated[i].id], updated[i].userState != newState else { continue }
+            updated[i].userState = newState
+            changed = true
+        }
+        if changed { conversations = updated }
     }
 
     private func applyPreferencesUpdate(_ event: ConversationPreferencesBroadcaster.Event) {
