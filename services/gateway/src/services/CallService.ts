@@ -309,6 +309,62 @@ export class CallService {
       throw new Error(`${CALL_ERROR_CODES.NOT_A_PARTICIPANT}: You are not a participant in this conversation`);
     }
 
+    // PHANTOM CLEANUP (2026-06-05) — every initiate force-ends ANY non-ended call
+    // the INITIATOR is still a live participant of (across ALL conversations).
+    // The iOS long-poll transport churns (transport close/error) and frequently
+    // leaves the initiator as a leftAt:null participant in a stale call whose
+    // leave/end never processed; that stale call then makes the next initiate
+    // throw CALL_ALREADY_ACTIVE and surfaces as a stuck "phantom" call on the
+    // device. Clearing the initiator's phantoms here guarantees a fresh start on
+    // every call. We end the WHOLE stale session (all remaining participants
+    // marked left + status ended) so it can never block the conversation either.
+    const initiatorStaleParticipations = await this.prisma.callParticipant.findMany({
+      where: {
+        leftAt: null,
+        participant: { userId: initiatorId },
+        callSession: { status: { in: ACTIVE_STATUSES } }
+      },
+      include: { callSession: { select: { id: true, startedAt: true, conversationId: true } } }
+    });
+
+    if (initiatorStaleParticipations.length > 0) {
+      const now = new Date();
+      const staleCalls = Array.from(
+        new Map(
+          initiatorStaleParticipations.map(p => [p.callSessionId, p.callSession])
+        ).entries()
+      );
+      logger.warn('🔬 [CALL-DIAG] phantom-cleanup on initiate — force-ending initiator stale calls', {
+        initiatorId,
+        conversationId,
+        staleCallIds: staleCalls.map(([id]) => id)
+      });
+      for (const [staleCallId, staleSession] of staleCalls) {
+        const startedAt = staleSession?.startedAt ? new Date(staleSession.startedAt) : now;
+        try {
+          await this.prisma.$transaction(async (tx) => {
+            await tx.callParticipant.updateMany({
+              where: { callSessionId: staleCallId, leftAt: null },
+              data: { leftAt: now }
+            });
+            await tx.callSession.updateMany({
+              where: { id: staleCallId, status: { in: ACTIVE_STATUSES } },
+              data: {
+                status: CallStatus.ended,
+                endedAt: now,
+                duration: Math.max(0, Math.floor((now.getTime() - startedAt.getTime()) / 1000)),
+                endReason: CallEndReason.garbageCollected
+              }
+            });
+          });
+          this.clearHeartbeats(staleCallId);
+          this.clearRingingTimeout(staleCallId);
+        } catch (cleanupErr) {
+          logger.error('phantom-cleanup failed for stale call', { staleCallId, error: cleanupErr });
+        }
+      }
+    }
+
     // IMPROVEMENT: Clean up any zombie calls before initiating new call
     // This prevents orphan calls from blocking new calls
     const activeCall = await this.prisma.callSession.findFirst({
