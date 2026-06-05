@@ -418,12 +418,17 @@ class ConversationListViewModel: ObservableObject {
 
     /// Filtre les conversations selon le texte de recherche et le filtre sélectionné
     /// - Peut s'exécuter sur n'importe quel thread (pas d'accès à self)
-    nonisolated private static func filterConversations(
+    nonisolated static func filterConversations(
         _ conversations: [Conversation],
         searchText: String,
         filter: ConversationFilter
     ) -> [Conversation] {
         return conversations.filter { c in
+            // Soft delete (`.deleteForUser` / `.leave` set `deletedForUserAt`):
+            // the store keeps the row in RAM until a refresh drops it, so the
+            // list must hide it from EVERY filter (incl. .archived). Matches
+            // `ConversationUserState.isVisible`.
+            guard c.userState.deletedForUserAt == nil else { return false }
             let filterMatch: Bool
             // Hide user-archived conversations from all filters except .archived
             let userArchiveOk = filter == .archived ? c.userState.isArchived : !c.userState.isArchived
@@ -1297,18 +1302,17 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Mark as Read
 
     func markAsRead(conversationId: String) async {
-        guard let index = convIndex(for: conversationId) else { return }
-        let previousCount = conversations[index].userState.unreadCount
-
-        conversations[index].userState.unreadCount = 0
+        guard convIndex(for: conversationId) != nil else { return }
+        // Local-first read sync (cache + cross-VM `.conversationMarkedRead`).
         await syncEngine.markConversationReadLocally(conversationId)
-
-        guard UserPreferencesManager.shared.privacy.showReadReceipts else { return }
-        do {
-            try await conversationService.markRead(conversationId: conversationId)
-        } catch {
-            conversations[index].userState.unreadCount = previousCount
-        }
+        // Server mark-read via the store: optimistic unreadCount=0 + outbox
+        // offline replay. The gateway gates the read-RECEIPT broadcast to the
+        // sender by the user's `showReadReceipts` preference (see
+        // routes/conversations/messages.ts → broadcastReadStatus), so the old
+        // client-side `showReadReceipts` gate was redundant for privacy.
+        // Dropping it also fixes cross-device unread sync when receipts are off
+        // (the server now records the read position regardless).
+        try? await store.apply(.markAsRead, for: conversationId)
     }
 
     // MARK: - Mark as Unread
@@ -1336,14 +1340,12 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Delete Conversation
 
     func deleteConversation(conversationId: String) async {
-        guard let index = convIndex(for: conversationId) else { return }
-        let removed = conversations.remove(at: index)
-
-        do {
-            try await conversationService.deleteForMe(conversationId: conversationId)
-        } catch {
-            conversations.insert(removed, at: min(index, conversations.count))
-        }
+        guard convIndex(for: conversationId) != nil else { return }
+        // `.deleteForUser` sets userState.deletedForUserAt (soft delete)
+        // optimistically + dispatches deleteForMe via the outbox. The row
+        // disappears because `filterConversations` hides deletedForUserAt != nil;
+        // on a 4xx the store clears deletedForUserAt and the row reappears.
+        try? await store.apply(.deleteForUser, for: conversationId)
     }
 
     // MARK: - Move to Section

@@ -305,64 +305,81 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertFalse(sut.conversations.first(where: { $0.id == "conv1" })?.userState.isMuted ?? true)
     }
 
-    // MARK: - markAsRead: Success
+    // MARK: - markAsRead: Success (via store — 1b-ii-c)
 
-    func test_markAsRead_setsUnreadCountToZero() async {
-        let (sut, _, conversationService, _, _, _, _) = makeSUT()
-        sut.conversations = [makeConversation(id: "conv1", unreadCount: 5)]
+    func test_markAsRead_setsUnreadCountToZeroViaStore() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1", unreadCount: 5)])
+        await sut.storeHydrationTask?.value
 
         await sut.markAsRead(conversationId: "conv1")
+        await drainMainQueue()
 
-        XCTAssertEqual(sut.conversations[0].unreadCount, 0)
-        XCTAssertEqual(conversationService.markReadCallCount, 1)
-        XCTAssertEqual(conversationService.lastMarkReadConversationId, "conv1")
+        XCTAssertEqual(sut.conversations.first(where: { $0.id == "conv1" })?.userState.unreadCount, 0)
     }
 
     // MARK: - markAsRead: Failure (rollback)
 
-    func test_markAsRead_rollsBackOnFailure() async {
-        let conversationService = MockConversationService()
-        conversationService.markReadResult = .failure(NSError(domain: "test", code: 500))
-        let (sut, _, _, _, _, _, _) = makeSUT(conversationService: conversationService)
-        sut.conversations = [makeConversation(id: "conv1", unreadCount: 5)]
+    func test_markAsRead_rollsBackOnPermanentFailure() async throws {
+        let store = Self.makeTestStore(lifecycleError: MeeshyError.server(statusCode: 422, message: "bad"))
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1", unreadCount: 5)])
+        await sut.storeHydrationTask?.value
 
         await sut.markAsRead(conversationId: "conv1")
+        await drainMainQueue()
 
-        XCTAssertEqual(sut.conversations[0].unreadCount, 5, "Should rollback to previous count on failure")
+        XCTAssertEqual(sut.conversations.first(where: { $0.id == "conv1" })?.userState.unreadCount, 5,
+                       "4xx must roll back to the previous unread count")
     }
 
-    // MARK: - deleteConversation: Success
+    // MARK: - deleteConversation: Success (soft delete via store)
 
-    func test_deleteConversation_removesFromList() async {
-        let (sut, _, conversationService, _, _, _, _) = makeSUT()
-        sut.conversations = [
-            makeConversation(id: "conv1"),
-            makeConversation(id: "conv2")
-        ]
+    func test_deleteConversation_softDeletesViaStore() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1"), makeConversation(id: "conv2")])
+        await sut.storeHydrationTask?.value
 
         await sut.deleteConversation(conversationId: "conv1")
+        await drainMainQueue()
 
-        XCTAssertEqual(sut.conversations.count, 1)
-        XCTAssertEqual(sut.conversations[0].id, "conv2")
-        XCTAssertEqual(conversationService.deleteForMeCallCount, 1)
-        XCTAssertEqual(conversationService.lastDeleteForMeConversationId, "conv1")
+        // Soft delete: deletedForUserAt set; the row is hidden by filterConversations.
+        XCTAssertNotNil(sut.conversations.first(where: { $0.id == "conv1" })?.userState.deletedForUserAt,
+                        "conv1 must be soft-deleted in the store")
+        XCTAssertNil(sut.conversations.first(where: { $0.id == "conv2" })?.userState.deletedForUserAt)
     }
 
-    // MARK: - deleteConversation: Failure (re-insert)
+    // MARK: - deleteConversation: Failure (restore)
 
-    func test_deleteConversation_reInsertsOnFailure() async {
-        let conversationService = MockConversationService()
-        conversationService.deleteForMeResult = .failure(NSError(domain: "test", code: 500))
-        let (sut, _, _, _, _, _, _) = makeSUT(conversationService: conversationService)
-        sut.conversations = [
-            makeConversation(id: "conv1"),
-            makeConversation(id: "conv2")
-        ]
+    func test_deleteConversation_rollsBackOnPermanentFailure() async throws {
+        let store = Self.makeTestStore(lifecycleError: MeeshyError.server(statusCode: 422, message: "bad"))
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1"), makeConversation(id: "conv2")])
+        await sut.storeHydrationTask?.value
 
         await sut.deleteConversation(conversationId: "conv1")
+        await drainMainQueue()
 
-        XCTAssertEqual(sut.conversations.count, 2, "Should re-insert conversation on failure")
-        XCTAssertTrue(sut.conversations.contains(where: { $0.id == "conv1" }))
+        XCTAssertNil(sut.conversations.first(where: { $0.id == "conv1" })?.userState.deletedForUserAt,
+                     "4xx must restore the conversation (clear deletedForUserAt)")
+    }
+
+    // MARK: - filterConversations hides soft-deleted rows
+
+    func test_filterConversations_excludesSoftDeleted() {
+        var deleted = makeConversation(id: "conv1")
+        deleted.userState.deletedForUserAt = Date()
+        let visible = makeConversation(id: "conv2")
+
+        for filter in [ConversationFilter.all, .unread, .archived, .personnel] {
+            let result = ConversationListViewModel.filterConversations(
+                [deleted, visible], searchText: "", filter: filter
+            )
+            XCTAssertFalse(result.contains(where: { $0.id == "conv1" }),
+                           "Soft-deleted conv must be hidden from filter \(filter)")
+        }
     }
 
     // MARK: - Filter Pipeline
@@ -736,24 +753,32 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertFalse(sut.conversations.first(where: { $0.id == "conv1" })?.userState.isPinned ?? true)
     }
 
-    func test_markAsRead_ignoredForUnknownConversation() async {
-        let (sut, _, conversationService, _, _, _, _) = makeSUT()
-        sut.conversations = [makeConversation(id: "conv1", unreadCount: 5)]
+    func test_markAsRead_ignoredForUnknownConversation() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1", unreadCount: 5)])
+        await sut.storeHydrationTask?.value
 
         await sut.markAsRead(conversationId: "unknown")
+        await drainMainQueue()
 
-        XCTAssertEqual(conversationService.markReadCallCount, 0)
-        XCTAssertEqual(sut.conversations[0].unreadCount, 5)
+        let unknown = await store.conversation(id: "unknown")
+        XCTAssertNil(unknown)
+        XCTAssertEqual(sut.conversations.first(where: { $0.id == "conv1" })?.userState.unreadCount, 5)
     }
 
-    func test_deleteConversation_ignoredForUnknownConversation() async {
-        let (sut, _, conversationService, _, _, _, _) = makeSUT()
-        sut.conversations = [makeConversation(id: "conv1")]
+    func test_deleteConversation_ignoredForUnknownConversation() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1")])
+        await sut.storeHydrationTask?.value
 
         await sut.deleteConversation(conversationId: "unknown")
+        await drainMainQueue()
 
-        XCTAssertEqual(conversationService.deleteForMeCallCount, 0)
-        XCTAssertEqual(sut.conversations.count, 1)
+        let unknown = await store.conversation(id: "unknown")
+        XCTAssertNil(unknown)
+        XCTAssertNil(sut.conversations.first(where: { $0.id == "conv1" })?.userState.deletedForUserAt)
     }
 
     // MARK: - Initial State
@@ -1061,15 +1086,18 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertEqual(sut.totalUnreadCount, 0)
     }
 
-    func test_totalUnreadCount_updatesAfterMarkAsRead() async {
-        let (sut, _, _, _, _, _, _) = makeSUT()
-        sut.conversations = [
+    func test_totalUnreadCount_updatesAfterMarkAsRead() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([
             makeConversation(id: "c1", unreadCount: 3),
             makeConversation(id: "c2", unreadCount: 5)
-        ]
+        ])
+        await sut.storeHydrationTask?.value
         XCTAssertEqual(sut.totalUnreadCount, 8)
 
         await sut.markAsRead(conversationId: "c1")
+        await drainMainQueue()
 
         XCTAssertEqual(sut.totalUnreadCount, 5)
     }
