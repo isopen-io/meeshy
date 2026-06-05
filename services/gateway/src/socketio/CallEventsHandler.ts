@@ -325,9 +325,12 @@ export class CallEventsHandler {
           for (const memberSocket of memberSockets) {
             memberSocket.emit(CALL_EVENTS.INITIATED, { ...initiatedEvent, iceServers: memberIceServers });
             notifiedSocketsCount++;
-            logger.debug('📤 Sent call:initiated to member socket', {
+            // CALL-DIAG (temp instrumentation — remove on rollback): debug→info to
+            // confirm per-socket delivery of call:initiated to the callee.
+            logger.info('🔬 [CALL-DIAG] 📤 Sent call:initiated to member socket', {
               socketId: memberSocket.id,
-              userId: memberId
+              userId: memberId,
+              callId: callSession.id
             });
           }
         }

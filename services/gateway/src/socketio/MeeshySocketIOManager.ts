@@ -669,7 +669,24 @@ export class MeeshySocketIOManager {
         try { await this.locationHandler.handleLiveLocationStop(socket, data); } catch (error) { logger.error('[LOCATION_LIVE_STOP] Error:', error); }
       });
 
-      socket.on('disconnect', () => {
+      // CALL-DIAG (temp instrumentation — remove on rollback): capture disconnect
+      // reason + rooms to diagnose socket churn. `disconnecting` fires while the
+      // socket's rooms are still populated (the `disconnect` event fires after
+      // Socket.IO has already emptied them), so this is the only place we can see
+      // which user room / call room the dropping socket belonged to.
+      socket.on('disconnecting', (reason: string) => {
+        try {
+          const rooms = Array.from(socket.rooms || []).filter((r) => r !== socket.id);
+          logger.warn('🔬 [CALL-DIAG] socket disconnecting', {
+            socketId: socket.id,
+            reason,
+            rooms
+          });
+        } catch (e) { /* never throw from instrumentation */ }
+      });
+
+      socket.on('disconnect', (reason: string) => {
+        logger.warn('🔬 [CALL-DIAG] socket disconnect', { socketId: socket.id, reason });
         this.authHandler.handleDisconnection(socket).catch((error) => logger.error('[DISCONNECT] Error:', error));
         this.stats.active_connections--;
       });
