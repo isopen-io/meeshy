@@ -183,6 +183,38 @@ public actor ConversationStore {
         publishList()
     }
 
+    /// Merge a server / cache metadata snapshot into the store while
+    /// preserving any local `userState` that is newer than the incoming
+    /// one — i.e. an in-flight optimistic mutation the server hasn't ACK'd
+    /// yet (`local.version > incoming.version`).
+    ///
+    /// Unlike `hydrateList`, which replaces each conversation wholesale,
+    /// this is the safe path for repeated metadata refreshes (the list VM
+    /// re-hydrates on every sync / socket update): metadata (title,
+    /// `lastMessageAt`, members, …) always takes the incoming value, but
+    /// the per-user state is version-gated so a concurrent refresh can't
+    /// clobber an optimistic toggle that is still draining through the
+    /// outbox. Conversations the store doesn't know yet are seeded
+    /// wholesale.
+    public func hydrateMetadata(_ convs: [MeeshyConversation]) {
+        for incoming in convs {
+            let merged: MeeshyConversation
+            if let existing = conversations[incoming.id],
+               existing.userState.version > incoming.userState.version {
+                var grafted = incoming
+                grafted.userState = existing.userState
+                merged = grafted
+            } else {
+                merged = incoming
+            }
+            conversations[merged.id] = merged
+            if let subject = subjects.subject(for: merged.id, initial: { merged }) {
+                subject.send(merged)
+            }
+        }
+        publishList()
+    }
+
     /// Seed the store from the L2 conversation cache (Stale-While-Revalidate):
     /// both `.fresh` and `.stale` snapshots hydrate immediately so the UI
     /// paints from cache without a spinner; `.expired` / `.empty` are no-ops

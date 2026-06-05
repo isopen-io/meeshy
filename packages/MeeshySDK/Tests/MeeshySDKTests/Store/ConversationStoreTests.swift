@@ -127,6 +127,106 @@ final class ConversationStoreTests: XCTestCase {
         XCTAssertEqual(list?.count, 1)
     }
 
+    // MARK: - hydrateMetadata (version-aware merge)
+
+    func test_hydrateMetadata_unknownConv_seedsWholesale() async {
+        let (store, _, _, _) = makeStore()
+
+        let incoming = MeeshyConversation(
+            id: "conv-1", identifier: "conv-1", type: .direct,
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_000_000),
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            userState: ConversationUserState(isPinned: true, version: 2)
+        )
+        await store.hydrateMetadata([incoming])
+
+        let stored = await store.conversation(id: "conv-1")
+        XCTAssertEqual(stored?.id, "conv-1")
+        XCTAssertTrue(stored?.userState.isPinned ?? false)
+        XCTAssertEqual(store.listPublisher().value()?.count, 1)
+    }
+
+    func test_hydrateMetadata_lowerIncomingVersion_preservesLocalUserStateTakesMetadata() async {
+        let (store, _, _, _) = makeStore()
+        // Local has an in-flight optimistic pin at version 6.
+        await store.hydrate(MeeshyConversation(
+            id: "conv-1", identifier: "conv-1", type: .direct,
+            title: "Old title",
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_000_000),
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            userState: ConversationUserState(isPinned: true, version: 6)
+        ))
+
+        // A stale server snapshot (version 5) that hasn't seen the pin yet,
+        // but carries fresher metadata (newer lastMessageAt + new title).
+        let serverSnapshot = MeeshyConversation(
+            id: "conv-1", identifier: "conv-1", type: .direct,
+            title: "New title",
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_009_999),
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_700_009_999),
+            userState: ConversationUserState(isPinned: false, version: 5)
+        )
+        await store.hydrateMetadata([serverSnapshot])
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertTrue(after.userState.isPinned, "Newer local optimistic userState must survive a stale refresh")
+        XCTAssertEqual(after.userState.version, 6, "Local version preserved")
+        XCTAssertEqual(after.title, "New title", "Incoming metadata is still taken")
+        XCTAssertEqual(after.lastMessageAt, Date(timeIntervalSince1970: 1_700_009_999))
+    }
+
+    func test_hydrateMetadata_equalOrHigherIncomingVersion_takesIncomingUserState() async {
+        let (store, _, _, _) = makeStore()
+        await store.hydrate(MeeshyConversation(
+            id: "conv-1", identifier: "conv-1", type: .direct,
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_000_000),
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            userState: ConversationUserState(isPinned: true, version: 5)
+        ))
+
+        // Server has caught up (version 6) and shows the pin removed.
+        let serverSnapshot = MeeshyConversation(
+            id: "conv-1", identifier: "conv-1", type: .direct,
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_000_000),
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            userState: ConversationUserState(isPinned: false, version: 6)
+        )
+        await store.hydrateMetadata([serverSnapshot])
+
+        let after = await store.conversation(id: "conv-1")!
+        XCTAssertFalse(after.userState.isPinned, "Server-authoritative state at higher version wins")
+        XCTAssertEqual(after.userState.version, 6)
+    }
+
+    func test_hydrateMetadata_publishesPerConvAndList() async {
+        let (store, _, _, _) = makeStore()
+        let conv = makeConv()
+        await store.hydrate(conv)
+
+        var perConvEmissions = 0
+        let perConv = store.publisher(for: "conv-1")
+        let token = perConv?.sink { _ in perConvEmissions += 1 }
+        defer { token?.cancel() }
+
+        let updated = MeeshyConversation(
+            id: "conv-1", identifier: "conv-1", type: .direct,
+            title: "Updated",
+            lastMessageAt: Date(timeIntervalSince1970: 1_700_111_111),
+            createdAt: Date(timeIntervalSince1970: 1_700_000_000),
+            updatedAt: Date(timeIntervalSince1970: 1_700_111_111),
+            userState: ConversationUserState(version: 0)
+        )
+        await store.hydrateMetadata([updated])
+
+        XCTAssertGreaterThanOrEqual(perConvEmissions, 2, "initial value + post-merge emission")
+        XCTAssertEqual(store.listPublisher().value()?.first?.title, "Updated")
+    }
+
     // MARK: - apply optimistic + ACK
 
     func test_apply_optimisticVisibleImmediately_versionCandidateBumped() async throws {
