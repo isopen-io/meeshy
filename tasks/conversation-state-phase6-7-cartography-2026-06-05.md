@@ -71,7 +71,9 @@ ConversationListView.swift: pin L375, mute L384, lock L393(sheet), archive/unarc
 |---|-----------|---------|--------|-------------|
 | 1a | SDK `hydrateMetadata` (merge version-aware) | feat/conv-state-store-merge | ✅ MERGÉ | `53804f530` |
 | 1b-i | List VM observe store (dep + hydrate + observeStore/merge) | feat/conv-state-list-vm-observe | ✅ MERGÉ | `5e707b38e` |
-| 1b-ii | List VM : migrer les 9 méthodes mutation → `store.apply` (garder markAsRead extras + delete removal) ; réécrire ~25 tests mutation | — | 🔲 SUIVANT | — |
+| 1b-ii-a | List VM : migrer togglePin/toggleMute → `store.apply` + réécrire 7 tests (drainMainQueue) | — | ✅ MERGÉ | `291c60cde` |
+| 1b-ii-b | List VM : migrer archive/unarchive/reaction/moveToSection/markAsUnread → `store.apply` + réécrire 12 tests (waitForListState, lifecycleError) | — | ✅ MERGÉ | `1d547d6a0` |
+| 1b-ii-c | List VM : migrer markAsRead (**edge: gate `showReadReceipts`** — ne pas envoyer le receipt si off ; garder `syncEngine.markConversationReadLocally`) + deleteConversation (**edge: `.deleteForUser` pose `deletedForUserAt` sans retirer → FILTRER `deletedForUserAt != nil` dans `filterConversations`**) + tests | — | 🔲 SUIVANT | — |
 | 1b-iii | Activer le bridge dans MeeshyApp (login/logout) + gérer removal `applyConversationDeleted` dans le merge | — | 🔲 | — |
 | 2 | Options VM → `store.apply` (hydrate depuis la conv, observe publisher(for:id), drop persistAsync/broadcaster/L2) ; supprimer abonnement broadcaster du list VM ; réécrire 22 tests | — | 🔲 | — |
 | 3 | Conv header markAsRead via store + scenePhase | — | 🔲 | — |
