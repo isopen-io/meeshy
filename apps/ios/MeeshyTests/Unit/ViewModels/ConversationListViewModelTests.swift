@@ -67,14 +67,27 @@ final class ConversationListViewModelTests: XCTestCase {
     /// Build an ISOLATED `ConversationStore` (own in-memory outbox + mock
     /// writers) so each VM under test gets its own mutation store instead of
     /// the global `.shared` singleton — prevents cross-test pollution.
-    static func makeTestStore() -> ConversationStore {
+    /// `prefError` makes the preference writer throw (e.g. a 4xx for a
+    /// permanent-failure rollback test).
+    static func makeTestStore(prefError: Error? = nil) -> ConversationStore {
+        let writer = ConvListTestPreferenceWriter()
+        writer.errorToThrow = prefError
         let outboxPath = FileManager.default.temporaryDirectory
             .appendingPathComponent("convlist-vm-outbox-\(UUID().uuidString).db").path
         return ConversationStore(
-            preferenceService: ConvListTestPreferenceWriter(),
+            preferenceService: writer,
             conversationService: ConvListTestLifecycleWriter(),
             outbox: ConversationStateOutbox(dbPath: outboxPath)
         )
+    }
+
+    /// Deterministically wait for the `observeStore` merge sink (delivered on
+    /// `DispatchQueue.main`) to drain. Enqueued AFTER any pending merge
+    /// closures, so FIFO guarantees the merge ran by the time it fulfills.
+    private func drainMainQueue() async {
+        let exp = expectation(description: "main queue drained")
+        DispatchQueue.main.async { exp.fulfill() }
+        await fulfillment(of: [exp], timeout: 2.0)
     }
 
     private func makeConversation(
@@ -207,55 +220,68 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertGreaterThan(countAfterSecond, countAfterFirst, "Should refetch after invalidation")
     }
 
-    // MARK: - togglePin: Success
+    // MARK: - togglePin: Success (via ConversationStore — Strategy B 1b-ii-a)
 
-    func test_togglePin_setsIsPinnedOptimistically() async {
-        let (sut, _, _, preferenceService, _, _, _) = makeSUT()
-        sut.conversations = [makeConversation(id: "conv1", isPinned: false)]
+    func test_togglePin_appliesViaStoreAndReflectsInList() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1", isPinned: false)])
+        await sut.storeHydrationTask?.value
 
         await sut.togglePin(for: "conv1")
+        await drainMainQueue()
 
-        XCTAssertTrue(sut.conversations[0].isPinned)
-        XCTAssertEqual(preferenceService.updateConversationPreferencesCallCount, 1)
-        XCTAssertEqual(preferenceService.lastUpdateConversationPreferencesId, "conv1")
+        XCTAssertTrue(sut.conversations.first(where: { $0.id == "conv1" })?.userState.isPinned ?? false,
+                      "Optimistic pin must reflect into the list via the store merge")
+        let stored = await store.conversation(id: "conv1")
+        XCTAssertTrue(stored?.userState.isPinned ?? false, "Persistence routed through the store")
     }
 
-    // MARK: - togglePin: Failure (rollback)
+    // MARK: - togglePin: Failure (rollback via store on 4xx)
 
-    func test_togglePin_rollsBackOnFailure() async {
-        let preferenceService = MockPreferenceService()
-        preferenceService.updateConversationPreferencesResult = .failure(NSError(domain: "test", code: 400))
-        let (sut, _, _, _, _, _, _) = makeSUT(preferenceService: preferenceService)
-        sut.conversations = [makeConversation(id: "conv1", isPinned: false)]
+    func test_togglePin_rollsBackOnPermanentFailure() async throws {
+        let store = Self.makeTestStore(prefError: MeeshyError.server(statusCode: 422, message: "bad"))
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1", isPinned: false)])
+        await sut.storeHydrationTask?.value
 
         await sut.togglePin(for: "conv1")
+        await drainMainQueue()
 
-        XCTAssertFalse(sut.conversations[0].isPinned, "Should rollback to original value on failure")
+        XCTAssertFalse(sut.conversations.first(where: { $0.id == "conv1" })?.userState.isPinned ?? true,
+                       "4xx must roll back the optimistic pin in the list")
+        let stored = await store.conversation(id: "conv1")
+        XCTAssertFalse(stored?.userState.isPinned ?? true)
     }
 
     // MARK: - toggleMute: Success
 
-    func test_toggleMute_setsIsMutedOptimistically() async {
-        let (sut, _, _, preferenceService, _, _, _) = makeSUT()
-        sut.conversations = [makeConversation(id: "conv1", isMuted: false)]
+    func test_toggleMute_appliesViaStoreAndReflectsInList() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1", isMuted: false)])
+        await sut.storeHydrationTask?.value
 
         await sut.toggleMute(for: "conv1")
+        await drainMainQueue()
 
-        XCTAssertTrue(sut.conversations[0].isMuted)
-        XCTAssertEqual(preferenceService.updateConversationPreferencesCallCount, 1)
+        XCTAssertTrue(sut.conversations.first(where: { $0.id == "conv1" })?.userState.isMuted ?? false)
+        let stored = await store.conversation(id: "conv1")
+        XCTAssertTrue(stored?.userState.isMuted ?? false)
     }
 
     // MARK: - toggleMute: Failure (rollback)
 
-    func test_toggleMute_rollsBackOnFailure() async {
-        let preferenceService = MockPreferenceService()
-        preferenceService.updateConversationPreferencesResult = .failure(NSError(domain: "test", code: 400))
-        let (sut, _, _, _, _, _, _) = makeSUT(preferenceService: preferenceService)
-        sut.conversations = [makeConversation(id: "conv1", isMuted: false)]
+    func test_toggleMute_rollsBackOnPermanentFailure() async throws {
+        let store = Self.makeTestStore(prefError: MeeshyError.server(statusCode: 422, message: "bad"))
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1", isMuted: false)])
+        await sut.storeHydrationTask?.value
 
         await sut.toggleMute(for: "conv1")
+        await drainMainQueue()
 
-        XCTAssertFalse(sut.conversations[0].isMuted, "Should rollback to original value on failure")
+        XCTAssertFalse(sut.conversations.first(where: { $0.id == "conv1" })?.userState.isMuted ?? true)
     }
 
     // MARK: - markAsRead: Success
@@ -628,39 +654,48 @@ final class ConversationListViewModelTests: XCTestCase {
 
     // MARK: - togglePin on unpinned -> pinned -> unpinned
 
-    func test_togglePin_togglesBackAndForth() async {
-        let (sut, _, _, _, _, _, _) = makeSUT()
-        sut.conversations = [makeConversation(id: "conv1", isPinned: false)]
+    func test_togglePin_togglesBackAndForth() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1", isPinned: false)])
+        await sut.storeHydrationTask?.value
 
-        await sut.togglePin(for: "conv1")
-        XCTAssertTrue(sut.conversations[0].isPinned)
+        await sut.togglePin(for: "conv1"); await drainMainQueue()
+        XCTAssertTrue(sut.conversations.first(where: { $0.id == "conv1" })?.userState.isPinned ?? false)
 
-        await sut.togglePin(for: "conv1")
-        XCTAssertFalse(sut.conversations[0].isPinned)
+        await sut.togglePin(for: "conv1"); await drainMainQueue()
+        XCTAssertFalse(sut.conversations.first(where: { $0.id == "conv1" })?.userState.isPinned ?? true)
     }
 
     // MARK: - toggleMute on unmuted -> muted -> unmuted
 
-    func test_toggleMute_togglesBackAndForth() async {
-        let (sut, _, _, _, _, _, _) = makeSUT()
-        sut.conversations = [makeConversation(id: "conv1", isMuted: false)]
+    func test_toggleMute_togglesBackAndForth() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1", isMuted: false)])
+        await sut.storeHydrationTask?.value
 
-        await sut.toggleMute(for: "conv1")
-        XCTAssertTrue(sut.conversations[0].isMuted)
+        await sut.toggleMute(for: "conv1"); await drainMainQueue()
+        XCTAssertTrue(sut.conversations.first(where: { $0.id == "conv1" })?.userState.isMuted ?? false)
 
-        await sut.toggleMute(for: "conv1")
-        XCTAssertFalse(sut.conversations[0].isMuted)
+        await sut.toggleMute(for: "conv1"); await drainMainQueue()
+        XCTAssertFalse(sut.conversations.first(where: { $0.id == "conv1" })?.userState.isMuted ?? true)
     }
 
     // MARK: - Non-existent conversation ID
 
-    func test_togglePin_ignoredForUnknownConversation() async {
-        let (sut, _, _, preferenceService, _, _, _) = makeSUT()
-        sut.conversations = [makeConversation(id: "conv1")]
+    func test_togglePin_ignoredForUnknownConversation() async throws {
+        let store = Self.makeTestStore()
+        let (sut, _, _, _, _, _, _) = makeSUT(store: store)
+        sut.setConversations([makeConversation(id: "conv1")])
+        await sut.storeHydrationTask?.value
 
         await sut.togglePin(for: "unknown")
+        await drainMainQueue()
 
-        XCTAssertEqual(preferenceService.updateConversationPreferencesCallCount, 0)
+        let unknown = await store.conversation(id: "unknown")
+        XCTAssertNil(unknown, "Unknown conversation is never created in the store")
+        XCTAssertFalse(sut.conversations.first(where: { $0.id == "conv1" })?.userState.isPinned ?? true)
     }
 
     func test_markAsRead_ignoredForUnknownConversation() async {

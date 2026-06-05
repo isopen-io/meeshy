@@ -1278,17 +1278,12 @@ class ConversationListViewModel: ObservableObject {
     func togglePin(for conversationId: String) async {
         guard let index = convIndex(for: conversationId) else { return }
         let newValue = !conversations[index].userState.isPinned
-
-        conversations[index].userState.isPinned = newValue
-
-        do {
-            try await preferenceService.updateConversationPreferences(
-                conversationId: conversationId,
-                request: .init(isPinned: newValue)
-            )
-        } catch {
-            conversations[index].userState.isPinned = !newValue
-        }
+        // Strategy B: the store owns the optimistic update, outbox-backed
+        // offline replay and rollback. The result lands back on the row via
+        // `observeStore` (merge sink). `try?` — a 4xx rollback is already
+        // reflected by the store's publisher; a transient failure keeps the
+        // optimistic value and retries via the outbox.
+        try? await store.apply(.setPinned(newValue), for: conversationId)
     }
 
     // MARK: - Toggle Mute
@@ -1296,17 +1291,7 @@ class ConversationListViewModel: ObservableObject {
     func toggleMute(for conversationId: String) async {
         guard let index = convIndex(for: conversationId) else { return }
         let newValue = !conversations[index].userState.isMuted
-
-        conversations[index].userState.isMuted = newValue
-
-        do {
-            try await preferenceService.updateConversationPreferences(
-                conversationId: conversationId,
-                request: .init(isMuted: newValue)
-            )
-        } catch {
-            conversations[index].userState.isMuted = !newValue
-        }
+        try? await store.apply(.setMuted(newValue), for: conversationId)
     }
 
     // MARK: - Mark as Read
