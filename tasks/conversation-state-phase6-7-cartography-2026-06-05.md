@@ -74,11 +74,14 @@ ConversationListView.swift: pin L375, mute L384, lock L393(sheet), archive/unarc
 | 1b-ii-a | List VM : migrer togglePin/toggleMute → `store.apply` + réécrire 7 tests (drainMainQueue) | — | ✅ MERGÉ | `291c60cde` |
 | 1b-ii-b | List VM : migrer archive/unarchive/reaction/moveToSection/markAsUnread → `store.apply` + réécrire 12 tests (waitForListState, lifecycleError) | — | ✅ MERGÉ | `1d547d6a0` |
 | 1b-ii-c | List VM : markAsRead (gate client `showReadReceipts` SUPPRIMÉ — serveur gate déjà le broadcast ; fixe sync cross-device) + deleteConversation (soft-delete `.deleteForUser` + filtre `deletedForUserAt` dans `filterConversations`) + tests | — | ✅ MERGÉ | `b2517737b` |
-| 1b-iii | Activer le bridge dans MeeshyApp (login/logout). **⚠️ BLOQUÉ : MeeshyApp.swift en cours d'édition par Codex (call-fix non-committé) — ne pas éditer le même fichier (règle worktree). Reprendre quand Codex aura committé/relâché MeeshyApp.swift.** Removal cross-device `applyConversationDeleted` : self-heal au refresh (le merge ne retire pas, mais le sync suivant drop la conv) — drop immédiat déféré. | — | 🔲 BLOQUÉ (Codex) | — |
-| 2 | Options VM → `store.apply` (hydrate depuis la conv, observe publisher(for:id), drop persistAsync/broadcaster/L2) ; supprimer abonnement broadcaster du list VM ; réécrire 22 tests. **Fichiers disjoints de Codex → DÉBLOQUÉ, prochain.** | — | 🔲 SUIVANT (débloqué) | — |
-| 3 | Conv header markAsRead via store + scenePhase | — | 🔲 | — |
+| 1b-iii | Activer le bridge dans MeeshyApp (login `activate()` / logout `deactivate()`). Removal cross-device `applyConversationDeleted` : self-heal au refresh (drop immédiat déféré). | — | ✅ MERGÉ | `bb300e5e8` |
+| 2 | Options VM → `store.apply` (hydrate depuis la conv, mirror userState→prefs, optimiste sync + rollback, drop persistAsync/broadcaster/L2) + `ConversationPreferencesTab` init + 25 tests réécrits. Broadcaster du list VM rendu inerte (suppression Phase 8/inc. 5). | — | ✅ MERGÉ | `e0255ff18` |
+| 3 | Conv header markAsRead via store + scenePhase (`ConversationViewModel` 3536 l. — risque moyen ; `ConversationView.swift` partagé potentiel avec Codex calls) | — | 🔲 SUIVANT | — |
 | 4 | Section headers → UserCategoryStore (reorder/expand) + UI pendingMutationCount | — | 🔲 | — |
-| 5 | Phase 8 : supprimer broadcaster + shims dépréciés, smoke, quality gate | — | 🔲 | — |
+| 5 | Phase 8 : supprimer broadcaster (+ abonnement list VM inerte L542/L584 + pbxproj) + shims dépréciés, smoke, quality gate | — | 🔲 | — |
+
+### État global (2/3 ViewModels migrés + bridge live)
+La fondation Stratégie B est **substantiellement livrée** : list VM (9/9 mutations) + options VM mutent via `ConversationStore` (optimiste + outbox offline + rollback + sync cross-surface au même tick via le merge sink), et le bridge route les events cross-device (deleted/reorder/category) vers le store. Restent 3 raffinements : conv header (inc. 3), section headers (inc. 4), cleanup broadcaster/shims (inc. 5).
 
 ### Détails 1b-ii (prochain)
 Réécrire dans `ConversationListViewModel.swift` (L~1221-1373) chaque méthode pour appeler `store.apply` au lieu de `preferenceService.updateConversationPreferences` direct. Le store fait l'optimiste + outbox + rollback ; le merge sink (1b-i) reflète déjà le résultat dans `conversations`. Donc le corps optimiste/rollback in-place des 9 méthodes disparaît.
