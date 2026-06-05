@@ -1006,6 +1006,12 @@ extension P2PWebRTCClient: RTCPeerConnectionDelegate {
             sdpMLineIndex: candidate.sdpMLineIndex,
             candidate: candidate.sdp
         )
+        // CALL-DIAG (temp instrumentation — remove on rollback): ICE candidate typ
+        let diagTyp: String = {
+            guard let r = candidate.sdp.range(of: "typ ") else { return "?" }
+            return String(candidate.sdp[r.upperBound...].split(separator: " ").first ?? "?")
+        }()
+        Logger.webrtc.info("[CALL-DIAG] ICE_OUT typ=\(diagTyp, privacy: .public) mid=\(candidate.sdpMid ?? "nil", privacy: .public)")
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.delegate?.webRTCClient(self, didGenerateCandidate: iceCandidate)

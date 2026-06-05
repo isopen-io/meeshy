@@ -1194,8 +1194,8 @@ final class CallManager: ObservableObject {
                     self.transitionToConnected()
                     return
                 }
-                Logger.calls.debug(
-                    "RTP gate attempt \(attempt) — packets=\(stats.inboundPacketsReceived) (need \(QualityThresholds.rtpGateRequiredPackets)) — patiente, pas de timeout auto"
+                Logger.calls.info(
+                    "[CALL-DIAG] RTP gate attempt \(attempt) — inboundPackets=\(stats.inboundPacketsReceived) (need \(QualityThresholds.rtpGateRequiredPackets)) — patiente, pas de timeout auto"
                 )
             }
         }

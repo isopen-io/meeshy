@@ -65,8 +65,20 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             await PushDeliveryReceiptService.shared.flushPending()
         }
         await withBudget("sockets.prepareForBackground") {
-            MessageSocketManager.shared.prepareForBackground()
-            SocialSocketManager.shared.prepareForBackground()
+            // CALL-FIX 2026-06-05 — NEVER tear down the realtime sockets while a
+            // call is active. CallKit + UIBackgroundModes(voip/audio) keep the app
+            // running in background during a call; suspending the socket here kills
+            // the WebRTC signaling channel mid-call (gateway sees "client namespace
+            // disconnect" ~seconds after initiate), the offer/answer/ICE exchange
+            // never completes and the call gets stuck on "connecting" + leaves a
+            // phantom. Keep the socket alive; Socket.IO auto-reconnect still covers
+            // a genuine transport drop.
+            if CallManager.shared.isCallActiveForAudioGuard {
+                logger.info("Skipping socket suspend — call active (keep signaling channel)")
+            } else {
+                MessageSocketManager.shared.prepareForBackground()
+                SocialSocketManager.shared.prepareForBackground()
+            }
         }
         // BG tasks are only useful for authenticated users — scheduling them
         // for guests would burn quota and fail at execution time.
@@ -91,8 +103,16 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
             await NSEPendingMessageConsumer.shared.consumeAll()
         }
         await withBudget("sockets.resume") {
-            MessageSocketManager.shared.resumeFromBackground()
-            SocialSocketManager.shared.resumeFromBackground()
+            // CALL-FIX 2026-06-05 — if a call kept the sockets alive (see the
+            // enterBackground guard), do NOT force-reconnect on resume: that would
+            // tear down and rebuild the very socket carrying the live call's
+            // signaling. Only reconnect when no call is active.
+            if CallManager.shared.isCallActiveForAudioGuard {
+                logger.info("Skipping socket resume reconnect — call active (socket kept alive)")
+            } else {
+                MessageSocketManager.shared.resumeFromBackground()
+                SocialSocketManager.shared.resumeFromBackground()
+            }
         }
         // Sync presence dots with the gateway runtime state. We may have missed
         // `user:status` events while suspended, and `presence:snapshot` only
