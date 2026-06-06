@@ -78,6 +78,13 @@ final class CallManager: ObservableObject {
     @Published private(set) var activeAudioEffect: AudioEffectConfig?
     @Published private(set) var hasLocalVideoTrack = false
     @Published private(set) var hasRemoteVideoTrack = false
+    /// §7.7 — whether the local capture is the front camera. Drives mirroring
+    /// in the UI: only the front camera is mirrored (a mirrored back camera
+    /// shows reversed text/scene — bug k). Tracked optimistically (toggled on
+    /// switchCamera, reset per call). Default true on iPhone/iPad (front camera
+    /// at start), false on iOS-on-Mac (built-in/Continuity cameras are not
+    /// mirrored).
+    @Published private(set) var isUsingFrontCamera = true
     @Published var pendingIncomingCall: (callId: String, fromUserId: String, fromUsername: String, isVideo: Bool)?
 
     // MARK: - Audio Guard (DEBUG override for tests)
@@ -1068,6 +1075,10 @@ final class CallManager: ObservableObject {
 
     func switchCamera() {
         webRTCService.switchCamera()
+        // §7.7 — optimistic front/back tracking for mirroring. On iPhone/iPad a
+        // flip alternates front↔back; on Mac switchCamera is usually a no-op so
+        // the flag rarely matters there.
+        isUsingFrontCamera.toggle()
         HapticFeedback.light()
     }
 
@@ -1969,6 +1980,8 @@ final class CallManager: ObservableObject {
     /// epoch for the new call (single per-call setup chokepoint).
     private func applyNegotiationRole() {
         negotiationId = 0
+        // §7.7 — front camera by default on iPhone/iPad (mirror), not on Mac.
+        isUsingFrontCamera = !ProcessInfo.processInfo.isiOSAppOnMac
         let localId = AuthManager.shared.currentUser?.id ?? ""
         let remoteId = remoteUserId ?? ""
         let polite = Self.isPolitePeer(localUserId: localId, remoteUserId: remoteId)

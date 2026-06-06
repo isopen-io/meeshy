@@ -35,7 +35,8 @@ struct CallView: View {
         ZStack {
             // Background: camera locale pour appels video, gradient pour audio
             if callManager.isVideoEnabled && callManager.hasLocalVideoTrack {
-                CallVideoView(track: callManager.localVideoTrack, mirror: true, contentMode: .scaleAspectFill)
+                // §7.7 — self-preview background mirrors only the front camera.
+                CallVideoView(track: callManager.localVideoTrack, mirror: callManager.isUsingFrontCamera, contentMode: .scaleAspectFill)
                     .ignoresSafeArea()
                 Color.black.opacity(0.25)
                     .ignoresSafeArea()
@@ -391,8 +392,9 @@ struct CallView: View {
     @ViewBuilder
     private func videoStream(local: Bool, contentMode: UIView.ContentMode) -> some View {
         if local {
-            // Mirror the local preview. Conditional front-only mirroring is §7.7.
-            CallVideoView(track: callManager.localVideoTrack, mirror: true, contentMode: contentMode)
+            // §7.7 — mirror ONLY the front camera (a mirrored back camera shows
+            // reversed text/scene — bug k).
+            CallVideoView(track: callManager.localVideoTrack, mirror: callManager.isUsingFrontCamera, contentMode: contentMode)
         } else if callManager.hasRemoteVideoTrack && callManager.isRemoteVideoEnabled {
             CallVideoView(track: callManager.remoteVideoTrack, contentMode: contentMode)
         } else if callManager.hasRemoteVideoTrack {
