@@ -85,6 +85,12 @@ class ConversationListViewModel: ObservableObject {
     /// with outbox-backed offline replay. Metadata + ordering stay owned by
     /// this VM (the store only sorts by `lastMessageAt`).
     private let store: ConversationStore
+    /// Source of truth for the user's conversation categories (sections). The
+    /// VM seeds it from the cache-first load and observes it back, so a
+    /// cross-device category event (created/renamed/reordered/deleted, routed
+    /// by `ConversationStoreSocketBridge`) or a local expand/collapse reflects
+    /// into `userCategories` via its publisher.
+    private let categoryStore: UserCategoryStore
     /// Publisher des notifications push « message » (conversationId). Injecté
     /// pour la testabilité ; en production, branché sur
     /// `PushNotificationManager.shared.messageNotificationReceived`.
@@ -351,7 +357,8 @@ class ConversationListViewModel: ObservableObject {
         syncEngine: ConversationSyncEngineProviding = ConversationSyncEngine.shared,
         messageNotificationPublisher: AnyPublisher<String, Never> = PushNotificationManager.shared.messageNotificationReceived.eraseToAnyPublisher(),
         draftStore: DraftStore = DraftStore.shared,
-        store: ConversationStore = .shared
+        store: ConversationStore = .shared,
+        categoryStore: UserCategoryStore = .shared
     ) {
         self.api = api
         self.conversationService = conversationService
@@ -364,6 +371,7 @@ class ConversationListViewModel: ObservableObject {
         self.messageNotificationPublisher = messageNotificationPublisher
         self.draftStore = draftStore
         self.store = store
+        self.categoryStore = categoryStore
         reloadDraftSummaries()
         subscribeToSocketEvents()
         subscribeToPushNotifications()
@@ -373,6 +381,7 @@ class ConversationListViewModel: ObservableObject {
         observeMarkAsRead()
         observeSync()
         observeStore()
+        observeCategoryStore()
     }
 
     /// Latest store-hydration task spawned by `setConversations`
@@ -559,6 +568,27 @@ class ConversationListViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] snapshot in
                 self?.mergeUserStateFromStore(snapshot)
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Subscribe to the category store and mirror its snapshot into
+    /// `userCategories` (the grouping pipeline's section source). The store is
+    /// the SoT for categories: a local expand/collapse (`setExpanded`) and a
+    /// cross-device category event (`applyRemote`, routed by the socket bridge)
+    /// both land here through its publisher.
+    private func observeCategoryStore() {
+        categoryStore.publisher()
+            // Drop the CurrentValueSubject's initial replay: at init the store
+            // is empty and `userCategories` is already empty, so the first
+            // emission is redundant. `loadCategories` re-emits via
+            // `hydrateFromSnapshot` (a post-subscribe emission, not dropped) for
+            // the actual paint; only real changes (hydrate / setExpanded /
+            // applyRemote) drive `userCategories` thereafter.
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] categories in
+                self?.applyCategories(categories)
             }
             .store(in: &cancellables)
     }
@@ -917,15 +947,21 @@ class ConversationListViewModel: ObservableObject {
 
     func loadCategories() async {
         if let cached = await preferenceService.loadCachedCategories() {
+            // Paint synchronously for the cold-start frame (no grouping flash),
+            // then seed the category store as the SoT. Its publisher
+            // (`observeCategoryStore`) drives every subsequent update —
+            // expand/collapse via `setExpanded`, and cross-device category
+            // events via `applyRemote`.
             applyCategories(cached)
+            await categoryStore.hydrateFromSnapshot(cached)
         }
         // Background revalidate so the next session picks up server-truth
-        // changes (new category created on web, color renamed, etc.).
-        // Errors here are non-fatal — we keep whatever cached snapshot we
-        // already painted.
+        // changes (new category created on web, color renamed, etc.). The
+        // store publisher repaints `userCategories`; errors are non-fatal —
+        // we keep whatever snapshot we already painted.
         do {
             let fresh = try await preferenceService.revalidateCategories()
-            applyCategories(fresh)
+            await categoryStore.hydrateFromSnapshot(fresh)
         } catch {
             // Network blip or unauthorized: cached value (if any) stays.
         }
@@ -1270,11 +1306,11 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Persist Category Expansion
 
     func persistCategoryExpansion(id: String, isExpanded: Bool) {
-        Task {
-            let _: APIResponse<AnyCodable>? = try? await api.patch(
-                endpoint: "/me/preferences/categories/\(id)",
-                body: ["isExpanded": isExpanded]
-            )
+        // Route through the category store: optimistic update + persist via the
+        // unified `/me/preferences/categories/{id}` PATCH, and the publisher
+        // reflects the new `isExpanded` into `userCategories` (cross-surface).
+        Task { [categoryStore] in
+            _ = try? await categoryStore.setExpanded(id, expanded: isExpanded)
         }
     }
 
