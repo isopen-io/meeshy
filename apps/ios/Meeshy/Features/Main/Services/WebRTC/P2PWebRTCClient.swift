@@ -139,7 +139,9 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
     func startLocalMedia(type: CallMediaType) async throws {
         Logger.webrtc.info("[WEBRTC] startLocalMedia begin type=\(String(describing: type))")
-        guard let pc = peerConnection else { throw WebRTCError.noPeerConnection }
+        // §5.2 — transceivers are no longer created here, but a live peer
+        // connection is still required before we build the local media.
+        guard peerConnection != nil else { throw WebRTCError.noPeerConnection }
 
         let audioConstraints = RTCMediaConstraints(
             mandatoryConstraints: [
@@ -155,25 +157,21 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let audioTrack = factory.audioTrack(with: audioSource, trackId: "audio0")
         audioTrack.isEnabled = true
         localAudioTrack = audioTrack
-        Logger.webrtc.info("[WEBRTC] addTransceiver audio")
-        // Phase 2 — addTransceiver garantit la présence du transceiver dans
-        // pc.transceivers AVANT setLocalDescription, ce qui permet d'appliquer
-        // setCodecPreferences de manière fiable. add(track:streamIds:) crée
-        // un transceiver implicite mais la liste pc.transceivers peut rester
-        // vide jusqu'au premier setLocalDescription, rendant setCodecPreferences
-        // inopérant. Reference §3.8 + §7 E9/E12.
-        let audioInit = RTCRtpTransceiverInit()
-        audioInit.direction = .sendRecv
-        audioInit.streamIds = ["meeshy-stream-0"]
-        guard let audioTransceiver = pc.addTransceiver(of: .audio, init: audioInit) else {
-            throw WebRTCError.failedToCreatePeerConnection
-        }
-        audioTransceiver.sender.track = audioTrack
-        self.audioTransceiver = audioTransceiver
-        applyAudioCodecPreferences(audioTransceiver: audioTransceiver)
 
+        // §5.2 — do NOT add transceivers here. The offerer adds its sendRecv
+        // transceivers in createOffer; the answerer applies the remote offer
+        // FIRST (createAnswer) and only THEN attaches its local tracks to the
+        // transceivers libwebrtc auto-created from the offer. Pre-adding
+        // sendRecv transceivers on the answerer BEFORE setRemoteDescription was
+        // the ROOT CAUSE of one-way media: libwebrtc could not associate them
+        // with the offer's m-sections, so the answer advertised recvonly/
+        // inactive on the section the caller reads → the caller's inbound RTP
+        // stayed 0 (caller hears nothing, callee hears fine — build 465 symptom,
+        // bug b). startLocalMedia now only builds the local tracks/capturer;
+        // attachment happens at SDP time (addOffererTransceiversIfNeeded /
+        // attachAnswererTracks).
         guard type == .audioVideo else {
-            Logger.webrtc.info("Local audio track started")
+            Logger.webrtc.info("[WEBRTC] local audio track prepared (audio-only)")
             return
         }
 
@@ -193,16 +191,9 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let videoTrack = factory.videoTrack(with: videoSource, trackId: "video0")
         videoTrack.isEnabled = true
         localVideoTrack_ = videoTrack
-        Logger.webrtc.info("[WEBRTC] addTransceiver video")
-        let videoInit = RTCRtpTransceiverInit()
-        videoInit.direction = .sendRecv
-        videoInit.streamIds = ["meeshy-stream-0"]
-        guard let videoTransceiver = pc.addTransceiver(of: .video, init: videoInit) else {
-            throw WebRTCError.failedToCreatePeerConnection
-        }
-        videoTransceiver.sender.track = videoTrack
-        self.videoTransceiver = videoTransceiver
-        applyVideoCodecPreferences(videoTransceiver: videoTransceiver)
+        // §5.2 — transceiver attach deferred to createOffer/createAnswer (see
+        // the audio-path note above). Here we only build the source/track and
+        // start the capturer.
 
         let filterDelegate = VideoFilterCapturerDelegate(target: videoSource, pipeline: videoFilterPipeline)
         videoFilterDelegate = filterDelegate
@@ -233,8 +224,10 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let fps = targetFrameRate(for: format)
         Logger.webrtc.info("[WEBRTC] capturer.startCapture begin fps=\(fps)")
         try await capturer.startCapture(with: camera, format: format, fps: fps)
-        applyVideoEncoding()
-        Logger.webrtc.info("Local audio + video tracks started (\(camera.position == .front ? "front" : "device") camera, \(fps)fps)")
+        // applyVideoEncoding() is deferred — it runs once the video track is
+        // attached to its transceiver (addOffererTransceiversIfNeeded /
+        // attachAnswererTracks); a sender does not exist yet at this point.
+        Logger.webrtc.info("[WEBRTC] local audio + video tracks prepared (\(camera.position == .front ? "front" : "device") camera, \(fps)fps)")
         #endif
     }
 
@@ -430,8 +423,84 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
     // MARK: - SDP Negotiation
 
+    /// §5.2 (offerer path) — create the audio (+ video when a local video track
+    /// exists) `.sendRecv` transceivers, attach the prepared local tracks, and
+    /// pin codec preferences. No-op once transceivers exist so renegotiation /
+    /// ICE-restart never duplicates m-lines (stable layout = safe renegotiation
+    /// + SFU-ready).
+    private func addOffererTransceiversIfNeeded(on pc: RTCPeerConnection) {
+        guard audioTransceiver == nil else { return }
+
+        let audioInit = RTCRtpTransceiverInit()
+        audioInit.direction = .sendRecv
+        audioInit.streamIds = ["meeshy-stream-0"]
+        if let at = pc.addTransceiver(of: .audio, init: audioInit) {
+            at.sender.track = localAudioTrack
+            self.audioTransceiver = at
+            applyAudioCodecPreferences(audioTransceiver: at)
+        } else {
+            Logger.webrtc.error("[WEBRTC] failed to add audio transceiver (offerer)")
+        }
+
+        guard let videoTrack = localVideoTrack_ else { return }
+        let videoInit = RTCRtpTransceiverInit()
+        videoInit.direction = .sendRecv
+        videoInit.streamIds = ["meeshy-stream-0"]
+        if let vt = pc.addTransceiver(of: .video, init: videoInit) {
+            vt.sender.track = videoTrack
+            self.videoTransceiver = vt
+            applyVideoCodecPreferences(videoTransceiver: vt)
+            applyVideoEncoding()
+        } else {
+            Logger.webrtc.error("[WEBRTC] failed to add video transceiver (offerer)")
+        }
+    }
+
+    /// §5.2 (answerer path) — MUST run AFTER setRemoteDescription(offer).
+    /// Attaches the prepared local tracks to the transceivers libwebrtc created
+    /// from the remote offer (matched by media kind) and forces them sendRecv so
+    /// the answer is bidirectional on the sections the caller reads.
+    private func attachAnswererTracks(on pc: RTCPeerConnection) {
+        for transceiver in pc.transceivers {
+            switch transceiver.mediaType {
+            case .audio:
+                if let audio = localAudioTrack {
+                    transceiver.sender.track = audio
+                    forceSendRecv(transceiver)
+                }
+                self.audioTransceiver = transceiver
+                applyAudioCodecPreferences(audioTransceiver: transceiver)
+            case .video:
+                self.videoTransceiver = transceiver
+                if let video = localVideoTrack_ {
+                    transceiver.sender.track = video
+                    forceSendRecv(transceiver)
+                    applyVideoCodecPreferences(videoTransceiver: transceiver)
+                    applyVideoEncoding()
+                }
+                // else: audio-only answerer to a video offer → leave recvonly
+                // (receive remote video, send none). Mid-call upgrade is P1.
+            default:
+                break
+            }
+        }
+    }
+
+    private func forceSendRecv(_ transceiver: RTCRtpTransceiver) {
+        do {
+            try transceiver.setDirection(.sendRecv, error: nil)
+        } catch {
+            Logger.webrtc.warning("[WEBRTC] setDirection(.sendRecv) failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
     func createOffer() async throws -> SessionDescription {
         guard let pc = peerConnection else { throw WebRTCError.noPeerConnection }
+
+        // §5.2 — offerer attaches its sendRecv transceivers before creating the
+        // offer. Idempotent (no-op once they exist) so renegotiation/ICE-restart
+        // reuses them and the m-line layout stays stable.
+        addOffererTransceiversIfNeeded(on: pc)
 
         // §5.3 — NO legacy Plan-B `OfferToReceiveAudio/Video` constraints. Mixing
         // those with Unified-Plan transceivers is a classic source of direction
@@ -477,22 +546,19 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let rtcOffer = RTCSessionDescription(type: .offer, sdp: offer.sdp)
         try await setRemoteDescription(rtcOffer, on: pc)
 
-        // CALL-FIX 2026-06-06 — ROOT CAUSE of one-way media. We pre-add audio+video
-        // transceivers (sendRecv, with local tracks) in startLocalMedia, then apply
-        // the remote offer here. On the ANSWERER, libwebrtc left those transceivers
-        // at `recvonly` after setRemoteDescription(offer), so the generated answer
-        // advertised audio=recvonly/video=recvonly → the callee RECEIVED the caller's
-        // media (it shows the remote video) but NEVER SENT its own → the caller's
-        // inbound RTP stayed 0 ("Connexion vidéo…" forever, caller keeps ringing,
-        // asymmetric media). Force every transceiver that has a local track back to
-        // .sendRecv BEFORE creating the answer so the answer is bidirectional.
-        for transceiver in pc.transceivers where transceiver.sender.track != nil {
-            do {
-                try transceiver.setDirection(.sendRecv, error: nil)
-            } catch {
-                Logger.webrtc.warning("[WEBRTC] setDirection(.sendRecv) failed: \(error.localizedDescription, privacy: .public)")
-            }
-        }
+        // §5.2 — canonical Unified-Plan answerer path and the REAL fix for
+        // one-way media (bug b, build 465). The remote offer was applied above,
+        // which makes libwebrtc auto-create the receiver transceivers matching
+        // the offer's m-sections. Only NOW do we attach our local tracks to
+        // those transceivers and force them sendRecv, so the answer advertises
+        // sendrecv on the sections the caller reads → the caller's inbound RTP
+        // flows (the callee is finally heard).
+        //
+        // This replaces the band-aid (commit c5b15ce) that forced sendRecv on
+        // transceivers PRE-added in startLocalMedia: those were never associated
+        // with the offer's m-sections, so the answer stayed recvonly/inactive
+        // and the fix did nothing.
+        attachAnswererTracks(on: pc)
 
         // §5.3 — empty constraints (no legacy Plan-B `OfferToReceive*`). Under
         // Unified-Plan the answer's per-section direction is derived from the
