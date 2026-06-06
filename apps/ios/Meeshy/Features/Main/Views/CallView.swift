@@ -38,8 +38,16 @@ struct CallView: View {
 
     var body: some View {
         ZStack {
-            // Background: camera locale pour appels video, gradient pour audio
-            if callManager.isVideoEnabled && callManager.hasLocalVideoTrack {
+            // Background: full-screen LOCAL self-preview ONLY while waiting to
+            // connect (ringing/offering/connecting) — the user sees themselves
+            // before the peer's video arrives. Once `.connected`/`.reconnecting`,
+            // the primary stream (`videoCallLayout`) + the `pipView` own the
+            // single video surface; keeping a full-screen local layer here would
+            // render the local feed TWICE (background + PiP) and bleed around the
+            // primary — the "double frame / overlapping layers" bug. After a PiP
+            // swap the local feed becomes the primary, so this would duplicate it
+            // again. Hence: self-preview background only when NOT connected.
+            if shouldShowSelfPreviewBackground {
                 // §7.7 — self-preview background mirrors only the front camera.
                 CallVideoView(track: callManager.localVideoTrack, mirror: callManager.isUsingFrontCamera, contentMode: .scaleAspectFill)
                     .ignoresSafeArea()
@@ -266,16 +274,23 @@ struct CallView: View {
 
     private var connectedView: some View {
         ZStack {
-            VStack(spacing: 0) {
-                Spacer()
+            // §7.2 — full-bleed PRIMARY video is the SINGLE video surface
+            // (remote by default, the local camera after a PiP swap). The
+            // secondary feed lives ONLY in the draggable PiP. Controls (and the
+            // centered avatar for audio calls) overlay on top. This replaces the
+            // old centered card sandwiched in Spacers, which floated over the
+            // self-preview background and read as a "double frame".
+            if callManager.isVideoEnabled {
+                // §7.3 — tap the primary video to toggle the controls
+                // (auto-hide UX). The PiP (on top) keeps its own swap tap.
+                videoCallLayout
+                    .contentShape(Rectangle())
+                    .onTapGesture { toggleControls() }
+            }
 
-                if callManager.isVideoEnabled {
-                    // §7.3 — tap the primary video to toggle the controls
-                    // (auto-hide UX). The PiP (on top) keeps its own swap tap.
-                    videoCallLayout
-                        .contentShape(Rectangle())
-                        .onTapGesture { toggleControls() }
-                } else {
+            VStack(spacing: 0) {
+                if !callManager.isVideoEnabled {
+                    Spacer()
                     audioCallLayout
                 }
 
@@ -333,6 +348,20 @@ struct CallView: View {
 
     private func toggleControls() {
         withAnimation(.easeInOut(duration: 0.25)) { showControls.toggle() }
+    }
+
+    /// Whether to render the full-screen LOCAL self-preview as the call
+    /// background. True ONLY while waiting to connect (ringing/offering/
+    /// connecting) so the user sees themselves before the peer's video arrives.
+    /// Once `.connected`/`.reconnecting`, the primary stream + PiP own the
+    /// single video surface, so a full-screen local layer here would duplicate
+    /// the local feed (rendered again in the PiP) — the double-frame bug.
+    private var shouldShowSelfPreviewBackground: Bool {
+        guard callManager.isVideoEnabled, callManager.hasLocalVideoTrack else { return false }
+        switch callManager.callState {
+        case .connected, .reconnecting: return false
+        default: return true
+        }
     }
 
     /// §7.1 — iOS-app-on-Mac (NOT Catalyst). Drives desktop-specific UI:
@@ -451,13 +480,17 @@ struct CallView: View {
 
     private var videoCallLayout: some View {
         ZStack {
-            // §7.2 — full-area PRIMARY stream. `swapStreams` decides whether the
-            // primary is the remote feed (default) or the local camera (after a
-            // PiP tap). The OTHER stream is rendered in the draggable PiP.
-            // §7.1 — letterbox on Mac, fill on phone/tablet.
+            // §7.2 — full-bleed PRIMARY stream (edge-to-edge, single surface).
+            // `swapStreams` decides whether the primary is the remote feed
+            // (default) or the local camera (after a PiP tap). The OTHER stream
+            // is rendered in the draggable PiP. §7.1 — letterbox on Mac, fill on
+            // phone/tablet. `.ignoresSafeArea()` is on the VIDEO only so the feed
+            // reaches the screen edges while the duration badge stays inside the
+            // safe area (never under the notch / Dynamic Island).
             videoStream(local: swapStreams, contentMode: primaryVideoContentMode)
+                .ignoresSafeArea()
 
-            // Duration badge top-left
+            // Duration badge top-left (respects the safe area).
             VStack {
                 HStack {
                     Text(callManager.formattedDuration)
@@ -473,7 +506,6 @@ struct CallView: View {
                 Spacer()
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 20))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
