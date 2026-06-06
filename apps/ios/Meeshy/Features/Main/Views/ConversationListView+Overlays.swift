@@ -244,11 +244,6 @@ struct ConversationListHeaderOverlay: View {
             titleColor: theme.textPrimary,
             backArrowColor: MeeshyColors.indigo500,
             backgroundColor: theme.backgroundPrimary,
-            // The "Meeshy" title slides to the centre as the list scrolls, and the
-            // header surface fades from a readable blur at the top to transparent
-            // at the bottom edge so the conversation rows stay visible underneath.
-            centerTitleOnCollapse: true,
-            fadeOutBackground: true,
             leading: {
                 if let iPadFeedAction {
                     Button {

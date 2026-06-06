@@ -86,8 +86,9 @@ final class CompatibilityLayerTests: XCTestCase {
     }
 
     @MainActor
-    func test_collapsibleHeader_supportsCenteredTitleAndFadeOutBackground() {
-        // Opt-in flags must not break the existing call surface (defaults false).
+    func test_collapsibleHeader_buildsWithLeadingTitleAndFadeOutSurface() {
+        // The header now uses a left/leading title (no centring) and a fade-out
+        // blurred surface for ALL screens — no per-screen flags.
         _ = CollapsibleHeader(
             title: "Meeshy",
             scrollOffset: -30,
@@ -95,12 +96,9 @@ final class CompatibilityLayerTests: XCTestCase {
             titleColor: .primary,
             backArrowColor: .blue,
             backgroundColor: .black,
-            centerTitleOnCollapse: true,
-            fadeOutBackground: true,
             titleView: { Text("Meeshy") },
             trailing: { EmptyView() }
         )
-        // Backward-compatible: still builds without the new flags.
         _ = CollapsibleHeader(
             title: "Settings",
             scrollOffset: 0,
