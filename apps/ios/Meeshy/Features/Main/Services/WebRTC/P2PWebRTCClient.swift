@@ -477,6 +477,23 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let rtcOffer = RTCSessionDescription(type: .offer, sdp: offer.sdp)
         try await setRemoteDescription(rtcOffer, on: pc)
 
+        // CALL-FIX 2026-06-06 — ROOT CAUSE of one-way media. We pre-add audio+video
+        // transceivers (sendRecv, with local tracks) in startLocalMedia, then apply
+        // the remote offer here. On the ANSWERER, libwebrtc left those transceivers
+        // at `recvonly` after setRemoteDescription(offer), so the generated answer
+        // advertised audio=recvonly/video=recvonly → the callee RECEIVED the caller's
+        // media (it shows the remote video) but NEVER SENT its own → the caller's
+        // inbound RTP stayed 0 ("Connexion vidéo…" forever, caller keeps ringing,
+        // asymmetric media). Force every transceiver that has a local track back to
+        // .sendRecv BEFORE creating the answer so the answer is bidirectional.
+        for transceiver in pc.transceivers where transceiver.sender.track != nil {
+            do {
+                try transceiver.setDirection(.sendRecv)
+            } catch {
+                Logger.webrtc.warning("[WEBRTC] setDirection(.sendRecv) failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+
         let constraints = RTCMediaConstraints(
             mandatoryConstraints: [
                 "OfferToReceiveAudio": "true",
