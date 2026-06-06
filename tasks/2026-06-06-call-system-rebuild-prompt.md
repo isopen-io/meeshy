@@ -826,4 +826,24 @@ Reste UI :
 
 ---
 
+### 📍 ÉTAT ACTUEL & PROCHAINE SESSION (2026-06-06)
+
+**Branches** : `claude/admiring-faraday-ZMpBt` (PR #314) + `feat/calls-sota-rebuild` (snapshot) — synchronisées à `c02b527`. Tags `calls-sota-p0.1`→`p1.9` (locaux uniquement — push de tags bloqué HTTP 403 dans l'env web ; tous les commits sont sur le remote).
+
+**Où on en est :**
+- ✅ **P0 fondation** : relais signaling fiable (epoch §3.5 + buffer/replay §4.6), autorité FSM `RTCPeerConnectionState` (§3.2), **fix racine son à sens unique** (answerer applique l'offre avant d'attacher §5.2), perfect-negotiation fondation (rôle polite + garde glare + rollback §3.4), suppression contraintes legacy (§5.3). **Happy-path audio+vidéo 1:1 validé sur device réel** (iPhone ↔ Mac).
+- ✅ **P1 UI/UX** : PiP tap-swap + drag (§7.2), miroir conditionnel (§7.7), couleurs tokens (§7.3), pastille return-to-call vidéo + header retour-à-l'appel + call-waiting (§7.6), watchdog spinner (§7.2/f), auto-hide contrôles (§7.3), Mac-adaptive letterbox + contrôles cachés (§7.1, AC9).
+
+**Où on va :** terminer P0 (robustesse/fiabilité), puis P2 (qualité SOTA + adaptatif complet) et P3 (messages système).
+
+**🎯 PRIORITÉ PROCHAINE SESSION (nouvelle session de code) — P0 différés (plus risqués, mis en retrait pour préserver la branche stable ; à faire en premier avec TDD strict + re-test device des DEUX côtés) :**
+1. **§3.1 — `CallEventQueue` réducteur** : sérialiser TOUTES les écritures `callState =` (~13 sites) derrière un réducteur unique (gros refactor FSM ; câbler le scaffold mort).
+2. **§6.3 — at-least-once offer iOS** : `emitCallOffer` via `emitCallSignalWithAck` + retry/backoff (le buffer/replay gateway §4.6 est le backstop, pas le retry émetteur).
+3. **§5.8 — watchdog `.connecting`** : timeout 20-30 s → ICE restart → fail + RTP gate **actionnable** (auto-réparation half-open : inbound=0 & outbound>0 après 3-4 s → ICE restart auto).
+4. **§2.3/§6.4 — gating audio Mac** : gater `[AUDIO_FALLBACK]` sur `isiOSAppOnMac` (au lieu de l'heuristique fragile `!isAudioEnabled`).
+
+> Rappels pour la prochaine session : ne PAS partager `P2PWebRTCClient.swift`/`CallManager.swift` entre worktrees parallèles ; build vert + commit isolé par étape ; `setDirection(_:error:)` est **void** (capturer via `&error`, jamais `try`) ; `meeshy.sh build` peut sortir EXIT=1 sur un build sans warning (vérifier `** BUILD SUCCEEDED **` dans le log). §6.1 `reportOutgoingCall(connectedAt:)` est **déjà** piloté par `.connected` (p0.2) — rien à y faire.
+
+---
+
 **Fin de la spec. Implémente phase par phase, TDD strict, build vert à chaque commit, vérification finale sur device réel. La FSM WebRTC pilotée par `RTCPeerConnectionState` + perfect negotiation est le cœur ; tout le reste en découle.**
