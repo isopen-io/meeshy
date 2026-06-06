@@ -1014,7 +1014,6 @@ final class CallManager: ObservableObject {
         // the rollback, the app's `isMuted` and the WebRTC track were
         // permanently out of sync with CallKit's system mute UI — once
         // diverged, only a call hangup recovered it.
-        let previous = isMuted
         isMuted.toggle()
         webRTCService.muteAudio(isMuted)
 
@@ -1029,14 +1028,15 @@ final class CallManager: ObservableObject {
             return
         }
         let muteAction = CXSetMutedCallAction(call: uuid, muted: isMuted)
-        callController.request(CXTransaction(action: muteAction)) { [weak self] error in
+        callController.request(CXTransaction(action: muteAction)) { error in
             if let error {
-                Logger.calls.error("CallKit mute failed (rolling back local state): \(error.localizedDescription)")
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    self.isMuted = previous
-                    self.webRTCService.muteAudio(self.isMuted)
-                }
+                // CALL-FIX 2026-06-06 — do NOT roll back the WebRTC mute when CallKit
+                // refuses the transaction (CXSetMutedCallAction error 4). The WebRTC
+                // track toggle above IS the real mute; the old rollback UN-muted the
+                // user against their intent ("impossible de mute — ça fall back").
+                // Keep the mute; CallKit's system UI may briefly desync but the audio
+                // is correctly muted.
+                Logger.calls.error("CallKit mute transaction failed (keeping WebRTC mute): \(error.localizedDescription)")
             }
         }
 
@@ -1886,38 +1886,59 @@ final class CallManager: ObservableObject {
     // MARK: - Participant Joined (Outgoing Call)
 
     private func listenForParticipantJoined(callId: String, toUserId: String, isVideo: Bool) {
+        // Idempotent join handler: creates the offer exactly once. Guarded so a
+        // replayed buffered event + the live event can't both fire it.
+        let handleJoin: (CallParticipantData) -> Void = { [weak self] event in
+            guard let self else { return }
+            guard self.currentCallId == callId else { return }
+            // Once we've started offering/connecting, ignore further joins.
+            switch self.callState {
+            case .offering, .connecting, .connected, .reconnecting: return
+            default: break
+            }
+            self.participantJoinedCancellable?.cancel()
+            Logger.calls.info("Participant joined call \(callId), creating offer")
+
+            // Update ICE servers with TURN credentials without recreating the peer connection
+            if let servers = event.iceServers, !servers.isEmpty {
+                let dynamicServers = servers.map { server in
+                    IceServer(urls: server.urls.asArray, username: server.username, credential: server.credential)
+                }
+                self.webRTCService.updateIceServers(dynamicServers)
+            }
+
+            // Phase 1 fix E5: distinct .offering state. We're no longer ringing
+            // (peer joined) but not yet connecting (no answer received). This
+            // makes the FSM observable and matches the SOTA spec §2.2.
+            self.cancelOutgoingRingTimeout()
+            self.callState = .offering
+            Task { [weak self] in
+                guard let self else { return }
+                guard let offer = await self.webRTCService.createOffer() else {
+                    self.endCallInternal(reason: .failed("Failed to create offer"))
+                    return
+                }
+                self.emitCallOffer(callId: callId, toUserId: toUserId, isVideo: isVideo, sdp: offer)
+                Logger.calls.info("SDP offer sent for call: \(callId)")
+            }
+        }
+
         participantJoinedCancellable?.cancel()
         participantJoinedCancellable = MessageSocketManager.shared.callParticipantJoined
             .receive(on: DispatchQueue.main)
             .filter { $0.callId == callId }
-            .first()
-            .sink { [weak self] event in
-                guard let self else { return }
-                Logger.calls.info("Participant joined call \(callId), creating offer")
+            .sink { handleJoin($0) }
 
-                // Update ICE servers with TURN credentials without recreating the peer connection
-                if let servers = event.iceServers, !servers.isEmpty {
-                    let dynamicServers = servers.map { server in
-                        IceServer(urls: server.urls.asArray, username: server.username, credential: server.credential)
-                    }
-                    self.webRTCService.updateIceServers(dynamicServers)
-                }
-
-                // Phase 1 fix E5: distinct .offering state. We're no longer ringing
-                // (peer joined) but not yet connecting (no answer received). This
-                // makes the FSM observable and matches the SOTA spec §2.2.
-                self.cancelOutgoingRingTimeout()
-                self.callState = .offering
-                Task { [weak self] in
-                    guard let self else { return }
-                    guard let offer = await self.webRTCService.createOffer() else {
-                        self.endCallInternal(reason: .failed("Failed to create offer"))
-                        return
-                    }
-                    self.emitCallOffer(callId: callId, toUserId: toUserId, isVideo: isVideo, sdp: offer)
-                    Logger.calls.info("SDP offer sent for call: \(callId)")
-                }
-            }
+        // CALL-FIX 2026-06-06 — the callee may have ALREADY joined (socket churn /
+        // re-join / rapid retry) before this listener subscribed; the live
+        // PassthroughSubject doesn't replay, so the offer would never be created
+        // and the call would ring-timeout at 45s. Replay the SDK's buffered last
+        // event if it matches this callId.
+        if let buffered = MessageSocketManager.shared.lastCallParticipantJoined,
+           buffered.callId == callId {
+            Logger.calls.info("Replaying buffered participant-joined for \(callId)")
+            handleJoin(buffered)
+        }
     }
 
     // MARK: - Socket Emit Helpers

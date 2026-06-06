@@ -1017,6 +1017,11 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let callMissed = PassthroughSubject<CallMissedData, Never>()
     public let callAlreadyAnswered = PassthroughSubject<CallAlreadyAnsweredData, Never>()
     public let callParticipantJoined = PassthroughSubject<CallParticipantData, Never>()
+    /// Last `call:participant-joined` event received, so the initiator's listener
+    /// (set up only after the call:initiate ACK) can replay an event that arrived
+    /// before it subscribed (callee already in the room). Matched by callId, so a
+    /// stale event from a previous call is naturally ignored.
+    public private(set) var lastCallParticipantJoined: CallParticipantData?
     public let callParticipantLeft = PassthroughSubject<CallParticipantData, Never>()
     public let callMediaToggled = PassthroughSubject<CallMediaToggleData, Never>()
     public let callError = PassthroughSubject<CallErrorData, Never>()
@@ -1914,6 +1919,12 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             // a foreground app as unknown and push CallKit for the first call.
             self.socket?.emit("presence:app-state", ["foreground": self.lastAppForeground])
 
+            // CALL-FIX 2026-06-06 — ask the gateway to replay any in-progress
+            // (ringing) call so a user who comes online / opens the app mid-ring
+            // sees the incoming banner immediately, instead of missing the call
+            // that started while they were offline/backgrounded.
+            self.socket?.emit("call:check-active")
+
             // Re-join all tracked conversations (active-first for fastest UX).
             for convId in self.roomsToRejoinOnConnect() {
                 self.socket?.emit("conversation:join", ["conversationId": convId])
@@ -2439,7 +2450,16 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         socket.on("call:participant-joined") { [weak self] data, _ in
             guard let self else { return }
             self.decode(CallParticipantData.self, from: data) { [weak self] event in
-                self?.callParticipantJoined.send(event)
+                guard let self else { return }
+                // CALL-FIX 2026-06-06 — buffer the last event. The initiator sets up
+                // its `callParticipantJoined` listener only AFTER the call:initiate
+                // ACK; if the callee was already in the call room (socket churn /
+                // re-join / rapid retry) the gateway emits participant-joined BEFORE
+                // the listener subscribes, and a PassthroughSubject doesn't replay →
+                // the offer is never created → 45s ring timeout. The listener replays
+                // this buffered value by callId.
+                self.lastCallParticipantJoined = event
+                self.callParticipantJoined.send(event)
             }
         }
 
