@@ -816,11 +816,13 @@ Côté P0, restent (plus risqués, mis en retrait pour préserver la stabilité)
 - ✅ **`p1.6` (db5f86b)** — header conversation : pendant un appel actif, les boutons start-call deviennent un indicateur vert « ● ⏱ toucher pour revenir » (bloque un 2e appel + retour 1-tap) (§7.6).
 - ✅ **`p1.7` (ab76bd6)** — auto-hide des contrôles ~4 s sur iPhone/iPad vidéo (tap vidéo = toggle ; jamais sur Mac/audio/effets ouverts) (§7.3).
 
+- ✅ **`p1.8` (74610c9)** — Mac-adaptive : cacher speaker + flip caméra sur Mac (contrôles morts), vidéo remote letterboxée (`.scaleAspectFit`) sur Mac vs fill iPhone/iPad ; contrôles persistants Mac (via gating auto-hide de p1.7) (§7.1, AC9).
+- ✅ **`p1.9` (a40f5f4)** — **call-waiting câblé** : `CallWaitingBannerView` montée (RootView + iPadRootView), 2e appel entrant → Refuser / Terminer & répondre (était dead code) (§7.6, bug l).
+
 Reste UI :
 - 🟡 Self-preview vidéo dans `IncomingCallView` (§7.4) — **partiellement couvert** : le fond `CallView` rend déjà la caméra locale (atténuée, miroir avant) derrière l'UI entrante ; une vignette nette dédiée serait du polish.
-- ⏳ Câbler le **call-waiting** dead code (`CallWaitingBannerView` / API `CallManager` 2e appel entrant) (§7.6).
-- ⏳ **Layout adaptatif** size class + `isiOSAppOnMac` : Mac letterbox + contrôles persistants + cacher speaker/flip ; iPad regular-width (§7.1).
-- ⏳ P2 (codecs HW, getStats par-kind, filtres Vision/Metal, ICE-restart sur `.disconnected`) et P3 (messages système d'appel).
+- ⏳ **Layout adaptatif** complet : iPad regular-width (barre glass flottante centrée), debounce resize Mac/iPad, Continuity Camera device picker (§7.1).
+- ⏳ P2 (codecs HW, getStats par-kind, filtres Vision/Metal, ICE-restart sur `.disconnected` + bannière reconnecting) et P3 (messages système d'appel).
 
 ---
 
