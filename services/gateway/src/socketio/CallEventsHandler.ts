@@ -167,6 +167,18 @@ export class CallEventsHandler {
       return false;
     };
 
+    // CALL-FIX 2026-06-06 — track app foreground/background so call:initiate can
+    // choose socket delivery (in-app UI) vs VoIP push (CallKit) per callee. A
+    // backgrounded iOS app keeps a live socket for ~45s (until ping timeout) but
+    // CANNOT process socket events — without this signal the gateway treated it as
+    // reachable and never sent the VoIP push, so incoming calls never rang unless
+    // the app was foreground. iOS emits this on scenePhase transitions while the
+    // socket is still alive (`.inactive` fires before suspension). Stored on the
+    // socket so the per-user fanout (which uses fetchSockets) can read it.
+    socket.on('presence:app-state', (data: { foreground?: boolean }) => {
+      socket.data.appForeground = data?.foreground === true;
+    });
+
     /**
      * call:initiate - Client initiates a new call
      * CVE-002: Added rate limiting (5 req/min)
@@ -316,11 +328,19 @@ export class CallEventsHandler {
         // is O(M) where M = the callee's online device count (typically 1–3).
         let notifiedSocketsCount = 0;
         const notifiedUserIds = new Set<string>();
+        const foregroundUserIds = new Set<string>();
         for (const memberId of memberUserIds) {
           if (memberId === userId) continue; // skip initiator
           const memberSockets = await io.in(ROOMS.user(memberId)).fetchSockets();
           if (memberSockets.length === 0) continue;
           notifiedUserIds.add(memberId);
+          // CALL-FIX 2026-06-06 — a member is reachable via the in-app socket UI
+          // ONLY if at least one of its sockets is FOREGROUND. A backgrounded
+          // socket still receives this emit but iOS has suspended the app so it
+          // can't act on it → that member also needs a VoIP push (below).
+          if (memberSockets.some((s: any) => s.data?.appForeground === true)) {
+            foregroundUserIds.add(memberId);
+          }
           const memberIceServers = this.callService.generateIceServers(memberId);
           for (const memberSocket of memberSockets) {
             memberSocket.emit(CALL_EVENTS.INITIATED, { ...initiatedEvent, iceServers: memberIceServers });
@@ -422,12 +442,17 @@ export class CallEventsHandler {
           const callerName = initiatorUser?.displayName || initiatorUser?.username || 'Unknown';
           const callerAvatar = initiatorUser?.avatar || undefined;
 
-          // Audit P2-GW-1 — reuse the `notifiedUserIds` set built above
-          // (filled during the per-user fanout); offline users are the
-          // conversation members for whom no socket was found in their
-          // user room.
+          // CALL-FIX 2026-06-06 — VoIP-push every callee that is NOT confirmed
+          // FOREGROUND (the `foregroundUserIds` set built during the fanout). That
+          // covers BOTH truly offline members (no socket) AND backgrounded members
+          // (socket still TCP-connected for ~45s but the app is suspended and can't
+          // ring from the socket event). Only a foreground member relies on the
+          // in-app socket UI and must NOT get a VoIP push (which would force a
+          // CallKit banner over the in-app UI). Previously this used
+          // `!notifiedUserIds` (socket-less only), so a backgrounded iPhone never
+          // rang — the core "I don't receive calls when the app is closed" bug.
           const offlineUserIds = memberUserIds.filter(
-            uid => uid !== userId && !notifiedUserIds.has(uid)
+            uid => uid !== userId && !foregroundUserIds.has(uid)
           );
 
           for (const offlineUserId of offlineUserIds) {
