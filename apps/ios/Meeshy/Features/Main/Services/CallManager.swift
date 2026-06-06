@@ -455,6 +455,7 @@ final class CallManager: ObservableObject {
                 self.currentCallId = ack.callId
                 Logger.calls.info("[CALL_SETUP] outgoing 1/4 webRTC.configure begin (isVideo=\(isVideo))")
                 self.webRTCService.configure(isVideo: isVideo, iceServers: dynamicServers)
+                self.applyNegotiationRole()
                 Logger.calls.info("[CALL_SETUP] outgoing 2/4 configureAudioSession begin")
                 self.configureAudioSession()
                 Logger.calls.info("[CALL_SETUP] outgoing 3/4 startLocalMedia begin (isVideo=\(isVideo))")
@@ -567,6 +568,7 @@ final class CallManager: ObservableObject {
         // so RTCPeerConnection is built with TURN BEFORE the offer is set.
         Logger.calls.info("[CALL_SETUP] incoming 1/4 webRTC.configure begin (isVideo=\(isVideo))")
         webRTCService.configure(isVideo: isVideo, iceServers: iceServers)
+        applyNegotiationRole()
         Logger.calls.info("[CALL_SETUP] incoming 2/4 configureAudioSession begin")
         configureAudioSession()
 
@@ -765,6 +767,7 @@ final class CallManager: ObservableObject {
 
         // Auto-join call room + configure WebRTC so SDP offer can be received while ringing
         webRTCService.configure(isVideo: isVideo, iceServers: iceServers)
+        applyNegotiationRole()
         configureAudioSession()
 
         // Phase 2 fix — Bug 2: emit call:join IMMEDIATELY so the caller receives
@@ -1939,6 +1942,31 @@ final class CallManager: ObservableObject {
             Logger.calls.info("Replaying buffered participant-joined for \(callId)")
             handleJoin(buffered)
         }
+    }
+
+    // MARK: - Perfect Negotiation Role (§3.4)
+
+    /// Assigns the deterministic, symmetric polite/impolite role to the WebRTC
+    /// client. Both peers compute it identically from the two userIds, so it is
+    /// independent of who called whom and survives renegotiations. Called once
+    /// per call, right after `webRTCService.configure`.
+    private func applyNegotiationRole() {
+        let localId = AuthManager.shared.currentUser?.id ?? ""
+        let remoteId = remoteUserId ?? ""
+        let polite = Self.isPolitePeer(localUserId: localId, remoteUserId: remoteId)
+        webRTCService.setNegotiationRole(isPolite: polite)
+        Logger.calls.info("[CALL-DIAG] negotiation role: \(polite ? "polite" : "impolite") (local=\(localId, privacy: .public) remote=\(remoteId, privacy: .public))")
+    }
+
+    /// Pure, testable politeness rule (W3C perfect negotiation): the
+    /// lexicographically-smaller userId is the polite peer. Symmetric — peer A
+    /// comparing (idA, idB) and peer B comparing (idB, idA) both reduce to
+    /// `min(idA, idB)` and therefore agree without any extra signaling. Returns
+    /// `false` (impolite) when an id is missing, so a misconfigured side never
+    /// yields blindly. Scales cleanly to SFU later (client always polite).
+    static func isPolitePeer(localUserId: String, remoteUserId: String) -> Bool {
+        guard !localUserId.isEmpty, !remoteUserId.isEmpty, localUserId != remoteUserId else { return false }
+        return localUserId < remoteUserId
     }
 
     // MARK: - Socket Emit Helpers

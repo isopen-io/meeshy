@@ -76,8 +76,57 @@ export class CallEventsHandler {
   private pushService: PushNotificationService | null = null;
   private rateLimiter = getSocketRateLimiter();
 
+  /**
+   * §4.6 — last-offer buffer per call. The signaling relay is otherwise
+   * fire-and-forget: if the caller's offer arrives while the callee's socket
+   * is not yet in the call room (PushKit wake, background/foreground churn,
+   * 2nd device), the gateway drops it with TARGET_NOT_FOUND and the call hangs
+   * (bug a/d). We buffer the most recent offer (or ice-restart) per call and
+   * replay it to the destined participant when their socket (re)joins the
+   * room. Replaying an out-of-date offer is harmless because the receiver
+   * drops stale epochs via `negotiationId` (§3.5).
+   */
+  private bufferedOffers = new Map<string, { signal: CallSignalEvent; bufferedAt: number }>();
+  private static readonly OFFER_BUFFER_TTL_MS = 90_000;
+
   constructor(private prisma: PrismaClient) {
     this.callService = new CallService(prisma);
+  }
+
+  /** §4.6 — store the latest offer for a call, sweeping expired entries. */
+  private bufferOffer(callId: string, signal: CallSignalEvent): void {
+    const now = Date.now();
+    for (const [key, entry] of this.bufferedOffers) {
+      if (now - entry.bufferedAt > CallEventsHandler.OFFER_BUFFER_TTL_MS) {
+        this.bufferedOffers.delete(key);
+      }
+    }
+    this.bufferedOffers.set(callId, { signal, bufferedAt: now });
+  }
+
+  /** §4.6 — drop a call's buffered offer (negotiation complete or terminated). */
+  private clearBufferedOffer(callId: string): void {
+    this.bufferedOffers.delete(callId);
+  }
+
+  /**
+   * §4.6 — returns the buffered offer for a call IF it is destined for the
+   * (re)joining participant and not expired; otherwise null. Does NOT consume
+   * the entry — a participant that churns again must be able to recover, and
+   * re-delivery is epoch-safe.
+   */
+  private bufferedOfferFor(callId: string, joiningUserId: string, joiningParticipantId: string | null): CallSignalEvent | null {
+    const entry = this.bufferedOffers.get(callId);
+    if (!entry) return null;
+    if (Date.now() - entry.bufferedAt > CallEventsHandler.OFFER_BUFFER_TTL_MS) {
+      this.bufferedOffers.delete(callId);
+      return null;
+    }
+    const to = entry.signal.signal.to;
+    if (to === joiningUserId || (joiningParticipantId !== null && to === joiningParticipantId)) {
+      return entry.signal;
+    }
+    return null;
   }
 
   private getSocketUserId(sock: any): string | undefined {
@@ -725,6 +774,24 @@ export class CallEventsHandler {
           });
         }
 
+        // §4.6 — replay a buffered offer to the joining participant. If the
+        // caller's offer arrived before this socket was in the room (PushKit
+        // wake / churn), it was buffered; deliver it now so the callee can
+        // answer instead of waiting forever (bug a/d). Epoch-guarded on the
+        // client (stale offers dropped via negotiationId).
+        // Match the same identity the relay uses to resolve `signal.to`:
+        // the participant's real userId (registered) or participantId (anon).
+        const joinerParticipantId = (participant as any).participant?.userId || participant.participantId;
+        const replayOffer = this.bufferedOfferFor(data.callId, userId, joinerParticipantId);
+        if (replayOffer) {
+          socket.emit(CALL_EVENTS.SIGNAL, replayOffer);
+          logger.info('📦 [CALL] Replayed buffered offer on (re)join', {
+            callId: data.callId,
+            to: userId,
+            type: replayOffer.signal.type
+          });
+        }
+
         // Audit P1-27 — notify the joining user's OTHER devices that the
         // call was answered elsewhere, so they dismiss their ringing UI /
         // CallKit incoming card. `socket.to(...)` excludes the answering
@@ -828,6 +895,8 @@ export class CallEventsHandler {
 
         // Phase 1 fix P2 — caller cancel or callee reject ends ringing
         this.callService.clearRingingTimeout(data.callId);
+        // §4.6 — drop any buffered offer for this call (a participant left).
+        this.clearBufferedOffer(data.callId);
 
         // Prepare event data BEFORE leaving room
         const leftEvent: CallParticipantLeftEvent = {
@@ -1212,6 +1281,20 @@ export class CallEventsHandler {
         const targetSocketIds = await this.resolveTargetSockets(io, data.callId, targetUserId, getUserId);
 
         if (targetSocketIds.length === 0) {
+          // §4.6 — target not in the room yet (PushKit wake / socket churn /
+          // 2nd device). Instead of silently losing the offer, buffer it so it
+          // is replayed when the target (re)joins. ICE candidates are dropped
+          // as before (they are re-gathered after the buffered offer is
+          // applied). The caller still gets success:false so its at-least-once
+          // retry can also fire; the buffer is the backstop.
+          if (data.signal.type === 'offer' || data.signal.type === 'ice-restart') {
+            this.bufferOffer(data.callId, data);
+            logger.info('📦 [CALL] Buffered offer for late (re)join', {
+              callId: data.callId,
+              to: data.signal.to,
+              type: data.signal.type
+            });
+          }
           logger.warn('Target participant has no active sockets', {
             callId: data.callId,
             targetUserId
@@ -1228,10 +1311,19 @@ export class CallEventsHandler {
           io.to(targetSocketId).emit(CALL_EVENTS.SIGNAL, data);
         }
 
+        // §4.6 — also buffer successfully-relayed offers. The target may have
+        // received it but then churn its socket before answering; the buffer
+        // lets it recover on rejoin (epoch-guarded, last-write-wins).
+        if (data.signal.type === 'offer' || data.signal.type === 'ice-restart') {
+          this.bufferOffer(data.callId, data);
+        }
+
         // Transition to active on first successful signal exchange
         if (data.signal.type === 'answer') {
           // Phase 1 fix P2 — answer signal transitions ringing → active
           this.callService.clearRingingTimeout(data.callId);
+          // §4.6 — negotiation complete, the buffered offer is no longer needed.
+          this.clearBufferedOffer(data.callId);
           await this.callService.updateCallStatus(data.callId, CallStatus.active).catch(() => {});
         }
 
@@ -1489,6 +1581,8 @@ export class CallEventsHandler {
 
         // Phase 1 fix P2 — explicit end clears any pending ringing timeout
         this.callService.clearRingingTimeout(data.callId);
+        // §4.6 — drop any buffered offer for this terminated call.
+        this.clearBufferedOffer(data.callId);
 
         const endReason = (callSession.endReason || 'completed') as CallEndReason;
 

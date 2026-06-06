@@ -52,6 +52,42 @@ final class CallStateTests: XCTestCase {
     }
 }
 
+// MARK: - Perfect Negotiation Role (§3.4)
+
+final class PerfectNegotiationRoleTests: XCTestCase {
+    // The polite peer is the lexicographically-smaller userId. The rule MUST be
+    // symmetric: whichever side we view it from, exactly one peer is polite.
+    func test_isPolitePeer_smallerUserId_isPolite() {
+        XCTAssertTrue(CallManager.isPolitePeer(localUserId: "aaa", remoteUserId: "bbb"))
+    }
+
+    func test_isPolitePeer_largerUserId_isImpolite() {
+        XCTAssertFalse(CallManager.isPolitePeer(localUserId: "bbb", remoteUserId: "aaa"))
+    }
+
+    func test_isPolitePeer_symmetric_exactlyOnePolite() {
+        let a = "507f1f77bcf86cd799439011"
+        let b = "507f1f77bcf86cd799439012"
+        let aSeesItself = CallManager.isPolitePeer(localUserId: a, remoteUserId: b)
+        let bSeesItself = CallManager.isPolitePeer(localUserId: b, remoteUserId: a)
+        XCTAssertNotEqual(aSeesItself, bSeesItself, "exactly one peer must be polite")
+        XCTAssertTrue(aSeesItself, "smaller id (a) is polite")
+    }
+
+    func test_isPolitePeer_missingLocalId_isImpolite() {
+        XCTAssertFalse(CallManager.isPolitePeer(localUserId: "", remoteUserId: "bbb"))
+    }
+
+    func test_isPolitePeer_missingRemoteId_isImpolite() {
+        XCTAssertFalse(CallManager.isPolitePeer(localUserId: "aaa", remoteUserId: ""))
+    }
+
+    func test_isPolitePeer_identicalIds_isImpolite() {
+        // Degenerate (should not happen in a 1:1 call) — never yield blindly.
+        XCTAssertFalse(CallManager.isPolitePeer(localUserId: "same", remoteUserId: "same"))
+    }
+}
+
 // MARK: - WebRTC Types Tests
 
 final class WebRTCTypesTests: XCTestCase {
@@ -143,6 +179,8 @@ final class MockWebRTCClient: WebRTCClientProviding {
 
     func configure(iceServers: [IceServer]) throws { configureCallCount += 1 }
     func updateIceServers(_ iceServers: [IceServer]) {}
+    private(set) var lastNegotiationIsPolite: Bool?
+    func setNegotiationRole(isPolite: Bool) { lastNegotiationIsPolite = isPolite }
     func createOffer() async throws -> SessionDescription { try createOfferResult.get() }
     func createAnswer(for offer: SessionDescription) async throws -> SessionDescription { try createAnswerResult.get() }
     func setRemoteAnswer(_ answer: SessionDescription) async throws {}

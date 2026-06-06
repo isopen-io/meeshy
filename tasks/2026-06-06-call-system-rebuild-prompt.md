@@ -701,4 +701,82 @@ Tâches :
 
 ---
 
+## 12. Suivi d'implémentation
+
+### 2026-06-06 — Tranche fondation P0 (branche `claude/admiring-faraday-ZMpBt`)
+
+Première tranche livrée : **fiabilité du relais signaling** côté gateway + les **deux fixes root-cause du média à sens unique** côté iOS. Ce n'est PAS la P0 complète (voir « Reste à faire P0 » plus bas) — c'est la fondation qui débloque la connexion fiable avant la refonte perfect-negotiation iOS.
+
+#### Commits livrés (4)
+
+| Commit | Portée | Couvre |
+|---|---|---|
+| `7416e1ffc` | gateway | **P0 §3.5** (epoch `negotiationId` : champ optionnel readonly sur `WebRTCSignalBase`, **déclaré dans `socketSignalSchema`** pour que Zod ne le strippe pas — passthrough opaque) + **P0 §4.6** (buffer last-offer/ice-restart par appel, TTL 90 s, sweep à l'écriture, replay au (re)join, clear au leave) |
+| `75b6bdf1d` | iOS | **P0 §3.2** (autorité FSM déplacée sur `RTCPeerConnectionState.connected` — ICE+DTLS up — au lieu de `RTCIceConnectionState` qui passe `.connected` avant les clés SRTP → bug a' média muet/à sens unique ; `RTCIceConnectionState` rétrogradé en diag-only) + debounce 3,5 s des blips `.disconnected` (self-heal path migration) |
+| `2a2694278` | iOS | **P0 §5.3** (suppression des contraintes legacy Plan-B `OfferToReceive*` mélangées à l'Unified-Plan — contributeur bug b ; remplacées par contraintes vides, l'intention send/recv est portée par les transceivers `.sendRecv` pré-ajoutés) |
+| `3c6e635b4` | iOS | **P0 §5.2 — ROOT CAUSE** (l'answerer applique l'offre AVANT d'attacher ses tracks : `startLocalMedia` ne crée plus les transceivers ; OFFERER via `addOffererTransceiversIfNeeded` dans `createOffer` ; ANSWERER applique l'offre → `attachAnswererTracks` matche les transceivers créés par l'offre + force sendRecv. Le band-aid `c5b15ce` était inerte car les transceivers pré-ajoutés n'étaient jamais liés aux m-sections de l'offre) |
+
+#### Fix de cette session — `forceSendRecv` (commit séparé)
+
+Le build iOS sortait **2 warnings** dans le code neuf (`P2PWebRTCClient.swift`, helper `forceSendRecv`) :
+
+```swift
+try transceiver.setDirection(.sendRecv, error: nil)   // ❌ try inutile + catch mort + erreur jetée
+```
+
+`RTCRtpTransceiver.setDirection(_:error:)` retourne **`void`** → Swift l'importe **non-throwing** (pas de valeur de retour à ponter sur `throws`). Le `try` est inerte, le `catch` est du code mort, et `error: nil` jette toute erreur réelle. Cousin distinct du piège `setCodecPreferences` (lui a deux surcharges dont une throwing ; ici il n'y a **aucune** variante throwing). Forme correcte :
+
+```swift
+var error: NSError?
+transceiver.setDirection(.sendRecv, error: &error)
+if let error { Logger.webrtc.warning("[WEBRTC] setDirection(.sendRecv) failed: …") }
+```
+
+Règle : `BOOL` + `NSError**` → import throwing ; `void` + `NSError**` → import non-throwing (capturer via `&error`, jamais `try`). Rebuild → **0 warning, 0 erreur**.
+
+#### Vérifications de cette session (toolchain, hors device)
+
+| Volet | Commande | Résultat |
+|---|---|---|
+| Gateway — schémas d'appel | `jest call-schemas` | ✅ **33/33** (dont 5 nouveaux : passthrough `negotiationId` sur offer/ice-candidate, absence tolérée, rejet négatif, doc du stripping évité) |
+| Gateway — type-check TS complet | `pnpm type-check` | ✅ **0 erreur** (shared + gateway) |
+| iOS — build iPhone 16 Pro | `meeshy.sh build` | ✅ **BUILD SUCCEEDED**, 0 erreur, 0 warning (après fix `forceSendRecv`) |
+
+> Rappel observé : `meeshy.sh build` sort `EXIT=1` sur un build warning-free (le pipeline `grep "warning:" | … | while` + `set -eo pipefail` meurt quand grep ne trouve rien) APRÈS `** BUILD SUCCEEDED **`. Vérifier le vrai verdict dans `/tmp/meeshy_sim_build_<pid>.log` (non supprimé car le script meurt avant le `rm -f`).
+
+#### ✅ Validé SUR DEVICE RÉEL (2026-06-06 soir) — appel vidéo 1:1 happy-path opérationnel
+
+Validation end-to-end **iPhone 16 Pro Max physique (« Services CEO i16pm ») ↔ Mac (isiOSAppOnMac)**, **les DEUX sur le build de la branche**. Confirmé par les logs `[CALL-DIAG]` (`/tmp/mac_call_live5.log`, appel `6a244f90…` 17:49→17:50) + retour utilisateur « tout fonctionne pour l'appel vidéo ».
+
+| AC | Critère | Preuve |
+|---|---|---|
+| AC1/AC2 | audio + vidéo **bidirectionnels** | STATS Mac answerer `sent=10484pkt **recv=5066pkt**` (les deux non-nuls, croissants), `RTP gate passed at attempt 1` ; codecs opus + H264 (`profile-level-id=640c34`) |
+| §5.2 | answerer répond **sendrecv** | `[CALL-DIAG] local ANSWER directions: audio=sendrecv video=sendrecv` (avant le fix : `recvonly`) |
+| §3.2 | autorité FSM | `peerConnectionState (authority): connected` pilote la transition ; le caller (Mac, test précédent) atteint bien `.connected` |
+| AC4 | plus de caller-stuck | une fois l'iPhone sur la branche, le caller passe `.connected` (build 464 obsolète = caller bloqué « Connexion… ») |
+| AC8 | in-app Mac | `[no-callkit] incoming via in-app UI` + `[AUDIO_FALLBACK] RTCAudioSession activée manuellement` (CallKit error 4 attendu sur Mac, non bloquant) |
+
+> **Leçon opérationnelle critique** : les fixes §5.2 (answerer) et §3.2 (caller) vivent **dans chaque rôle séparément** → **les DEUX devices doivent porter le build de la branche**. Signature d'un déploiement à un seul côté : média à sens unique quand le device non-patché **répond**, caller bloqué « Connexion… » quand le device non-patché **appelle**. Pièce qui avait fait perdre du temps : l'iPhone était resté sur **build 464** (le commit `3c6e635b4` parle de « Build 465 symptom »).
+
+#### Restant device (matrice complète — NON validé)
+
+Le happy-path 1:1 est vert. **Restent à dérouler sur 2 devices** (cf. AC3/AC5/AC6/AC7/AC9→AC13/AC15) : robustesse churn background/foreground + replay offer (§4.6), glare (upgrade AV simultané), switch audio↔vidéo, ICE restart sur coupure réseau, 20 appels consécutifs sans média à sens unique persistant, UI adaptative, messages système. Ces critères dépendent du « Reste à faire P0 » + Phases P1/P2/P3 ci-dessous.
+
+#### ▶️ Reste à faire P0 — REPRENDRE ICI (ordre conseillé)
+
+> La tranche fondation est mergée + validée happy-path. Continuer **dans cet ordre** (chaque item : TDD strict, build vert, commit isolé, re-test device des deux côtés). Plusieurs items se prêtent à des worktrees parallèles (ne pas partager `P2PWebRTCClient.swift` entre deux worktrees).
+
+- §3.4 — perfect negotiation iOS complète (`negotiate()`, `handleRemoteDescription` + rollback, `isPolite` = plus petit userId). **Prérequis de la plupart du reste** ; le gateway note explicitement « before the iOS perfect-negotiation rework lands ».
+- §3.5 — moitié **client** de l'epoch : incrément par (re)négociation + drop des SDP/ICE d'epoch antérieur (le gateway ne fait que le passthrough du champ).
+- §4.1 — queue de candidats ICE jusqu'à `remoteDescription != nil` + flush + re-buffer sur restart (task P0-3).
+- §4.1/§6.3 — signaling **at-least-once côté iOS** (`emitCallSignalWithAck` + retry/backoff) ; le gateway buffer/replay est le backstop, pas le retry émetteur.
+- §3.1 — `CallEventQueue` : réducteur unique sérialisé pour toutes les écritures `callState =` (task P0-6).
+- §6.1 — `reportOutgoingCall(connectedAt:)` piloté par `.connected` (task P0-7).
+- §5.8 — watchdog `.connecting` (20-30 s → ICE restart → fail) + RTP gate actionnable (task P0-9).
+- §2.3/§6.4 — `RTCAudioSession` manual-audio + gating Mac/iPhone (task P0-10).
+
+Puis Phases P1 (switch AV + UI), P2 (qualité SOTA + adaptatif), P3 (messages système) intactes.
+
+---
+
 **Fin de la spec. Implémente phase par phase, TDD strict, build vert à chaque commit, vérification finale sur device réel. La FSM WebRTC pilotée par `RTCPeerConnectionState` + perfect negotiation est le cœur ; tout le reste en découle.**

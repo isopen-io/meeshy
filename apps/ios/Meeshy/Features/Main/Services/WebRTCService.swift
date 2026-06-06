@@ -51,6 +51,10 @@ final class WebRTCService {
     private var lastStats: CallStats?
     private var comfortNoiseEnabled = true
     private var qualityLevelDebounceDate: Date?
+    // §3.2 — debounce window for transient `.disconnected` blips. Cancelled
+    // the moment the connection recovers (`.connected`) or decisively fails
+    // (`.failed`/`.closed`, which fire `webRTCServiceDidDisconnect` at once).
+    private var disconnectDebounceTask: Task<Void, Never>?
 
     init(client: (any WebRTCClientProviding)? = nil) {
         self.client = client ?? P2PWebRTCClient()
@@ -76,6 +80,11 @@ final class WebRTCService {
 
     func updateIceServers(_ iceServers: [IceServer]) {
         client.updateIceServers(iceServers)
+    }
+
+    /// §3.4 — forward the deterministic polite/impolite role to the client.
+    func setNegotiationRole(isPolite: Bool) {
+        client.setNegotiationRole(isPolite: isPolite)
     }
 
     func createOffer() async -> SessionDescription? {
@@ -297,6 +306,8 @@ final class WebRTCService {
 
     func close() {
         stopQualityMonitor()
+        disconnectDebounceTask?.cancel()
+        disconnectDebounceTask = nil
         client.disconnect()
         iceCandidateBuffer.removeAll()
         hasRemoteDescription = false
@@ -346,12 +357,41 @@ extension WebRTCService: WebRTCClientDelegate {
 
             switch state {
             case .connected:
+                // Recovered (or first connect) — cancel any pending disconnect
+                // debounce so a transient blip that healed does not fire.
+                self.disconnectDebounceTask?.cancel()
+                self.disconnectDebounceTask = nil
                 self.delegate?.webRTCServiceDidConnect(self)
-            case .disconnected, .failed, .closed:
+            case .disconnected:
+                // §3.2 — debounce: only escalate to the FSM if still
+                // disconnected after the window. Transient ICE blips self-heal.
+                self.scheduleDisconnectEscalation()
+            case .failed, .closed:
+                // Decisive — escalate immediately.
+                self.disconnectDebounceTask?.cancel()
+                self.disconnectDebounceTask = nil
                 self.delegate?.webRTCServiceDidDisconnect(self)
-            default:
-                break
+            case .connecting, .reconnecting, .checking, .new:
+                // No longer in a settled-disconnected state — drop the debounce.
+                self.disconnectDebounceTask?.cancel()
+                self.disconnectDebounceTask = nil
             }
+        }
+    }
+
+    /// §3.2 — fire `webRTCServiceDidDisconnect` only if the connection is still
+    /// `.disconnected` after `disconnectDebounceSeconds`. Re-arming cancels the
+    /// previous task so the window always reflects the latest `.disconnected`.
+    private func scheduleDisconnectEscalation() {
+        disconnectDebounceTask?.cancel()
+        disconnectDebounceTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            let nanos = UInt64(QualityThresholds.disconnectDebounceSeconds * 1_000_000_000)
+            try? await Task.sleep(nanoseconds: nanos)
+            if Task.isCancelled { return }
+            guard self.connectionState == .disconnected else { return }
+            Logger.webrtc.info("[CALL-DIAG] disconnect debounce elapsed — escalating to reconnect")
+            self.delegate?.webRTCServiceDidDisconnect(self)
         }
     }
 

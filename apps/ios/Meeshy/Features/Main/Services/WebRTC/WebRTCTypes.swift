@@ -89,6 +89,12 @@ protocol WebRTCClientProviding: AnyObject {
 
     func configure(iceServers: [IceServer]) throws
     func updateIceServers(_ iceServers: [IceServer])
+    /// §3.4 perfect negotiation — sets the deterministic polite/impolite role.
+    /// Computed symmetrically by both peers (lexicographically-smaller userId is
+    /// polite) and fixed once for the call's lifetime, independent of caller/
+    /// callee, so it survives renegotiations. The client stores it and uses it
+    /// in the glare-collision guard.
+    func setNegotiationRole(isPolite: Bool)
     func createOffer() async throws -> SessionDescription
     func createAnswer(for offer: SessionDescription) async throws -> SessionDescription
     func setRemoteAnswer(_ answer: SessionDescription) async throws
@@ -190,6 +196,14 @@ enum QualityThresholds {
     static let heartbeatAckTimeoutSeconds: TimeInterval = 5.0
     static let maxReconnectAttempts: Int = 3
 
+    /// §3.2 — debounce before treating `RTCPeerConnectionState.disconnected`
+    /// as a reconnect trigger. ICE produces transient `.disconnected` blips
+    /// (path migration, brief loss) that self-heal within 1-2s; reacting
+    /// immediately causes reconnect churn. 3.5s waits out the blip while still
+    /// reacting well before the ~30s `.failed` timeout. `.failed`/`.closed`
+    /// are NOT debounced (terminal/decisive).
+    static let disconnectDebounceSeconds: TimeInterval = 3.5
+
     static let initialVideoBitrate: Int = 500_000
     static let minVideoBitrate: Int = 100_000
     static let maxVideoBitrate: Int = 2_500_000
@@ -288,6 +302,7 @@ enum WebRTCError: Error, LocalizedError {
     case noCameraFormatAvailable
     case notSupported
     case simulatorVideoUnsupported
+    case offerIgnored
 
     var errorDescription: String? {
         switch self {
@@ -300,6 +315,8 @@ enum WebRTCError: Error, LocalizedError {
         case .simulatorVideoUnsupported:
             "Video unsupported on iOS Simulator (FigCaptureSourceRemote XPC failure). " +
             "Use a real device for video calls."
+        case .offerIgnored:
+            "Colliding offer ignored by the impolite peer (perfect negotiation glare)"
         }
     }
 }

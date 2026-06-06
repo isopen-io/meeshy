@@ -187,6 +187,8 @@ private final class TestableWebRTCClient: WebRTCClientProviding {
 
     func configure(iceServers: [IceServer]) throws { configureCallCount += 1 }
     func updateIceServers(_ iceServers: [IceServer]) {}
+    private(set) var lastNegotiationIsPolite: Bool?
+    func setNegotiationRole(isPolite: Bool) { lastNegotiationIsPolite = isPolite }
     func createOffer() async throws -> SessionDescription { try createOfferResult.get() }
     func createAnswer(for offer: SessionDescription) async throws -> SessionDescription { try createAnswerResult.get() }
     func setRemoteAnswer(_ answer: SessionDescription) async throws {}
