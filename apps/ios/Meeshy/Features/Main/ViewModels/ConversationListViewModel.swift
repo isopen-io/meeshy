@@ -543,17 +543,10 @@ class ConversationListViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
-
-        // Listen to in-app preference updates from the conversation options
-        // sheet so a toggle (pin / mute / mention / archive) or a value change
-        // (customName / reaction / categoryId / tags) is reflected on the row
-        // immediately, without waiting for a refetch.
-        ConversationPreferencesBroadcaster.shared.updates
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] event in
-                self?.applyPreferencesUpdate(event)
-            }
-            .store(in: &cancellables)
+        // (Removed) ConversationPreferencesBroadcaster subscription: the options
+        // sheet now mutates via ConversationStore (increment 2), so a pref change
+        // reflects on the row through `observeStore` (the store merge sink) in the
+        // same Combine tick — the broadcaster bridge is redundant and deleted.
     }
 
     // MARK: - Conversation Store Observation
@@ -609,37 +602,6 @@ class ConversationListViewModel: ObservableObject {
             changed = true
         }
         if changed { conversations = updated }
-    }
-
-    private func applyPreferencesUpdate(_ event: ConversationPreferencesBroadcaster.Event) {
-        guard let idx = conversations.firstIndex(where: { $0.id == event.conversationId }) else { return }
-        var conv = conversations[idx]
-        let prefs = event.prefs
-
-        if let isPinned = prefs.isPinned { conv.userState.isPinned = isPinned }
-        if let isMuted = prefs.isMuted { conv.userState.isMuted = isMuted }
-        if let isArchived = prefs.isArchived { conv.userState.isArchived = isArchived }
-        if let mentionsOnly = prefs.mentionsOnly { conv.userState.mentionsOnly = mentionsOnly }
-        // categoryId/customName/reaction are nullable on purpose — a nil here
-        // legitimately means "uncategorize / clear".
-        conv.userState.sectionId = prefs.categoryId
-        conv.userState.customName = prefs.customName
-        conv.userState.reaction = prefs.reaction
-        if let tagNames = prefs.tags {
-            conv.tags = tagNames.enumerated().map { index, name in
-                MeeshyConversationTag(
-                    name: name,
-                    color: MeeshyConversationTag.colors[index % MeeshyConversationTag.colors.count]
-                )
-            }
-        }
-
-        conversations[idx] = conv
-
-        // Persist the in-memory mutation through the unified coalescing
-        // path so a burst of preference toggles (pin + mute + tag in
-        // quick succession) collapses to one GRDB write rather than three.
-        schedulePersist()
     }
 
     private func reloadFromCache() async {
