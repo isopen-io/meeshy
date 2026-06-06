@@ -1131,13 +1131,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         manager = SocketManager(socketURL: url, config: [
             .log(false),
-            // Transport HTTP long-polling uniquement. Le transport WebSocket
-            // (Starscream) ne s'établit pas de façon fiable ici : forcé, le
-            // handshake restait bloqué ; en upgrade, la connexion tombait au
-            // bout de ~35 s (timeout ping Engine.IO). Le long-polling s'appuie
-            // sur URLSession — fiable, comme le REST — et reste un transport
-            // temps réel Socket.IO pleinement valide.
-            .forcePolling(true),
+            // CALL-FIX 2026-06-06 — WebSocket transport (polling handshake → auto
+            // upgrade to WebSocket). The previous `.forcePolling(true)` (HTTP
+            // long-poll ONLY) dropped mid-call: every re-poll under WebRTC CPU load
+            // surfaced as "transport close" on the gateway, killing call:initiate /
+            // SDP / ICE signaling (call stuck on "connecting"). The old "~35s the WS
+            // dropped" was a ping timeout (gateway pingTimeout was 10s) — bumped to
+            // 20s server-side, so the persistent WebSocket now holds.
             .extraHeaders(["Authorization": "Bearer \(token)"]),
             .reconnects(true),
             .reconnectWait(1),
@@ -1162,8 +1162,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         manager = SocketManager(socketURL: url, config: [
             .log(false),
-            // Voir connect() : transport long-polling uniquement.
-            .forcePolling(true),
+            // CALL-FIX 2026-06-06 — WebSocket transport (voir connect()).
             .extraHeaders(["X-Session-Token": sessionToken]),
             .reconnects(true),
             .reconnectWait(1),

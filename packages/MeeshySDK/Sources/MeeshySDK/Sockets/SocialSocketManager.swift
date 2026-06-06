@@ -404,8 +404,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
 
         manager = SocketManager(socketURL: url, config: [
             .log(false),
-            // Voir MessageSocketManager : transport long-polling uniquement.
-            .forcePolling(true),
+            // CALL-FIX 2026-06-06 — WebSocket transport (voir MessageSocketManager).
             .extraHeaders(["Authorization": "Bearer \(token)"]),
             .reconnects(true),
             .reconnectWait(1),

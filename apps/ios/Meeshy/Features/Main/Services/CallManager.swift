@@ -338,39 +338,50 @@ final class CallManager: ObservableObject {
 
         let uuid = UUID()
         activeCallUUID = uuid
-        // CXHandle.value persists in the iOS Phone app Recents list — use the
-        // userId for stable identity rather than a (possibly localized) name.
-        let handle = CXHandle(type: .generic, value: userId)
-        let startAction = CXStartCallAction(call: uuid, handle: handle)
-        startAction.isVideo = isVideo
-        startAction.contactIdentifier = displayName
-        let transaction = CXTransaction(action: startAction)
-        let provider = callProvider
-        callController.request(transaction) { [weak self] error in
-            if let error {
-                Logger.calls.error("CallKit start call failed: \(error.localizedDescription)")
-                Task { @MainActor in self?.endCallInternal(reason: .failed("CallKit error")) }
-            } else {
-                let update = CXCallUpdate()
-                update.remoteHandle = CXHandle(type: .generic, value: userId)
-                update.localizedCallerName = displayName
-                update.hasVideo = isVideo
-                provider.reportCall(with: uuid, updated: update)
+        if ProcessInfo.processInfo.isiOSAppOnMac {
+            // CALL-FIX 2026-06-06 (macOS) — do NOT create a CallKit call on
+            // iOS-app-on-Mac. There is no system call UI there: CXStartCallAction
+            // half-succeeds and the later CXEndCallAction can't clear it → CallKit
+            // shows a stuck "call in progress" after hangup. The call is driven
+            // entirely in-app; the call:initiate flow below runs independently.
+            // Start the ringback directly (provider:didActivate never fires on Mac).
+            Logger.calls.info("[macOS] outgoing call without CallKit — in-app ringback")
+            startRingbackIfNeeded()
+        } else {
+            // CXHandle.value persists in the iOS Phone app Recents list — use the
+            // userId for stable identity rather than a (possibly localized) name.
+            let handle = CXHandle(type: .generic, value: userId)
+            let startAction = CXStartCallAction(call: uuid, handle: handle)
+            startAction.isVideo = isVideo
+            startAction.contactIdentifier = displayName
+            let transaction = CXTransaction(action: startAction)
+            let provider = callProvider
+            callController.request(transaction) { [weak self] error in
+                if let error {
+                    Logger.calls.error("CallKit start call failed: \(error.localizedDescription)")
+                    Task { @MainActor in self?.endCallInternal(reason: .failed("CallKit error")) }
+                } else {
+                    let update = CXCallUpdate()
+                    update.remoteHandle = CXHandle(type: .generic, value: userId)
+                    update.localizedCallerName = displayName
+                    update.hasVideo = isVideo
+                    provider.reportCall(with: uuid, updated: update)
 
-                // Audit P2-iOS-CALLKIT-OUTGOING-TIMEOUT —
-                // CallKit autonomously fires `CXEndCallAction` (~4-5 seconds
-                // after `CXStartCallAction.fulfill()`) on outgoing calls that
-                // never report progress, which surfaced in production as
-                // "calls drop after 2-4 seconds" before the SDP answer round-
-                // trip completes. Reporting `startedConnectingAt` here as
-                // soon as the transaction is accepted signals to CallKit
-                // that the call is making progress, so it waits for our
-                // explicit `outgoingRingTimeoutSeconds` budget (45 s) instead
-                // of killing the call out from under us. The later call from
-                // `handleRemoteAnswer` (P1-12) still fires once the real
-                // answer lands — CallKit accepts that as a refresh of the
-                // connecting timestamp and uses it to drive the system UI.
-                provider.reportOutgoingCall(with: uuid, startedConnectingAt: Date())
+                    // Audit P2-iOS-CALLKIT-OUTGOING-TIMEOUT —
+                    // CallKit autonomously fires `CXEndCallAction` (~4-5 seconds
+                    // after `CXStartCallAction.fulfill()`) on outgoing calls that
+                    // never report progress, which surfaced in production as
+                    // "calls drop after 2-4 seconds" before the SDP answer round-
+                    // trip completes. Reporting `startedConnectingAt` here as
+                    // soon as the transaction is accepted signals to CallKit
+                    // that the call is making progress, so it waits for our
+                    // explicit `outgoingRingTimeoutSeconds` budget (45 s) instead
+                    // of killing the call out from under us. The later call from
+                    // `handleRemoteAnswer` (P1-12) still fires once the real
+                    // answer lands — CallKit accepts that as a refresh of the
+                    // connecting timestamp and uses it to drive the system UI.
+                    provider.reportOutgoingCall(with: uuid, startedConnectingAt: Date())
+                }
             }
         }
 
@@ -691,10 +702,26 @@ final class CallManager: ObservableObject {
         update.supportsGrouping = false
         update.supportsHolding = false
 
-        callProvider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
-            if let error {
-                Logger.calls.error("CallKit report incoming failed: \(error.localizedDescription)")
-                Task { @MainActor in self?.endCallInternal(reason: .failed("CallKit error")) }
+        // CALL-FIX 2026-06-06 (macOS) — CallKit's `reportNewIncomingCall` FAILS on
+        // iOS-app-on-Mac (no system call UI → CXErrorCodeIncomingCallError 3), which
+        // previously killed every Mac incoming call (`endCallInternal(.failed)`).
+        // On Mac we skip CallKit entirely and keep `callState=.ringing(incoming)` so
+        // the in-app `IncomingCallView` presents; `answerCall()`/`rejectCall()`/`endCall()`
+        // already tolerate the CX*Action being a no-op (their failures are logged &
+        // ignored, the SDP answer is still created+sent). The audio session is then
+        // activated by the `[AUDIO_FALLBACK]` path (`provider:didActivate:` never fires
+        // on Mac) + the `.speaker` route fix.
+        if ProcessInfo.processInfo.isiOSAppOnMac {
+            Logger.calls.info("[macOS] incoming call presented via in-app UI (CallKit skipped)")
+            // CallKit plays the ringtone on iOS via `config.ringtoneSound`; on Mac
+            // CallKit is bypassed, so play the incoming ringtone in-app.
+            ringbackPlayer.startRingtone()
+        } else {
+            callProvider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
+                if let error {
+                    Logger.calls.error("CallKit report incoming failed: \(error.localizedDescription)")
+                    Task { @MainActor in self?.endCallInternal(reason: .failed("CallKit error")) }
+                }
             }
         }
 
@@ -943,7 +970,11 @@ final class CallManager: ObservableObject {
         isMuted.toggle()
         webRTCService.muteAudio(isMuted)
 
-        guard let uuid = activeCallUUID else {
+        // CALL-FIX 2026-06-06 (macOS) — `CXSetMutedCallAction` fails on iOS-app-on-Mac
+        // (CallKit requesttransaction error 4) and the rollback below then UNDOES the
+        // mute → the mute button never sticks. On Mac the WebRTC track toggle above IS
+        // the mute (no CallKit system UI), so short-circuit before the transaction.
+        guard let uuid = activeCallUUID, !ProcessInfo.processInfo.isiOSAppOnMac else {
             HapticFeedback.light()
             return
         }
@@ -1240,7 +1271,13 @@ final class CallManager: ObservableObject {
                 // Configurer la session pour VoIP avant d'activer.
                 let configuration = RTCAudioSessionConfiguration.webRTC()
                 configuration.category = AVAudioSession.Category.playAndRecord.rawValue
-                configuration.mode = (isVideoEnabled ? AVAudioSession.Mode.videoChat : AVAudioSession.Mode.voiceChat).rawValue
+                // CALL-FIX 2026-06-06 (macOS) — `.default` avoids the voice-processing
+                // I/O unit that faults on the mic uplink on iOS-app-on-Mac (see
+                // configureAudioSession). This fallback IS the primary activation path
+                // on Mac (provider:didActivate never fires there).
+                configuration.mode = ProcessInfo.processInfo.isiOSAppOnMac
+                    ? AVAudioSession.Mode.default.rawValue
+                    : (isVideoEnabled ? AVAudioSession.Mode.videoChat : AVAudioSession.Mode.voiceChat).rawValue
                 configuration.categoryOptions = [.allowBluetoothHFP, .duckOthers]
                 try rtc.setConfiguration(configuration, active: true)
                 rtc.isAudioEnabled = true
@@ -1253,7 +1290,12 @@ final class CallManager: ObservableObject {
             Logger.calls.info("[AUDIO_FALLBACK] RTCAudioSession déjà active (CallKit didActivate a firé normalement)")
         }
 
+        // CALL-FIX 2026-06-06 — call established: stop ringback/ringtone + play the
+        // "connected" cue. transitionToConnected is idempotent (guarded above) so
+        // the cue plays exactly once.
         ringbackPlayer.stop()
+        ringbackPlayer.stopRingtone()
+        ringbackPlayer.playConnected()
         callState = .connected
         // Audio session was configured ONCE at peer-connection setup; CallKit
         // drives activation via provider:didActivate:, which is the single
@@ -1451,7 +1493,14 @@ final class CallManager: ObservableObject {
     }
 
     private func endCallInternal(reason: CallEndReason) {
+        // CALL-FIX 2026-06-06 — stop any ringing loop + play the "ended" cue, but
+        // ONLY if the call was actually active (ringing/connecting/connected). The
+        // `isActive` guard means a re-entrant endCallInternal (already .ended/.idle)
+        // won't double-play the cue.
+        let wasActive = callState.isActive
         ringbackPlayer.stop()
+        ringbackPlayer.stopRingtone()
+        if wasActive { ringbackPlayer.playEnded() }
         durationTask?.cancel()
         durationTask = nil
         rtpGateTask?.cancel()
@@ -1544,7 +1593,14 @@ final class CallManager: ObservableObject {
         let isVideo = isVideoEnabled
         let configuration = RTCAudioSessionConfiguration.webRTC()
         configuration.category = AVAudioSession.Category.playAndRecord.rawValue
-        configuration.mode = (isVideo ? AVAudioSession.Mode.videoChat : AVAudioSession.Mode.voiceChat).rawValue
+        // CALL-FIX 2026-06-06 (macOS) — on iOS-app-on-Mac the voice-processing I/O unit
+        // (engaged by `.voiceChat`/`.videoChat`) faults on the mic uplink ("failed to
+        // write uplink microphone input signal (state fault)") → the Mac mic captures
+        // silence and the peer hears nothing. `.default` bypasses the voice processor;
+        // WebRTC's own software AEC/NS still runs.
+        configuration.mode = ProcessInfo.processInfo.isiOSAppOnMac
+            ? AVAudioSession.Mode.default.rawValue
+            : (isVideo ? AVAudioSession.Mode.videoChat : AVAudioSession.Mode.voiceChat).rawValue
         // PERF-010: drop .allowBluetoothA2DP. A2DP is an output-only profile and
         // conflicts with the bidirectional voice path (forces the OS to flap
         // between A2DP and HFP, causing periodic ~200ms audio glitches). HFP
@@ -1560,8 +1616,15 @@ final class CallManager: ObservableObject {
         }
         do {
             Logger.calls.info("[AUDIO_SESS] setConfiguration call")
-            try session.setConfiguration(configuration, active: false)
-            Logger.calls.info("RTCAudioSession pre-configured — video: \(isVideo) (CallKit will activate)")
+            // CALL-FIX 2026-06-06 — iOS defers activation to CallKit's
+            // provider:didActivate (active:false here). On iOS-app-on-Mac there is
+            // no CallKit, so activate NOW (active:true) — otherwise this call would
+            // DEACTIVATE the session the ring-sound manager just brought up, cutting
+            // the ringback/ringtone after a few hundred ms. The [AUDIO_FALLBACK] at
+            // connect then finds it already active (no-op).
+            let activateNow = ProcessInfo.processInfo.isiOSAppOnMac
+            try session.setConfiguration(configuration, active: activateNow)
+            Logger.calls.info("RTCAudioSession pre-configured — video: \(isVideo), activeNow=\(activateNow)")
         } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == 4099 {
             // "Session deactivation failed" — le call précédent a laissé
             // AVAudioSession dans un état non-deactivable depuis ce process

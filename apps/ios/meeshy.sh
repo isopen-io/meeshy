@@ -525,7 +525,12 @@ do_clean() {
 build_destination() {
     case "$PLATFORM" in
         mac)
-            echo "platform=macOS,arch=arm64"
+            # "Designed for iPad" is the only valid macOS destination (project has
+            # SUPPORTS_MACCATALYST=0). NB: this builds an iOS bundle that the Mac
+            # runs via the iOS-on-Mac runtime — it is NOT a Mac `.app` and cannot
+            # be launched by `open` from the CLI. Use Xcode (⌘R on "My Mac") to
+            # launch, or enable Mac Catalyst project-wide for a CLI-launchable app.
+            echo "platform=macOS,arch=arm64,variant=Designed for iPad"
             ;;
         *)
             echo "id=$DEVICE_ID"
