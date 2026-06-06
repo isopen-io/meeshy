@@ -76,9 +76,23 @@ struct CallView: View {
             case .ended(let reason):
                 endedView(reason: reason)
             case .reconnecting:
-                connectingView
+                // §4.3 — keep the connected layout (peer's last frame / tiles)
+                // and overlay a "Reconnexion…" banner instead of blanking to
+                // the full-screen connecting view. `.reconnecting` is only
+                // entered from `.connected` (FSM §3.2), so the tracks already
+                // exist — the FaceTime/WhatsApp recovery behaviour.
+                connectedView
             case .idle:
                 EmptyView()
+            }
+
+            // §4.3 — reconnecting banner: surfaced while an ICE restart recovers
+            // a dropped connection, layered over the frozen last frame without
+            // tearing down the call UI.
+            if case .reconnecting = callManager.callState {
+                reconnectingBanner
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
 
             // Effects overlay — accessible dans tous les etats actifs (pas seulement connected)
@@ -382,6 +396,28 @@ struct CallView: View {
             .fill(connectionQualityColor)
             .frame(width: 8, height: 8)
             .accessibilityLabel(connectionQualityAccessibilityLabel)
+    }
+
+    /// §4.3 — reconnecting banner shown over the frozen call layout while an
+    /// ICE restart recovers a dropped connection (warning-tinted capsule with a
+    /// spinner). The call is NOT torn down; the peer's last frame stays visible.
+    private var reconnectingBanner: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .progressViewStyle(.circular)
+                .tint(.white)
+                .scaleEffect(0.8)
+            Text(String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.white)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Capsule().fill(MeeshyColors.warning.opacity(0.92)))
+        .shadow(color: Color.black.opacity(0.18), radius: 8, y: 2)
+        .padding(.top, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main))
     }
 
     private var connectionQualityColor: Color {
