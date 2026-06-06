@@ -22,4 +22,9 @@ public enum Platform {
     public nonisolated static var isIOS18OrLater: Bool {
         if #available(iOS 18.0, *) { return true } else { return false }
     }
+
+    /// `true` when running on iOS 26.0 or later (Liquid Glass design system).
+    public nonisolated static var isIOS26OrLater: Bool {
+        if #available(iOS 26.0, *) { return true } else { return false }
+    }
 }

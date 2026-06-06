@@ -62,20 +62,177 @@ struct CallStats: Equatable, Sendable {
     let packetsLost: Int
     let bandwidth: Int
     let codec: String?
-    let inboundPacketsReceived: Int   // Phase 1 fix E6 — RTP gate
+    let inboundPacketsReceived: Int   // Phase 1 fix E6 — RTP gate (sum of all kinds)
+    // §5.7 — inbound parsed per `kind` so a single-direction *per media* (audio OK
+    // but video dead, or vice-versa) is diagnosable. The legacy code summed every
+    // `inbound-rtp` (audio + video + rtx/fec), masking which leg was broken.
+    let inboundAudioPackets: Int
+    let inboundVideoPackets: Int
+    // §5.8 — outbound packet count drives half-open self-heal: a real half-open
+    // path is `inbound == 0 && outbound > 0`. Without the outbound side we cannot
+    // distinguish a transport fault from a peer who simply muted / has mic off.
+    let outboundPacketsSent: Int
 
     init(
         roundTripTimeMs: Double = 0,
         packetsLost: Int = 0,
         bandwidth: Int = 0,
         codec: String? = nil,
-        inboundPacketsReceived: Int = 0
+        inboundPacketsReceived: Int = 0,
+        inboundAudioPackets: Int = 0,
+        inboundVideoPackets: Int = 0,
+        outboundPacketsSent: Int = 0
     ) {
         self.roundTripTimeMs = roundTripTimeMs
         self.packetsLost = packetsLost
         self.bandwidth = bandwidth
         self.codec = codec
         self.inboundPacketsReceived = inboundPacketsReceived
+        self.inboundAudioPackets = inboundAudioPackets
+        self.inboundVideoPackets = inboundVideoPackets
+        self.outboundPacketsSent = outboundPacketsSent
+    }
+}
+
+// MARK: - Call Stats Reducer (§5.7)
+
+extension CallStats {
+    /// Minimal, `Sendable` projection of one `RTCStatistics` entry. The live
+    /// `getStats` reads `RTCStatisticsReport` (a framework type that can't cross
+    /// the stats callback's nonisolated boundary as-is) into `[RawEntry]`, then
+    /// `reduce` turns it into a `CallStats`. Splitting the parse this way keeps the
+    /// arithmetic (per-kind sums, codec resolution) pure and unit-testable without
+    /// a live `RTCPeerConnection`.
+    struct RawEntry: Sendable, Equatable {
+        let id: String
+        let type: String            // "candidate-pair" | "inbound-rtp" | "outbound-rtp" | "codec" | …
+        let kind: String?           // "audio" | "video" on inbound/outbound-rtp
+        let codecId: String?        // points at a "codec" entry's id
+        let mimeType: String?       // only on "codec" entries, e.g. "audio/opus"
+        let values: [String: Double]
+
+        init(
+            id: String,
+            type: String,
+            kind: String? = nil,
+            codecId: String? = nil,
+            mimeType: String? = nil,
+            values: [String: Double] = [:]
+        ) {
+            self.id = id
+            self.type = type
+            self.kind = kind
+            self.codecId = codecId
+            self.mimeType = mimeType
+            self.values = values
+        }
+    }
+
+    /// Pure reducer (§5.7 fix for bug j). Resolves the real codec name via
+    /// `codecId → codec.mimeType` (the legacy code stored the stats-graph
+    /// reference id, e.g. `"COT01_111"`, instead of `"opus"`/`"H264"`) and keeps
+    /// inbound audio/video separate.
+    static func reduce(entries: [RawEntry]) -> CallStats {
+        var rtt = 0.0
+        var packetsLost = 0
+        var bytesSent = 0
+        var inboundAudio = 0
+        var inboundVideo = 0
+        var outbound = 0
+        var primaryCodecId: String?
+
+        let codecMime: [String: String] = entries.reduce(into: [:]) { map, entry in
+            guard entry.type == "codec", let mime = entry.mimeType else { return }
+            map[entry.id] = mime
+        }
+
+        for entry in entries {
+            switch entry.type {
+            case "candidate-pair":
+                if let value = entry.values["currentRoundTripTime"] { rtt = value * 1000 }
+            case "inbound-rtp":
+                if let lost = entry.values["packetsLost"] { packetsLost += Int(lost) }
+                let received = Int(entry.values["packetsReceived"] ?? 0)
+                if entry.kind == "video" { inboundVideo += received } else { inboundAudio += received }
+                if primaryCodecId == nil { primaryCodecId = entry.codecId }
+            case "outbound-rtp":
+                outbound += Int(entry.values["packetsSent"] ?? 0)
+                bytesSent += Int(entry.values["bytesSent"] ?? 0)
+            default:
+                break
+            }
+        }
+
+        let resolvedCodec: String? = primaryCodecId
+            .flatMap { codecMime[$0] }
+            .map { mime in mime.split(separator: "/").last.map(String.init) ?? mime }
+
+        return CallStats(
+            roundTripTimeMs: rtt,
+            packetsLost: packetsLost,
+            bandwidth: bytesSent,
+            codec: resolvedCodec,
+            inboundPacketsReceived: inboundAudio + inboundVideo,
+            inboundAudioPackets: inboundAudio,
+            inboundVideoPackets: inboundVideo,
+            outboundPacketsSent: outbound
+        )
+    }
+}
+
+// MARK: - Call Reliability Policy (§5.8)
+
+/// Pure, stateless reliability decisions for the call FSM. Extracted so the
+/// half-open self-heal and the `.connecting` watchdog can be unit-tested without
+/// a live `RTCPeerConnection` or device. `CallManager` owns the timers and the
+/// side effects (ICE restart, end-call); this type owns only the *decision*.
+enum CallReliabilityPolicy {
+
+    /// §5.8 — half-open media detection. We keep `.connected` immediately on
+    /// `RTCPeerConnectionState.connected` for snappy UX, but a real half-open
+    /// path (we send RTP, the peer's RTP never arrives) is silent audio. After a
+    /// grace window we self-heal with exactly one ICE restart.
+    enum HalfOpenOutcome: Equatable {
+        case healthy        // bidirectional RTP confirmed — stop monitoring
+        case waiting        // not enough evidence yet — keep polling
+        case healHalfOpen   // outbound flowing, inbound stalled → ICE restart
+    }
+
+    static func evaluateHalfOpen(
+        inboundPackets: Int,
+        outboundPackets: Int,
+        secondsInConnected: TimeInterval,
+        requiredInboundPackets: Int = QualityThresholds.rtpGateRequiredPackets,
+        graceSeconds: TimeInterval = QualityThresholds.halfOpenHealGraceSeconds
+    ) -> HalfOpenOutcome {
+        if inboundPackets >= requiredInboundPackets { return .healthy }
+        // Below the inbound threshold. Within the grace window the first second
+        // after ICE/DTLS is legitimately packet-free — keep waiting.
+        guard secondsInConnected >= graceSeconds else { return .waiting }
+        // Past grace, still no inbound. Only a true *half-open* (we ARE sending)
+        // warrants an ICE restart; if we're not sending either it's a mute /
+        // mic-off business condition, not a transport fault — keep waiting.
+        return outboundPackets > 0 ? .healHalfOpen : .waiting
+    }
+
+    /// §5.8 / bug h — `.connecting` watchdog. ICE/DTLS can wedge with `.connected`
+    /// never arriving. We give it a budget, try ONE ICE restart, then fail rather
+    /// than spin forever (the old code only guarded `.ringing`).
+    enum ConnectingOutcome: Equatable {
+        case waiting
+        case restartICE
+        case fail
+    }
+
+    static func evaluateConnecting(
+        secondsInConnecting: TimeInterval,
+        didAttemptRestart: Bool,
+        restartAfterSeconds: TimeInterval = QualityThresholds.connectingRestartSeconds,
+        failAfterSeconds: TimeInterval = QualityThresholds.connectingFailSeconds
+    ) -> ConnectingOutcome {
+        if secondsInConnecting >= failAfterSeconds { return .fail }
+        if secondsInConnecting >= restartAfterSeconds && !didAttemptRestart { return .restartICE }
+        return .waiting
     }
 }
 
@@ -218,6 +375,19 @@ enum QualityThresholds {
     static let rtpGatePollIntervalSeconds: TimeInterval = 2.0
     static let rtpGateMaxAttempts: Int = 5
     static let rtpGateRequiredPackets: Int = 5
+
+    /// §5.8 — grace window after reaching `.connected` before a stalled inbound
+    /// (`inbound == 0 && outbound > 0`) is treated as a real half-open path and
+    /// healed with one automatic ICE restart. The first ~1s post-handshake is
+    /// legitimately packet-free; 4s waits that out without an annoying lag.
+    static let halfOpenHealGraceSeconds: TimeInterval = 4.0
+
+    /// §5.8 / bug h — `.connecting` watchdog budget. ICE/DTLS that never reaches
+    /// `.connected` triggers ONE ICE restart at `connectingRestartSeconds`, then
+    /// fails the call at `connectingFailSeconds`. Distinct from
+    /// `outgoingRingTimeoutSeconds` (which guards `.ringing`, *before* the offer).
+    static let connectingRestartSeconds: TimeInterval = 12.0
+    static let connectingFailSeconds: TimeInterval = 25.0
 
     /// Caller-side ringing timeout. The gateway has its own 60s server-side
     /// timeout (CallEventsHandler.ts §scheduleRingingTimeout) but a snappier

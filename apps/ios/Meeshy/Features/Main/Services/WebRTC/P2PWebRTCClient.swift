@@ -760,66 +760,43 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
     func getStats() async -> CallStats? {
         guard let pc = peerConnection else { return nil }
-        // Collect raw values inside the nonisolated pc.statistics callback,
-        // then build CallStats (which is @MainActor) after the continuation
-        // returns — avoiding an 'await' inside a synchronous closure.
-        typealias RawStats = (rtt: Double, packetsLost: Int, bytesSent: Int, packetsReceived: Int, codec: String?)
-        let raw: RawStats = await withCheckedContinuation { continuation in
+        // Project the framework's `RTCStatisticsReport` into `[CallStats.RawEntry]`
+        // inside the nonisolated `pc.statistics` callback, then reduce it after the
+        // continuation returns (`CallStats.init` is @MainActor; getStats() runs on
+        // the main actor). The arithmetic lives in the pure, tested
+        // `CallStats.reduce` (§5.7) — here we only adapt NSObject → Double.
+        let entries: [CallStats.RawEntry] = await withCheckedContinuation { continuation in
             pc.statistics { report in
-                var rtt: Double = 0
-                var packetsLost: Int = 0
-                var bytesSent: Int = 0
-                var bytesReceived: Int = 0
-                var packetsSent: Int = 0
-                var packetsReceived: Int = 0
-                var codec: String?
-
-                for (_, stats) in report.statistics {
-                    if stats.type == "candidate-pair" {
-                        let values = stats.values
-                        if let rttValue = values["currentRoundTripTime"] as? NSNumber {
-                            rtt = rttValue.doubleValue * 1000
-                        }
+                let numericKeys = [
+                    "currentRoundTripTime", "packetsLost", "packetsReceived",
+                    "packetsSent", "bytesSent", "bytesReceived"
+                ]
+                var parsed: [CallStats.RawEntry] = []
+                parsed.reserveCapacity(report.statistics.count)
+                for (id, stats) in report.statistics {
+                    let values = stats.values
+                    var nums: [String: Double] = [:]
+                    for key in numericKeys {
+                        if let number = values[key] as? NSNumber { nums[key] = number.doubleValue }
                     }
-                    if stats.type == "inbound-rtp" {
-                        let values = stats.values
-                        if let lost = values["packetsLost"] as? NSNumber {
-                            packetsLost = lost.intValue
-                        }
-                        if let received = values["bytesReceived"] as? NSNumber {
-                            bytesReceived += received.intValue
-                        }
-                        if let pkts = values["packetsReceived"] as? NSNumber {
-                            packetsReceived += pkts.intValue
-                        }
-                        if let codecId = values["codecId"] as? String {
-                            codec = codecId
-                        }
-                    }
-                    if stats.type == "outbound-rtp" {
-                        let values = stats.values
-                        if let sent = values["bytesSent"] as? NSNumber {
-                            bytesSent += sent.intValue
-                        }
-                        if let pkts = values["packetsSent"] as? NSNumber {
-                            packetsSent += pkts.intValue
-                        }
-                    }
+                    parsed.append(CallStats.RawEntry(
+                        id: id,
+                        type: stats.type,
+                        kind: (values["kind"] as? String) ?? (values["mediaType"] as? String),
+                        codecId: values["codecId"] as? String,
+                        mimeType: values["mimeType"] as? String,
+                        values: nums
+                    ))
                 }
-
-                Logger.webrtc.info("[CALL-DIAG][STATS] sent=\(bytesSent)B/\(packetsSent)pkt recv=\(bytesReceived)B/\(packetsReceived)pkt rtt=\(rtt)ms lost=\(packetsLost) codec=\(codec ?? "?", privacy: .public)")
-                continuation.resume(returning: (rtt, packetsLost, bytesSent, packetsReceived, codec))
+                continuation.resume(returning: parsed)
             }
         }
-        // CallStats.init is @MainActor — safe here because getStats() is called
-        // on the main actor (P2PWebRTCClient is @MainActor-isolated).
-        return CallStats(
-            roundTripTimeMs: raw.rtt,
-            packetsLost: raw.packetsLost,
-            bandwidth: raw.bytesSent,
-            codec: raw.codec,
-            inboundPacketsReceived: raw.packetsReceived
+
+        let result = CallStats.reduce(entries: entries)
+        Logger.webrtc.info(
+            "[CALL-DIAG][STATS] sent=\(result.bandwidth)B/\(result.outboundPacketsSent)pkt recvAudio=\(result.inboundAudioPackets)pkt recvVideo=\(result.inboundVideoPackets)pkt rtt=\(result.roundTripTimeMs)ms lost=\(result.packetsLost) codec=\(result.codec ?? "?", privacy: .public)"
         )
+        return result
     }
 
     // MARK: - DataChannel

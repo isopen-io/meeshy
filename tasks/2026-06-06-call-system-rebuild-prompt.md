@@ -826,23 +826,109 @@ Reste UI :
 
 ---
 
-### 📍 ÉTAT ACTUEL & PROCHAINE SESSION (2026-06-06)
+### 2026-06-06 (suite 3) — P0/P2 diagnostics média + auto-réparation (branche `claude/friendly-ride-H5qtI`)
 
-**Branches** : `claude/admiring-faraday-ZMpBt` (PR #314) + `feat/calls-sota-rebuild` (snapshot) — synchronisées à `c02b527`. Tags `calls-sota-p0.1`→`p1.9` (locaux uniquement — push de tags bloqué HTTP 403 dans l'env web ; tous les commits sont sur le remote).
+Troisième tranche : **diagnostic média par-kind (§5.7)** + **fiabilité auto-réparatrice (§5.8)** + **gating audio Mac (§2.3/§6.4)**. TDD strict (logique pure extraite et testée), build non disponible dans cet env → vérification par analyse statique + tests unitaires écrits. Périmètre strict appels ; aucun fichier nouveau (zéro édition `project.pbxproj`).
 
-**Où on en est :**
-- ✅ **P0 fondation** : relais signaling fiable (epoch §3.5 + buffer/replay §4.6), autorité FSM `RTCPeerConnectionState` (§3.2), **fix racine son à sens unique** (answerer applique l'offre avant d'attacher §5.2), perfect-negotiation fondation (rôle polite + garde glare + rollback §3.4), suppression contraintes legacy (§5.3). **Happy-path audio+vidéo 1:1 validé sur device réel** (iPhone ↔ Mac).
-- ✅ **P1 UI/UX** : PiP tap-swap + drag (§7.2), miroir conditionnel (§7.7), couleurs tokens (§7.3), pastille return-to-call vidéo + header retour-à-l'appel + call-waiting (§7.6), watchdog spinner (§7.2/f), auto-hide contrôles (§7.3), Mac-adaptive letterbox + contrôles cachés (§7.1, AC9).
+#### Livré (tag `calls-sota-p0.7`)
 
-**Où on va :** terminer P0 (robustesse/fiabilité), puis P2 (qualité SOTA + adaptatif complet) et P3 (messages système).
+| § | Portée | Détail |
+|---|---|---|
+| §5.7 | `WebRTCTypes.swift` + `P2PWebRTCClient.swift` | **getStats correct** : `CallStats` enrichi (`inboundAudioPackets`/`inboundVideoPackets`/`outboundPacketsSent`) ; parsing **par `kind`** (bug j : sens-unique par média diagnosticable) ; **vrai codec** résolu via `codecId → codec.mimeType` (avant : la référence stats-graph `COT01_111`). Logique pure `CallStats.reduce(entries:)` (le client n'adapte plus que NSObject→Double). |
+| §5.8 | `CallReliabilityPolicy` (pur, dans `WebRTCTypes.swift`) + `CallManager.swift` | **Réducteur de fiabilité unique** `startReliabilityMonitor` (remplace `rtpGateTask` informatif) : un seul Task périodique qui, selon `callState`, applique soit le **watchdog `.connecting`** (`evaluateConnecting` : 12 s → 1 ICE restart, 25 s → fail ; bug h) soit l'**auto-réparation half-open `.connected`** (`evaluateHalfOpen` : in=0 & out>0 après 4 s → **un** ICE restart, one-shot via `halfOpenSettled`). `.connected` reste immédiat (UX, §3.2) ; auto-heal en arrière-plan. |
+| §2.3/§6.4 | `CallManager.swift` | `[AUDIO_FALLBACK]` **gaté sur `!callUsesCallKit` (= isiOSAppOnMac)** au lieu de l'heuristique fragile `!isAudioEnabled`. iPhone/iPad : jamais de self-activation (CallKit `didActivate` possède l'activation ; self-activate prématuré casse l'ADM silencieusement). Mac : activation manuelle (didActivate ne fire jamais). |
 
-**🎯 PRIORITÉ PROCHAINE SESSION (nouvelle session de code) — P0 différés (plus risqués, mis en retrait pour préserver la branche stable ; à faire en premier avec TDD strict + re-test device des DEUX côtés) :**
-1. **§3.1 — `CallEventQueue` réducteur** : sérialiser TOUTES les écritures `callState =` (~13 sites) derrière un réducteur unique (gros refactor FSM ; câbler le scaffold mort).
-2. **§6.3 — at-least-once offer iOS** : `emitCallOffer` via `emitCallSignalWithAck` + retry/backoff (le buffer/replay gateway §4.6 est le backstop, pas le retry émetteur).
-3. **§5.8 — watchdog `.connecting`** : timeout 20-30 s → ICE restart → fail + RTP gate **actionnable** (auto-réparation half-open : inbound=0 & outbound>0 après 3-4 s → ICE restart auto).
-4. **§2.3/§6.4 — gating audio Mac** : gater `[AUDIO_FALLBACK]` sur `isiOSAppOnMac` (au lieu de l'heuristique fragile `!isAudioEnabled`).
+Tests (TDD) ajoutés dans `CallManagerTests.swift` : `CallStatsReducerTests` (per-kind, codec réel, RTT, vide), `CallReliabilityPolicyTests` (half-open healthy/waiting/heal/mute-vs-fault ; watchdog waiting/restart/fail/ordre des budgets), + mise à jour du guard source `webRTCServiceDidConnect` (transition directe §3.2, plus de RTP gate) + guard monitor démarré/annulé.
 
-> Rappels pour la prochaine session : ne PAS partager `P2PWebRTCClient.swift`/`CallManager.swift` entre worktrees parallèles ; build vert + commit isolé par étape ; `setDirection(_:error:)` est **void** (capturer via `&error`, jamais `try`) ; `meeshy.sh build` peut sortir EXIT=1 sur un build sans warning (vérifier `** BUILD SUCCEEDED **` dans le log). §6.1 `reportOutgoingCall(connectedAt:)` est **déjà** piloté par `.connected` (p0.2) — rien à y faire.
+#### Suite (tag `calls-sota-p0.8`) — at-least-once offer (§6.3)
+
+- **§6.3 — fait** : `emitCallOffer` ne fait plus du fire-and-forget. Il délègue à `emitOfferWithRetry` (ACK via `emitCallSignalWithAck` + backoff expo 500ms→1s→2s, 3 tentatives), **superseded-aware** (stoppe si `currentCallId` a changé ou si une négociation plus récente a dépassé l'epoch `generation >= negotiationId`). Le buffer/replay gateway (§4.6) reste le backstop pour un target pas-encore-dans-la-room ; ce retry couvre la perte de frame côté émetteur (churn socket). Test source-guard ajouté.
+
+#### Reste à faire P0
+
+- **§3.1 `CallEventQueue` réducteur** (gros refactor FSM — sérialiser ~13 `callState =`). Toujours différé (le plus risqué sans build/device) — **dernier item P0**.
+- **§4.1 re-buffer candidats ICE à travers l'ICE-restart** : ✅ **déjà en place** (`performICERestart` remet `hasRemoteDescription=false` + vide le buffer → les nouveaux candidats du nouvel ufrag se re-bufferisent et se flushent au nouveau remote-desc ; validé device d'après la tranche fondation).
+
+Puis P2 (codecs H264 HW §5.5, RtpEncoding/degradation §5.6, filtres Vision/Metal §7.5, layout adaptatif complet §7.1, ICE-restart `.disconnected` + bannière reconnecting §4.3) et P3 (messages système §9-P3).
+
+> ✅ **Faits cette session** : §5.7, §5.8 (watchdog `.connecting` + RTP gate actionnable), §2.3/§6.4 (gating audio Mac), §6.3 (at-least-once offer). §4.1 confirmé déjà présent. **Seul §3.1 reste en P0.**
+
+---
+
+### 2026-06-06 (suite 4) — iOS 26 Liquid Glass + positionnement intelligent de la barre d'appel (tag `calls-sota-p2.1`)
+
+Recherche API faite (Apple docs « Applying Liquid Glass to custom views » + LiquidGlassReference). Adoption du **Liquid Glass iOS 26** sur les boutons de `CallView`, avec **fallback `.ultraThinMaterial` gardé pour iOS < 26** (gating `#available(iOS 26.0, *)`).
+
+- **Helpers réutilisables** `View.callControlGlass(diameter:isActive:tint:)` et `endCallGlass(diameter:)` : `.glassEffect(.regular.tint(...).interactive(), in: .circle)` sur iOS 26 (press scale + shimmer + illumination natifs), sinon le cercle material translucide d'avant. Appliqués à : barre de contrôle (mute/son/effets/**flip caméra**/vidéo), bouton raccrocher (glass rouge prominent), bouton filtres, bouton réduire (chevron).
+- **Glass ne sample pas le glass** → la barre groupe ses cercles dans un `GlassEffectContainer(spacing:)` (blend/morph des contrôles adjacents).
+- **Positionnement intelligent** : `ViewThatFits(.horizontal)` centre la rangée quand elle tient, et ne retombe sur le scroll horizontal que sur largeur étroite / Dynamic Type large (avant : `ScrollView` qui ancrait tout à gauche). **Caption courte visible distincte du label VoiceOver long** + colonnes à largeur fixe (68pt) → fini le bouton qui s'élargit pour caser « Basculer la caméra avant/arrière » ; chaque contrôle est aligné et de taille uniforme (cercles 56pt, raccrocher inclus).
+- Tests source-guard `CallViewLiquidGlassTests` (glassEffect gaté iOS 26, fallback material présent, GlassEffectContainer, ViewThatFits, caption≠label, flip caméra présent).
+
+> Prérequis build : Xcode 26 / SDK iOS 26 (le projet est en swift-tools 6.2). Les symboles `glassEffect`/`GlassEffectContainer` n'existent que dans ce SDK ; le `#available` est le gating runtime.
+
+#### Correction (tag `calls-sota-p2.2`) — gating déplacé dans la couche `Compatibility/` du SDK
+
+Le gating `#available(iOS 26)` ne doit PAS vivre inline dans `CallView` : la convention du repo veut que **tout wrapper d'API version-restreinte vit dans `packages/MeeshySDK/Sources/MeeshyUI/Compatibility/`** (cf. `AdaptiveSymbolEffects`, `AdaptivePresentationStyle`, `AdaptiveContentUnavailableView`, `Platform`). Refonte :
+
+- **Nouveau `AdaptiveGlass.swift`** (SDK MeeshyUI/Compatibility) : `View.adaptiveGlass(in:tint:interactive:)` (régulier), `View.adaptiveGlassProminent(in:tint:interactive:)` (raccrocher), `AdaptiveGlassContainer` (= `GlassEffectContainer` iOS 26, pass-through sinon). Atomes opaques (Shape + Color), agnostiques produit → conformes à la SDK purity. Le `#available(iOS 26.0, *)` + le fallback (material / fill tinté / gradient prominent) sont encapsulés ici. `Platform.isIOS26OrLater` ajouté.
+- **`CallView`** : ne contient plus AUCUN `#available` / `glassEffect` / `GlassEffectContainer`. Ses helpers app-side `callControlGlass`/`endCallGlass` ne font plus que le **styling produit** (diamètre, active→tint, rouge) et délèguent au SDK.
+- Tests : `CompatibilityLayerTests` (smoke construction `adaptiveGlass`/`adaptiveGlassProminent`/`AdaptiveGlassContainer` + `Platform.isIOS26OrLater`), et `CallViewLiquidGlassTests` mis à jour (CallView utilise les wrappers SDK, zéro `#available`/`glassEffect` inline).
+
+#### Extension (tag `calls-sota-p2.3`) — Liquid Glass sur IncomingCallView + FloatingCallPillView
+
+Cohérence totale via les wrappers SDK `Compatibility/` (zéro `#available`/`glassEffect` inline dans l'app) :
+- **`IncomingCallView`** : boutons **Accepter/Refuser** → `adaptiveGlassProminent(tint: .success/.error)`, groupés dans un `AdaptiveGlassContainer` (les deux cercles se fondent ; fallback gradient+ombre < iOS 26).
+- **`FloatingCallPillView`** : la **capsule** de la pastille devient une surface Liquid Glass (`adaptiveGlass(in: Capsule())`, fallback `.ultraThinMaterial`). Les mini-contrôles internes restent des fills de vibrancy **sur** le glass — HIG : pas de glass-dans-glass.
+- Tests source-guard ajoutés (`CallViewLiquidGlassTests`) : prominent glass + container dans IncomingCallView, capsule glass dans la pastille, aucun gating inline.
+
+---
+
+### 2026-06-06 (suite 5) — P0 robustesse complétée + Liquid Glass iOS 26 + header généralisé (branche `claude/friendly-ride-H5qtI`, PR #315)
+
+Session menée **sans build ni device** (env web : pas de `meeshy.sh build` ; install gateway bloquée — Prisma engine download HTTP self-signed). Tout est écrit en TDD (logique pure extraite + tests source-guard), à **valider par la CI de la PR #315** puis sur device. Aucune édition `project.pbxproj` (tout dans des fichiers existants ou des fichiers SDK SwiftPM auto-inclus).
+
+#### Commits livrés (sur `claude/friendly-ride-H5qtI` → PR #315)
+
+| Commit | Tag (local) | Portée |
+|---|---|---|
+| `a25afa0` | `calls-sota-p0.7` | **§5.7** getStats par-kind (`inboundAudioPackets`/`inboundVideoPackets`/`outboundPacketsSent`) + vrai codec via `codecId→mimeType` (réducteur pur `CallStats.reduce`) ; **§5.8** réducteur de fiabilité unique `startReliabilityMonitor` (watchdog `.connecting` 12s→ICE restart, 25s→fail ; auto-heal half-open one-shot in=0&out>0 après 4s) via `CallReliabilityPolicy` pur ; **§2.3/§6.4** `[AUDIO_FALLBACK]` gaté sur `!callUsesCallKit` (Mac) au lieu de `!isAudioEnabled` |
+| `a42d7a9` | `calls-sota-p0.8` | **§6.3** offer at-least-once : `emitCallOffer`→`emitOfferWithRetry` (ACK + backoff 500/1000/2000ms, superseded-aware via epoch). §4.1 confirmé déjà présent (re-buffer ICE au restart) |
+| `508667b` | `calls-sota-p2.1` | **Liquid Glass iOS 26 CallView** + layout barre intelligent (`ViewThatFits` centré, caption courte ≠ label a11y) |
+| `86ee81d` | `calls-sota-p2.2` | **Gating Liquid Glass déplacé dans le SDK** `MeeshyUI/Compatibility/AdaptiveGlass.swift` (`adaptiveGlass`/`adaptiveGlassProminent`/`AdaptiveGlassContainer` + `Platform.isIOS26OrLater`) ; CallView ne contient plus aucun `#available`/`glassEffect` inline |
+| `aa2104f` | `calls-sota-p2.3` | Liquid Glass étendu : **IncomingCallView** (accepter/refuser → prominent glass) + **FloatingCallPillView** (capsule glass ; mini-contrôles restent vibrancy = pas de glass-dans-glass HIG) |
+| `cbadf69` → `07ff0a4` | `conv-list-glass-header.2` | **(hors sujet appels)** Page Conversations : boutons header glass (lien + nouvelle conv) ; `CollapsibleHeader` (SDK) → **titre à gauche** + **header flouté dégradé transparent vers le bas généralisé à TOUS les écrans** (Settings/Profile/Feed/LinksHub/ConversationList) |
+
+> Tags toujours **locaux uniquement** (push tags bloqué HTTP 403 dans l'env web). Tous les **commits** sont sur le remote / la PR #315. Recréer les tags depuis un env autorisé via les SHA ci-dessus.
+
+#### État P0/P1/P2/P3
+
+- ✅ **P0** : §3.2, §3.4 (fondation), §3.5, §4.1, §4.6, §5.2, §5.3, **§5.7**, **§5.8**, **§6.1**, **§6.3**, **§2.3/§6.4**. **Reste uniquement §3.1** (réducteur `CallEventQueue`).
+- ✅ **P1 UI** : PiP, return-to-call vidéo, header, auto-hide, Mac-adaptive, call-waiting, miroir conditionnel, watchdog spinner.
+- 🟡 **P2** : ✅ §5.7 (getStats), ✅ §5.8 (auto-heal/watchdog), ✅ Liquid Glass (CallView/Incoming/Pill + header conversations). **Reste** : §5.5 codecs H264 HW + `setCodecPreferences` throwing, §5.6 `RtpEncodingParameters`/`degradationPreference`/thermal, §7.5 filtres Vision/Metal, §7.1 layout adaptatif complet (iPad barre flottante, Continuity Camera picker), §4.3 ICE-restart sur `.disconnected` + bannière reconnecting.
+- ⏳ **P3** : messages système d'appel (gateway + shared + rendu iOS) — non commencé.
+
+#### 🎯 PROCHAINE SESSION — ordre conseillé (TDD strict + build vert + re-test device des DEUX côtés)
+
+1. **CI PR #315 d'abord** : c'est la 1re vraie compilation. Vérifier en priorité les symboles iOS 26 (`glassEffect`/`GlassEffectContainer` — exigent SDK Xcode 26) et la couche `Compatibility/AdaptiveGlass.swift`. Corriger toute erreur de build avant d'ajouter du neuf.
+2. **§3.1 — `CallEventQueue` réducteur** (dernier P0, le plus risqué) : sérialiser TOUTES les écritures `callState =` (~13 sites) derrière un réducteur unique ; câbler le scaffold `CallEventQueue.swift` (actuellement vide hors hooks). **Ne pas faire à l'aveugle** — exige build + device.
+3. **P2 média** : §5.5 codecs H264 HW (forcer l'overload throwing `setCodecPreferences`, intersection bidirectionnelle), §5.6 RtpEncoding/degradation/thermal, §4.3 ICE-restart `.disconnected` + bannière reconnecting.
+4. **P3** : messages système d'appel.
+
+#### ⚠️ Rappels techniques (vérifiés cette session)
+
+- `setDirection(_:error:)` est **void** → capturer via `&error`, jamais `try`.
+- `setCodecPreferences` : forcer l'overload **throwing** (l'overload void no-op).
+- Swift 6 `SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor` : les `static func`/enums purs sont MainActor par défaut → marquer les tests `@MainActor` ou les helpers `nonisolated`. `CallStats.reduce` reste MainActor (init MainActor) — testé via classe `@MainActor`.
+- **Liquid Glass** : tout passe par le SDK `MeeshyUI/Compatibility/AdaptiveGlass.swift` (jamais de `#available(iOS 26)` inline dans l'app — convention `Compatibility/`). HIG : pas de glass-dans-glass (pastille = capsule glass, mini-contrôles = vibrancy).
+- `CollapsibleHeader` : titre **à gauche** (pas de centrage) + surface **flouté dégradé transparent vers le bas par défaut pour tous les écrans** (plus de flag).
+- `meeshy.sh build` peut sortir EXIT=1 sur un build sans warning → vérifier `** BUILD SUCCEEDED **` dans le log.
+- Ne PAS partager `P2PWebRTCClient.swift`/`CallManager.swift` entre worktrees parallèles.
+
+---
+
+### 📍 ÉTAT ACTUEL (référence — antérieure, conservée)
+
+**Branche active** : `claude/friendly-ride-H5qtI` (PR #315). Voir « suite 5 » ci-dessus pour l'état à jour. (Tranches antérieures : branches `claude/admiring-faraday-ZMpBt` PR #314 + `feat/calls-sota-rebuild`, tags `calls-sota-p0.1`→`p1.9`, mergées sur `main`.)
 
 ---
 

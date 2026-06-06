@@ -35,7 +35,10 @@ struct FloatingCallPillView: View {
         }
         .padding(.horizontal, 16)
         .frame(height: pillHeight)
-        .background(.ultraThinMaterial)
+        // iOS 26 Liquid Glass capsule surface (SDK Compatibility wrapper owns the
+        // gating + the .ultraThinMaterial fallback). The small inner controls stay
+        // as vibrancy fills ON the glass — Apple HIG: don't nest glass in glass.
+        .adaptiveGlass(in: Capsule())
         .clipShape(Capsule())
         .overlay(
             Capsule()

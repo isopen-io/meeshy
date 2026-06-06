@@ -311,32 +311,59 @@ final class CallManagerOfferingTransitionTests: XCTestCase {
 @MainActor
 final class CallManagerRTPGateTests: XCTestCase {
 
-    func test_webRTCServiceDidConnect_invokesRTPGate_notDirectTransition() throws {
-        // Source-level guard: webRTCServiceDidConnect must NOT call transitionToConnected
-        // directly. It must call startRTPGatePolling instead, which internally polls
-        // stats and only transitions if inboundPacketsReceived >= rtpGateRequiredPackets.
-        // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §2.3
+    private func callManagerSource() throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
-        let source = try String(contentsOf: url, encoding: .utf8)
+        return try String(contentsOf: url, encoding: .utf8)
+    }
 
+    func test_webRTCServiceDidConnect_transitionsDirectly_perPCStateAuthority() throws {
+        // §3.2 — `RTCPeerConnectionState.connected` (ICE + DTLS up) is the reliable
+        // gate, so webRTCServiceDidConnect transitions to `.connected` immediately
+        // for snappy UX. The OLD RTP-gate-drives-transition behaviour is removed:
+        // half-open detection is now an auto-HEAL owned by the reliability monitor
+        // (§5.8), not a precondition for `.connected`.
+        let source = try callManagerSource()
         guard let funcRange = source.range(of: "func webRTCServiceDidConnect") else {
             XCTFail("webRTCServiceDidConnect not found")
             return
         }
-        // Bound to next func declaration
         let blockEnd = source.range(of: "func webRTCServiceDidDisconnect", range: funcRange.upperBound..<source.endIndex)?.lowerBound
                     ?? source.endIndex
         let funcBody = String(source[funcRange.lowerBound..<blockEnd])
 
         XCTAssertTrue(
-            funcBody.contains("startRTPGatePolling"),
-            "webRTCServiceDidConnect must invoke startRTPGatePolling instead of direct transitionToConnected"
+            funcBody.contains("transitionToConnected"),
+            "webRTCServiceDidConnect must transition to .connected on RTCPeerConnectionState.connected (§3.2)"
         )
+        XCTAssertFalse(
+            funcBody.contains("startRTPGatePolling"),
+            "Obsolete: the RTP gate no longer gates the .connected transition (§3.2/§5.8)"
+        )
+    }
+
+    func test_reliabilityMonitor_startedAtSetup_cancelledOnEndCall() throws {
+        // §5.8 — the unified reliability monitor (connecting watchdog + half-open
+        // self-heal) is started during call setup and torn down on end.
+        let source = try callManagerSource()
+        XCTAssertTrue(
+            source.contains("startReliabilityMonitor()"),
+            "Reliability monitor must be started during call setup"
+        )
+        XCTAssertTrue(
+            source.contains("reliabilityMonitorTask?.cancel()"),
+            "endCallInternal must cancel the reliability monitor"
+        )
+    }
+
+    func test_qualityThresholds_watchdog_constants() {
+        // §5.8 budgets are ordered: grace < connecting-restart < connecting-fail.
+        XCTAssertLessThan(QualityThresholds.halfOpenHealGraceSeconds, QualityThresholds.connectingRestartSeconds)
+        XCTAssertLessThan(QualityThresholds.connectingRestartSeconds, QualityThresholds.connectingFailSeconds)
     }
 
     func test_qualityThresholds_rtpGate_constants() {
@@ -511,5 +538,186 @@ final class CallManagerEarlyJoinTests: XCTestCase {
             body.contains("localMediaTask?.cancel()"),
             "Cleanup guard: endCallInternal must cancel localMediaTask to avoid leaking the in-flight startLocalMedia coroutine."
         )
+    }
+
+    func test_emitCallOffer_usesAtLeastOnceWithAck_notFireAndForget() throws {
+        // §6.3 — the offer is the single most critical signal. It must be sent
+        // through the ACK'd at-least-once path (emitOfferWithRetry), not the
+        // fire-and-forget emitCallSignal that dropped it silently on churn.
+        let source = try sourceText()
+        guard let offerBody = body(of: "func emitCallOffer", in: source) else {
+            XCTFail("emitCallOffer not found")
+            return
+        }
+        XCTAssertTrue(
+            offerBody.contains("emitOfferWithRetry"),
+            "emitCallOffer must delegate to the at-least-once retry path (§6.3)"
+        )
+        guard let retryBody = body(of: "func emitOfferWithRetry", in: source) else {
+            XCTFail("emitOfferWithRetry not found")
+            return
+        }
+        XCTAssertTrue(
+            retryBody.contains("emitCallSignalWithAck"),
+            "emitOfferWithRetry must use the ACK'd emit (§6.3)"
+        )
+        XCTAssertTrue(
+            retryBody.contains("generation >= negotiationId"),
+            "emitOfferWithRetry must stop when a newer negotiation supersedes the offer (epoch guard, §3.5)"
+        )
+    }
+}
+
+// MARK: - CallStats Reducer (§5.7)
+
+@MainActor
+final class CallStatsReducerTests: XCTestCase {
+    private func codec(_ id: String, _ mime: String) -> CallStats.RawEntry {
+        CallStats.RawEntry(id: id, type: "codec", mimeType: mime)
+    }
+    private func inbound(_ kind: String, packets: Int, codecId: String? = nil, lost: Int = 0) -> CallStats.RawEntry {
+        CallStats.RawEntry(
+            id: "in-\(kind)", type: "inbound-rtp", kind: kind, codecId: codecId,
+            values: ["packetsReceived": Double(packets), "packetsLost": Double(lost)]
+        )
+    }
+    private func outbound(_ kind: String, packets: Int, bytes: Int = 0) -> CallStats.RawEntry {
+        CallStats.RawEntry(
+            id: "out-\(kind)", type: "outbound-rtp", kind: kind,
+            values: ["packetsSent": Double(packets), "bytesSent": Double(bytes)]
+        )
+    }
+
+    func test_reduce_splitsInboundByKind() {
+        let stats = CallStats.reduce(entries: [
+            inbound("audio", packets: 120),
+            inbound("video", packets: 300)
+        ])
+        XCTAssertEqual(stats.inboundAudioPackets, 120)
+        XCTAssertEqual(stats.inboundVideoPackets, 300)
+        XCTAssertEqual(stats.inboundPacketsReceived, 420)
+    }
+
+    func test_reduce_audioOnly_videoPacketsZero() {
+        let stats = CallStats.reduce(entries: [inbound("audio", packets: 50)])
+        XCTAssertEqual(stats.inboundAudioPackets, 50)
+        XCTAssertEqual(stats.inboundVideoPackets, 0)
+    }
+
+    func test_reduce_missingKind_countsAsAudio() {
+        // inbound-rtp with no `kind` (older libwebrtc) defaults to audio.
+        let stats = CallStats.reduce(entries: [
+            CallStats.RawEntry(id: "x", type: "inbound-rtp", values: ["packetsReceived": 10])
+        ])
+        XCTAssertEqual(stats.inboundAudioPackets, 10)
+    }
+
+    func test_reduce_sumsOutboundPackets() {
+        let stats = CallStats.reduce(entries: [
+            outbound("audio", packets: 200, bytes: 1000),
+            outbound("video", packets: 800, bytes: 50000)
+        ])
+        XCTAssertEqual(stats.outboundPacketsSent, 1000)
+        XCTAssertEqual(stats.bandwidth, 51000)
+    }
+
+    func test_reduce_resolvesRealCodecName_notGraphReference() {
+        // Bug j: codecId "COT01_111" must resolve to "opus", not the raw id.
+        let stats = CallStats.reduce(entries: [
+            codec("COT01_111", "audio/opus"),
+            inbound("audio", packets: 40, codecId: "COT01_111")
+        ])
+        XCTAssertEqual(stats.codec, "opus")
+    }
+
+    func test_reduce_resolvesVideoCodec() {
+        let stats = CallStats.reduce(entries: [
+            codec("CIT01_96", "video/H264"),
+            inbound("video", packets: 40, codecId: "CIT01_96")
+        ])
+        XCTAssertEqual(stats.codec, "H264")
+    }
+
+    func test_reduce_unknownCodecId_isNil() {
+        let stats = CallStats.reduce(entries: [inbound("audio", packets: 40, codecId: "ghost")])
+        XCTAssertNil(stats.codec)
+    }
+
+    func test_reduce_parsesRttFromCandidatePair() {
+        let stats = CallStats.reduce(entries: [
+            CallStats.RawEntry(id: "cp", type: "candidate-pair", values: ["currentRoundTripTime": 0.085])
+        ])
+        XCTAssertEqual(stats.roundTripTimeMs, 85, accuracy: 0.001)
+    }
+
+    func test_reduce_emptyReport_isZeroed() {
+        let stats = CallStats.reduce(entries: [])
+        XCTAssertEqual(stats.inboundPacketsReceived, 0)
+        XCTAssertEqual(stats.outboundPacketsSent, 0)
+        XCTAssertNil(stats.codec)
+    }
+}
+
+// MARK: - Call Reliability Policy (§5.8)
+
+@MainActor
+final class CallReliabilityPolicyTests: XCTestCase {
+    typealias Policy = CallReliabilityPolicy
+
+    // --- Half-open self-heal ---
+
+    func test_halfOpen_bidirectional_isHealthy() {
+        let outcome = Policy.evaluateHalfOpen(inboundPackets: 50, outboundPackets: 50, secondsInConnected: 10)
+        XCTAssertEqual(outcome, .healthy)
+    }
+
+    func test_halfOpen_withinGrace_waitsEvenWithZeroInbound() {
+        // First second after handshake is legitimately packet-free.
+        let outcome = Policy.evaluateHalfOpen(inboundPackets: 0, outboundPackets: 30, secondsInConnected: 1)
+        XCTAssertEqual(outcome, .waiting)
+    }
+
+    func test_halfOpen_pastGrace_inboundZeroOutboundFlowing_heals() {
+        let outcome = Policy.evaluateHalfOpen(inboundPackets: 0, outboundPackets: 30, secondsInConnected: 5)
+        XCTAssertEqual(outcome, .healHalfOpen)
+    }
+
+    func test_halfOpen_pastGrace_noOutbound_waits() {
+        // Both directions silent = mute / mic-off business condition, not a
+        // transport fault. Do NOT trigger an ICE restart.
+        let outcome = Policy.evaluateHalfOpen(inboundPackets: 0, outboundPackets: 0, secondsInConnected: 10)
+        XCTAssertEqual(outcome, .waiting)
+    }
+
+    func test_halfOpen_inboundAboveThreshold_healthyRegardlessOfTime() {
+        let outcome = Policy.evaluateHalfOpen(inboundPackets: 5, outboundPackets: 0, secondsInConnected: 0)
+        XCTAssertEqual(outcome, .healthy)
+    }
+
+    // --- Connecting watchdog ---
+
+    func test_connecting_early_waits() {
+        let outcome = Policy.evaluateConnecting(secondsInConnecting: 3, didAttemptRestart: false)
+        XCTAssertEqual(outcome, .waiting)
+    }
+
+    func test_connecting_pastRestartBudget_restartsOnce() {
+        let outcome = Policy.evaluateConnecting(secondsInConnecting: 13, didAttemptRestart: false)
+        XCTAssertEqual(outcome, .restartICE)
+    }
+
+    func test_connecting_afterRestartAttempted_waitsUntilFail() {
+        let outcome = Policy.evaluateConnecting(secondsInConnecting: 13, didAttemptRestart: true)
+        XCTAssertEqual(outcome, .waiting)
+    }
+
+    func test_connecting_pastFailBudget_fails() {
+        let outcome = Policy.evaluateConnecting(secondsInConnecting: 26, didAttemptRestart: true)
+        XCTAssertEqual(outcome, .fail)
+    }
+
+    func test_connecting_failBudgetWins_evenIfRestartNotAttempted() {
+        let outcome = Policy.evaluateConnecting(secondsInConnecting: 30, didAttemptRestart: false)
+        XCTAssertEqual(outcome, .fail)
     }
 }

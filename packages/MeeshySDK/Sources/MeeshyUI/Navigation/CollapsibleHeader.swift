@@ -142,23 +142,43 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
                 .opacity(Double(progress) * 0.3)
         }
         .frame(maxWidth: .infinity)
-        .background(
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .overlay(
+        .background(headerBackground)
+    }
+
+    /// Header surface — generalised for ALL screens using this header: an
+    /// `.ultraThinMaterial` blur + a `backgroundColor` tint, both masked to fade
+    /// from a readable blur at the top to fully transparent at the bottom edge, so
+    /// the scroll content (list rows, etc.) passing under the lower edge stays
+    /// visible instead of being clipped by an opaque bar.
+    private var headerBackground: some View {
+        Rectangle()
+            .fill(.ultraThinMaterial)
+            .overlay(
+                LinearGradient(
+                    stops: [
+                        .init(color: backgroundColor.opacity(0.75), location: 0),
+                        .init(color: backgroundColor.opacity(0.45), location: 0.5),
+                        .init(color: backgroundColor.opacity(0.0), location: 1.0),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .mask(
+                Rectangle().fill(
                     LinearGradient(
                         stops: [
-                            .init(color: backgroundColor.opacity(0.5), location: 0),
-                            .init(color: backgroundColor.opacity(0.65), location: 0.8),
-                            .init(color: backgroundColor.opacity(0.7), location: 1.0),
+                            .init(color: .black, location: 0),
+                            .init(color: .black, location: 0.5),
+                            .init(color: .clear, location: 1.0),
                         ],
                         startPoint: .top,
                         endPoint: .bottom
                     )
                 )
-                .ignoresSafeArea(edges: .top)
-                .allowsHitTesting(false)
-        )
+            )
+            .ignoresSafeArea(edges: .top)
+            .allowsHitTesting(false)
     }
 
     private var backButton: some View {

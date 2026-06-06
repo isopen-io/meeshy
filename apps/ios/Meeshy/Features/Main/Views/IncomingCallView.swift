@@ -165,66 +165,49 @@ struct IncomingCallView: View {
     // MARK: - Action Buttons
 
     private var actionButtons: some View {
-        HStack(spacing: 60) {
-            // Reject
-            Button {
-                callManager.rejectCall()
-            } label: {
-                VStack(spacing: 10) {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [MeeshyColors.error, MeeshyColors.error.opacity(0.85)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 70, height: 70)
-                            .shadow(color: MeeshyColors.error.opacity(0.4), radius: 10, y: 4)
-
+        // iOS 26 Liquid Glass (prominent, tinted) for the two primary actions —
+        // gating/fallback owned by the SDK Compatibility wrappers. Grouped so the
+        // glass circles blend rather than clip (glass can't sample glass).
+        AdaptiveGlassContainer(spacing: 40) {
+            HStack(spacing: 60) {
+                // Reject
+                Button {
+                    callManager.rejectCall()
+                } label: {
+                    VStack(spacing: 10) {
                         Image(systemName: "phone.down.fill")
                             .font(.system(size: 28, weight: .semibold))
                             .foregroundColor(.white)
-                    }
-
-                    Text(String(localized: "call.incoming.decline", defaultValue: "Refuser", bundle: .main))
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(MeeshyColors.error)
-                }
-            }
-            .pressable()
-            .accessibilityLabel(String(localized: "call.incoming.decline.label", defaultValue: "Refuser l'appel", bundle: .main))
-
-            // Accept
-            Button {
-                callManager.answerCall()
-            } label: {
-                VStack(spacing: 10) {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [MeeshyColors.success, MeeshyColors.indigo400],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
                             .frame(width: 70, height: 70)
-                            .shadow(color: MeeshyColors.success.opacity(0.4), radius: 10, y: 4)
+                            .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)
 
+                        Text(String(localized: "call.incoming.decline", defaultValue: "Refuser", bundle: .main))
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(MeeshyColors.error)
+                    }
+                }
+                .pressable()
+                .accessibilityLabel(String(localized: "call.incoming.decline.label", defaultValue: "Refuser l'appel", bundle: .main))
+
+                // Accept
+                Button {
+                    callManager.answerCall()
+                } label: {
+                    VStack(spacing: 10) {
                         Image(systemName: callManager.isVideoEnabled ? "video.fill" : "phone.fill")
                             .font(.system(size: 28, weight: .semibold))
                             .foregroundColor(.white)
-                    }
+                            .frame(width: 70, height: 70)
+                            .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.success)
 
-                    Text(String(localized: "call.incoming.accept", defaultValue: "Accepter", bundle: .main))
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(MeeshyColors.success)
+                        Text(String(localized: "call.incoming.accept", defaultValue: "Accepter", bundle: .main))
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(MeeshyColors.success)
+                    }
                 }
+                .pressable()
+                .accessibilityLabel(String(localized: "call.incoming.accept.label", defaultValue: "Accepter l'appel", bundle: .main))
             }
-            .pressable()
-            .accessibilityLabel(String(localized: "call.incoming.accept.label", defaultValue: "Accepter l'appel", bundle: .main))
         }
     }
 }

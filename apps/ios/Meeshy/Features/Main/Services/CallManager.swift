@@ -131,7 +131,13 @@ final class CallManager: ObservableObject {
     // immediately stop their work loop on cancel.
     private var durationTask: Task<Void, Never>?
     private var heartbeatTask: Task<Void, Never>?
-    private var rtpGateTask: Task<Void, Never>?
+    /// §5.8 — single periodic monitor that owns BOTH the `.connecting` watchdog
+    /// (timeout → ICE restart → fail) and the `.connected` half-open self-heal
+    /// (inbound stalled while outbound flows → one ICE restart). It reads
+    /// `callState` each tick and applies `CallReliabilityPolicy`, so there is a
+    /// single wiring point instead of a timer per state. Replaces the old
+    /// purely-informational `rtpGateTask`.
+    private var reliabilityMonitorTask: Task<Void, Never>?
     /// Phase 2 fix — Bug 2 (caller stays ringing while callee shows Connecting).
     /// Tracks the startLocalMedia Task so that:
     ///   1. `emitCallJoin` can be sent IMMEDIATELY (decoupled from media init)
@@ -465,6 +471,7 @@ final class CallManager: ObservableObject {
                 self.applyNegotiationRole()
                 Logger.calls.info("[CALL_SETUP] outgoing 2/4 configureAudioSession begin")
                 self.configureAudioSession()
+                self.startReliabilityMonitor()
                 Logger.calls.info("[CALL_SETUP] outgoing 3/4 startLocalMedia begin (isVideo=\(isVideo))")
                 do {
                     try await self.webRTCService.startLocalMedia(isVideo: isVideo)
@@ -578,6 +585,7 @@ final class CallManager: ObservableObject {
         applyNegotiationRole()
         Logger.calls.info("[CALL_SETUP] incoming 2/4 configureAudioSession begin")
         configureAudioSession()
+        startReliabilityMonitor()
 
         // Phase 2 fix — Bug 2: emit call:join IMMEDIATELY (before awaiting
         // startLocalMedia) so the caller receives PARTICIPANT_JOINED without
@@ -776,6 +784,7 @@ final class CallManager: ObservableObject {
         webRTCService.configure(isVideo: isVideo, iceServers: iceServers)
         applyNegotiationRole()
         configureAudioSession()
+        startReliabilityMonitor()
 
         // Phase 2 fix — Bug 2: emit call:join IMMEDIATELY so the caller receives
         // PARTICIPANT_JOINED while we initialize media in parallel. See
@@ -1281,80 +1290,115 @@ final class CallManager: ObservableObject {
 
     // MARK: - Private: State Transitions
 
+    /// §5.8 — unified reliability monitor. One periodic task that, each tick,
+    /// branches on `callState`:
+    ///   - `.connecting`/`.offering`: applies the watchdog (`evaluateConnecting`)
+    ///     so a wedged ICE/DTLS handshake gets ONE ICE restart, then fails,
+    ///     instead of spinning "Connexion…" forever (bug h).
+    ///   - `.connected`: applies the half-open self-heal (`evaluateHalfOpen`).
+    ///     We stay `.connected` for snappy UX, but if after the grace window the
+    ///     peer's RTP never arrives while ours flows, we trigger ONE ICE restart
+    ///     (the heal is one-shot per call to honour "un ICE restart").
+    /// Real disconnects/hangups remain handled by the PC-state delegate, remote
+    /// `call:ended`, the user, and `outgoingRingTimeoutSeconds` (in `.ringing`).
     @MainActor
-    private func startRTPGatePolling() {
-        rtpGateTask?.cancel()
-        rtpGateTask = Task { @MainActor [weak self] in
+    private func startReliabilityMonitor() {
+        reliabilityMonitorTask?.cancel()
+        reliabilityMonitorTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            // Le RTP gate poll en boucle jusqu'à recevoir les premiers paquets
-            // RTP du peer (signal d'établissement média effectif). Auparavant
-            // il y avait un timeout (5 tentatives x 2s = 10s) qui tuait
-            // l'appel en `.failed("media path broken")` si pas de RTP — c'est
-            // PRÉCISÉMENT le comportement que l'utilisateur veut SUPPRIMER :
-            // en phase `.connecting`, on doit attendre la connexion, pas
-            // l'arrêter automatiquement. Les vraies coupures restent :
-            //   - WebRTC peerConnection state → .failed (cause via delegate)
-            //   - call:ended remote (peer raccroche)
-            //   - User raccroche via CallKit / UI app
-            //   - outgoingRingTimeoutSeconds 45s en `.ringing(outgoing)`
-            //     (avant l'offer SDP — pas pendant .connecting)
-            // On poll donc indéfiniment (jusqu'à cancel par endCallInternal).
-            var attempt = 0
+            var connectingSince: Date?
+            var connectedSince: Date?
+            var didAttemptConnectingRestart = false
+            // Half-open is checked only until it settles (media confirmed healthy
+            // OR the one allowed self-heal fired). After that the connected branch
+            // idles — ongoing transport faults surface via the PC-state delegate,
+            // not by polling stats forever.
+            var halfOpenSettled = false
+            let nanos = UInt64(QualityThresholds.rtpGatePollIntervalSeconds * 1_000_000_000)
+
             while !Task.isCancelled {
-                attempt += 1
-                let nanos = UInt64(QualityThresholds.rtpGatePollIntervalSeconds * 1_000_000_000)
                 try? await Task.sleep(nanoseconds: nanos)
                 guard !Task.isCancelled else { return }
-                guard let stats = await self.webRTCService.getStats() else { continue }
-                if stats.inboundPacketsReceived >= QualityThresholds.rtpGateRequiredPackets {
-                    Logger.calls.info(
-                        "RTP gate passed at attempt \(attempt) (packets=\(stats.inboundPacketsReceived))"
-                    )
-                    self.transitionToConnected()
-                    return
+
+                switch self.callState {
+                case .connecting, .offering:
+                    connectedSince = nil
+                    let since = connectingSince ?? Date()
+                    connectingSince = since
+                    let elapsed = Date().timeIntervalSince(since)
+                    switch CallReliabilityPolicy.evaluateConnecting(
+                        secondsInConnecting: elapsed,
+                        didAttemptRestart: didAttemptConnectingRestart
+                    ) {
+                    case .waiting:
+                        break
+                    case .restartICE:
+                        didAttemptConnectingRestart = true
+                        Logger.calls.warning("[CALL-DIAG] .connecting watchdog (\(Int(elapsed))s) — ICE restart")
+                        self.attemptReconnection()
+                    case .fail:
+                        Logger.calls.error("[CALL-DIAG] .connecting watchdog (\(Int(elapsed))s) — failing call")
+                        self.endCallInternal(reason: .failed(String(localized: "call.error.timeout")))
+                        return
+                    }
+                case .connected:
+                    connectingSince = nil
+                    didAttemptConnectingRestart = false
+                    let since = connectedSince ?? Date()
+                    connectedSince = since
+                    guard !halfOpenSettled else { break }
+                    let elapsed = Date().timeIntervalSince(since)
+                    guard let stats = await self.webRTCService.getStats() else { continue }
+                    switch CallReliabilityPolicy.evaluateHalfOpen(
+                        inboundPackets: stats.inboundPacketsReceived,
+                        outboundPackets: stats.outboundPacketsSent,
+                        secondsInConnected: elapsed
+                    ) {
+                    case .healthy:
+                        halfOpenSettled = true
+                        Logger.calls.info("[CALL-DIAG] media bidirectional (inAudio=\(stats.inboundAudioPackets) inVideo=\(stats.inboundVideoPackets) out=\(stats.outboundPacketsSent))")
+                    case .waiting:
+                        break
+                    case .healHalfOpen:
+                        halfOpenSettled = true
+                        Logger.calls.warning("[CALL-DIAG] half-open detected (in=0 out=\(stats.outboundPacketsSent)) after \(Int(elapsed))s — auto ICE restart")
+                        self.attemptReconnection()
+                    }
+                case .reconnecting:
+                    connectingSince = nil
+                    connectedSince = nil
+                default:
+                    connectingSince = nil
+                    connectedSince = nil
                 }
-                Logger.calls.info(
-                    "[CALL-DIAG] RTP gate attempt \(attempt) — inboundPackets=\(stats.inboundPacketsReceived) (need \(QualityThresholds.rtpGateRequiredPackets)) — patiente, pas de timeout auto"
-                )
             }
         }
     }
 
     private func transitionToConnected() {
-        // Idempotent : si déjà .connected, no-op. Cette fonction peut être
-        // appelée par 2 chemins après le fix RTP-gate-non-bloquant :
-        //   1) webRTCServiceDidConnect → immédiat sur ICE connected
-        //   2) RTP gate poll qui détecte les premiers packets entrants
-        // On évite ainsi de relancer durationTask / heartbeat / haptics.
+        // Idempotent : si déjà .connected, no-op. Appelée par webRTCServiceDidConnect
+        // (immédiat sur RTCPeerConnectionState.connected, §3.2). Le guard évite de
+        // relancer durationTask / heartbeat / haptics si re-déclenchée.
         if case .connected = callState { return }
 
-        // Audio fallback CRITIQUE — si CallKit `provider:didActivate:audioSession`
-        // n'a JAMAIS firé (bug iOS connu sur certaines configs : simulateur,
-        // fresh app launch sur 1er incoming, etc.), `RTCAudioSession.isAudioEnabled`
-        // reste `false` → libwebrtc ne démarre PAS son audio engine →
-        // CONNEXION ICE ÉTABLIE MAIS AUCUNE VOIX (symptôme rapporté par
-        // l'user : "compteur visible mais pas de voix").
-        //
-        // On vérifie ici si la session est active. Si non, on l'active
-        // manuellement avant de passer en `.connected`. Sur device avec
-        // CallKit qui fonctionne normalement, didActivate a déjà firé et
-        // ce code est no-op. Sur simulateur ou edge cases, ça sauve la
-        // voix.
+        // §2.3/§6.4 — audio activation is gated on the PLATFORM, not on the
+        // fragile `!rtc.isAudioEnabled` heuristic.
+        //   - iPhone/iPad (`callUsesCallKit == true`): CallKit owns activation via
+        //     `provider:didActivate:`. We must NEVER self-activate here — calling
+        //     `setActive(true)` before `didActivate` makes iOS fail the audio
+        //     device module silently ("no sound on 1st call"). Log only.
+        //   - Mac (`callUsesCallKit == false`, iOS-app-on-Mac): `didActivate`
+        //     never fires, so this `[AUDIO_FALLBACK]` IS the activation path.
         let rtc = RTCAudioSession.sharedInstance()
-        if !rtc.isAudioEnabled {
-            Logger.calls.warning("[AUDIO_FALLBACK] CallKit didActivate n'a pas firé — activation manuelle de RTCAudioSession pour transmettre l'audio")
+        if !callUsesCallKit {
+            Logger.calls.warning("[AUDIO_FALLBACK] Mac (no CallKit didActivate) — activation manuelle de RTCAudioSession")
             rtc.lockForConfiguration()
             do {
-                // Configurer la session pour VoIP avant d'activer.
                 let configuration = RTCAudioSessionConfiguration.webRTC()
                 configuration.category = AVAudioSession.Category.playAndRecord.rawValue
                 // CALL-FIX 2026-06-06 (macOS) — `.default` avoids the voice-processing
-                // I/O unit that faults on the mic uplink on iOS-app-on-Mac (see
-                // configureAudioSession). This fallback IS the primary activation path
-                // on Mac (provider:didActivate never fires there).
-                configuration.mode = ProcessInfo.processInfo.isiOSAppOnMac
-                    ? AVAudioSession.Mode.default.rawValue
-                    : (isVideoEnabled ? AVAudioSession.Mode.videoChat : AVAudioSession.Mode.voiceChat).rawValue
+                // I/O unit that faults on the mic uplink on iOS-app-on-Mac.
+                configuration.mode = AVAudioSession.Mode.default.rawValue
                 configuration.categoryOptions = [.allowBluetoothHFP, .duckOthers]
                 try rtc.setConfiguration(configuration, active: true)
                 rtc.isAudioEnabled = true
@@ -1363,8 +1407,8 @@ final class CallManager: ObservableObject {
                 Logger.calls.error("[AUDIO_FALLBACK] échec activation manuelle: \(error.localizedDescription)")
             }
             rtc.unlockForConfiguration()
-        } else {
-            Logger.calls.info("[AUDIO_FALLBACK] RTCAudioSession déjà active (CallKit didActivate a firé normalement)")
+        } else if !rtc.isAudioEnabled {
+            Logger.calls.warning("[AUDIO] connected but RTCAudioSession not yet active — awaiting CallKit provider:didActivate (do NOT self-activate on iPhone/iPad)")
         }
 
         // CALL-FIX 2026-06-06 — call established: stop ringback/ringtone + play the
@@ -1580,8 +1624,8 @@ final class CallManager: ObservableObject {
         if wasActive { ringbackPlayer.playEnded() }
         durationTask?.cancel()
         durationTask = nil
-        rtpGateTask?.cancel()
-        rtpGateTask = nil
+        reliabilityMonitorTask?.cancel()
+        reliabilityMonitorTask = nil
         localMediaTask?.cancel()
         localMediaTask = nil
         outgoingRingTimeoutTask?.cancel()
@@ -2033,11 +2077,44 @@ final class CallManager: ObservableObject {
         let fromUserId = AuthManager.shared.currentUser?.id ?? ""
         // §3.5 — a new offer opens a new negotiation generation.
         let generation = nextOutgoingNegotiationId()
-        MessageSocketManager.shared.emitCallSignal(
-            callId: callId,
-            type: "offer",
-            payload: ["sdp": sdp.sdp, "to": toUserId, "from": fromUserId, "negotiationId": generation]
-        )
+        let payload: [String: Any] = [
+            "sdp": sdp.sdp, "to": toUserId, "from": fromUserId, "negotiationId": generation
+        ]
+        // §6.3 — at-least-once delivery. The offer is the single most critical
+        // signal (no offer ⇒ caller rings forever, callee stuck "Connexion…").
+        // Fire-and-forget dropped it silently on socket churn; the gateway
+        // buffer/replay (§4.6) is the *backstop* for a target not-yet-in-room,
+        // but the EMITTER must also retry when its own socket lost the frame.
+        Task { [weak self] in
+            await self?.emitOfferWithRetry(callId: callId, payload: payload, generation: generation)
+        }
+    }
+
+    /// §6.3 — ACK + bounded exponential backoff for the SDP offer. Stops early
+    /// if the call ended or a newer negotiation superseded this offer (epoch),
+    /// so a stale retry never lands on the peer after a renegotiation.
+    private func emitOfferWithRetry(callId: String, payload: [String: Any], generation: Int) async {
+        let maxAttempts = 3
+        var delayMs: UInt64 = 500
+        for attempt in 1...maxAttempts {
+            guard currentCallId == callId, generation >= negotiationId else {
+                Logger.calls.info("[CALL-DIAG] offer gen=\(generation) superseded/cancelled — stop retry")
+                return
+            }
+            let acked = await MessageSocketManager.shared.emitCallSignalWithAck(
+                callId: callId, type: "offer", payload: payload
+            )
+            if acked {
+                if attempt > 1 { Logger.calls.info("[CALL-DIAG] offer ACK'd on attempt \(attempt)") }
+                return
+            }
+            Logger.calls.warning("[CALL-DIAG] offer ACK timed out (attempt \(attempt)/\(maxAttempts)) call=\(callId)")
+            if attempt < maxAttempts {
+                try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
+                delayMs *= 2
+            }
+        }
+        Logger.calls.error("[CALL-DIAG] offer never ACK'd after \(maxAttempts) attempts — relying on gateway replay (§4.6)")
     }
 
     /// PERF-004: Awaits gateway ACK (3s timeout) confirming the SDP answer
@@ -2171,22 +2248,21 @@ extension CallManager: WebRTCServiceDelegate {
             // - Si vraiment aucun RTP n'arrive jamais, l'utilisateur entend
             //   du silence — c'est un signal métier (mute, mic off, network)
             //   pas une raison de couper l'appel.
+            // §5.8 — the reliability monitor (started at call setup) owns the
+            // half-open self-heal once `.connected`; no per-connect RTP task here.
             switch self.callState {
             case .connecting:
-                Logger.calls.info("[CallFSM] ICE connected — transition à .connected (RTP gate informational)")
+                Logger.calls.info("[CallFSM] ICE connected — transition à .connected")
                 self.transitionToConnected()
-                self.startRTPGatePolling()
             case .reconnecting:
                 Logger.calls.info("Reconnection successful — transition à .connected")
                 self.transitionToConnected()
-                self.startRTPGatePolling()
             case .offering:
                 // ICE connected en .offering : handleRemoteAnswer n'a pas
                 // tourné mais ICE a réussi. Catch-up direct à .connected.
                 Logger.calls.warning("[CallFSM] ICE connected while state=.offering — direct catch-up à .connected")
                 self.callState = .connecting
                 self.transitionToConnected()
-                self.startRTPGatePolling()
             default:
                 Logger.calls.debug("[CallFSM] webRTCServiceDidConnect ignored in state \(String(describing: self.callState))")
             }
