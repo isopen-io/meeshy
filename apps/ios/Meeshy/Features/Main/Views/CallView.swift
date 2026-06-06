@@ -314,6 +314,18 @@ struct CallView: View {
         withAnimation(.easeInOut(duration: 0.25)) { showControls.toggle() }
     }
 
+    /// §7.1 — iOS-app-on-Mac (NOT Catalyst). Drives desktop-specific UI:
+    /// letterboxed remote video (no crop), persistent controls, hidden
+    /// speaker/flip controls.
+    private var isOnMac: Bool { ProcessInfo.processInfo.isiOSAppOnMac }
+
+    /// §7.1 — fill (crop) on phone/tablet for an immersive edge-to-edge feed;
+    /// fit (letterbox) on Mac where the window is resizable and cropping the
+    /// peer is undesirable.
+    private var primaryVideoContentMode: UIView.ContentMode {
+        isOnMac ? .scaleAspectFit : .scaleAspectFill
+    }
+
     private var audioCallLayout: some View {
         VStack(spacing: 16) {
             // Avatar (no pulse)
@@ -399,7 +411,8 @@ struct CallView: View {
             // §7.2 — full-area PRIMARY stream. `swapStreams` decides whether the
             // primary is the remote feed (default) or the local camera (after a
             // PiP tap). The OTHER stream is rendered in the draggable PiP.
-            videoStream(local: swapStreams, contentMode: .scaleAspectFill)
+            // §7.1 — letterbox on Mac, fill on phone/tablet.
+            videoStream(local: swapStreams, contentMode: primaryVideoContentMode)
 
             // Duration badge top-left
             VStack {
@@ -661,15 +674,18 @@ struct CallView: View {
                     callManager.toggleMute()
                 }
 
-                // Speaker
-                callControlButton(
-                    icon: callManager.isSpeaker ? "speaker.wave.3.fill" : "speaker.fill",
-                    color: callManager.isSpeaker ? MeeshyColors.info : .white,
-                    bgColor: callManager.isSpeaker ? MeeshyColors.info : .white,
-                    isActive: callManager.isSpeaker,
-                    label: callManager.isSpeaker ? String(localized: "call.control.speakerOff", defaultValue: "Désactiver le haut-parleur", bundle: .main) : String(localized: "call.control.speakerOn", defaultValue: "Activer le haut-parleur", bundle: .main)
-                ) {
-                    callManager.toggleSpeaker()
+                // Speaker — §7.1/§7.3: hidden on iOS-on-Mac (output is the system
+                // device, route is forced .speaker; a toggle here is a dead control).
+                if !isOnMac {
+                    callControlButton(
+                        icon: callManager.isSpeaker ? "speaker.wave.3.fill" : "speaker.fill",
+                        color: callManager.isSpeaker ? MeeshyColors.info : .white,
+                        bgColor: callManager.isSpeaker ? MeeshyColors.info : .white,
+                        isActive: callManager.isSpeaker,
+                        label: callManager.isSpeaker ? String(localized: "call.control.speakerOff", defaultValue: "Désactiver le haut-parleur", bundle: .main) : String(localized: "call.control.speakerOn", defaultValue: "Activer le haut-parleur", bundle: .main)
+                    ) {
+                        callManager.toggleSpeaker()
+                    }
                 }
 
                 // Effects (Plus button)
@@ -685,9 +701,12 @@ struct CallView: View {
                     }
                 }
 
-                // Audit P3 — Camera flip only when video is currently
-                // capturing; flipping a stopped capturer has no effect.
-                if callManager.isVideoEnabled {
+                // Audit P3 — Camera flip only when video is currently capturing
+                // (flipping a stopped capturer has no effect). §7.1/§7.3: hidden
+                // on iOS-on-Mac (single .unspecified camera → switchCamera is a
+                // no-op there; a device picker would be the Mac equivalent, out
+                // of scope here).
+                if callManager.isVideoEnabled && !isOnMac {
                     callControlButton(
                         icon: "camera.rotate.fill",
                         color: .white,
