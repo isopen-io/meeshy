@@ -414,6 +414,22 @@ struct RootView: View {
             FloatingCallPillView()
                 .padding(.top, 8)
         }
+        // §7.6 — call-waiting: a 2nd incoming call while one is active. Was dead
+        // code (CallManager API + CallWaitingBannerView existed but were never
+        // mounted). Reject ends the new call; "end & answer" drops the current
+        // call and accepts the new one.
+        .overlay(alignment: .top) {
+            if callManager.showCallWaitingBanner {
+                CallWaitingBannerView(
+                    callerName: callManager.pendingIncomingCall?.fromUsername
+                        ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main),
+                    isVisible: $callManager.showCallWaitingBanner,
+                    onReject: { callManager.rejectPendingCall() },
+                    onEndAndAnswer: { callManager.endCurrentAndAnswerPending() }
+                )
+                .padding(.top, 8)
+            }
+        }
         // SyncPill is mounted INSIDE ConnectionBanner (replacing the legacy
         // single-label "Synchronisation..." pill) via .safeAreaInset on the
         // NavigationStack root. Same emplacement, same chrome dimensions —

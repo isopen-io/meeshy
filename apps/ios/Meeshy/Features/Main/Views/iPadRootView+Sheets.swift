@@ -109,5 +109,18 @@ extension iPadRootView {
                 FloatingCallPillView()
                     .padding(.top, 8)
             }
+            // §7.6 — call-waiting banner (2nd incoming call during an active one).
+            .overlay(alignment: .top) {
+                if callManager.showCallWaitingBanner {
+                    CallWaitingBannerView(
+                        callerName: callManager.pendingIncomingCall?.fromUsername
+                            ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main),
+                        isVisible: $callManager.showCallWaitingBanner,
+                        onReject: { callManager.rejectPendingCall() },
+                        onEndAndAnswer: { callManager.endCurrentAndAnswerPending() }
+                    )
+                    .padding(.top, 8)
+                }
+            }
     }
 }
