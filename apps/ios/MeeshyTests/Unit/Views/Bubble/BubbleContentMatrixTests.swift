@@ -124,6 +124,26 @@ final class BubbleContentMatrixTests: XCTestCase {
         XCTAssertEqual(content.kind, .burned)
     }
 
+    /// P3 — call-summary messages arrive with `messageSource == .system` and
+    /// must route to the centered `.system` notice, never a chat bubble.
+    func test_systemSourceMessage_routesToSystemKind() {
+        var msg = makeMessage(content: "Appel vidéo · 04:32")
+        msg.messageSource = .system
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertEqual(content.kind, .system)
+    }
+
+    /// The system branch has priority: even a system message flagged deleted
+    /// (defensive — should not happen) renders as a system notice, not deleted.
+    func test_systemSource_takesPriorityOverOtherKinds() {
+        var msg = makeMessage(content: "Appel refusé", isViewOnce: true, viewOnceCount: 1)
+        msg.messageSource = .system
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertEqual(content.kind, .system)
+    }
+
     func test_mixedVisualAndAudio_carriesBothInMixedCase() {
         let img = makeAttachment(type: .image)
         let audio = makeAttachment(type: .audio)

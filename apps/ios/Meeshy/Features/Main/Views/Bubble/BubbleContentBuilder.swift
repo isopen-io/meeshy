@@ -30,7 +30,13 @@ extension BubbleContent {
         // matching the legacy `ThemedMessageBubble.isViewOnceBurned` semantics
         // (the wrapper additionally gates on `blurController.isRevealed`,
         // which is a runtime concern handled in the wrapper, not in BubbleContent).
-        if message.isDeleted {
+        // System messages (call summaries: "Appel vidéo · 04:32", "Appel
+        // refusé", …) render as a centered notice, never as a chat bubble.
+        // Checked first so a system message is never mistaken for a deleted /
+        // view-once bubble.
+        if message.messageSource == .system {
+            self.kind = .system
+        } else if message.isDeleted {
             self.kind = .deleted
         } else if message.isViewOnce && message.viewOnceCount > 0 {
             self.kind = .burned

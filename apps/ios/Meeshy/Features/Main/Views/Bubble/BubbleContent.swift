@@ -11,6 +11,10 @@ struct BubbleContent: Equatable {
         case deleted
         case burned
         case ephemeralExpired
+        /// System notice rendered as a centered capsule (no avatar, no L/R
+        /// alignment) — e.g. the call-summary messages "Appel vidéo · 04:32".
+        /// Driven by `messageSource == .system`.
+        case system
     }
 
     enum Attachments: Equatable {

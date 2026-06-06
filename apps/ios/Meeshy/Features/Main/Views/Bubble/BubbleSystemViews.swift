@@ -82,3 +82,50 @@ struct BubbleBurnedView: View, Equatable {
         .padding(.vertical, 2)
     }
 }
+
+/// Centered system notice rendered in place of a chat bubble — used for
+/// call-summary messages ("Appel vidéo · 04:32", "Appel audio manqué",
+/// "Appel refusé") posted by the gateway when a call ends. Unlike
+/// `BubbleDeletedView`/`BubbleBurnedView` (which still align with the sender
+/// side), a system notice is always centered with no avatar, matching the
+/// iMessage/WhatsApp call-log treatment.
+///
+/// Stateless: depends only on `text` + `isDark`. The leading phone glyph
+/// reflects that calls are today's sole producer of system messages; the
+/// content string itself carries the localized label from the gateway.
+struct BubbleSystemNoticeView: View, Equatable {
+    let text: String
+    let isDark: Bool
+
+    var body: some View {
+        HStack(spacing: 0) {
+            Spacer(minLength: 24)
+
+            HStack(spacing: 6) {
+                Image(systemName: "phone.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(ThemeManager.shared.textMuted)
+                Text(text)
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundColor(ThemeManager.shared.textMuted)
+                    .multilineTextAlignment(.center)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background(
+                Capsule()
+                    .fill(isDark ? Color.white.opacity(0.06) : Color.black.opacity(0.04))
+                    .overlay(
+                        Capsule()
+                            .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5)
+                    )
+            )
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(text)
+
+            Spacer(minLength: 24)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 3)
+    }
+}
