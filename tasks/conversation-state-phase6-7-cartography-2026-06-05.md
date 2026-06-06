@@ -79,7 +79,10 @@ ConversationListView.swift: pin L375, mute L384, lock L393(sheet), archive/unarc
 | 3 | Conv header markAsRead via store + scenePhase (`ConversationViewModel` 3536 l. — risque moyen ; `ConversationView.swift` partagé potentiel avec Codex calls) | — | 🔲 | — |
 | 4 | Section categories → `UserCategoryStore` : observe publisher (.dropFirst) → userCategories, loadCategories seed le store, persistCategoryExpansion → setExpanded ; cross-device via applyRemote (bridge). Pas de reorder UI (skip). **Part B (UI pendingMutationCount) déférée → inc. 5.** | feat/conv-state-category-store | ✅ MERGÉ | `3f3278a7e` |
 | 5a | Supprimer le broadcaster (subscription + handler list VM + fichier + 4 entrées pbxproj) — devenu inerte depuis inc. 2 | feat (direct main) | ✅ MERGÉ | `b3bc7f1ba`+`f77198ce6` |
-| 5b | Reste Phase 8 : shims dépréciés (computed proxies Phase 2) + **UI pendingMutationCount (renderFingerprint + indicateur sync row)** + smoke E2E + quality gate (gateway/web) | — | 🔲 | — |
+| 5b-i | UI pendingMutationCount : indicateur sync subtil sur la row quand hasPendingSync (renderFingerprint l'incluait déjà) + a11y + test | feat/conv-state-pending-sync-ui | ✅ MERGÉ | `40c4945bb` |
+| 5b-ii | Supprime les 8 shims dépréciés userState de MeeshyConversation + migre tous les call-sites (sources SDK + tests SDK + tests app). 76 tests SDK + 1791 tests app verts | (direct main) | ✅ MERGÉ | `a9296bbc9` |
+| 5b-iii | Quality gate iOS : full app suite **1791/0** (12 skip) + SDK migrés 76/0 + build-for-testing app+SDK OK. Gateway/web **non affectés** (changements iOS/SDK-only, pas de `packages/shared`). | — | ✅ | — |
+| 5b-iv | Smoke E2E (XCUITest pin→options / airplane replay / cross-device) | — | 🔲 DÉFÉRÉ (QA manuel — XCUITest fragile ; comportement couvert par unit/integration) | — |
 
 ### CI iOS désactivé (2026-06-06)
 `ios-tests.yml` passé en `workflow_dispatch` seul (commit `45743ac45`) — il crashait systématiquement en CI (MeeshyUITests `CanvasBackgroundIntegrationTests` : `swift_task_deinitOnExecutorMainActorBackDeploy`) et brûlait des minutes macOS par-push. Tests validés en local. À ré-activer une fois le crash corrigé. `ios-release.yml` (tags `v*`+manuel) inchangé.
