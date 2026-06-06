@@ -194,6 +194,12 @@ private final class TestableWebRTCClient: WebRTCClientProviding {
     func startLocalMedia(type: CallMediaType) async throws {}
     func toggleAudio(_ enabled: Bool) { lastAudioEnabled = enabled }
     func toggleVideo(_ enabled: Bool) { lastVideoEnabled = enabled }
+    private(set) var applyVideoEncodingCallCount = 0
+    private(set) var lastVideoEncoding: (maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double)?
+    func applyVideoEncoding(maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double) {
+        applyVideoEncodingCallCount += 1
+        lastVideoEncoding = (maxBitrateBps, maxFramerate, scaleResolutionDownBy)
+    }
     func switchCamera() async throws {}
     func getStats() async -> CallStats? { nil }
     func createDataChannel(label: String) -> Bool {
