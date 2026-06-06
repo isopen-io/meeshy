@@ -826,6 +826,32 @@ Reste UI :
 
 ---
 
+### 2026-06-06 (suite 3) — P0/P2 diagnostics média + auto-réparation (branche `claude/friendly-ride-H5qtI`)
+
+Troisième tranche : **diagnostic média par-kind (§5.7)** + **fiabilité auto-réparatrice (§5.8)** + **gating audio Mac (§2.3/§6.4)**. TDD strict (logique pure extraite et testée), build non disponible dans cet env → vérification par analyse statique + tests unitaires écrits. Périmètre strict appels ; aucun fichier nouveau (zéro édition `project.pbxproj`).
+
+#### Livré (tag `calls-sota-p0.7`)
+
+| § | Portée | Détail |
+|---|---|---|
+| §5.7 | `WebRTCTypes.swift` + `P2PWebRTCClient.swift` | **getStats correct** : `CallStats` enrichi (`inboundAudioPackets`/`inboundVideoPackets`/`outboundPacketsSent`) ; parsing **par `kind`** (bug j : sens-unique par média diagnosticable) ; **vrai codec** résolu via `codecId → codec.mimeType` (avant : la référence stats-graph `COT01_111`). Logique pure `CallStats.reduce(entries:)` (le client n'adapte plus que NSObject→Double). |
+| §5.8 | `CallReliabilityPolicy` (pur, dans `WebRTCTypes.swift`) + `CallManager.swift` | **Réducteur de fiabilité unique** `startReliabilityMonitor` (remplace `rtpGateTask` informatif) : un seul Task périodique qui, selon `callState`, applique soit le **watchdog `.connecting`** (`evaluateConnecting` : 12 s → 1 ICE restart, 25 s → fail ; bug h) soit l'**auto-réparation half-open `.connected`** (`evaluateHalfOpen` : in=0 & out>0 après 4 s → **un** ICE restart, one-shot via `halfOpenSettled`). `.connected` reste immédiat (UX, §3.2) ; auto-heal en arrière-plan. |
+| §2.3/§6.4 | `CallManager.swift` | `[AUDIO_FALLBACK]` **gaté sur `!callUsesCallKit` (= isiOSAppOnMac)** au lieu de l'heuristique fragile `!isAudioEnabled`. iPhone/iPad : jamais de self-activation (CallKit `didActivate` possède l'activation ; self-activate prématuré casse l'ADM silencieusement). Mac : activation manuelle (didActivate ne fire jamais). |
+
+Tests (TDD) ajoutés dans `CallManagerTests.swift` : `CallStatsReducerTests` (per-kind, codec réel, RTT, vide), `CallReliabilityPolicyTests` (half-open healthy/waiting/heal/mute-vs-fault ; watchdog waiting/restart/fail/ordre des budgets), + mise à jour du guard source `webRTCServiceDidConnect` (transition directe §3.2, plus de RTP gate) + guard monitor démarré/annulé.
+
+#### Reste à faire P0
+
+- **§3.1 `CallEventQueue` réducteur** (gros refactor FSM — sérialiser ~13 `callState =`). Toujours différé (le plus risqué sans build/device).
+- **§6.3 at-least-once offer iOS** : `emitCallOffer` via `emitCallSignalWithAck` + retry/backoff.
+- **§4.1 re-buffer candidats ICE à travers l'ICE-restart**.
+
+Puis P2 (codecs H264 HW §5.5, RtpEncoding/degradation §5.6, filtres Vision/Metal §7.5, layout adaptatif complet §7.1, ICE-restart `.disconnected` + bannière reconnecting §4.3) et P3 (messages système §9-P3).
+
+> ✅ **§5.7 et §5.8 (watchdog `.connecting` + RTP gate actionnable) et §2.3/§6.4 (gating audio Mac) : faits cette tranche.** Restent en P0 : §3.1, §6.3, §4.1.
+
+---
+
 ### 📍 ÉTAT ACTUEL & PROCHAINE SESSION (2026-06-06)
 
 **Branches** : `claude/admiring-faraday-ZMpBt` (PR #314) + `feat/calls-sota-rebuild` (snapshot) — synchronisées à `c02b527`. Tags `calls-sota-p0.1`→`p1.9` (locaux uniquement — push de tags bloqué HTTP 403 dans l'env web ; tous les commits sont sur le remote).
