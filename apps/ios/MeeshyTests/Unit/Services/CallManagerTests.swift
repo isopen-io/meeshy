@@ -539,6 +539,33 @@ final class CallManagerEarlyJoinTests: XCTestCase {
             "Cleanup guard: endCallInternal must cancel localMediaTask to avoid leaking the in-flight startLocalMedia coroutine."
         )
     }
+
+    func test_emitCallOffer_usesAtLeastOnceWithAck_notFireAndForget() throws {
+        // §6.3 — the offer is the single most critical signal. It must be sent
+        // through the ACK'd at-least-once path (emitOfferWithRetry), not the
+        // fire-and-forget emitCallSignal that dropped it silently on churn.
+        let source = try sourceText()
+        guard let offerBody = body(of: "func emitCallOffer", in: source) else {
+            XCTFail("emitCallOffer not found")
+            return
+        }
+        XCTAssertTrue(
+            offerBody.contains("emitOfferWithRetry"),
+            "emitCallOffer must delegate to the at-least-once retry path (§6.3)"
+        )
+        guard let retryBody = body(of: "func emitOfferWithRetry", in: source) else {
+            XCTFail("emitOfferWithRetry not found")
+            return
+        }
+        XCTAssertTrue(
+            retryBody.contains("emitCallSignalWithAck"),
+            "emitOfferWithRetry must use the ACK'd emit (§6.3)"
+        )
+        XCTAssertTrue(
+            retryBody.contains("generation >= negotiationId"),
+            "emitOfferWithRetry must stop when a newer negotiation supersedes the offer (epoch guard, §3.5)"
+        )
+    }
 }
 
 // MARK: - CallStats Reducer (§5.7)

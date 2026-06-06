@@ -840,15 +840,18 @@ Troisième tranche : **diagnostic média par-kind (§5.7)** + **fiabilité auto-
 
 Tests (TDD) ajoutés dans `CallManagerTests.swift` : `CallStatsReducerTests` (per-kind, codec réel, RTT, vide), `CallReliabilityPolicyTests` (half-open healthy/waiting/heal/mute-vs-fault ; watchdog waiting/restart/fail/ordre des budgets), + mise à jour du guard source `webRTCServiceDidConnect` (transition directe §3.2, plus de RTP gate) + guard monitor démarré/annulé.
 
+#### Suite (tag `calls-sota-p0.8`) — at-least-once offer (§6.3)
+
+- **§6.3 — fait** : `emitCallOffer` ne fait plus du fire-and-forget. Il délègue à `emitOfferWithRetry` (ACK via `emitCallSignalWithAck` + backoff expo 500ms→1s→2s, 3 tentatives), **superseded-aware** (stoppe si `currentCallId` a changé ou si une négociation plus récente a dépassé l'epoch `generation >= negotiationId`). Le buffer/replay gateway (§4.6) reste le backstop pour un target pas-encore-dans-la-room ; ce retry couvre la perte de frame côté émetteur (churn socket). Test source-guard ajouté.
+
 #### Reste à faire P0
 
-- **§3.1 `CallEventQueue` réducteur** (gros refactor FSM — sérialiser ~13 `callState =`). Toujours différé (le plus risqué sans build/device).
-- **§6.3 at-least-once offer iOS** : `emitCallOffer` via `emitCallSignalWithAck` + retry/backoff.
-- **§4.1 re-buffer candidats ICE à travers l'ICE-restart**.
+- **§3.1 `CallEventQueue` réducteur** (gros refactor FSM — sérialiser ~13 `callState =`). Toujours différé (le plus risqué sans build/device) — **dernier item P0**.
+- **§4.1 re-buffer candidats ICE à travers l'ICE-restart** : ✅ **déjà en place** (`performICERestart` remet `hasRemoteDescription=false` + vide le buffer → les nouveaux candidats du nouvel ufrag se re-bufferisent et se flushent au nouveau remote-desc ; validé device d'après la tranche fondation).
 
 Puis P2 (codecs H264 HW §5.5, RtpEncoding/degradation §5.6, filtres Vision/Metal §7.5, layout adaptatif complet §7.1, ICE-restart `.disconnected` + bannière reconnecting §4.3) et P3 (messages système §9-P3).
 
-> ✅ **§5.7 et §5.8 (watchdog `.connecting` + RTP gate actionnable) et §2.3/§6.4 (gating audio Mac) : faits cette tranche.** Restent en P0 : §3.1, §6.3, §4.1.
+> ✅ **Faits cette session** : §5.7, §5.8 (watchdog `.connecting` + RTP gate actionnable), §2.3/§6.4 (gating audio Mac), §6.3 (at-least-once offer). §4.1 confirmé déjà présent. **Seul §3.1 reste en P0.**
 
 ---
 

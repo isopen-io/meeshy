@@ -2077,11 +2077,44 @@ final class CallManager: ObservableObject {
         let fromUserId = AuthManager.shared.currentUser?.id ?? ""
         // §3.5 — a new offer opens a new negotiation generation.
         let generation = nextOutgoingNegotiationId()
-        MessageSocketManager.shared.emitCallSignal(
-            callId: callId,
-            type: "offer",
-            payload: ["sdp": sdp.sdp, "to": toUserId, "from": fromUserId, "negotiationId": generation]
-        )
+        let payload: [String: Any] = [
+            "sdp": sdp.sdp, "to": toUserId, "from": fromUserId, "negotiationId": generation
+        ]
+        // §6.3 — at-least-once delivery. The offer is the single most critical
+        // signal (no offer ⇒ caller rings forever, callee stuck "Connexion…").
+        // Fire-and-forget dropped it silently on socket churn; the gateway
+        // buffer/replay (§4.6) is the *backstop* for a target not-yet-in-room,
+        // but the EMITTER must also retry when its own socket lost the frame.
+        Task { [weak self] in
+            await self?.emitOfferWithRetry(callId: callId, payload: payload, generation: generation)
+        }
+    }
+
+    /// §6.3 — ACK + bounded exponential backoff for the SDP offer. Stops early
+    /// if the call ended or a newer negotiation superseded this offer (epoch),
+    /// so a stale retry never lands on the peer after a renegotiation.
+    private func emitOfferWithRetry(callId: String, payload: [String: Any], generation: Int) async {
+        let maxAttempts = 3
+        var delayMs: UInt64 = 500
+        for attempt in 1...maxAttempts {
+            guard currentCallId == callId, generation >= negotiationId else {
+                Logger.calls.info("[CALL-DIAG] offer gen=\(generation) superseded/cancelled — stop retry")
+                return
+            }
+            let acked = await MessageSocketManager.shared.emitCallSignalWithAck(
+                callId: callId, type: "offer", payload: payload
+            )
+            if acked {
+                if attempt > 1 { Logger.calls.info("[CALL-DIAG] offer ACK'd on attempt \(attempt)") }
+                return
+            }
+            Logger.calls.warning("[CALL-DIAG] offer ACK timed out (attempt \(attempt)/\(maxAttempts)) call=\(callId)")
+            if attempt < maxAttempts {
+                try? await Task.sleep(nanoseconds: delayMs * 1_000_000)
+                delayMs *= 2
+            }
+        }
+        Logger.calls.error("[CALL-DIAG] offer never ACK'd after \(maxAttempts) attempts — relying on gateway replay (§4.6)")
     }
 
     /// PERF-004: Awaits gateway ACK (3s timeout) confirming the SDP answer
