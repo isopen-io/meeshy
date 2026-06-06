@@ -78,6 +78,13 @@ final class CallManager: ObservableObject {
     @Published private(set) var activeAudioEffect: AudioEffectConfig?
     @Published private(set) var hasLocalVideoTrack = false
     @Published private(set) var hasRemoteVideoTrack = false
+    /// §7.7 — whether the local capture is the front camera. Drives mirroring
+    /// in the UI: only the front camera is mirrored (a mirrored back camera
+    /// shows reversed text/scene — bug k). Tracked optimistically (toggled on
+    /// switchCamera, reset per call). Default true on iPhone/iPad (front camera
+    /// at start), false on iOS-on-Mac (built-in/Continuity cameras are not
+    /// mirrored).
+    @Published private(set) var isUsingFrontCamera = true
     @Published var pendingIncomingCall: (callId: String, fromUserId: String, fromUsername: String, isVideo: Bool)?
 
     // MARK: - Audio Guard (DEBUG override for tests)
@@ -801,11 +808,14 @@ final class CallManager: ObservableObject {
 
     // MARK: - Signal Offer (real SDP from caller after auto-join)
 
-    func handleSignalOffer(callId: String, sdp: SessionDescription) {
+    func handleSignalOffer(callId: String, sdp: SessionDescription, generation: Int = 0) {
         guard currentCallId == callId else {
             Logger.calls.warning("Signal offer for unknown call: \(callId)")
             return
         }
+        // §3.5 — drop offers from an older negotiation epoch (churned socket /
+        // replayed buffer). The newest generation always wins.
+        guard acceptIncomingNegotiation(generation) else { return }
         guard let userId = remoteUserId else { return }
 
         switch callState {
@@ -1065,6 +1075,10 @@ final class CallManager: ObservableObject {
 
     func switchCamera() {
         webRTCService.switchCamera()
+        // §7.7 — optimistic front/back tracking for mirroring. On iPhone/iPad a
+        // flip alternates front↔back; on Mac switchCamera is usually a no-op so
+        // the flag rarely matters there.
+        isUsingFrontCamera.toggle()
         HapticFeedback.light()
     }
 
@@ -1137,8 +1151,10 @@ final class CallManager: ObservableObject {
 
     // MARK: - Remote Events
 
-    func handleRemoteAnswer(callId: String, sdp: SessionDescription) {
+    func handleRemoteAnswer(callId: String, sdp: SessionDescription, generation: Int = 0) {
         guard currentCallId == callId else { return }
+        // §3.5 — drop answers from a stale negotiation epoch.
+        guard acceptIncomingNegotiation(generation) else { return }
         Task { @MainActor [weak self] in
             guard let self else { return }
             await self.webRTCService.setRemoteDescription(sdp)
@@ -1161,8 +1177,11 @@ final class CallManager: ObservableObject {
         }
     }
 
-    func handleRemoteICECandidate(callId: String, candidate: IceCandidate) {
+    func handleRemoteICECandidate(callId: String, candidate: IceCandidate, generation: Int = 0) {
         guard currentCallId == callId else { return }
+        // §3.5 — drop ICE candidates from a stale negotiation epoch (their
+        // ufrag/pwd belong to a superseded negotiation and would never pair).
+        guard acceptIncomingNegotiation(generation) else { return }
         webRTCService.addICECandidate(candidate)
     }
 
@@ -1790,7 +1809,7 @@ final class CallManager: ObservableObject {
             .sink { [weak self] event in
                 guard let sdpString = event.signal.sdp else { return }
                 let sdp = SessionDescription(type: .offer, sdp: sdpString)
-                self?.handleSignalOffer(callId: event.callId, sdp: sdp)
+                self?.handleSignalOffer(callId: event.callId, sdp: sdp, generation: event.signal.negotiationId ?? 0)
             }
             .store(in: &cancellables)
 
@@ -1799,7 +1818,7 @@ final class CallManager: ObservableObject {
             .sink { [weak self] event in
                 guard let sdpString = event.signal.sdp else { return }
                 let sdp = SessionDescription(type: .answer, sdp: sdpString)
-                self?.handleRemoteAnswer(callId: event.callId, sdp: sdp)
+                self?.handleRemoteAnswer(callId: event.callId, sdp: sdp, generation: event.signal.negotiationId ?? 0)
             }
             .store(in: &cancellables)
 
@@ -1812,7 +1831,7 @@ final class CallManager: ObservableObject {
                     sdpMLineIndex: Int32(event.signal.sdpMLineIndex ?? 0),
                     candidate: candidateString
                 )
-                self?.handleRemoteICECandidate(callId: event.callId, candidate: candidate)
+                self?.handleRemoteICECandidate(callId: event.callId, candidate: candidate, generation: event.signal.negotiationId ?? 0)
             }
             .store(in: &cancellables)
 
@@ -1944,18 +1963,57 @@ final class CallManager: ObservableObject {
         }
     }
 
-    // MARK: - Perfect Negotiation Role (§3.4)
+    // MARK: - Perfect Negotiation Role (§3.4) + Epoch (§3.5)
+
+    /// §3.5 — current negotiation generation (high-water mark of generations
+    /// SENT or SEEN). Stamped on every outgoing offer/answer/ICE; incoming
+    /// signals older than this are dropped. Reset per call in
+    /// `applyNegotiationRole` (CallManager is a singleton, so it must not carry
+    /// over between calls — otherwise a peer with a higher counter from a prior
+    /// call would wrongly drop the new call's first offer).
+    private var negotiationId = 0
 
     /// Assigns the deterministic, symmetric polite/impolite role to the WebRTC
     /// client. Both peers compute it identically from the two userIds, so it is
     /// independent of who called whom and survives renegotiations. Called once
-    /// per call, right after `webRTCService.configure`.
+    /// per call, right after `webRTCService.configure`. Also resets the §3.5
+    /// epoch for the new call (single per-call setup chokepoint).
     private func applyNegotiationRole() {
+        negotiationId = 0
+        // §7.7 — front camera by default on iPhone/iPad (mirror), not on Mac.
+        isUsingFrontCamera = !ProcessInfo.processInfo.isiOSAppOnMac
         let localId = AuthManager.shared.currentUser?.id ?? ""
         let remoteId = remoteUserId ?? ""
         let polite = Self.isPolitePeer(localUserId: localId, remoteUserId: remoteId)
         webRTCService.setNegotiationRole(isPolite: polite)
         Logger.calls.info("[CALL-DIAG] negotiation role: \(polite ? "polite" : "impolite") (local=\(localId, privacy: .public) remote=\(remoteId, privacy: .public))")
+    }
+
+    /// §3.5 — accept an incoming signal of `generation` unless it is stale
+    /// (older than the high-water mark). Advances the mark on accept. The first
+    /// signal of a call (generation 0 or 1) is always accepted.
+    private func acceptIncomingNegotiation(_ generation: Int) -> Bool {
+        if Self.isStaleNegotiation(incoming: generation, highWaterMark: negotiationId) {
+            Logger.calls.info("[CALL-DIAG] dropping stale signal gen=\(generation) < current=\(self.negotiationId)")
+            return false
+        }
+        negotiationId = max(negotiationId, generation)
+        return true
+    }
+
+    /// Pure, testable epoch rule (§3.5): a signal is stale when its generation
+    /// is strictly older than the highest already seen-or-sent. Equal/newer is
+    /// accepted (offer, its answer, and the matching ICE share a generation).
+    static func isStaleNegotiation(incoming: Int, highWaterMark: Int) -> Bool {
+        incoming < highWaterMark
+    }
+
+    /// §3.5 — begin a new outgoing negotiation: bump the epoch and return it to
+    /// stamp on the offer. Only offer creation starts a new generation; the
+    /// answer and ICE reuse the current value.
+    private func nextOutgoingNegotiationId() -> Int {
+        negotiationId += 1
+        return negotiationId
     }
 
     /// Pure, testable politeness rule (W3C perfect negotiation): the
@@ -1973,10 +2031,12 @@ final class CallManager: ObservableObject {
 
     private func emitCallOffer(callId: String, toUserId: String, isVideo: Bool, sdp: SessionDescription) {
         let fromUserId = AuthManager.shared.currentUser?.id ?? ""
+        // §3.5 — a new offer opens a new negotiation generation.
+        let generation = nextOutgoingNegotiationId()
         MessageSocketManager.shared.emitCallSignal(
             callId: callId,
             type: "offer",
-            payload: ["sdp": sdp.sdp, "to": toUserId, "from": fromUserId]
+            payload: ["sdp": sdp.sdp, "to": toUserId, "from": fromUserId, "negotiationId": generation]
         )
     }
 
@@ -1987,10 +2047,12 @@ final class CallManager: ObservableObject {
     @discardableResult
     private func emitCallAnswer(callId: String, toUserId: String, sdp: SessionDescription) async -> Bool {
         let fromUserId = AuthManager.shared.currentUser?.id ?? ""
+        // §3.5 — the answer belongs to the offer's generation (the current
+        // high-water mark, advanced when the offer was accepted).
         let acked = await MessageSocketManager.shared.emitCallSignalWithAck(
             callId: callId,
             type: "answer",
-            payload: ["sdp": sdp.sdp, "to": toUserId, "from": fromUserId]
+            payload: ["sdp": sdp.sdp, "to": toUserId, "from": fromUserId, "negotiationId": negotiationId]
         )
         if !acked {
             Logger.calls.warning("SDP answer ACK timed out (3s) for call: \(callId) — proceeding optimistically")
@@ -2063,7 +2125,9 @@ extension CallManager: WebRTCServiceDelegate {
                 "candidate": candidate.candidate,
                 "sdpMLineIndex": Int(candidate.sdpMLineIndex),
                 "to": userId,
-                "from": fromUserId
+                "from": fromUserId,
+                // §3.5 — candidates belong to the current negotiation generation.
+                "negotiationId": self.negotiationId
             ]
             if let sdpMid = candidate.sdpMid {
                 payload["sdpMid"] = sdpMid

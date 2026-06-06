@@ -779,4 +779,71 @@ Puis Phases P1 (switch AV + UI), P2 (qualité SOTA + adaptatif), P3 (messages sy
 
 ---
 
+### 2026-06-06 (suite) — perfect-negotiation, epoch client, UI PiP (branche `claude/admiring-faraday-ZMpBt` + snapshot `feat/calls-sota-rebuild`)
+
+Deuxième tranche, livrée par-dessus la fondation happy-path validée device. Build vert + branche stable à chaque commit (audio+vidéo opérationnels confirmés par l'utilisateur entre les pushs).
+
+#### Commits livrés
+
+| Tag | Commit | Portée | Couvre |
+|---|---|---|---|
+| `calls-sota-p0.5` | `1d1607b` | iOS | **§3.4 fondation perfect negotiation** — rôle polite déterministe (`CallManager.isPolitePeer`, plus petit userId, symétrique), 3 flags MDN (`makingOffer`/`ignoreOffer`/`isSettingRemoteAnswerPending`), garde de collision + **rollback explicite** dans `createAnswer`, instrumentation `createOffer`/`setRemoteAnswer`. **Régression-safe** : pass-through transparent sur le handshake initial (pas de glare) ; la garde ne s'active qu'en renégociation. Tests `PerfectNegotiationRoleTests`. |
+| `calls-sota-p0.6` | `306109f` | SDK + iOS | **§3.5 moitié client de l'epoch** — `CallSignalPayload.negotiationId`; `CallManager` stampe chaque signal sortant (offer ouvre une génération, answer/ICE réutilisent) + drop des SDP/ICE périmés (`acceptIncomingNegotiation`), reset par appel dans `applyNegotiationRole`. No-op happy-path. Tests `NegotiationEpochTests`. |
+| `calls-sota-p1.1` | `f304214` | iOS UI | **§7.2 PiP SOTA** — tap = swap fond/cadre (FaceTime, `swapStreams`), drag + snap-to-nearest-corner via GeometryReader (`PiPCorner`), suppression du `(320,100)` hardcodé et du hack UIScreen/key-window. Flip caméra retiré du tap PiP (déjà dans la barre). |
+| `calls-sota-p1.2` | `b2306fb` | iOS UI | **§7.7 mirroring conditionnel** (bug k) — `CallManager.isUsingFrontCamera` (optimiste, reset par appel, défaut Mac=false), miroir uniquement caméra avant (PiP + primary + self-preview). |
+| `calls-sota-p1.3` | `c485028` | iOS UI | **§7.3 couleurs** — `callControlButton`/`statusPill` prennent `Color` ; hexes legacy `FF2E63`/`08D9D6`/`A855F7`/`6366F1` → `MeeshyColors.error`/`.info`/`.indigo400`/`.indigo500`. |
+
+> Note tags : le push des tags est **bloqué (HTTP 403)** par le proxy git de l'environnement web ; tous les commits sont sur les deux branches, mais les tags `calls-sota-*` n'existent qu'en local — à recréer/pousser depuis un environnement autorisé via les SHA ci-dessus.
+
+#### ▶️ Reste à faire P0 (mis à jour)
+
+- §3.4 — la **fondation** est faite (p0.5). Reste le **déclencheur de renégociation** : `negotiate()` via `onnegotiationneeded` + routage des offres reçues en `.connected` à travers la garde (couplé à l'usage réel du glare : switch AV / ICE-restart). Volontairement différé pour ne pas toucher le trigger d'offre initial qui marche.
+- §3.5 — **fait** (p0.6, moitié client + passthrough gateway p0.1).
+
+Côté P0, restent (plus risqués, mis en retrait pour préserver la stabilité) :
+- **§3.1 `CallEventQueue` réducteur** — gros refactor FSM (sérialiser les ~13 écritures `callState =` derrière un réducteur unique). Risqué sans validation device ; reporté pour ne pas déstabiliser la branche.
+- **§6.3 at-least-once offer iOS** — `emitCallOffer` via `emitCallSignalWithAck` + retry/backoff (le buffer/replay gateway §4.6 est le backstop, pas le retry émetteur).
+- **§5.8 watchdog `.connecting`** — timeout 20-30 s → ICE restart → fail + RTP gate actionnable (auto-réparation half-open).
+- **§2.3/§6.4 gating audio Mac** — gater `[AUDIO_FALLBACK]` sur `isiOSAppOnMac` (au lieu de l'heuristique fragile `!isAudioEnabled`).
+- **§4.1 queue candidats ICE** — re-buffer à travers l'ICE-restart (le buffer initial niveau `WebRTCService` marche déjà, validé device).
+
+> **§6.1 `reportOutgoingCall(connectedAt:)` est déjà piloté par `.connected`** depuis p0.2 (l'autorité FSM est sur `RTCPeerConnectionState`, et `transitionToConnected` est invoqué par `webRTCServiceDidConnect`). ✅ Plus rien à faire ici.
+
+#### ▶️ Reste à faire UI (P1/P2)
+
+- ✅ **`p1.4` (340d941)** — return-to-call pill affiche la **vidéo remote** pour un appel vidéo + hex→`MeeshyColors` (§7.6/§7.3).
+- ✅ **`p1.5` (1073b80)** — watchdog « Connexion vidéo… » : après 12 s, état informatif au lieu du spinner infini (§7.2/f). L'auto-réparation média réelle reste §5.8.
+- ✅ **`p1.6` (db5f86b)** — header conversation : pendant un appel actif, les boutons start-call deviennent un indicateur vert « ● ⏱ toucher pour revenir » (bloque un 2e appel + retour 1-tap) (§7.6).
+- ✅ **`p1.7` (ab76bd6)** — auto-hide des contrôles ~4 s sur iPhone/iPad vidéo (tap vidéo = toggle ; jamais sur Mac/audio/effets ouverts) (§7.3).
+
+- ✅ **`p1.8` (74610c9)** — Mac-adaptive : cacher speaker + flip caméra sur Mac (contrôles morts), vidéo remote letterboxée (`.scaleAspectFit`) sur Mac vs fill iPhone/iPad ; contrôles persistants Mac (via gating auto-hide de p1.7) (§7.1, AC9).
+- ✅ **`p1.9` (a40f5f4)** — **call-waiting câblé** : `CallWaitingBannerView` montée (RootView + iPadRootView), 2e appel entrant → Refuser / Terminer & répondre (était dead code) (§7.6, bug l).
+
+Reste UI :
+- 🟡 Self-preview vidéo dans `IncomingCallView` (§7.4) — **partiellement couvert** : le fond `CallView` rend déjà la caméra locale (atténuée, miroir avant) derrière l'UI entrante ; une vignette nette dédiée serait du polish.
+- ⏳ **Layout adaptatif** complet : iPad regular-width (barre glass flottante centrée), debounce resize Mac/iPad, Continuity Camera device picker (§7.1).
+- ⏳ P2 (codecs HW, getStats par-kind, filtres Vision/Metal, ICE-restart sur `.disconnected` + bannière reconnecting) et P3 (messages système d'appel).
+
+---
+
+### 📍 ÉTAT ACTUEL & PROCHAINE SESSION (2026-06-06)
+
+**Branches** : `claude/admiring-faraday-ZMpBt` (PR #314) + `feat/calls-sota-rebuild` (snapshot) — synchronisées à `c02b527`. Tags `calls-sota-p0.1`→`p1.9` (locaux uniquement — push de tags bloqué HTTP 403 dans l'env web ; tous les commits sont sur le remote).
+
+**Où on en est :**
+- ✅ **P0 fondation** : relais signaling fiable (epoch §3.5 + buffer/replay §4.6), autorité FSM `RTCPeerConnectionState` (§3.2), **fix racine son à sens unique** (answerer applique l'offre avant d'attacher §5.2), perfect-negotiation fondation (rôle polite + garde glare + rollback §3.4), suppression contraintes legacy (§5.3). **Happy-path audio+vidéo 1:1 validé sur device réel** (iPhone ↔ Mac).
+- ✅ **P1 UI/UX** : PiP tap-swap + drag (§7.2), miroir conditionnel (§7.7), couleurs tokens (§7.3), pastille return-to-call vidéo + header retour-à-l'appel + call-waiting (§7.6), watchdog spinner (§7.2/f), auto-hide contrôles (§7.3), Mac-adaptive letterbox + contrôles cachés (§7.1, AC9).
+
+**Où on va :** terminer P0 (robustesse/fiabilité), puis P2 (qualité SOTA + adaptatif complet) et P3 (messages système).
+
+**🎯 PRIORITÉ PROCHAINE SESSION (nouvelle session de code) — P0 différés (plus risqués, mis en retrait pour préserver la branche stable ; à faire en premier avec TDD strict + re-test device des DEUX côtés) :**
+1. **§3.1 — `CallEventQueue` réducteur** : sérialiser TOUTES les écritures `callState =` (~13 sites) derrière un réducteur unique (gros refactor FSM ; câbler le scaffold mort).
+2. **§6.3 — at-least-once offer iOS** : `emitCallOffer` via `emitCallSignalWithAck` + retry/backoff (le buffer/replay gateway §4.6 est le backstop, pas le retry émetteur).
+3. **§5.8 — watchdog `.connecting`** : timeout 20-30 s → ICE restart → fail + RTP gate **actionnable** (auto-réparation half-open : inbound=0 & outbound>0 après 3-4 s → ICE restart auto).
+4. **§2.3/§6.4 — gating audio Mac** : gater `[AUDIO_FALLBACK]` sur `isiOSAppOnMac` (au lieu de l'heuristique fragile `!isAudioEnabled`).
+
+> Rappels pour la prochaine session : ne PAS partager `P2PWebRTCClient.swift`/`CallManager.swift` entre worktrees parallèles ; build vert + commit isolé par étape ; `setDirection(_:error:)` est **void** (capturer via `&error`, jamais `try`) ; `meeshy.sh build` peut sortir EXIT=1 sur un build sans warning (vérifier `** BUILD SUCCEEDED **` dans le log). §6.1 `reportOutgoingCall(connectedAt:)` est **déjà** piloté par `.connected` (p0.2) — rien à y faire.
+
+---
+
 **Fin de la spec. Implémente phase par phase, TDD strict, build vert à chaque commit, vérification finale sur device réel. La FSM WebRTC pilotée par `RTCPeerConnectionState` + perfect negotiation est le cœur ; tout le reste en découle.**

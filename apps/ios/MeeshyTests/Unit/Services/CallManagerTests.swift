@@ -88,6 +88,28 @@ final class PerfectNegotiationRoleTests: XCTestCase {
     }
 }
 
+// MARK: - Negotiation Epoch (§3.5)
+
+final class NegotiationEpochTests: XCTestCase {
+    func test_isStale_olderGeneration_isStale() {
+        XCTAssertTrue(CallManager.isStaleNegotiation(incoming: 1, highWaterMark: 2))
+    }
+
+    func test_isStale_sameGeneration_isAccepted() {
+        // Offer, its answer, and matching ICE all carry the same generation.
+        XCTAssertFalse(CallManager.isStaleNegotiation(incoming: 2, highWaterMark: 2))
+    }
+
+    func test_isStale_newerGeneration_isAccepted() {
+        XCTAssertFalse(CallManager.isStaleNegotiation(incoming: 3, highWaterMark: 2))
+    }
+
+    func test_isStale_firstSignal_isAccepted() {
+        // Fresh call: high-water mark 0, first offer is generation 1.
+        XCTAssertFalse(CallManager.isStaleNegotiation(incoming: 1, highWaterMark: 0))
+    }
+}
+
 // MARK: - WebRTC Types Tests
 
 final class WebRTCTypesTests: XCTestCase {

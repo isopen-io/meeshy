@@ -531,6 +531,11 @@ public struct CallSignalPayload: Decodable, Sendable {
     public let sdpMid: String?
     public let from: String?
     public let to: String?
+    /// §3.5 — negotiation epoch. Monotonic per peer; the receiver drops any
+    /// SDP/ICE whose generation is older than the highest already seen, so
+    /// offers/candidates from a churned socket become inert. Optional for
+    /// backward compatibility (absent ⇒ generation 0).
+    public let negotiationId: Int?
 }
 
 public struct CallICECandidateData: Decodable, Sendable {

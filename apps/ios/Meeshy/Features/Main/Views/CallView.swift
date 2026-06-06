@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import Combine
 import MeeshySDK
 import MeeshyUI
@@ -20,19 +21,27 @@ struct CallView: View {
     @State private var showControls = true
     @State private var showTranscript = false
     @State private var showEffectsToolbar = false
-    @State private var localPreviewOffset: CGSize = .zero
-    // Audit P1-18 — `UIScreen.main` is deprecated since iOS 16 and returns
-    // wrong values on iPad multitasking / Stage Manager (the app's window is
-    // a fraction of the screen). Use a sensible default; the runtime drag
-    // handler reconciles the real position from a GeometryReader proxy
-    // when the user moves the bubble.
-    @State private var localPreviewPosition: CGPoint = CGPoint(x: 320, y: 100)
+    // §7.2 — PiP placement is corner-anchored (snap-to-nearest-corner) and
+    // computed from a GeometryReader, not a hardcoded point. `pipDragOffset`
+    // tracks the in-flight drag; `pipCorner` is the resting corner.
+    @State private var pipCorner: PiPCorner = .topTrailing
+    @State private var pipDragOffset: CGSize = .zero
+    // §7.2 — FaceTime-style swap: which stream is the full-area "primary".
+    // false ⇒ remote is primary + local in the PiP; true ⇒ swapped. Tapping
+    // the PiP toggles it.
+    @State private var swapStreams = false
+    // §7.2/f — watchdog: after a delay with no remote video, the "Connexion
+    // vidéo…" spinner turns into a calmer, informative state instead of
+    // spinning forever (the media auto-repair / ICE-restart is §5.8).
+    @State private var videoConnectSlow = false
+    private let videoConnectWatchdogSeconds: UInt64 = 12
 
     var body: some View {
         ZStack {
             // Background: camera locale pour appels video, gradient pour audio
             if callManager.isVideoEnabled && callManager.hasLocalVideoTrack {
-                CallVideoView(track: callManager.localVideoTrack, mirror: true, contentMode: .scaleAspectFill)
+                // §7.7 — self-preview background mirrors only the front camera.
+                CallVideoView(track: callManager.localVideoTrack, mirror: callManager.isUsingFrontCamera, contentMode: .scaleAspectFill)
                     .ignoresSafeArea()
                 Color.black.opacity(0.25)
                     .ignoresSafeArea()
@@ -129,8 +138,19 @@ struct CallView: View {
 
     private var callBackground: some View {
         ZStack {
-            theme.backgroundGradient
-                .ignoresSafeArea()
+            // Call UI is white-on-dark in BOTH video (camera feed) and audio
+            // modes — like every platform call screen (FaceTime/WhatsApp). Pin
+            // a fixed DARK backdrop so the white controls stay readable in
+            // .light mode too: `theme.backgroundGradient` turns near-white in
+            // light mode, which would make the white labels/icons invisible
+            // (white-on-white). This keeps the call screen correct in .dark AND
+            // .light appearance.
+            LinearGradient(
+                colors: [Color(hex: "09090B"), Color(hex: "0F0D19"), Color(hex: "13111C")],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
 
             // Animated ambient orbs
             Circle()
@@ -240,23 +260,34 @@ struct CallView: View {
                 Spacer()
 
                 if callManager.isVideoEnabled {
+                    // §7.3 — tap the primary video to toggle the controls
+                    // (auto-hide UX). The PiP (on top) keeps its own swap tap.
                     videoCallLayout
+                        .contentShape(Rectangle())
+                        .onTapGesture { toggleControls() }
                 } else {
                     audioCallLayout
                 }
 
                 Spacer()
 
+                // §7.3 — auto-hiding control bar on iPhone video calls; always
+                // visible for audio and on Mac (and while the effects tray is
+                // open). Hidden controls don't capture taps.
                 controlBar
                     .padding(.bottom, 60)
+                    .opacity(showControls ? 1 : 0)
+                    .allowsHitTesting(showControls)
+                    .animation(.easeInOut(duration: 0.25), value: showControls)
             }
 
             // Transcript overlay
             transcriptOverlay
 
-            // Draggable local preview (video only, when connected with remote video)
+            // §7.2 — draggable, corner-snapping PiP showing the secondary
+            // stream. Tap to swap it with the full-area primary (FaceTime).
             if callManager.isVideoEnabled && callManager.hasLocalVideoTrack {
-                draggableLocalPreview
+                pipView
             }
         }
         .simultaneousGesture(
@@ -270,6 +301,40 @@ struct CallView: View {
                     }
                 }
         )
+        // §7.3 — auto-hide after 4s of no interaction. Re-arms whenever
+        // showControls flips to true (a reveal tap); no-op for audio / Mac /
+        // effects-open via shouldAutoHideControls.
+        .task(id: showControls) {
+            guard showControls, shouldAutoHideControls else { return }
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            if !Task.isCancelled {
+                withAnimation(.easeInOut(duration: 0.25)) { showControls = false }
+            }
+        }
+        .onDisappear { showControls = true }
+    }
+
+    /// §7.3 — controls auto-hide only on iPhone/iPad video calls, never on Mac
+    /// (controls are persistent on desktop), never for audio-only (no video to
+    /// reveal), and never while the effects tray is open.
+    private var shouldAutoHideControls: Bool {
+        callManager.isVideoEnabled && !showEffectsToolbar && !ProcessInfo.processInfo.isiOSAppOnMac
+    }
+
+    private func toggleControls() {
+        withAnimation(.easeInOut(duration: 0.25)) { showControls.toggle() }
+    }
+
+    /// §7.1 — iOS-app-on-Mac (NOT Catalyst). Drives desktop-specific UI:
+    /// letterboxed remote video (no crop), persistent controls, hidden
+    /// speaker/flip controls.
+    private var isOnMac: Bool { ProcessInfo.processInfo.isiOSAppOnMac }
+
+    /// §7.1 — fill (crop) on phone/tablet for an immersive edge-to-edge feed;
+    /// fit (letterbox) on Mac where the window is resizable and cropping the
+    /// peer is undesirable.
+    private var primaryVideoContentMode: UIView.ContentMode {
+        isOnMac ? .scaleAspectFit : .scaleAspectFill
     }
 
     private var audioCallLayout: some View {
@@ -299,13 +364,13 @@ struct CallView: View {
             // Status indicators
             HStack(spacing: 12) {
                 if callManager.isMuted {
-                    statusPill(icon: "mic.slash.fill", text: String(localized: "call.status.muted", defaultValue: "Micro coupe", bundle: .main), color: "FF2E63")
+                    statusPill(icon: "mic.slash.fill", text: String(localized: "call.status.muted", defaultValue: "Micro coupe", bundle: .main), color: MeeshyColors.error)
                 }
                 if callManager.isSpeaker {
-                    statusPill(icon: "speaker.wave.3.fill", text: String(localized: "call.status.speaker", defaultValue: "Haut-parleur", bundle: .main), color: "08D9D6")
+                    statusPill(icon: "speaker.wave.3.fill", text: String(localized: "call.status.speaker", defaultValue: "Haut-parleur", bundle: .main), color: MeeshyColors.info)
                 }
                 if isConnectionDegraded {
-                    statusPill(icon: "wifi.exclamationmark", text: String(localized: "call.status.unstable", defaultValue: "Connexion instable", bundle: .main), color: "FBBF24")
+                    statusPill(icon: "wifi.exclamationmark", text: String(localized: "call.status.unstable", defaultValue: "Connexion instable", bundle: .main), color: MeeshyColors.warning)
                 }
             }
         }
@@ -354,25 +419,11 @@ struct CallView: View {
 
     private var videoCallLayout: some View {
         ZStack {
-            // Remote video (full area)
-            if callManager.hasRemoteVideoTrack && callManager.isRemoteVideoEnabled {
-                CallVideoView(track: callManager.remoteVideoTrack, contentMode: .scaleAspectFill)
-            } else if callManager.hasRemoteVideoTrack {
-                // P0-3 — peer turned its camera off: avatar placeholder, never the
-                // frozen last frame.
-                remoteCameraOffPlaceholder
-            } else {
-                Color.black.opacity(0.4)
-                    .overlay(
-                        VStack(spacing: 12) {
-                            ProgressView()
-                                .tint(.white.opacity(0.5))
-                            Text(String(localized: "call.video.connecting", defaultValue: "Connexion video...", bundle: .main))
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.white.opacity(0.4))
-                        }
-                    )
-            }
+            // §7.2 — full-area PRIMARY stream. `swapStreams` decides whether the
+            // primary is the remote feed (default) or the local camera (after a
+            // PiP tap). The OTHER stream is rendered in the draggable PiP.
+            // §7.1 — letterbox on Mac, fill on phone/tablet.
+            videoStream(local: swapStreams, contentMode: primaryVideoContentMode)
 
             // Duration badge top-left
             VStack {
@@ -392,6 +443,62 @@ struct CallView: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 20))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// §7.2 — renders one call stream. `local == true` shows the (mirrored)
+    /// local camera; otherwise the remote feed, degrading to a camera-off
+    /// placeholder (peer's camera off) or a connecting placeholder (no track
+    /// yet). Shared by the full-area primary and the PiP so a swap just flips
+    /// the `local` flag on each.
+    @ViewBuilder
+    private func videoStream(local: Bool, contentMode: UIView.ContentMode) -> some View {
+        if local {
+            // §7.7 — mirror ONLY the front camera (a mirrored back camera shows
+            // reversed text/scene — bug k).
+            CallVideoView(track: callManager.localVideoTrack, mirror: callManager.isUsingFrontCamera, contentMode: contentMode)
+        } else if callManager.hasRemoteVideoTrack && callManager.isRemoteVideoEnabled {
+            CallVideoView(track: callManager.remoteVideoTrack, contentMode: contentMode)
+        } else if callManager.hasRemoteVideoTrack {
+            // P0-3 — peer turned its camera off: avatar placeholder, never the
+            // frozen last frame.
+            remoteCameraOffPlaceholder
+        } else {
+            connectingVideoPlaceholder
+        }
+    }
+
+    private var connectingVideoPlaceholder: some View {
+        Color.black.opacity(0.4)
+            .overlay(
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .tint(.white.opacity(0.5))
+                    Text(videoConnectSlow
+                        ? String(localized: "call.video.connecting.slow", defaultValue: "La vidéo prend plus de temps que prévu…", bundle: .main)
+                        : String(localized: "call.video.connecting", defaultValue: "Connexion video...", bundle: .main))
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white.opacity(videoConnectSlow ? 0.7 : 0.4))
+                        .multilineTextAlignment(.center)
+                    if videoConnectSlow {
+                        Text(String(localized: "call.video.connecting.slow.hint", defaultValue: "L'audio est peut-être déjà actif.", bundle: .main))
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundColor(.white.opacity(0.45))
+                            .multilineTextAlignment(.center)
+                    }
+                }
+                .padding(.horizontal, 32)
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // The watchdog runs only while this placeholder is on screen; SwiftUI
+            // cancels the task the moment the remote track arrives and the view
+            // is replaced by the live feed.
+            .task {
+                videoConnectSlow = false
+                try? await Task.sleep(nanoseconds: videoConnectWatchdogSeconds * 1_000_000_000)
+                if !Task.isCancelled {
+                    withAnimation(.easeInOut(duration: 0.3)) { videoConnectSlow = true }
+                }
+            }
     }
 
     // P0-3 — shown full-area when the remote peer has a video track but turned
@@ -414,50 +521,83 @@ struct CallView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Draggable Local Preview
+    // MARK: - Picture-in-Picture (§7.2)
 
-    private var draggableLocalPreview: some View {
-        CallVideoView(track: callManager.localVideoTrack, mirror: true, contentMode: .scaleAspectFill)
-            .frame(width: 100, height: 140)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.white.opacity(0.3), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
-            .position(localPreviewPosition)
-            .offset(localPreviewOffset)
-            .gesture(
-                DragGesture()
-                    .onChanged { localPreviewOffset = $0.translation }
-                    .onEnded { value in
-                        let finalX = localPreviewPosition.x + value.translation.width
-                        let finalY = localPreviewPosition.y + value.translation.height
-                        // Audit P1-18 — use the active key window's bounds
-                        // (correct under Stage Manager / iPad multitasking)
-                        // and fall back to UIScreen.main only when no window
-                        // scene is yet attached. A full GeometryReader-driven
-                        // refactor is tracked in the P2 backlog.
-                        let bounds: CGRect = {
-                            let scenes = UIApplication.shared.connectedScenes
-                            for case let windowScene as UIWindowScene in scenes {
-                                if let win = windowScene.windows.first(where: { $0.isKeyWindow }) ?? windowScene.windows.first {
-                                    return win.bounds
-                                }
+    /// The four anchor corners a PiP can snap to.
+    private enum PiPCorner: CaseIterable {
+        case topLeading, topTrailing, bottomLeading, bottomTrailing
+    }
+
+    private static let pipSize = CGSize(width: 100, height: 140)
+
+    /// Resting center for the PiP in a given container, accounting for safe-ish
+    /// insets (top for the notch/duration badge, bottom for the control bar).
+    private func pipCenter(_ corner: PiPCorner, in container: CGSize) -> CGPoint {
+        let halfW = Self.pipSize.width / 2
+        let halfH = Self.pipSize.height / 2
+        let margin: CGFloat = 16
+        let topInset: CGFloat = 64      // below the minimize chevron / notch
+        let bottomInset: CGFloat = 160  // above the control bar
+        let leadingX = margin + halfW
+        let trailingX = container.width - margin - halfW
+        let topY = topInset + halfH
+        let bottomY = container.height - bottomInset - halfH
+        switch corner {
+        case .topLeading: return CGPoint(x: leadingX, y: topY)
+        case .topTrailing: return CGPoint(x: trailingX, y: topY)
+        case .bottomLeading: return CGPoint(x: leadingX, y: bottomY)
+        case .bottomTrailing: return CGPoint(x: trailingX, y: bottomY)
+        }
+    }
+
+    /// Nearest corner to a point — used to snap on drag end.
+    private func nearestCorner(to point: CGPoint, in container: CGSize) -> PiPCorner {
+        PiPCorner.allCases.min(by: { a, b in
+            let ca = pipCenter(a, in: container)
+            let cb = pipCenter(b, in: container)
+            return hypot(point.x - ca.x, point.y - ca.y) < hypot(point.x - cb.x, point.y - cb.y)
+        }) ?? .topTrailing
+    }
+
+    private var pipView: some View {
+        GeometryReader { geo in
+            let base = pipCenter(pipCorner, in: geo.size)
+            // §7.2 — the PiP shows the SECONDARY stream (the opposite of the
+            // primary). Swap flips both with one tap.
+            videoStream(local: !swapStreams, contentMode: .scaleAspectFill)
+                .frame(width: Self.pipSize.width, height: Self.pipSize.height)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
+                .position(x: base.x + pipDragOffset.width, y: base.y + pipDragOffset.height)
+                .gesture(
+                    DragGesture()
+                        .onChanged { pipDragOffset = $0.translation }
+                        .onEnded { value in
+                            let dropped = CGPoint(x: base.x + value.translation.width,
+                                                  y: base.y + value.translation.height)
+                            let corner = nearestCorner(to: dropped, in: geo.size)
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                pipCorner = corner
+                                pipDragOffset = .zero
                             }
-                            return UIScreen.main.bounds
-                        }()
-                        let screenW = bounds.width
-                        let screenH = bounds.height
-                        let snappedX: CGFloat = finalX < screenW / 2 ? 70 : screenW - 70
-                        let snappedY: CGFloat = max(80, min(finalY, screenH - 180))
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            localPreviewPosition = CGPoint(x: snappedX, y: snappedY)
-                            localPreviewOffset = .zero
+                            HapticFeedback.light()
                         }
+                )
+                // §7.2 — tap PiP = swap which stream is full-screen (FaceTime).
+                // Camera flip lives in the control bar now (was here, undiscoverable).
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        swapStreams.toggle()
                     }
-            )
-            .onTapGesture { callManager.switchCamera() }
+                    HapticFeedback.light()
+                }
+                .accessibilityLabel(String(localized: "call.pip.swap", defaultValue: "Permuter les vidéos", bundle: .main))
+                .accessibilityHint(String(localized: "call.pip.swap.hint", defaultValue: "Touchez pour échanger la petite et la grande vidéo ; faites glisser pour déplacer", bundle: .main))
+        }
     }
 
     // MARK: - Transcript Overlay
@@ -537,30 +677,33 @@ struct CallView: View {
                 // outcome of the tap, not just "Micro".
                 callControlButton(
                     icon: callManager.isMuted ? "mic.slash.fill" : "mic.fill",
-                    color: callManager.isMuted ? "FF2E63" : "FFFFFF",
-                    bgColor: callManager.isMuted ? "FF2E63" : "FFFFFF",
+                    color: callManager.isMuted ? MeeshyColors.error : .white,
+                    bgColor: callManager.isMuted ? MeeshyColors.error : .white,
                     isActive: callManager.isMuted,
                     label: callManager.isMuted ? String(localized: "call.control.unmute", defaultValue: "Réactiver le micro", bundle: .main) : String(localized: "call.control.mute", defaultValue: "Couper le micro", bundle: .main)
                 ) {
                     callManager.toggleMute()
                 }
 
-                // Speaker
-                callControlButton(
-                    icon: callManager.isSpeaker ? "speaker.wave.3.fill" : "speaker.fill",
-                    color: callManager.isSpeaker ? "08D9D6" : "FFFFFF",
-                    bgColor: callManager.isSpeaker ? "08D9D6" : "FFFFFF",
-                    isActive: callManager.isSpeaker,
-                    label: callManager.isSpeaker ? String(localized: "call.control.speakerOff", defaultValue: "Désactiver le haut-parleur", bundle: .main) : String(localized: "call.control.speakerOn", defaultValue: "Activer le haut-parleur", bundle: .main)
-                ) {
-                    callManager.toggleSpeaker()
+                // Speaker — §7.1/§7.3: hidden on iOS-on-Mac (output is the system
+                // device, route is forced .speaker; a toggle here is a dead control).
+                if !isOnMac {
+                    callControlButton(
+                        icon: callManager.isSpeaker ? "speaker.wave.3.fill" : "speaker.fill",
+                        color: callManager.isSpeaker ? MeeshyColors.info : .white,
+                        bgColor: callManager.isSpeaker ? MeeshyColors.info : .white,
+                        isActive: callManager.isSpeaker,
+                        label: callManager.isSpeaker ? String(localized: "call.control.speakerOff", defaultValue: "Désactiver le haut-parleur", bundle: .main) : String(localized: "call.control.speakerOn", defaultValue: "Activer le haut-parleur", bundle: .main)
+                    ) {
+                        callManager.toggleSpeaker()
+                    }
                 }
 
                 // Effects (Plus button)
                 callControlButton(
                     icon: showEffectsToolbar ? "xmark" : "plus",
-                    color: hasActiveEffects ? "6366F1" : "FFFFFF",
-                    bgColor: hasActiveEffects ? "6366F1" : "FFFFFF",
+                    color: hasActiveEffects ? MeeshyColors.indigo500 : .white,
+                    bgColor: hasActiveEffects ? MeeshyColors.indigo500 : .white,
                     isActive: showEffectsToolbar || hasActiveEffects,
                     label: String(localized: "call.control.effects", defaultValue: "Effets", bundle: .main)
                 ) {
@@ -569,13 +712,16 @@ struct CallView: View {
                     }
                 }
 
-                // Audit P3 — Camera flip only when video is currently
-                // capturing; flipping a stopped capturer has no effect.
-                if callManager.isVideoEnabled {
+                // Audit P3 — Camera flip only when video is currently capturing
+                // (flipping a stopped capturer has no effect). §7.1/§7.3: hidden
+                // on iOS-on-Mac (single .unspecified camera → switchCamera is a
+                // no-op there; a device picker would be the Mac equivalent, out
+                // of scope here).
+                if callManager.isVideoEnabled && !isOnMac {
                     callControlButton(
                         icon: "camera.rotate.fill",
-                        color: "FFFFFF",
-                        bgColor: "FFFFFF",
+                        color: .white,
+                        bgColor: .white,
                         isActive: false,
                         label: String(localized: "call.control.flipCamera", defaultValue: "Basculer la caméra avant/arrière", bundle: .main)
                     ) {
@@ -590,8 +736,8 @@ struct CallView: View {
                 if callManager.hasLocalVideoTrack || callManager.isVideoEnabled {
                     callControlButton(
                         icon: callManager.isVideoEnabled ? "video.fill" : "video.slash.fill",
-                        color: "A855F7",
-                        bgColor: "A855F7",
+                        color: MeeshyColors.indigo400,
+                        bgColor: MeeshyColors.indigo400,
                         isActive: !callManager.isVideoEnabled,
                         label: callManager.isVideoEnabled ? String(localized: "call.control.videoOff", defaultValue: "Désactiver la vidéo", bundle: .main) : String(localized: "call.control.videoOn", defaultValue: "Activer la vidéo", bundle: .main)
                     ) {
@@ -678,21 +824,21 @@ struct CallView: View {
         )
     }
 
-    private func callControlButton(icon: String, color: String, bgColor: String, isActive: Bool, label: String, action: @escaping () -> Void) -> some View {
+    private func callControlButton(icon: String, color: Color, bgColor: Color, isActive: Bool, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 6) {
                 ZStack {
                     Circle()
-                        .fill(isActive ? Color(hex: bgColor).opacity(0.2) : Color.white.opacity(0.1))
+                        .fill(isActive ? bgColor.opacity(0.2) : Color.white.opacity(0.1))
                         .frame(width: 56, height: 56)
                         .overlay(
                             Circle()
-                                .stroke(Color(hex: color).opacity(isActive ? 0.5 : 0.2), lineWidth: 1)
+                                .stroke(color.opacity(isActive ? 0.5 : 0.2), lineWidth: 1)
                         )
 
                     Image(systemName: icon)
                         .font(.system(size: 22, weight: .medium))
-                        .foregroundColor(isActive ? Color(hex: color) : .white.opacity(0.9))
+                        .foregroundColor(isActive ? color : .white.opacity(0.9))
                 }
 
                 Text(label)
@@ -758,19 +904,19 @@ struct CallView: View {
         .accessibilityLabel(String(localized: "call.end", defaultValue: "Raccrocher", bundle: .main))
     }
 
-    private func statusPill(icon: String, text: String, color: String) -> some View {
+    private func statusPill(icon: String, text: String, color: Color) -> some View {
         HStack(spacing: 4) {
             Image(systemName: icon)
                 .font(.system(size: 10, weight: .semibold))
             Text(text)
                 .font(.system(size: 11, weight: .medium))
         }
-        .foregroundColor(Color(hex: color))
+        .foregroundColor(color)
         .padding(.horizontal, 10)
         .padding(.vertical, 4)
         .background(
             Capsule()
-                .fill(Color(hex: color).opacity(0.12))
+                .fill(color.opacity(0.12))
         )
     }
 
