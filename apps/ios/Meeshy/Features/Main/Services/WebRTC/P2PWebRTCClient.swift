@@ -466,6 +466,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         mungedSDP = Self.addVideoBitrateHints(mungedSDP)
         let mungedDescription = RTCSessionDescription(type: sdp.type, sdp: mungedSDP)
         try await setLocalDescription(mungedDescription, on: pc)
+        Logger.webrtc.info("[CALL-DIAG] local OFFER directions: \(Self.sdpDirections(mungedSDP), privacy: .public)")
         Logger.webrtc.info("SDP offer created and set as local description (Opus munged)")
         return SessionDescription(type: .offer, sdp: mungedSDP)
     }
@@ -509,6 +510,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         mungedSDP = Self.addVideoBitrateHints(mungedSDP)
         let mungedDescription = RTCSessionDescription(type: sdp.type, sdp: mungedSDP)
         try await setLocalDescription(mungedDescription, on: pc)
+        Logger.webrtc.info("[CALL-DIAG] local ANSWER directions: \(Self.sdpDirections(mungedSDP), privacy: .public)")
         Logger.webrtc.info("SDP answer created and set as local description (Opus munged)")
         return SessionDescription(type: .answer, sdp: mungedSDP)
     }
@@ -517,7 +519,26 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         guard let pc = peerConnection else { throw WebRTCError.noPeerConnection }
         let rtcAnswer = RTCSessionDescription(type: .answer, sdp: answer.sdp)
         try await setRemoteDescription(rtcAnswer, on: pc)
+        // CALL-DIAG (temp) — log the answer's per-media direction. If the peer's
+        // answer is recvonly/inactive for a media we expect to receive, that peer
+        // is NOT sending → our inbound RTP stays 0 (one-way media symptom).
+        Logger.webrtc.info("[CALL-DIAG] remote ANSWER directions: \(Self.sdpDirections(answer.sdp), privacy: .public)")
         Logger.webrtc.info("Remote answer set")
+    }
+
+    /// CALL-DIAG (temp) — extracts per-m-section direction (sendrecv/sendonly/
+    /// recvonly/inactive) from an SDP, to diagnose one-way media.
+    static func sdpDirections(_ sdp: String) -> String {
+        var out: [String] = []
+        var media = "?"
+        for line in sdp.components(separatedBy: "\r\n") {
+            if line.hasPrefix("m=") {
+                media = String(line.dropFirst(2).split(separator: " ").first ?? "?")
+            } else if line == "a=sendrecv" || line == "a=sendonly" || line == "a=recvonly" || line == "a=inactive" {
+                out.append("\(media)=\(line.dropFirst(2))")
+            }
+        }
+        return out.isEmpty ? "(none)" : out.joined(separator: " ")
     }
 
     func addIceCandidate(_ candidate: IceCandidate) async throws {
@@ -652,7 +673,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
                     }
                 }
 
-                Logger.webrtc.debug("[STATS] sent=\(bytesSent)B/\(packetsSent)pkt recv=\(bytesReceived)B/\(packetsReceived)pkt rtt=\(rtt)ms loss=\(packetsLost)")
+                Logger.webrtc.info("[CALL-DIAG][STATS] sent=\(bytesSent)B/\(packetsSent)pkt recv=\(bytesReceived)B/\(packetsReceived)pkt rtt=\(rtt)ms lost=\(packetsLost) codec=\(codec ?? "?", privacy: .public)")
                 continuation.resume(returning: (rtt, packetsLost, bytesSent, packetsReceived, codec))
             }
         }
