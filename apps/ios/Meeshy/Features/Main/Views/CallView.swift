@@ -671,13 +671,11 @@ struct CallView: View {
     /// row when it fits the width, and only falls back to a horizontal scroll on
     /// narrow widths / large Dynamic Type — so the camera-flip and other controls
     /// are evenly centred rather than left-anchored in a scroll view.
-    @ViewBuilder
     private var controlBar: some View {
-        if #available(iOS 26.0, *) {
-            GlassEffectContainer(spacing: 20) { fittingControlRow }
-        } else {
-            fittingControlRow
-        }
+        // Adjacent glass circles must share a container (glass can't sample
+        // glass). `AdaptiveGlassContainer` (SDK Compatibility) is a GlassEffect-
+        // Container on iOS 26 and a pass-through on earlier versions.
+        AdaptiveGlassContainer(spacing: 20) { fittingControlRow }
     }
 
     private var fittingControlRow: some View {
@@ -967,61 +965,27 @@ private extension Logger {
     nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
 }
 
-// MARK: - Liquid Glass (iOS 26)
+// MARK: - Liquid Glass (product styling over the SDK Compatibility wrappers)
 
+/// These are thin, app-side *styling* helpers: they encode Meeshy's product
+/// choices (circle diameter, active→tint, red hang-up) and delegate the version
+/// gating to the SDK `Compatibility/` layer (`adaptiveGlass` /
+/// `adaptiveGlassProminent` / `AdaptiveGlassContainer`), which owns the real
+/// `#available(iOS 26.0, *)` and the pre-iOS-26 fallback. No `#available` lives
+/// in the app — same rule as every other adaptive wrapper.
 private extension View {
-    /// iOS 26 Liquid Glass for a circular call control. Glass cannot sample
-    /// glass, so the control bar groups its buttons in a `GlassEffectContainer`
-    /// (see `CallView.controlBar`) — adjacent controls then blend/morph like
-    /// droplets. `.interactive()` gives the native press scale + shimmer +
-    /// touch-point illumination. On iOS < 26 it falls back to the prior
-    /// translucent-material circle so the control looks consistent across OS
-    /// versions. Apply LAST in the modifier chain (after `.frame`).
-    /// Reference: developer.apple.com/documentation/SwiftUI/Applying-Liquid-Glass-to-custom-views
-    @ViewBuilder
+    /// Regular Liquid Glass circle for a neutral/secondary control. Active state
+    /// tints the glass; inactive renders plain glass (clear / material fallback).
     func callControlGlass(diameter: CGFloat, isActive: Bool, tint: Color) -> some View {
-        if #available(iOS 26.0, *) {
-            self
-                .frame(width: diameter, height: diameter)
-                .glassEffect(
-                    .regular
-                        .tint(isActive ? tint.opacity(0.55) : Color.clear)
-                        .interactive(),
-                    in: .circle
-                )
-        } else {
-            self
-                .frame(width: diameter, height: diameter)
-                .background(
-                    Circle()
-                        .fill(isActive ? tint.opacity(0.2) : Color.white.opacity(0.1))
-                        .overlay(Circle().stroke(tint.opacity(isActive ? 0.5 : 0.2), lineWidth: 1))
-                )
-        }
+        self
+            .frame(width: diameter, height: diameter)
+            .adaptiveGlass(in: Circle(), tint: isActive ? tint.opacity(0.55) : nil, interactive: true)
     }
 
-    /// Prominent (red-tinted) Liquid Glass for the hang-up button; gradient +
-    /// shadow fallback on iOS < 26.
-    @ViewBuilder
+    /// Prominent red Liquid Glass circle for the hang-up button.
     func endCallGlass(diameter: CGFloat) -> some View {
-        if #available(iOS 26.0, *) {
-            self
-                .frame(width: diameter, height: diameter)
-                .glassEffect(.regular.tint(MeeshyColors.error).interactive(), in: .circle)
-        } else {
-            self
-                .frame(width: diameter, height: diameter)
-                .background(
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [MeeshyColors.error, MeeshyColors.error.opacity(0.85)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .shadow(color: MeeshyColors.error.opacity(0.4), radius: 8, y: 4)
-                )
-        }
+        self
+            .frame(width: diameter, height: diameter)
+            .adaptiveGlassProminent(in: Circle(), tint: MeeshyColors.error)
     }
 }

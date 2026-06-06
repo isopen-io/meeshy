@@ -866,6 +866,14 @@ Recherche API faite (Apple docs « Applying Liquid Glass to custom views » + Li
 
 > Prérequis build : Xcode 26 / SDK iOS 26 (le projet est en swift-tools 6.2). Les symboles `glassEffect`/`GlassEffectContainer` n'existent que dans ce SDK ; le `#available` est le gating runtime.
 
+#### Correction (tag `calls-sota-p2.2`) — gating déplacé dans la couche `Compatibility/` du SDK
+
+Le gating `#available(iOS 26)` ne doit PAS vivre inline dans `CallView` : la convention du repo veut que **tout wrapper d'API version-restreinte vit dans `packages/MeeshySDK/Sources/MeeshyUI/Compatibility/`** (cf. `AdaptiveSymbolEffects`, `AdaptivePresentationStyle`, `AdaptiveContentUnavailableView`, `Platform`). Refonte :
+
+- **Nouveau `AdaptiveGlass.swift`** (SDK MeeshyUI/Compatibility) : `View.adaptiveGlass(in:tint:interactive:)` (régulier), `View.adaptiveGlassProminent(in:tint:interactive:)` (raccrocher), `AdaptiveGlassContainer` (= `GlassEffectContainer` iOS 26, pass-through sinon). Atomes opaques (Shape + Color), agnostiques produit → conformes à la SDK purity. Le `#available(iOS 26.0, *)` + le fallback (material / fill tinté / gradient prominent) sont encapsulés ici. `Platform.isIOS26OrLater` ajouté.
+- **`CallView`** : ne contient plus AUCUN `#available` / `glassEffect` / `GlassEffectContainer`. Ses helpers app-side `callControlGlass`/`endCallGlass` ne font plus que le **styling produit** (diamètre, active→tint, rouge) et délèguent au SDK.
+- Tests : `CompatibilityLayerTests` (smoke construction `adaptiveGlass`/`adaptiveGlassProminent`/`AdaptiveGlassContainer` + `Platform.isIOS26OrLater`), et `CallViewLiquidGlassTests` mis à jour (CallView utilise les wrappers SDK, zéro `#available`/`glassEffect` inline).
+
 ---
 
 ### 📍 ÉTAT ACTUEL & PROCHAINE SESSION (2026-06-06)

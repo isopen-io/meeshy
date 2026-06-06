@@ -60,26 +60,23 @@ final class CallViewLiquidGlassTests: XCTestCase {
         return try String(contentsOf: url, encoding: .utf8)
     }
 
-    func test_controls_useGlassEffect_gatedForIOS26() throws {
+    func test_controls_useSDKAdaptiveGlass_notInlineAvailability() throws {
         let source = try callViewSource()
-        XCTAssertTrue(source.contains(".glassEffect("), "Call controls must adopt iOS 26 Liquid Glass via .glassEffect")
-        XCTAssertTrue(source.contains("if #available(iOS 26.0, *)"), "Glass must be gated behind #available(iOS 26.0, *)")
+        // The version gate belongs to the SDK Compatibility layer (adaptiveGlass /
+        // adaptiveGlassProminent), like every other adaptive wrapper — NOT an
+        // inline #available in the app view.
+        XCTAssertTrue(source.contains("adaptiveGlass("), "Call controls must use the SDK adaptiveGlass wrapper")
+        XCTAssertTrue(source.contains("adaptiveGlassProminent("), "Hang-up button must use the SDK adaptiveGlassProminent wrapper")
+        XCTAssertFalse(source.contains("#available(iOS 26"), "iOS 26 gating must live in the SDK Compatibility layer, not inline in CallView")
+        XCTAssertFalse(source.contains(".glassEffect("), "CallView must not call .glassEffect directly — go through the SDK wrapper")
     }
 
-    func test_glass_hasMaterialFallback_forOlderIOS() throws {
-        let source = try callViewSource()
-        // The glass helpers must keep an else-branch fallback so iOS < 26 still
-        // renders a translucent control (no blank/incompatible button).
-        XCTAssertTrue(source.contains("callControlGlass"), "Reusable glass helper must exist")
-        XCTAssertTrue(source.contains(".ultraThinMaterial") || source.contains("Color.white.opacity"),
-                      "A pre-iOS-26 material fallback must remain")
-    }
-
-    func test_adjacentControls_groupedInGlassEffectContainer() throws {
+    func test_adjacentControls_groupedInAdaptiveGlassContainer() throws {
         let source = try callViewSource()
         // Glass can't sample glass; adjacent control circles must share a
-        // GlassEffectContainer so they blend instead of clipping each other.
-        XCTAssertTrue(source.contains("GlassEffectContainer"), "Control bar must group glass buttons in a GlassEffectContainer")
+        // container so they blend instead of clipping each other. The app uses
+        // the SDK AdaptiveGlassContainer (GlassEffectContainer on iOS 26).
+        XCTAssertTrue(source.contains("AdaptiveGlassContainer"), "Control bar must group glass buttons in AdaptiveGlassContainer")
     }
 
     func test_controlBar_usesViewThatFits_forIntelligentLayout() throws {

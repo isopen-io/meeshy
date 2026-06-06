@@ -52,4 +52,36 @@ final class CompatibilityLayerTests: XCTestCase {
             .adaptiveSymbolBounce(value: true)
             .adaptiveSymbolPulse()
     }
+
+    // MARK: - Adaptive Liquid Glass (iOS 26)
+
+    func test_platform_isIOS26OrLater_matchesAvailabilityCheck() {
+        let expected: Bool
+        if #available(iOS 26.0, *) { expected = true } else { expected = false }
+        XCTAssertEqual(Platform.isIOS26OrLater, expected)
+    }
+
+    @MainActor
+    func test_adaptiveGlass_appliesToAnyView_regularAndProminent() {
+        // Construction smoke test: fails the build if the public API surface
+        // drifts. Real pixel parity across OS versions is a snapshot concern.
+        _ = Image(systemName: "mic.fill")
+            .frame(width: 56, height: 56)
+            .adaptiveGlass(in: Circle(), tint: .white, interactive: true)
+
+        _ = Image(systemName: "mic.fill")
+            .frame(width: 56, height: 56)
+            .adaptiveGlass()   // defaults: Circle(), no tint, non-interactive
+
+        _ = Image(systemName: "phone.down.fill")
+            .frame(width: 56, height: 56)
+            .adaptiveGlassProminent(in: Circle(), tint: .red)
+    }
+
+    @MainActor
+    func test_adaptiveGlassContainer_wrapsContent() {
+        _ = AdaptiveGlassContainer(spacing: 20) {
+            HStack { Text("a"); Text("b") }
+        }
+    }
 }
