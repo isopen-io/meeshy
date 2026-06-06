@@ -1307,7 +1307,11 @@ export class CallEventsHandler {
           data.enabled
         );
 
-        // Broadcast to all call participants
+        // P0-3 — broadcast to the OTHER participants only. The sender already
+        // updated its own camera state locally and must NOT receive its own echo:
+        // iOS treats any received call:media-toggled as the REMOTE peer's state
+        // (drives the avatar placeholder). `socket.to` excludes the sender;
+        // `io.to` would include it.
         const toggleEvent: CallMediaToggleEvent = {
           callId: data.callId,
           participantId: videoParticipantId,
@@ -1315,7 +1319,7 @@ export class CallEventsHandler {
           enabled: data.enabled
         };
 
-        io.to(ROOMS.call(data.callId)).emit(
+        socket.to(ROOMS.call(data.callId)).emit(
           CALL_EVENTS.MEDIA_TOGGLED,
           toggleEvent
         );
