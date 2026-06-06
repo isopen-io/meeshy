@@ -28,7 +28,7 @@ struct FloatingCallPillView: View {
 
     private var pillContent: some View {
         HStack(spacing: 12) {
-            avatarView
+            pillLeadingVisual
             userInfoSection
             Spacer()
             controlButtons
@@ -49,6 +49,30 @@ struct FloatingCallPillView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Appel en cours avec \(callManager.remoteUsername ?? "inconnu")")
         .accessibilityHint("Touchez pour revenir a l'appel en plein ecran")
+    }
+
+    // MARK: - Leading Visual (remote video thumbnail or avatar)
+
+    /// §7.6 — for a minimized VIDEO call, show the live remote feed as a small
+    /// thumbnail so the user still sees their interlocutor (a return-to-call pill
+    /// that drops the video is a major gap). Falls back to the avatar for audio
+    /// calls, or when the peer's camera is off / no track yet. Only one renderer
+    /// is live at a time: CallView is dismounted while in `.pip`, so this does
+    /// not double-render the remote track.
+    @ViewBuilder
+    private var pillLeadingVisual: some View {
+        if callManager.isVideoEnabled && callManager.hasRemoteVideoTrack && callManager.isRemoteVideoEnabled {
+            CallVideoView(track: callManager.remoteVideoTrack, contentMode: .scaleAspectFill)
+                .frame(width: 44, height: 44)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.white.opacity(0.25), lineWidth: 1)
+                )
+                .accessibilityHidden(true)
+        } else {
+            avatarView
+        }
     }
 
     // MARK: - Avatar
@@ -161,7 +185,7 @@ struct FloatingCallPillView: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                colors: [Color(hex: "FF2E63"), Color(hex: "FF6B6B")],
+                                colors: [MeeshyColors.error, MeeshyColors.error.opacity(0.85)],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
