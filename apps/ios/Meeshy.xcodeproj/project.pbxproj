@@ -123,6 +123,7 @@
 		A2471768A4B5E24D158CADA8 /* TaskTimeout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E4BCCBBF1987DDFDBB944AD /* TaskTimeout.swift */; };
 		A324ED5544DFEC45407307BA /* ConversationLanguagePreferencesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C86FD868488973CF5F8A0E1E /* ConversationLanguagePreferencesTests.swift */; };
 		A54BCE9ED2645E3D01AFA679 /* FloatingCallPillView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00B3D9B4A2850060E2C9470D /* FloatingCallPillView.swift */; };
+		CA11BA11E12026060001AAAA /* CallWaitingBannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA11BA11E12026060002BBBB /* CallWaitingBannerView.swift */; };
 		A5F4A39F208D252C3397EA52 /* ConversationLanguagePreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EBB27715D5F6E39BB1259FE /* ConversationLanguagePreferences.swift */; };
 		A5FCBF3B6F6D49097164DC92 /* StoryViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19B9EAF13A41EDB150DBC0DB /* StoryViewModelTests.swift */; };
 		A7AAC416193985EA14E97694 /* LoadMoreRepliesCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5046926FF79B56A61E8294C7 /* LoadMoreRepliesCell.swift */; };
@@ -590,6 +591,7 @@
 /* Begin PBXFileReference section */
 		00075CCB07F2C17B7B703EDB /* MeeshyWidgets.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; path = MeeshyWidgets.entitlements; sourceTree = "<group>"; };
 		00B3D9B4A2850060E2C9470D /* FloatingCallPillView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FloatingCallPillView.swift; sourceTree = "<group>"; };
+		CA11BA11E12026060002BBBB /* CallWaitingBannerView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CallWaitingBannerView.swift; sourceTree = "<group>"; };
 		0239AD0031D90A2CF73F176E /* AffiliateCreateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AffiliateCreateView.swift; sourceTree = "<group>"; };
 		02E6EEF0A507F120A2363E15 /* LiveActivities.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LiveActivities.swift; sourceTree = "<group>"; };
 		04F74C3B482B09AEDCB4FCB0 /* ConversationView+Header.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ConversationView+Header.swift"; sourceTree = "<group>"; };
@@ -1499,6 +1501,7 @@
 				D6E7F8091A2B3C4D5E6F7081 /* ReplyThreadOverlay.swift */,
 				25AD7697AD569462191E395F /* DataExportView.swift */,
 				00B3D9B4A2850060E2C9470D /* FloatingCallPillView.swift */,
+				CA11BA11E12026060002BBBB /* CallWaitingBannerView.swift */,
 				823B2865CE9642B487B0FC22 /* VideoFilterControlView.swift */,
 				SMV0010010010010010001 /* StarredMessagesView.swift */,
 				BBLC0001000100010001GRP /* Bubble */,
@@ -2634,6 +2637,7 @@
 				130B10371C067F6F4D2C891D /* ThermalStateMonitor.swift in Sources */,
 				ACDB7D2E3E77CEE8561566D3 /* DarkFrameDetector.swift in Sources */,
 				A54BCE9ED2645E3D01AFA679 /* FloatingCallPillView.swift in Sources */,
+				CA11BA11E12026060001AAAA /* CallWaitingBannerView.swift in Sources */,
 				5C3EBC97C453A81EFEAE35E6 /* VideoFilterControlView.swift in Sources */,
 				1CBAAFC69D3A2A2F928B9349 /* AudioPlayerManager.swift in Sources */,
 				APED0002000200020002F001 /* AudioPlaybackEngineDriving.swift in Sources */,

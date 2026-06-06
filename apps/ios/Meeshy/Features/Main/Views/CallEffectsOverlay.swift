@@ -60,7 +60,7 @@ struct CallEffectsOverlay: View {
         HStack(spacing: 20) {
             toolbarButton(
                 icon: "waveform.path.ecg",
-                label: "Effets",
+                label: String(localized: "call.effects.audio", defaultValue: "Effets"),
                 isActive: activePanel == .audioEffects || callManager.activeAudioEffect != nil,
                 panel: .audioEffects
             )
@@ -68,7 +68,7 @@ struct CallEffectsOverlay: View {
             if isVideoEnabled {
                 toolbarButton(
                     icon: "camera.filters",
-                    label: "Filtres",
+                    label: String(localized: "call.effects.videoFilters", defaultValue: "Filtres"),
                     isActive: activePanel == .videoFilters || callManager.videoFilters.config.isEnabled,
                     panel: .videoFilters
                 )

@@ -47,8 +47,11 @@ struct FloatingCallPillView: View {
             expandToFullScreen()
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Appel en cours avec \(callManager.remoteUsername ?? "inconnu")")
-        .accessibilityHint("Touchez pour revenir a l'appel en plein ecran")
+        .accessibilityLabel(
+            String(localized: "call.pill.ongoing", defaultValue: "Appel en cours")
+            + (callManager.remoteUsername.map { " — \($0)" } ?? "")
+        )
+        .accessibilityHint(String(localized: "call.pill.tapToReturn", defaultValue: "Touchez pour revenir à l'appel en plein écran"))
     }
 
     // MARK: - Leading Visual (remote video thumbnail or avatar)
@@ -169,7 +172,7 @@ struct FloatingCallPillView: View {
                 )
         }
         .pressable()
-        .accessibilityLabel("Agrandir l'appel")
+        .accessibilityLabel(String(localized: "call.pill.expand", defaultValue: "Agrandir l'appel"))
     }
 
     private var hangupButton: some View {
@@ -193,7 +196,7 @@ struct FloatingCallPillView: View {
                 )
         }
         .pressable()
-        .accessibilityLabel("Raccrocher")
+        .accessibilityLabel(String(localized: "call.pill.hangup", defaultValue: "Raccrocher"))
     }
 
     // MARK: - Actions

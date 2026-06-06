@@ -138,8 +138,19 @@ struct CallView: View {
 
     private var callBackground: some View {
         ZStack {
-            theme.backgroundGradient
-                .ignoresSafeArea()
+            // Call UI is white-on-dark in BOTH video (camera feed) and audio
+            // modes — like every platform call screen (FaceTime/WhatsApp). Pin
+            // a fixed DARK backdrop so the white controls stay readable in
+            // .light mode too: `theme.backgroundGradient` turns near-white in
+            // light mode, which would make the white labels/icons invisible
+            // (white-on-white). This keeps the call screen correct in .dark AND
+            // .light appearance.
+            LinearGradient(
+                colors: [Color(hex: "09090B"), Color(hex: "0F0D19"), Color(hex: "13111C")],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
 
             // Animated ambient orbs
             Circle()
