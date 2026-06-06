@@ -249,15 +249,25 @@ struct CallView: View {
                 Spacer()
 
                 if callManager.isVideoEnabled {
+                    // §7.3 — tap the primary video to toggle the controls
+                    // (auto-hide UX). The PiP (on top) keeps its own swap tap.
                     videoCallLayout
+                        .contentShape(Rectangle())
+                        .onTapGesture { toggleControls() }
                 } else {
                     audioCallLayout
                 }
 
                 Spacer()
 
+                // §7.3 — auto-hiding control bar on iPhone video calls; always
+                // visible for audio and on Mac (and while the effects tray is
+                // open). Hidden controls don't capture taps.
                 controlBar
                     .padding(.bottom, 60)
+                    .opacity(showControls ? 1 : 0)
+                    .allowsHitTesting(showControls)
+                    .animation(.easeInOut(duration: 0.25), value: showControls)
             }
 
             // Transcript overlay
@@ -280,6 +290,28 @@ struct CallView: View {
                     }
                 }
         )
+        // §7.3 — auto-hide after 4s of no interaction. Re-arms whenever
+        // showControls flips to true (a reveal tap); no-op for audio / Mac /
+        // effects-open via shouldAutoHideControls.
+        .task(id: showControls) {
+            guard showControls, shouldAutoHideControls else { return }
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            if !Task.isCancelled {
+                withAnimation(.easeInOut(duration: 0.25)) { showControls = false }
+            }
+        }
+        .onDisappear { showControls = true }
+    }
+
+    /// §7.3 — controls auto-hide only on iPhone/iPad video calls, never on Mac
+    /// (controls are persistent on desktop), never for audio-only (no video to
+    /// reveal), and never while the effects tray is open.
+    private var shouldAutoHideControls: Bool {
+        callManager.isVideoEnabled && !showEffectsToolbar && !ProcessInfo.processInfo.isiOSAppOnMac
+    }
+
+    private func toggleControls() {
+        withAnimation(.easeInOut(duration: 0.25)) { showControls.toggle() }
     }
 
     private var audioCallLayout: some View {
