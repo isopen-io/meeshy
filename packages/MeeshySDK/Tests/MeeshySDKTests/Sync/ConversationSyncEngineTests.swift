@@ -369,7 +369,7 @@ final class ConversationSyncEngineTests: XCTestCase {
 
         let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
         let openConv = cached.first { $0.id == "open-conv" }
-        XCTAssertEqual(openConv?.unreadCount, 0, "open conversation's unread must stay at 0")
+        XCTAssertEqual(openConv?.userState.unreadCount, 0, "open conversation's unread must stay at 0")
     }
 
     func test_setCurrentlyOpenConversation_excludesOpenConvFromAggregator() async {
@@ -404,7 +404,7 @@ final class ConversationSyncEngineTests: XCTestCase {
 
         let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
         let openConv = cached.first { $0.id == "conv-with-11-unread" }
-        XCTAssertEqual(openConv?.unreadCount, 0,
+        XCTAssertEqual(openConv?.userState.unreadCount, 0,
                        "opening a conversation must reset its unread count locally")
     }
 
@@ -421,7 +421,7 @@ final class ConversationSyncEngineTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 200_000_000)
 
         let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
-        XCTAssertEqual(cached.first?.unreadCount, 4)
+        XCTAssertEqual(cached.first?.userState.unreadCount, 4)
     }
 
     // Helper: seed the conversations cache with [id, unreadCount] tuples.

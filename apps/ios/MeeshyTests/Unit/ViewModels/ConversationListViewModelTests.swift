@@ -464,7 +464,7 @@ final class ConversationListViewModelTests: XCTestCase {
     func test_filterPipeline_archivedFilterShowsUserArchivedOnly() async throws {
         let (sut, _, _, _, _, _, _) = makeSUT()
         var archivedConv = makeConversation(id: "archived", isActive: true)
-        archivedConv.isArchivedByUser = true
+        archivedConv.userState.isArchived = true
         sut.conversations = [
             makeConversation(id: "active", isActive: true),
             archivedConv
@@ -530,9 +530,9 @@ final class ConversationListViewModelTests: XCTestCase {
         sut.conversations = [makeConversation(id: "conv1", unreadCount: 0)]
 
         // Simulate what the sync engine does when it receives an unread update
-        sut.conversations[0].unreadCount = 7
+        sut.conversations[0].userState.unreadCount = 7
 
-        XCTAssertEqual(sut.conversations[0].unreadCount, 7)
+        XCTAssertEqual(sut.conversations[0].userState.unreadCount, 7)
     }
 
     func test_unreadCountUpdatedForSpecificConversation_doesNotAffectOthers() async throws {
@@ -542,10 +542,10 @@ final class ConversationListViewModelTests: XCTestCase {
             makeConversation(id: "conv2", unreadCount: 3)
         ]
 
-        sut.conversations[0].unreadCount = 5
+        sut.conversations[0].userState.unreadCount = 5
 
-        XCTAssertEqual(sut.conversations[0].unreadCount, 5)
-        XCTAssertEqual(sut.conversations[1].unreadCount, 3, "Other conversations should not be affected")
+        XCTAssertEqual(sut.conversations[0].userState.unreadCount, 5)
+        XCTAssertEqual(sut.conversations[1].userState.unreadCount, 3, "Other conversations should not be affected")
     }
 
     // MARK: - Socket: Typing
@@ -1136,7 +1136,7 @@ final class ConversationListViewModelTests: XCTestCase {
 
         try await Task.sleep(nanoseconds: 50_000_000)
 
-        XCTAssertTrue(sut.conversations[0].isPinned)
+        XCTAssertTrue(sut.conversations[0].userState.isPinned)
     }
 
     func test_socketUserPreferencesUpdated_updatesMuteState() async throws {
@@ -1150,7 +1150,7 @@ final class ConversationListViewModelTests: XCTestCase {
 
         try await Task.sleep(nanoseconds: 50_000_000)
 
-        XCTAssertTrue(sut.conversations[0].isMuted)
+        XCTAssertTrue(sut.conversations[0].userState.isMuted)
     }
 
     func test_socketUserPreferencesUpdated_ignoresUnknownConversation() async throws {
@@ -1164,7 +1164,7 @@ final class ConversationListViewModelTests: XCTestCase {
 
         try await Task.sleep(nanoseconds: 50_000_000)
 
-        XCTAssertFalse(sut.conversations[0].isPinned)
+        XCTAssertFalse(sut.conversations[0].userState.isPinned)
     }
 
     // MARK: - markAsUnread: preserves existing unread count
@@ -2358,6 +2358,17 @@ final class ConversationListViewModelTests: XCTestCase {
         let a = ThemedConversationRow(conversation: conv, draftSummary: draft)
         let b = ThemedConversationRow(conversation: conv, draftSummary: draft)
         XCTAssertEqual(a, b)
+    }
+
+    @MainActor
+    func test_themedRow_notEqual_whenPendingSyncDiffers() {
+        let synced = makeConversation(id: "c1")
+        var pending = makeConversation(id: "c1")
+        pending.userState.pendingMutationCount = 1  // hasPendingSync = true
+        let rowSynced = ThemedConversationRow(conversation: synced)
+        let rowPending = ThemedConversationRow(conversation: pending)
+        XCTAssertNotEqual(rowSynced, rowPending,
+                          "row must re-render (Equatable differs) when a mutation is draining via the outbox")
     }
 
     // MARK: - ConversationStore observation (Strategy B foundation, 1b-i)

@@ -921,7 +921,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         await cache.conversations.update(for: "list") { conversations in
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == event.conversationId }) {
-                updated[idx].unreadCount = effectiveUnread
+                updated[idx].userState.unreadCount = effectiveUnread
             }
             return updated
         }
@@ -949,7 +949,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             await cache.conversations.update(for: "list") { conversations in
                 var updated = conversations
                 if let idx = updated.firstIndex(where: { $0.id == event.conversationId }) {
-                    updated[idx].unreadCount = 0
+                    updated[idx].userState.unreadCount = 0
                 }
                 return updated
             }
@@ -1001,7 +1001,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 if let senderName, !senderName.isEmpty {
                     updated[idx].lastMessageSenderName = senderName
                 }
-                updated[idx].unreadCount = 0
+                updated[idx].userState.unreadCount = 0
                 let conv = updated.remove(at: idx)
                 updated.insert(conv, at: 0)
             }
@@ -1015,7 +1015,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         await cache.conversations.update(for: "list") { conversations in
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
-                updated[idx].unreadCount = 0
+                updated[idx].userState.unreadCount = 0
             }
             return updated
         }
@@ -1064,7 +1064,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         let openId = currentlyOpenConversationId
         let total = cached.reduce(0) { acc, conv in
             guard conv.id != openId else { return acc }
-            return acc + max(0, conv.unreadCount)
+            return acc + max(0, conv.userState.unreadCount)
         }
         _totalConversationsUnread.send(total)
     }
@@ -1087,7 +1087,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             await self.cache.conversations.update(for: "list") { conversations in
                 var updated = conversations
                 if let idx = updated.firstIndex(where: { $0.id == id }) {
-                    updated[idx].unreadCount = 0
+                    updated[idx].userState.unreadCount = 0
                 }
                 return updated
             }

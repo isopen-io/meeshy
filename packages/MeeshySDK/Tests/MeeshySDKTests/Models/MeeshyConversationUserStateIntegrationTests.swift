@@ -17,9 +17,12 @@ final class MeeshyConversationUserStateIntegrationTests: XCTestCase {
 
     // MARK: - Legacy shim parity
 
-    @available(*, deprecated)
-    func test_legacyShim_writeReadGoesThroughUserState() {
-        var conv = MeeshyConversation(
+    func test_legacyInitParams_seedUserState() {
+        // The convenience init params (unreadCount:/isPinned:/… kept for
+        // call-site ergonomics) seed `userState`. The per-user shim proxies
+        // (`conv.isPinned`, …) were removed in inc. 5b — read/write now goes
+        // through `userState` directly.
+        let conv = MeeshyConversation(
             identifier: "shim-1",
             unreadCount: 7,
             isPinned: true,
@@ -30,26 +33,12 @@ final class MeeshyConversationUserStateIntegrationTests: XCTestCase {
             reaction: "❤️"
         )
 
-        // Constructor seeded userState from legacy params.
         XCTAssertEqual(conv.userState.unreadCount, 7)
         XCTAssertTrue(conv.userState.isPinned)
         XCTAssertTrue(conv.userState.isMuted)
         XCTAssertTrue(conv.userState.isArchived)
         XCTAssertEqual(conv.userState.customName, "Family")
         XCTAssertEqual(conv.userState.reaction, "❤️")
-
-        // Reading via the shim returns the userState value.
-        XCTAssertEqual(conv.unreadCount, 7)
-        XCTAssertTrue(conv.isPinned)
-        XCTAssertEqual(conv.customName, "Family")
-
-        // Writing via the shim mutates userState (one source of truth).
-        conv.isPinned = false
-        conv.unreadCount = 0
-        conv.customName = nil
-        XCTAssertFalse(conv.userState.isPinned)
-        XCTAssertEqual(conv.userState.unreadCount, 0)
-        XCTAssertNil(conv.userState.customName)
     }
 
     // MARK: - Wire format backward compatibility

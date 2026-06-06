@@ -136,7 +136,7 @@ public final class NotificationCoordinator: ObservableObject {
     public func registerConversations(_ conversations: [MeeshyConversation]) {
         var didChange = false
         for c in conversations where conversationUnreadCounts[c.id] == nil {
-            conversationUnreadCounts[c.id] = c.unreadCount
+            conversationUnreadCounts[c.id] = c.userState.unreadCount
             didChange = true
         }
         if didChange {
@@ -153,7 +153,7 @@ public final class NotificationCoordinator: ObservableObject {
     public func reconcileConversationUnreads(_ conversations: [MeeshyConversation]) {
         var counts: [String: Int] = [:]
         for c in conversations {
-            counts[c.id] = c.unreadCount
+            counts[c.id] = c.userState.unreadCount
         }
         conversationUnreadCounts = counts
         recomputeTotal()
