@@ -607,9 +607,23 @@ export class CallService {
 
     const leftAt = new Date();
 
+    // CALL-FIX 2026-06-06 — a DIRECT (1:1) call cannot continue with a single
+    // remaining participant, so ANY leave (callee decline, caller cancel, hangup)
+    // must END the call so the OTHER party is notified (call:ended broadcast) and
+    // stops ringing. Previously only the LAST participant leaving ended the call:
+    // when the callee declined, the caller remained (isLastParticipant=false), the
+    // call stayed open, no call:ended was broadcast, and the caller's ringback kept
+    // playing until they manually hung up. GROUP calls still continue until the
+    // last participant leaves.
+    const conversation = await this.prisma.conversation.findUnique({
+      where: { id: call.conversationId },
+      select: { type: true }
+    });
+    const isDirectCall = conversation?.type === 'direct';
+
     // Check if this is the last active participant
     const activeParticipants = call.participants.filter((p) => !p.leftAt && p.id !== callParticipant.id);
-    const isLastParticipant = activeParticipants.length === 0;
+    const isLastParticipant = activeParticipants.length === 0 || isDirectCall;
 
     // Audit P1-29 — distinguish "leave during ringing/connecting" (callee
     // declined or initiator cancelled before media negotiation completed)
