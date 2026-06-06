@@ -151,6 +151,8 @@ struct ThemedMessageBubble: View {
         // Note: `.burned` includes `isMe` — the sender also sees "Vu et efface"
         // once their view-once is consumed (see BubbleContentBuilder).
         switch content.kind {
+        case .system:
+            BubbleSystemNoticeView(text: content.text?.raw ?? message.content, isDark: isDark)
         case .deleted:
             BubbleDeletedView(isMe: message.isMe, isDark: isDark)
         case .burned where !blurController.isRevealed:

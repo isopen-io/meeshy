@@ -13,6 +13,7 @@
 import { PrismaClient, CallMode, CallStatus, CallEndReason, ParticipantRole, Prisma } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
 import { CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
+import { buildCallSummary, callSummaryClientMessageId } from '@meeshy/shared/utils/call-summary';
 import { TURNCredentialService } from './TURNCredentialService';
 
 const TERMINAL_STATUSES: CallStatus[] = [
@@ -29,6 +30,33 @@ const ACTIVE_STATUSES: CallStatus[] = [
   CallStatus.active,
   CallStatus.reconnecting
 ];
+
+// P3 — sender include for the call-summary system message, mirroring the
+// `message:new` broadcast shape produced by the normal message path so iOS/web
+// can render it like any other message.
+const CALL_SUMMARY_MESSAGE_INCLUDE = {
+  sender: {
+    select: {
+      id: true,
+      displayName: true,
+      avatar: true,
+      type: true,
+      nickname: true,
+      userId: true,
+      user: {
+        select: {
+          id: true,
+          username: true,
+          displayName: true,
+          firstName: true,
+          lastName: true,
+          avatar: true
+        }
+      }
+    }
+  },
+  attachments: true
+} satisfies Prisma.MessageInclude;
 
 // Type for CallSession with populated participants
 type CallSessionWithParticipants = Prisma.CallSessionGetPayload<{
@@ -1101,6 +1129,101 @@ export class CallService {
       case 'heartbeatTimeout': return CallEndReason.heartbeatTimeout;
       case 'garbageCollected': return CallEndReason.garbageCollected;
       default: return CallEndReason.completed;
+    }
+  }
+
+  /**
+   * P3 — post the call-summary system message into the conversation when a
+   * call reaches a terminal state ("Appel vidéo · 04:32", "Appel audio
+   * manqué", "Appel refusé").
+   *
+   * Idempotent by construction: the message's `clientMessageId` is derived
+   * deterministically from the callId, and the partial unique index on
+   * `Message(conversationId, clientMessageId)` guarantees exactly one summary
+   * per call even though several gateway terminal paths (ringing timeout,
+   * participant leave, force cleanup) may all call this. A duplicate insert
+   * raises Prisma P2002 and is swallowed as a no-op.
+   *
+   * Returns the created `Message` (with sender populated for Socket.IO
+   * broadcast) or `null` when nothing should be posted: the call is not
+   * terminal, the end reason is housekeeping (garbage collection), the message
+   * already exists, or the initiator has no participant row to attribute it to.
+   * The pure status/reason → label mapping lives in
+   * `@meeshy/shared/utils/call-summary`.
+   */
+  async createCallSummaryMessage(
+    callId: string
+  ): Promise<Prisma.MessageGetPayload<{ include: typeof CALL_SUMMARY_MESSAGE_INCLUDE }> | null> {
+    const call = await this.prisma.callSession.findUnique({
+      where: { id: callId },
+      select: {
+        id: true,
+        conversationId: true,
+        initiatorId: true,
+        status: true,
+        endReason: true,
+        duration: true,
+        metadata: true
+      }
+    });
+    if (!call) {
+      return null;
+    }
+
+    const metadataType = (call.metadata as Record<string, unknown> | null)?.type;
+    const summary = buildCallSummary({
+      status: call.status,
+      endReason: call.endReason,
+      callType: typeof metadataType === 'string' ? metadataType : null,
+      durationSeconds: call.duration
+    });
+    if (!summary) {
+      return null;
+    }
+
+    // `Message.senderId` references a Participant (not a User); resolve the
+    // initiator's participant row in this conversation to attribute the
+    // summary. iOS/web center system messages regardless of sender, so the
+    // attribution is bookkeeping, not a visible "from".
+    const initiatorParticipant = await this.prisma.participant.findFirst({
+      where: { userId: call.initiatorId, conversationId: call.conversationId },
+      select: { id: true }
+    });
+    if (!initiatorParticipant) {
+      logger.warn('Cannot attribute call summary: initiator has no participant row', {
+        callId,
+        conversationId: call.conversationId,
+        initiatorId: call.initiatorId
+      });
+      return null;
+    }
+
+    try {
+      const message = await this.prisma.message.create({
+        data: {
+          conversationId: call.conversationId,
+          senderId: initiatorParticipant.id,
+          content: summary.content,
+          originalLanguage: 'fr',
+          messageType: 'system',
+          messageSource: 'system',
+          clientMessageId: callSummaryClientMessageId(call.id)
+        },
+        include: CALL_SUMMARY_MESSAGE_INCLUDE
+      });
+      logger.info('Call summary message posted', {
+        callId,
+        conversationId: call.conversationId,
+        outcome: summary.outcome,
+        callType: summary.callType
+      });
+      return message;
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        // A concurrent terminal path already posted the summary — idempotent.
+        return null;
+      }
+      throw error;
     }
   }
 }

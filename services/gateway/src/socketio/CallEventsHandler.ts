@@ -74,6 +74,14 @@ export class CallEventsHandler {
   private callService: CallService;
   private notificationService: NotificationService | null = null;
   private pushService: PushNotificationService | null = null;
+  /**
+   * P3 — broadcaster for the call-summary system message. Injected by the
+   * socket manager (which owns `broadcastMessage`) so this handler can post a
+   * `message:new` into the conversation when a call ends, without reaching into
+   * the manager's internals. Stays null in unit tests that don't exercise the
+   * summary path.
+   */
+  private messageBroadcaster: ((message: unknown, conversationId: string) => Promise<void>) | null = null;
   private rateLimiter = getSocketRateLimiter();
 
   /**
@@ -181,6 +189,36 @@ export class CallEventsHandler {
   setPushNotificationService(pushService: PushNotificationService): void {
     this.pushService = pushService;
     logger.info('📢 CallEventsHandler: PushNotificationService initialized');
+  }
+
+  /**
+   * P3 — inject the conversation message broadcaster (the manager's
+   * `broadcastMessage`). Enables posting the call-summary system message.
+   */
+  setMessageBroadcaster(broadcaster: (message: unknown, conversationId: string) => Promise<void>): void {
+    this.messageBroadcaster = broadcaster;
+  }
+
+  /**
+   * P3 — create and broadcast the call-summary system message for a terminated
+   * call. Safe to call from every terminal path: `createCallSummaryMessage`
+   * is idempotent (deterministic clientMessageId + unique index), so only the
+   * first call per `callId` posts a message. Failures are logged, never thrown,
+   * so summary posting can never break call teardown.
+   */
+  private async postCallSummary(callId: string): Promise<void> {
+    try {
+      const message = await this.callService.createCallSummaryMessage(callId);
+      if (!message || !this.messageBroadcaster) {
+        return;
+      }
+      await this.messageBroadcaster(message, message.conversationId);
+    } catch (error) {
+      logger.error('[CallEventsHandler] Failed to post call summary message', {
+        callId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
   }
 
   /**
@@ -537,6 +575,9 @@ export class CallEventsHandler {
             io.to(ROOMS.call(callSession.id)).emit(CALL_EVENTS.MISSED, {
               callId: callSession.id
             });
+
+            // P3 — post the "Appel … manqué" system message into the conversation.
+            await this.postCallSummary(callSession.id);
 
             // Push notification for offline callees. The whole pipeline
             // (createMissedCallNotifications) was already wired but never
@@ -946,6 +987,10 @@ export class CallEventsHandler {
           io.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.ENDED, endedEvent);
           io.to(ROOMS.conversation(callSession.conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
 
+          // P3 — post the call-summary system message ("Appel … · MM:SS" /
+          // "… manqué" / "Appel refusé"). Idempotent across terminal paths.
+          await this.postCallSummary(callSession.id);
+
           if (finalStatus === 'missed') {
             // Reuse the same missed-call notification path as the ringing
             // timeout so the UX is identical (push notification + in-app
@@ -1124,6 +1169,9 @@ export class CallEventsHandler {
 
                 io.to(ROOMS.call(call.id)).emit(CALL_EVENTS.ENDED, endedEvent);
                 io.to(ROOMS.conversation(callSession.conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
+
+                // P3 — post the call-summary system message (idempotent).
+                await this.postCallSummary(callSession.id);
               }
             } catch (leaveError) {
               logger.error('❌ Error force leaving call', { callId: call.id, error: leaveError });
@@ -1596,6 +1644,10 @@ export class CallEventsHandler {
         // Broadcast to both call room and conversation room
         io.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.ENDED, endedEvent);
         io.to(ROOMS.conversation(callSession.conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
+
+        // P3 — post the call-summary system message ("Appel … · MM:SS",
+        // "Appel refusé", …). Primary hangup/reject path; idempotent.
+        await this.postCallSummary(callSession.id);
 
         // Cleanup: remove all sockets from call room
         const socketsInCallRoom = await io.in(ROOMS.call(data.callId)).fetchSockets();
