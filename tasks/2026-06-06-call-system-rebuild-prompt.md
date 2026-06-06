@@ -926,6 +926,52 @@ Session menée **sans build ni device** (env web : pas de `meeshy.sh build` ; in
 
 ---
 
+### 2026-06-06 (suite 6) — Phase P3 livrée END-TO-END (branche `claude/sleepy-carson-1farc`)
+
+Session **sans build ni device** (env web : pas de Swift toolchain ; gateway Prisma client régénéré localement → type-check + jest opérationnels). **Phase P3 (messages système d'appel) complète de bout en bout**, TDD strict (logique pure + persistance entièrement testées ; UI iOS en tests source-guard à valider CI/device). Périmètre strict appels ; **aucun fichier nouveau iOS** (zéro édition `project.pbxproj`).
+
+#### Commits livrés
+
+| Tag (local) | Commit | Portée | Couvre |
+|---|---|---|---|
+| `calls-sota-p3.1` | `30baffe` | shared + gateway | **P3 backend** — `@meeshy/shared/utils/call-summary.ts` (mapping pur status/endReason/type/durée → libellé FR « Appel vidéo · 04:32 » / « … manqué » / « Appel refusé » + `callSummaryClientMessageId`, **18 vitest**) ; `CallService.createCallSummaryMessage` (persistance **idempotente** via `clientMessageId` déterministe + index unique partiel `Message(conversationId, clientMessageId)`, attribuée au Participant de l'initiateur, P2002 swallowed, null si non-terminal / garbageCollected / sans participant, **9 jest**) ; `CallEventsHandler.postCallSummary` câblé aux **4** sites terminaux (ringing timeout, leave, force-leave, **call:end = hangup/reject**), broadcast via `manager.broadcastMessage` injecté (chemin `message:new` canonique). |
+| `calls-sota-p3.2` | `acda1c2` | iOS | **P3 rendu** — `messageSource == .system` → `BubbleContent.Kind.system` (priorité sur deleted/burned) → `BubbleSystemNoticeView` (capsule centrée, glyphe `phone.fill`, muted, Equatable) ; dispatch dans `ThemedMessageBubble` (bypass `standardLayout` = pas d'avatar, comme deleted/burned). Tests `BubbleContentMatrixTests` (kind .system + priorité). |
+
+#### Revue architecte senior (Opus) — P3
+
+- ✅ **Idempotence** : même garantie que le chemin message normal (index unique partiel `clientMessageId`). Multi-paths terminaux → 1 seul message (P2002 no-op).
+- ✅ **Tous les chemins terminaux couverts** : `markCallAsRejected` est **dead code** (zéro caller) ; un refus passe par `call:end {reason:'rejected'}` (→ « Appel refusé ») et un timeout/décline par leave/missed (→ « Appel … manqué »). Le handler `call:end` que j'ai câblé couvre hangup ET reject.
+- ✅ **Chemin de rendu iOS confirmé** : la liste live rend **tout** message via `ThemedMessageBubble` (UIHostingConfiguration) ; `SystemMessageCell` UIKit = dead code jamais enregistré. `messageSource` survit au reload cache (`MessageRecord.messageSource`).
+- ✅ **Non-régression gateway** : type-check vert ; les 8 échecs `initiateCall`/`leaveCall` de `CallService.test.ts` **préexistent sur `main`** (vérifié par stash — mocks `$transaction`, sans rapport avec P3).
+- 🟡 **À valider device/CI** : compilation Swift (pas de toolchain ici) ; complétude du payload `broadcastMessage` pour un message système (réutilise le helper canonique → faible risque).
+
+#### Vérifications toolchain (hors device)
+
+| Volet | Commande | Résultat |
+|---|---|---|
+| shared — mapping pur | `vitest call-summary` | ✅ **18/18** |
+| gateway — persistance summary | `jest CallService.summary` | ✅ **9/9** |
+| gateway — type-check complet | `pnpm type-check` (après `prisma generate` local) | ✅ **0 erreur** |
+| gateway — non-régression | `jest CallService` + `call-schemas` | ✅ 85 pass / 8 fails **préexistants** |
+
+> Tags `calls-sota-p3.*` **locaux uniquement** (push tags bloqué HTTP 403 dans l'env web). Commits sur le remote (`claude/sleepy-carson-1farc`). Recréer les tags depuis un env autorisé via les SHA ci-dessus.
+
+#### État global après cette session
+
+- ✅ **P0** : tout sauf §3.1 (réducteur `CallEventQueue` — dernier item, le plus risqué sans build/device).
+- ✅ **P1 UI** : complet (PiP, return-to-call, header, auto-hide, Mac-adaptive, call-waiting, miroir, watchdog).
+- 🟡 **P2** : ✅ §5.7, §5.8, Liquid Glass. **Reste** : §5.5 codecs H264 HW, §5.6 RtpEncoding/degradation/thermal, §7.5 filtres Vision/Metal, §7.1 layout adaptatif complet, §4.3 ICE-restart `.disconnected` + bannière reconnecting.
+- ✅ **P3** : **complet** (backend + rendu iOS).
+
+#### Prochaine session — ordre conseillé
+
+1. **CI compilation iOS** (1re vraie compilation des fichiers P3.2 + des tranches Liquid Glass).
+2. **§3.1** réducteur `CallEventQueue` (dernier P0 — exige build + device).
+3. **P2 média** : §5.5 codecs H264 HW (`setCodecPreferences` throwing + intersection bidi), §5.6 RtpEncoding/degradation/thermal, §4.3 ICE-restart `.disconnected` + bannière reconnecting.
+4. **P2 UI** : §7.5 filtres Vision/Metal, §7.1 layout adaptatif complet.
+
+---
+
 ### 📍 ÉTAT ACTUEL (référence — antérieure, conservée)
 
 **Branche active** : `claude/friendly-ride-H5qtI` (PR #315). Voir « suite 5 » ci-dessus pour l'état à jour. (Tranches antérieures : branches `claude/admiring-faraday-ZMpBt` PR #314 + `feat/calls-sota-rebuild`, tags `calls-sota-p0.1`→`p1.9`, mergées sur `main`.)
