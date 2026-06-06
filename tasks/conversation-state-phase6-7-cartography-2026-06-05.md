@@ -78,7 +78,11 @@ ConversationListView.swift: pin L375, mute L384, lock L393(sheet), archive/unarc
 | 2 | Options VM → `store.apply` (hydrate depuis la conv, mirror userState→prefs, optimiste sync + rollback, drop persistAsync/broadcaster/L2) + `ConversationPreferencesTab` init + 25 tests réécrits. Broadcaster du list VM rendu inerte (suppression Phase 8/inc. 5). | — | ✅ MERGÉ | `e0255ff18` |
 | 3 | Conv header markAsRead via store + scenePhase (`ConversationViewModel` 3536 l. — risque moyen ; `ConversationView.swift` partagé potentiel avec Codex calls) | — | 🔲 | — |
 | 4 | Section categories → `UserCategoryStore` : observe publisher (.dropFirst) → userCategories, loadCategories seed le store, persistCategoryExpansion → setExpanded ; cross-device via applyRemote (bridge). Pas de reorder UI (skip). **Part B (UI pendingMutationCount) déférée → inc. 5.** | feat/conv-state-category-store | ✅ MERGÉ | `3f3278a7e` |
-| 5 | Phase 8 : supprimer broadcaster (+ abonnement list VM inerte) + shims dépréciés ; **+ UI pendingMutationCount (renderFingerprint + indicateur sync sur row)** ; smoke, quality gate | — | 🔲 | — |
+| 5a | Supprimer le broadcaster (subscription + handler list VM + fichier + 4 entrées pbxproj) — devenu inerte depuis inc. 2 | feat (direct main) | ✅ MERGÉ | `b3bc7f1ba`+`f77198ce6` |
+| 5b | Reste Phase 8 : shims dépréciés (computed proxies Phase 2) + **UI pendingMutationCount (renderFingerprint + indicateur sync row)** + smoke E2E + quality gate (gateway/web) | — | 🔲 | — |
+
+### CI iOS désactivé (2026-06-06)
+`ios-tests.yml` passé en `workflow_dispatch` seul (commit `45743ac45`) — il crashait systématiquement en CI (MeeshyUITests `CanvasBackgroundIntegrationTests` : `swift_task_deinitOnExecutorMainActorBackDeploy`) et brûlait des minutes macOS par-push. Tests validés en local. À ré-activer une fois le crash corrigé. `ios-release.yml` (tags `v*`+manuel) inchangé.
 
 ### État global (2/3 ViewModels migrés + bridge live)
 La fondation Stratégie B est **substantiellement livrée** : list VM (9/9 mutations) + options VM mutent via `ConversationStore` (optimiste + outbox offline + rollback + sync cross-surface au même tick via le merge sink), et le bridge route les events cross-device (deleted/reorder/category) vers le store. Restent 3 raffinements : conv header (inc. 3), section headers (inc. 4), cleanup broadcaster/shims (inc. 5).
