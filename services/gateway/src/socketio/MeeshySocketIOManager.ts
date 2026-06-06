@@ -150,6 +150,11 @@ export class MeeshySocketIOManager {
     this.mentionService = new MentionService(prisma);
     this.messagingService = new MessagingService(prisma, this.translationService, this.notificationService);
     this.callEventsHandler = new CallEventsHandler(prisma);
+    // P3 — let the call handler post the call-summary system message through
+    // the canonical message broadcast path when a call ends.
+    this.callEventsHandler.setMessageBroadcaster(
+      (message, conversationId) => this.broadcastMessage(message as Message, conversationId)
+    );
     this.callService = new CallService(prisma);
 
     // CORRECTION: Configurer le callback de broadcast pour le MaintenanceService
