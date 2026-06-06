@@ -1100,23 +1100,39 @@ extension P2PWebRTCClient: RTCPeerConnectionDelegate {
         Logger.webrtc.info("Negotiation needed")
     }
 
-    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
+    // §3.2 — FSM AUTHORITY. `RTCPeerConnectionState` aggregates ICE *and* DTLS:
+    // it only reports `.connected` once the DTLS handshake completes and SRTP
+    // media keys exist. Driving the call FSM off this (rather than
+    // `RTCIceConnectionState`, which can read `.connected` while DTLS is still
+    // negotiating) is the reliable "connected" gate the redesign requires —
+    // transitioning the UI to connected before keys exist produced silent /
+    // one-way audio (bug a'). The ObjC selector is
+    // `peerConnection:didChangeConnectionState:`; Swift imports it as
+    // `peerConnection(_:didChange:)` disambiguated by the enum type.
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCPeerConnectionState) {
         let state: PeerConnectionState = switch newState {
         case .new: .new
-        case .checking: .connecting
+        case .connecting: .connecting
         case .connected: .connected
-        case .completed: .connected
         case .disconnected: .disconnected
         case .failed: .failed
         case .closed: .closed
-        case .count: .closed
         @unknown default: .new
         }
-        Logger.webrtc.info("ICE connection state: \(state.rawValue)")
+        Logger.webrtc.info("[CALL-DIAG] peerConnectionState (authority): \(state.rawValue, privacy: .public)")
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.delegate?.webRTCClient(self, didChangeConnectionState: state)
         }
+    }
+
+    // §3.2 — DIAGNOSTIC ONLY. ICE state is retained for observability and
+    // quality diagnostics but is NO LONGER the FSM authority: ICE can reach
+    // `.connected` before the DTLS handshake, so transitioning the call here
+    // raced media-key setup and caused one-way / silent audio. The authority
+    // moved to `peerConnection(_:didChange: RTCPeerConnectionState)` above.
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
+        Logger.webrtc.info("[CALL-DIAG] iceConnectionState (diagnostic): \(newState.rawValue)")
     }
 
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceGatheringState) {

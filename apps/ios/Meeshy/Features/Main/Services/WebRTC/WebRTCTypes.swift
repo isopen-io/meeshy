@@ -190,6 +190,14 @@ enum QualityThresholds {
     static let heartbeatAckTimeoutSeconds: TimeInterval = 5.0
     static let maxReconnectAttempts: Int = 3
 
+    /// §3.2 — debounce before treating `RTCPeerConnectionState.disconnected`
+    /// as a reconnect trigger. ICE produces transient `.disconnected` blips
+    /// (path migration, brief loss) that self-heal within 1-2s; reacting
+    /// immediately causes reconnect churn. 3.5s waits out the blip while still
+    /// reacting well before the ~30s `.failed` timeout. `.failed`/`.closed`
+    /// are NOT debounced (terminal/decisive).
+    static let disconnectDebounceSeconds: TimeInterval = 3.5
+
     static let initialVideoBitrate: Int = 500_000
     static let minVideoBitrate: Int = 100_000
     static let maxVideoBitrate: Int = 2_500_000
