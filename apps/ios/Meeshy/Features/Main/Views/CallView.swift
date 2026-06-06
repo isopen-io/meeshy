@@ -108,11 +108,7 @@ struct CallView: View {
                             Image(systemName: "chevron.down")
                                 .font(.system(size: 16, weight: .semibold))
                                 .foregroundColor(.white)
-                                .frame(width: 40, height: 40)
-                                .background(
-                                    Circle()
-                                        .fill(.ultraThinMaterial)
-                                )
+                                .callControlGlass(diameter: 40, isActive: false, tint: .white)
                         }
                         .accessibilityLabel(String(localized: "call.minimize", defaultValue: "Reduire l'appel", bundle: .main))
                         .accessibilityHint(String(localized: "call.minimize.hint", defaultValue: "Garde l'appel en cours dans une banniere flottante", bundle: .main))
@@ -669,87 +665,106 @@ struct CallView: View {
         callManager.activeAudioEffect != nil || callManager.videoFilters.config.isEnabled
     }
 
+    /// §7.3 + iOS 26 Liquid Glass. The buttons are grouped in a
+    /// `GlassEffectContainer` so adjacent glass circles blend/morph (glass can't
+    /// sample glass otherwise). Layout is intelligent: `ViewThatFits` centres the
+    /// row when it fits the width, and only falls back to a horizontal scroll on
+    /// narrow widths / large Dynamic Type — so the camera-flip and other controls
+    /// are evenly centred rather than left-anchored in a scroll view.
+    @ViewBuilder
     private var controlBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 24) {
-                // Mute
-                // Audit P2-iOS-7 — dynamic VoiceOver label so users hear the
-                // outcome of the tap, not just "Micro".
-                callControlButton(
-                    icon: callManager.isMuted ? "mic.slash.fill" : "mic.fill",
-                    color: callManager.isMuted ? MeeshyColors.error : .white,
-                    bgColor: callManager.isMuted ? MeeshyColors.error : .white,
-                    isActive: callManager.isMuted,
-                    label: callManager.isMuted ? String(localized: "call.control.unmute", defaultValue: "Réactiver le micro", bundle: .main) : String(localized: "call.control.mute", defaultValue: "Couper le micro", bundle: .main)
-                ) {
-                    callManager.toggleMute()
-                }
-
-                // Speaker — §7.1/§7.3: hidden on iOS-on-Mac (output is the system
-                // device, route is forced .speaker; a toggle here is a dead control).
-                if !isOnMac {
-                    callControlButton(
-                        icon: callManager.isSpeaker ? "speaker.wave.3.fill" : "speaker.fill",
-                        color: callManager.isSpeaker ? MeeshyColors.info : .white,
-                        bgColor: callManager.isSpeaker ? MeeshyColors.info : .white,
-                        isActive: callManager.isSpeaker,
-                        label: callManager.isSpeaker ? String(localized: "call.control.speakerOff", defaultValue: "Désactiver le haut-parleur", bundle: .main) : String(localized: "call.control.speakerOn", defaultValue: "Activer le haut-parleur", bundle: .main)
-                    ) {
-                        callManager.toggleSpeaker()
-                    }
-                }
-
-                // Effects (Plus button)
-                callControlButton(
-                    icon: showEffectsToolbar ? "xmark" : "plus",
-                    color: hasActiveEffects ? MeeshyColors.indigo500 : .white,
-                    bgColor: hasActiveEffects ? MeeshyColors.indigo500 : .white,
-                    isActive: showEffectsToolbar || hasActiveEffects,
-                    label: String(localized: "call.control.effects", defaultValue: "Effets", bundle: .main)
-                ) {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        showEffectsToolbar.toggle()
-                    }
-                }
-
-                // Audit P3 — Camera flip only when video is currently capturing
-                // (flipping a stopped capturer has no effect). §7.1/§7.3: hidden
-                // on iOS-on-Mac (single .unspecified camera → switchCamera is a
-                // no-op there; a device picker would be the Mac equivalent, out
-                // of scope here).
-                if callManager.isVideoEnabled && !isOnMac {
-                    callControlButton(
-                        icon: "camera.rotate.fill",
-                        color: .white,
-                        bgColor: .white,
-                        isActive: false,
-                        label: String(localized: "call.control.flipCamera", defaultValue: "Basculer la caméra avant/arrière", bundle: .main)
-                    ) {
-                        callManager.switchCamera()
-                    }
-                }
-
-                // Audit P3 — toggle button stays visible even when video is
-                // disabled so the user can re-enable it. Was gated by
-                // `if isVideoEnabled` which left the user unable to bring
-                // video back after disabling it.
-                if callManager.hasLocalVideoTrack || callManager.isVideoEnabled {
-                    callControlButton(
-                        icon: callManager.isVideoEnabled ? "video.fill" : "video.slash.fill",
-                        color: MeeshyColors.indigo400,
-                        bgColor: MeeshyColors.indigo400,
-                        isActive: !callManager.isVideoEnabled,
-                        label: callManager.isVideoEnabled ? String(localized: "call.control.videoOff", defaultValue: "Désactiver la vidéo", bundle: .main) : String(localized: "call.control.videoOn", defaultValue: "Activer la vidéo", bundle: .main)
-                    ) {
-                        callManager.toggleVideo()
-                    }
-                }
-
-                // End call
-                endCallButton
-            }
-            .padding(.horizontal, 16)
+        if #available(iOS 26.0, *) {
+            GlassEffectContainer(spacing: 20) { fittingControlRow }
+        } else {
+            fittingControlRow
         }
+    }
+
+    private var fittingControlRow: some View {
+        ViewThatFits(in: .horizontal) {
+            controlButtonsRow
+            ScrollView(.horizontal, showsIndicators: false) { controlButtonsRow }
+        }
+    }
+
+    private var controlButtonsRow: some View {
+        HStack(spacing: 20) {
+            // Mute — dynamic VoiceOver label so users hear the tap outcome.
+            callControlButton(
+                icon: callManager.isMuted ? "mic.slash.fill" : "mic.fill",
+                color: callManager.isMuted ? MeeshyColors.error : .white,
+                bgColor: callManager.isMuted ? MeeshyColors.error : .white,
+                isActive: callManager.isMuted,
+                caption: String(localized: "call.control.mute.caption", defaultValue: "Micro", bundle: .main),
+                label: callManager.isMuted ? String(localized: "call.control.unmute", defaultValue: "Réactiver le micro", bundle: .main) : String(localized: "call.control.mute", defaultValue: "Couper le micro", bundle: .main)
+            ) {
+                callManager.toggleMute()
+            }
+
+            // Speaker — §7.1/§7.3: hidden on iOS-on-Mac (output is the system
+            // device, route is forced .speaker; a toggle here is a dead control).
+            if !isOnMac {
+                callControlButton(
+                    icon: callManager.isSpeaker ? "speaker.wave.3.fill" : "speaker.fill",
+                    color: callManager.isSpeaker ? MeeshyColors.info : .white,
+                    bgColor: callManager.isSpeaker ? MeeshyColors.info : .white,
+                    isActive: callManager.isSpeaker,
+                    caption: String(localized: "call.control.speaker.caption", defaultValue: "Son", bundle: .main),
+                    label: callManager.isSpeaker ? String(localized: "call.control.speakerOff", defaultValue: "Désactiver le haut-parleur", bundle: .main) : String(localized: "call.control.speakerOn", defaultValue: "Activer le haut-parleur", bundle: .main)
+                ) {
+                    callManager.toggleSpeaker()
+                }
+            }
+
+            // Effects (Plus button)
+            callControlButton(
+                icon: showEffectsToolbar ? "xmark" : "plus",
+                color: hasActiveEffects ? MeeshyColors.indigo500 : .white,
+                bgColor: hasActiveEffects ? MeeshyColors.indigo500 : .white,
+                isActive: showEffectsToolbar || hasActiveEffects,
+                caption: String(localized: "call.control.effects", defaultValue: "Effets", bundle: .main),
+                label: String(localized: "call.control.effects", defaultValue: "Effets", bundle: .main)
+            ) {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showEffectsToolbar.toggle()
+                }
+            }
+
+            // Camera flip — only when video is capturing (flipping a stopped
+            // capturer is a no-op). §7.1/§7.3: hidden on iOS-on-Mac (single
+            // .unspecified camera → switchCamera is a no-op there).
+            if callManager.isVideoEnabled && !isOnMac {
+                callControlButton(
+                    icon: "camera.rotate.fill",
+                    color: .white,
+                    bgColor: .white,
+                    isActive: false,
+                    caption: String(localized: "call.control.flipCamera.caption", defaultValue: "Pivoter", bundle: .main),
+                    label: String(localized: "call.control.flipCamera", defaultValue: "Basculer la caméra avant/arrière", bundle: .main)
+                ) {
+                    callManager.switchCamera()
+                }
+            }
+
+            // Video toggle stays visible even when video is disabled so the user
+            // can re-enable it.
+            if callManager.hasLocalVideoTrack || callManager.isVideoEnabled {
+                callControlButton(
+                    icon: callManager.isVideoEnabled ? "video.fill" : "video.slash.fill",
+                    color: MeeshyColors.indigo400,
+                    bgColor: MeeshyColors.indigo400,
+                    isActive: !callManager.isVideoEnabled,
+                    caption: String(localized: "call.control.video.caption", defaultValue: "Vidéo", bundle: .main),
+                    label: callManager.isVideoEnabled ? String(localized: "call.control.videoOff", defaultValue: "Désactiver la vidéo", bundle: .main) : String(localized: "call.control.videoOn", defaultValue: "Activer la vidéo", bundle: .main)
+                ) {
+                    callManager.toggleVideo()
+                }
+            }
+
+            // End call
+            endCallButton
+        }
+        .padding(.horizontal, 16)
     }
 
     // MARK: - UI Components
@@ -824,27 +839,26 @@ struct CallView: View {
         )
     }
 
-    private func callControlButton(icon: String, color: Color, bgColor: Color, isActive: Bool, label: String, action: @escaping () -> Void) -> some View {
+    /// `caption` is the short visible word under the glass circle; `label` is the
+    /// full (often long, stateful) VoiceOver description. Keeping them separate is
+    /// what lets every column stay the same width so the row reads as an even,
+    /// intelligently-aligned glass bar instead of one button ballooning to fit a
+    /// long French label.
+    private func callControlButton(icon: String, color: Color, bgColor: Color, isActive: Bool, caption: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 6) {
-                ZStack {
-                    Circle()
-                        .fill(isActive ? bgColor.opacity(0.2) : Color.white.opacity(0.1))
-                        .frame(width: 56, height: 56)
-                        .overlay(
-                            Circle()
-                                .stroke(color.opacity(isActive ? 0.5 : 0.2), lineWidth: 1)
-                        )
+                Image(systemName: icon)
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundColor(isActive ? color : .white.opacity(0.9))
+                    .callControlGlass(diameter: 56, isActive: isActive, tint: bgColor)
 
-                    Image(systemName: icon)
-                        .font(.system(size: 22, weight: .medium))
-                        .foregroundColor(isActive ? color : .white.opacity(0.9))
-                }
-
-                Text(label)
+                Text(caption)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(theme.textMuted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
+            .frame(width: 68)
         }
         .pressable()
         .accessibilityLabel(label)
@@ -857,19 +871,11 @@ struct CallView: View {
             }
         } label: {
             VStack(spacing: 6) {
-                ZStack {
-                    Circle()
-                        .fill(hasActiveEffects ? MeeshyColors.indigo500.opacity(0.2) : Color.white.opacity(0.1))
-                        .frame(width: 64, height: 64)
-                        .overlay(
-                            Circle()
-                                .stroke(hasActiveEffects ? MeeshyColors.indigo500.opacity(0.5) : Color.white.opacity(0.2), lineWidth: 1)
-                        )
+                Image(systemName: showEffectsToolbar ? "xmark" : "camera.filters")
+                    .font(.system(size: 24, weight: .medium))
+                    .foregroundColor(hasActiveEffects ? MeeshyColors.indigo500 : .white.opacity(0.9))
+                    .callControlGlass(diameter: 64, isActive: hasActiveEffects, tint: MeeshyColors.indigo500)
 
-                    Image(systemName: showEffectsToolbar ? "xmark" : "camera.filters")
-                        .font(.system(size: 24, weight: .medium))
-                        .foregroundColor(hasActiveEffects ? MeeshyColors.indigo500 : .white.opacity(0.9))
-                }
                 Text(String(localized: "call.filters", defaultValue: "Filtres", bundle: .main))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white.opacity(0.7))
@@ -883,22 +889,19 @@ struct CallView: View {
         Button {
             callManager.endCall()
         } label: {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [MeeshyColors.error, MeeshyColors.error.opacity(0.85)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 64, height: 64)
-                    .shadow(color: MeeshyColors.error.opacity(0.4), radius: 8, y: 4)
-
+            VStack(spacing: 6) {
                 Image(systemName: "phone.down.fill")
-                    .font(.system(size: 26, weight: .semibold))
+                    .font(.system(size: 24, weight: .semibold))
                     .foregroundColor(.white)
+                    .endCallGlass(diameter: 56)
+
+                Text(String(localized: "call.end.caption", defaultValue: "Raccrocher", bundle: .main))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
             }
+            .frame(width: 68)
         }
         .pressable()
         .accessibilityLabel(String(localized: "call.end", defaultValue: "Raccrocher", bundle: .main))
@@ -962,4 +965,63 @@ struct CallView: View {
 
 private extension Logger {
     nonisolated static let calls = Logger(subsystem: "me.meeshy.app", category: "calls")
+}
+
+// MARK: - Liquid Glass (iOS 26)
+
+private extension View {
+    /// iOS 26 Liquid Glass for a circular call control. Glass cannot sample
+    /// glass, so the control bar groups its buttons in a `GlassEffectContainer`
+    /// (see `CallView.controlBar`) — adjacent controls then blend/morph like
+    /// droplets. `.interactive()` gives the native press scale + shimmer +
+    /// touch-point illumination. On iOS < 26 it falls back to the prior
+    /// translucent-material circle so the control looks consistent across OS
+    /// versions. Apply LAST in the modifier chain (after `.frame`).
+    /// Reference: developer.apple.com/documentation/SwiftUI/Applying-Liquid-Glass-to-custom-views
+    @ViewBuilder
+    func callControlGlass(diameter: CGFloat, isActive: Bool, tint: Color) -> some View {
+        if #available(iOS 26.0, *) {
+            self
+                .frame(width: diameter, height: diameter)
+                .glassEffect(
+                    .regular
+                        .tint(isActive ? tint.opacity(0.55) : Color.clear)
+                        .interactive(),
+                    in: .circle
+                )
+        } else {
+            self
+                .frame(width: diameter, height: diameter)
+                .background(
+                    Circle()
+                        .fill(isActive ? tint.opacity(0.2) : Color.white.opacity(0.1))
+                        .overlay(Circle().stroke(tint.opacity(isActive ? 0.5 : 0.2), lineWidth: 1))
+                )
+        }
+    }
+
+    /// Prominent (red-tinted) Liquid Glass for the hang-up button; gradient +
+    /// shadow fallback on iOS < 26.
+    @ViewBuilder
+    func endCallGlass(diameter: CGFloat) -> some View {
+        if #available(iOS 26.0, *) {
+            self
+                .frame(width: diameter, height: diameter)
+                .glassEffect(.regular.tint(MeeshyColors.error).interactive(), in: .circle)
+        } else {
+            self
+                .frame(width: diameter, height: diameter)
+                .background(
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [MeeshyColors.error, MeeshyColors.error.opacity(0.85)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .shadow(color: MeeshyColors.error.opacity(0.4), radius: 8, y: 4)
+                )
+        }
+    }
 }

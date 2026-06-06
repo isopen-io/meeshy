@@ -855,6 +855,19 @@ Puis P2 (codecs H264 HW §5.5, RtpEncoding/degradation §5.6, filtres Vision/Met
 
 ---
 
+### 2026-06-06 (suite 4) — iOS 26 Liquid Glass + positionnement intelligent de la barre d'appel (tag `calls-sota-p2.1`)
+
+Recherche API faite (Apple docs « Applying Liquid Glass to custom views » + LiquidGlassReference). Adoption du **Liquid Glass iOS 26** sur les boutons de `CallView`, avec **fallback `.ultraThinMaterial` gardé pour iOS < 26** (gating `#available(iOS 26.0, *)`).
+
+- **Helpers réutilisables** `View.callControlGlass(diameter:isActive:tint:)` et `endCallGlass(diameter:)` : `.glassEffect(.regular.tint(...).interactive(), in: .circle)` sur iOS 26 (press scale + shimmer + illumination natifs), sinon le cercle material translucide d'avant. Appliqués à : barre de contrôle (mute/son/effets/**flip caméra**/vidéo), bouton raccrocher (glass rouge prominent), bouton filtres, bouton réduire (chevron).
+- **Glass ne sample pas le glass** → la barre groupe ses cercles dans un `GlassEffectContainer(spacing:)` (blend/morph des contrôles adjacents).
+- **Positionnement intelligent** : `ViewThatFits(.horizontal)` centre la rangée quand elle tient, et ne retombe sur le scroll horizontal que sur largeur étroite / Dynamic Type large (avant : `ScrollView` qui ancrait tout à gauche). **Caption courte visible distincte du label VoiceOver long** + colonnes à largeur fixe (68pt) → fini le bouton qui s'élargit pour caser « Basculer la caméra avant/arrière » ; chaque contrôle est aligné et de taille uniforme (cercles 56pt, raccrocher inclus).
+- Tests source-guard `CallViewLiquidGlassTests` (glassEffect gaté iOS 26, fallback material présent, GlassEffectContainer, ViewThatFits, caption≠label, flip caméra présent).
+
+> Prérequis build : Xcode 26 / SDK iOS 26 (le projet est en swift-tools 6.2). Les symboles `glassEffect`/`GlassEffectContainer` n'existent que dans ce SDK ; le `#available` est le gating runtime.
+
+---
+
 ### 📍 ÉTAT ACTUEL & PROCHAINE SESSION (2026-06-06)
 
 **Branches** : `claude/admiring-faraday-ZMpBt` (PR #314) + `feat/calls-sota-rebuild` (snapshot) — synchronisées à `c02b527`. Tags `calls-sota-p0.1`→`p1.9` (locaux uniquement — push de tags bloqué HTTP 403 dans l'env web ; tous les commits sont sur le remote).
