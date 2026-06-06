@@ -21,7 +21,8 @@ final class ConversationListViewModelTests: XCTestCase {
         syncEngine: MockConversationSyncEngine? = nil,
         messageNotificationPublisher: AnyPublisher<String, Never>? = nil,
         draftStore: DraftStore? = nil,
-        store: ConversationStore? = nil
+        store: ConversationStore? = nil,
+        categoryStore: UserCategoryStore? = nil
     ) -> (
         sut: ConversationListViewModel,
         api: MockAPIClientForApp,
@@ -48,6 +49,7 @@ final class ConversationListViewModelTests: XCTestCase {
             return store
         }()
         let resolvedStore = store ?? Self.makeTestStore()
+        let resolvedCategoryStore = categoryStore ?? UserCategoryStore(service: ConvListTestCategoryWriter())
         let sut = ConversationListViewModel(
             api: api,
             conversationService: conversationService,
@@ -59,7 +61,8 @@ final class ConversationListViewModelTests: XCTestCase {
             syncEngine: syncEngine,
             messageNotificationPublisher: pushPublisher,
             draftStore: resolvedDraftStore,
-            store: resolvedStore
+            store: resolvedStore,
+            categoryStore: resolvedCategoryStore
         )
         return (sut, api, conversationService, preferenceService, messageSocket, messageService, authManager)
     }
@@ -109,6 +112,24 @@ final class ConversationListViewModelTests: XCTestCase {
         }
         await fulfillment(of: [exp], timeout: timeout)
         token?.cancel()
+    }
+
+    /// Poll `condition` on the main queue until it holds or `timeout` elapses.
+    /// Used for state that isn't a `@Published` mirror (e.g. a mock writer's
+    /// recorded calls behind a fire-and-forget store mutation).
+    private func waitUntil(timeout: TimeInterval = 2.0, _ condition: @escaping () -> Bool) async {
+        let exp = expectation(description: "condition")
+        exp.assertForOverFulfill = false
+        func poll() {
+            if condition() { exp.fulfill(); return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) { poll() }
+        }
+        poll()
+        await fulfillment(of: [exp], timeout: timeout)
+    }
+
+    private func makeCat(id: String, name: String, order: Int = 0, isExpanded: Bool = true) -> ConversationCategory {
+        ConversationCategory(id: id, name: name, color: "#6366F1", icon: "folder.fill", order: order, isExpanded: isExpanded)
     }
 
     private func makeConversation(
@@ -1840,6 +1861,7 @@ final class ConversationListViewModelTests: XCTestCase {
         let (sut, _, _, _, _, _, _) = makeSUT(preferenceService: preferenceService)
 
         await sut.loadCategories()
+        await drainMainQueue()  // fresh now flows through the category store publisher
 
         XCTAssertEqual(sut.userCategories.first?.id, "cat-1")
         XCTAssertEqual(preferenceService.persistCategoriesCallCount, 1,
@@ -1878,6 +1900,7 @@ final class ConversationListViewModelTests: XCTestCase {
         let (sut, _, _, _, _, _, _) = makeSUT(preferenceService: preferenceService)
 
         await sut.loadCategories()
+        await drainMainQueue()  // fresh now flows through the category store publisher
 
         XCTAssertEqual(sut.userCategories.count, 2,
                        "Fresh fetch with new category must replace stale cached value")
@@ -2362,6 +2385,55 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertTrue(sut.conversations.first?.userState.isPinned ?? false,
                       "A mutation applied to the store must reflect into the list via listPublisher")
     }
+
+    // MARK: - UserCategoryStore observation (increment 4)
+
+    func test_loadCategories_seedsCategoryStore_andReflectsIntoUserCategories() async {
+        let writer = ConvListTestCategoryWriter()
+        let cats = [makeCat(id: "c1", name: "Work", order: 0), makeCat(id: "c2", name: "Family", order: 1)]
+        writer.listed = cats
+        let catStore = UserCategoryStore(service: writer)
+        let prefs = MockPreferenceService()
+        prefs.getCategoriesResult = .success(cats)
+        let (sut, _, _, _, _, _, _) = makeSUT(preferenceService: prefs, categoryStore: catStore)
+
+        await sut.loadCategories()
+        await drainMainQueue()
+
+        XCTAssertEqual(sut.userCategories.map { $0.id }, ["c1", "c2"],
+                       "userCategories must mirror the category store, sorted by order")
+        let stored = await catStore.categories()
+        XCTAssertEqual(stored.count, 2, "loadCategories seeds the store as SoT")
+    }
+
+    func test_persistCategoryExpansion_routesThroughCategoryStore() async {
+        let writer = ConvListTestCategoryWriter()
+        let cat = makeCat(id: "c1", name: "Work", order: 0, isExpanded: true)
+        writer.listed = [cat]
+        let catStore = UserCategoryStore(service: writer)
+        await catStore.hydrateFromSnapshot([cat])  // setExpanded requires the category to be hydrated
+        let (sut, _, _, _, _, _, _) = makeSUT(categoryStore: catStore)
+
+        sut.persistCategoryExpansion(id: "c1", isExpanded: false)
+        await waitUntil { writer.updateCalls.contains { $0.id == "c1" && $0.isExpanded == false } }
+
+        XCTAssertTrue(writer.updateCalls.contains { $0.id == "c1" && $0.isExpanded == false },
+                      "expand/collapse must persist via the category store, not a direct PATCH")
+        await drainMainQueue()
+        XCTAssertEqual(sut.userCategories.first(where: { $0.id == "c1" })?.isExpanded, false,
+                       "the store publisher reflects the new isExpanded into userCategories")
+    }
+
+    func test_categoryStoreApplyRemote_reflectsIntoUserCategories() async {
+        let catStore = UserCategoryStore(service: ConvListTestCategoryWriter())
+        let (sut, _, _, _, _, _, _) = makeSUT(categoryStore: catStore)
+
+        await catStore.applyRemote(.created(makeCat(id: "c9", name: "Cross-device", order: 0)))
+        await drainMainQueue()
+
+        XCTAssertTrue(sut.userCategories.contains { $0.id == "c9" && $0.name == "Cross-device" },
+                      "a cross-device category event (via the socket bridge) must reflect into the list")
+    }
 }
 
 // MARK: - ConversationUpdatedEvent factory
@@ -2421,4 +2493,30 @@ final class ConvListTestLifecycleWriter: ConversationLifecycleWriting, @unchecke
     func markUnread(conversationId: String) async throws { if let e = errorToThrow { throw e } }
     func deleteForMe(conversationId: String) async throws { if let e = errorToThrow { throw e } }
     func leave(conversationId: String) async throws { if let e = errorToThrow { throw e } }
+}
+
+final class ConvListTestCategoryWriter: UserCategoryWriting, @unchecked Sendable {
+    var listed: [ConversationCategory] = []
+    var errorToThrow: Error?
+    private(set) var updateCalls: [(id: String, isExpanded: Bool?)] = []
+    private(set) var reorderCalls: [[(id: String, order: Int)]] = []
+
+    func listCategories() async throws -> [ConversationCategory] {
+        if let e = errorToThrow { throw e }
+        return listed
+    }
+    func createCategory(name: String, color: String?, icon: String?) async throws -> ConversationCategory {
+        if let e = errorToThrow { throw e }
+        return ConversationCategory(id: "new-\(name)", name: name, color: color, icon: icon, order: 0, isExpanded: true)
+    }
+    func updateCategory(id: String, name: String?, color: String?, icon: String?, isExpanded: Bool?) async throws -> ConversationCategory {
+        updateCalls.append((id, isExpanded))
+        if let e = errorToThrow { throw e }
+        return ConversationCategory(id: id, name: name ?? "Cat", color: color, icon: icon, order: 0, isExpanded: isExpanded ?? true)
+    }
+    func deleteCategory(id: String) async throws { if let e = errorToThrow { throw e } }
+    func reorderCategories(_ updates: [(id: String, order: Int)]) async throws {
+        reorderCalls.append(updates)
+        if let e = errorToThrow { throw e }
+    }
 }
