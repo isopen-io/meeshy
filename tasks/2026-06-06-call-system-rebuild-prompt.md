@@ -1008,6 +1008,40 @@ Session **sans build ni device** (env web). Constat important : **§5.5 et §5.6
 
 ---
 
+### 2026-06-06 (suite 8) — Fix double-frame vidéo + état RÉEL recalibré (branche `claude/calls-p2-sota`)
+
+#### Bug utilisateur corrigé (tag `calls-sota-p2.7`, commit `baace0e`)
+
+**Symptôme** : « double frame qui superpose plusieurs layer » dans l'appel vidéo connecté. **Cause racine** : la caméra LOCALE était rendue **deux fois** — en fond plein écran (`CallView.body` ZStack) ET dans la PiP — pendant que le remote flottait dans une carte arrondie centrée entre des `Spacer`. Le fond local débordait autour de la carte (et après un swap PiP, le local devenait à la fois le fond ET le primary).
+
+**Fix** :
+- `shouldShowSelfPreviewBackground` : le self-preview local plein écran n'apparaît plus QUE pendant l'attente de connexion (ringing/offering/connecting). En `.connected`/`.reconnecting`, primary + PiP possèdent l'unique surface vidéo.
+- `connectedView` : le primary devient une surface **full-bleed edge-to-edge** (la vue unique), contrôles/avatar/PiP en overlay — remplace la carte centrée sandwichée dans des Spacer.
+- `videoCallLayout` : `.ignoresSafeArea()` sur la vidéo seule (le badge durée reste dans la safe area), suppression du clip arrondi.
+- **Revue** : `pipView` rend `videoStream(local: !swapStreams)` = toujours l'OPPOSÉ du primary → aucune duplication quel que soit l'état de swap. ✅
+
+#### ⚠️ §12 recalibré — `main` contient BEAUCOUP plus que les tranches « reste » antérieures ne le laissaient croire
+
+Vérifié dans le code de `main` (et non d'après les notes) :
+- ✅ **§5.5** codecs H264 HW + `invokeSetCodecPreferences` (overload throwing) + ordre H264>VP8>VP9 + Opus 64/16 kbps — **déjà sur main**.
+- ✅ **§5.6** RtpEncoding + `degradationPreference=.maintainFramerate` — **déjà sur main** ; **adaptation thermique ajoutée cette session (p2.4)**.
+- ✅ **§7.5** filtres Vision/Metal — **déjà sur main** (`VideoFilterPipeline` : `VNGeneratePersonSegmentationRequest` + `CIGaussianBlur` + `CIContext(mtlDevice:)` + `CVPixelBufferPool` + re-wrap `RTCVideoFrame` ; `VideoFilterCapturerDelegate` ; `VideoFiltersPanel`).
+- ✅ **§7.1** barre de contrôle intelligente (`ViewThatFits`), Mac letterbox + contrôles persistants + cacher speaker/flip (p1.8). **Manque uniquement** : picker Continuity Camera (caméras `.continuityCamera`/`.external` nommées).
+- ✅ **§4.3** debounce `.disconnected` → `.reconnecting` → `performICERestart` (antérieur) + **bannière reconnecting (p2.5)**.
+
+#### Reste réellement à faire (TOUS exigent build Xcode + device — ne PAS faire à l'aveugle)
+
+1. **§3.1 `CallEventQueue` réducteur** : scaffold pur, **13** écritures `callState =` éparpillées à sérialiser derrière un réducteur unique. Gros refactor FSM live — le plus risqué, à faire en DERNIER avec device (comme le note la spec).
+2. **Suppression `.offering`** (P0 tâche 1, jamais faite) : encore dans l'enum + 3 usages (CallManager 1175/1962, CallView 63). État FSM live de l'appel sortant — exige validation device.
+3. **§7.1 picker Continuity Camera** (Mac/iPad caméras externes nommées) : additif, touche le chemin capture — validation device.
+
+> **Tout le reste de la spec (P0 hors §3.1/`.offering`, P1, P2, P3) est implémenté.** Le système d'appels audio/vidéo est fonctionnellement complet de bout en bout. Les 3 items ci-dessus sont des changements FSM/capture qui ne peuvent PAS être faits à l'A-level sans Xcode + 2 iPhones + Mac sans risquer une régression d'un système d'appels qui marche.
+
+#### Tags de cette session (locaux — push tags 403)
+`calls-sota-p3.1`→`p3.3` (P3 system messages E2E), `p2.4` (thermal), `p2.5` (reconnecting banner), `p2.6` (§12), `p2.7` (double-frame fix). Branche : `claude/calls-p2-sota` (sur-ensemble de `sleepy-carson` + main).
+
+---
+
 ### 📍 ÉTAT ACTUEL (référence — antérieure, conservée)
 
 **Branche active** : `claude/friendly-ride-H5qtI` (PR #315). Voir « suite 5 » ci-dessus pour l'état à jour. (Tranches antérieures : branches `claude/admiring-faraday-ZMpBt` PR #314 + `feat/calls-sota-rebuild`, tags `calls-sota-p0.1`→`p1.9`, mergées sur `main`.)
