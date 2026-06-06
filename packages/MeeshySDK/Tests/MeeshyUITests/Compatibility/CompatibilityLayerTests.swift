@@ -84,4 +84,29 @@ final class CompatibilityLayerTests: XCTestCase {
             HStack { Text("a"); Text("b") }
         }
     }
+
+    @MainActor
+    func test_collapsibleHeader_supportsCenteredTitleAndFadeOutBackground() {
+        // Opt-in flags must not break the existing call surface (defaults false).
+        _ = CollapsibleHeader(
+            title: "Meeshy",
+            scrollOffset: -30,
+            showBackButton: false,
+            titleColor: .primary,
+            backArrowColor: .blue,
+            backgroundColor: .black,
+            centerTitleOnCollapse: true,
+            fadeOutBackground: true,
+            titleView: { Text("Meeshy") },
+            trailing: { EmptyView() }
+        )
+        // Backward-compatible: still builds without the new flags.
+        _ = CollapsibleHeader(
+            title: "Settings",
+            scrollOffset: 0,
+            titleColor: .primary,
+            backArrowColor: .blue,
+            backgroundColor: .black
+        )
+    }
 }

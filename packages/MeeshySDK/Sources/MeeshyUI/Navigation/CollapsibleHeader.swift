@@ -14,6 +14,14 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
     let titleColor: Color
     let backArrowColor: Color
     let backgroundColor: Color
+    /// When `true`, the title cross-fades from large/leading (expanded) to a
+    /// small horizontally-centred title (collapsed) — the iOS large-title nav
+    /// pattern. Defaults to `false` so existing screens keep the leading title.
+    let centerTitleOnCollapse: Bool
+    /// When `true`, the header surface (blur + tint) fades from readable at the
+    /// top to fully transparent at the bottom edge, so list rows scrolling under
+    /// the lower edge stay visible. Defaults to `false` (uniform surface).
+    let fadeOutBackground: Bool
     let leading: (() -> LeadingContent)?
     let titleView: (() -> TitleContent)?
     let trailing: () -> TrailingContent
@@ -30,6 +38,8 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
         titleColor: Color,
         backArrowColor: Color,
         backgroundColor: Color,
+        centerTitleOnCollapse: Bool = false,
+        fadeOutBackground: Bool = false,
         @ViewBuilder leading: @escaping () -> LeadingContent,
         @ViewBuilder titleView: @escaping () -> TitleContent,
         @ViewBuilder trailing: @escaping () -> TrailingContent = { EmptyView() }
@@ -42,6 +52,8 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
         self.titleColor = titleColor
         self.backArrowColor = backArrowColor
         self.backgroundColor = backgroundColor
+        self.centerTitleOnCollapse = centerTitleOnCollapse
+        self.fadeOutBackground = fadeOutBackground
         self.leading = leading
         self.titleView = titleView
         self.trailing = trailing
@@ -91,7 +103,14 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
 
     public var body: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .center, spacing: 0) {
+            ZStack {
+                if centerTitleOnCollapse {
+                    centeredCollapsedTitle
+                        .opacity(Double(progress))
+                        .frame(height: headerHeight, alignment: .bottom)
+                        .padding(.bottom, titleBottomPadding)
+                }
+                HStack(alignment: .center, spacing: 0) {
                 if showBackButton {
                     backButton
                 }
@@ -121,6 +140,7 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
                     }
                 }
                 .padding(.leading, showBackButton ? 0 : 16)
+                .opacity(centerTitleOnCollapse ? Double(1 - progress) : 1)
 
                 if showCollapsedSubtitle {
                     makeSubtitleText(subtitle ?? "", size: 12, opacity: 0.5)
@@ -133,32 +153,73 @@ public struct CollapsibleHeader<LeadingContent: View, TitleContent: View, Traili
 
                 trailing()
                     .frame(minWidth: 44, minHeight: 44)
+                }
+                .padding(.horizontal, 12)
+                .padding(.bottom, titleBottomPadding)
+                .frame(height: headerHeight, alignment: .bottom)
             }
-            .padding(.horizontal, 12)
-            .padding(.bottom, titleBottomPadding)
-            .frame(height: headerHeight, alignment: .bottom)
 
             Divider()
                 .opacity(Double(progress) * 0.3)
         }
         .frame(maxWidth: .infinity)
-        .background(
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    LinearGradient(
-                        stops: [
-                            .init(color: backgroundColor.opacity(0.5), location: 0),
-                            .init(color: backgroundColor.opacity(0.65), location: 0.8),
-                            .init(color: backgroundColor.opacity(0.7), location: 1.0),
-                        ],
-                        startPoint: .top,
-                        endPoint: .bottom
-                    )
-                )
-                .ignoresSafeArea(edges: .top)
-                .allowsHitTesting(false)
-        )
+        .background(headerBackground)
+    }
+
+    /// Header surface: `.ultraThinMaterial` blur + a `backgroundColor` tint. When
+    /// `fadeOutBackground` is set, both the blur and the tint are masked to fade
+    /// from readable at the top to transparent at the bottom edge, so list rows
+    /// scrolling under the lower edge remain visible. Otherwise the surface is the
+    /// uniform legacy gradient (unchanged for the other screens).
+    private var headerBackground: some View {
+        Rectangle()
+            .fill(.ultraThinMaterial)
+            .overlay(LinearGradient(stops: backgroundTintStops, startPoint: .top, endPoint: .bottom))
+            .mask(Rectangle().fill(LinearGradient(stops: backgroundMaskStops, startPoint: .top, endPoint: .bottom)))
+            .ignoresSafeArea(edges: .top)
+            .allowsHitTesting(false)
+    }
+
+    private var backgroundTintStops: [Gradient.Stop] {
+        if fadeOutBackground {
+            return [
+                .init(color: backgroundColor.opacity(0.75), location: 0),
+                .init(color: backgroundColor.opacity(0.45), location: 0.5),
+                .init(color: backgroundColor.opacity(0.0), location: 1.0),
+            ]
+        }
+        return [
+            .init(color: backgroundColor.opacity(0.5), location: 0),
+            .init(color: backgroundColor.opacity(0.65), location: 0.8),
+            .init(color: backgroundColor.opacity(0.7), location: 1.0),
+        ]
+    }
+
+    private var backgroundMaskStops: [Gradient.Stop] {
+        if fadeOutBackground {
+            return [
+                .init(color: .black, location: 0),
+                .init(color: .black, location: 0.5),
+                .init(color: .clear, location: 1.0),
+            ]
+        }
+        // Solid mask = no-op (keeps the legacy uniform surface).
+        return [
+            .init(color: .black, location: 0),
+            .init(color: .black, location: 1.0),
+        ]
+    }
+
+    @ViewBuilder
+    private var centeredCollapsedTitle: some View {
+        if let titleView {
+            titleView().scaleEffect(0.6)
+        } else {
+            Text(title)
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .foregroundColor(titleColor)
+                .lineLimit(1)
+        }
     }
 
     private var backButton: some View {
@@ -188,6 +249,8 @@ extension CollapsibleHeader where LeadingContent == EmptyView, TitleContent == E
         titleColor: Color,
         backArrowColor: Color,
         backgroundColor: Color,
+        centerTitleOnCollapse: Bool = false,
+        fadeOutBackground: Bool = false,
         @ViewBuilder trailing: @escaping () -> TrailingContent = { EmptyView() }
     ) {
         self.title = title
@@ -198,6 +261,8 @@ extension CollapsibleHeader where LeadingContent == EmptyView, TitleContent == E
         self.titleColor = titleColor
         self.backArrowColor = backArrowColor
         self.backgroundColor = backgroundColor
+        self.centerTitleOnCollapse = centerTitleOnCollapse
+        self.fadeOutBackground = fadeOutBackground
         self.leading = nil
         self.titleView = nil
         self.trailing = trailing
@@ -216,6 +281,8 @@ extension CollapsibleHeader where LeadingContent == EmptyView {
         titleColor: Color,
         backArrowColor: Color,
         backgroundColor: Color,
+        centerTitleOnCollapse: Bool = false,
+        fadeOutBackground: Bool = false,
         @ViewBuilder titleView: @escaping () -> TitleContent,
         @ViewBuilder trailing: @escaping () -> TrailingContent = { EmptyView() }
     ) {
@@ -227,6 +294,8 @@ extension CollapsibleHeader where LeadingContent == EmptyView {
         self.titleColor = titleColor
         self.backArrowColor = backArrowColor
         self.backgroundColor = backgroundColor
+        self.centerTitleOnCollapse = centerTitleOnCollapse
+        self.fadeOutBackground = fadeOutBackground
         self.leading = nil
         self.titleView = titleView
         self.trailing = trailing

@@ -244,6 +244,11 @@ struct ConversationListHeaderOverlay: View {
             titleColor: theme.textPrimary,
             backArrowColor: MeeshyColors.indigo500,
             backgroundColor: theme.backgroundPrimary,
+            // The "Meeshy" title slides to the centre as the list scrolls, and the
+            // header surface fades from a readable blur at the top to transparent
+            // at the bottom edge so the conversation rows stay visible underneath.
+            centerTitleOnCollapse: true,
+            fadeOutBackground: true,
             leading: {
                 if let iPadFeedAction {
                     Button {
@@ -277,27 +282,34 @@ struct ConversationListHeaderOverlay: View {
             },
             trailing: {
                 HStack(spacing: 12) {
-                    // Tailles header revenues à la base après itération
-                    // user 2026-05-28 « réduire /2 les icones (+) et (link)
-                    // de la liste de conversation ». Précédent essai à
-                    // 40/44pt (e1bf90029) jugé trop gros — retour 20/22pt.
-                    Button {
-                        showShareLinkSheet = true
-                    } label: {
-                        Image(systemName: "link.badge.plus")
-                            .font(.system(size: 20, weight: .semibold))
-                            .foregroundColor(MeeshyColors.indigo500)
-                    }
-                    .accessibilityLabel(String(localized: "conversation.list.create_share_link", defaultValue: "Creer un lien de partage", bundle: .main))
+                    // iOS 26 Liquid Glass for the two primary actions (share link +
+                    // new conversation), grouped so the glass circles blend. Gating/
+                    // fallback owned by the SDK Compatibility wrappers.
+                    AdaptiveGlassContainer(spacing: 10) {
+                        HStack(spacing: 12) {
+                            Button {
+                                showShareLinkSheet = true
+                            } label: {
+                                Image(systemName: "link.badge.plus")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundColor(MeeshyColors.indigo500)
+                                    .frame(width: 40, height: 40)
+                                    .adaptiveGlass(in: Circle(), interactive: true)
+                            }
+                            .accessibilityLabel(String(localized: "conversation.list.create_share_link", defaultValue: "Creer un lien de partage", bundle: .main))
 
-                    Button {
-                        onNewConversation?()
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 22, weight: .semibold))
-                            .foregroundColor(MeeshyColors.indigo500)
+                            Button {
+                                onNewConversation?()
+                            } label: {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 18, weight: .bold))
+                                    .foregroundColor(MeeshyColors.indigo500)
+                                    .frame(width: 40, height: 40)
+                                    .adaptiveGlass(in: Circle(), interactive: true)
+                            }
+                            .accessibilityLabel(String(localized: "conversation.list.new_conversation", defaultValue: "Nouvelle conversation", bundle: .main))
+                        }
                     }
-                    .accessibilityLabel(String(localized: "conversation.list.new_conversation", defaultValue: "Nouvelle conversation", bundle: .main))
 
                     if let onNotificationsTap {
                         Button {
