@@ -179,6 +179,79 @@ export class CallEventsHandler {
       socket.data.appForeground = data?.foreground === true;
     });
 
+    // CALL-FIX 2026-06-06 — replay any IN-PROGRESS (ringing) call to a socket that
+    // just (re)connected. A user who was offline/backgrounded/app-closed when the
+    // call started missed the original call:initiated; on reconnect the client emits
+    // `call:check-active` and we re-send call:initiated so the incoming banner /
+    // CallKit appears immediately ("I come online and a call started 20s ago → I see
+    // it"; "I open the Mac app → the banner shows"). Scoped to the user's
+    // conversations, the ringing window (<60s), calls they did NOT initiate, and only
+    // if they haven't already left. The client dedups by callId.
+    socket.on('call:check-active', async () => {
+      try {
+        const userId = getUserId(socket.id);
+        if (!userId) return;
+        const myConvs = await this.prisma.participant.findMany({
+          where: { userId, isActive: true },
+          select: { conversationId: true }
+        });
+        const convIds = myConvs.map((p: any) => p.conversationId);
+        if (convIds.length === 0) return;
+        const ringingWindowStart = new Date(Date.now() - 60_000);
+        const activeCalls = await this.prisma.callSession.findMany({
+          where: {
+            conversationId: { in: convIds },
+            endedAt: null,
+            initiatorId: { not: userId },
+            status: { in: [CallStatus.initiated, CallStatus.ringing, CallStatus.connecting] },
+            startedAt: { gte: ringingWindowStart }
+          },
+          select: { id: true }
+        });
+        for (const c of activeCalls) {
+          // Skip if this user already joined AND left the call.
+          const myPart = await this.prisma.callParticipant.findFirst({
+            where: { callSessionId: c.id, participant: { userId } }
+          });
+          if (myPart?.leftAt) continue;
+
+          const full = await this.callService.getCallSession(c.id);
+          const callType: 'audio' | 'video' = (full.metadata as any)?.type === 'video' ? 'video' : 'audio';
+          const event: CallInitiatedEvent = {
+            callId: full.id,
+            conversationId: full.conversationId,
+            mode: full.mode,
+            type: callType,
+            initiator: {
+              userId: full.initiator.id,
+              username: full.initiator.username,
+              displayName: full.initiator.displayName || undefined,
+              avatar: full.initiator.avatar
+            },
+            participants: full.participants.map((p: any) => ({
+              id: p.id,
+              callSessionId: p.callSessionId,
+              userId: p.participant?.userId || p.participantId,
+              role: p.role,
+              joinedAt: p.joinedAt,
+              leftAt: p.leftAt,
+              isAudioEnabled: p.isAudioEnabled,
+              isVideoEnabled: p.isVideoEnabled,
+              connectionQuality: p.connectionQuality as any,
+              username: p.participant?.user?.username || p.participant?.displayName,
+              displayName: p.participant?.displayName || p.participant?.user?.displayName,
+              avatar: p.participant?.user?.avatar || p.participant?.avatar
+            }))
+          };
+          const iceServers = this.callService.generateIceServers(userId);
+          socket.emit(CALL_EVENTS.INITIATED, { ...event, iceServers });
+          logger.info('📲 Replayed in-progress call:initiated on (re)connect', { callId: c.id, userId });
+        }
+      } catch (err: any) {
+        logger.error('call:check-active failed', { error: err?.message });
+      }
+    });
+
     /**
      * call:initiate - Client initiates a new call
      * CVE-002: Added rate limiting (5 req/min)
