@@ -28,7 +28,11 @@ final class RingbackTonePlayer {
     private var activeLoop: String?
     private let logger = Logger(subsystem: "me.meeshy.app", category: "call-sounds")
 
-    private var isMac: Bool { ProcessInfo.processInfo.isiOSAppOnMac }
+    /// Set by `CallManager` to `!callUsesCallKit`: true when there is no CallKit to
+    /// activate the AVAudioSession during the ringing phase (iOS-app-on-Mac, or a
+    /// foreground in-app call), so the loop players must bring the session up
+    /// themselves. False on CallKit-driven calls (CallKit owns activation).
+    var shouldSelfActivateSession = false
 
     // MARK: - Ringback (caller)
 
@@ -68,7 +72,7 @@ final class RingbackTonePlayer {
             logger.error("\(resource, privacy: .public).caf not found in bundle")
             return
         }
-        activateForMacRingingIfNeeded()
+        activateForRingingIfNeeded()
         do {
             let player = try AVAudioPlayer(contentsOf: url)
             player.numberOfLoops = -1
@@ -93,11 +97,12 @@ final class RingbackTonePlayer {
         activeLoop = nil
     }
 
-    /// Mac has no CallKit to activate the session during ringing → bring the
-    /// WebRTC session up (playback, speaker) so the loops are audible. No-op on
-    /// iOS (CallKit owns activation) and when the session is already enabled.
-    private func activateForMacRingingIfNeeded() {
-        guard isMac else { return }
+    /// When there is no CallKit to activate the session during ringing (Mac, or a
+    /// foreground in-app call), bring the WebRTC session up (playback, speaker) so
+    /// the loops are audible. No-op on CallKit-driven calls (it owns activation)
+    /// and when the session is already enabled.
+    private func activateForRingingIfNeeded() {
+        guard shouldSelfActivateSession else { return }
         let rtc = RTCAudioSession.sharedInstance()
         guard !rtc.isAudioEnabled else { return }
         rtc.lockForConfiguration()

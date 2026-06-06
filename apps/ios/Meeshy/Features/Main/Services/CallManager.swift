@@ -52,6 +52,18 @@ final class CallManager: ObservableObject {
     @Published private(set) var remoteUsername: String?
     @Published var isVideoEnabled: Bool = false
     @Published var isMuted: Bool = false
+
+    /// CALL-FIX 2026-06-06 — whether THIS call drives CallKit. CallKit is only
+    /// needed to (a) ring a backgrounded/locked device woken by a VoIP push and
+    /// (b) provide the system call UI. We bypass it when the app already shows its
+    /// own in-app call UI: ALWAYS on iOS-app-on-Mac (no system call UI there), and
+    /// for socket-delivered INCOMING calls while the app is in the FOREGROUND (the
+    /// in-app banner is enough — the redundant CallKit banner is suppressed). The
+    /// VoIP-push incoming path (`reportIncomingVoIPCall`) ALWAYS keeps CallKit —
+    /// Apple requires `reportNewIncomingCall` there. Set per call in `startCall` /
+    /// `handleIncomingCallNotification`; gates CallKit transactions + audio-session
+    /// self-activation (when false, no CallKit means we own the session lifecycle).
+    private var callUsesCallKit = true
     @Published var isSpeaker: Bool = false
     @Published private(set) var callDuration: TimeInterval = 0
     @Published private(set) var currentCallId: String?
@@ -336,16 +348,20 @@ final class CallManager: ObservableObject {
         // de 45s prend le relais comme avant.
         startOutgoingRingTimeout()
 
+        // Outgoing is always foreground (the user just tapped Call), so the only
+        // no-CallKit case here is iOS-app-on-Mac. (Suppressing CallKit for outgoing
+        // on iOS would drop the system call UI / Recents the user expects there.)
+        callUsesCallKit = !ProcessInfo.processInfo.isiOSAppOnMac
+        ringbackPlayer.shouldSelfActivateSession = !callUsesCallKit
         let uuid = UUID()
         activeCallUUID = uuid
-        if ProcessInfo.processInfo.isiOSAppOnMac {
-            // CALL-FIX 2026-06-06 (macOS) — do NOT create a CallKit call on
-            // iOS-app-on-Mac. There is no system call UI there: CXStartCallAction
-            // half-succeeds and the later CXEndCallAction can't clear it → CallKit
-            // shows a stuck "call in progress" after hangup. The call is driven
-            // entirely in-app; the call:initiate flow below runs independently.
-            // Start the ringback directly (provider:didActivate never fires on Mac).
-            Logger.calls.info("[macOS] outgoing call without CallKit — in-app ringback")
+        if !callUsesCallKit {
+            // No CallKit (iOS-app-on-Mac): CXStartCallAction half-succeeds and the
+            // later CXEndCallAction can't clear it → CallKit shows a stuck "call in
+            // progress" after hangup. Drive the call entirely in-app; the
+            // call:initiate flow below runs independently. Start the ringback
+            // directly (provider:didActivate never fires without CallKit).
+            Logger.calls.info("[no-callkit] outgoing call — in-app ringback")
             startRingbackIfNeeded()
         } else {
             // CXHandle.value persists in the iOS Phone app Recents list — use the
@@ -475,6 +491,11 @@ final class CallManager: ObservableObject {
     func reportIncomingVoIPCall(callId: String, callerUserId: String, callerName: String, isVideo: Bool, iceServers: [IceServer]? = nil) {
         resetEndedStateForNewCall()
         lastCallWasOutgoing = false
+        // The VoIP-push path ALWAYS uses CallKit — Apple mandates a synchronous
+        // reportNewIncomingCall from the push handler. Reset the flag (a prior
+        // foreground in-app call may have left it false).
+        callUsesCallKit = true
+        ringbackPlayer.shouldSelfActivateSession = false
         let uuid = UUID()
         let update = CXCallUpdate()
         // Use the callerUserId as the CXHandle.value so Recents stays stable
@@ -711,10 +732,20 @@ final class CallManager: ObservableObject {
         // ignored, the SDP answer is still created+sent). The audio session is then
         // activated by the `[AUDIO_FALLBACK]` path (`provider:didActivate:` never fires
         // on Mac) + the `.speaker` route fix.
-        if ProcessInfo.processInfo.isiOSAppOnMac {
-            Logger.calls.info("[macOS] incoming call presented via in-app UI (CallKit skipped)")
-            // CallKit plays the ringtone on iOS via `config.ringtoneSound`; on Mac
-            // CallKit is bypassed, so play the incoming ringtone in-app.
+        // CallKit only when we genuinely need the SYSTEM call UI — i.e. to ring a
+        // backgrounded/locked device. When the app is in the FOREGROUND the in-app
+        // IncomingCallView already presents (callState == .ringing), so suppress the
+        // redundant CallKit banner. Never use CallKit on iOS-app-on-Mac (no system
+        // call UI; reportNewIncomingCall fails error 3). NB: a device woken from
+        // suspension by a VoIP push comes through `reportIncomingVoIPCall`, NOT here,
+        // and that path always keeps CallKit (Apple requirement).
+        callUsesCallKit = !ProcessInfo.processInfo.isiOSAppOnMac
+            && UIApplication.shared.applicationState != .active
+        ringbackPlayer.shouldSelfActivateSession = !callUsesCallKit
+        if !callUsesCallKit {
+            Logger.calls.info("[no-callkit] incoming via in-app UI (foreground/macOS) — CallKit banner skipped")
+            // CallKit plays the ringtone on iOS via `config.ringtoneSound`; without
+            // CallKit we play the incoming ringtone in-app.
             ringbackPlayer.startRingtone()
         } else {
             callProvider.reportNewIncomingCall(with: uuid, update: update) { [weak self] error in
@@ -802,6 +833,12 @@ final class CallManager: ObservableObject {
     func answerCall() {
         guard case .ringing(isOutgoing: false) = callState else { return }
         guard let callId = currentCallId, let userId = remoteUserId else { return }
+
+        // CALL-FIX 2026-06-06 — stop the incoming ringtone the INSTANT the user
+        // accepts, not at .connected (which is seconds later after ICE). Otherwise
+        // the ringtone keeps playing through the connecting phase.
+        ringbackPlayer.stop()
+        ringbackPlayer.stopRingtone()
 
         callState = .connecting
         // Audio session is configured at peer-connection setup (handleIncoming…),
@@ -891,6 +928,10 @@ final class CallManager: ObservableObject {
         guard case .ringing(isOutgoing: false) = callState else { return }
         guard let callId = currentCallId, remoteUserId != nil else { return }
 
+        // CALL-FIX 2026-06-06 — stop the ringtone the INSTANT the user declines.
+        ringbackPlayer.stop()
+        ringbackPlayer.stopRingtone()
+
         emitCallReject(callId: callId)
 
         if let uuid = activeCallUUID {
@@ -974,7 +1015,9 @@ final class CallManager: ObservableObject {
         // (CallKit requesttransaction error 4) and the rollback below then UNDOES the
         // mute → the mute button never sticks. On Mac the WebRTC track toggle above IS
         // the mute (no CallKit system UI), so short-circuit before the transaction.
-        guard let uuid = activeCallUUID, !ProcessInfo.processInfo.isiOSAppOnMac else {
+        guard let uuid = activeCallUUID, callUsesCallKit else {
+            // No CallKit (Mac / foreground in-app call) — the WebRTC track toggle
+            // above IS the mute; skip CXSetMutedCallAction (it fails + rolls back).
             HapticFeedback.light()
             return
         }
@@ -1622,7 +1665,12 @@ final class CallManager: ObservableObject {
             // DEACTIVATE the session the ring-sound manager just brought up, cutting
             // the ringback/ringtone after a few hundred ms. The [AUDIO_FALLBACK] at
             // connect then finds it already active (no-op).
-            let activateNow = ProcessInfo.processInfo.isiOSAppOnMac
+            // When CallKit drives the call it activates the session via
+            // provider:didActivate (active:false here). Without CallKit (Mac, or a
+            // foreground in-app call) WE own activation, so activate now — otherwise
+            // this would DEACTIVATE the session the ring-sound manager just brought
+            // up. The [AUDIO_FALLBACK] at connect then finds it already active.
+            let activateNow = !callUsesCallKit
             try session.setConfiguration(configuration, active: activateNow)
             Logger.calls.info("RTCAudioSession pre-configured — video: \(isVideo), activeNow=\(activateNow)")
         } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == 4099 {
