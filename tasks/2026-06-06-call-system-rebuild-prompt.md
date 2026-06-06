@@ -744,13 +744,29 @@ Règle : `BOOL` + `NSError**` → import throwing ; `void` + `NSError**` → imp
 
 > Rappel observé : `meeshy.sh build` sort `EXIT=1` sur un build warning-free (le pipeline `grep "warning:" | … | while` + `set -eo pipefail` meurt quand grep ne trouve rien) APRÈS `** BUILD SUCCEEDED **`. Vérifier le vrai verdict dans `/tmp/meeshy_sim_build_<pid>.log` (non supprimé car le script meurt avant le `rm -f`).
 
-#### Non vérifié (gate device — obligatoire)
+#### ✅ Validé SUR DEVICE RÉEL (2026-06-06 soir) — appel vidéo 1:1 happy-path opérationnel
 
-Aucun critère média des sections 9/11 n'est validable ici : le simulateur ne fait pas de vidéo réelle et a des limites CallKit. **AC1→AC13, AC15 + tous les « Done P0 » restent à dérouler sur 2 iPhones physiques + Mac.** Les messages de commit `2a2694278`/`3c6e635b4` notent eux-mêmes « device-verification pending ». Points à confirmer en priorité via `[CALL-DIAG]` : `inboundAudioPackets > 0` des deux côtés, l'answer lit `sendrecv` sur les sections lues par le caller, offer rejoué après churn background/foreground.
+Validation end-to-end **iPhone 16 Pro Max physique (« Services CEO i16pm ») ↔ Mac (isiOSAppOnMac)**, **les DEUX sur le build de la branche**. Confirmé par les logs `[CALL-DIAG]` (`/tmp/mac_call_live5.log`, appel `6a244f90…` 17:49→17:50) + retour utilisateur « tout fonctionne pour l'appel vidéo ».
 
-#### Reste à faire P0 (non couvert par cette tranche)
+| AC | Critère | Preuve |
+|---|---|---|
+| AC1/AC2 | audio + vidéo **bidirectionnels** | STATS Mac answerer `sent=10484pkt **recv=5066pkt**` (les deux non-nuls, croissants), `RTP gate passed at attempt 1` ; codecs opus + H264 (`profile-level-id=640c34`) |
+| §5.2 | answerer répond **sendrecv** | `[CALL-DIAG] local ANSWER directions: audio=sendrecv video=sendrecv` (avant le fix : `recvonly`) |
+| §3.2 | autorité FSM | `peerConnectionState (authority): connected` pilote la transition ; le caller (Mac, test précédent) atteint bien `.connected` |
+| AC4 | plus de caller-stuck | une fois l'iPhone sur la branche, le caller passe `.connected` (build 464 obsolète = caller bloqué « Connexion… ») |
+| AC8 | in-app Mac | `[no-callkit] incoming via in-app UI` + `[AUDIO_FALLBACK] RTCAudioSession activée manuellement` (CallKit error 4 attendu sur Mac, non bloquant) |
 
-- §3.4 — perfect negotiation iOS complète (`negotiate()`, `handleRemoteDescription` + rollback, `isPolite`). Le gateway note explicitement « before the iOS perfect-negotiation rework lands ».
+> **Leçon opérationnelle critique** : les fixes §5.2 (answerer) et §3.2 (caller) vivent **dans chaque rôle séparément** → **les DEUX devices doivent porter le build de la branche**. Signature d'un déploiement à un seul côté : média à sens unique quand le device non-patché **répond**, caller bloqué « Connexion… » quand le device non-patché **appelle**. Pièce qui avait fait perdre du temps : l'iPhone était resté sur **build 464** (le commit `3c6e635b4` parle de « Build 465 symptom »).
+
+#### Restant device (matrice complète — NON validé)
+
+Le happy-path 1:1 est vert. **Restent à dérouler sur 2 devices** (cf. AC3/AC5/AC6/AC7/AC9→AC13/AC15) : robustesse churn background/foreground + replay offer (§4.6), glare (upgrade AV simultané), switch audio↔vidéo, ICE restart sur coupure réseau, 20 appels consécutifs sans média à sens unique persistant, UI adaptative, messages système. Ces critères dépendent du « Reste à faire P0 » + Phases P1/P2/P3 ci-dessous.
+
+#### ▶️ Reste à faire P0 — REPRENDRE ICI (ordre conseillé)
+
+> La tranche fondation est mergée + validée happy-path. Continuer **dans cet ordre** (chaque item : TDD strict, build vert, commit isolé, re-test device des deux côtés). Plusieurs items se prêtent à des worktrees parallèles (ne pas partager `P2PWebRTCClient.swift` entre deux worktrees).
+
+- §3.4 — perfect negotiation iOS complète (`negotiate()`, `handleRemoteDescription` + rollback, `isPolite` = plus petit userId). **Prérequis de la plupart du reste** ; le gateway note explicitement « before the iOS perfect-negotiation rework lands ».
 - §3.5 — moitié **client** de l'epoch : incrément par (re)négociation + drop des SDP/ICE d'epoch antérieur (le gateway ne fait que le passthrough du champ).
 - §4.1 — queue de candidats ICE jusqu'à `remoteDescription != nil` + flush + re-buffer sur restart (task P0-3).
 - §4.1/§6.3 — signaling **at-least-once côté iOS** (`emitCallSignalWithAck` + retry/backoff) ; le gateway buffer/replay est le backstop, pas le retry émetteur.
