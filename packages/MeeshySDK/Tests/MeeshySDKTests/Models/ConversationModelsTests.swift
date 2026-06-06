@@ -75,10 +75,10 @@ final class ConversationModelsTests: XCTestCase {
         XCTAssertNil(conv.title)
         XCTAssertTrue(conv.isActive)
         XCTAssertEqual(conv.memberCount, 2)
-        XCTAssertEqual(conv.unreadCount, 0)
+        XCTAssertEqual(conv.userState.unreadCount, 0)
         XCTAssertNil(conv.encryptionMode)
-        XCTAssertFalse(conv.isPinned)
-        XCTAssertFalse(conv.isMuted)
+        XCTAssertFalse(conv.userState.isPinned)
+        XCTAssertFalse(conv.userState.isMuted)
         XCTAssertTrue(conv.tags.isEmpty)
     }
 

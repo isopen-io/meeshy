@@ -165,7 +165,7 @@ final class CacheCoordinatorTests: XCTestCase {
         guard let items = result.value else {
             XCTFail("Expected cached conversations"); return
         }
-        XCTAssertEqual(items.first?.unreadCount, 5)
+        XCTAssertEqual(items.first?.userState.unreadCount, 5)
     }
 
     // MARK: - Socket -> Cache: participant role update

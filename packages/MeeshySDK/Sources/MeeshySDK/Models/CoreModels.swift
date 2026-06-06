@@ -170,60 +170,10 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public var language: ConversationContext.ConversationLanguage = .french
     public var theme: ConversationContext.ConversationTheme = .general
 
-    // MARK: - Deprecated per-user shims
-    //
-    // These computed properties forward to `userState`. They preserve the
-    // existing API surface (call sites read/write `conv.isPinned`,
-    // `conv.unreadCount`, etc.) while the storage moves into the unified
-    // struct. Phase 8 removes them along with their call sites.
-
-    @available(*, deprecated, message: "Use `userState.unreadCount` instead.")
-    public var unreadCount: Int {
-        get { userState.unreadCount }
-        set { userState.unreadCount = newValue }
-    }
-
-    @available(*, deprecated, message: "Use `userState.isPinned` instead.")
-    public var isPinned: Bool {
-        get { userState.isPinned }
-        set { userState.isPinned = newValue }
-    }
-
-    @available(*, deprecated, message: "Use `userState.sectionId` instead.")
-    public var sectionId: String? {
-        get { userState.sectionId }
-        set { userState.sectionId = newValue }
-    }
-
-    @available(*, deprecated, message: "Use `userState.isMuted` instead.")
-    public var isMuted: Bool {
-        get { userState.isMuted }
-        set { userState.isMuted = newValue }
-    }
-
-    @available(*, deprecated, message: "Use `userState.mentionsOnly` instead.")
-    public var mentionsOnly: Bool {
-        get { userState.mentionsOnly }
-        set { userState.mentionsOnly = newValue }
-    }
-
-    @available(*, deprecated, message: "Use `userState.isArchived` instead.")
-    public var isArchivedByUser: Bool {
-        get { userState.isArchived }
-        set { userState.isArchived = newValue }
-    }
-
-    @available(*, deprecated, message: "Use `userState.customName` instead.")
-    public var customName: String? {
-        get { userState.customName }
-        set { userState.customName = newValue }
-    }
-
-    @available(*, deprecated, message: "Use `userState.reaction` instead.")
-    public var reaction: String? {
-        get { userState.reaction }
-        set { userState.reaction = newValue }
-    }
+    // (Removed 2026-06-06, inc. 5b) Deprecated per-user shims (`conv.isPinned`,
+    // `conv.unreadCount`, …) forwarding to `userState`. The app + SDK migrated
+    // fully to `userState.X` (0 deprecation warnings at build), so the proxies
+    // are dead API surface — deleted. Read per-user state via `userState`.
 
     public enum ConversationType: String, Codable, CaseIterable, Sendable {
         case direct, group, `public`, global, community, channel, bot, broadcast

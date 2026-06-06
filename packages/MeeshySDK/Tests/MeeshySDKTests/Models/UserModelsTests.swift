@@ -180,7 +180,7 @@ final class UserModelsTests: XCTestCase {
         XCTAssertEqual(conv.type, .direct)
         XCTAssertEqual(conv.identifier, "conv-abc")
         XCTAssertEqual(conv.memberCount, 2)
-        XCTAssertEqual(conv.unreadCount, 3)
+        XCTAssertEqual(conv.userState.unreadCount, 3)
     }
 
     func testToConversationSetsPinnedAndMutedFromUserPreferences() throws {
@@ -188,8 +188,8 @@ final class UserModelsTests: XCTestCase {
         let apiConv = try makeDecoder().decode(APIConversation.self, from: json)
         let conv = apiConv.toConversation(currentUserId: "me")
 
-        XCTAssertTrue(conv.isPinned)
-        XCTAssertTrue(conv.isMuted)
+        XCTAssertTrue(conv.userState.isPinned)
+        XCTAssertTrue(conv.userState.isMuted)
     }
 
     func testToConversationSetsParticipantUserIdForDirectConversation() throws {
