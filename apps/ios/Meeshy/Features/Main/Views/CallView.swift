@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import Combine
 import MeeshySDK
 import MeeshyUI
@@ -20,13 +21,15 @@ struct CallView: View {
     @State private var showControls = true
     @State private var showTranscript = false
     @State private var showEffectsToolbar = false
-    @State private var localPreviewOffset: CGSize = .zero
-    // Audit P1-18 — `UIScreen.main` is deprecated since iOS 16 and returns
-    // wrong values on iPad multitasking / Stage Manager (the app's window is
-    // a fraction of the screen). Use a sensible default; the runtime drag
-    // handler reconciles the real position from a GeometryReader proxy
-    // when the user moves the bubble.
-    @State private var localPreviewPosition: CGPoint = CGPoint(x: 320, y: 100)
+    // §7.2 — PiP placement is corner-anchored (snap-to-nearest-corner) and
+    // computed from a GeometryReader, not a hardcoded point. `pipDragOffset`
+    // tracks the in-flight drag; `pipCorner` is the resting corner.
+    @State private var pipCorner: PiPCorner = .topTrailing
+    @State private var pipDragOffset: CGSize = .zero
+    // §7.2 — FaceTime-style swap: which stream is the full-area "primary".
+    // false ⇒ remote is primary + local in the PiP; true ⇒ swapped. Tapping
+    // the PiP toggles it.
+    @State private var swapStreams = false
 
     var body: some View {
         ZStack {
@@ -254,9 +257,10 @@ struct CallView: View {
             // Transcript overlay
             transcriptOverlay
 
-            // Draggable local preview (video only, when connected with remote video)
+            // §7.2 — draggable, corner-snapping PiP showing the secondary
+            // stream. Tap to swap it with the full-area primary (FaceTime).
             if callManager.isVideoEnabled && callManager.hasLocalVideoTrack {
-                draggableLocalPreview
+                pipView
             }
         }
         .simultaneousGesture(
@@ -354,25 +358,10 @@ struct CallView: View {
 
     private var videoCallLayout: some View {
         ZStack {
-            // Remote video (full area)
-            if callManager.hasRemoteVideoTrack && callManager.isRemoteVideoEnabled {
-                CallVideoView(track: callManager.remoteVideoTrack, contentMode: .scaleAspectFill)
-            } else if callManager.hasRemoteVideoTrack {
-                // P0-3 — peer turned its camera off: avatar placeholder, never the
-                // frozen last frame.
-                remoteCameraOffPlaceholder
-            } else {
-                Color.black.opacity(0.4)
-                    .overlay(
-                        VStack(spacing: 12) {
-                            ProgressView()
-                                .tint(.white.opacity(0.5))
-                            Text(String(localized: "call.video.connecting", defaultValue: "Connexion video...", bundle: .main))
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.white.opacity(0.4))
-                        }
-                    )
-            }
+            // §7.2 — full-area PRIMARY stream. `swapStreams` decides whether the
+            // primary is the remote feed (default) or the local camera (after a
+            // PiP tap). The OTHER stream is rendered in the draggable PiP.
+            videoStream(local: swapStreams, contentMode: .scaleAspectFill)
 
             // Duration badge top-left
             VStack {
@@ -392,6 +381,41 @@ struct CallView: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 20))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    /// §7.2 — renders one call stream. `local == true` shows the (mirrored)
+    /// local camera; otherwise the remote feed, degrading to a camera-off
+    /// placeholder (peer's camera off) or a connecting placeholder (no track
+    /// yet). Shared by the full-area primary and the PiP so a swap just flips
+    /// the `local` flag on each.
+    @ViewBuilder
+    private func videoStream(local: Bool, contentMode: UIView.ContentMode) -> some View {
+        if local {
+            // Mirror the local preview. Conditional front-only mirroring is §7.7.
+            CallVideoView(track: callManager.localVideoTrack, mirror: true, contentMode: contentMode)
+        } else if callManager.hasRemoteVideoTrack && callManager.isRemoteVideoEnabled {
+            CallVideoView(track: callManager.remoteVideoTrack, contentMode: contentMode)
+        } else if callManager.hasRemoteVideoTrack {
+            // P0-3 — peer turned its camera off: avatar placeholder, never the
+            // frozen last frame.
+            remoteCameraOffPlaceholder
+        } else {
+            connectingVideoPlaceholder
+        }
+    }
+
+    private var connectingVideoPlaceholder: some View {
+        Color.black.opacity(0.4)
+            .overlay(
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .tint(.white.opacity(0.5))
+                    Text(String(localized: "call.video.connecting", defaultValue: "Connexion video...", bundle: .main))
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white.opacity(0.4))
+                }
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // P0-3 — shown full-area when the remote peer has a video track but turned
@@ -414,50 +438,83 @@ struct CallView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Draggable Local Preview
+    // MARK: - Picture-in-Picture (§7.2)
 
-    private var draggableLocalPreview: some View {
-        CallVideoView(track: callManager.localVideoTrack, mirror: true, contentMode: .scaleAspectFill)
-            .frame(width: 100, height: 140)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.white.opacity(0.3), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
-            .position(localPreviewPosition)
-            .offset(localPreviewOffset)
-            .gesture(
-                DragGesture()
-                    .onChanged { localPreviewOffset = $0.translation }
-                    .onEnded { value in
-                        let finalX = localPreviewPosition.x + value.translation.width
-                        let finalY = localPreviewPosition.y + value.translation.height
-                        // Audit P1-18 — use the active key window's bounds
-                        // (correct under Stage Manager / iPad multitasking)
-                        // and fall back to UIScreen.main only when no window
-                        // scene is yet attached. A full GeometryReader-driven
-                        // refactor is tracked in the P2 backlog.
-                        let bounds: CGRect = {
-                            let scenes = UIApplication.shared.connectedScenes
-                            for case let windowScene as UIWindowScene in scenes {
-                                if let win = windowScene.windows.first(where: { $0.isKeyWindow }) ?? windowScene.windows.first {
-                                    return win.bounds
-                                }
+    /// The four anchor corners a PiP can snap to.
+    private enum PiPCorner: CaseIterable {
+        case topLeading, topTrailing, bottomLeading, bottomTrailing
+    }
+
+    private static let pipSize = CGSize(width: 100, height: 140)
+
+    /// Resting center for the PiP in a given container, accounting for safe-ish
+    /// insets (top for the notch/duration badge, bottom for the control bar).
+    private func pipCenter(_ corner: PiPCorner, in container: CGSize) -> CGPoint {
+        let halfW = Self.pipSize.width / 2
+        let halfH = Self.pipSize.height / 2
+        let margin: CGFloat = 16
+        let topInset: CGFloat = 64      // below the minimize chevron / notch
+        let bottomInset: CGFloat = 160  // above the control bar
+        let leadingX = margin + halfW
+        let trailingX = container.width - margin - halfW
+        let topY = topInset + halfH
+        let bottomY = container.height - bottomInset - halfH
+        switch corner {
+        case .topLeading: return CGPoint(x: leadingX, y: topY)
+        case .topTrailing: return CGPoint(x: trailingX, y: topY)
+        case .bottomLeading: return CGPoint(x: leadingX, y: bottomY)
+        case .bottomTrailing: return CGPoint(x: trailingX, y: bottomY)
+        }
+    }
+
+    /// Nearest corner to a point — used to snap on drag end.
+    private func nearestCorner(to point: CGPoint, in container: CGSize) -> PiPCorner {
+        PiPCorner.allCases.min(by: { a, b in
+            let ca = pipCenter(a, in: container)
+            let cb = pipCenter(b, in: container)
+            return hypot(point.x - ca.x, point.y - ca.y) < hypot(point.x - cb.x, point.y - cb.y)
+        }) ?? .topTrailing
+    }
+
+    private var pipView: some View {
+        GeometryReader { geo in
+            let base = pipCenter(pipCorner, in: geo.size)
+            // §7.2 — the PiP shows the SECONDARY stream (the opposite of the
+            // primary). Swap flips both with one tap.
+            videoStream(local: !swapStreams, contentMode: .scaleAspectFill)
+                .frame(width: Self.pipSize.width, height: Self.pipSize.height)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
+                .position(x: base.x + pipDragOffset.width, y: base.y + pipDragOffset.height)
+                .gesture(
+                    DragGesture()
+                        .onChanged { pipDragOffset = $0.translation }
+                        .onEnded { value in
+                            let dropped = CGPoint(x: base.x + value.translation.width,
+                                                  y: base.y + value.translation.height)
+                            let corner = nearestCorner(to: dropped, in: geo.size)
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.75)) {
+                                pipCorner = corner
+                                pipDragOffset = .zero
                             }
-                            return UIScreen.main.bounds
-                        }()
-                        let screenW = bounds.width
-                        let screenH = bounds.height
-                        let snappedX: CGFloat = finalX < screenW / 2 ? 70 : screenW - 70
-                        let snappedY: CGFloat = max(80, min(finalY, screenH - 180))
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                            localPreviewPosition = CGPoint(x: snappedX, y: snappedY)
-                            localPreviewOffset = .zero
+                            HapticFeedback.light()
                         }
+                )
+                // §7.2 — tap PiP = swap which stream is full-screen (FaceTime).
+                // Camera flip lives in the control bar now (was here, undiscoverable).
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        swapStreams.toggle()
                     }
-            )
-            .onTapGesture { callManager.switchCamera() }
+                    HapticFeedback.light()
+                }
+                .accessibilityLabel(String(localized: "call.pip.swap", defaultValue: "Permuter les vidéos", bundle: .main))
+                .accessibilityHint(String(localized: "call.pip.swap.hint", defaultValue: "Touchez pour échanger la petite et la grande vidéo ; faites glisser pour déplacer", bundle: .main))
+        }
     }
 
     // MARK: - Transcript Overlay
