@@ -874,6 +874,13 @@ Le gating `#available(iOS 26)` ne doit PAS vivre inline dans `CallView` : la con
 - **`CallView`** : ne contient plus AUCUN `#available` / `glassEffect` / `GlassEffectContainer`. Ses helpers app-side `callControlGlass`/`endCallGlass` ne font plus que le **styling produit** (diamètre, active→tint, rouge) et délèguent au SDK.
 - Tests : `CompatibilityLayerTests` (smoke construction `adaptiveGlass`/`adaptiveGlassProminent`/`AdaptiveGlassContainer` + `Platform.isIOS26OrLater`), et `CallViewLiquidGlassTests` mis à jour (CallView utilise les wrappers SDK, zéro `#available`/`glassEffect` inline).
 
+#### Extension (tag `calls-sota-p2.3`) — Liquid Glass sur IncomingCallView + FloatingCallPillView
+
+Cohérence totale via les wrappers SDK `Compatibility/` (zéro `#available`/`glassEffect` inline dans l'app) :
+- **`IncomingCallView`** : boutons **Accepter/Refuser** → `adaptiveGlassProminent(tint: .success/.error)`, groupés dans un `AdaptiveGlassContainer` (les deux cercles se fondent ; fallback gradient+ombre < iOS 26).
+- **`FloatingCallPillView`** : la **capsule** de la pastille devient une surface Liquid Glass (`adaptiveGlass(in: Capsule())`, fallback `.ultraThinMaterial`). Les mini-contrôles internes restent des fills de vibrancy **sur** le glass — HIG : pas de glass-dans-glass.
+- Tests source-guard ajoutés (`CallViewLiquidGlassTests`) : prominent glass + container dans IncomingCallView, capsule glass dans la pastille, aucun gating inline.
+
 ---
 
 ### 📍 ÉTAT ACTUEL & PROCHAINE SESSION (2026-06-06)

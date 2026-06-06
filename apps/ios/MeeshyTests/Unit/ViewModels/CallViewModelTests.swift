@@ -50,15 +50,17 @@ final class CallViewModelTests: XCTestCase {
 /// the structural invariants in the source (same pattern as CallManager guards).
 final class CallViewLiquidGlassTests: XCTestCase {
 
-    private func callViewSource() throws -> String {
+    private func viewSource(_ fileName: String) throws -> String {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()   // ViewModels
             .deletingLastPathComponent()   // Unit
             .deletingLastPathComponent()   // MeeshyTests
             .deletingLastPathComponent()   // apps/ios
-            .appendingPathComponent("Meeshy/Features/Main/Views/CallView.swift")
+            .appendingPathComponent("Meeshy/Features/Main/Views/\(fileName)")
         return try String(contentsOf: url, encoding: .utf8)
     }
+
+    private func callViewSource() throws -> String { try viewSource("CallView.swift") }
 
     func test_controls_useSDKAdaptiveGlass_notInlineAvailability() throws {
         let source = try callViewSource()
@@ -93,5 +95,22 @@ final class CallViewLiquidGlassTests: XCTestCase {
         // width (no button ballooning to fit a long French label).
         XCTAssertTrue(source.contains("caption: String"), "callControlButton must take a short visible caption distinct from the a11y label")
         XCTAssertTrue(source.contains("camera.rotate.fill"), "Camera flip control must be present in the bar")
+    }
+
+    func test_incomingCall_acceptDecline_useProminentGlass_inContainer() throws {
+        let source = try viewSource("IncomingCallView.swift")
+        // Accept/decline are primary actions → prominent tinted glass, grouped so
+        // the two circles blend. Gating delegated to the SDK (no inline #available).
+        XCTAssertTrue(source.contains("adaptiveGlassProminent("), "Accept/decline must use adaptiveGlassProminent")
+        XCTAssertTrue(source.contains("AdaptiveGlassContainer"), "Accept/decline must be grouped in an AdaptiveGlassContainer")
+        XCTAssertFalse(source.contains("#available(iOS 26"), "iOS 26 gating must live in the SDK, not inline in IncomingCallView")
+    }
+
+    func test_floatingPill_surfaceUsesAdaptiveGlassCapsule() throws {
+        let source = try viewSource("FloatingCallPillView.swift")
+        // The pill capsule itself is the Liquid Glass surface (inner mini-controls
+        // stay vibrancy fills — no glass-on-glass per HIG).
+        XCTAssertTrue(source.contains("adaptiveGlass(in: Capsule())"), "Pill surface must adopt Liquid Glass via adaptiveGlass(in: Capsule())")
+        XCTAssertFalse(source.contains(".glassEffect("), "FloatingCallPillView must not call .glassEffect directly")
     }
 }
