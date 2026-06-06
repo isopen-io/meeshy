@@ -30,6 +30,11 @@ struct CallView: View {
     // false ⇒ remote is primary + local in the PiP; true ⇒ swapped. Tapping
     // the PiP toggles it.
     @State private var swapStreams = false
+    // §7.2/f — watchdog: after a delay with no remote video, the "Connexion
+    // vidéo…" spinner turns into a calmer, informative state instead of
+    // spinning forever (the media auto-repair / ICE-restart is §5.8).
+    @State private var videoConnectSlow = false
+    private let videoConnectWatchdogSeconds: UInt64 = 12
 
     var body: some View {
         ZStack {
@@ -412,12 +417,32 @@ struct CallView: View {
                 VStack(spacing: 12) {
                     ProgressView()
                         .tint(.white.opacity(0.5))
-                    Text(String(localized: "call.video.connecting", defaultValue: "Connexion video...", bundle: .main))
+                    Text(videoConnectSlow
+                        ? String(localized: "call.video.connecting.slow", defaultValue: "La vidéo prend plus de temps que prévu…", bundle: .main)
+                        : String(localized: "call.video.connecting", defaultValue: "Connexion video...", bundle: .main))
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white.opacity(0.4))
+                        .foregroundColor(.white.opacity(videoConnectSlow ? 0.7 : 0.4))
+                        .multilineTextAlignment(.center)
+                    if videoConnectSlow {
+                        Text(String(localized: "call.video.connecting.slow.hint", defaultValue: "L'audio est peut-être déjà actif.", bundle: .main))
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundColor(.white.opacity(0.45))
+                            .multilineTextAlignment(.center)
+                    }
                 }
+                .padding(.horizontal, 32)
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // The watchdog runs only while this placeholder is on screen; SwiftUI
+            // cancels the task the moment the remote track arrives and the view
+            // is replaced by the live feed.
+            .task {
+                videoConnectSlow = false
+                try? await Task.sleep(nanoseconds: videoConnectWatchdogSeconds * 1_000_000_000)
+                if !Task.isCancelled {
+                    withAnimation(.easeInOut(duration: 0.3)) { videoConnectSlow = true }
+                }
+            }
     }
 
     // P0-3 — shown full-area when the remote peer has a video track but turned
