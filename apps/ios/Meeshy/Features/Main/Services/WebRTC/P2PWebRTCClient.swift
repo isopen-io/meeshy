@@ -433,13 +433,13 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     func createOffer() async throws -> SessionDescription {
         guard let pc = peerConnection else { throw WebRTCError.noPeerConnection }
 
-        let constraints = RTCMediaConstraints(
-            mandatoryConstraints: [
-                "OfferToReceiveAudio": "true",
-                "OfferToReceiveVideo": "true"
-            ],
-            optionalConstraints: nil
-        )
+        // §5.3 — NO legacy Plan-B `OfferToReceiveAudio/Video` constraints. Mixing
+        // those with Unified-Plan transceivers is a classic source of direction
+        // asymmetry (the legacy hints synthesize/duplicate m-sections or muddy
+        // the per-section direction). The pre-added `.sendRecv` transceivers
+        // (audio + video) already declare the send/receive intent, so we pass
+        // empty constraints and let Unified-Plan drive the m-line layout.
+        let constraints = RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)
 
         let sdp: RTCSessionDescription = try await withCheckedThrowingContinuation { continuation in
             pc.offer(for: constraints) { sdp, error in
@@ -494,13 +494,11 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             }
         }
 
-        let constraints = RTCMediaConstraints(
-            mandatoryConstraints: [
-                "OfferToReceiveAudio": "true",
-                "OfferToReceiveVideo": "true"
-            ],
-            optionalConstraints: nil
-        )
+        // §5.3 — empty constraints (no legacy Plan-B `OfferToReceive*`). Under
+        // Unified-Plan the answer's per-section direction is derived from the
+        // transceivers' directions, not from these constraints; keeping them
+        // only risks the Plan-B/Unified-Plan mixing that skews directions.
+        let constraints = RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)
 
         let sdp: RTCSessionDescription = try await withCheckedThrowingContinuation { continuation in
             pc.answer(for: constraints) { sdp, error in
