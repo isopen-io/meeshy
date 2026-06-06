@@ -301,7 +301,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
         by: ['originalLanguage'],
         where: {
           deletedAt: null,
-          originalLanguage: { not: null }
+          originalLanguage: { not: '' } // Prisma+Mongo rejects `not: null`; exclude empties with a concrete value
         },
         _count: {
           id: true

@@ -590,8 +590,74 @@ export class CallService {
     });
 
     if (!callParticipant) {
-      logger.error('❌ Participant not found or already left', { callId, userId });
-      throw new Error(`${CALL_ERROR_CODES.CALL_NOT_FOUND}: You are not in this call`);
+      // CALL-FIX 2026-06-06 — IDEMPOTENT LEAVE. The leaver's active (leftAt:null)
+      // CallParticipant row is missing: either a racing path stamped it first
+      // (socket `disconnect` auto-leave, a double `call:leave`), OR the handler
+      // passed a fallback `participantId` (a User.id, when resolveParticipantId
+      // returned null) that can never match `CallParticipant.participantId`
+      // (a Participant.id). A legitimate hang-up must NEVER throw here — throwing
+      // made the handler skip the `call:ended` broadcast, so the OTHER party
+      // stayed "in call" until CallCleanupService force-FAILED the call 30s later.
+      // Instead, ensure the call is terminal and RETURN it so the handler still
+      // broadcasts `call:ended` cleanly.
+      const existing = await this.prisma.callSession.findUnique({
+        where: { id: callId },
+        include: { participants: true }
+      });
+
+      if (!existing) {
+        logger.error('❌ Call not found on idempotent leave', { callId, userId });
+        throw new Error(`${CALL_ERROR_CODES.CALL_NOT_FOUND}: Call session not found`);
+      }
+
+      // Already ended by the racing path → return as-is; the handler still
+      // broadcasts call:ended. (`endedAt != null` is the terminal signal.)
+      if (existing.endedAt) {
+        logger.info('ℹ️ Idempotent leave — call already ended, returning session', {
+          callId, userId, status: existing.status
+        });
+        return this.getCallSession(callId);
+      }
+
+      // Mirror the normal direct/last-participant decision below.
+      const idemConversation = await this.prisma.conversation.findUnique({
+        where: { id: existing.conversationId },
+        select: { type: true }
+      });
+      const idemIsDirect = idemConversation?.type === 'direct';
+      const idemRemaining = existing.participants.filter((p) => !p.leftAt).length;
+      if (!idemIsDirect && idemRemaining > 1) {
+        // Group call with others still active and this leaver already gone:
+        // nothing to end. Return the live session unchanged.
+        logger.info('ℹ️ Idempotent leave — leaver gone, group call continues', { callId, userId });
+        return this.getCallSession(callId);
+      }
+
+      // Direct call (or last participant): end it so the OTHER party is notified.
+      const idemNow = new Date();
+      const idemPreAnswered =
+        existing.status === CallStatus.initiated ||
+        existing.status === CallStatus.ringing ||
+        existing.status === CallStatus.connecting;
+      await this.prisma.$transaction(async (tx) => {
+        await tx.callParticipant.updateMany({
+          where: { callSessionId: callId, leftAt: null },
+          data: { leftAt: idemNow }
+        });
+        await tx.callSession.update({
+          where: { id: callId },
+          data: {
+            status: idemPreAnswered ? CallStatus.missed : CallStatus.ended,
+            endReason: idemPreAnswered ? CallEndReason.missed : CallEndReason.completed,
+            endedAt: idemNow,
+            duration: Math.max(0, Math.floor((idemNow.getTime() - existing.startedAt.getTime()) / 1000))
+          }
+        });
+      });
+      logger.info('✅ Idempotent leave — call force-ended for absent participant', {
+        callId, userId, wasPreAnswered: idemPreAnswered
+      });
+      return this.getCallSession(callId);
     }
 
     // Get call with all participants

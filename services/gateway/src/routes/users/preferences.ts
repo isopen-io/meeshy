@@ -455,7 +455,11 @@ export async function getUserStats(fastify: FastifyInstance) {
           where: {
             sender: { userId },
             deletedAt: null,
-            originalLanguage: { not: null },
+            // NOTE: `originalLanguage: { not: null }` was INVALID here — Prisma+Mongo
+            // rejects `not: null` ("Argument `not` must not be null", spammed prod
+            // logs on every profile-stats request). The field is a required
+            // non-nullable String (@default("fr")) so it can never be null; the
+            // clause was redundant. Downstream `.filter(Boolean)` already drops empties.
           },
         }),
       ]);

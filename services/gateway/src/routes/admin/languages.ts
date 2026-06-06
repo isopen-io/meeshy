@@ -63,7 +63,7 @@ export async function languagesRoutes(fastify: FastifyInstance) {
         where: {
           createdAt: { gte: startDate },
           deletedAt: null,
-          originalLanguage: { not: null }
+          originalLanguage: { not: '' } // Prisma+Mongo rejects `not: null`; exclude empties with a concrete value
         },
         _count: {
           id: true
@@ -194,7 +194,7 @@ export async function languagesRoutes(fastify: FastifyInstance) {
             lt: startDate
           },
           deletedAt: null,
-          originalLanguage: { not: null }
+          originalLanguage: { not: '' } // Prisma+Mongo rejects `not: null`; exclude empties with a concrete value
         },
         _count: {
           id: true
@@ -282,7 +282,7 @@ export async function languagesRoutes(fastify: FastifyInstance) {
       const where: any = {
         createdAt: { gte: startDate },
         deletedAt: null,
-        originalLanguage: { not: null }
+        originalLanguage: { not: '' } // Prisma+Mongo rejects `not: null`; exclude empties with a concrete value
       };
 
       if (language) {

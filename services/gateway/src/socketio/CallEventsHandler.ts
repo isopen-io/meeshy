@@ -1655,7 +1655,7 @@ export class CallEventsHandler {
           if (participation.callSession.status !== 'ended') {
             try {
               // Try normal leave flow first
-              await this.callService.leaveCall({
+              const leftSession = await this.callService.leaveCall({
                 callId: participation.callSessionId,
                 userId,
                 participantId: participation.participantId
@@ -1670,6 +1670,22 @@ export class CallEventsHandler {
                   mode: participation.callSession.mode
                 } as CallParticipantLeftEvent
               );
+
+              // CALL-FIX 2026-06-06 — if leaving ENDED the call (direct call, or
+              // last participant), broadcast call:ended too. Without this, a peer
+              // whose socket simply DROPS mid-call left the OTHER party stuck "in
+              // call" (only participant-left was sent) until CallCleanupService GC.
+              const dcStatus = leftSession.status as string;
+              if (dcStatus === 'ended' || dcStatus === 'missed') {
+                const dcEndedEvent: CallEndedEvent = {
+                  callId: leftSession.id,
+                  duration: leftSession.duration || 0,
+                  endedBy: userId,
+                  reason: (leftSession.endReason || 'completed') as CallEndReason
+                };
+                io.to(ROOMS.call(participation.callSessionId)).emit(CALL_EVENTS.ENDED, dcEndedEvent);
+                io.to(ROOMS.conversation(leftSession.conversationId)).emit(CALL_EVENTS.ENDED, dcEndedEvent);
+              }
 
               logger.info('✅ Socket: Auto-left call on disconnect', {
                 callId: participation.callSessionId,
@@ -1686,6 +1702,7 @@ export class CallEventsHandler {
 
               try {
                 const now = new Date();
+                let dcForceEndedDuration: number | null = null;
 
                 // Force update participant and potentially end call
                 await this.prisma.$transaction(async (tx) => {
@@ -1720,6 +1737,7 @@ export class CallEventsHandler {
                           duration
                         }
                       });
+                      dcForceEndedDuration = duration;
 
                       logger.info('✅ Socket: Force-ended call after disconnect error', {
                         callId: participation.callSessionId,
@@ -1738,6 +1756,20 @@ export class CallEventsHandler {
                     mode: participation.callSession.mode
                   } as CallParticipantLeftEvent
                 );
+
+                // CALL-FIX 2026-06-06 — broadcast call:ended too when force cleanup
+                // ended the call, so the other party tears down instead of staying
+                // stuck until CallCleanupService GC.
+                if (dcForceEndedDuration !== null) {
+                  const dcForceEndedEvent: CallEndedEvent = {
+                    callId: participation.callSessionId,
+                    duration: dcForceEndedDuration,
+                    endedBy: userId,
+                    reason: 'completed' as CallEndReason
+                  };
+                  io.to(ROOMS.call(participation.callSessionId)).emit(CALL_EVENTS.ENDED, dcForceEndedEvent);
+                  io.to(ROOMS.conversation(participation.callSession.conversationId)).emit(CALL_EVENTS.ENDED, dcForceEndedEvent);
+                }
 
                 logger.info('✅ Socket: Force cleanup successful on disconnect', {
                   callId: participation.callSessionId,

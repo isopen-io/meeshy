@@ -285,6 +285,17 @@ export class ReactionHandler {
   ): Promise<string | undefined> {
     if (isAnonymous) return user?.participantId;
 
+    // Guard: a `messageId` still carrying a client-generated optimistic id
+    // (`cid_<uuid>`) — or anything not a 24-hex Mongo ObjectId — must NEVER reach
+    // prisma.message.findUnique, which throws P2023 ("Malformed ObjectID") and
+    // aborts the whole reaction flow. The optimistic row is not yet reconciled to
+    // its server id, so we skip gracefully; the caller replies "Could not resolve
+    // participant" and the client retries after the send ACK reconciles the cid.
+    if (!/^[0-9a-fA-F]{24}$/.test(messageId)) {
+      console.warn(`⚠️ [REACTION] messageId non réconcilié (cid/optimistic), skip: ${messageId}`);
+      return undefined;
+    }
+
     const msg = await this.prisma.message.findUnique({
       where: { id: messageId },
       select: { conversationId: true }
