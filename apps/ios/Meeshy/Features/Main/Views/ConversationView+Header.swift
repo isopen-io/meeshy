@@ -48,52 +48,17 @@ extension ConversationView {
     @ViewBuilder
     var headerCallButtons: some View {
         if isDirect, let userId = conversation?.participantUserId {
-            let calleeName = resolvedCalleeName
-            HStack(spacing: 4) {
-                // Audio call
-                Button {
-                    CallManager.shared.startCall(
-                        conversationId: conversation?.id ?? "",
-                        userId: userId,
-                        displayName: calleeName,
-                        isVideo: false
-                    )
-                } label: {
-                    Image(systemName: "phone.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 28, height: 28)
-                        .background(Circle().fill(Color(hex: accentColor).opacity(0.15)))
-                }
-                .accessibilityLabel("Appel audio")
-
-                // Video call
-                Button {
-                    CallManager.shared.startCall(
-                        conversationId: conversation?.id ?? "",
-                        userId: userId,
-                        displayName: calleeName,
-                        isVideo: true
-                    )
-                } label: {
-                    Image(systemName: "video.fill")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(
-                            LinearGradient(
-                                colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
-                                startPoint: .topLeading, endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 28, height: 28)
-                        .background(Circle().fill(Color(hex: accentColor).opacity(0.15)))
-                }
-                .accessibilityLabel("Appel video")
-            }
+            // §7.6 — the start-call buttons are owned by a dedicated subview that
+            // observes CallManager, so during an active call they swap to a
+            // "tap to return" indicator (preventing a 2nd call from the header)
+            // without forcing the whole ConversationView to observe the singleton.
+            HeaderCallButtonsView(
+                conversationId: conversation?.id ?? "",
+                userId: userId,
+                calleeName: resolvedCalleeName,
+                accentColor: accentColor,
+                secondaryColor: secondaryColor
+            )
         }
     }
 
@@ -205,6 +170,89 @@ extension ConversationView {
             await conversationListViewModel.refresh()
             router.navigateToConversation(newConv)
         } catch { }
+    }
+}
+
+// MARK: - Header Call Buttons (§7.6)
+// Owns the CallManager observation so the header reacts to call state without
+// the whole ConversationView subscribing. Idle → audio + video start buttons;
+// active call → a green "tap to return" indicator (blocks starting a 2nd call,
+// gives one-tap return to the in-progress call).
+
+private struct HeaderCallButtonsView: View {
+    let conversationId: String
+    let userId: String
+    let calleeName: String
+    let accentColor: String
+    let secondaryColor: String
+
+    @ObservedObject private var callManager = CallManager.shared
+
+    var body: some View {
+        if callManager.callState.isActive {
+            returnToCallIndicator
+        } else {
+            startCallButtons
+        }
+    }
+
+    private var returnToCallIndicator: some View {
+        Button {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.75)) {
+                callManager.displayMode = .fullScreen
+            }
+            HapticFeedback.medium()
+        } label: {
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(MeeshyColors.success)
+                    .frame(width: 7, height: 7)
+                Image(systemName: "phone.fill")
+                    .font(.system(size: 10, weight: .semibold))
+                Text(callManager.formattedDuration)
+                    .font(.system(size: 11, weight: .semibold).monospacedDigit())
+            }
+            .foregroundColor(MeeshyColors.success)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(
+                Capsule()
+                    .fill(MeeshyColors.success.opacity(0.15))
+                    .overlay(Capsule().stroke(MeeshyColors.success.opacity(0.3), lineWidth: 0.5))
+            )
+        }
+        .accessibilityLabel(String(localized: "call.header.return", defaultValue: "Appel en cours, toucher pour revenir", bundle: .main))
+    }
+
+    private var startCallButtons: some View {
+        HStack(spacing: 4) {
+            Button {
+                CallManager.shared.startCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: false)
+            } label: {
+                callGlyph("phone.fill")
+            }
+            .accessibilityLabel(String(localized: "call.start.audio", defaultValue: "Appel audio", bundle: .main))
+
+            Button {
+                CallManager.shared.startCall(conversationId: conversationId, userId: userId, displayName: calleeName, isVideo: true)
+            } label: {
+                callGlyph("video.fill")
+            }
+            .accessibilityLabel(String(localized: "call.start.video", defaultValue: "Appel video", bundle: .main))
+        }
+    }
+
+    private func callGlyph(_ systemName: String) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(
+                LinearGradient(
+                    colors: [Color(hex: accentColor), Color(hex: secondaryColor)],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                )
+            )
+            .frame(width: 28, height: 28)
+            .background(Circle().fill(Color(hex: accentColor).opacity(0.15)))
     }
 }
 
