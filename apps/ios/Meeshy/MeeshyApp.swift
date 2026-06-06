@@ -389,11 +389,20 @@ struct MeeshyApp: App {
                     switch newPhase {
                     case .active:
                         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
+                        // CALL-FIX 2026-06-06 — tell the gateway we're foreground so
+                        // incoming calls use the in-app banner (socket) instead of a
+                        // VoIP push / CallKit.
+                        MessageSocketManager.shared.emitAppForeground(true)
                         Task { await handleForegroundTransition() }
                         // Drain any mark-as-read actions the user tapped from the
                         // widget while the app was suspended.
                         Task { await WidgetActionFlusher.shared.flush() }
                     case .background:
+                        // CALL-FIX 2026-06-06 — tell the gateway we're backgrounded
+                        // FIRST (while the socket is still alive, before the
+                        // coordinator may suspend it) so incoming calls fall back to
+                        // a VoIP push (CallKit) — a suspended socket can't ring.
+                        MessageSocketManager.shared.emitAppForeground(false)
                         // Delegate the whole background entry to a single
                         // coordinator guarded by a beginBackgroundTask. The
                         // coordinator owns the order (stop players → flush

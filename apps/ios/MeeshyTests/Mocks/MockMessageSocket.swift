@@ -183,6 +183,11 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         callLeaveCallCount += 1
     }
 
+    private(set) var lastAppForeground: Bool?
+    func emitAppForeground(_ foreground: Bool) {
+        lastAppForeground = foreground
+    }
+
     func emitCallSignal(callId: String, type: String, payload: [String: Any]) {
         callSignalCallCount += 1
     }

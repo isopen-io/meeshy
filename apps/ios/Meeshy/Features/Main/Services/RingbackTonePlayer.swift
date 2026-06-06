@@ -116,7 +116,15 @@ final class RingbackTonePlayer {
             config.mode = AVAudioSession.Mode.default.rawValue
             config.categoryOptions = [.allowBluetoothHFP, .duckOthers, .defaultToSpeaker]
             try rtc.setConfiguration(config, active: true)
-            rtc.isAudioEnabled = true
+            // CALL-FIX 2026-06-06 — do NOT set `rtc.isAudioEnabled` here. That is
+            // WebRTC's CALL-audio flag (manual-audio mode): setting it during the
+            // ringing phase starts WebRTC's audio I/O unit prematurely AND makes
+            // the call's `[AUDIO_FALLBACK]` (transitionToConnected) think the
+            // session was already activated by CallKit → it SKIPS the real call
+            // activation → on Mac the mic never starts (the peer can't hear us).
+            // The ringback/ringtone AVAudioPlayer only needs the AVAudioSession
+            // ACTIVE (done by setConfiguration above); WebRTC flips isAudioEnabled
+            // itself at connect.
             logger.info("ringing-phase audio session active (.playAndRecord — ignores silent switch)")
         } catch {
             logger.error("ringing-phase session activation failed: \(error.localizedDescription)")

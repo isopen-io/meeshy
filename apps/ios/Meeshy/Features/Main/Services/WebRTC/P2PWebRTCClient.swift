@@ -1015,6 +1015,18 @@ extension P2PWebRTCClient: RTCPeerConnectionDelegate {
         deliverRemoteTrack(transceiver.receiver.track)
     }
 
+    // P0-2 (FIX 2026-06-06) — onTrack under Unified-Plan. Fires on
+    // setRemoteDescription when each remote receiver is created, BEFORE any RTP
+    // arrives — so the remote video track reaches the renderer immediately
+    // instead of the UI being stuck on "Connexion vidéo…". This is the most
+    // reliable remote-track signal: `didStartReceivingOn` only fires once RTP is
+    // actually flowing (never, if media is delayed/blocked) and `didAdd stream:`
+    // is a Plan-B legacy callback that libwebrtc may not emit under Unified-Plan.
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didAdd rtpReceiver: RTCRtpReceiver, streams mediaStreams: [RTCMediaStream]) {
+        Logger.webrtc.info("[WEBRTC] didAddReceiver kind=\(rtpReceiver.track?.kind ?? "nil", privacy: .public)")
+        deliverRemoteTrack(rtpReceiver.track)
+    }
+
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didAdd stream: RTCMediaStream) {
         deliverRemoteTrack(stream.videoTracks.first)
         deliverRemoteTrack(stream.audioTracks.first)

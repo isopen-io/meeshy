@@ -877,6 +877,7 @@ public protocol MessageSocketProviding: Sendable {
     func emitCallInitiate(conversationId: String, isVideo: Bool) async throws -> MessageSocketManager.CallInitiateAck
     func emitCallJoin(callId: String)
     func emitCallLeave(callId: String)
+    func emitAppForeground(_ foreground: Bool)
     func emitCallSignal(callId: String, type: String, payload: [String: Any])
     func emitCallSignalWithAck(callId: String, type: String, payload: [String: Any]) async -> Bool
     func emitCallToggleAudio(callId: String, enabled: Bool)
@@ -1776,6 +1777,25 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         socket?.emit("call:leave", ["callId": callId])
     }
 
+    /// Reports whether the app is in the FOREGROUND so the gateway can decide,
+    /// per incoming call, between socket delivery (in-app banner) and a VoIP push
+    /// (CallKit). A backgrounded iOS app keeps a live socket for ~45s but is
+    /// suspended and can't ring from a socket event — without this signal the
+    /// gateway thought it was reachable and never sent the VoIP push, so calls
+    /// never rang when the app wasn't foreground. Emit on scenePhase transitions
+    /// (and on connect) while the socket is still alive (`.inactive` fires before
+    /// suspension).
+    /// Last app foreground/background state declared by the app, replayed on every
+    /// (re)connect (see the `.connect` handler). Defaults to `true` because the
+    /// socket only ever connects while the app is foreground (iOS suspends it in
+    /// background), so a fresh connection is foreground by definition.
+    private var lastAppForeground = true
+
+    public func emitAppForeground(_ foreground: Bool) {
+        lastAppForeground = foreground
+        socket?.emit("presence:app-state", ["foreground": foreground])
+    }
+
     /// Émet `call:force-leave` pour la conversation donnée. Le gateway
     /// nettoie alors toute trace d'appel actif où l'utilisateur courant
     /// était participant (CallParticipant.leftAt = null) sans nécessiter
@@ -1885,6 +1905,14 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
 
             self.startHeartbeat()
+
+            // CALL-FIX 2026-06-06 — replay the app foreground/background state on
+            // every (re)connect so the gateway always knows whether to deliver
+            // incoming calls via the in-app socket banner (foreground) or a VoIP
+            // push / CallKit (background). The first connect fires before the app's
+            // scenePhase emit lands, so without this replay the gateway would treat
+            // a foreground app as unknown and push CallKit for the first call.
+            self.socket?.emit("presence:app-state", ["foreground": self.lastAppForeground])
 
             // Re-join all tracked conversations (active-first for fastest UX).
             for convId in self.roomsToRejoinOnConnect() {
