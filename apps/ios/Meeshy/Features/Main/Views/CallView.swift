@@ -304,13 +304,13 @@ struct CallView: View {
             // Status indicators
             HStack(spacing: 12) {
                 if callManager.isMuted {
-                    statusPill(icon: "mic.slash.fill", text: String(localized: "call.status.muted", defaultValue: "Micro coupe", bundle: .main), color: "FF2E63")
+                    statusPill(icon: "mic.slash.fill", text: String(localized: "call.status.muted", defaultValue: "Micro coupe", bundle: .main), color: MeeshyColors.error)
                 }
                 if callManager.isSpeaker {
-                    statusPill(icon: "speaker.wave.3.fill", text: String(localized: "call.status.speaker", defaultValue: "Haut-parleur", bundle: .main), color: "08D9D6")
+                    statusPill(icon: "speaker.wave.3.fill", text: String(localized: "call.status.speaker", defaultValue: "Haut-parleur", bundle: .main), color: MeeshyColors.info)
                 }
                 if isConnectionDegraded {
-                    statusPill(icon: "wifi.exclamationmark", text: String(localized: "call.status.unstable", defaultValue: "Connexion instable", bundle: .main), color: "FBBF24")
+                    statusPill(icon: "wifi.exclamationmark", text: String(localized: "call.status.unstable", defaultValue: "Connexion instable", bundle: .main), color: MeeshyColors.warning)
                 }
             }
         }
@@ -596,8 +596,8 @@ struct CallView: View {
                 // outcome of the tap, not just "Micro".
                 callControlButton(
                     icon: callManager.isMuted ? "mic.slash.fill" : "mic.fill",
-                    color: callManager.isMuted ? "FF2E63" : "FFFFFF",
-                    bgColor: callManager.isMuted ? "FF2E63" : "FFFFFF",
+                    color: callManager.isMuted ? MeeshyColors.error : .white,
+                    bgColor: callManager.isMuted ? MeeshyColors.error : .white,
                     isActive: callManager.isMuted,
                     label: callManager.isMuted ? String(localized: "call.control.unmute", defaultValue: "Réactiver le micro", bundle: .main) : String(localized: "call.control.mute", defaultValue: "Couper le micro", bundle: .main)
                 ) {
@@ -607,8 +607,8 @@ struct CallView: View {
                 // Speaker
                 callControlButton(
                     icon: callManager.isSpeaker ? "speaker.wave.3.fill" : "speaker.fill",
-                    color: callManager.isSpeaker ? "08D9D6" : "FFFFFF",
-                    bgColor: callManager.isSpeaker ? "08D9D6" : "FFFFFF",
+                    color: callManager.isSpeaker ? MeeshyColors.info : .white,
+                    bgColor: callManager.isSpeaker ? MeeshyColors.info : .white,
                     isActive: callManager.isSpeaker,
                     label: callManager.isSpeaker ? String(localized: "call.control.speakerOff", defaultValue: "Désactiver le haut-parleur", bundle: .main) : String(localized: "call.control.speakerOn", defaultValue: "Activer le haut-parleur", bundle: .main)
                 ) {
@@ -618,8 +618,8 @@ struct CallView: View {
                 // Effects (Plus button)
                 callControlButton(
                     icon: showEffectsToolbar ? "xmark" : "plus",
-                    color: hasActiveEffects ? "6366F1" : "FFFFFF",
-                    bgColor: hasActiveEffects ? "6366F1" : "FFFFFF",
+                    color: hasActiveEffects ? MeeshyColors.indigo500 : .white,
+                    bgColor: hasActiveEffects ? MeeshyColors.indigo500 : .white,
                     isActive: showEffectsToolbar || hasActiveEffects,
                     label: String(localized: "call.control.effects", defaultValue: "Effets", bundle: .main)
                 ) {
@@ -633,8 +633,8 @@ struct CallView: View {
                 if callManager.isVideoEnabled {
                     callControlButton(
                         icon: "camera.rotate.fill",
-                        color: "FFFFFF",
-                        bgColor: "FFFFFF",
+                        color: .white,
+                        bgColor: .white,
                         isActive: false,
                         label: String(localized: "call.control.flipCamera", defaultValue: "Basculer la caméra avant/arrière", bundle: .main)
                     ) {
@@ -649,8 +649,8 @@ struct CallView: View {
                 if callManager.hasLocalVideoTrack || callManager.isVideoEnabled {
                     callControlButton(
                         icon: callManager.isVideoEnabled ? "video.fill" : "video.slash.fill",
-                        color: "A855F7",
-                        bgColor: "A855F7",
+                        color: MeeshyColors.indigo400,
+                        bgColor: MeeshyColors.indigo400,
                         isActive: !callManager.isVideoEnabled,
                         label: callManager.isVideoEnabled ? String(localized: "call.control.videoOff", defaultValue: "Désactiver la vidéo", bundle: .main) : String(localized: "call.control.videoOn", defaultValue: "Activer la vidéo", bundle: .main)
                     ) {
@@ -737,21 +737,21 @@ struct CallView: View {
         )
     }
 
-    private func callControlButton(icon: String, color: String, bgColor: String, isActive: Bool, label: String, action: @escaping () -> Void) -> some View {
+    private func callControlButton(icon: String, color: Color, bgColor: Color, isActive: Bool, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 6) {
                 ZStack {
                     Circle()
-                        .fill(isActive ? Color(hex: bgColor).opacity(0.2) : Color.white.opacity(0.1))
+                        .fill(isActive ? bgColor.opacity(0.2) : Color.white.opacity(0.1))
                         .frame(width: 56, height: 56)
                         .overlay(
                             Circle()
-                                .stroke(Color(hex: color).opacity(isActive ? 0.5 : 0.2), lineWidth: 1)
+                                .stroke(color.opacity(isActive ? 0.5 : 0.2), lineWidth: 1)
                         )
 
                     Image(systemName: icon)
                         .font(.system(size: 22, weight: .medium))
-                        .foregroundColor(isActive ? Color(hex: color) : .white.opacity(0.9))
+                        .foregroundColor(isActive ? color : .white.opacity(0.9))
                 }
 
                 Text(label)
@@ -817,19 +817,19 @@ struct CallView: View {
         .accessibilityLabel(String(localized: "call.end", defaultValue: "Raccrocher", bundle: .main))
     }
 
-    private func statusPill(icon: String, text: String, color: String) -> some View {
+    private func statusPill(icon: String, text: String, color: Color) -> some View {
         HStack(spacing: 4) {
             Image(systemName: icon)
                 .font(.system(size: 10, weight: .semibold))
             Text(text)
                 .font(.system(size: 11, weight: .medium))
         }
-        .foregroundColor(Color(hex: color))
+        .foregroundColor(color)
         .padding(.horizontal, 10)
         .padding(.vertical, 4)
         .background(
             Capsule()
-                .fill(Color(hex: color).opacity(0.12))
+                .fill(color.opacity(0.12))
         )
     }
 
