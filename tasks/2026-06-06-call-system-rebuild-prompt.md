@@ -811,11 +811,16 @@ Côté P0, restent (plus risqués, mis en retrait pour préserver la stabilité)
 
 #### ▶️ Reste à faire UI (P1/P2)
 
-- Watchdog « Connexion vidéo… » (§7.2/f) : timeout + état dégradé/retry au lieu du spinner infini (lié à §5.8).
-- Auto-hide des contrôles ~4 s sur iPhone, réapparition au tap (§7.3).
-- Bannière return-to-call **vidéo** dans `FloatingCallPillView` + bannière in-conversation gatée `Router.currentConversationId`, désactiver start-call pendant un appel, câbler le call-waiting dead code (§7.6).
-- Self-preview vidéo dans `IncomingCallView` pour appel vidéo entrant (§7.4).
-- Layout adaptatif size class + `isiOSAppOnMac` : Mac letterbox + contrôles persistants + cacher speaker/flip ; iPad regular-width (§7.1). Puis P2 (codecs HW, getStats par-kind, filtres Vision/Metal, ICE-restart sur `.disconnected`) et P3 (messages système d'appel).
+- ✅ **`p1.4` (340d941)** — return-to-call pill affiche la **vidéo remote** pour un appel vidéo + hex→`MeeshyColors` (§7.6/§7.3).
+- ✅ **`p1.5` (1073b80)** — watchdog « Connexion vidéo… » : après 12 s, état informatif au lieu du spinner infini (§7.2/f). L'auto-réparation média réelle reste §5.8.
+- ✅ **`p1.6` (db5f86b)** — header conversation : pendant un appel actif, les boutons start-call deviennent un indicateur vert « ● ⏱ toucher pour revenir » (bloque un 2e appel + retour 1-tap) (§7.6).
+- ✅ **`p1.7` (ab76bd6)** — auto-hide des contrôles ~4 s sur iPhone/iPad vidéo (tap vidéo = toggle ; jamais sur Mac/audio/effets ouverts) (§7.3).
+
+Reste UI :
+- 🟡 Self-preview vidéo dans `IncomingCallView` (§7.4) — **partiellement couvert** : le fond `CallView` rend déjà la caméra locale (atténuée, miroir avant) derrière l'UI entrante ; une vignette nette dédiée serait du polish.
+- ⏳ Câbler le **call-waiting** dead code (`CallWaitingBannerView` / API `CallManager` 2e appel entrant) (§7.6).
+- ⏳ **Layout adaptatif** size class + `isiOSAppOnMac` : Mac letterbox + contrôles persistants + cacher speaker/flip ; iPad regular-width (§7.1).
+- ⏳ P2 (codecs HW, getStats par-kind, filtres Vision/Metal, ICE-restart sur `.disconnected`) et P3 (messages système d'appel).
 
 ---
 
