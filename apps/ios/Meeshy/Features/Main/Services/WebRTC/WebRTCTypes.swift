@@ -89,6 +89,12 @@ protocol WebRTCClientProviding: AnyObject {
 
     func configure(iceServers: [IceServer]) throws
     func updateIceServers(_ iceServers: [IceServer])
+    /// §3.4 perfect negotiation — sets the deterministic polite/impolite role.
+    /// Computed symmetrically by both peers (lexicographically-smaller userId is
+    /// polite) and fixed once for the call's lifetime, independent of caller/
+    /// callee, so it survives renegotiations. The client stores it and uses it
+    /// in the glare-collision guard.
+    func setNegotiationRole(isPolite: Bool)
     func createOffer() async throws -> SessionDescription
     func createAnswer(for offer: SessionDescription) async throws -> SessionDescription
     func setRemoteAnswer(_ answer: SessionDescription) async throws
@@ -296,6 +302,7 @@ enum WebRTCError: Error, LocalizedError {
     case noCameraFormatAvailable
     case notSupported
     case simulatorVideoUnsupported
+    case offerIgnored
 
     var errorDescription: String? {
         switch self {
@@ -308,6 +315,8 @@ enum WebRTCError: Error, LocalizedError {
         case .simulatorVideoUnsupported:
             "Video unsupported on iOS Simulator (FigCaptureSourceRemote XPC failure). " +
             "Use a real device for video calls."
+        case .offerIgnored:
+            "Colliding offer ignored by the impolite peer (perfect negotiation glare)"
         }
     }
 }

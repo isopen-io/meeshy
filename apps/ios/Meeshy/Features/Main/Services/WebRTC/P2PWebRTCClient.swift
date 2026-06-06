@@ -42,6 +42,19 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     private var remoteVideoTrack_: RTCVideoTrack?
     private var remoteAudioTrack_: RTCAudioTrack?
     private var usingFrontCamera = true
+
+    // §3.4 perfect negotiation (W3C/MDN). These three flags + the polite role
+    // make renegotiation and offer-glare safe. `makingOffer` is true only while
+    // we build+set our local offer; `isSettingRemoteAnswerPending` true only
+    // while we apply a remote answer (so an offer arriving in that window is not
+    // treated as a collision); `ignoreOffer` records that the impolite peer
+    // dropped a colliding offer. `isPolite` (the lexicographically-smaller
+    // userId) decides who yields on a collision.
+    private var makingOffer = false
+    private var ignoreOffer = false
+    private var isSettingRemoteAnswerPending = false
+    private(set) var isPolite = false
+
     private(set) var videoFilterPipeline = VideoFilterPipeline()
     private var transcriptionDataChannel: RTCDataChannel?
     private let audioProcessingModule: MeeshyAudioProcessingModule
@@ -133,6 +146,13 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
         pc.setConfiguration(config)
         Logger.webrtc.info("ICE servers updated to \(iceServers.count) servers (no reconnect)")
+    }
+
+    // §3.4 — store the deterministic polite/impolite role (computed by the
+    // caller from the two userIds; the smaller is polite). Fixed once per call.
+    func setNegotiationRole(isPolite: Bool) {
+        self.isPolite = isPolite
+        Logger.webrtc.info("[CALL-DIAG] negotiation role set: \(isPolite ? "polite" : "impolite", privacy: .public)")
     }
 
     // MARK: - Local Media
@@ -505,6 +525,12 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // reuses them and the m-line layout stays stable.
         addOffererTransceiversIfNeeded(on: pc)
 
+        // §3.4 — mark the offer window. A remote offer arriving while makingOffer
+        // is true is a glare collision (handled in createAnswer's guard). Cleared
+        // once our local offer is set (signalingState then guards the rest).
+        makingOffer = true
+        defer { makingOffer = false }
+
         // §5.3 — NO legacy Plan-B `OfferToReceiveAudio/Video` constraints. Mixing
         // those with Unified-Plan transceivers is a classic source of direction
         // asymmetry (the legacy hints synthesize/duplicate m-sections or muddy
@@ -545,6 +571,26 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
     func createAnswer(for offer: SessionDescription) async throws -> SessionDescription {
         guard let pc = peerConnection else { throw WebRTCError.noPeerConnection }
+
+        // §3.4 — perfect-negotiation collision guard. For the INITIAL handshake
+        // there is no collision (makingOffer == false, signalingState == stable)
+        // so this is a transparent pass-through. It only engages on renegotiation
+        // glare (both peers offer at once): the impolite peer drops the colliding
+        // offer (throws .offerIgnored), the polite peer rolls its own offer back
+        // before applying the remote one. libwebrtc (ObjC) has no implicit
+        // rollback, so we issue an explicit `.rollback` description.
+        let readyForOffer = !makingOffer &&
+            (pc.signalingState == .stable || isSettingRemoteAnswerPending)
+        let offerCollision = !readyForOffer
+        ignoreOffer = !isPolite && offerCollision
+        if ignoreOffer {
+            Logger.webrtc.info("[CALL-DIAG] glare: impolite peer ignoring colliding offer")
+            throw WebRTCError.offerIgnored
+        }
+        if offerCollision {
+            Logger.webrtc.info("[CALL-DIAG] glare: polite peer rolling back local offer")
+            try await setLocalDescription(RTCSessionDescription(type: .rollback, sdp: ""), on: pc)
+        }
 
         let rtcOffer = RTCSessionDescription(type: .offer, sdp: offer.sdp)
         try await setRemoteDescription(rtcOffer, on: pc)
@@ -601,6 +647,10 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
     func setRemoteAnswer(_ answer: SessionDescription) async throws {
         guard let pc = peerConnection else { throw WebRTCError.noPeerConnection }
+        // §3.4 — mark the answer-application window so a remote offer arriving
+        // mid-apply is not misread as a glare collision (MDN invariant).
+        isSettingRemoteAnswerPending = true
+        defer { isSettingRemoteAnswerPending = false }
         let rtcAnswer = RTCSessionDescription(type: .answer, sdp: answer.sdp)
         try await setRemoteDescription(rtcAnswer, on: pc)
         // CALL-DIAG (temp) — log the answer's per-media direction. If the peer's
@@ -1273,6 +1323,7 @@ final class P2PWebRTCClient: WebRTCClientProviding {
     }
 
     func updateIceServers(_ iceServers: [IceServer]) {}
+    func setNegotiationRole(isPolite: Bool) {}
 
     func createOffer() async throws -> SessionDescription { throw WebRTCError.notSupported }
     func createAnswer(for offer: SessionDescription) async throws -> SessionDescription { throw WebRTCError.notSupported }

@@ -82,6 +82,11 @@ final class WebRTCService {
         client.updateIceServers(iceServers)
     }
 
+    /// §3.4 — forward the deterministic polite/impolite role to the client.
+    func setNegotiationRole(isPolite: Bool) {
+        client.setNegotiationRole(isPolite: isPolite)
+    }
+
     func createOffer() async -> SessionDescription? {
         do {
             let offer = try await client.createOffer()
