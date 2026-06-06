@@ -488,7 +488,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // .sendRecv BEFORE creating the answer so the answer is bidirectional.
         for transceiver in pc.transceivers where transceiver.sender.track != nil {
             do {
-                try transceiver.setDirection(.sendRecv)
+                try transceiver.setDirection(.sendRecv, error: nil)
             } catch {
                 Logger.webrtc.warning("[WEBRTC] setDirection(.sendRecv) failed: \(error.localizedDescription, privacy: .public)")
             }
