@@ -213,17 +213,18 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         Logger.webrtc.info("[WEBRTC] captureDevices probe")
         let cams = RTCCameraVideoCapturer.captureDevices()
         Logger.webrtc.info("[WEBRTC] captureDevices count=\(cams.count)")
-        guard let frontCamera = cams.first(where: { $0.position == .front }) else {
-            // Sur simulator iOS il n'y a aucune caméra, donc on tombe ici si
-            // type == .audioVideo. Renvoyer l'erreur typée fait remonter
-            // l'échec proprement au lieu de laisser RTCCameraVideoCapturer
-            // throw plus tard une NSException sur un device list vide.
-            Logger.webrtc.error("[WEBRTC] no front camera (simulator?) — throwing noCameraAvailable")
+        guard let camera = Self.pickCaptureDevice(preferring: .front) else {
+            // Aucune caméra : simulator iOS (device list vide) OU Mac sans caméra.
+            // Renvoyer l'erreur typée fait remonter l'échec proprement au lieu de
+            // laisser RTCCameraVideoCapturer throw une NSException plus tard.
+            Logger.webrtc.error("[WEBRTC] no capture device available — throwing noCameraAvailable")
             throw WebRTCError.noCameraAvailable
         }
+        // Sur Mac la caméra rapporte `.unspecified` ; ne pas présumer "front".
+        usingFrontCamera = camera.position == .front
 
         Logger.webrtc.info("[WEBRTC] selectFormat begin")
-        let selectedFormat = selectFormat(for: frontCamera)
+        let selectedFormat = selectFormat(for: camera)
         guard let format = selectedFormat else {
             Logger.webrtc.error("[WEBRTC] no usable camera format — throwing noCameraFormatAvailable")
             throw WebRTCError.noCameraFormatAvailable
@@ -231,8 +232,9 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
         let fps = targetFrameRate(for: format)
         Logger.webrtc.info("[WEBRTC] capturer.startCapture begin fps=\(fps)")
-        try await capturer.startCapture(with: frontCamera, format: format, fps: fps)
-        Logger.webrtc.info("Local audio + video tracks started (front camera, \(fps)fps)")
+        try await capturer.startCapture(with: camera, format: format, fps: fps)
+        applyVideoEncoding()
+        Logger.webrtc.info("Local audio + video tracks started (\(camera.position == .front ? "front" : "device") camera, \(fps)fps)")
         #endif
     }
 
@@ -338,6 +340,52 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         } catch {
             Logger.webrtc.warning("[WEBRTC] setCodecPreferences (video) threw: \(error.localizedDescription, privacy: .public)")
         }
+    }
+
+    // P1-1 + P1-2 — SOTA video sender parameters. libwebrtc otherwise lets the
+    // encoder run open-loop (no native cap; the SDP `x-google-max-bitrate` hint is
+    // soft and non-authoritative on iOS). We set an explicit max bitrate / max
+    // framerate / resolution-downscale on every encoding, mirroring the audio
+    // bitrate path (applyAudioCodecPreferences :295). `degradationPreference =
+    // .maintainFramerate` keeps talking-head motion fluid and drops resolution
+    // first under congestion (reserve .maintainResolution for screen-share).
+    // Called once at capture start (720p30 / 2.5 Mbps) and again by the adaptive
+    // quality loop (WebRTCService.adjustBitrate) with throttled targets.
+    func applyVideoEncoding(
+        maxBitrateBps: Int = 2_500_000,
+        maxFramerate: Int = 30,
+        scaleResolutionDownBy: Double = 1.0
+    ) {
+        guard let sender = videoTransceiver?.sender else { return }
+        let params = sender.parameters
+        params.degradationPreference = NSNumber(value: RTCDegradationPreference.maintainFramerate.rawValue)
+        for encoding in params.encodings {
+            encoding.maxBitrateBps = NSNumber(value: maxBitrateBps)
+            encoding.maxFramerate = NSNumber(value: maxFramerate)
+            encoding.scaleResolutionDownBy = NSNumber(value: max(1.0, scaleResolutionDownBy))
+        }
+        sender.parameters = params
+        let count = params.encodings.count
+        if count > 0 {
+            let scaleStr = String(format: "%.2f", scaleResolutionDownBy)
+            Logger.webrtc.info("[WEBRTC] video encoding applied (max=\(maxBitrateBps / 1000, privacy: .public)kbps fps=\(maxFramerate, privacy: .public) scale=\(scaleStr, privacy: .public) degradation=maintainFramerate encodings=\(count, privacy: .public))")
+        } else {
+            Logger.webrtc.warning("[WEBRTC] video encoding NOT applied — encodings array empty")
+        }
+    }
+
+    /// Selects a capture device for a desired logical position. On iPhone/iPad the
+    /// front/back cameras report `.front`/`.back`. On **iOS-app-on-Mac** the
+    /// built-in / Continuity / USB cameras report `.unspecified`, so a strict
+    /// `.front` filter finds nothing and the call silently degrades to audio
+    /// (P0-1). Fallback chain: exact position → `.unspecified` (Mac) → opposite
+    /// camera → first available.
+    static func pickCaptureDevice(preferring position: AVCaptureDevice.Position) -> AVCaptureDevice? {
+        let cams = RTCCameraVideoCapturer.captureDevices()
+        if let exact = cams.first(where: { $0.position == position }) { return exact }
+        if let unspecified = cams.first(where: { $0.position == .unspecified }) { return unspecified }
+        let opposite: AVCaptureDevice.Position = position == .front ? .back : .front
+        return cams.first(where: { $0.position == opposite }) ?? cams.first
     }
 
     /// Calls the throwing `setCodecPreferences:error:` selector on the given
@@ -516,7 +564,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     private func restartCapturerIfStopped() async {
         guard let capturer = videoCapturer else { return }
         let position: AVCaptureDevice.Position = usingFrontCamera ? .front : .back
-        guard let camera = RTCCameraVideoCapturer.captureDevices().first(where: { $0.position == position }),
+        guard let camera = Self.pickCaptureDevice(preferring: position),
               let format = selectFormat(for: camera) else {
             Logger.webrtc.warning("[WEBRTC] toggleVideo on — no camera/format available, skipping capturer restart")
             return
@@ -535,7 +583,10 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         usingFrontCamera.toggle()
         let position: AVCaptureDevice.Position = usingFrontCamera ? .front : .back
 
-        guard let camera = RTCCameraVideoCapturer.captureDevices().first(where: { $0.position == position }) else {
+        // Sur Mac (caméra unique `.unspecified`) il n'y a généralement pas de
+        // seconde caméra : pickCaptureDevice retombe sur le même device, le
+        // switch est alors un no-op visuel plutôt qu'une erreur.
+        guard let camera = Self.pickCaptureDevice(preferring: position) else {
             usingFrontCamera.toggle()
             throw WebRTCError.noCameraAvailable
         }
@@ -953,18 +1004,40 @@ extension P2PWebRTCClient: RTCPeerConnectionDelegate {
         Logger.webrtc.info("Signaling state: \(stateChanged.rawValue)")
     }
 
+    // P0-2 — PRIMARY remote-track path under Unified-Plan. `didStartReceivingOn`
+    // fires deterministically when a receiver's track goes live, exposing it via
+    // `transceiver.receiver.track`. The legacy `didAdd stream:` below is a
+    // stream-based callback that under unified-plan can deliver late or be missed
+    // (black/intermittent remote video). Both feed `deliverRemoteTrack`, whose
+    // `!==` guard makes a second delivery of the same track a no-op.
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didStartReceivingOn transceiver: RTCRtpTransceiver) {
+        Logger.webrtc.info("[WEBRTC] didStartReceivingOn mediaType=\(transceiver.mediaType.rawValue)")
+        deliverRemoteTrack(transceiver.receiver.track)
+    }
+
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didAdd stream: RTCMediaStream) {
-        let videoTrack = stream.videoTracks.first
-        let audioTrack = stream.audioTracks.first
+        deliverRemoteTrack(stream.videoTracks.first)
+        deliverRemoteTrack(stream.audioTracks.first)
+    }
+
+    /// Routes a freshly-received remote track to the delegate exactly once. Both
+    /// `didStartReceivingOn` (unified-plan, primary) and `didAdd stream:` (legacy
+    /// fallback) can fire for the same track — the `!==` guard prevents attaching
+    /// the same track to the renderer twice.
+    nonisolated private func deliverRemoteTrack(_ track: RTCMediaStreamTrack?) {
+        guard let track else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            if let videoTrack {
+            if let videoTrack = track as? RTCVideoTrack {
+                guard self.remoteVideoTrack_ !== videoTrack else { return }
                 self.remoteVideoTrack_ = videoTrack
                 self.delegate?.webRTCClient(self, didReceiveRemoteVideoTrack: videoTrack)
-            }
-            if let audioTrack {
+                Logger.webrtc.info("[WEBRTC] remote video track delivered")
+            } else if let audioTrack = track as? RTCAudioTrack {
+                guard self.remoteAudioTrack_ !== audioTrack else { return }
                 self.remoteAudioTrack_ = audioTrack
                 self.delegate?.webRTCClient(self, didReceiveRemoteAudioTrack: audioTrack)
+                Logger.webrtc.info("[WEBRTC] remote audio track delivered")
             }
         }
     }
@@ -1075,6 +1148,7 @@ final class P2PWebRTCClient: WebRTCClientProviding {
     func startLocalMedia(type: CallMediaType) async throws { throw WebRTCError.notSupported }
     func toggleAudio(_ enabled: Bool) {}
     func toggleVideo(_ enabled: Bool) {}
+    func applyVideoEncoding(maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double) {}
     func switchCamera() async throws {}
     func getStats() async -> CallStats? { nil }
     func createDataChannel(label: String) -> Bool { false }

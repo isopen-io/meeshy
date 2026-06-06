@@ -355,8 +355,12 @@ struct CallView: View {
     private var videoCallLayout: some View {
         ZStack {
             // Remote video (full area)
-            if callManager.hasRemoteVideoTrack {
+            if callManager.hasRemoteVideoTrack && callManager.isRemoteVideoEnabled {
                 CallVideoView(track: callManager.remoteVideoTrack, contentMode: .scaleAspectFill)
+            } else if callManager.hasRemoteVideoTrack {
+                // P0-3 — peer turned its camera off: avatar placeholder, never the
+                // frozen last frame.
+                remoteCameraOffPlaceholder
             } else {
                 Color.black.opacity(0.4)
                     .overlay(
@@ -387,6 +391,26 @@ struct CallView: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 20))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // P0-3 — shown full-area when the remote peer has a video track but turned
+    // its camera off, so the user sees the peer's avatar rather than a frozen
+    // last frame.
+    private var remoteCameraOffPlaceholder: some View {
+        ZStack {
+            Color.black.opacity(0.5)
+            VStack(spacing: 14) {
+                avatarCircle(size: 96)
+                HStack(spacing: 6) {
+                    Image(systemName: "video.slash.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text(String(localized: "call.video.remoteOff", defaultValue: "Caméra désactivée", bundle: .main))
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .foregroundColor(.white.opacity(0.6))
+            }
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 

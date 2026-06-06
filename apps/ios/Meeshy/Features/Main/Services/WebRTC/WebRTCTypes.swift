@@ -96,6 +96,10 @@ protocol WebRTCClientProviding: AnyObject {
     func startLocalMedia(type: CallMediaType) async throws
     func toggleAudio(_ enabled: Bool)
     func toggleVideo(_ enabled: Bool)
+    /// Applies adaptive video sender caps (max bitrate / framerate / resolution
+    /// downscale). No-op on audio-only calls (no video transceiver). Driven by
+    /// the quality ladder in `WebRTCService.adjustBitrate`.
+    func applyVideoEncoding(maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double)
     func switchCamera() async throws
     func getStats() async -> CallStats?
     func createDataChannel(label: String) -> Bool

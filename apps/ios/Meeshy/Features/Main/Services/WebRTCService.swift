@@ -180,8 +180,9 @@ final class WebRTCService {
                 await Task { @MainActor [weak self] in
                     guard let self else { return }
                     guard let stats = await self.client.getStats() else { return }
+                    let previous = self.lastStats
                     self.lastStats = stats
-                    self.adjustBitrate(basedOn: stats)
+                    self.adjustBitrate(basedOn: stats, previous: previous)
                 }.value
             }
         }
@@ -193,16 +194,23 @@ final class WebRTCService {
         qualityMonitorTask = nil
     }
 
-    private func adjustBitrate(basedOn stats: CallStats) {
+    private func adjustBitrate(basedOn stats: CallStats, previous: CallStats?) {
         let rtt = stats.roundTripTimeMs
-        let loss = Double(stats.packetsLost)
+        // P1-4 — `packetsLost` / `inboundPacketsReceived` are CUMULATIVE counters.
+        // Compute a real loss RATIO between two snapshots: Δlost / (Δlost+Δrecv).
+        // The old code passed the raw cumulative count as a fraction, so a single
+        // lost packet read as >100% loss and pinned quality to .critical for life.
+        let deltaLost = max(0, stats.packetsLost - (previous?.packetsLost ?? 0))
+        let deltaReceived = max(0, stats.inboundPacketsReceived - (previous?.inboundPacketsReceived ?? 0))
+        let denom = deltaLost + deltaReceived
+        let lossRatio = denom > 0 ? Double(deltaLost) / Double(denom) : 0
 
-        let newLevel = VideoQualityLevel.from(rtt: rtt, packetLoss: loss)
+        let newLevel = VideoQualityLevel.from(rtt: rtt, packetLoss: lossRatio)
 
         let newBitrate: Int
-        if rtt <= QualityThresholds.excellentRTT && loss <= QualityThresholds.excellentPacketLoss {
+        if rtt <= QualityThresholds.excellentRTT && lossRatio <= QualityThresholds.excellentPacketLoss {
             newBitrate = QualityThresholds.maxBitrate
-        } else if rtt <= QualityThresholds.goodRTT && loss <= QualityThresholds.goodPacketLoss {
+        } else if rtt <= QualityThresholds.goodRTT && lossRatio <= QualityThresholds.goodPacketLoss {
             newBitrate = QualityThresholds.defaultBitrate
         } else {
             newBitrate = QualityThresholds.minBitrate
@@ -210,7 +218,8 @@ final class WebRTCService {
 
         if newBitrate != currentBitrate {
             currentBitrate = newBitrate
-            Logger.webrtc.info("Audio bitrate adjusted to \(newBitrate) bps (RTT: \(rtt)ms, loss: \(loss))")
+            let lossPct = String(format: "%.1f%%", lossRatio * 100)
+            Logger.webrtc.info("Audio bitrate adjusted to \(newBitrate) bps (RTT: \(rtt)ms, loss: \(lossPct))")
         }
 
         guard newLevel != currentQualityLevel else { return }
@@ -226,12 +235,23 @@ final class WebRTCService {
         Logger.webrtc.info("Quality level changed: \(previousLevel.rawValue) → \(newLevel.rawValue)")
         delegate?.webRTCService(self, didChangeQualityLevel: newLevel, from: previousLevel)
 
-        if newLevel == .critical {
-            client.toggleVideo(false)
-            Logger.webrtc.warning("Critical quality — auto-disabled video")
-        } else if previousLevel == .critical && newLevel >= .poor {
-            Logger.webrtc.info("Quality recovered from critical — video can be re-enabled manually")
-        }
+        applyVideoQuality(newLevel)
+    }
+
+    /// P1-3 — drive the actual video encoder from the quality ladder. The old
+    /// code only ever toggled video OFF at `.critical` (never back ON, never
+    /// touched bitrate/fps), so adaptation was all-or-nothing. We instead scale
+    /// the SENDER caps continuously. We intentionally NEVER toggle the video
+    /// track here: on/off is the USER's control (privacy). Even `.critical` is
+    /// floored to a low resolution/bitrate (360p15 @ 100 kbps) rather than killed
+    /// — `degradationPreference = .maintainFramerate` + low caps handle severe
+    /// congestion gracefully without desyncing the peer.
+    private func applyVideoQuality(_ level: VideoQualityLevel) {
+        let bitrate = level.targetVideoBitrate > 0 ? level.targetVideoBitrate : QualityThresholds.minVideoBitrate
+        let fps = level.targetFPS > 0 ? level.targetFPS : 15
+        let height = level.targetResolutionHeight > 0 ? level.targetResolutionHeight : 360
+        let scale = max(1.0, 720.0 / Double(height))
+        client.applyVideoEncoding(maxBitrateBps: bitrate, maxFramerate: fps, scaleResolutionDownBy: scale)
     }
 
     // MARK: - DataChannel Transcription (H7)

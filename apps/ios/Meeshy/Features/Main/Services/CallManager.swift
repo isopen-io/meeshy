@@ -51,6 +51,12 @@ final class CallManager: ObservableObject {
     @Published private(set) var remoteUserId: String?
     @Published private(set) var remoteUsername: String?
     @Published var isVideoEnabled: Bool = false
+    /// P0-3 — the REMOTE peer's camera state, driven by `call:media-toggled`.
+    /// Defaults to `true` (assume on) and flips to `false` when the peer turns
+    /// its camera off, so the UI can show an avatar placeholder instead of the
+    /// peer's frozen last frame. 1:1 only — the gateway routes the toggle to the
+    /// other participant via `socket.to(room)` so we never see our own echo.
+    @Published private(set) var isRemoteVideoEnabled: Bool = true
     @Published var isMuted: Bool = false
 
     /// CALL-FIX 2026-06-06 — whether THIS call drives CallKit. CallKit is only
@@ -301,6 +307,7 @@ final class CallManager: ObservableObject {
             remoteUsername = nil
             callDuration = 0
             isVideoEnabled = false
+            isRemoteVideoEnabled = true
             isMuted = false
             isSpeaker = false
             Logger.calls.info("Force-reset .ended → .idle to accept new call")
@@ -1045,6 +1052,11 @@ final class CallManager: ObservableObject {
     func toggleVideo() {
         isVideoEnabled.toggle()
         webRTCService.enableVideo(isVideoEnabled)
+        // P0-3 — tell the peer so it shows our avatar placeholder instead of a
+        // frozen last frame. Gateway broadcasts to the other participant only.
+        if let callId = currentCallId {
+            MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: isVideoEnabled)
+        }
         HapticFeedback.light()
     }
 
@@ -1855,6 +1867,20 @@ final class CallManager: ObservableObject {
                 self.endCallInternal(reason: .remote)
             }
             .store(in: &cancellables)
+
+        // P0-3 — the peer toggled its camera (call:media-toggled). The gateway
+        // routes this to the OTHER participant only (socket.to(room)), so every
+        // event we receive reflects the REMOTE peer's video state. Drives the
+        // avatar placeholder in CallView instead of a frozen last frame.
+        socket.callMediaToggled
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                guard event.callId == self.currentCallId, event.mediaType == "video" else { return }
+                self.isRemoteVideoEnabled = event.enabled
+                Logger.calls.info("Remote video \(event.enabled ? "enabled" : "disabled") (callId=\(event.callId))")
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Participant Joined (Outgoing Call)
@@ -1957,6 +1983,10 @@ extension CallManager: ThermalStateMonitorDelegate {
                 if self.isVideoEnabled {
                     self.isVideoEnabled = false
                     self.webRTCService.enableVideo(false)
+                    // P0-3 — signal the peer (avatar placeholder, not a frozen frame).
+                    if let callId = self.currentCallId {
+                        MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: false)
+                    }
                     Logger.calls.warning("Thermal critical — disabled video")
                 }
             } else if state == .serious {
