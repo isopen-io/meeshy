@@ -487,9 +487,12 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     }
 
     private func forceSendRecv(_ transceiver: RTCRtpTransceiver) {
-        do {
-            try transceiver.setDirection(.sendRecv, error: nil)
-        } catch {
+        // `setDirection:error:` returns void → Swift imports it as a NON-throwing
+        // func taking an NSErrorPointer (no return value to bridge to `throws`).
+        // Passing `error: nil` would silently drop any failure; capture it instead.
+        var error: NSError?
+        transceiver.setDirection(.sendRecv, error: &error)
+        if let error {
             Logger.webrtc.warning("[WEBRTC] setDirection(.sendRecv) failed: \(error.localizedDescription, privacy: .public)")
         }
     }
