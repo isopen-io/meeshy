@@ -916,9 +916,20 @@ export class CallService {
       }
     });
 
+    // CALL-FIX 2026-06-06 — TOLERANT media toggle. The DB media flag
+    // (isAudioEnabled/isVideoEnabled) is bookkeeping; what actually matters is
+    // that the handler BROADCASTS call:media-toggled to the peer (avatar
+    // placeholder). When the resolved `participantId` doesn't match an active
+    // CallParticipant row (participantId↔Participant.id resolution drift, or a
+    // racing leave), THROWING aborted the whole toggle — the peer never learned
+    // the camera turned off, and the error bubbled back to the toggling client.
+    // Skip the bookkeeping update best-effort instead of throwing so the toggle
+    // still propagates.
     if (!callParticipant) {
-      logger.error('❌ Participant not found or already left', { callId, participantId });
-      throw new Error(`${CALL_ERROR_CODES.CALL_NOT_FOUND}: You are not in this call`);
+      logger.warn('⚠️ updateParticipantMedia — no active CallParticipant, skipping DB flag (toggle still broadcast)', {
+        callId, participantId, mediaType, enabled
+      });
+      return this.getCallSession(callId);
     }
 
     // Update media state
