@@ -152,7 +152,11 @@ export const socketSignalSchema = z.object({
     // ICE candidate data
     candidate: z.string().max(1000, 'ICE candidate exceeds maximum size of 1KB').optional(),
     sdpMLineIndex: z.number().optional(),
-    sdpMid: z.string().optional()
+    sdpMid: z.string().optional(),
+    // §3.5 negotiation epoch — declared so Zod does not strip it from the
+    // opaque relay payload (the gateway passes it through verbatim; the
+    // receiving client uses it to drop stale offers/candidates).
+    negotiationId: z.number().int().min(0).optional()
   }).refine(
     (data) => {
       if (data.type === 'offer' || data.type === 'answer' || data.type === 'ice-restart') {

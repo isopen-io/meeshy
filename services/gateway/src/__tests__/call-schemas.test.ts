@@ -109,6 +109,84 @@ describe('Call Validation Schemas', () => {
       });
       expect(result.success).toBe(false);
     });
+
+    // §3.5 — the negotiation epoch MUST survive validation. Zod strips
+    // undeclared keys by default, which is exactly why a NON-declared field
+    // would be lost on the opaque relay. Proving both halves here documents
+    // the mechanism and guards against a regression that silently drops the
+    // epoch (which would re-open the stale-offer race the field prevents).
+    it('preserves negotiationId on offer (not stripped by validation)', () => {
+      const result = socketSignalSchema.safeParse({
+        callId: validMongoId,
+        signal: {
+          type: 'offer',
+          from: 'user-1',
+          to: 'user-2',
+          sdp: 'v=0\r\no=- 1234 1 IN IP4 0.0.0.0\r\n',
+          negotiationId: 7,
+        },
+      });
+      expect(result.success).toBe(true);
+      expect(result.success && result.data.signal.negotiationId).toBe(7);
+    });
+
+    it('preserves negotiationId on ice-candidate', () => {
+      const result = socketSignalSchema.safeParse({
+        callId: validMongoId,
+        signal: {
+          type: 'ice-candidate',
+          from: 'user-1',
+          to: 'user-2',
+          candidate: 'candidate:1 1 udp 2130706431 192.168.1.1 5000 typ host',
+          negotiationId: 3,
+        },
+      });
+      expect(result.success).toBe(true);
+      expect(result.success && result.data.signal.negotiationId).toBe(3);
+    });
+
+    it('accepts a signal without negotiationId (older clients ⇒ epoch absent)', () => {
+      const result = socketSignalSchema.safeParse({
+        callId: validMongoId,
+        signal: {
+          type: 'offer',
+          from: 'user-1',
+          to: 'user-2',
+          sdp: 'v=0\r\n',
+        },
+      });
+      expect(result.success).toBe(true);
+      expect(result.success && result.data.signal.negotiationId).toBeUndefined();
+    });
+
+    it('rejects a negative negotiationId', () => {
+      const result = socketSignalSchema.safeParse({
+        callId: validMongoId,
+        signal: {
+          type: 'offer',
+          from: 'user-1',
+          to: 'user-2',
+          sdp: 'v=0\r\n',
+          negotiationId: -1,
+        },
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it('strips an undeclared field (documents the stripping the epoch avoids)', () => {
+      const result = socketSignalSchema.safeParse({
+        callId: validMongoId,
+        signal: {
+          type: 'offer',
+          from: 'user-1',
+          to: 'user-2',
+          sdp: 'v=0\r\n',
+          someUndeclaredField: 'value',
+        },
+      });
+      expect(result.success).toBe(true);
+      expect(result.success && (result.data.signal as Record<string, unknown>).someUndeclaredField).toBeUndefined();
+    });
   });
 
   describe('socketHeartbeatSchema', () => {

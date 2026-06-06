@@ -250,6 +250,14 @@ export interface ConnectionQualityStats {
 interface WebRTCSignalBase {
   readonly from: string;                  // userId ou participantId
   readonly to: string;                    // userId ou participantId
+  /**
+   * Negotiation epoch (§3.5). Monotonic per peer connection; incremented on
+   * every locally-initiated (re)negotiation. The receiver drops any SDP/ICE
+   * whose `negotiationId` is older than the current one, so offers/candidates
+   * left in flight by a churned socket become inert. Optional for backward
+   * compatibility with older clients (absent ⇒ treated as epoch 0).
+   */
+  readonly negotiationId?: number;
 }
 
 /**
