@@ -50,11 +50,11 @@ final class RingbackTonePlayer {
 
     // MARK: - One-shot cues
 
-    /// Short cue when the call connects. `AudioServicesPlaySystemSound` plays
-    /// through the system path so it is reliable even while WebRTC owns the
-    /// session, and needs no bundled asset.
+    /// VERY short cue when the call connects (a single light "Tink"). Plays via
+    /// `AudioServicesPlaySystemSound` (system path, reliable while WebRTC owns the
+    /// session, no bundled asset).
     func playConnected() {
-        AudioServicesPlaySystemSound(SystemSoundID(1336)) // subtle "connect" tock
+        AudioServicesPlaySystemSound(SystemSoundID(1057)) // "Tink" — very brief
         logger.info("connected cue played")
     }
 
@@ -104,18 +104,22 @@ final class RingbackTonePlayer {
     private func activateForRingingIfNeeded() {
         guard shouldSelfActivateSession else { return }
         let rtc = RTCAudioSession.sharedInstance()
-        guard !rtc.isAudioEnabled else { return }
         rtc.lockForConfiguration()
         do {
+            // `.playAndRecord` IGNORES the hardware silent switch (recording
+            // categories always do), so the in-app ringtone/ringback rings even in
+            // silent mode — matching the system Phone app. `.defaultToSpeaker` keeps
+            // it audible. Applied unconditionally: the session may already be active
+            // in a category that RESPECTS the mute switch (then the sound is silent).
             let config = RTCAudioSessionConfiguration.webRTC()
             config.category = AVAudioSession.Category.playAndRecord.rawValue
             config.mode = AVAudioSession.Mode.default.rawValue
             config.categoryOptions = [.allowBluetoothHFP, .duckOthers, .defaultToSpeaker]
             try rtc.setConfiguration(config, active: true)
             rtc.isAudioEnabled = true
-            logger.info("[macOS] audio session activated for ringing-phase sounds")
+            logger.info("ringing-phase audio session active (.playAndRecord — ignores silent switch)")
         } catch {
-            logger.error("[macOS] ringing-phase session activation failed: \(error.localizedDescription)")
+            logger.error("ringing-phase session activation failed: \(error.localizedDescription)")
         }
         rtc.unlockForConfiguration()
     }
