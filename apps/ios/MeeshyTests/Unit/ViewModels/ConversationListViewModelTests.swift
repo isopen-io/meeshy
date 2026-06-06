@@ -2360,6 +2360,17 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertEqual(a, b)
     }
 
+    @MainActor
+    func test_themedRow_notEqual_whenPendingSyncDiffers() {
+        let synced = makeConversation(id: "c1")
+        var pending = makeConversation(id: "c1")
+        pending.userState.pendingMutationCount = 1  // hasPendingSync = true
+        let rowSynced = ThemedConversationRow(conversation: synced)
+        let rowPending = ThemedConversationRow(conversation: pending)
+        XCTAssertNotEqual(rowSynced, rowPending,
+                          "row must re-render (Equatable differs) when a mutation is draining via the outbox")
+    }
+
     // MARK: - ConversationStore observation (Strategy B foundation, 1b-i)
 
     func test_storeApply_reflectsUserStateIntoConversations() async throws {

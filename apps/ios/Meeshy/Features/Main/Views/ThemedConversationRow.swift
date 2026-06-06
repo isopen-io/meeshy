@@ -161,6 +161,19 @@ struct ThemedConversationRow: View {
 
                     Spacer()
 
+                    // Pending-sync indicator: a per-user mutation (pin/mute/
+                    // archive/section/…) is still draining through the
+                    // ConversationStore outbox (offline or in-flight). Subtle,
+                    // non-intrusive — matches the instant-app "silent indicator"
+                    // philosophy. Re-renders via renderFingerprint's hasPendingSync.
+                    if conversation.userState.hasPendingSync {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundColor(accent.opacity(0.7))
+                            .padding(.top, 2)
+                            .accessibilityHidden(true)
+                    }
+
                     // Timestamp — layoutPriority(1) pour ne jamais être écrasé
                     Text(timeAgo(conversation.lastMessageAt))
                         .font(.system(size: 11, weight: .medium))
@@ -252,6 +265,7 @@ struct ThemedConversationRow: View {
         }
         if conversation.userState.isMuted { parts.append("en silence") }
         if conversation.userState.isPinned { parts.append("epingle") }
+        if conversation.userState.hasPendingSync { parts.append("synchronisation en attente") }
         return parts.joined(separator: ", ")
     }
 
