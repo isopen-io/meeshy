@@ -972,6 +972,42 @@ Session **sans build ni device** (env web : pas de Swift toolchain ; gateway Pri
 
 ---
 
+### 2026-06-06 (suite 7) — P2 média/UI (branche `claude/calls-p2-sota`, depuis `sleepy-carson` + main mergé)
+
+Session **sans build ni device** (env web). Constat important : **§5.5 et §5.6-core sont DÉJÀ implémentés sur `main`** (le §12 « suite 5 » les listait à tort en reste) — `invokeSetCodecPreferences` force l'overload throwing, `applyVideoCodecPreferences` ordonne H264>VP8>VP9, `applyVideoEncoding` pose maxBitrate/maxFramerate/scale + `degradationPreference=.maintainFramerate`, Opus 64/16 kbps via RtpEncodingParameters. Restaient les vrais trous ci-dessous.
+
+#### Commits livrés
+
+| Tag (local) | Commit | Portée | Couvre |
+|---|---|---|---|
+| `calls-sota-p2.4` | `a59c193` | iOS | **§5.6 adaptation thermique** — `VideoThermalProfile` pur (`ProcessInfo.ThermalState` → facteur bitrate / cap fps / plancher scale ; prend le plus conservateur de la cible réseau et du plafond thermique sur chaque axe ; `.nominal` = no-op strict). Composé dans `WebRTCService.applyVideoQuality` + re-appliqué dans `adjustBitrate` sur transition thermique même à niveau réseau stable (`lastThermalState`). **7 tests purs** `VideoThermalProfileTests`. |
+| `calls-sota-p2.5` | `ff85b7d` | iOS UI | **§4.3 bannière reconnecting** — `.reconnecting` garde désormais `connectedView` (dernière frame du pair, jamais blank) + overlay `reconnectingBanner` (capsule warning + spinner, top-aligned). Le chemin `.disconnected` debounce → `.reconnecting` → `performICERestart` préexistait (§3.2/p0.2) ; ceci complète la moitié UI de §4.3. |
+
+> Tags `calls-sota-p2.*` **locaux uniquement** (push tags 403 dans l'env web). Commits poussés sur `claude/calls-p2-sota`. Recréer via SHA.
+
+#### Vérifications (toolchain)
+
+- `VideoThermalProfile` : logique pure entièrement testée (7 cas, mais **non exécutés** ici — pas de Swift toolchain ; valider via CI/device).
+- Build iOS non disponible : §5.6 + §4.3 sont additifs, mirroring de patterns existants ; validation compilation = CI.
+
+#### État P2 mis à jour
+
+- ✅ §5.5 (codecs HW, throwing setCodecPreferences, ordre) — **déjà sur main**.
+- ✅ §5.6 — RtpEncoding/degradation **déjà sur main** + **adaptation thermique (p2.4, cette session)**.
+- ✅ §5.7, §5.8, Liquid Glass — antérieur.
+- ✅ §4.3 — debounce/ICE-restart (antérieur) + **bannière reconnecting (p2.5)**.
+- ⏳ **Reste P2** : **§7.5 filtres Vision/Metal** (pipeline CV ~150+ l. — exige build+device), **§7.1 layout adaptatif complet** (iPad barre flottante centrée, Continuity Camera picker, debounce resize — exige device).
+- ⏳ **Reste P0** : **§3.1 réducteur `CallEventQueue`** (gros refactor FSM, ~13 sites `callState =` — le plus risqué, exige build+device).
+
+#### Prochaine session — ordre conseillé
+
+1. **CI** des PR (sleepy-carson #316 + cette branche) : 1re vraie compilation de P3.2, p2.4, p2.5. Corriger toute erreur de symbole avant d'ajouter du neuf.
+2. **§7.5 filtres Vision/Metal** via le seam `VideoFilterCapturerDelegate` (build+device requis pour la perf/throttle).
+3. **§7.1 layout adaptatif complet**.
+4. **§3.1 réducteur `CallEventQueue`** (dernier P0, le plus risqué — build+device obligatoire).
+
+---
+
 ### 📍 ÉTAT ACTUEL (référence — antérieure, conservée)
 
 **Branche active** : `claude/friendly-ride-H5qtI` (PR #315). Voir « suite 5 » ci-dessus pour l'état à jour. (Tranches antérieures : branches `claude/admiring-faraday-ZMpBt` PR #314 + `feat/calls-sota-rebuild`, tags `calls-sota-p0.1`→`p1.9`, mergées sur `main`.)
