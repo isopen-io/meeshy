@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useCallStore } from '@/stores/call-store';
 
-export function useCallBanner(conversationId: string, onStartCall?: () => void) {
+export function useCallBanner(conversationId: string, onStartCall?: (type?: 'audio' | 'video') => void) {
   const { currentCall, isInCall } = useCallStore();
   const [callDuration, setCallDuration] = useState(0);
   const [showCallBanner, setShowCallBanner] = useState(false);

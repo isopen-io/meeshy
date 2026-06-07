@@ -5,6 +5,8 @@ import MeeshyUI
 
 struct RequestsTab: View {
     @ObservedObject var viewModel: RequestsViewModel
+    var isActive: Bool = true
+    var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
@@ -85,6 +87,7 @@ struct RequestsTab: View {
 
     private var receivedList: some View {
         ScrollView(.vertical, showsIndicators: false) {
+            ContactsScrollSentinel()
             LazyVStack(spacing: 0) {
                 ForEach(Array(viewModel.receivedRequests.enumerated()), id: \.element.id) { index, request in
                     receivedRow(request, index: index)
@@ -92,6 +95,7 @@ struct RequestsTab: View {
             }
             .padding(.top, 4)
         }
+        .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
     }
 
     private func receivedRow(_ request: FriendRequest, index: Int) -> some View {
@@ -178,6 +182,7 @@ struct RequestsTab: View {
 
     private var sentList: some View {
         ScrollView(.vertical, showsIndicators: false) {
+            ContactsScrollSentinel()
             LazyVStack(spacing: 0) {
                 ForEach(Array(viewModel.sentRequests.enumerated()), id: \.element.id) { index, request in
                     sentRow(request, index: index)
@@ -185,6 +190,7 @@ struct RequestsTab: View {
             }
             .padding(.top, 4)
         }
+        .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
     }
 
     private func sentRow(_ request: FriendRequest, index: Int) -> some View {

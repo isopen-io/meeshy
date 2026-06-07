@@ -23,8 +23,10 @@ interface UseVideoCallOptions {
   conversation: Conversation | null;
 }
 
+export type CallMediaType = 'audio' | 'video';
+
 interface UseVideoCallReturn {
-  startCall: () => Promise<void>;
+  startCall: (type?: CallMediaType) => Promise<void>;
   answerCall: (callId: string) => Promise<void>;
   rejectCall: (callId: string) => Promise<void>;
   endCall: (callId: string) => Promise<void>;
@@ -63,24 +65,25 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
   /**
    * Démarre un appel vidéo
    */
-  const startCall = useCallback(async () => {
+  const startCall = useCallback(async (type: CallMediaType = 'video') => {
     if (!conversation) {
       toast.error('Please select a conversation first');
       return;
     }
 
     if (conversation.type !== 'direct') {
-      toast.error('Video calls are only available for direct conversations');
+      toast.error('Calls are only available for direct conversations');
       return;
     }
 
+    const isVideo = type === 'video';
     let stream: MediaStream | null = null;
 
     try {
-      // Demander les permissions média
+      // Demander les permissions média (vidéo uniquement pour un appel vidéo)
       stream = await navigator.mediaDevices.getUserMedia({
         audio: AUDIO_CONSTRAINTS,
-        video: VIDEO_CONSTRAINTS,
+        video: isVideo ? VIDEO_CONSTRAINTS : false,
       });
 
       // Stocker le stream pour réutilisation
@@ -98,9 +101,9 @@ export function useVideoCall({ conversation }: UseVideoCallOptions): UseVideoCal
       // Initier l'appel avec le type correct CallInitiateEvent
       const callData = {
         conversationId: conversation.id,
-        type: 'video' as const,
+        type,
         settings: {
-          screenShareEnabled: true,
+          screenShareEnabled: isVideo,
           translationEnabled: true,
         },
       };
