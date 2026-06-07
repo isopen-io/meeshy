@@ -972,9 +972,132 @@ Session **sans build ni device** (env web : pas de Swift toolchain ; gateway Pri
 
 ---
 
-### 📍 ÉTAT ACTUEL (référence — antérieure, conservée)
+### 2026-06-06 (suite 7) — P2 média/UI (branche `claude/calls-p2-sota`, depuis `sleepy-carson` + main mergé)
 
-**Branche active** : `claude/friendly-ride-H5qtI` (PR #315). Voir « suite 5 » ci-dessus pour l'état à jour. (Tranches antérieures : branches `claude/admiring-faraday-ZMpBt` PR #314 + `feat/calls-sota-rebuild`, tags `calls-sota-p0.1`→`p1.9`, mergées sur `main`.)
+Session **sans build ni device** (env web). Constat important : **§5.5 et §5.6-core sont DÉJÀ implémentés sur `main`** (le §12 « suite 5 » les listait à tort en reste) — `invokeSetCodecPreferences` force l'overload throwing, `applyVideoCodecPreferences` ordonne H264>VP8>VP9, `applyVideoEncoding` pose maxBitrate/maxFramerate/scale + `degradationPreference=.maintainFramerate`, Opus 64/16 kbps via RtpEncodingParameters. Restaient les vrais trous ci-dessous.
+
+#### Commits livrés
+
+| Tag (local) | Commit | Portée | Couvre |
+|---|---|---|---|
+| `calls-sota-p2.4` | `a59c193` | iOS | **§5.6 adaptation thermique** — `VideoThermalProfile` pur (`ProcessInfo.ThermalState` → facteur bitrate / cap fps / plancher scale ; prend le plus conservateur de la cible réseau et du plafond thermique sur chaque axe ; `.nominal` = no-op strict). Composé dans `WebRTCService.applyVideoQuality` + re-appliqué dans `adjustBitrate` sur transition thermique même à niveau réseau stable (`lastThermalState`). **7 tests purs** `VideoThermalProfileTests`. |
+| `calls-sota-p2.5` | `ff85b7d` | iOS UI | **§4.3 bannière reconnecting** — `.reconnecting` garde désormais `connectedView` (dernière frame du pair, jamais blank) + overlay `reconnectingBanner` (capsule warning + spinner, top-aligned). Le chemin `.disconnected` debounce → `.reconnecting` → `performICERestart` préexistait (§3.2/p0.2) ; ceci complète la moitié UI de §4.3. |
+
+> Tags `calls-sota-p2.*` **locaux uniquement** (push tags 403 dans l'env web). Commits poussés sur `claude/calls-p2-sota`. Recréer via SHA.
+
+#### Vérifications (toolchain)
+
+- `VideoThermalProfile` : logique pure entièrement testée (7 cas, mais **non exécutés** ici — pas de Swift toolchain ; valider via CI/device).
+- Build iOS non disponible : §5.6 + §4.3 sont additifs, mirroring de patterns existants ; validation compilation = CI.
+
+#### État P2 mis à jour
+
+- ✅ §5.5 (codecs HW, throwing setCodecPreferences, ordre) — **déjà sur main**.
+- ✅ §5.6 — RtpEncoding/degradation **déjà sur main** + **adaptation thermique (p2.4, cette session)**.
+- ✅ §5.7, §5.8, Liquid Glass — antérieur.
+- ✅ §4.3 — debounce/ICE-restart (antérieur) + **bannière reconnecting (p2.5)**.
+- ⏳ **Reste P2** : **§7.5 filtres Vision/Metal** (pipeline CV ~150+ l. — exige build+device), **§7.1 layout adaptatif complet** (iPad barre flottante centrée, Continuity Camera picker, debounce resize — exige device).
+- ⏳ **Reste P0** : **§3.1 réducteur `CallEventQueue`** (gros refactor FSM, ~13 sites `callState =` — le plus risqué, exige build+device).
+
+#### Prochaine session — ordre conseillé
+
+1. **CI** des PR (sleepy-carson #316 + cette branche) : 1re vraie compilation de P3.2, p2.4, p2.5. Corriger toute erreur de symbole avant d'ajouter du neuf.
+2. **§7.5 filtres Vision/Metal** via le seam `VideoFilterCapturerDelegate` (build+device requis pour la perf/throttle).
+3. **§7.1 layout adaptatif complet**.
+4. **§3.1 réducteur `CallEventQueue`** (dernier P0, le plus risqué — build+device obligatoire).
+
+---
+
+### 2026-06-06 (suite 8) — Fix double-frame vidéo + état RÉEL recalibré (branche `claude/calls-p2-sota`)
+
+#### Bug utilisateur corrigé (tag `calls-sota-p2.7`, commit `baace0e`)
+
+**Symptôme** : « double frame qui superpose plusieurs layer » dans l'appel vidéo connecté. **Cause racine** : la caméra LOCALE était rendue **deux fois** — en fond plein écran (`CallView.body` ZStack) ET dans la PiP — pendant que le remote flottait dans une carte arrondie centrée entre des `Spacer`. Le fond local débordait autour de la carte (et après un swap PiP, le local devenait à la fois le fond ET le primary).
+
+**Fix** :
+- `shouldShowSelfPreviewBackground` : le self-preview local plein écran n'apparaît plus QUE pendant l'attente de connexion (ringing/offering/connecting). En `.connected`/`.reconnecting`, primary + PiP possèdent l'unique surface vidéo.
+- `connectedView` : le primary devient une surface **full-bleed edge-to-edge** (la vue unique), contrôles/avatar/PiP en overlay — remplace la carte centrée sandwichée dans des Spacer.
+- `videoCallLayout` : `.ignoresSafeArea()` sur la vidéo seule (le badge durée reste dans la safe area), suppression du clip arrondi.
+- **Revue** : `pipView` rend `videoStream(local: !swapStreams)` = toujours l'OPPOSÉ du primary → aucune duplication quel que soit l'état de swap. ✅
+
+#### ⚠️ §12 recalibré — `main` contient BEAUCOUP plus que les tranches « reste » antérieures ne le laissaient croire
+
+Vérifié dans le code de `main` (et non d'après les notes) :
+- ✅ **§5.5** codecs H264 HW + `invokeSetCodecPreferences` (overload throwing) + ordre H264>VP8>VP9 + Opus 64/16 kbps — **déjà sur main**.
+- ✅ **§5.6** RtpEncoding + `degradationPreference=.maintainFramerate` — **déjà sur main** ; **adaptation thermique ajoutée cette session (p2.4)**.
+- ✅ **§7.5** filtres Vision/Metal — **déjà sur main** (`VideoFilterPipeline` : `VNGeneratePersonSegmentationRequest` + `CIGaussianBlur` + `CIContext(mtlDevice:)` + `CVPixelBufferPool` + re-wrap `RTCVideoFrame` ; `VideoFilterCapturerDelegate` ; `VideoFiltersPanel`).
+- ✅ **§7.1** barre de contrôle intelligente (`ViewThatFits`), Mac letterbox + contrôles persistants + cacher speaker/flip (p1.8). **Manque uniquement** : picker Continuity Camera (caméras `.continuityCamera`/`.external` nommées).
+- ✅ **§4.3** debounce `.disconnected` → `.reconnecting` → `performICERestart` (antérieur) + **bannière reconnecting (p2.5)**.
+
+#### Reste réellement à faire (TOUS exigent build Xcode + device — ne PAS faire à l'aveugle)
+
+1. **§3.1 `CallEventQueue` réducteur** : scaffold pur, **13** écritures `callState =` éparpillées à sérialiser derrière un réducteur unique. Gros refactor FSM live — le plus risqué, à faire en DERNIER avec device (comme le note la spec).
+2. **Suppression `.offering`** (P0 tâche 1, jamais faite) : encore dans l'enum + 3 usages (CallManager 1175/1962, CallView 63). État FSM live de l'appel sortant — exige validation device.
+3. **§7.1 picker Continuity Camera** (Mac/iPad caméras externes nommées) : additif, touche le chemin capture — validation device.
+
+> **Tout le reste de la spec (P0 hors §3.1/`.offering`, P1, P2, P3) est implémenté.** Le système d'appels audio/vidéo est fonctionnellement complet de bout en bout. Les 3 items ci-dessus sont des changements FSM/capture qui ne peuvent PAS être faits à l'A-level sans Xcode + 2 iPhones + Mac sans risquer une régression d'un système d'appels qui marche.
+
+#### Tags de cette session (locaux — push tags 403)
+`calls-sota-p3.1`→`p3.3` (P3 system messages E2E), `p2.4` (thermal), `p2.5` (reconnecting banner), `p2.6` (§12), `p2.7` (double-frame fix). Branche : `claude/calls-p2-sota` (sur-ensemble de `sleepy-carson` + main).
+
+---
+
+### 2026-06-06 (suite 9) — §7.1 picker Continuity Camera livré (branche `claude/calls-p2-sota`)
+
+#### Livré (tags `calls-sota-p7.1` data + `p7.2` UI)
+
+**§7.1 picker Continuity/USB camera** (Mac/iPad) — additif, ne touche PAS la FSM ; le flip front/back iPhone reste identique.
+- `p7.1` (`5d0d0f7`) **data** : `CameraCatalog` pur (`CameraDeviceOption`/`CameraFacing`, ordre front→back→external + nom + tiebreak uniqueID, de-dup, suffixe « (2) » pour noms identiques — **6 tests purs**) ; protocole `WebRTCClientProviding.availableCameras()`/`switchToCamera(uniqueID:)` (real client : enum `RTCCameraVideoCapturer.captureDevices`, external via `deviceType` iOS 17 ; switch = même stop→reselect→start que `switchCamera`) ; stub + `MockWebRTCClient` mis à jour ; passthrough `WebRTCService` ; `CallManager.availableCameras`/`selectedCameraId`/`refreshAvailableCameras()`/`selectCamera(id:)`.
+- `p7.2` (`a471859`) **UI** : `cameraControl` (flip iPhone vs Menu device picker Mac/iPad si >1 caméra + externe), `cameraPickerMenu` (liste nommée + checkmark actif), refresh `.task(id: isVideoEnabled)`.
+
+#### État FINAL — il ne reste que 2 items, TOUS exigent build Xcode + device
+
+1. **§3.1 réducteur `CallEventQueue`** : scaffold pur, 13 écritures `callState =` à sérialiser. Gros refactor FSM live.
+2. **Suppression `.offering`** (P0 tâche 1) : contenu (1 case enum + 1 assignation `CallManager:2008` + ~5 sites de match), mais **change les transitions FSM live de l'appel sortant** (bridge ringing→connecting l.1203, catch-up ICE l.2288). Mal fait sans device → caller bloqué « Sonnerie ». La spec impose validation device + progressive.
+
+> **Tout le reste de la spec est implémenté.** Le système d'appels est fonctionnellement complet E2E. Les 2 items restants sont des changements FSM live à faire **uniquement avec Xcode + 2 iPhones + Mac**.
+
+#### Tous les tags de la session (locaux — push tags 403)
+`p3.1`→`p3.3` (P3 messages système E2E), `p2.4` (thermal §5.6), `p2.5` (bannière reconnecting §4.3), `p2.7` (fix double-frame vidéo), `p7.1`+`p7.2` (§7.1 Continuity picker), + docs `p2.6`/`p2.8`/`p7.x`. Branche : `claude/calls-p2-sota`.
+
+---
+
+### 📍 ÉTAT ACTUEL — HANDOFF POUR REPRISE (nouvelle session) — 2026-06-07
+
+> **Lis ce bloc en premier.** Il résume tout l'état et te dit exactement quoi faire ensuite.
+
+**Branche active** : `claude/calls-p2-sota` (sur-ensemble de `claude/sleepy-carson-1farc` [PR #316] + `origin/main` mergé). Développe et pousse ICI.
+
+#### ✅ Ce qui est FAIT (système d'appels fonctionnellement complet E2E)
+- **P0** : autorité FSM `RTCPeerConnectionState` (§3.2), perfect negotiation fondation (§3.4), epoch `negotiationId` (§3.5), candidate queue + re-buffer ICE-restart (§4.1), buffer/replay offer gateway (§4.6), answerer-applies-offer-first (§5.2), suppression contraintes Plan-B (§5.3), getStats par-kind + vrai codec (§5.7), watchdog `.connecting` + auto-heal half-open (§5.8), `reportOutgoingCall(connectedAt:)` piloté `.connected` (§6.1), offer at-least-once (§6.3), gating audio Mac (§2.3/§6.4).
+- **P1 UI** : PiP swap/drag/snap, return-to-call vidéo, header in-conv, auto-hide contrôles, Mac-adaptive (letterbox + contrôles persistants), call-waiting câblé, miroir conditionnel front-only (§7.7), watchdog spinner vidéo.
+- **P2** : codecs H264 HW + `setCodecPreferences` throwing + ordre (§5.5), RtpEncoding + degradation (§5.6-core), **adaptation thermique (§5.6, p2.4)**, filtres Vision/Metal blur (§7.5 : `VideoFilterPipeline`), Liquid Glass iOS 26, **bannière reconnecting (§4.3, p2.5)**, **picker Continuity Camera (§7.1, p7.1+p7.2)**.
+- **P3** : **messages système d'appel E2E** (gateway `CallService.createCallSummaryMessage` idempotent + 4 sites terminaux ; iOS `BubbleSystemNoticeView`). Tests : 18 vitest + 9 jest.
+- **Fix visuel** : double-frame vidéo éliminé (surface vidéo full-bleed unique + PiP, plus de caméra locale dupliquée en fond) — p2.7.
+
+#### ⏳ RESTE À FAIRE — 2 items, **build Xcode + 2 iPhones + Mac OBLIGATOIRES**
+1. **Suppression `.offering`** (P0 tâche 1) — le plus simple des deux, fais-le EN PREMIER :
+   - Enum case : `CallManager.swift:20`. Assignation unique : `CallManager.swift:2008` (`self.callState = .offering` après envoi de l'offer). Matchs : `if case .offering` l.1203 ; `switch` l.1352 (watchdog), l.1990 (ignore joins), l.2288 (catch-up ICE) ; `CallView.swift:71` (→ `outgoingRingingView`).
+   - Cible (spec §3.2) : `outgoing(.ringing(isOutgoing:true)) → connecting → connected`. Remplacer `= .offering` par : **rester `.ringing(isOutgoing:true)`** après envoi de l'offer ; bridger vers `.connecting` à la réception de l'answer (`handleRemoteAnswer`) au lieu du bridge `.offering→.connecting` actuel (l.1203). Supprimer le hack catch-up ICE l.2288 (l'autorité `RTCPeerConnectionState.connected` rend `.connected` fiable). Mettre à jour les ~5 `switch`/`if case`.
+   - **Risque** : mal fait → caller bloqué « Sonnerie » ou skip de l'UI ringing. **Valider device des 2 côtés** : appel sortant audio + vidéo se connecte, UI ringing→connexion→connecté correcte.
+2. **§3.1 réducteur `CallEventQueue`** — gros refactor, fais-le EN DERNIER :
+   - `CallEventQueue.swift` est un scaffold (state/version/hooks, pas de logique de transition). `CallManager` mute `callState` depuis **13 sites** (`grep -n "callState = " CallManager.swift`).
+   - Cible (spec §3.1/§3.6) : un réducteur unique sérialisé possède TOUTES les écritures `callState`. Tous les stimuli (CallKit, socket, ICE/`RTCPeerConnectionState`, NWPath, timeouts) sont enqueue dans une file unique consommée par un seul réducteur. Extraire idéalement `CallConnectionFSM`.
+   - **Risque** : race windows si mal sérialisé. **Exige build + device** ; faire **progressivement, jamais d'un bloc** (mandat §0 rule 9/19).
+
+#### 🧪 Validation
+1. **CI de la PR D'ABORD** (1re vraie compilation iOS de toute la session) — corriger tout symbole manquant avant d'ajouter du neuf. Symboles à risque : `glassEffect`/`GlassEffectContainer` (SDK iOS 26), `AVCaptureDevice.DeviceType.external/.continuityCamera` (iOS 17, gardés `#available`).
+2. `cd packages/shared && npx vitest run __tests__/call-summary.test.ts` → 18/18.
+3. `cd packages/shared && npx prisma generate` puis `cd services/gateway && npx jest --config jest.config.json src/__tests__/unit/services/CallService.summary.test.ts` → 9/9 (+ `pnpm type-check` → 0).
+4. Device : `./apps/ios/meeshy.sh build` + `./apps/ios/meeshy.sh test` (`VideoThermalProfileTests`, `CameraCatalogTests`, `BubbleContentMatrixTests`, `CallStatsReducerTests`, `CallReliabilityPolicyTests`, `PerfectNegotiationRoleTests`, `NegotiationEpochTests`). Puis AC1→AC15 sur 2 iPhones + Mac.
+
+#### ⚠️ Contraintes env web (cette série de sessions)
+- **Pas de toolchain Swift** → iOS non compilable ici ; tout le code iOS est validé par CI/device. Le TS (vitest/jest/type-check) EST exécutable après `npx prisma generate` (le client se génère, l'engine se télécharge).
+- **Push des tags bloqué (HTTP 403)** → tags `calls-sota-*` locaux seulement ; recréer via SHA depuis un env autorisé. Les **commits** sont tous poussés.
+- Ne PAS partager `P2PWebRTCClient.swift`/`CallManager.swift` entre worktrees parallèles.
+
+#### Historique
+Tranches antérieures mergées sur `main` (PR #314/#315, tags `p0.1`→`p1.9`). Cette série : `p3.1`→`p3.3`, `p2.4`→`p2.8`, `p7.1`→`p7.3` (voir « suite 6 » à « suite 9 » ci-dessus).
 
 ---
 

@@ -38,8 +38,16 @@ struct CallView: View {
 
     var body: some View {
         ZStack {
-            // Background: camera locale pour appels video, gradient pour audio
-            if callManager.isVideoEnabled && callManager.hasLocalVideoTrack {
+            // Background: full-screen LOCAL self-preview ONLY while waiting to
+            // connect (ringing/offering/connecting) — the user sees themselves
+            // before the peer's video arrives. Once `.connected`/`.reconnecting`,
+            // the primary stream (`videoCallLayout`) + the `pipView` own the
+            // single video surface; keeping a full-screen local layer here would
+            // render the local feed TWICE (background + PiP) and bleed around the
+            // primary — the "double frame / overlapping layers" bug. After a PiP
+            // swap the local feed becomes the primary, so this would duplicate it
+            // again. Hence: self-preview background only when NOT connected.
+            if shouldShowSelfPreviewBackground {
                 // §7.7 — self-preview background mirrors only the front camera.
                 CallVideoView(track: callManager.localVideoTrack, mirror: callManager.isUsingFrontCamera, contentMode: .scaleAspectFill)
                     .ignoresSafeArea()
@@ -76,9 +84,23 @@ struct CallView: View {
             case .ended(let reason):
                 endedView(reason: reason)
             case .reconnecting:
-                connectingView
+                // §4.3 — keep the connected layout (peer's last frame / tiles)
+                // and overlay a "Reconnexion…" banner instead of blanking to
+                // the full-screen connecting view. `.reconnecting` is only
+                // entered from `.connected` (FSM §3.2), so the tracks already
+                // exist — the FaceTime/WhatsApp recovery behaviour.
+                connectedView
             case .idle:
                 EmptyView()
+            }
+
+            // §4.3 — reconnecting banner: surfaced while an ICE restart recovers
+            // a dropped connection, layered over the frozen last frame without
+            // tearing down the call UI.
+            if case .reconnecting = callManager.callState {
+                reconnectingBanner
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
 
             // Effects overlay — accessible dans tous les etats actifs (pas seulement connected)
@@ -252,16 +274,23 @@ struct CallView: View {
 
     private var connectedView: some View {
         ZStack {
-            VStack(spacing: 0) {
-                Spacer()
+            // §7.2 — full-bleed PRIMARY video is the SINGLE video surface
+            // (remote by default, the local camera after a PiP swap). The
+            // secondary feed lives ONLY in the draggable PiP. Controls (and the
+            // centered avatar for audio calls) overlay on top. This replaces the
+            // old centered card sandwiched in Spacers, which floated over the
+            // self-preview background and read as a "double frame".
+            if callManager.isVideoEnabled {
+                // §7.3 — tap the primary video to toggle the controls
+                // (auto-hide UX). The PiP (on top) keeps its own swap tap.
+                videoCallLayout
+                    .contentShape(Rectangle())
+                    .onTapGesture { toggleControls() }
+            }
 
-                if callManager.isVideoEnabled {
-                    // §7.3 — tap the primary video to toggle the controls
-                    // (auto-hide UX). The PiP (on top) keeps its own swap tap.
-                    videoCallLayout
-                        .contentShape(Rectangle())
-                        .onTapGesture { toggleControls() }
-                } else {
+            VStack(spacing: 0) {
+                if !callManager.isVideoEnabled {
+                    Spacer()
                     audioCallLayout
                 }
 
@@ -319,6 +348,20 @@ struct CallView: View {
 
     private func toggleControls() {
         withAnimation(.easeInOut(duration: 0.25)) { showControls.toggle() }
+    }
+
+    /// Whether to render the full-screen LOCAL self-preview as the call
+    /// background. True ONLY while waiting to connect (ringing/offering/
+    /// connecting) so the user sees themselves before the peer's video arrives.
+    /// Once `.connected`/`.reconnecting`, the primary stream + PiP own the
+    /// single video surface, so a full-screen local layer here would duplicate
+    /// the local feed (rendered again in the PiP) — the double-frame bug.
+    private var shouldShowSelfPreviewBackground: Bool {
+        guard callManager.isVideoEnabled, callManager.hasLocalVideoTrack else { return false }
+        switch callManager.callState {
+        case .connected, .reconnecting: return false
+        default: return true
+        }
     }
 
     /// §7.1 — iOS-app-on-Mac (NOT Catalyst). Drives desktop-specific UI:
@@ -384,6 +427,28 @@ struct CallView: View {
             .accessibilityLabel(connectionQualityAccessibilityLabel)
     }
 
+    /// §4.3 — reconnecting banner shown over the frozen call layout while an
+    /// ICE restart recovers a dropped connection (warning-tinted capsule with a
+    /// spinner). The call is NOT torn down; the peer's last frame stays visible.
+    private var reconnectingBanner: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .progressViewStyle(.circular)
+                .tint(.white)
+                .scaleEffect(0.8)
+            Text(String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main))
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(.white)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Capsule().fill(MeeshyColors.warning.opacity(0.92)))
+        .shadow(color: Color.black.opacity(0.18), radius: 8, y: 2)
+        .padding(.top, 8)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(String(localized: "call.reconnecting", defaultValue: "Reconnexion…", bundle: .main))
+    }
+
     private var connectionQualityColor: Color {
         switch callManager.connectionQuality {
         case .connected: return MeeshyColors.success
@@ -415,13 +480,17 @@ struct CallView: View {
 
     private var videoCallLayout: some View {
         ZStack {
-            // §7.2 — full-area PRIMARY stream. `swapStreams` decides whether the
-            // primary is the remote feed (default) or the local camera (after a
-            // PiP tap). The OTHER stream is rendered in the draggable PiP.
-            // §7.1 — letterbox on Mac, fill on phone/tablet.
+            // §7.2 — full-bleed PRIMARY stream (edge-to-edge, single surface).
+            // `swapStreams` decides whether the primary is the remote feed
+            // (default) or the local camera (after a PiP tap). The OTHER stream
+            // is rendered in the draggable PiP. §7.1 — letterbox on Mac, fill on
+            // phone/tablet. `.ignoresSafeArea()` is on the VIDEO only so the feed
+            // reaches the screen edges while the duration badge stays inside the
+            // safe area (never under the notch / Dynamic Island).
             videoStream(local: swapStreams, contentMode: primaryVideoContentMode)
+                .ignoresSafeArea()
 
-            // Duration badge top-left
+            // Duration badge top-left (respects the safe area).
             VStack {
                 HStack {
                     Text(callManager.formattedDuration)
@@ -437,7 +506,6 @@ struct CallView: View {
                 Spacer()
             }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 20))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -728,21 +796,9 @@ struct CallView: View {
                 }
             }
 
-            // Camera flip — only when video is capturing (flipping a stopped
-            // capturer is a no-op). §7.1/§7.3: hidden on iOS-on-Mac (single
-            // .unspecified camera → switchCamera is a no-op there).
-            if callManager.isVideoEnabled && !isOnMac {
-                callControlButton(
-                    icon: "camera.rotate.fill",
-                    color: .white,
-                    bgColor: .white,
-                    isActive: false,
-                    caption: String(localized: "call.control.flipCamera.caption", defaultValue: "Pivoter", bundle: .main),
-                    label: String(localized: "call.control.flipCamera", defaultValue: "Basculer la caméra avant/arrière", bundle: .main)
-                ) {
-                    callManager.switchCamera()
-                }
-            }
+            // §7.1/§7.3 — camera control: front/back flip on iPhone, a named
+            // device picker (Continuity / USB) on Mac/iPad with multiple cameras.
+            cameraControl
 
             // Video toggle stays visible even when video is disabled so the user
             // can re-enable it.
@@ -763,6 +819,66 @@ struct CallView: View {
             endCallButton
         }
         .padding(.horizontal, 16)
+        // §7.1 — populate the camera list when video turns on so `cameraControl`
+        // can decide flip vs device picker (Continuity/USB on Mac/iPad).
+        .task(id: callManager.isVideoEnabled) {
+            if callManager.isVideoEnabled { callManager.refreshAvailableCameras() }
+        }
+    }
+
+    /// §7.1/§7.3 — front/back flip on iPhone; a named device picker on Mac/iPad
+    /// when multiple cameras (incl. Continuity/USB) are available. Hidden when
+    /// video is off, or on Mac with a single camera (flip would be a no-op).
+    @ViewBuilder
+    private var cameraControl: some View {
+        if callManager.isVideoEnabled {
+            if callManager.availableCameras.count > 1
+                && (isOnMac || callManager.availableCameras.contains(where: { $0.isExternal })) {
+                cameraPickerMenu
+            } else if !isOnMac {
+                callControlButton(
+                    icon: "camera.rotate.fill",
+                    color: .white,
+                    bgColor: .white,
+                    isActive: false,
+                    caption: String(localized: "call.control.flipCamera.caption", defaultValue: "Pivoter", bundle: .main),
+                    label: String(localized: "call.control.flipCamera", defaultValue: "Basculer la caméra avant/arrière", bundle: .main)
+                ) {
+                    callManager.switchCamera()
+                }
+            }
+        }
+    }
+
+    /// §7.1 — named camera picker (Continuity / USB / built-in) for Mac/iPad.
+    private var cameraPickerMenu: some View {
+        Menu {
+            ForEach(callManager.availableCameras) { cam in
+                Button {
+                    callManager.selectCamera(id: cam.id)
+                } label: {
+                    Label(
+                        cam.displayName,
+                        systemImage: callManager.selectedCameraId == cam.id ? "checkmark" : "camera"
+                    )
+                }
+            }
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: "camera.badge.ellipsis")
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundColor(.white.opacity(0.9))
+                    .callControlGlass(diameter: 56, isActive: false, tint: .white)
+                Text(String(localized: "call.control.camera.caption", defaultValue: "Caméra", bundle: .main))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(width: 68)
+        }
+        .pressable()
+        .accessibilityLabel(String(localized: "call.control.camera", defaultValue: "Choisir la caméra", bundle: .main))
     }
 
     // MARK: - UI Components

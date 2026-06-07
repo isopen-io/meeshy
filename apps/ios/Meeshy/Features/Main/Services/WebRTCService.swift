@@ -51,6 +51,10 @@ final class WebRTCService {
     private var lastStats: CallStats?
     private var comfortNoiseEnabled = true
     private var qualityLevelDebounceDate: Date?
+    // §5.6 — last device thermal state applied to the encoder. A change here
+    // re-applies the video encoding ceiling even when the network quality
+    // level is steady (see adjustBitrate / VideoThermalProfile).
+    private var lastThermalState: ProcessInfo.ThermalState = .nominal
     // §3.2 — debounce window for transient `.disconnected` blips. Cancelled
     // the moment the connection recovers (`.connected`) or decisively fails
     // (`.failed`/`.closed`, which fire `webRTCServiceDidDisconnect` at once).
@@ -162,6 +166,21 @@ final class WebRTCService {
         }
     }
 
+    // §7.1 — Continuity / external camera picker passthrough.
+    func availableCameras() -> [CameraDeviceOption] {
+        client.availableCameras()
+    }
+
+    func switchToCamera(uniqueID: String) {
+        Task {
+            do {
+                try await client.switchToCamera(uniqueID: uniqueID)
+            } catch {
+                Logger.webrtc.error("Failed to switch to camera \(uniqueID): \(error.localizedDescription)")
+            }
+        }
+    }
+
     // MARK: - Comfort Noise
 
     func handleRemoteAudioMuted(_ muted: Bool) {
@@ -231,7 +250,18 @@ final class WebRTCService {
             Logger.webrtc.info("Audio bitrate adjusted to \(newBitrate) bps (RTT: \(rtt)ms, loss: \(lossPct))")
         }
 
-        guard newLevel != currentQualityLevel else { return }
+        // §5.6 — a thermal transition must re-apply the encoder ceiling even
+        // when the network quality level is steady (a hot device sheds frames
+        // regardless of net health). Detected here on the periodic stats tick;
+        // thermal changes are slow (minutes) so tick latency is irrelevant.
+        let thermal = ProcessInfo.processInfo.thermalState
+        let thermalChanged = thermal != lastThermalState
+        lastThermalState = thermal
+
+        guard newLevel != currentQualityLevel else {
+            if thermalChanged { applyVideoQuality(currentQualityLevel) }
+            return
+        }
 
         let now = Date()
         if let debounce = qualityLevelDebounceDate, now.timeIntervalSince(debounce) < 5.0 {
@@ -260,7 +290,20 @@ final class WebRTCService {
         let fps = level.targetFPS > 0 ? level.targetFPS : 15
         let height = level.targetResolutionHeight > 0 ? level.targetResolutionHeight : 360
         let scale = max(1.0, 720.0 / Double(height))
-        client.applyVideoEncoding(maxBitrateBps: bitrate, maxFramerate: fps, scaleResolutionDownBy: scale)
+        // §5.6 — compose the network-driven target with the device thermal
+        // ceiling so a hot device sheds frames/bitrate even when the network is
+        // healthy. `.nominal` is a no-op, so cool devices keep full quality.
+        let thermal = VideoThermalProfile.apply(
+            bitrateBps: bitrate,
+            framerate: fps,
+            scaleDownBy: scale,
+            thermalState: ProcessInfo.processInfo.thermalState
+        )
+        client.applyVideoEncoding(
+            maxBitrateBps: thermal.bitrateBps,
+            maxFramerate: thermal.framerate,
+            scaleResolutionDownBy: thermal.scaleDownBy
+        )
     }
 
     // MARK: - DataChannel Transcription (H7)

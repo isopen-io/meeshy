@@ -85,6 +85,12 @@ final class CallManager: ObservableObject {
     /// at start), false on iOS-on-Mac (built-in/Continuity cameras are not
     /// mirrored).
     @Published private(set) var isUsingFrontCamera = true
+    /// §7.1 — capture cameras available for the in-call device picker (Mac/iPad
+    /// Continuity/USB). Refreshed via `refreshAvailableCameras()`. Empty on
+    /// iPhone where the front/back flip is the affordance.
+    @Published private(set) var availableCameras: [CameraDeviceOption] = []
+    /// §7.1 — uniqueID of the active capture camera (drives the picker's check).
+    @Published private(set) var selectedCameraId: String?
     @Published var pendingIncomingCall: (callId: String, fromUserId: String, fromUsername: String, isVideo: Bool)?
 
     // MARK: - Audio Guard (DEBUG override for tests)
@@ -1088,6 +1094,28 @@ final class CallManager: ObservableObject {
         // flip alternates front↔back; on Mac switchCamera is usually a no-op so
         // the flag rarely matters there.
         isUsingFrontCamera.toggle()
+        HapticFeedback.light()
+    }
+
+    // §7.1 — Continuity / external camera picker. On iPhone the front/back flip
+    // (`switchCamera`) is the right affordance; on Mac/iPad with named external
+    // (Continuity / USB) cameras the UI offers this device picker instead.
+    func refreshAvailableCameras() {
+        availableCameras = webRTCService.availableCameras()
+        if selectedCameraId == nil {
+            selectedCameraId = availableCameras.first(where: { $0.facing == .front })?.id
+                ?? availableCameras.first?.id
+        }
+    }
+
+    func selectCamera(id: String) {
+        guard id != selectedCameraId else { return }
+        selectedCameraId = id
+        webRTCService.switchToCamera(uniqueID: id)
+        if let cam = availableCameras.first(where: { $0.id == id }) {
+            // §7.7 — only the front camera is mirrored; external/back are not.
+            isUsingFrontCamera = (cam.facing == .front)
+        }
         HapticFeedback.light()
     }
 

@@ -264,6 +264,12 @@ protocol WebRTCClientProviding: AnyObject {
     /// the quality ladder in `WebRTCService.adjustBitrate`.
     func applyVideoEncoding(maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double)
     func switchCamera() async throws
+    /// §7.1 — available capture cameras (front/back/Continuity/external). Empty
+    /// on the no-WebRTC stub. Drives the Mac/iPad camera picker.
+    func availableCameras() -> [CameraDeviceOption]
+    /// §7.1 — switch the active capture device by `uniqueID` (Continuity / USB
+    /// camera selection). Reuses the same stop/start path as `switchCamera`.
+    func switchToCamera(uniqueID: String) async throws
     func getStats() async -> CallStats?
     func createDataChannel(label: String) -> Bool
     func sendDataChannelMessage(_ data: Data)
@@ -487,6 +493,108 @@ enum WebRTCError: Error, LocalizedError {
             "Use a real device for video calls."
         case .offerIgnored:
             "Colliding offer ignored by the impolite peer (perfect negotiation glare)"
+        }
+    }
+}
+
+// MARK: - Thermal-aware video encoder ceiling (§5.6)
+
+/// §5.6 — thermal-aware video encoder ceiling. The network-driven quality
+/// ladder (`WebRTCService.adjustBitrate`) picks an encoder target from RTT +
+/// packet loss; this composes a SECOND, independent ceiling from the device's
+/// `ProcessInfo.thermalState` so a hot device sheds encode load (the #1 cause
+/// of dropped frames + battery drain in long video calls) regardless of how
+/// healthy the network looks.
+///
+/// Pure + deterministic: maps a thermal state to multiplicative/absolute caps,
+/// then takes the MORE conservative of the network target and the thermal cap
+/// on each axis. `.nominal` is a strict no-op.
+enum VideoThermalProfile {
+    struct Ceiling: Equatable {
+        let bitrateFactor: Double   // multiplies the network bitrate target (≤ 1)
+        let maxFramerate: Int       // absolute fps cap
+        let minScaleDownBy: Double  // floor on resolution downscale (≥ 1)
+    }
+
+    static func ceiling(for state: ProcessInfo.ThermalState) -> Ceiling {
+        switch state {
+        case .nominal:  return Ceiling(bitrateFactor: 1.0, maxFramerate: 60, minScaleDownBy: 1.0)
+        case .fair:     return Ceiling(bitrateFactor: 0.8, maxFramerate: 30, minScaleDownBy: 1.0)
+        case .serious:  return Ceiling(bitrateFactor: 0.5, maxFramerate: 24, minScaleDownBy: 1.5)
+        case .critical: return Ceiling(bitrateFactor: 0.3, maxFramerate: 15, minScaleDownBy: 2.0)
+        @unknown default: return Ceiling(bitrateFactor: 1.0, maxFramerate: 60, minScaleDownBy: 1.0)
+        }
+    }
+
+    /// Compose a network-derived encoder target with the thermal ceiling, taking
+    /// the more conservative value on each axis. Bitrate/framerate never go below
+    /// 1; scale never below 1.0.
+    static func apply(
+        bitrateBps: Int,
+        framerate: Int,
+        scaleDownBy: Double,
+        thermalState: ProcessInfo.ThermalState
+    ) -> (bitrateBps: Int, framerate: Int, scaleDownBy: Double) {
+        let c = ceiling(for: thermalState)
+        let cappedBitrate = Int((Double(bitrateBps) * c.bitrateFactor).rounded())
+        let cappedFramerate = min(framerate, c.maxFramerate)
+        let flooredScale = max(scaleDownBy, c.minScaleDownBy)
+        return (max(1, cappedBitrate), max(1, cappedFramerate), max(1.0, flooredScale))
+    }
+}
+
+// MARK: - Camera device catalog (§7.1 — Continuity / external camera picker)
+
+/// Framework-agnostic facing of a capture device. On iOS-app-on-Mac and iPad,
+/// Continuity / USB cameras report no front/back position, so we surface them as
+/// `.external` (named) rather than a meaningless front/back flip.
+enum CameraFacing: String, Sendable, Equatable {
+    case front, back, external, unspecified
+}
+
+/// A selectable capture camera, surfaced to the call UI's device picker.
+struct CameraDeviceOption: Identifiable, Equatable, Sendable {
+    let id: String          // AVCaptureDevice.uniqueID
+    let displayName: String
+    let facing: CameraFacing
+
+    var isExternal: Bool { facing == .external }
+}
+
+/// Pure ordering/labeling of the camera list — kept free of AVFoundation so it
+/// is unit-testable from plain descriptors. The live enumeration
+/// (`RTCCameraVideoCapturer.captureDevices()`) maps into `Descriptor`.
+enum CameraCatalog {
+    struct Descriptor: Equatable, Sendable {
+        let uniqueID: String
+        let localizedName: String
+        let facing: CameraFacing
+    }
+
+    /// Build a stable, de-duplicated, human-ordered camera list. Ordering:
+    /// front → back → external/Continuity → unspecified, then by name, so the
+    /// most-expected camera leads the picker. Identically-named externals get a
+    /// "(2)" suffix so two same-model cameras stay distinguishable.
+    static func options(from descriptors: [Descriptor]) -> [CameraDeviceOption] {
+        let order: [CameraFacing: Int] = [.front: 0, .back: 1, .external: 2, .unspecified: 3]
+        var seen = Set<String>()
+        let unique = descriptors.filter { seen.insert($0.uniqueID).inserted }
+        let sorted = unique.sorted {
+            let a = order[$0.facing] ?? 9
+            let b = order[$1.facing] ?? 9
+            if a != b { return a < b }
+            let byName = $0.localizedName.localizedCaseInsensitiveCompare($1.localizedName)
+            if byName != .orderedSame { return byName == .orderedAscending }
+            // Deterministic tiebreaker (Swift's sort isn't stable) so two
+            // identically-named cameras keep a fixed order in the picker.
+            return $0.uniqueID < $1.uniqueID
+        }
+        var nameCounts: [String: Int] = [:]
+        return sorted.map { d in
+            let count = (nameCounts[d.localizedName] ?? 0) + 1
+            nameCounts[d.localizedName] = count
+            let display = count > 1 ? "\(d.localizedName) (\(count))" : d.localizedName
+            return CameraDeviceOption(id: d.uniqueID, displayName: display, facing: d.facing)
         }
     }
 }
