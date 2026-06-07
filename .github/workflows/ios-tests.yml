@@ -1,11 +1,15 @@
 name: iOS Tests
 
-# Re-enabled 2026-06-07 — the "test runner crashed while preparing to run tests:
-# xctest at swift_task_deinitOnExecutorMainActorBackDeploy" failure (which hit
-# both the SDK and app suites at bundle bootstrap) was an isolated-deinit
-# back-deployment bug in the Xcode 26.0.1 toolchain, not a product defect. Pinning
-# the runner to Xcode 26.1.1 (17B100 — the exact build that passes locally) fixes
-# it. workflow_dispatch kept for on-demand runs from the Actions tab.
+# Re-enabled 2026-06-07. Two environment facts drive the configuration below:
+#   1. The "test runner crashed … at swift_task_deinitOnExecutorMainActorBackDeploy"
+#      failure is a bug in the iOS 26.x SIMULATOR runtime's isolated-deinit path
+#      (double-free of a TaskLocal scope at xctest teardown for @MainActor classes
+#      with isolated deinits). It is ABSENT on the iOS 18.x runtime.
+#   2. The Timeline snapshot baselines were recorded on iOS 18.2.
+# So we COMPILE with Xcode 26.1.1 (Swift 6.2, required by the package) but RUN the
+# tests on an iOS 18.x simulator: crash-free AND consistent with the baselines.
+# Product code also received `nonisolated deinit` hardening for the affected
+# classes. workflow_dispatch kept for on-demand runs from the Actions tab.
 on:
   push:
     branches:
@@ -34,12 +38,22 @@ jobs:
       - name: Select Xcode 26.1.1 (Swift 6.2)
         run: sudo xcode-select -s /Applications/Xcode_26.1.1.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_26.1.app/Contents/Developer
 
+      - name: Create iOS 18 simulator
+        id: sim
+        run: |
+          set -e
+          RT=$(xcrun simctl list runtimes available | grep -oE 'com.apple.CoreSimulator.SimRuntime.iOS-18-[0-9]+' | sort -V | head -1)
+          if [ -z "$RT" ]; then echo "::error::No iOS 18 simulator runtime available"; xcrun simctl list runtimes; exit 1; fi
+          echo "Using runtime: $RT"
+          SIM_ID=$(xcrun simctl create "iPhone16Pro-iOS18-CI" "iPhone 16 Pro" "$RT")
+          echo "sim_id=$SIM_ID" >> "$GITHUB_OUTPUT"
+
       - name: Run SDK tests
         run: |
           rm -rf TestResults.xcresult
           xcodebuild test \
             -scheme MeeshySDK-Package \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.sim_id }}" \
             -resultBundlePath TestResults.xcresult \
             -quiet
         working-directory: packages/MeeshySDK
@@ -64,13 +78,23 @@ jobs:
       - name: Select Xcode 26.1.1 (Swift 6.2)
         run: sudo xcode-select -s /Applications/Xcode_26.1.1.app/Contents/Developer || sudo xcode-select -s /Applications/Xcode_26.1.app/Contents/Developer
 
+      - name: Create iOS 18 simulator
+        id: sim
+        run: |
+          set -e
+          RT=$(xcrun simctl list runtimes available | grep -oE 'com.apple.CoreSimulator.SimRuntime.iOS-18-[0-9]+' | sort -V | head -1)
+          if [ -z "$RT" ]; then echo "::error::No iOS 18 simulator runtime available"; xcrun simctl list runtimes; exit 1; fi
+          echo "Using runtime: $RT"
+          SIM_ID=$(xcrun simctl create "iPhone16Pro-iOS18-CI" "iPhone 16 Pro" "$RT")
+          echo "sim_id=$SIM_ID" >> "$GITHUB_OUTPUT"
+
       - name: Run iOS tests
         run: |
           rm -rf TestResults.xcresult
           xcodebuild test \
             -project apps/ios/Meeshy.xcodeproj \
             -scheme Meeshy \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.sim_id }}" \
             -only-testing:MeeshyTests \
             -resultBundlePath TestResults.xcresult \
             -quiet
