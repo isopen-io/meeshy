@@ -124,11 +124,6 @@ final class CallManager: ObservableObject {
 
     // MARK: - Internal
 
-    /// Phase 0 scaffold — owned but not yet wired into transitions.
-    /// Subsequent phases migrate transition logic from CallManager into this actor.
-    /// Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §2.2
-    private let eventQueue = CallEventQueue()
-
     private let webRTCService: WebRTCService
     private let ringbackPlayer = RingbackTonePlayer()
     // PERF-011: replace Timer.scheduledTimer with cancellable @MainActor Tasks.
@@ -1457,10 +1452,10 @@ final class CallManager: ObservableObject {
                         break
                     case .restartICE:
                         didAttemptConnectingRestart = true
-                        Logger.calls.warning("[CALL-DIAG] .connecting watchdog (\(Int(elapsed))s) — ICE restart")
+                        Logger.calls.info(".connecting watchdog (\(Int(elapsed))s) → triggering ICE restart")
                         self.attemptReconnection()
                     case .fail:
-                        Logger.calls.error("[CALL-DIAG] .connecting watchdog (\(Int(elapsed))s) — failing call")
+                        Logger.calls.error(".connecting watchdog (\(Int(elapsed))s) — failing call")
                         self.endCallInternal(reason: .failed(String(localized: "call.error.timeout")))
                         return
                     }
@@ -1479,12 +1474,12 @@ final class CallManager: ObservableObject {
                     ) {
                     case .healthy:
                         halfOpenSettled = true
-                        Logger.calls.info("[CALL-DIAG] media bidirectional (inAudio=\(stats.inboundAudioPackets) inVideo=\(stats.inboundVideoPackets) out=\(stats.outboundPacketsSent))")
+                        Logger.calls.debug("media bidirectional (inAudio=\(stats.inboundAudioPackets) inVideo=\(stats.inboundVideoPackets) out=\(stats.outboundPacketsSent))")
                     case .waiting:
                         break
                     case .healHalfOpen:
                         halfOpenSettled = true
-                        Logger.calls.warning("[CALL-DIAG] half-open detected (in=0 out=\(stats.outboundPacketsSent)) after \(Int(elapsed))s — auto ICE restart")
+                        Logger.calls.warning("half-open detected (in=0 out=\(stats.outboundPacketsSent)) after \(Int(elapsed))s — auto ICE restart")
                         self.attemptReconnection()
                     }
                 case .reconnecting:
@@ -2155,7 +2150,7 @@ final class CallManager: ObservableObject {
         let remoteId = remoteUserId ?? ""
         let polite = Self.isPolitePeer(localUserId: localId, remoteUserId: remoteId)
         webRTCService.setNegotiationRole(isPolite: polite)
-        Logger.calls.info("[CALL-DIAG] negotiation role: \(polite ? "polite" : "impolite") (local=\(localId, privacy: .public) remote=\(remoteId, privacy: .public))")
+        Logger.calls.debug("negotiation role: \(polite ? "polite" : "impolite") (local=\(localId, privacy: .public) remote=\(remoteId, privacy: .public))")
     }
 
     /// §3.5 — accept an incoming signal of `generation` unless it is stale

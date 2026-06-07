@@ -471,7 +471,7 @@ extension WebRTCService: WebRTCClientDelegate {
             try? await Task.sleep(nanoseconds: nanos)
             if Task.isCancelled { return }
             guard self.connectionState == .disconnected else { return }
-            Logger.webrtc.info("[CALL-DIAG] disconnect debounce elapsed — escalating to reconnect")
+            Logger.webrtc.info("disconnect debounce elapsed — escalating to reconnect")
             self.delegate?.webRTCServiceDidDisconnect(self)
         }
     }

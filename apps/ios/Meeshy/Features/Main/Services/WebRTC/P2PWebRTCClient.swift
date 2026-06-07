@@ -60,7 +60,6 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
     private(set) var videoFilterPipeline = VideoFilterPipeline()
     private var transcriptionDataChannel: RTCDataChannel?
-    private let audioProcessingModule: MeeshyAudioProcessingModule
     private let _audioEffectsService: CallAudioEffectsService
 
     var audioEffectsService: CallAudioEffectsServiceProviding? { _audioEffectsService }
@@ -73,9 +72,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     var remoteVideoTrack: Any? { remoteVideoTrack_ }
 
     override init() {
-        let effectsService = CallAudioEffectsService()
-        self._audioEffectsService = effectsService
-        self.audioProcessingModule = MeeshyAudioProcessingModule(effectsService: effectsService)
+        self._audioEffectsService = CallAudioEffectsService()
 
         // PERF-001: reuse the process-wide cached factory (initialized lazily once).
         // SSL init is performed inside the factory's lazy block.
@@ -155,7 +152,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     // caller from the two userIds; the smaller is polite). Fixed once per call.
     func setNegotiationRole(isPolite: Bool) {
         self.isPolite = isPolite
-        Logger.webrtc.info("[CALL-DIAG] negotiation role set: \(isPolite ? "polite" : "impolite", privacy: .public)")
+        Logger.webrtc.info("negotiation role set: \(isPolite ? "polite" : "impolite", privacy: .public)")
     }
 
     // MARK: - Local Media
@@ -592,7 +589,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         mungedSDP = Self.addVideoBitrateHints(mungedSDP)
         let mungedDescription = RTCSessionDescription(type: sdp.type, sdp: mungedSDP)
         try await setLocalDescription(mungedDescription, on: pc)
-        Logger.webrtc.info("[CALL-DIAG] local OFFER directions: \(Self.sdpDirections(mungedSDP), privacy: .public)")
+        Logger.webrtc.info("local OFFER directions: \(Self.sdpDirections(mungedSDP), privacy: .public)")
         Logger.webrtc.info("SDP offer created and set as local description (Opus munged)")
         return SessionDescription(type: .offer, sdp: mungedSDP)
     }
@@ -612,11 +609,11 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let offerCollision = !readyForOffer
         ignoreOffer = !isPolite && offerCollision
         if ignoreOffer {
-            Logger.webrtc.info("[CALL-DIAG] glare: impolite peer ignoring colliding offer")
+            Logger.webrtc.info("glare: impolite peer ignoring colliding offer")
             throw WebRTCError.offerIgnored
         }
         if offerCollision {
-            Logger.webrtc.info("[CALL-DIAG] glare: polite peer rolling back local offer")
+            Logger.webrtc.info("glare: polite peer rolling back local offer")
             try await setLocalDescription(RTCSessionDescription(type: .rollback, sdp: ""), on: pc)
         }
 
@@ -668,7 +665,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         mungedSDP = Self.addVideoBitrateHints(mungedSDP)
         let mungedDescription = RTCSessionDescription(type: sdp.type, sdp: mungedSDP)
         try await setLocalDescription(mungedDescription, on: pc)
-        Logger.webrtc.info("[CALL-DIAG] local ANSWER directions: \(Self.sdpDirections(mungedSDP), privacy: .public)")
+        Logger.webrtc.info("local ANSWER directions: \(Self.sdpDirections(mungedSDP), privacy: .public)")
         Logger.webrtc.info("SDP answer created and set as local description (Opus munged)")
         return SessionDescription(type: .answer, sdp: mungedSDP)
     }
@@ -684,7 +681,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // CALL-DIAG (temp) — log the answer's per-media direction. If the peer's
         // answer is recvonly/inactive for a media we expect to receive, that peer
         // is NOT sending → our inbound RTP stays 0 (one-way media symptom).
-        Logger.webrtc.info("[CALL-DIAG] remote ANSWER directions: \(Self.sdpDirections(answer.sdp), privacy: .public)")
+        Logger.webrtc.info("remote ANSWER directions: \(Self.sdpDirections(answer.sdp), privacy: .public)")
         Logger.webrtc.info("Remote answer set")
     }
 
@@ -1349,7 +1346,7 @@ extension P2PWebRTCClient: RTCPeerConnectionDelegate {
         case .closed: .closed
         @unknown default: .new
         }
-        Logger.webrtc.info("[CALL-DIAG] peerConnectionState (authority): \(state.rawValue, privacy: .public)")
+        Logger.webrtc.info("peerConnectionState (authority): \(state.rawValue, privacy: .public)")
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.delegate?.webRTCClient(self, didChangeConnectionState: state)
@@ -1362,7 +1359,7 @@ extension P2PWebRTCClient: RTCPeerConnectionDelegate {
     // raced media-key setup and caused one-way / silent audio. The authority
     // moved to `peerConnection(_:didChange: RTCPeerConnectionState)` above.
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
-        Logger.webrtc.info("[CALL-DIAG] iceConnectionState (diagnostic): \(newState.rawValue)")
+        Logger.webrtc.info("iceConnectionState (diagnostic): \(newState.rawValue)")
     }
 
     nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceGatheringState) {
@@ -1380,7 +1377,7 @@ extension P2PWebRTCClient: RTCPeerConnectionDelegate {
             guard let r = candidate.sdp.range(of: "typ ") else { return "?" }
             return String(candidate.sdp[r.upperBound...].split(separator: " ").first ?? "?")
         }()
-        Logger.webrtc.info("[CALL-DIAG] ICE_OUT typ=\(diagTyp, privacy: .public) mid=\(candidate.sdpMid ?? "nil", privacy: .public)")
+        Logger.webrtc.info("ICE_OUT typ=\(diagTyp, privacy: .public) mid=\(candidate.sdpMid ?? "nil", privacy: .public)")
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.delegate?.webRTCClient(self, didGenerateCandidate: iceCandidate)
