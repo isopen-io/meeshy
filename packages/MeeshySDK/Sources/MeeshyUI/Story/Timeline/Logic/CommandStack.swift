@@ -62,6 +62,20 @@ public final class CommandStack {
 
     public var canUndo: Bool { cursor > 0 }
     public var canRedo: Bool { cursor < commands.count }
+
+    // `nonisolated` deinit : CommandStack ne retient que des commandes value-type
+    // (`AnyEditCommand`) et un closure `didChange` — sa libération ne fait AUCUN
+    // travail @MainActor. Sans ceci, le deinit implicite isolé @MainActor passe
+    // par `swift_task_deinitOnExecutorMainActorBackDeploy` (deployment target
+    // iOS 16 → l'isolated-deinit SE-0371 est back-deployé), dont le shim
+    // double-free le `TaskLocal` scope et abort (SIGABRT) quand la stack est
+    // libérée HORS du main actor — typiquement dans un teardown XCTest
+    // non-@MainActor. C'est précisément ce crash (« test runner crashed … at
+    // swift_task_deinitOnExecutorMainActorBackDeploy ») qui faisait tomber tout
+    // le bundle MeeshyUITests en CI, attribué tantôt à CommandStackTests, tantôt
+    // à CanvasBackgroundIntegrationTests (qui possède un CommandStack via
+    // StoryCanvasUIView). Même pattern de garde que `StoryCanvasUIView.deinit`.
+    nonisolated deinit {}
 }
 
 extension CommandStack {

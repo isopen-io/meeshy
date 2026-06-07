@@ -17,8 +17,10 @@ struct VariableWidthStrokeBuilderTests {
     func offsetsPerpendicular() {
         let geo = VariableWidthStrokeBuilder().geometry(for: stroke([(0,0,1), (100,0,1)]))
         let v0 = geo.vertices[0], v1 = geo.vertices[1]
-        #expect(abs(v0.y - 8) < 0.01 || abs(v0.y + 8) < 0.01)
-        #expect(abs((v0.y - v1.y).magnitude - 16) < 0.01)
+        // Pression 1 → effectiveWidth = base×1.0 = 10 (cf. StrokeWidthMapping
+        // 2026-06-03, avant ×1.6=16) → demi-largeur ±5, ruban plein 10.
+        #expect(abs(v0.y - 5) < 0.01 || abs(v0.y + 5) < 0.01)
+        #expect(abs((v0.y - v1.y).magnitude - 10) < 0.01)
         #expect(abs(v0.x) < 0.01)
     }
     @Test("width varies along strip when pressure varies")

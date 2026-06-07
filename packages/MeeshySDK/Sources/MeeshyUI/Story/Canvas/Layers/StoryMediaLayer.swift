@@ -102,7 +102,10 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         fatalError("StoryMediaLayer does not support NSCoder")
     }
 
-    deinit {
+    // `nonisolated` : ne touche que `loopObserver` (nonisolated(unsafe)). Évite
+    // le shim `swift_task_deinitOnExecutorMainActorBackDeploy` qui double-free le
+    // TaskLocal scope et abort à la libération (cf. CommandStack/ReaderAudioMixer).
+    nonisolated deinit {
         if let token = loopObserver {
             NotificationCenter.default.removeObserver(token)
         }

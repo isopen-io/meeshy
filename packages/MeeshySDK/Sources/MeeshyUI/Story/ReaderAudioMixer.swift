@@ -337,7 +337,12 @@ public final class ReaderAudioMixer {
         isPlaying = false
     }
 
-    deinit {
+    // `nonisolated` : ne lit que `didShutdown` (Bool, Sendable) + log. Sans ce
+    // mot-clé, le deinit @MainActor implicite est isolé et passe par
+    // `swift_task_deinitOnExecutorMainActorBackDeploy`, dont le shim double-free
+    // le TaskLocal scope et abort (SIGABRT) à la libération du mixer — y compris
+    // via le teardown de StoryCanvasUIView qui possède toujours un audioMixer.
+    nonisolated deinit {
         if !didShutdown {
             os.Logger(subsystem: "me.meeshy.app", category: "media").warning(
                 "ReaderAudioMixer deinit without shutdown() — owner should call shutdown() before drop to release AVAudioEngine + nodes deterministically."

@@ -72,7 +72,11 @@ final class StoryServiceTests: XCTestCase {
     // MARK: - markViewed
 
     func testMarkViewedCallsCorrectEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["status": "viewed"], error: nil)
+        // `markViewed` décode la forme réelle du gateway `{ viewed: true }`
+        // (APIResponse<[String: Bool]>) depuis le fix 2026-06-01 ; le stub doit
+        // fournir un `[String: Bool]`, sinon le MockAPIClient ne matche pas le
+        // type de retour et lève « no stub … returning APIResponse<…Bool> ».
+        let response = APIResponse(success: true, data: ["viewed": true], error: nil)
         mock.stub("/posts/\(storyId)/view", result: response)
 
         try await service.markViewed(storyId: storyId)

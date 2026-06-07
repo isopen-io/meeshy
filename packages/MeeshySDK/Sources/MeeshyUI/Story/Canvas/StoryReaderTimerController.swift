@@ -138,7 +138,12 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
         super.init()
     }
 
-    deinit {
+    // `nonisolated` (l'intention documentée ci-dessus l.118) : sans ce mot-clé,
+    // le deinit @MainActor implicite est ISOLÉ et passe par
+    // `swift_task_deinitOnExecutorMainActorBackDeploy`, dont le shim double-free
+    // le TaskLocal scope et abort (SIGABRT) — c'est ce crash qui faisait tomber
+    // le bundle via le teardown de StoryCanvasUIView (qui possède ce controller).
+    nonisolated deinit {
         displayLink?.invalidate()
     }
 

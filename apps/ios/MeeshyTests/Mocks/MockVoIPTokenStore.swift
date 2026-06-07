@@ -24,45 +24,49 @@ final class MockVoIPTokenStore: VoIPTokenStoring, @unchecked Sendable {
         self.legacy = legacy
     }
 
+    // Scoped locking (`withLock`) instead of explicit lock()/unlock(): the
+    // latter is unavailable from async contexts under Swift 6 (a lock must not
+    // be held across a suspension point). These critical sections never await,
+    // so a synchronous scoped closure is the correct, warning-free form.
     func read() async -> VoIPTokenRecord? {
-        lock.lock(); defer { lock.unlock() }
-        readCallCount += 1
-        return storage
+        lock.withLock {
+            readCallCount += 1
+            return storage
+        }
     }
 
     func save(token: String, at date: Date) async throws {
         if let err = saveErrorToThrow { throw err }
-        lock.lock(); defer { lock.unlock() }
-        saveCallCount += 1
-        storage = VoIPTokenRecord(token: token, at: date)
+        lock.withLock {
+            saveCallCount += 1
+            storage = VoIPTokenRecord(token: token, at: date)
+        }
     }
 
     func clear() async {
-        lock.lock(); defer { lock.unlock() }
-        clearCallCount += 1
-        storage = nil
+        lock.withLock {
+            clearCallCount += 1
+            storage = nil
+        }
     }
 
     @discardableResult
     func migrateFromUserDefaultsIfNeeded() async -> VoIPTokenRecord? {
-        lock.lock()
-        migrateCallCount += 1
-        if let existing = storage {
-            lock.unlock()
-            return existing
+        lock.withLock {
+            migrateCallCount += 1
+            if let existing = storage {
+                return existing
+            }
+            if let legacy {
+                storage = legacy
+                self.legacy = nil
+                return legacy
+            }
+            return nil
         }
-        if let legacy {
-            storage = legacy
-            self.legacy = nil
-            lock.unlock()
-            return legacy
-        }
-        lock.unlock()
-        return nil
     }
 
     func snapshot() -> VoIPTokenRecord? {
-        lock.lock(); defer { lock.unlock() }
-        return storage
+        lock.withLock { storage }
     }
 }

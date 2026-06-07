@@ -100,6 +100,15 @@ public final class StoryBackdropCapture: BackdropCapturing {
 
     public init() {}
 
+    // `nonisolated` deinit : la classe @MainActor ne stocke que des références
+    // (MTLTexture, CGSize) libérées par ARC — aucun cleanup isolé requis. Sans
+    // ce mot-clé, le deinit @MainActor implicite (rendu isolé par la prop
+    // non-Sendable `MTLTexture`) passe par
+    // `swift_task_deinitOnExecutorMainActorBackDeploy`, dont le shim double-free
+    // le TaskLocal scope et abort (SIGABRT) quand StoryCanvasUIView libère cet
+    // ivar à sa propre désallocation. Même garde que CommandStack/ReaderAudioMixer.
+    nonisolated deinit {}
+
     // MARK: - Public API
 
     /// Rasterizes the slide minus any glass-flagged text item into an
