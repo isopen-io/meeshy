@@ -12,6 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { parseFile } from 'music-metadata';
 import { PDFParse } from 'pdf-parse';
 import * as ffmpeg from 'fluent-ffmpeg';
+import { createImageThumbnail, thumbnailPathFor } from './thumbnail';
 import type { AttachmentMetadata } from '@meeshy/shared/types/attachment';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
@@ -61,22 +62,16 @@ export class MetadataManager {
   }
 
   /**
-   * Génère une miniature pour une image
+   * Génère une miniature pour une image (WebP — sprint bande passante D4)
    */
   async generateThumbnail(imagePath: string): Promise<string | null> {
     try {
       const fullPath = path.join(this.uploadBasePath, imagePath);
-      const ext = path.extname(imagePath);
-      const thumbnailPath = imagePath.replace(ext, `_thumb${ext}`);
+      const thumbnailPath = thumbnailPathFor(imagePath);
       const fullThumbnailPath = path.join(this.uploadBasePath, thumbnailPath);
 
-      await sharp(fullPath)
-        .resize(this.thumbnailSize, this.thumbnailSize, {
-          fit: 'inside',
-          withoutEnlargement: true,
-        })
-        .jpeg({ quality: 80 })
-        .toFile(fullThumbnailPath);
+      const thumb = await createImageThumbnail(fullPath, { size: this.thumbnailSize });
+      await fs.writeFile(fullThumbnailPath, thumb);
 
       return thumbnailPath;
     } catch (error) {
@@ -86,17 +81,11 @@ export class MetadataManager {
   }
 
   /**
-   * Génère une miniature à partir d'un buffer (pour fichiers chiffrés)
+   * Génère une miniature à partir d'un buffer (pour fichiers chiffrés) — WebP
    */
   async generateThumbnailFromBuffer(buffer: Buffer): Promise<Buffer | undefined> {
     try {
-      return await sharp(buffer)
-        .resize(this.thumbnailSize, this.thumbnailSize, {
-          fit: 'inside',
-          withoutEnlargement: true,
-        })
-        .jpeg({ quality: 80 })
-        .toBuffer();
+      return await createImageThumbnail(buffer, { size: this.thumbnailSize });
     } catch (error) {
       logger.warn('[MetadataManager] Could not generate thumbnail from buffer:', error);
       return undefined;

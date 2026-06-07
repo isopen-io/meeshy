@@ -8,6 +8,7 @@ import { Server as HTTPServer } from 'http';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService, MessageData } from '../services/message-translation/MessageTranslationService';
 import { transformTranslationsToArray } from '../utils/translation-transformer';
+import { filterMessagePayloadForLanguages } from './utils/message-payload-filter';
 import { MaintenanceService } from '../services/MaintenanceService';
 import { StatusService } from '../services/StatusService';
 import { MessagingService } from '../services/MessagingService';
@@ -196,14 +197,20 @@ export class MeeshySocketIOManager {
       connectTimeout: 45000, // 45s - Timeout pour la connexion initiale
       // Autoriser reconnexion rapide
       allowEIO3: true,
+      // Bandwidth sprint Phase A: lower the deflate threshold from 1024→256 so
+      // frequent mid-size events (reaction:added, read-status:updated,
+      // per-user presence, typing payloads with display names) are compressed
+      // too. Their JSON keys are highly repetitive → strong deflate ratio.
+      // Context takeover stays disabled to cap per-connection memory at the
+      // 100k+ concurrent socket scale.
       perMessageDeflate: {
-        threshold: 1024,
+        threshold: 256,
         zlibDeflateOptions: { level: 6, memLevel: 7 },
         clientNoContextTakeover: true,
         serverNoContextTakeover: true,
       },
       httpCompression: {
-        threshold: 1024,
+        threshold: 256,
       },
     });
 
@@ -1195,6 +1202,35 @@ export class MeeshySocketIOManager {
   }
 
   /**
+   * Phase B1 — emit `message:new` to a conversation room grouped by each
+   * recipient's preferred language, sending a translation-trimmed payload once
+   * per distinct language. Recipients whose language is unknown fall back to the
+   * message's original language. Gated by `SOCKET_LANG_FILTER`. Pure trimming is
+   * delegated to `filterMessagePayloadForLanguages` (unit-tested).
+   */
+  private _emitMessageNewByLanguage(room: string, payload: Record<string, any>): void {
+    const socketIds = this.io.sockets.adapter.rooms.get(room);
+    if (!socketIds || socketIds.size === 0) return;
+
+    const originalLanguage = String(payload.originalLanguage || 'fr').toLowerCase();
+    const socketsByLanguage = new Map<string, string[]>();
+    for (const socketId of socketIds) {
+      const userId = this.socketToUser.get(socketId);
+      const lang = String((userId && this.connectedUsers.get(userId)?.language) || originalLanguage).toLowerCase();
+      const bucket = socketsByLanguage.get(lang);
+      if (bucket) bucket.push(socketId);
+      else socketsByLanguage.set(lang, [socketId]);
+    }
+
+    for (const [lang, socketsForLang] of socketsByLanguage) {
+      const filtered = filterMessagePayloadForLanguages(payload, [lang, originalLanguage]);
+      let emitter: any = this.io;
+      for (const socketId of socketsForLang) emitter = emitter.to(socketId);
+      emitter.emit(SERVER_EVENTS.MESSAGE_NEW, filtered);
+    }
+  }
+
+  /**
    * CORRECTION: Broadcaster le changement de statut d'un utilisateur à tous les clients
    * PRIVACY: Respecte les préférences showOnlineStatus et showLastSeen
    */
@@ -1442,8 +1478,19 @@ export class MeeshySocketIOManager {
 
       // COMPORTEMENT SIMPLE ET FIABLE DE L'ANCIENNE MÉTHODE
       const room = ROOMS.conversation(normalizedId);
-      // 1. Broadcast vers tous les clients de la conversation
-      this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
+      // 1. Broadcast vers tous les clients de la conversation.
+      //
+      // Bandwidth sprint Phase B1 (flag `SOCKET_LANG_FILTER`, OFF par défaut) :
+      // au lieu d'un emit room unique portant TOUTES les langues, on regroupe
+      // les sockets de la room par langue préférée (déjà connue via
+      // `SocketUser.language`, zéro requête DB) et on émet un payload filtré une
+      // seule fois par langue distincte. Le contenu original est toujours
+      // préservé. Désactivé tant que non validé en staging (mesure avant/après).
+      if (process.env.SOCKET_LANG_FILTER === 'true') {
+        this._emitMessageNewByLanguage(room, messagePayload);
+      } else {
+        this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
+      }
 
       // 2. S'assurer que l'auteur reçoit aussi (au cas où il ne serait pas dans la room encore)
       if (senderSocket) {
