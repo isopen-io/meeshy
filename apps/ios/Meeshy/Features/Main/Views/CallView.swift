@@ -800,19 +800,18 @@ struct CallView: View {
             // device picker (Continuity / USB) on Mac/iPad with multiple cameras.
             cameraControl
 
-            // Video toggle stays visible even when video is disabled so the user
-            // can re-enable it.
-            if callManager.hasLocalVideoTrack || callManager.isVideoEnabled {
-                callControlButton(
-                    icon: callManager.isVideoEnabled ? "video.fill" : "video.slash.fill",
-                    color: MeeshyColors.indigo400,
-                    bgColor: MeeshyColors.indigo400,
-                    isActive: !callManager.isVideoEnabled,
-                    caption: String(localized: "call.control.video.caption", defaultValue: "Vidéo", bundle: .main),
-                    label: callManager.isVideoEnabled ? String(localized: "call.control.videoOff", defaultValue: "Désactiver la vidéo", bundle: .main) : String(localized: "call.control.videoOn", defaultValue: "Activer la vidéo", bundle: .main)
-                ) {
-                    callManager.toggleVideo()
-                }
+            // §5.4 — always visible so an AUDIO call can be upgraded to video
+            // (FaceTime-style), not just toggled off/on once already in video.
+            // `video.badge.plus` when off reads as "turn on camera".
+            callControlButton(
+                icon: callManager.isVideoEnabled ? "video.fill" : "video.badge.plus",
+                color: MeeshyColors.indigo400,
+                bgColor: MeeshyColors.indigo400,
+                isActive: !callManager.isVideoEnabled,
+                caption: String(localized: "call.control.video.caption", defaultValue: "Vidéo", bundle: .main),
+                label: callManager.isVideoEnabled ? String(localized: "call.control.videoOff", defaultValue: "Désactiver la vidéo", bundle: .main) : String(localized: "call.control.videoOn", defaultValue: "Activer la vidéo", bundle: .main)
+            ) {
+                callManager.toggleVideo()
             }
 
             // End call
