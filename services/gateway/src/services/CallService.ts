@@ -13,8 +13,12 @@
 import { PrismaClient, CallMode, CallStatus, CallEndReason, ParticipantRole, Prisma } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
 import { CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
-import { buildCallSummary, callSummaryClientMessageId } from '@meeshy/shared/utils/call-summary';
+import { buildCallSummaryWithMetadata, callSummaryClientMessageId } from '@meeshy/shared/utils/call-summary';
 import { TURNCredentialService } from './TURNCredentialService';
+
+/** Floor a finite, non-negative byte counter; anything else → null. */
+const clampNonNegativeInt = (value?: number | null): number | null =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : null;
 
 const TERMINAL_STATUSES: CallStatus[] = [
   CallStatus.ended,
@@ -1133,6 +1137,58 @@ export class CallService {
   }
 
   /**
+   * Persist the latest client-reported call statistics onto the CallSession so
+   * the call-summary message can surface "data spent" + network quality.
+   *
+   * WebRTC `bytesSent`/`bytesReceived` are cumulative monotonic counters, so we
+   * keep the MAX seen (defensive against out-of-order/duplicate reports); the
+   * last report before teardown therefore yields the call totals. The quality
+   * tier is overwritten with the most recent non-empty value. Best-effort and
+   * never throws — a failed stats write must not break call signaling.
+   */
+  async persistCallStats(
+    callId: string,
+    stats: { bytesSent?: number | null; bytesReceived?: number | null; level?: string | null }
+  ): Promise<void> {
+    const data: Prisma.CallSessionUpdateInput = {};
+    const current = await this.prisma.callSession
+      .findUnique({ where: { id: callId }, select: { bytesSent: true, bytesReceived: true } })
+      .catch(() => null);
+    if (current === null) {
+      return;
+    }
+    // "Data spent" is a per-DEVICE figure. Each participant reports its OWN
+    // cumulative sent/received, so maxing the two fields independently across
+    // participants would mix endpoints and over-count asymmetric calls (e.g.
+    // one side sends video). Instead, keep the (sent, received) pair from the
+    // single report with the largest TOTAL — a coherent one-device view that is
+    // also monotonic across a given participant's growing counters.
+    const reportSent = clampNonNegativeInt(stats.bytesSent);
+    const reportReceived = clampNonNegativeInt(stats.bytesReceived);
+    if (reportSent !== null || reportReceived !== null) {
+      const nextSent = reportSent ?? current.bytesSent ?? 0;
+      const nextReceived = reportReceived ?? current.bytesReceived ?? 0;
+      const currentTotal = (current.bytesSent ?? 0) + (current.bytesReceived ?? 0);
+      if (nextSent + nextReceived > currentTotal) {
+        data.bytesSent = nextSent;
+        data.bytesReceived = nextReceived;
+      }
+    }
+    if (stats.level === 'excellent' || stats.level === 'good' || stats.level === 'fair' || stats.level === 'poor') {
+      data.networkQuality = stats.level;
+    }
+    if (Object.keys(data).length === 0) {
+      return;
+    }
+    await this.prisma.callSession.update({ where: { id: callId }, data }).catch((error) => {
+      logger.warn('Failed to persist call stats', {
+        callId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    });
+  }
+
+  /**
    * P3 — post the call-summary system message into the conversation when a
    * call reaches a terminal state ("Appel vidéo · 04:32", "Appel audio
    * manqué", "Appel refusé").
@@ -1163,7 +1219,10 @@ export class CallService {
         status: true,
         endReason: true,
         duration: true,
-        metadata: true
+        metadata: true,
+        bytesSent: true,
+        bytesReceived: true,
+        networkQuality: true
       }
     });
     if (!call) {
@@ -1171,15 +1230,27 @@ export class CallService {
     }
 
     const metadataType = (call.metadata as Record<string, unknown> | null)?.type;
-    const summary = buildCallSummary({
+    const callType = typeof metadataType === 'string' ? metadataType : null;
+    // Compute the human-readable label AND the structured call facts the client
+    // renders into a rich, actionable bubble (direction resolved per-viewer from
+    // initiatorId, media glyph, outcome tint, and the "duration · data · quality"
+    // line) in a single pass. Persisted on `Message.metadata`; survives both the
+    // socket broadcast and REST history.
+    const built = buildCallSummaryWithMetadata({
       status: call.status,
       endReason: call.endReason,
-      callType: typeof metadataType === 'string' ? metadataType : null,
-      durationSeconds: call.duration
+      callType,
+      durationSeconds: call.duration,
+      callId: call.id,
+      initiatorId: call.initiatorId,
+      bytesSent: call.bytesSent,
+      bytesReceived: call.bytesReceived,
+      networkQuality: call.networkQuality
     });
-    if (!summary) {
+    if (!built) {
       return null;
     }
+    const { summary, metadata: callMetadata } = built;
 
     // `Message.senderId` references a Participant (not a User); resolve the
     // initiator's participant row in this conversation to attribute the
@@ -1207,6 +1278,7 @@ export class CallService {
           originalLanguage: 'fr',
           messageType: 'system',
           messageSource: 'system',
+          metadata: callMetadata ?? undefined,
           clientMessageId: callSummaryClientMessageId(call.id)
         },
         include: CALL_SUMMARY_MESSAGE_INCLUDE

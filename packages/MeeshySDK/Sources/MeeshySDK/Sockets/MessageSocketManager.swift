@@ -890,6 +890,7 @@ public protocol MessageSocketProviding: Sendable {
     func emitCallEnd(callId: String)
     func emitCallEndWithAck(callId: String) async -> Bool
     func emitCallHeartbeat(callId: String)
+    func emitCallQualityReport(callId: String, level: String, rtt: Double, packetLoss: Double, bytesSent: Int, bytesReceived: Int)
 }
 
 // MARK: - Protocol Default-Arg Convenience
@@ -901,6 +902,13 @@ public protocol MessageSocketProviding: Sendable {
 /// so the optimistic row, the ACK echo, and the `message:new` broadcast can
 /// be reconciled by the same end-to-end identifier.
 public extension MessageSocketProviding {
+    /// Default no-op so existing conformers (test mocks) need not implement the
+    /// quality-report emit added for call data/quality persistence.
+    func emitCallQualityReport(
+        callId: String, level: String, rtt: Double, packetLoss: Double,
+        bytesSent: Int, bytesReceived: Int
+    ) {}
+
     func sendWithAttachments(
         conversationId: String,
         content: String?,
@@ -1889,6 +1897,27 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     public func emitCallHeartbeat(callId: String) {
         socket?.emit("call:heartbeat", ["callId": callId])
+    }
+
+    /// Report periodic call quality + cumulative data usage to the gateway. The
+    /// last report before teardown carries the call totals, which the gateway
+    /// persists on the CallSession so the call-summary message can surface
+    /// "data spent · network quality". Fire-and-forget. `bytesSent`/`bytesReceived`
+    /// are cumulative WebRTC counters; `level` is excellent|good|fair|poor.
+    public func emitCallQualityReport(
+        callId: String, level: String, rtt: Double, packetLoss: Double,
+        bytesSent: Int, bytesReceived: Int
+    ) {
+        socket?.emit("call:quality-report", [
+            "callId": callId,
+            "stats": [
+                "level": level,
+                "rtt": rtt,
+                "packetLoss": packetLoss,
+                "bytesSent": bytesSent,
+                "bytesReceived": bytesReceived
+            ]
+        ])
     }
 
     // MARK: - Event Handlers

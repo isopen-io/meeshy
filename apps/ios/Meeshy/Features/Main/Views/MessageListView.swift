@@ -313,6 +313,9 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onMediaTap = onMediaTap
         vc.onConsumeViewOnce = onConsumeViewOnce
         vc.onRequestTranslation = onRequestTranslation
+        vc.onCallBack = { [weak conversationViewModel] summary in
+            conversationViewModel?.callBack(for: summary)
+        }
         vc.conversationViewModel = conversationViewModel
         vc.applyBottomInset(bottomInset)
         return vc
@@ -359,6 +362,9 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onMediaTap = onMediaTap
         vc.onConsumeViewOnce = onConsumeViewOnce
         vc.onRequestTranslation = onRequestTranslation
+        vc.onCallBack = { [weak conversationViewModel] summary in
+            conversationViewModel?.callBack(for: summary)
+        }
         vc.conversationViewModel = conversationViewModel
         vc.applyBottomInset(bottomInset)
     }

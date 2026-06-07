@@ -98,6 +98,19 @@ struct BubbleContent: Equatable {
         let deliveryStatus: MeeshyMessage.DeliveryStatus?  // nil si reçu
     }
 
+    /// Resolved facts for a call-summary system message — everything the leaf
+    /// `BubbleCallNoticeView` needs as primitives so it re-renders only when
+    /// these change. `isOutgoing` is pre-resolved per viewer at build time
+    /// (depends on the current user id) so the leaf view stays singleton-free.
+    struct CallNotice: Equatable {
+        let summary: CallSummaryMetadata
+        /// Current user initiated this call (emitted) vs received it.
+        let isOutgoing: Bool
+        /// Gateway-localized label ("Appel vidéo · 04:32", "Appel audio manqué"),
+        /// used as the human title base + VoiceOver fallback.
+        let fallbackText: String
+    }
+
     let messageId: String
     let kind: Kind
     let text: Text?
@@ -116,6 +129,10 @@ struct BubbleContent: Equatable {
     let meta: Meta
     let isMe: Bool
     let senderName: String?
+    /// Present for `.system` call-summary messages carrying structured metadata
+    /// (`messageSource == .system` + `callSummary != nil`). When nil, a `.system`
+    /// message falls back to the plain centered notice.
+    let callNotice: CallNotice?
 
     /// Convenience pour tests + branch logic du body.
     var isEmojiOnly: Bool { text?.isEmojiOnly ?? false }
@@ -189,5 +206,6 @@ struct BubbleContent: Equatable {
             && lhs.meta == rhs.meta
             && lhs.isMe == rhs.isMe
             && lhs.senderName == rhs.senderName
+            && lhs.callNotice == rhs.callNotice
     }
 }

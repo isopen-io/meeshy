@@ -76,6 +76,9 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
     public var currentUserReactionsJson: Data?
     public var mentionedUsersJson: Data?
 
+    // Structured call-summary metadata (JSON blob) for system call messages.
+    public var callSummaryJson: Data?
+
     // Pre-computed layout (CTFramesetter)
     public var cachedBubbleWidth: Double?
     public var cachedBubbleHeight: Double?
@@ -121,7 +124,8 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         cachedTimestampInline: Bool?,
         layoutVersion: Int, layoutMaxWidth: Double?,
         cachedTimeString: String? = nil,
-        changeVersion: Int64
+        changeVersion: Int64,
+        callSummaryJson: Data? = nil
     ) {
         self.localId = localId
         self.serverId = serverId
@@ -180,6 +184,7 @@ public struct MessageRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         self.layoutMaxWidth = layoutMaxWidth
         self.cachedTimeString = cachedTimeString
         self.changeVersion = changeVersion
+        self.callSummaryJson = callSummaryJson
     }
 
     // MARK: - Timestamp pre-compute helper

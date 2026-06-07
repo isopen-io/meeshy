@@ -254,5 +254,15 @@ public enum MessageDatabaseMigrations {
                 END
                 """)
         }
+
+        // Structured call-summary metadata for system call messages — persisted
+        // as a JSON blob (mirrors attachmentsJson/reactionsJson) so the rich,
+        // actionable call bubble survives a GRDB cache reload, not just the
+        // live socket/REST render.
+        migrator.registerMigration("messages_call_summary") { db in
+            try db.alter(table: "messages") { t in
+                t.add(column: "callSummaryJson", .blob)
+            }
+        }
     }
 }

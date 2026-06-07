@@ -115,6 +115,9 @@ final class MessageListViewController: UIViewController {
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)?
     /// Request an on-demand translation for a message into a target language.
     var onRequestTranslation: ((String, String) -> Void)?
+    /// Tap on a call-summary notice → re-initiate (call back) the same media
+    /// type with the conversation peer.
+    var onCallBack: ((CallSummaryMetadata) -> Void)?
     /// Live source of dynamic per-message data (translations, transcriptions,
     /// audio translations, last-message gating). Held weakly: the cell
     /// registration closure runs on the main runloop alongside the VM, but
@@ -428,6 +431,7 @@ final class MessageListViewController: UIViewController {
             let showReadStatusHandler = self.onShowReadStatus
             let showReactionsHandler = self.onShowReactions
             let showTranslationHandler = self.onShowTranslationDetail
+            let callBackHandler = self.onCallBack
             let mediaTapHandler = self.onMediaTap
             let consumeViewOnceHandler = self.onConsumeViewOnce
             let requestTranslationHandler = self.onRequestTranslation
@@ -475,6 +479,7 @@ final class MessageListViewController: UIViewController {
                         onConsumeViewOnce: consumeViewOnceHandler,
                         onRequestTranslation: requestTranslationHandler,
                         onShowTranslationDetail: showTranslationHandler,
+                        onCallBack: callBackHandler,
                         onPlayAudio: { [weak self] attachmentId in
                             self?.conversationViewModel?.playAudio(attachmentId: attachmentId)
                         },

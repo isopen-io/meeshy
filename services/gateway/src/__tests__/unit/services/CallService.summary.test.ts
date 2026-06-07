@@ -28,7 +28,7 @@ import { Prisma } from '@meeshy/shared/prisma/client';
 type MockFn = jest.Mock<any>;
 
 const createMockPrisma = () => ({
-  callSession: { findUnique: jest.fn() as MockFn },
+  callSession: { findUnique: jest.fn() as MockFn, update: jest.fn() as MockFn },
   participant: { findFirst: jest.fn() as MockFn },
   message: { create: jest.fn() as MockFn }
 });
@@ -76,6 +76,30 @@ describe('CallService.createCallSummaryMessage', () => {
       messageType: 'system',
       messageSource: 'system',
       clientMessageId: `call-summary:${CALL_ID}`
+    });
+  });
+
+  it('persists structured call metadata (direction, data, quality) on the message', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue(
+      makeSession({ metadata: { type: 'video' }, duration: 272, bytesSent: 1_000_000, bytesReceived: 1_400_000, networkQuality: 'good' })
+    );
+    prisma.participant.findFirst.mockResolvedValue({ id: INITIATOR_PARTICIPANT_ID });
+    prisma.message.create.mockResolvedValue({ id: 'm1', conversationId: CONVERSATION_ID });
+
+    await sut.createCallSummaryMessage(CALL_ID);
+
+    const arg = prisma.message.create.mock.calls[0][0] as any;
+    expect(arg.data.metadata).toEqual({
+      kind: 'call',
+      callId: CALL_ID,
+      initiatorId: INITIATOR_USER_ID,
+      callType: 'video',
+      outcome: 'completed',
+      durationSeconds: 272,
+      bytesTotal: 2_400_000,
+      bytesEstimated: false,
+      networkQuality: 'good'
     });
   });
 
@@ -163,5 +187,72 @@ describe('CallService.createCallSummaryMessage', () => {
     prisma.message.create.mockRejectedValue(new Error('db down'));
 
     await expect(sut.createCallSummaryMessage(CALL_ID)).rejects.toThrow('db down');
+  });
+});
+
+describe('CallService.persistCallStats', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  const lastUpdateData = (prisma: ReturnType<typeof createMockPrisma>) =>
+    (prisma.callSession.update.mock.calls[0]?.[0] as any)?.data;
+
+  it('stores the (sent, received) pair as a coherent unit, not per-field max', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue({ bytesSent: 0, bytesReceived: 0 });
+
+    await sut.persistCallStats(CALL_ID, { bytesSent: 500_000, bytesReceived: 1_500_000, level: 'good' });
+
+    expect(lastUpdateData(prisma)).toEqual({
+      bytesSent: 500_000,
+      bytesReceived: 1_500_000,
+      networkQuality: 'good'
+    });
+  });
+
+  it('keeps the pair with the larger TOTAL (avoids cross-participant over-count)', async () => {
+    const { sut, prisma } = makeSUT();
+    // Stored pair total = 2.0M. An asymmetric peer reports sent=1.8M+recv=0.1M
+    // (total 1.9M < 2.0M) → must NOT overwrite, or data would mix endpoints.
+    prisma.callSession.findUnique.mockResolvedValue({ bytesSent: 1_000_000, bytesReceived: 1_000_000 });
+
+    await sut.persistCallStats(CALL_ID, { bytesSent: 1_800_000, bytesReceived: 100_000 });
+
+    expect(prisma.callSession.update).not.toHaveBeenCalled();
+  });
+
+  it('overwrites when the new report total is larger', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue({ bytesSent: 1_000_000, bytesReceived: 1_000_000 });
+
+    await sut.persistCallStats(CALL_ID, { bytesSent: 1_500_000, bytesReceived: 1_500_000 });
+
+    expect(lastUpdateData(prisma)).toMatchObject({ bytesSent: 1_500_000, bytesReceived: 1_500_000 });
+  });
+
+  it('updates only the quality tier when no byte counters are present', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue({ bytesSent: null, bytesReceived: null });
+
+    await sut.persistCallStats(CALL_ID, { level: 'poor' });
+
+    expect(lastUpdateData(prisma)).toEqual({ networkQuality: 'poor' });
+  });
+
+  it('is a no-op when the call no longer exists', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue(null);
+
+    await sut.persistCallStats(CALL_ID, { bytesSent: 1, bytesReceived: 1, level: 'good' });
+
+    expect(prisma.callSession.update).not.toHaveBeenCalled();
+  });
+
+  it('ignores an unknown quality tier', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue({ bytesSent: 0, bytesReceived: 0 });
+
+    await sut.persistCallStats(CALL_ID, { level: 'amazing' });
+
+    expect(prisma.callSession.update).not.toHaveBeenCalled();
   });
 });
