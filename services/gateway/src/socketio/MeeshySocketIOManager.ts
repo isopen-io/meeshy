@@ -115,8 +115,9 @@ export class MeeshySocketIOManager {
   private socketToUser: Map<string, string> = new Map();
   private userSockets: Map<string, Set<string>> = new Map();
 
-  // Cache immutable identifier → ObjectId (populated on first lookup)
+  // Cache immutable identifier → ObjectId (populated on first lookup, bounded to 2000 entries LRU)
   private conversationIdCache = new Map<string, string>();
+  private readonly CONVERSATION_ID_CACHE_MAX = 2000;
 
   // Statistiques
   private stats = {
@@ -343,6 +344,11 @@ export class MeeshySocketIOManager {
         select: { id: true, identifier: true }
       });
       if (conversation) {
+        // Evict oldest entry when cap reached (simple FIFO bounded LRU)
+        if (this.conversationIdCache.size >= this.CONVERSATION_ID_CACHE_MAX) {
+          const firstKey = this.conversationIdCache.keys().next().value;
+          if (firstKey !== undefined) this.conversationIdCache.delete(firstKey);
+        }
         this.conversationIdCache.set(conversationId, conversation.id);
         return conversation.id;
       }
@@ -1540,15 +1546,18 @@ export class MeeshySocketIOManager {
 
           const connectedUserIds = new Set(this.getConnectedUsers());
 
-          for (const participant of participants) {
-            const roomTarget = participant.userId || participant.id;
-            // Pass `participant.id` (not `roomTarget`) — the cursor's
-            // participantId column is the Participant.id. Using the userId
-            // here previously caused every registered recipient to fall
-            // through to a stale "count all historical messages" path and
-            // see inflated unread counts (e.g. 75).
-            const unreadCount = await readStatusService.getUnreadCount(participant.id, normalizedId);
+          // Batch all unread-count queries in parallel instead of sequential N+1
+          const unreadResults = await Promise.all(
+            participants.map(async (participant) => {
+              const roomTarget = participant.userId || participant.id;
+              // Pass `participant.id` (not `roomTarget`) — the cursor's
+              // participantId column is the Participant.id.
+              const unreadCount = await readStatusService.getUnreadCount(participant.id, normalizedId);
+              return { participant, roomTarget, unreadCount };
+            })
+          );
 
+          for (const { participant, roomTarget, unreadCount } of unreadResults) {
             // Émettre vers le socket personnel de l'utilisateur
             this.io.to(ROOMS.user(roomTarget)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
               conversationId: normalizedId,
