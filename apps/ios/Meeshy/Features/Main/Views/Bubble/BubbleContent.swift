@@ -74,13 +74,18 @@ struct BubbleContent: Equatable {
         let reference: ReplyReference
         let isStory: Bool
 
-        // TODO(Task14): expand equality to cover story-side mutations (attachmentThumbnailUrl,
-        // storyThumbnailUrl, storyReactionCount, storyCommentCount, storyPublishedAt) — current
-        // (messageId + previewText + isStory) misses late thumbnail/counter updates.
+        // TODO(Task14): expand equality to cover the remaining story-side mutations
+        // (attachmentThumbnailUrl, storyThumbnailUrl, storyReactionCount,
+        // storyCommentCount) — still misses late thumbnail/counter updates.
+        // `moodEmoji` + `storyPublishedAt` ARE compared: a mood citation's emoji/date
+        // can change (optimistic→server echo) while messageId+previewText stay equal,
+        // so this outer gate must not short-circuit the inner BubbleQuotedReply.
         static func == (lhs: Reply, rhs: Reply) -> Bool {
             lhs.reference.messageId == rhs.reference.messageId
                 && lhs.reference.previewText == rhs.reference.previewText
                 && lhs.isStory == rhs.isStory
+                && lhs.reference.moodEmoji == rhs.reference.moodEmoji
+                && lhs.reference.storyPublishedAt == rhs.reference.storyPublishedAt
         }
     }
 

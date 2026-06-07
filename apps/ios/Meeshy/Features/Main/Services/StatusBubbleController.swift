@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Status Bubble Controller
 
@@ -91,35 +92,113 @@ private struct StatusBubbleOverlayModifier: ViewModifier {
                 )
                 .zIndex(200)
             }
-        }
-        .confirmationDialog(
-            String(localized: "mood.reply.confirm.title", defaultValue: "Répondre à cette humeur ?", bundle: .main),
-            isPresented: Binding(
-                get: { controller.replyConfirmationEntry != nil },
-                set: { if !$0 { controller.replyConfirmationEntry = nil } }
-            ),
-            titleVisibility: .visible,
-            presenting: controller.replyConfirmationEntry
-        ) { entry in
-            Button(String(localized: "mood.reply.confirm.reply", defaultValue: "Répondre", bundle: .main)) {
-                controller.onConfirmedReply?(entry)
-                controller.replyConfirmationEntry = nil
+            // Pop-up de confirmation (groupe / story tray / ailleurs). Rendu en
+            // overlay ZStack — et NON via `.confirmationDialog` système — parce que
+            // `.withStatusBubble()` est appliqué sur ~15 écrans potentiellement
+            // co-présents : une présentation modale UIKit partagée déclencherait des
+            // conflits « already presenting ». Comme la bulle, seule l'instance au
+            // sommet est visible ; les copies couvertes restent invisibles.
+            if let entry = controller.replyConfirmationEntry {
+                MoodReplyConfirmationOverlay(
+                    entry: entry,
+                    onReply: {
+                        controller.onConfirmedReply?(entry)
+                        controller.replyConfirmationEntry = nil
+                    },
+                    onCancel: { controller.replyConfirmationEntry = nil }
+                )
+                .zIndex(201)
             }
-            Button(String(localized: "mood.reply.confirm.cancel", defaultValue: "Quitter", bundle: .main), role: .cancel) {
-                controller.replyConfirmationEntry = nil
-            }
-        } message: { entry in
-            Text(Self.moodReplyMessage(entry))
         }
     }
+}
 
-    /// Aperçu du mood présenté dans le pop-up : emoji + contenu entier + date.
-    private static func moodReplyMessage(_ entry: StatusEntry) -> String {
+// MARK: - Mood Reply Confirmation Overlay
+
+/// Pop-up « Répondre à cette humeur ? » présenté quand un mood est touché hors de
+/// la conversation directe de son auteur (groupe, story tray, liste…). Affiche le
+/// mood entier (emoji + contenu + date) et propose Répondre / Quitter.
+private struct MoodReplyConfirmationOverlay: View {
+    let entry: StatusEntry
+    let onReply: () -> Void
+    let onCancel: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
+    private var theme: ThemeManager { ThemeManager.shared }
+    @State private var appear = false
+
+    private var moodSummary: String {
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .short
         let date = formatter.localizedString(for: entry.createdAt, relativeTo: Date())
         let content = (entry.content?.isEmpty == false) ? " \(entry.content!)" : ""
         return "\(entry.moodEmoji)\(content) \u{00B7} \(date)"
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(appear ? 0.35 : 0)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { onCancel() }
+
+            VStack(spacing: 14) {
+                Text(String(localized: "mood.reply.confirm.title", defaultValue: "Répondre à cette humeur ?", bundle: .main))
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(theme.textPrimary)
+                    .multilineTextAlignment(.center)
+
+                Text(moodSummary)
+                    .font(.system(size: 14))
+                    .foregroundColor(theme.textSecondary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+
+                HStack(spacing: 10) {
+                    Button(action: onCancel) {
+                        Text(String(localized: "mood.reply.confirm.cancel", defaultValue: "Quitter", bundle: .main))
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(theme.textSecondary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 11)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
+                            )
+                    }
+
+                    Button(action: onReply) {
+                        Text(String(localized: "mood.reply.confirm.reply", defaultValue: "Répondre", bundle: .main))
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 11)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(MeeshyColors.brandGradient)
+                            )
+                    }
+                }
+            }
+            .padding(20)
+            .frame(maxWidth: 320)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(theme.border(tint: "6366F1", intensity: 0.3), lineWidth: 1)
+                    )
+                    .shadow(color: Color.black.opacity(0.18), radius: 24, y: 8)
+            )
+            .padding(.horizontal, 32)
+            .scaleEffect(appear ? 1 : 0.9)
+            .opacity(appear ? 1 : 0)
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) { appear = true }
+        }
+        .accessibilityElement(children: .contain)
     }
 }
 

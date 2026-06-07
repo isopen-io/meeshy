@@ -221,23 +221,18 @@ struct BubbleMoodReplyPreview: View, Equatable {
                     .font(.system(size: 13))
             }
 
-            Text(String(localized: "bubble.reply.mood", defaultValue: "Humeur", bundle: .main))
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(previewColor)
-
             if let date = reply.storyPublishedAt {
-                Text("\u{2022}")
-                    .font(.system(size: 8))
-                    .foregroundColor(previewColor.opacity(0.6))
                 Text(date, style: .relative)
                     .font(.system(size: 10))
                     .foregroundColor(previewColor.opacity(0.8))
             }
 
             if !reply.previewText.isEmpty {
-                Text("\u{2022}")
-                    .font(.system(size: 8))
-                    .foregroundColor(previewColor.opacity(0.6))
+                if reply.storyPublishedAt != nil {
+                    Text("\u{2022}")
+                        .font(.system(size: 8))
+                        .foregroundColor(previewColor.opacity(0.6))
+                }
                 Text(reply.previewText)
                     .font(.system(size: 11))
                     .foregroundColor(previewColor)
