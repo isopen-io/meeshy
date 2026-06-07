@@ -16,7 +16,7 @@ export interface ConversationHeaderProps {
   onParticipantRemoved: (userId: string) => void;
   onParticipantAdded: (userId: string) => void;
   onLinkCreated: (link: unknown) => void;
-  onStartCall?: () => void;
+  onStartCall?: (type?: 'audio' | 'video') => void;
   onOpenGallery?: () => void;
   t: (key: string) => string;
   showBackButton?: boolean;
