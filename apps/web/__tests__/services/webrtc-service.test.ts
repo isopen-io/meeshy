@@ -16,7 +16,7 @@ jest.mock('@/utils/logger', () => ({
   logger: { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
-import { WebRTCService } from '@/services/webrtc-service';
+import { WebRTCService, type WebRTCServiceConfig } from '@/services/webrtc-service';
 
 class FakeSender {
   track: unknown;
@@ -100,7 +100,7 @@ beforeAll(() => {
     jest.fn().mockImplementation((init: unknown) => init);
 });
 
-const setup = (overrides: Partial<Parameters<typeof WebRTCService.prototype.constructor>[0]> = {}) => {
+const setup = (overrides: Partial<WebRTCServiceConfig> = {}) => {
   const onLocalDescription = jest.fn();
   const service = new WebRTCService({ onLocalDescription, ...overrides });
   const pc = service.createPeerConnection('peer-1') as unknown as FakeRTCPeerConnection;
