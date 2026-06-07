@@ -1083,6 +1083,9 @@ export function registerMessagesRoutes(
             reactionCount: true,
             commentCount: true,
             createdAt: true,
+            // `moodEmoji` non-null ⇒ le post cité est un mood/statut : le client
+            // affiche alors une citation dédiée (emoji + contenu + date).
+            moodEmoji: true,
             media: {
               select: { thumbnailUrl: true },
               orderBy: { order: 'asc' },
@@ -1102,7 +1105,8 @@ export function registerMessagesRoutes(
             commentCount: story.commentCount,
             createdAt: story.createdAt,
             thumbnailUrl: story.media[0]?.thumbnailUrl ?? null,
-            previewText: preview
+            previewText: preview,
+            moodEmoji: story.moodEmoji ?? null
           };
         }
       }

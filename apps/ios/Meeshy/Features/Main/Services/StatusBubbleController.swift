@@ -11,11 +11,25 @@ final class StatusBubbleController: ObservableObject {
 
     @Published var currentEntry: StatusEntry?
     @Published var anchor: CGPoint = .zero
-    var onRepublish: ((StatusEntry) -> Void)?
+    /// Mood en attente de confirmation de réponse (groupe / story tray / ailleurs).
+    /// Non-nil ⇒ le pop-up "Répondre / Quitter" est présenté.
+    @Published var replyConfirmationEntry: StatusEntry?
 
-    func show(entry: StatusEntry, anchor: CGPoint) {
+    var onRepublish: ((StatusEntry) -> Void)?
+    /// Action de réponse à un mood : résout/ouvre la DM avec l'auteur et amorce
+    /// le composer. Branchée une fois au niveau racine (RootView / iPadRootView).
+    var onConfirmedReply: ((StatusEntry) -> Void)?
+
+    /// Vrai quand le mood courant est affiché DANS la conversation directe de son
+    /// auteur (barre de conversation directe). La réponse est alors immédiate
+    /// (pas de pop-up) : on est déjà dans la bonne conversation. Posé par le site
+    /// d'appel à `show(...)`, jamais stale (chaque ouverture le réécrit).
+    var repliesInline = false
+
+    func show(entry: StatusEntry, anchor: CGPoint, repliesInline: Bool = false) {
         currentEntry = entry
         self.anchor = anchor
+        self.repliesInline = repliesInline
 
         // Statut consommé : enregistrer la vue côté serveur (sauf le sien) pour
         // que la notification « X a publié un statut » (friend_new_mood) ne reste
@@ -28,6 +42,23 @@ final class StatusBubbleController: ObservableObject {
 
     func dismiss() {
         currentEntry = nil
+    }
+
+    /// Déclenché quand l'utilisateur touche le CONTENU du mood affiché (pas la
+    /// zone extérieure de fermeture). Ouvre la réponse au mood :
+    /// - mood affiché dans la conversation directe courante ⇒ réponse immédiate ;
+    /// - sinon (groupe, story tray, …) ⇒ pop-up de confirmation Répondre / Quitter.
+    func requestReply() {
+        guard let entry = currentEntry else { return }
+        currentEntry = nil
+        // On ne répond pas à son propre mood.
+        guard entry.userId != AuthManager.shared.currentUser?.id else { return }
+
+        if repliesInline {
+            onConfirmedReply?(entry)
+        } else {
+            replyConfirmationEntry = entry
+        }
     }
 
     var isPresented: Binding<Bool> {
@@ -53,11 +84,42 @@ private struct StatusBubbleOverlayModifier: ViewModifier {
                     isPresented: controller.isPresented,
                     onRepublish: entry.userId != AuthManager.shared.currentUser?.id
                         ? controller.onRepublish
+                        : nil,
+                    onReplyTapped: entry.userId != AuthManager.shared.currentUser?.id
+                        ? { controller.requestReply() }
                         : nil
                 )
                 .zIndex(200)
             }
         }
+        .confirmationDialog(
+            String(localized: "mood.reply.confirm.title", defaultValue: "Répondre à cette humeur ?", bundle: .main),
+            isPresented: Binding(
+                get: { controller.replyConfirmationEntry != nil },
+                set: { if !$0 { controller.replyConfirmationEntry = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: controller.replyConfirmationEntry
+        ) { entry in
+            Button(String(localized: "mood.reply.confirm.reply", defaultValue: "Répondre", bundle: .main)) {
+                controller.onConfirmedReply?(entry)
+                controller.replyConfirmationEntry = nil
+            }
+            Button(String(localized: "mood.reply.confirm.cancel", defaultValue: "Quitter", bundle: .main), role: .cancel) {
+                controller.replyConfirmationEntry = nil
+            }
+        } message: { entry in
+            Text(Self.moodReplyMessage(entry))
+        }
+    }
+
+    /// Aperçu du mood présenté dans le pop-up : emoji + contenu entier + date.
+    private static func moodReplyMessage(_ entry: StatusEntry) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .short
+        let date = formatter.localizedString(for: entry.createdAt, relativeTo: Date())
+        let content = (entry.content?.isEmpty == false) ? " \(entry.content!)" : ""
+        return "\(entry.moodEmoji)\(content) \u{00B7} \(date)"
     }
 }
 

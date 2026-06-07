@@ -351,6 +351,17 @@ struct RootView: View {
             // Observe sync events for conversation list
             conversationViewModel.observeSync()
 
+            // Réponse à un mood (confirmée via pop-up, ou immédiate en DM) :
+            // résout/ouvre la DM avec l'auteur et amorce le composer.
+            StatusBubbleController.shared.onConfirmedReply = { entry in
+                router.navigateToStoryReply(
+                    .status(statusId: entry.id, authorId: entry.userId,
+                            authorName: entry.username, emoji: entry.moodEmoji,
+                            content: entry.content, publishedAt: entry.createdAt),
+                    conversationListViewModel: conversationViewModel
+                )
+            }
+
             // Pilier 22 V3 wiring — register the StoryViewModel as the
             // queue's upload executor. setExecutor also registers the
             // queue's publish handler in the same call, so the M5 auto-

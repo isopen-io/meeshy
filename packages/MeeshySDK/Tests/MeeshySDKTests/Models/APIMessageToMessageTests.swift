@@ -171,6 +171,48 @@ final class APIMessageToMessageTests: XCTestCase {
         XCTAssertTrue(msg.replyTo?.isStoryReply ?? false)
     }
 
+    // MARK: - mood reply enrichment (storyReplyTo.moodEmoji)
+
+    func test_toMessage_storyReplyTo_withMoodEmoji_buildsMoodReply() {
+        let api = makeAPIMessage(extraFields: [
+            "storyReplyToId": "status-1",
+            "storyReplyTo": [
+                "id": "status-1",
+                "reactionCount": 0,
+                "commentCount": 0,
+                "createdAt": ISO8601DateFormatter().string(from: Date(timeIntervalSince1970: 1_700_000_000)),
+                "previewText": "en forme",
+                "moodEmoji": "🔥"
+            ]
+        ])
+
+        let reply = api.toMessage(currentUserId: "user-1").replyTo
+
+        XCTAssertEqual(reply?.moodEmoji, "🔥")
+        XCTAssertEqual(reply?.previewText, "en forme")
+        XCTAssertTrue(reply?.isStoryReply ?? false)
+        XCTAssertNotNil(reply?.storyPublishedAt)
+    }
+
+    func test_toMessage_storyReplyTo_withoutMoodEmoji_staysStory() {
+        let api = makeAPIMessage(extraFields: [
+            "storyReplyToId": "story-1",
+            "storyReplyTo": [
+                "id": "story-1",
+                "reactionCount": 2,
+                "commentCount": 1,
+                "createdAt": ISO8601DateFormatter().string(from: Date()),
+                "previewText": "ma story"
+            ]
+        ])
+
+        let reply = api.toMessage(currentUserId: "user-1").replyTo
+
+        XCTAssertNil(reply?.moodEmoji)
+        XCTAssertTrue(reply?.isStoryReply ?? false)
+        XCTAssertEqual(reply?.previewText, "ma story")
+    }
+
     // MARK: - attachment thumbHash preserved
 
     func test_toMessage_preservesThumbHash() {

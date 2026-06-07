@@ -814,6 +814,16 @@ struct ConversationView: View {
                 typingDotConnection?.cancel()
                 typingDotConnection = nil
             }
+            .adaptiveOnChange(of: router.replyContextVersion) { _, _ in
+                // Réponse à un mood affiché dans la barre directe courante : la vue
+                // est déjà à l'écran, `onAppear` ne se redéclenche pas. On applique
+                // le contexte au composer ssi il cible CETTE conversation directe.
+                guard isDirect,
+                      let ctx = router.pendingReplyContext,
+                      ctx.authorId == conversation?.participantUserId else { return }
+                composerState.pendingReplyReference = ctx.toReplyReference
+                router.pendingReplyContext = nil
+            }
             .adaptiveOnChange(of: messageText) { _, newValue in
                 persistDraft(text: newValue)
             }
