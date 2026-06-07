@@ -231,6 +231,19 @@ final class Router: ObservableObject {
             case .userProfile(let username):
                 deepLinkProfileUser = ProfileSheetUser(username: username)
 
+            case .joinLink(let identifier):
+                // In-app taps of an invitation share link. Funnel them through
+                // the shared `DeepLinkRouter` pending pipeline so they land on
+                // the exact same authenticated join flow as cold-launch
+                // Universal Links (RootView/iPadRootView `handleDeepLink` →
+                // `joinViaShareLink`). This keeps the join resolution + error
+                // handling in a single place rather than duplicating the
+                // `ShareLinkService.joinAuthenticated` call here.
+                DeepLinkRouter.shared.pendingDeepLink = .joinLink(identifier: identifier)
+
+            case .chatLink(let identifier):
+                DeepLinkRouter.shared.pendingDeepLink = .chatLink(identifier: identifier)
+
             case .conversation(let id):
                 Task { [weak self] in
                     await self?.handleConversationDeepLink(id)

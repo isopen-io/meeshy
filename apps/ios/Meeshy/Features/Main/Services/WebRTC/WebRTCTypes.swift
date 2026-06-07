@@ -269,6 +269,16 @@ protocol WebRTCClientProviding: AnyObject {
     /// downscale). No-op on audio-only calls (no video transceiver). Driven by
     /// the quality ladder in `WebRTCService.adjustBitrate`.
     func applyVideoEncoding(maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double)
+    /// Whether a local camera track currently exists (audio-only calls have
+    /// none until upgraded). Drives the self-preview / camera-toggle UI.
+    var hasLocalVideoTrack: Bool { get }
+    /// §5.4 mid-call audio→video upgrade: lazily build the camera track, attach
+    /// it to the reserved video transceiver and flip to sendRecv. Returns true
+    /// when a renegotiation (createOffer) is required.
+    func enableLocalVideo() async throws -> Bool
+    /// §5.4 mid-call video→audio downgrade: stop the camera, detach the track,
+    /// flip the transceiver to recvonly. Returns true when renegotiation needed.
+    func disableLocalVideo() async -> Bool
     func switchCamera() async throws
     /// §7.1 — available capture cameras (front/back/Continuity/external). Empty
     /// on the no-WebRTC stub. Drives the Mac/iPad camera picker.

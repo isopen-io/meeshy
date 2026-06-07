@@ -196,6 +196,22 @@ private final class TestableWebRTCClient: WebRTCClientProviding {
     func startLocalMedia(type: CallMediaType) async throws {}
     func toggleAudio(_ enabled: Bool) { lastAudioEnabled = enabled }
     func toggleVideo(_ enabled: Bool) { lastVideoEnabled = enabled }
+    var hasLocalVideoTrack: Bool = false
+    var enableLocalVideoResult: Result<Bool, Error> = .success(true)
+    var disableLocalVideoResult: Bool = true
+    private(set) var enableLocalVideoCallCount = 0
+    private(set) var disableLocalVideoCallCount = 0
+    func enableLocalVideo() async throws -> Bool {
+        enableLocalVideoCallCount += 1
+        let needsRenegotiation = try enableLocalVideoResult.get()
+        hasLocalVideoTrack = true
+        return needsRenegotiation
+    }
+    func disableLocalVideo() async -> Bool {
+        disableLocalVideoCallCount += 1
+        hasLocalVideoTrack = false
+        return disableLocalVideoResult
+    }
     private(set) var applyVideoEncodingCallCount = 0
     private(set) var lastVideoEncoding: (maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double)?
     func applyVideoEncoding(maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double) {
@@ -203,6 +219,8 @@ private final class TestableWebRTCClient: WebRTCClientProviding {
         lastVideoEncoding = (maxBitrateBps, maxFramerate, scaleResolutionDownBy)
     }
     func switchCamera() async throws {}
+    func availableCameras() -> [CameraDeviceOption] { [] }
+    func switchToCamera(uniqueID: String) async throws {}
     func getStats() async -> CallStats? { nil }
     func createDataChannel(label: String) -> Bool {
         lastDataChannelLabel = label

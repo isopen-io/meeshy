@@ -670,6 +670,15 @@ struct MeeshyApp: App {
         case .joinLink(let id), .chatLink(let id):
             activeGuestSession = GuestSession(identifier: id, context: AnonymousSessionStore.load(linkId: id))
             deepLinkRouter.consumePendingDeepLink()
+        case .magicLink(let token):
+            // Cold-launch Universal Link magic link. `AppDelegate
+            // .application(_:continue:)` set `pendingDeepLink = .magicLink`
+            // before any view mounted, and `RootView` (the warm consumer)
+            // never mounts while unauthenticated — so this is the ONLY place
+            // a cold-launch magic link gets validated. Consume first so the
+            // `.task` + `.onChange` callers don't double-fire the request.
+            deepLinkRouter.consumePendingDeepLink()
+            validateMagicLinkToken(token)
         default:
             break
         }
@@ -680,7 +689,14 @@ struct MeeshyApp: App {
     private func handleAppLevelDeepLink(_ url: URL) {
         let destination = DeepLinkParser.parse(url)
         guard case .magicLink(let token) = destination else { return }
+        validateMagicLinkToken(token)
+    }
 
+    /// Validate a passwordless magic-link token and surface the outcome.
+    /// Shared by the warm path (`.onOpenURL` / `.onContinueUserActivity` via
+    /// `handleAppLevelDeepLink`) and the cold-launch path
+    /// (`handleGuestDeepLink`) so both report success/failure identically.
+    private func validateMagicLinkToken(_ token: String) {
         Task {
             await authManager.validateMagicLink(token: token)
 

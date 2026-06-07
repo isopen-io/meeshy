@@ -854,6 +854,22 @@ final class CallManager: ObservableObject {
                 Logger.calls.info("SDP answer created from late offer for call: \(callId)")
             }
 
+        case .connected, .reconnecting:
+            // §4.2 — mid-call renegotiation (the peer's A/V switch, or an ICE
+            // restart it initiated). Previously this fell into `default` and was
+            // DROPPED, leaving the peer's newly-enabled video one-way. Apply the
+            // offer in place and answer it; the perfect-negotiation glare guard
+            // in the client handles a simultaneous local offer.
+            Task { [weak self] in
+                guard let self else { return }
+                guard let answer = await self.webRTCService.createAnswer(from: sdp) else {
+                    Logger.calls.error("Failed to answer mid-call renegotiation offer for call: \(callId)")
+                    return
+                }
+                await self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
+                Logger.calls.info("Renegotiation answer sent for call: \(callId)")
+            }
+
         default:
             Logger.calls.warning("Signal offer received in unexpected state: \(String(describing: self.callState))")
         }
@@ -1077,15 +1093,48 @@ final class CallManager: ObservableObject {
         HapticFeedback.light()
     }
 
+    /// §5.4 — mid-call audio↔video switch (FaceTime-style asymmetric). Acquires/
+    /// releases the camera, attaches/detaches it on the reserved video
+    /// transceiver and, when the SDP direction changes, drives a renegotiation
+    /// (createOffer → emit; the peer answers via handleSignalOffer's connected
+    /// case). Replaces the old track.enabled flip, which left the upgrade
+    /// invisible to the peer (no transceiver / no renegotiation).
     func toggleVideo() {
-        isVideoEnabled.toggle()
-        webRTCService.enableVideo(isVideoEnabled)
-        // P0-3 — tell the peer so it shows our avatar placeholder instead of a
-        // frozen last frame. Gateway broadcasts to the other participant only.
-        if let callId = currentCallId {
-            MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: isVideoEnabled)
+        let target = !isVideoEnabled
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let needsRenegotiation: Bool
+                if target {
+                    needsRenegotiation = try await self.webRTCService.upgradeToVideo()
+                } else {
+                    needsRenegotiation = await self.webRTCService.downgradeFromVideo()
+                }
+                self.isVideoEnabled = target
+                self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
+
+                // P0-3 — tell the peer so it shows our avatar placeholder instead
+                // of a frozen last frame. Gateway broadcasts to the other peer only.
+                if let callId = self.currentCallId {
+                    MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: target)
+                }
+
+                // Renegotiate so the peer actually starts/stops receiving our
+                // video stream (a track.enabled flip alone never reaches it).
+                if needsRenegotiation,
+                   let callId = self.currentCallId,
+                   let userId = self.remoteUserId,
+                   let offer = await self.webRTCService.createOffer() {
+                    self.emitCallOffer(callId: callId, toUserId: userId, isVideo: target, sdp: offer)
+                    Logger.calls.info("[CALL] A/V switch renegotiation offer sent (video=\(target))")
+                }
+                HapticFeedback.light()
+            } catch {
+                Logger.calls.error("toggleVideo failed: \(error.localizedDescription)")
+                self.isVideoEnabled = false
+                FeedbackToastManager.shared.showError("Impossible d'activer la vidéo")
+            }
         }
-        HapticFeedback.light()
     }
 
     func switchCamera() {

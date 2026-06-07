@@ -195,6 +195,18 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             return
         }
 
+        try await buildLocalVideoTrackAndStartCapture()
+        Logger.webrtc.info("[WEBRTC] local audio + video tracks prepared")
+    }
+
+    /// Builds the local video source/track + camera capturer and starts capture.
+    /// Extracted from startLocalMedia so a mid-call audio→video upgrade
+    /// (enableLocalVideo) can lazily create the camera without an addTransceiver
+    /// — the LED stays off during an audio call until the user upgrades.
+    /// Idempotent: a no-op if a video track already exists.
+    private func buildLocalVideoTrackAndStartCapture() async throws {
+        guard localVideoTrack_ == nil else { return }
+
         #if targetEnvironment(simulator)
         // iOS Simulator's AVCaptureDevice.DiscoverySession returns phantom devices,
         // but RTCCameraVideoCapturer.startCapture fails with FigCaptureSourceRemote
@@ -211,9 +223,6 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let videoTrack = factory.videoTrack(with: videoSource, trackId: "video0")
         videoTrack.isEnabled = true
         localVideoTrack_ = videoTrack
-        // §5.2 — transceiver attach deferred to createOffer/createAnswer (see
-        // the audio-path note above). Here we only build the source/track and
-        // start the capturer.
 
         let filterDelegate = VideoFilterCapturerDelegate(target: videoSource, pipeline: videoFilterPipeline)
         videoFilterDelegate = filterDelegate
@@ -245,9 +254,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         Logger.webrtc.info("[WEBRTC] capturer.startCapture begin fps=\(fps)")
         try await capturer.startCapture(with: camera, format: format, fps: fps)
         // applyVideoEncoding() is deferred — it runs once the video track is
-        // attached to its transceiver (addOffererTransceiversIfNeeded /
-        // attachAnswererTracks); a sender does not exist yet at this point.
-        Logger.webrtc.info("[WEBRTC] local audio + video tracks prepared (\(camera.position == .front ? "front" : "device") camera, \(fps)fps)")
+        // attached to its transceiver; a sender does not exist yet at this point.
+        Logger.webrtc.info("[WEBRTC] video track prepared (\(camera.position == .front ? "front" : "device") camera, \(fps)fps)")
         #endif
     }
 
@@ -462,15 +470,21 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             Logger.webrtc.error("[WEBRTC] failed to add audio transceiver (offerer)")
         }
 
-        guard let videoTrack = localVideoTrack_ else { return }
+        // §5.1 — ALWAYS reserve a video m-line, even for an audio-only call, so a
+        // mid-call audio→video upgrade is just a direction flip + track attach
+        // (never an addTransceiver mid-call, which reorders m-lines and breaks
+        // renegotiation). recvonly + no track keeps the camera/LED off until the
+        // user actually upgrades.
         let videoInit = RTCRtpTransceiverInit()
-        videoInit.direction = .sendRecv
+        videoInit.direction = localVideoTrack_ != nil ? .sendRecv : .recvOnly
         videoInit.streamIds = ["meeshy-stream-0"]
         if let vt = pc.addTransceiver(of: .video, init: videoInit) {
-            vt.sender.track = videoTrack
             self.videoTransceiver = vt
             applyVideoCodecPreferences(videoTransceiver: vt)
-            applyVideoEncoding()
+            if let videoTrack = localVideoTrack_ {
+                vt.sender.track = videoTrack
+                applyVideoEncoding()
+            }
         } else {
             Logger.webrtc.error("[WEBRTC] failed to add video transceiver (offerer)")
         }
@@ -711,6 +725,68 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
                 await self.videoCapturer?.stopCapture()
             }
         }
+    }
+
+    /// Whether a local camera track currently exists (drives the UI's
+    /// self-preview / camera-toggle affordance).
+    var hasLocalVideoTrack: Bool { localVideoTrack_ != nil }
+
+    /// Mid-call audio→video upgrade (FaceTime-style asymmetric — we control our
+    /// own outbound video only). Lazily builds the camera track, attaches it to
+    /// the reserved video transceiver and flips it to sendRecv. Returns true when
+    /// the SDP direction changed and a renegotiation (createOffer) is required;
+    /// false when video was already being sent (no SDP change needed).
+    func enableLocalVideo() async throws -> Bool {
+        guard let pc = peerConnection else { throw WebRTCError.noPeerConnection }
+        if localVideoTrack_ == nil {
+            try await buildLocalVideoTrackAndStartCapture()
+        } else {
+            localVideoTrack_?.isEnabled = true
+            await restartCapturerIfStopped()
+        }
+        guard let videoTrack = localVideoTrack_ else { return false }
+
+        if let vt = videoTransceiver {
+            let wasSending = vt.direction == .sendRecv || vt.direction == .sendOnly
+            vt.sender.track = videoTrack
+            forceSendRecv(vt)
+            applyVideoCodecPreferences(videoTransceiver: vt)
+            applyVideoEncoding()
+            Logger.webrtc.info("[WEBRTC] local video enabled (upgrade) renegotiation=\(!wasSending, privacy: .public)")
+            return !wasSending
+        }
+
+        // Legacy peer with no reserved video m-line → add one (sendRecv).
+        let vinit = RTCRtpTransceiverInit()
+        vinit.direction = .sendRecv
+        vinit.streamIds = ["meeshy-stream-0"]
+        guard let vt = pc.addTransceiver(of: .video, init: vinit) else {
+            throw WebRTCError.failedToCreateSDP
+        }
+        vt.sender.track = videoTrack
+        self.videoTransceiver = vt
+        applyVideoCodecPreferences(videoTransceiver: vt)
+        applyVideoEncoding()
+        Logger.webrtc.info("[WEBRTC] local video enabled (added transceiver) renegotiation=true")
+        return true
+    }
+
+    /// Mid-call video→audio downgrade. Stops the camera, detaches the outbound
+    /// track and flips the transceiver to recvonly (we keep receiving the peer's
+    /// video). Returns true when a renegotiation is required.
+    func disableLocalVideo() async -> Bool {
+        localVideoTrack_?.isEnabled = false
+        await videoCapturer?.stopCapture()
+        guard let vt = videoTransceiver else { return false }
+        let wasSending = vt.direction == .sendRecv || vt.direction == .sendOnly
+        vt.sender.track = nil
+        var error: NSError?
+        vt.setDirection(.recvOnly, error: &error)
+        if let error {
+            Logger.webrtc.warning("[WEBRTC] setDirection(.recvOnly) failed: \(error.localizedDescription, privacy: .public)")
+        }
+        Logger.webrtc.info("[WEBRTC] local video disabled (downgrade) renegotiation=\(wasSending, privacy: .public)")
+        return wasSending
     }
 
     /// Restarts the existing capturer using the current camera selection
@@ -1356,6 +1432,9 @@ final class P2PWebRTCClient: WebRTCClientProviding {
     func toggleAudio(_ enabled: Bool) {}
     func toggleVideo(_ enabled: Bool) {}
     func applyVideoEncoding(maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double) {}
+    var hasLocalVideoTrack: Bool { false }
+    func enableLocalVideo() async throws -> Bool { throw WebRTCError.notSupported }
+    func disableLocalVideo() async -> Bool { false }
     func switchCamera() async throws {}
     func availableCameras() -> [CameraDeviceOption] { [] }
     func switchToCamera(uniqueID: String) async throws {}

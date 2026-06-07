@@ -199,12 +199,95 @@ final class DeepLinkParserTests: XCTestCase {
     }
 
     func test_parse_webUrl_unknownPath_returnsExternal() {
-        let url = URL(string: "https://meeshy.me/l/some-token")!
+        // `/settings` is not claimed by AASA and has no in-app surface, so it
+        // must fall through to Safari. (`/l/<token>` USED to land here, but it
+        // is now recognised as a `.joinLink` — see the join-link tests below.)
+        let url = URL(string: "https://meeshy.me/settings")!
         let result = DeepLinkParser.parse(url)
         guard case .external = result else {
             XCTFail("Expected .external, got \(result)")
             return
         }
+    }
+
+    // MARK: - Invitation / Join links (parser parity with DeepLinkRouter)
+    //
+    // Regression guard: `DeepLinkParser` used to return `.external` for
+    // `/join`, `/l`, `/chat` and the long-form `/conversation`, which made
+    // `isMeeshyDeepLink` return `false` and caused `AppDelegate
+    // .application(_:continue:)` to bounce cold-launch invitation Universal
+    // Links to Safari instead of opening the join flow. These pin the parser
+    // in lockstep with `DeepLinkRouter.handle`.
+
+    func test_parse_webUrl_join_returnsJoinLink() {
+        let url = URL(string: "https://meeshy.me/join/inv123")!
+        guard case .joinLink(let id) = DeepLinkParser.parse(url) else {
+            XCTFail("Expected .joinLink")
+            return
+        }
+        XCTAssertEqual(id, "inv123")
+    }
+
+    func test_parse_webUrl_legacyJoinL_returnsJoinLink() {
+        let url = URL(string: "https://meeshy.me/l/shortcode")!
+        guard case .joinLink(let id) = DeepLinkParser.parse(url) else {
+            XCTFail("Expected .joinLink")
+            return
+        }
+        XCTAssertEqual(id, "shortcode")
+    }
+
+    func test_parse_webUrl_chat_returnsChatLink() {
+        let url = URL(string: "https://meeshy.me/chat/mshy_support")!
+        guard case .chatLink(let id) = DeepLinkParser.parse(url) else {
+            XCTFail("Expected .chatLink")
+            return
+        }
+        XCTAssertEqual(id, "mshy_support")
+    }
+
+    func test_parse_webUrl_conversationLongForm_returnsConversation() {
+        let url = URL(string: "https://meeshy.me/conversation/conv789")!
+        guard case .conversation(let id) = DeepLinkParser.parse(url) else {
+            XCTFail("Expected .conversation")
+            return
+        }
+        XCTAssertEqual(id, "conv789")
+    }
+
+    func test_parse_webUrl_join_emptyId_returnsExternal() {
+        let url = URL(string: "https://meeshy.me/join/")!
+        guard case .external = DeepLinkParser.parse(url) else {
+            XCTFail("Expected .external for empty join id")
+            return
+        }
+    }
+
+    func test_parse_customScheme_join_returnsJoinLink() {
+        let url = URL(string: "meeshy://join/inv999")!
+        guard case .joinLink(let id) = DeepLinkParser.parse(url) else {
+            XCTFail("Expected .joinLink")
+            return
+        }
+        XCTAssertEqual(id, "inv999")
+    }
+
+    func test_parse_customScheme_chat_returnsChatLink() {
+        let url = URL(string: "meeshy://chat/mshy_abc123")!
+        guard case .chatLink(let id) = DeepLinkParser.parse(url) else {
+            XCTFail("Expected .chatLink")
+            return
+        }
+        XCTAssertEqual(id, "mshy_abc123")
+    }
+
+    func test_parse_customScheme_conversationLongForm_returnsConversation() {
+        let url = URL(string: "meeshy://conversation/conv222")!
+        guard case .conversation(let id) = DeepLinkParser.parse(url) else {
+            XCTFail("Expected .conversation")
+            return
+        }
+        XCTAssertEqual(id, "conv222")
     }
 
     // MARK: - External URLs

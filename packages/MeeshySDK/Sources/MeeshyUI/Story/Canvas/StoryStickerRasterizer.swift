@@ -64,7 +64,9 @@ public final class StoryStickerRasterizer: @unchecked Sendable {
         }
     }
 
-    deinit {
+    // `nonisolated` : ne touche que `memoryWarningObserver` (nonisolated(unsafe)).
+    // Évite le shim isolated-deinit qui double-free le TaskLocal scope (SIGABRT).
+    nonisolated deinit {
         if let observer = memoryWarningObserver {
             NotificationCenter.default.removeObserver(observer)
         }

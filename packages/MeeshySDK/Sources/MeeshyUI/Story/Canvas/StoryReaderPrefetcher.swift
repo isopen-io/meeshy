@@ -6,9 +6,9 @@ import MeeshySDK
 /// instantaneous — no image decode, no Metal pipeline cold start, no
 /// AVPlayer init on the transition.
 ///
-/// Maintains a sliding window of at most 4 canvas views: `[N-1, N, N+1, N+2]`.
-/// Window is asymmetric (1 backward + 2 forward) to absorb rapid-swipe
-/// sequences (3 taps in <500 ms) without a flash on the 3ʳᵈ transition.
+/// Maintains a sliding window of at most 3 canvas views: `[N-1, N, N+1]`.
+/// The window is symmetric — one slide of look-behind for back-swipe and one
+/// of look-ahead so the next slide's first frame is already rendered.
 /// Views outside the window are evicted (memory bounded).
 ///
 /// Usage from a multi-slide viewer:
@@ -135,17 +135,16 @@ public final class StoryReaderPrefetcher {
 
     // MARK: - Window math
 
-    /// Indices to keep in the sliding window. Asymétrique : 1 slide en arrière
-    /// (N-1) + 2 slides en avant (N+1, N+2) pour couvrir les rapid-swipes :
-    /// si l'utilisateur tape 3 fois rapidement (N → N+1 → N+2 → N+3), au moins
-    /// N+2 est déjà bootstrappée avant la 3ᵉ transition → pas de flash. N-1
-    /// suffit pour la marche-arrière qui est moins fréquente dans les stories.
-    /// Bornes : start drops indices < 0, end drops indices ≥ count.
-    /// Single-slide group keeps only `N`.
+    /// Indices to keep in the sliding window. Symétrique : 1 slide en arrière
+    /// (N-1) + 1 slide en avant (N+1), centré sur `N`. La marche-avant couvre
+    /// le swipe suivant (sa première frame est déjà rendue), la marche-arrière
+    /// couvre le back-swipe. Bornes : start drops indices < 0, end drops
+    /// indices ≥ count — donc `[N, N+1]` au premier slide, `[N-1, N]` au
+    /// dernier. Single-slide group keeps only `N`.
     func windowIndices(around current: Int, count: Int) -> [Int] {
         guard count > 0 else { return [] }
         let lower = max(0, current - 1)
-        let upper = min(count - 1, current + 2)
+        let upper = min(count - 1, current + 1)
         return Array(lower...upper)
     }
 
