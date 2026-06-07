@@ -1,48 +1,41 @@
-name: iOS Tests
+name: SDK Tests
 
-# Re-enabled 2026-06-07. Runs the app's MeeshyTests suite. The MeeshySDK package
-# suite lives in a separate workflow (sdk-tests.yml) gated only on
-# packages/MeeshySDK/**, so an app-only PR is not blocked by it. This workflow
-# still triggers on packages/MeeshySDK/** because the app depends on the SDK and
-# we want app-level coverage of SDK changes.
+# Split out of ios-tests.yml (2026-06-07): the MeeshySDK package suite is gated
+# ONLY on packages/MeeshySDK/** so an app-only PR (apps/ios changes) is no longer
+# blocked by it. The app's own MeeshyTests still run via ios-tests.yml, which is
+# triggered on both apps/ios/** and packages/MeeshySDK/** (the app depends on the
+# SDK), giving app-level coverage of SDK changes without coupling the two suites.
 #
-# Two environment facts drive the toolchain configuration below:
-#   1. The "test runner crashed … at swift_task_deinitOnExecutorMainActorBackDeploy"
-#      failure is a bug in the iOS 26.x SIMULATOR runtime's isolated-deinit path
-#      (double-free of a TaskLocal scope at xctest teardown for @MainActor classes
-#      with isolated deinits). It is ABSENT on the iOS 18.x runtime.
-#   2. The Timeline snapshot baselines were recorded on iOS 18.2.
-# So we COMPILE with Xcode 26.1.1 (Swift 6.2, required by the package) but RUN the
-# tests on an iOS 18.x simulator: crash-free AND consistent with the baselines.
-# Product code also received `nonisolated deinit` hardening for the affected
-# classes. workflow_dispatch kept for on-demand runs from the Actions tab.
+# Toolchain rationale (same as ios-tests.yml): COMPILE with Xcode 26.1.1
+# (Swift 6.2, required by the package) but RUN on an iOS 18.2 simulator — iOS 18.5+
+# and 26.x hit a Swift runtime isolated-deinit crash at xctest teardown, and the
+# Timeline snapshot baselines were recorded on 18.2.
 on:
   push:
     branches:
       - dev
       - main
     paths:
-      - 'apps/ios/**'
       - 'packages/MeeshySDK/**'
-      - '.github/workflows/ios-tests.yml'
   pull_request:
     branches:
       - dev
       - main
     paths:
-      - 'apps/ios/**'
       - 'packages/MeeshySDK/**'
-      - '.github/workflows/ios-tests.yml'
+  # Intentionally NOT triggered by changes to this workflow file itself: an
+  # app-only PR that merely touches CI config must not be gated by the SDK suite.
+  # Use workflow_dispatch (Actions tab) to exercise CI changes on demand.
   workflow_dispatch:
 
 # A hung xctest must never sit for GitHub's 6h default. A new push on the same
 # ref cancels stale in-progress runs so we never accumulate multi-hour zombies.
 concurrency:
-  group: ios-tests-${{ github.ref }}
+  group: sdk-tests-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  ios-tests:
+  sdk-tests:
     runs-on: macos-15
     # Hard cap: the suite normally finishes in <15 min (incl. the one-time 18.2
     # runtime download). 25 min fails fast if a test deadlocks instead of hanging.
@@ -70,21 +63,21 @@ jobs:
           SIM_ID=$(xcrun simctl create "iPhone16Pro-iOS182-CI" "iPhone 16 Pro" "com.apple.CoreSimulator.SimRuntime.iOS-18-2")
           echo "sim_id=$SIM_ID" >> "$GITHUB_OUTPUT"
 
-      - name: Run iOS tests
+      - name: Run SDK tests
         run: |
           rm -rf TestResults.xcresult
           xcodebuild test \
-            -project apps/ios/Meeshy.xcodeproj \
-            -scheme Meeshy \
+            -scheme MeeshySDK-Package \
             -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.sim_id }}" \
-            -only-testing:MeeshyTests \
             -resultBundlePath TestResults.xcresult \
             -test-timeouts-enabled YES \
             -maximum-test-execution-time-allowance 180 \
             -quiet
+        working-directory: packages/MeeshySDK
 
       - name: Surface test failures
         if: always()
+        working-directory: packages/MeeshySDK
         run: |
           BUNDLE=TestResults.xcresult
           [ -d "$BUNDLE" ] || { echo "No result bundle produced."; exit 0; }
