@@ -14,7 +14,7 @@ public final class CommunityLinkService: @unchecked Sendable {
         let response: APIResponse<[APICommunityMini]> = try await api.request(
             endpoint: "/communities/mine?role=admin,moderator"
         )
-        let baseUrl = MeeshyConfig.shared.serverOrigin
+        let baseUrl = MeeshyConfig.shared.webOrigin
         return response.data.map { community in
             CommunityLink(
                 id: community.id,

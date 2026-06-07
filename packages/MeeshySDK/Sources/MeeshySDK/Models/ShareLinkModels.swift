@@ -221,7 +221,7 @@ public struct MyShareLink: Codable, Identifiable, Sendable, CacheIdentifiable {
     public let conversationTitle: String?
 
     public var displayName: String { name ?? identifier ?? linkId }
-    public var joinUrl: String { "\(MeeshyConfig.shared.serverOrigin)/join/\(identifier ?? linkId)" }
+    public var joinUrl: String { "\(MeeshyConfig.shared.webOrigin)/join/\(identifier ?? linkId)" }
 }
 
 public struct MyShareLinkStats: Codable, Sendable, CacheIdentifiable {

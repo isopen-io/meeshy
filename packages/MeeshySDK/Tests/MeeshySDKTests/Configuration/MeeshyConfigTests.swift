@@ -64,6 +64,38 @@ final class MeeshyConfigTests: XCTestCase {
         XCTAssertEqual(config.serverOrigin, "https://api.example.com")
     }
 
+    // MARK: - webOrigin Computed Property
+    //
+    // Regression guard: user-facing share / deep links MUST resolve to the
+    // public web origin (which serves apple-app-site-association + matches the
+    // in-app DeepLinkParser host set), NOT the `gate.` API origin. A
+    // `gate.meeshy.me/join/…` link neither verifies as a Universal Link nor
+    // routes in-app — it falls through to an API 404.
+
+    func testWebOriginStripsGateSubdomainInProduction() {
+        let config = MeeshyConfig.shared
+        config.configure(apiURL: "https://gate.meeshy.me/api/v1")
+        XCTAssertEqual(config.webOrigin, "https://meeshy.me")
+    }
+
+    func testWebOriginStripsGateSubdomainInStaging() {
+        let config = MeeshyConfig.shared
+        config.configure(apiURL: "https://gate.staging.meeshy.me/api/v1")
+        XCTAssertEqual(config.webOrigin, "https://staging.meeshy.me")
+    }
+
+    func testWebOriginRemapsLocalhostPort() {
+        let config = MeeshyConfig.shared
+        config.configure(apiURL: "http://localhost:3000/api/v1")
+        XCTAssertEqual(config.webOrigin, "http://localhost:3100")
+    }
+
+    func testWebOriginReturnsHostWithoutGatePrefixVerbatim() {
+        let config = MeeshyConfig.shared
+        config.configure(apiURL: "https://custom.example.com/api/v1")
+        XCTAssertEqual(config.webOrigin, "https://custom.example.com")
+    }
+
     // MARK: - socketBaseURL Computed Property
 
     func testSocketBaseURLMatchesServerOrigin() {

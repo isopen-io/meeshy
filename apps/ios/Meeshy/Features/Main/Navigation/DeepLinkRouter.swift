@@ -9,6 +9,14 @@ enum DeepLinkDestination {
     case ownProfile
     case userProfile(username: String)
     case conversation(id: String)
+    /// Invitation / share link (`/join/<id>` or `/l/<id>`). The recipient
+    /// resolves it server-side: anonymous → guest session, authenticated →
+    /// idempotent `joinAuthenticated`. Kept distinct from `.conversation`
+    /// because the identifier is a share-link token, not a conversationId.
+    case joinLink(identifier: String)
+    /// Direct chat share link (`/chat/<id>`). Same resolution path as
+    /// `.joinLink` — the gateway accepts either shape.
+    case chatLink(identifier: String)
     case post(id: String)
     case magicLink(token: String)
     case share(text: String?, url: String?)
@@ -150,7 +158,17 @@ enum DeepLinkParser {
         case "u", "users":
             // meeshy://u/{username} (or meeshy://users/{username}).
             if components.count >= 2 { return .userProfile(username: components[1]) }
-        case "c":
+        case "join", "l":
+            // meeshy://join/{linkId} (or meeshy://l/{linkId}) — invitation /
+            // share link. Mirrors the Universal Link shape claimed by AASA
+            // (`/join/*`, `/l/*`) and the web fallback redirect
+            // (`window.location = meeshy://join/<id>`).
+            if components.count >= 2 { return .joinLink(identifier: components[1]) }
+        case "chat":
+            // meeshy://chat/{linkId} — direct chat share link (web fallback
+            // redirect emits this from /chat/[id]).
+            if components.count >= 2 { return .chatLink(identifier: components[1]) }
+        case "c", "conversation":
             if components.count >= 2 { return .conversation(id: components[1]) }
         case "post", "p":
             // meeshy://post/{postId} (or meeshy://p/{postId}) — direct
@@ -230,12 +248,22 @@ enum DeepLinkParser {
                 return .postDetail(postId: components[1])
             }
             switch head {
-            case "c": return .conversation(id: components[1])
+            case "c", "conversation": return .conversation(id: components[1])
+            // Invitation / share links — `/join/<id>` (canonical) and
+            // `/l/<id>` (legacy / tracking alias). Both are claimed as
+            // Universal Links in apple-app-site-association and resolve to
+            // the same authenticated/anonymous join flow. Recognising them
+            // here is what lets `isMeeshyDeepLink` return `true` so
+            // `AppDelegate.application(_:continue:)` claims the cold-launch
+            // Universal Link instead of bouncing it to Safari.
+            case "join", "l": return .joinLink(identifier: components[1])
+            // Direct chat share link — `/chat/<id>`.
+            case "chat": return .chatLink(identifier: components[1])
             default: break
             }
         }
 
-        // Unknown meeshy.me path (e.g. /l/TOKEN) -> open in Safari
+        // Unknown meeshy.me path (e.g. /settings) -> open in Safari
         return .external(url)
     }
 
