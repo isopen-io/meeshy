@@ -36,6 +36,11 @@ struct ContactsHubView: View {
         }
         .background(theme.backgroundPrimary.ignoresSafeArea())
         .navigationBarHidden(true)
+        .adaptiveOnChange(of: selectedTab) { _, _ in
+            // Re-expand the header when switching tabs (the freshly shown tab's
+            // offset only re-fires once the user scrolls it).
+            scrollOffset = 0
+        }
     }
 
     // MARK: - Tab Bar
@@ -104,16 +109,16 @@ struct ContactsHubView: View {
 
     private var tabContent: some View {
         TabView(selection: $selectedTab) {
-            ContactsListTab(viewModel: contactsListVM)
+            ContactsListTab(viewModel: contactsListVM, isActive: selectedTab == .contacts, onScrollOffsetChange: { scrollOffset = $0 })
                 .tag(ContactsTab.contacts)
 
-            RequestsTab(viewModel: requestsVM)
+            RequestsTab(viewModel: requestsVM, isActive: selectedTab == .requests, onScrollOffsetChange: { scrollOffset = $0 })
                 .tag(ContactsTab.requests)
 
-            DiscoverTab(viewModel: discoverVM)
+            DiscoverTab(viewModel: discoverVM, isActive: selectedTab == .discover, onScrollOffsetChange: { scrollOffset = $0 })
                 .tag(ContactsTab.discover)
 
-            BlockedTab(viewModel: blockedVM)
+            BlockedTab(viewModel: blockedVM, isActive: selectedTab == .blocked, onScrollOffsetChange: { scrollOffset = $0 })
                 .tag(ContactsTab.blocked)
         }
         .tabViewStyle(.page(indexDisplayMode: .never))

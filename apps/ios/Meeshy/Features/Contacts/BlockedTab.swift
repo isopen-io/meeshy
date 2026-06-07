@@ -5,6 +5,8 @@ import MeeshyUI
 
 struct BlockedTab: View {
     @ObservedObject var viewModel: BlockedViewModel
+    var isActive: Bool = true
+    var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
@@ -48,6 +50,7 @@ struct BlockedTab: View {
 
     private var blockedList: some View {
         ScrollView(.vertical, showsIndicators: false) {
+            ContactsScrollSentinel()
             LazyVStack(spacing: 0) {
                 ForEach(Array(viewModel.blockedUsers.enumerated()), id: \.element.id) { index, user in
                     blockedRow(user, index: index)
@@ -55,6 +58,7 @@ struct BlockedTab: View {
             }
             .padding(.top, 8)
         }
+        .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
     }
 
     private func blockedRow(_ user: BlockedUser, index: Int) -> some View {
