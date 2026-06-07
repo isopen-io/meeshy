@@ -653,6 +653,11 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     // Pre-computed "HH:mm" string set at ingestion time — avoids DateFormatter in bubble body
     public var cachedTimeString: String?
 
+    /// Structured call facts for a call-summary system message
+    /// (`messageSource == .system`). Drives the rich, actionable call bubble.
+    /// `nil` for ordinary messages.
+    public var callSummary: CallSummaryMetadata?
+
     public enum DeliveryStatus: String, Codable, Sendable {
         case sending    // optimistic, not yet sent
         case invisible  // < 200ms, status hidden in UI (debounce — spec §6.2)
@@ -709,7 +714,8 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
                 deliveryStatus: DeliveryStatus = .sent, isMe: Bool = false,
                 deliveredToAllAt: Date? = nil, readByAllAt: Date? = nil,
                 deliveredCount: Int = 0, readCount: Int = 0,
-                cachedTimeString: String? = nil) {
+                cachedTimeString: String? = nil,
+                callSummary: CallSummaryMetadata? = nil) {
         self.id = id; self.clientMessageId = clientMessageId
         self.conversationId = conversationId; self.senderId = senderId
         self.content = content
@@ -728,6 +734,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         self.deliveredToAllAt = deliveredToAllAt; self.readByAllAt = readByAllAt
         self.deliveredCount = deliveredCount; self.readCount = readCount
         self.cachedTimeString = cachedTimeString
+        self.callSummary = callSummary
         self.effects = effects
     }
 
@@ -743,6 +750,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         case deliveryStatus, isMe
         case deliveredToAllAt, readByAllAt, deliveredCount, readCount
         case cachedTimeString
+        case callSummary
         // Legacy keys for migration from old cached data
         case isViewOnce, isBlurred
     }
@@ -790,6 +798,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         deliveredCount = try c.decodeIfPresent(Int.self, forKey: .deliveredCount) ?? 0
         readCount = try c.decodeIfPresent(Int.self, forKey: .readCount) ?? 0
         cachedTimeString = try c.decodeIfPresent(String.self, forKey: .cachedTimeString)
+        callSummary = try c.decodeIfPresent(CallSummaryMetadata.self, forKey: .callSummary)
         // Legacy migration: merge old isViewOnce/isBlurred bools into effects
         if let legacyViewOnce = try c.decodeIfPresent(Bool.self, forKey: .isViewOnce), legacyViewOnce {
             effects.flags.insert(.viewOnce)
@@ -842,6 +851,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         try c.encode(deliveredCount, forKey: .deliveredCount)
         try c.encode(readCount, forKey: .readCount)
         try c.encodeIfPresent(cachedTimeString, forKey: .cachedTimeString)
+        try c.encodeIfPresent(callSummary, forKey: .callSummary)
     }
 
     public var text: String { content }

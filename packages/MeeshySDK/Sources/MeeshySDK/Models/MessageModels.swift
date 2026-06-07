@@ -355,6 +355,9 @@ public struct APIMessage: Sendable {
     public let effectFlags: UInt32?
     public let translations: [APITextTranslation]?
     public let mentionedUsers: [MentionedUser]?
+    /// Structured per-type payload. For call-summary system messages this decodes
+    /// into a `CallSummaryMetadata`; absent / non-call metadata yields `nil`.
+    public let callSummary: CallSummaryMetadata?
 }
 
 extension APIMessage: Decodable {
@@ -368,6 +371,7 @@ extension APIMessage: Decodable {
         case reactionSummary, reactionCount, currentUserReactions
         case deliveredToAllAt, readByAllAt, deliveredCount, readCount
         case effectFlags, translations, mentionedUsers
+        case metadata
         // MongoDB fallback
         case _id
     }
@@ -418,6 +422,9 @@ extension APIMessage: Decodable {
         effectFlags = try c.decodeIfPresent(UInt32.self, forKey: .effectFlags)
         translations = try c.decodeIfPresent([APITextTranslation].self, forKey: .translations)
         mentionedUsers = try c.decodeIfPresent([MentionedUser].self, forKey: .mentionedUsers)
+        // Tolerant: a present-but-non-call metadata object must not fail the
+        // whole message decode, so swallow shape mismatches into nil.
+        callSummary = try? c.decodeIfPresent(CallSummaryMetadata.self, forKey: .metadata)
     }
 }
 
@@ -648,7 +655,8 @@ extension APIMessage {
             isMe: (sender?.resolvedUserId ?? senderId) == currentUserId
                 || (currentUsername != nil && resolvedUsername?.lowercased() == currentUsername?.lowercased()),
             deliveredToAllAt: deliveredToAllAt, readByAllAt: readByAllAt,
-            deliveredCount: deliveredCount ?? 0, readCount: readCount ?? 0
+            deliveredCount: deliveredCount ?? 0, readCount: readCount ?? 0,
+            callSummary: callSummary
         )
     }
 }
