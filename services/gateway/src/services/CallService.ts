@@ -13,7 +13,7 @@
 import { PrismaClient, CallMode, CallStatus, CallEndReason, ParticipantRole, Prisma } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
 import { CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
-import { buildCallSummary, callSummaryClientMessageId } from '@meeshy/shared/utils/call-summary';
+import { buildCallSummary, buildCallSummaryMetadata, callSummaryClientMessageId } from '@meeshy/shared/utils/call-summary';
 import { TURNCredentialService } from './TURNCredentialService';
 
 const TERMINAL_STATUSES: CallStatus[] = [
@@ -1133,6 +1133,47 @@ export class CallService {
   }
 
   /**
+   * Persist the latest client-reported call statistics onto the CallSession so
+   * the call-summary message can surface "data spent" + network quality.
+   *
+   * WebRTC `bytesSent`/`bytesReceived` are cumulative monotonic counters, so we
+   * keep the MAX seen (defensive against out-of-order/duplicate reports); the
+   * last report before teardown therefore yields the call totals. The quality
+   * tier is overwritten with the most recent non-empty value. Best-effort and
+   * never throws — a failed stats write must not break call signaling.
+   */
+  async persistCallStats(
+    callId: string,
+    stats: { bytesSent?: number | null; bytesReceived?: number | null; level?: string | null }
+  ): Promise<void> {
+    const data: Prisma.CallSessionUpdateInput = {};
+    const current = await this.prisma.callSession
+      .findUnique({ where: { id: callId }, select: { bytesSent: true, bytesReceived: true } })
+      .catch(() => null);
+    if (current === null) {
+      return;
+    }
+    if (typeof stats.bytesSent === 'number' && Number.isFinite(stats.bytesSent)) {
+      data.bytesSent = Math.max(current.bytesSent ?? 0, Math.floor(stats.bytesSent));
+    }
+    if (typeof stats.bytesReceived === 'number' && Number.isFinite(stats.bytesReceived)) {
+      data.bytesReceived = Math.max(current.bytesReceived ?? 0, Math.floor(stats.bytesReceived));
+    }
+    if (stats.level === 'excellent' || stats.level === 'good' || stats.level === 'fair' || stats.level === 'poor') {
+      data.networkQuality = stats.level;
+    }
+    if (Object.keys(data).length === 0) {
+      return;
+    }
+    await this.prisma.callSession.update({ where: { id: callId }, data }).catch((error) => {
+      logger.warn('Failed to persist call stats', {
+        callId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    });
+  }
+
+  /**
    * P3 — post the call-summary system message into the conversation when a
    * call reaches a terminal state ("Appel vidéo · 04:32", "Appel audio
    * manqué", "Appel refusé").
@@ -1163,7 +1204,10 @@ export class CallService {
         status: true,
         endReason: true,
         duration: true,
-        metadata: true
+        metadata: true,
+        bytesSent: true,
+        bytesReceived: true,
+        networkQuality: true
       }
     });
     if (!call) {
@@ -1171,15 +1215,32 @@ export class CallService {
     }
 
     const metadataType = (call.metadata as Record<string, unknown> | null)?.type;
+    const callType = typeof metadataType === 'string' ? metadataType : null;
     const summary = buildCallSummary({
       status: call.status,
       endReason: call.endReason,
-      callType: typeof metadataType === 'string' ? metadataType : null,
+      callType,
       durationSeconds: call.duration
     });
     if (!summary) {
       return null;
     }
+
+    // Structured call facts the client renders into a rich, actionable bubble
+    // (direction resolved per-viewer from initiatorId, media glyph, outcome
+    // tint, and the "duration · data · quality" line). Persisted on
+    // `Message.metadata`; survives both the socket broadcast and REST history.
+    const callMetadata = buildCallSummaryMetadata({
+      status: call.status,
+      endReason: call.endReason,
+      callType,
+      durationSeconds: call.duration,
+      callId: call.id,
+      initiatorId: call.initiatorId,
+      bytesSent: call.bytesSent,
+      bytesReceived: call.bytesReceived,
+      networkQuality: call.networkQuality
+    });
 
     // `Message.senderId` references a Participant (not a User); resolve the
     // initiator's participant row in this conversation to attribute the
@@ -1207,6 +1268,7 @@ export class CallService {
           originalLanguage: 'fr',
           messageType: 'system',
           messageSource: 'system',
+          metadata: callMetadata ?? undefined,
           clientMessageId: callSummaryClientMessageId(call.id)
         },
         include: CALL_SUMMARY_MESSAGE_INCLUDE

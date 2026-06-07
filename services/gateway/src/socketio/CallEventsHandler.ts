@@ -1708,6 +1708,15 @@ export class CallEventsHandler {
 
         // Check quality thresholds and emit alerts if needed
         const { stats } = data;
+
+        // Persist cumulative data usage + quality tier so the call-summary
+        // message can surface "data spent · network quality". Best-effort.
+        await this.callService.persistCallStats(data.callId, {
+          bytesSent: stats.bytesSent,
+          bytesReceived: stats.bytesReceived,
+          level: stats.level
+        });
+
         if (stats.rtt > 300 || stats.packetLoss > 5) {
           const participantId = await this.resolveParticipantIdFromCall(userId, data.callId);
           if (participantId) {

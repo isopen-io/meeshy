@@ -79,6 +79,30 @@ describe('CallService.createCallSummaryMessage', () => {
     });
   });
 
+  it('persists structured call metadata (direction, data, quality) on the message', async () => {
+    const { sut, prisma } = makeSUT();
+    prisma.callSession.findUnique.mockResolvedValue(
+      makeSession({ metadata: { type: 'video' }, duration: 272, bytesSent: 1_000_000, bytesReceived: 1_400_000, networkQuality: 'good' })
+    );
+    prisma.participant.findFirst.mockResolvedValue({ id: INITIATOR_PARTICIPANT_ID });
+    prisma.message.create.mockResolvedValue({ id: 'm1', conversationId: CONVERSATION_ID });
+
+    await sut.createCallSummaryMessage(CALL_ID);
+
+    const arg = prisma.message.create.mock.calls[0][0] as any;
+    expect(arg.data.metadata).toEqual({
+      kind: 'call',
+      callId: CALL_ID,
+      initiatorId: INITIATOR_USER_ID,
+      callType: 'video',
+      outcome: 'completed',
+      durationSeconds: 272,
+      bytesTotal: 2_400_000,
+      bytesEstimated: false,
+      networkQuality: 'good'
+    });
+  });
+
   it('labels a completed video call from metadata.type', async () => {
     const { sut, prisma } = makeSUT();
     prisma.callSession.findUnique.mockResolvedValue(makeSession({ metadata: { type: 'video' }, duration: 65 }));
