@@ -48,6 +48,30 @@ public final class MeeshyConfig: @unchecked Sendable {
 
     public var socketBaseURL: String { serverOrigin }
 
+    /// Public web origin for user-facing share / deep links (e.g.
+    /// "https://meeshy.me"). Distinct from ``serverOrigin``, which is the API
+    /// host (`gate.meeshy.me`): the apple-app-site-association and every
+    /// Universal Link are served from the WEB origin, never the API origin.
+    /// Any link a user can copy, share or tap MUST be built from this — a
+    /// `gate.meeshy.me/join/…` URL neither verifies as a Universal Link (no
+    /// AASA on the gateway) nor matches the in-app `DeepLinkParser` host set,
+    /// so it would silently fall through to an API 404.
+    ///
+    /// Derivation strips the leading `gate.` API subdomain
+    /// (`gate.meeshy.me` → `meeshy.me`, `gate.staging.meeshy.me` →
+    /// `staging.meeshy.me`) and remaps the localhost dev port (API `:3000`
+    /// → web `:3100`). Hosts without a `gate.` prefix are returned verbatim.
+    public var webOrigin: String {
+        guard let url = URL(string: serverOrigin),
+              let scheme = url.scheme,
+              let host = url.host else { return serverOrigin }
+        if host == "localhost" || host == "127.0.0.1" {
+            return "\(scheme)://\(host):3100"
+        }
+        let webHost = host.hasPrefix("gate.") ? String(host.dropFirst("gate.".count)) : host
+        return "\(scheme)://\(webHost)"
+    }
+
     public var appBundleId: String = "me.meeshy.app"
 
     /// Base64-encoded SHA-256 hashes of pinned SubjectPublicKeyInfo (SPKI)

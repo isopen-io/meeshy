@@ -4,7 +4,7 @@ const AASA = {
   applinks: {
     details: [
       {
-        appIDs: ["J2LP6UE7JQ.me.meeshy.app"],
+        appIDs: ["D72UK7R5RE.me.meeshy.app"],
         components: [
           { "/": "/join/*", "comment": "Join conversation links" },
           { "/": "/l/*", "comment": "Legacy join links" },
@@ -26,7 +26,7 @@ const AASA = {
     ],
   },
   webcredentials: {
-    apps: ["J2LP6UE7JQ.me.meeshy.app"],
+    apps: ["D72UK7R5RE.me.meeshy.app"],
   },
 }
 
