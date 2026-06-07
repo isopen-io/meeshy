@@ -103,6 +103,32 @@ describe('Strategist — asUserId resolution (id / displayName / username)', () 
     expect(msgs[0].asUserId).toBe('68f76b6fa3d995a7322a88d0');
   });
 
+  it('resolves asUserId despite missing diacritics (LLM drops accents)', async () => {
+    const llm = {
+      chat: jest.fn().mockResolvedValue({
+        content: JSON.stringify({
+          shouldIntervene: true,
+          reason: 'relance',
+          interventions: [
+            // displayName is "Israël Tchoffo" — LLM emitted "israeltchoffo" (no accent, no space)
+            { type: 'message', asUserId: 'israeltchoffo', topic: 'IA', delayCategory: 'short' },
+          ],
+        }),
+        usage: { inputTokens: 1, outputTokens: 1 },
+        model: 'gpt-4o-mini',
+      }),
+    };
+    (getArchetype as jest.Mock).mockReturnValue(null);
+    const users = [makeUser('6922081c49035174caaa0965', 'Israël Tchoffo', 'TchoffoIsrael')];
+
+    const strategist = createStrategistNode(llm as any);
+    const result = await strategist(makeState(users));
+
+    const msgs = result.interventionPlan.interventions.filter((i: any) => i.type === 'message');
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].asUserId).toBe('6922081c49035174caaa0965');
+  });
+
   it('still drops interventions whose asUserId matches no controlled user', async () => {
     const llm = {
       chat: jest.fn().mockResolvedValue({
