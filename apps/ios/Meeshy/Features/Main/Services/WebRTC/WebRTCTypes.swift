@@ -111,7 +111,13 @@ extension CallStats {
         let mimeType: String?       // only on "codec" entries, e.g. "audio/opus"
         let values: [String: Double]
 
-        init(
+        // `nonisolated` : `RawEntry` est un value type pur `Sendable` construit dans
+        // le callback nonisolated `RTCPeerConnection.statistics` (thread du framework
+        // WebRTC, hors main actor). Sous `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`,
+        // l'init serait sinon inféré `@MainActor` -> warning Swift 6 (futur error) à
+        // chaque construction off-main. Toutes les stored props sont des value types
+        // Sendable, donc la construction nonisolated est sûre.
+        nonisolated init(
             id: String,
             type: String,
             kind: String? = nil,

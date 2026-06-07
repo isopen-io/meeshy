@@ -1,5 +1,12 @@
 @preconcurrency import UserNotifications
 import Intents
+// `import AppIntents` (volontairement non utilisé) émet la directive d'autolink
+// AppIntents.framework. La phase auto-injectée « Extract App Intents Metadata »
+// tourne sur toute cible app/extension ; sans cette dépendance Swift, son outil
+// (appintentsmetadataprocessor) émet le warning « Metadata extraction skipped.
+// No AppIntents.framework dependency found. ». L'import le fait passer en scan
+// bénin (« no relevant symbols »). Cette NSE ne définit aucun App Intent.
+import AppIntents
 import GRDB
 import MeeshySDK
 
