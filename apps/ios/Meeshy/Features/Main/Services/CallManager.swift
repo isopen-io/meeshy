@@ -2402,6 +2402,31 @@ extension CallManager: WebRTCServiceDelegate {
         }
     }
 
+    nonisolated func webRTCService(_ service: WebRTCService, didCollectStats stats: CallStats, level: VideoQualityLevel, packetLossPercent: Double) {
+        Task { @MainActor [weak self] in
+            guard let self, let callId = self.currentCallId else { return }
+            MessageSocketManager.shared.emitCallQualityReport(
+                callId: callId,
+                level: Self.connectionQualityLabel(for: level),
+                rtt: stats.roundTripTimeMs,
+                packetLoss: packetLossPercent,
+                bytesSent: stats.bandwidth,
+                bytesReceived: stats.bytesReceived
+            )
+        }
+    }
+
+    /// Map the 5-tier client quality ladder onto the gateway's 4-tier
+    /// `ConnectionQualityLevel` (critical collapses into poor).
+    nonisolated static func connectionQualityLabel(for level: VideoQualityLevel) -> String {
+        switch level {
+        case .excellent: return "excellent"
+        case .good: return "good"
+        case .fair: return "fair"
+        case .poor, .critical: return "poor"
+        }
+    }
+
     @MainActor
     private func attemptReconnection() {
         reconnectAttempt += 1

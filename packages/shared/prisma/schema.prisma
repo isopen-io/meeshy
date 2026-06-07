@@ -531,6 +531,11 @@ model Message {
   messageType                 String    @default("text")
   /// Message origin: user, system, ads, app, agent, authority
   messageSource               String    @default("user")
+  /// Structured, type-specific payload for non-plain messages. For call-summary
+  /// system messages (messageSource = "system") this carries the call facts the
+  /// client needs to render a rich, actionable bubble (direction, media type,
+  /// outcome, duration, data spent, network quality). @see packages/shared/utils/call-summary.ts
+  metadata                    Json?
   isEdited                    Boolean   @default(false)
   editedAt                    DateTime?
   deletedAt                   DateTime?
@@ -1613,6 +1618,15 @@ model CallSession {
   answeredAt DateTime? // When first participant answered
   endedAt    DateTime?
   duration   Int? // Duration in seconds
+
+  /// Cumulative data transferred during the call, in bytes, as reported by the
+  /// client's WebRTC stats at teardown (last `call:quality-report`). Used to
+  /// surface "data spent" in the call-summary message. Null when never reported.
+  bytesSent     Int?
+  bytesReceived Int?
+  /// Overall network quality tier observed during the call:
+  /// excellent | good | fair | poor. Null when never reported (e.g. missed).
+  networkQuality String?
 
   /// Participants in this call
   participants CallParticipant[]

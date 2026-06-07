@@ -538,6 +538,8 @@ export function registerMessagesRoutes(
         senderId: true,
         messageType: true,
         messageSource: true,
+        // Structured per-type payload (call-summary facts for system messages)
+        metadata: true,
 
         // ===== ÉDITION / SUPPRESSION =====
         isEdited: true,
@@ -891,6 +893,8 @@ export function registerMessagesRoutes(
           originalLanguage: message.originalLanguage || 'fr',
           messageType: message.messageType,
           messageSource: message.messageSource,
+          // Structured per-type payload (call-summary facts for system messages)
+          metadata: message.metadata ?? undefined,
 
           // Édition/Suppression
           isEdited: message.isEdited,

@@ -1,5 +1,21 @@
 {
   "bubbleStream": {
+    "callSystemMessage": {
+      "callVideo": "Appel vidéo",
+      "callAudio": "Appel audio",
+      "callVideoMissed": "Appel vidéo manqué",
+      "callAudioMissed": "Appel audio manqué",
+      "callRejected": "Appel refusé",
+      "callVideoFailed": "Appel vidéo interrompu",
+      "callAudioFailed": "Appel audio interrompu",
+      "outgoing": "Sortant",
+      "incoming": "Entrant",
+      "callBack": "Rappeler",
+      "qualityExcellent": "Excellent",
+      "qualityGood": "Bonne",
+      "qualityFair": "Moyenne",
+      "qualityPoor": "Faible"
+    },
     "title": "Flux de messages",
     "loading": "Chargement des messages...",
     "noMessages": "Aucun message",

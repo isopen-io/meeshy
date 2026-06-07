@@ -1,5 +1,21 @@
 {
   "bubbleStream": {
+    "callSystemMessage": {
+      "callVideo": "Video call",
+      "callAudio": "Audio call",
+      "callVideoMissed": "Missed video call",
+      "callAudioMissed": "Missed audio call",
+      "callRejected": "Call declined",
+      "callVideoFailed": "Video call interrupted",
+      "callAudioFailed": "Audio call interrupted",
+      "outgoing": "Outgoing",
+      "incoming": "Incoming",
+      "callBack": "Call back",
+      "qualityExcellent": "Excellent",
+      "qualityGood": "Good",
+      "qualityFair": "Fair",
+      "qualityPoor": "Poor"
+    },
     "title": "Message Stream",
     "loading": "Loading messages...",
     "noMessages": "No messages",

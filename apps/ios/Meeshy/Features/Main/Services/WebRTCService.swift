@@ -12,6 +12,16 @@ protocol WebRTCServiceDelegate: AnyObject {
     func webRTCService(_ service: WebRTCService, didChangeQualityLevel level: VideoQualityLevel, from previous: VideoQualityLevel)
     func webRTCService(_ service: WebRTCService, didReceiveRemoteVideoTrack track: Any)
     func webRTCService(_ service: WebRTCService, didReceiveTranscriptionData data: Data)
+    /// Periodic stats tick (every `statsIntervalSeconds`) carrying cumulative
+    /// data usage, the current quality level, and the interval packet-loss
+    /// percentage (0–100) — reported to the gateway so the call-summary message
+    /// can surface "data spent · network quality" and drive loss alerts.
+    func webRTCService(_ service: WebRTCService, didCollectStats stats: CallStats, level: VideoQualityLevel, packetLossPercent: Double)
+}
+
+extension WebRTCServiceDelegate {
+    // Optional by default — only CallManager needs the stats tick.
+    func webRTCService(_ service: WebRTCService, didCollectStats stats: CallStats, level: VideoQualityLevel, packetLossPercent: Double) {}
 }
 
 // MARK: - WebRTC Service
@@ -226,6 +236,16 @@ final class WebRTCService {
                     let previous = self.lastStats
                     self.lastStats = stats
                     self.adjustBitrate(basedOn: stats, previous: previous)
+                    // Interval packet-loss % from cumulative-counter deltas (same
+                    // formula as adjustBitrate) — reported alongside cumulative
+                    // data usage + current quality to the gateway so the
+                    // call-summary message can show "data spent · quality" and
+                    // loss alerts can fire.
+                    let deltaLost = max(0, stats.packetsLost - (previous?.packetsLost ?? 0))
+                    let deltaReceived = max(0, stats.inboundPacketsReceived - (previous?.inboundPacketsReceived ?? 0))
+                    let denom = deltaLost + deltaReceived
+                    let packetLossPercent = denom > 0 ? Double(deltaLost) / Double(denom) * 100 : 0
+                    self.delegate?.webRTCService(self, didCollectStats: stats, level: self.currentQualityLevel, packetLossPercent: packetLossPercent)
                 }.value
             }
         }

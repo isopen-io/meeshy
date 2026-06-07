@@ -71,6 +71,10 @@ struct ThemedMessageBubble: View {
     var onPlayAudio: ((String) -> Void)? = nil
     var allAudioItems: [ConversationViewModel.AudioItem] = []
     var onScrollToMessage: ((String) -> Void)? = nil
+    /// Tap on a call-summary notice → re-initiate (call back) the same media
+    /// type with the conversation peer. Routed by the conversation layer to
+    /// `CallManager.startCall`.
+    var onCallBack: ((CallSummaryMetadata) -> Void)? = nil
     var activeAudioLanguage: String? = nil
     var isLastInGroup: Bool = true
     /// Vrai uniquement pour le dernier message reçu (non envoyé par moi) — limite l'icône réaction
@@ -152,7 +156,11 @@ struct ThemedMessageBubble: View {
         // once their view-once is consumed (see BubbleContentBuilder).
         switch content.kind {
         case .system:
-            BubbleSystemNoticeView(text: content.text?.raw ?? message.content, isDark: isDark)
+            if let callNotice = content.callNotice {
+                BubbleCallNoticeView(notice: callNotice, isDark: isDark, onCallBack: onCallBack)
+            } else {
+                BubbleSystemNoticeView(text: content.text?.raw ?? message.content, isDark: isDark)
+            }
         case .deleted:
             BubbleDeletedView(isMe: message.isMe, isDark: isDark)
         case .burned where !blurController.isRevealed:

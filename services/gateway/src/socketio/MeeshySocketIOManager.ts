@@ -1362,6 +1362,11 @@ export class MeeshySocketIOManager {
         originalLanguage: message.originalLanguage || 'fr',
         originalContent: (message as any).originalContent || message.content,
         messageType: (message.messageType || 'text') as MessageType,
+        // Message origin (user/system/...) so clients render system notices
+        // (e.g. call summaries) in real time, not only after a REST reload.
+        messageSource: (message as any).messageSource || undefined,
+        // Structured per-type payload (call-summary facts for system messages)
+        metadata: (message as any).metadata || undefined,
         isEdited: Boolean(message.isEdited),
         deletedAt: message.deletedAt || undefined,
         isBlurred: Boolean((message as any).isBlurred),

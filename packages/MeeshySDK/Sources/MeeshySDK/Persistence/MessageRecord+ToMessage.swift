@@ -62,6 +62,14 @@ extension MessageRecord {
             uiForwardedFrom = nil
         }
 
+        let uiCallSummary: CallSummaryMetadata?
+        if let data = callSummaryJson,
+           let decoded = try? JSONDecoder().decode(CallSummaryMetadata.self, from: data) {
+            uiCallSummary = decoded
+        } else {
+            uiCallSummary = nil
+        }
+
         var effects = MessageEffects.none
         if effectFlags > 0 {
             effects.flags = MessageEffectFlags(rawValue: effectFlags)
@@ -130,7 +138,8 @@ extension MessageRecord {
             readByAllAt: readByAllAt,
             deliveredCount: deliveredCount,
             readCount: readCount,
-            cachedTimeString: cachedTimeString
+            cachedTimeString: cachedTimeString,
+            callSummary: uiCallSummary
         )
     }
 }

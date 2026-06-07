@@ -7,6 +7,7 @@ import type { SocketIOUser as User, MessageType } from './socketio-events.js';
 import type { Participant } from './participant.js';
 import type { Attachment } from './attachment.js';
 import type { TranslationModel, MessageTranslation, MessageStatusEntry, UITranslationState, UITranslationStatus } from './message-types.js';
+import type { CallSummaryMetadata } from '../utils/call-summary.js';
 
 // Re-export canonical types from message-types.ts
 export type { TranslationModel, MessageTranslation, MessageStatusEntry, UITranslationState, UITranslationStatus };
@@ -157,6 +158,11 @@ export interface Message {
   readonly encryptionMode?: EncryptionMode;
   readonly encryptionMetadata?: Record<string, unknown>;
   readonly isEncrypted: boolean;
+
+  // ===== METADONNEES STRUCTUREES (par type de message) =====
+  /** Structured per-type payload. For call-summary system messages this is a
+   * {@link CallSummaryMetadata} the client renders into a rich call bubble. */
+  readonly metadata?: CallSummaryMetadata | Record<string, unknown>;
 
   // ===== METADONNEES =====
   readonly createdAt: Date;

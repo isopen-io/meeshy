@@ -240,6 +240,15 @@ export interface ConnectionQualityStats {
   };
   readonly jitter: number;          // ms
   readonly timestamp: Date;
+  /**
+   * Cumulative bytes sent/received on the peer connection since the call
+   * started (WebRTC `outbound-rtp.bytesSent` / `inbound-rtp.bytesReceived`,
+   * summed across audio+video). Optional and monotonic: the last report before
+   * teardown carries the call totals, which the gateway persists on
+   * `CallSession` to surface "data spent" in the call-summary message.
+   */
+  readonly bytesSent?: number;
+  readonly bytesReceived?: number;
 }
 
 // ===== WEBRTC SIGNALING =====

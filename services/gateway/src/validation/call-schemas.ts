@@ -212,7 +212,11 @@ export const socketQualityReportSchema = z.object({
       video: z.number().min(0)
     }).optional(),
     jitter: z.number().min(0).optional(),
-    timestamp: z.string().datetime().or(z.date()).optional()
+    timestamp: z.string().datetime().or(z.date()).optional(),
+    // Cumulative WebRTC byte counters (monotonic). The last report before
+    // teardown carries the call totals, persisted to surface "data spent".
+    bytesSent: z.number().min(0).optional(),
+    bytesReceived: z.number().min(0).optional()
   })
 });
 
