@@ -44,6 +44,21 @@ extension BubbleContent {
             self.kind = .standard
         }
 
+        // --- Call notice (rich call-summary system message) ---
+        // When a system message carries structured call metadata, resolve the
+        // per-viewer direction now (outgoing iff the current user initiated) so
+        // the leaf view stays primitive. Absent metadata (legacy summaries) →
+        // nil, and the `.system` path falls back to the plain centered notice.
+        if message.messageSource == .system, let summary = message.callSummary {
+            self.callNotice = CallNotice(
+                summary: summary,
+                isOutgoing: summary.isOutgoing(currentUserId: currentUserId),
+                fallbackText: message.content
+            )
+        } else {
+            self.callNotice = nil
+        }
+
         // --- Text + emoji ---
         let activeLang = activeDisplayLangCode
             ?? preferredTranslation?.targetLanguage

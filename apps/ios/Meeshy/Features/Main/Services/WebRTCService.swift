@@ -12,6 +12,15 @@ protocol WebRTCServiceDelegate: AnyObject {
     func webRTCService(_ service: WebRTCService, didChangeQualityLevel level: VideoQualityLevel, from previous: VideoQualityLevel)
     func webRTCService(_ service: WebRTCService, didReceiveRemoteVideoTrack track: Any)
     func webRTCService(_ service: WebRTCService, didReceiveTranscriptionData data: Data)
+    /// Periodic stats tick (every `statsIntervalSeconds`) carrying cumulative
+    /// data usage + the current quality level — reported to the gateway so the
+    /// call-summary message can surface "data spent · network quality".
+    func webRTCService(_ service: WebRTCService, didCollectStats stats: CallStats, level: VideoQualityLevel)
+}
+
+extension WebRTCServiceDelegate {
+    // Optional by default — only CallManager needs the stats tick.
+    func webRTCService(_ service: WebRTCService, didCollectStats stats: CallStats, level: VideoQualityLevel) {}
 }
 
 // MARK: - WebRTC Service
@@ -226,6 +235,9 @@ final class WebRTCService {
                     let previous = self.lastStats
                     self.lastStats = stats
                     self.adjustBitrate(basedOn: stats, previous: previous)
+                    // Report cumulative data usage + current quality to the gateway
+                    // so the call-summary message can show "data spent · quality".
+                    self.delegate?.webRTCService(self, didCollectStats: stats, level: self.currentQualityLevel)
                 }.value
             }
         }

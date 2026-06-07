@@ -1238,6 +1238,10 @@ public actor MessagePersistenceActor {
                     $0.isEmpty ? nil : try? encoder.encode($0)
                 }
 
+                // Structured call-summary metadata for system call messages —
+                // persisted so the rich call bubble survives a cache reload.
+                let callSummaryJson: Data? = api.callSummary.flatMap { try? encoder.encode($0) }
+
                 var effectFlags: UInt32 = api.effectFlags ?? 0
                 if effectFlags == 0 {
                     var flags = MessageEffectFlags()
@@ -1406,6 +1410,7 @@ public actor MessagePersistenceActor {
                     existing.replyToId = api.replyToId ?? existing.replyToId
                     existing.storyReplyToId = api.storyReplyToId ?? existing.storyReplyToId
                     existing.mentionedUsersJson = mentionedUsersJson
+                    existing.callSummaryJson = callSummaryJson ?? existing.callSummaryJson
                     existing.effectFlags = effectFlags
                     existing.updatedAt = api.updatedAt ?? Date()
                     existing.changeVersion += 1
@@ -1474,7 +1479,8 @@ public actor MessagePersistenceActor {
                         cachedTimestampInline: nil,
                         layoutVersion: 0, layoutMaxWidth: nil,
                         cachedTimeString: timeString,
-                        changeVersion: 0
+                        changeVersion: 0,
+                        callSummaryJson: callSummaryJson
                     )
                     try record.insert(db)
                     // `save` (upsert): a dangling PendingIdRecord from a

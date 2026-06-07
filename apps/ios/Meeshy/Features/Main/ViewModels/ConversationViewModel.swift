@@ -1519,6 +1519,31 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Audio Continuous Playback (Phase 4)
 
+    /// Re-initiate ("call back") a call from a tapped call-summary notice.
+    /// Mirrors the conversation header's call entry point: direct (1:1) calls
+    /// only, re-using the SAME media type (audio/video) as the summarized call.
+    /// The peer display name is resolved best-effort from a received message so
+    /// the CallKit / in-app outgoing UI shows a name, not a raw id.
+    func callBack(for summary: CallSummaryMetadata) {
+        guard isDirect, let peerUserId = participantUserId, !peerUserId.isEmpty else { return }
+        let displayName = resolvedPeerDisplayName
+            ?? String(localized: "call.peer.fallback", defaultValue: "Appel", bundle: .main)
+        CallManager.shared.startCall(
+            conversationId: conversationId,
+            userId: peerUserId,
+            displayName: displayName,
+            isVideo: summary.callType == .video
+        )
+    }
+
+    /// Best-effort peer display name from the most recent received message in
+    /// the current snapshot (sender differs from the current user).
+    private var resolvedPeerDisplayName: String? {
+        messageStore.messages
+            .last { $0.senderId != currentUserId && !($0.senderName ?? "").isEmpty }?
+            .senderName
+    }
+
     /// Kicks off conversation-wide audio playback starting at `attachmentId`.
     ///
     /// Resolves the message/attachment in the current `messages` snapshot,
