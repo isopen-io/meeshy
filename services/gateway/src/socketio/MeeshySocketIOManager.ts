@@ -699,6 +699,8 @@ export class MeeshySocketIOManager {
 
       socket.on('disconnect', (reason: string) => {
         logger.warn('🔬 [CALL-DIAG] socket disconnect', { socketId: socket.id, reason });
+        const disconnectedUserId = this.socketToUser.get(socket.id);
+        if (disconnectedUserId) this.statusHandler.invalidateIdentityCache(disconnectedUserId);
         this.authHandler.handleDisconnection(socket).catch((error) => logger.error('[DISCONNECT] Error:', error));
         this.stats.active_connections--;
       });

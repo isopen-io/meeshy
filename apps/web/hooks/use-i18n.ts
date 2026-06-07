@@ -9,6 +9,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLanguageStore } from '@/stores';
 
 // Cache global pour éviter de recharger les mêmes fichiers
+// Bounded: 2 locales × ~25 namespaces = ~50 max entries in practice.
+const TRANSLATIONS_CACHE_MAX = 100;
 const translationsCache = new Map<string, Record<string, any>>();
 
 // Fonction pour vider le cache (utile lors de changements de structure)
@@ -73,8 +75,11 @@ export function useI18n(namespace: string = 'common', options: UseI18nOptions = 
         translations = translations[ns];
       }
       
-      // Mettre en cache (seulement en production)
+      // Mettre en cache (seulement en production, avec garde de taille)
       if (useCache) {
+        if (translationsCache.size >= TRANSLATIONS_CACHE_MAX) {
+          translationsCache.delete(translationsCache.keys().next().value!);
+        }
         translationsCache.set(cacheKey, translations);
       }
       
