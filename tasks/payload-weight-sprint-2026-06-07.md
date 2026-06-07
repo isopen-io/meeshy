@@ -57,9 +57,39 @@ chaque frame WebSocket, chaque blob média.
 | **A5** Trim métadonnées attachement | ⚠️ **Écarté (risque>gain)** | `attachmentMediaSelect` porte `transcription`+`translations` (Prisme audio) **nécessaires** au rendu instantané en liste. Les scalaires (codec/bitrate/fps) sont petits. Le vrai poids = les traductions audio multi-langues → déjà couvert par A3. Pas de trim scalaire agressif. |
 
 ## Phase B — Filtrage par destinataire + compaction (breaking, versionné)
-| Item | Détail |
-|---|---|
-| **B1** Filtre langue par socket | `message:new` émis par socket (pas par room) avec uniquement la/les langue(s) du destinataire résolue(s) via `resolveUserLanguage()`. Économie majeure sur conversations multilingues. |
+| Item | Statut | Détail |
+|---|---|---|
+| **B1** Filtre langue par socket | 🟡 **Cœur livré, flag OFF** | Fonction pure `filterMessagePayloadForLanguages` (texte + audio) + 7 tests. Câblée dans `_broadcastNewMessage` via `_emitMessageNewByLanguage` (emit groupé par langue, zéro requête DB — utilise `SocketUser.language` + `socketToUser`). **Gardée derrière `SOCKET_LANG_FILTER` (OFF par défaut)** : comportement prod inchangé jusqu'à validation staging (mesure avant/après + vérif multi-device). |
+
+### B1 — reste à faire pour activer en prod
+- Mesurer en staging avec `SOCKET_LANG_FILTER=true` (octets émis avant/après, latence emit groupé).
+- `SocketUser.language` = langue primaire uniquement. Pour le Prisme complet (regional, customDestination, deviceLocale), enrichir `SocketUser` à l'auth via `resolveUserLanguage()` et filtrer sur le set complet.
+- Étendre le filtrage au payload de la **delivery queue offline** (≈ ligne 1517) et au `senderSocket` re-emit (aujourd'hui payload complet — blast-radius volontairement minimal).
+- Négociation client `supportsLangFilter` au handshake pour les vieux clients.
+
+### B1 — design d'origine (référence)
+Hot-path : `MeeshySocketIOManager._broadcastNewMessage` — aujourd'hui un seul
+`this.io.to(room).emit(MESSAGE_NEW, payload)` (≈ ligne 1447) avec TOUTES les langues.
+
+Plan SOTA (grouper par jeu-de-langues pour éviter N sérialisations) :
+1. Extraire une fonction **pure** `filterMessagePayloadForLanguages(payload, langs)`
+   → renvoie une copie avec `translations` (texte) + `attachments[].translations`
+   (audio) restreints. **Unit-testable** sans Prisma/socket (à faire en TDD comme A3).
+2. Construire `socketId → preferredLanguages` (cache `connectedUsers`, résolu via
+   `resolveUserLanguage()` à l'auth, déjà partiellement dispo).
+3. Dans le broadcast : regrouper les sockets de la room par **signature de jeu de
+   langues** ; sérialiser **une fois par signature distincte** ; emit au sous-ensemble.
+   Fallback `originalLanguage`-only pour sockets sans préférence connue.
+4. Filtrer aussi le payload poussé dans la **delivery queue offline** (≈ ligne 1514)
+   par destinataire.
+5. Versionner : négociation client (handshake `supportsLangFilter`) — les vieux
+   clients continuent de recevoir le payload complet.
+
+> ⚠️ **Non implémenté dans cette session** : refactor perf-critique du chemin
+> 100k msg/s, **non vérifiable** dans ce container éphémère (client Prisma non
+> générable — CDN binaries.prisma.sh bloqué par cert self-signed ; pas de runtime
+> socket). À exécuter contre un build complet + staging avec mesure avant/après.
+> La fonction pure de l'étape 1 peut, elle, être livrée + testée dès maintenant.
 | **B2** Champs creux (`fields=`) | Sélection serveur type GraphQL sparse fieldset sur conv/messages/users. |
 | **B3** Field-aliasing / compaction clés | Mapping clés courtes (`tc`→`translatedContent`) ou bascule MessagePack (voir Phase C). |
 | **B4** Timestamps epoch ms (number) au lieu d'ISO8601 string | −16 o/timestamp ; gros volume sur listes. |
