@@ -468,6 +468,33 @@ function isTopicTooSimilar(topic: string, recentTopics: string[]): boolean {
   return overlap.length / topicWords.length > 0.5;
 }
 
+/**
+ * Resolve an LLM-provided `asUserId` to a controlled user. Weak models
+ * (gpt-4o-mini) routinely echo a displayName or username instead of the 24-hex
+ * Mongo id, so fall back to a case-insensitive name/username match before
+ * giving up. Without this, validateInterventions silently dropped every planned
+ * message (prod regression 2026-05-30: agent produced reactions only).
+ */
+function resolveControlledUser(
+  rawAsUserId: string,
+  controlledUsers: ControlledUser[],
+  byId: Map<string, ControlledUser>,
+): ControlledUser | undefined {
+  const direct = byId.get(rawAsUserId);
+  if (direct) return direct;
+  const needle = rawAsUserId.trim().toLowerCase();
+  if (!needle) return undefined;
+  // Also compare with all whitespace stripped: the LLM frequently splits or
+  // joins names (username "inocentguesseu" → "inocent guesseu", and vice-versa).
+  const needleTight = needle.replace(/\s+/g, '');
+  return controlledUsers.find((u) => {
+    const dn = u.displayName?.trim().toLowerCase() ?? '';
+    const un = u.username?.trim().toLowerCase() ?? '';
+    if (dn === needle || un === needle) return true;
+    return dn.replace(/\s+/g, '') === needleTight || un.replace(/\s+/g, '') === needleTight;
+  });
+}
+
 function validateInterventions(
   interventions: unknown[],
   controlledUsers: ControlledUser[],
@@ -485,10 +512,14 @@ function validateInterventions(
   for (const raw of interventions) {
     if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) continue;
     const item = raw as Record<string, unknown>;
-    const userId = String(item.asUserId ?? '');
+    const rawAsUserId = String(item.asUserId ?? '');
 
-    const user = controlledUserMap.get(userId);
-    if (!user) continue;
+    const user = resolveControlledUser(rawAsUserId, controlledUsers, controlledUserMap);
+    if (!user) {
+      console.warn(`[Strategist] Dropped ${String(item.type)} intervention: asUserId="${rawAsUserId}" matches no controlled user (id/displayName/username)`);
+      continue;
+    }
+    const userId = user.userId;
 
     const currentCount = userActionCounts.get(userId) ?? 0;
     if (currentCount >= 2) continue;
@@ -882,6 +913,20 @@ export function createStrategistNode(llm: LlmProvider, deps?: StrategistDependen
       }
 
       const messageIds = new Set(state.messages.map((m) => m.id));
+
+      // gpt-4o-mini (and other weak models) routinely return asUserId as a
+      // displayName/username instead of the 24-hex id. Normalise every
+      // intervention to the canonical controlled-user id BEFORE rotation and
+      // validation so all downstream matching works. (Prod regression
+      // 2026-05-30: 100% of planned messages were silently dropped here.)
+      if (parsed.interventions) {
+        const byId = new Map(state.controlledUsers.map((u) => [u.userId, u]));
+        for (const iv of parsed.interventions as Array<Record<string, unknown>>) {
+          if (!iv || typeof iv !== 'object') continue;
+          const resolved = resolveControlledUser(String(iv.asUserId ?? ''), state.controlledUsers, byId);
+          if (resolved) iv.asUserId = resolved.userId;
+        }
+      }
 
       // CODE-LEVEL USER ROTATION: If the LLM picked the same user as last cycle
       // and there are other available users, rewrite interventions to use different users (sequential cycling).
