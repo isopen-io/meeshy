@@ -560,7 +560,20 @@ final class MessageListViewController: UIViewController {
         // forces the registration to re-run for every visible row, picking up
         // GRDB-driven state / content / delivery / reaction changes in place
         // without triggering the costly insert/move/delete diff animation.
-        snapshot.reconfigureItems(items)
+        //
+        // CRITICAL: only reconfigure items that ALREADY exist in the applied
+        // snapshot. Reconfiguring an identifier that this same apply is also
+        // INSERTING is unsupported — UIKit resolves the insert against the new
+        // snapshot and the reconfigure against the old one, and the conflicting
+        // instructions can drop a freshly-inserted bubble (the new message
+        // flashes in then vanishes when the next message triggers the next
+        // apply). Inserted items are configured fresh anyway, so excluding them
+        // here is both correct and sufficient.
+        let previousItems = Set(dataSource.snapshot().itemIdentifiers)
+        let itemsToReconfigure = items.filter { previousItems.contains($0) }
+        if !itemsToReconfigure.isEmpty {
+            snapshot.reconfigureItems(itemsToReconfigure)
+        }
 
         // Detect genuinely-new messages: the MESSAGE count grew AND the newest
         // message changed. Tracking message items only (never the typing cell)

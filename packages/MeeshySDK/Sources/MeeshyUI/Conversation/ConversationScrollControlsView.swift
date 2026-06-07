@@ -9,6 +9,15 @@ public struct ConversationScrollControlsView: View {
     public var unreadAttachmentThumbnailUrl: String?
     public var unreadAttachmentFullUrl: String?
     public var unreadAttachmentIsAudio: Bool
+    /// Pre-formatted media detail of the last unread attachment, e.g.
+    /// "0:34 · 410 KB" (audio), "1280×720 · 2.3 MB" (image/video). Built
+    /// app-side so the SDK component stays agnostic of byte/duration
+    /// formatting. `nil` when no detail is available.
+    public var unreadAttachmentDetail: String?
+    /// SF Symbol name for the last unread attachment's type (waveform, photo,
+    /// video, doc, mappin…). Lets the preview show a type glyph when there is
+    /// no thumbnail to render. `nil` for plain-text messages.
+    public var unreadAttachmentSymbol: String?
     public var isAudioPlaying: Bool
     public var isOffline: Bool
     public var isSearchingQuotedMessage: Bool
@@ -28,6 +37,8 @@ public struct ConversationScrollControlsView: View {
         unreadAttachmentThumbnailUrl: String?,
         unreadAttachmentFullUrl: String?,
         unreadAttachmentIsAudio: Bool,
+        unreadAttachmentDetail: String? = nil,
+        unreadAttachmentSymbol: String? = nil,
         isAudioPlaying: Bool,
         isOffline: Bool,
         isSearchingQuotedMessage: Bool = false,
@@ -45,6 +56,8 @@ public struct ConversationScrollControlsView: View {
         self.unreadAttachmentThumbnailUrl = unreadAttachmentThumbnailUrl
         self.unreadAttachmentFullUrl = unreadAttachmentFullUrl
         self.unreadAttachmentIsAudio = unreadAttachmentIsAudio
+        self.unreadAttachmentDetail = unreadAttachmentDetail
+        self.unreadAttachmentSymbol = unreadAttachmentSymbol
         self.isAudioPlaying = isAudioPlaying
         self.isOffline = isOffline
         self.isSearchingQuotedMessage = isSearchingQuotedMessage
@@ -176,62 +189,31 @@ public struct ConversationScrollControlsView: View {
         )
     }
     
+    /// Whether the last unread message carries a renderable attachment preview
+    /// (audio control, image/video thumbnail, or a type glyph).
+    private var hasAttachmentPreview: Bool {
+        unreadAttachmentIsAudio
+            || unreadAttachmentThumbHash != nil
+            || unreadAttachmentThumbnailUrl != nil
+            || unreadAttachmentFullUrl != nil
+            || unreadAttachmentSymbol != nil
+    }
+
+    /// Unified rich preview used for BOTH single and multiple unreads. Shows
+    /// the count headline when more than one message is pending, followed by a
+    /// preview of the LAST received message — its text, or for media its type
+    /// label plus formatted detail (size / duration). Mirrors the product
+    /// requirement: "le nombre de messages ET à la suite le dernier message".
     private var unreadPreviewContent: some View {
         HStack(spacing: 10) {
-            if unreadCount > 1 {
-                // Multiple messages: prominent count display
-                multipleUnreadContent
-            } else {
-                // Single unread or typing only: rich preview
-                singleUnreadContent
-            }
-        }
-        .foregroundColor(.white)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .frame(maxWidth: 240)
-    }
-    
-    private var multipleUnreadContent: some View {
-        Group {
-            // Typing indicator takes priority even with multiple unreads
-            if hasTypingIndicator {
-                HStack(spacing: 4) {
-                    typingDotsView
-                    Text(typingLabel)
-                        .font(.system(size: 11, weight: .semibold))
-                        .lineLimit(1)
-                }
-            } else {
-                HStack(spacing: 6) {
-                    Text("\(unreadCount)")
-                        .font(.system(size: 16, weight: .heavy))
-                    Text("messages")
-                        .font(.system(size: 12, weight: .medium))
-                }
-            }
-
-            Spacer(minLength: 0)
-            
-            if isOffline {
-                Image(systemName: "wifi.slash")
-                    .font(.system(size: 11, weight: .bold))
-            } else {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 11, weight: .bold))
-            }
-        }
-    }
-    
-    private var singleUnreadContent: some View {
-        Group {
-            // Left: rich preview (image thumbnail or audio play)
-            if unreadAttachmentThumbHash != nil || unreadAttachmentThumbnailUrl != nil || unreadAttachmentFullUrl != nil || unreadAttachmentIsAudio {
+            // Left: rich attachment preview (audio play / image|video thumbnail
+            // / type glyph) of the last unread message.
+            if hasAttachmentPreview {
                 unreadAttachmentPreview
             }
 
-            VStack(alignment: .leading, spacing: 3) {
-                // Typing indicator (top priority)
+            VStack(alignment: .leading, spacing: 2) {
+                // Typing indicator (top priority — someone is composing now).
                 if hasTypingIndicator {
                     HStack(spacing: 4) {
                         typingDotsView
@@ -241,40 +223,66 @@ public struct ConversationScrollControlsView: View {
                     }
                 }
 
-                // Last unread message text preview
-                if let content = lastUnreadMessageContent, !content.isEmpty {
-                    Text(content)
-                        .font(.system(size: 12, weight: .regular))
+                // Count headline — only when more than one message is pending.
+                if unreadCount > 1 {
+                    Text("\(unreadCount) messages")
+                        .font(.system(size: 13, weight: .heavy))
                         .lineLimit(1)
-                } else if unreadAttachmentTypeLabel != nil, !hasTypingIndicator {
-                    Text(unreadAttachmentTypeLabel ?? "")
-                        .font(.system(size: 12, weight: .regular))
-                        .lineLimit(1)
+                }
+
+                // Last received message preview (skipped when only typing).
+                if unreadCount > 0 {
+                    lastMessageLine
                 }
             }
 
             Spacer(minLength: 0)
 
-            // Right: chevron + unread count badge
-            VStack(spacing: 2) {
-                if unreadCount > 0 {
-                    Text("\(unreadCount)")
-                        .font(.system(size: 10, weight: .heavy))
-                        .frame(width: 20, height: 20)
-                        .background(Circle().fill(Color.white.opacity(0.3)))
+            // Right: chevron / offline glyph.
+            if isOffline {
+                Image(systemName: "wifi.slash")
+                    .font(.system(size: 11, weight: .bold))
+            } else {
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .bold))
+            }
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(maxWidth: 260)
+    }
+
+    /// Single-line preview of the last received message: its text when present,
+    /// otherwise the attachment type label with its formatted media detail
+    /// (e.g. "Audio · 0:34 · 410 KB", "Photo · 1280×720 · 2.3 MB").
+    @ViewBuilder
+    private var lastMessageLine: some View {
+        if let content = lastUnreadMessageContent, !content.isEmpty {
+            Text(content)
+                .font(.system(size: 12, weight: .regular))
+                .lineLimit(1)
+                .opacity(0.95)
+        } else if let label = unreadAttachmentTypeLabel {
+            HStack(spacing: 4) {
+                if let symbol = unreadAttachmentSymbol {
+                    Image(systemName: symbol)
+                        .font(.system(size: 10, weight: .semibold))
                 }
-                
-                if isOffline {
-                    Image(systemName: "wifi.slash")
-                        .font(.system(size: 11, weight: .bold))
-                } else {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .bold))
-                }
+                Text(attachmentSummary(label: label))
+                    .font(.system(size: 12, weight: .regular))
+                    .lineLimit(1)
+                    .opacity(0.95)
             }
         }
     }
-    
+
+    /// Joins the attachment type label with its formatted detail when present.
+    private func attachmentSummary(label: String) -> String {
+        guard let detail = unreadAttachmentDetail, !detail.isEmpty else { return label }
+        return "\(label) · \(detail)"
+    }
+
     @ViewBuilder
     private var unreadAttachmentPreview: some View {
         if unreadAttachmentIsAudio {
@@ -306,6 +314,14 @@ public struct ConversationScrollControlsView: View {
             .aspectRatio(contentMode: .fill)
             .frame(width: 36, height: 36)
             .clipShape(RoundedRectangle(cornerRadius: 8))
+        } else if let symbol = unreadAttachmentSymbol {
+            // Media without a thumbnail (file, location, thumbnail-less video):
+            // render the type glyph so the preview still reads as media.
+            Image(systemName: symbol)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 36, height: 36)
+                .background(RoundedRectangle(cornerRadius: 8).fill(Color.white.opacity(0.2)))
         } else {
             EmptyView()
         }
