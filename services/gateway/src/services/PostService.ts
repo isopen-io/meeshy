@@ -617,7 +617,13 @@ export class PostService {
     return { success: true };
   }
 
-  async recordView(postId: string, userId: string, duration?: number) {
+  /**
+   * Enregistre une vue. Retourne `true` UNIQUEMENT lors de la première vue
+   * réelle (création du PostView) — permet à l'appelant de ne déclencher les
+   * effets de bord coûteux « une fois » (ex : marquer les notifications du post
+   * comme lues) sans les rejouer à chaque impression répétée du feed.
+   */
+  async recordView(postId: string, userId: string, duration?: number): Promise<boolean> {
     try {
       // Enforce visibility before recording — without this, any authenticated
       // user could increment viewCount on any private story by ID, and have
@@ -628,10 +634,10 @@ export class PostService {
         where: { id: postId, isDeleted: false, ...visibilityFilter },
         select: { id: true, authorId: true },
       });
-      if (!post) return;
+      if (!post) return false;
 
       // Author re-opening their own story shouldn't inflate viewCount.
-      if (post.authorId === userId) return;
+      if (post.authorId === userId) return false;
 
       // Sanitize duration: client-supplied → cap at 5 minutes (way past any
       // reasonable story).
@@ -650,7 +656,7 @@ export class PostService {
             data: { duration: safeDuration },
           });
         }
-        return;
+        return false;
       }
 
       await this.prisma.postView.create({
@@ -661,8 +667,11 @@ export class PostService {
         where: { id: postId },
         data: { viewCount: { increment: 1 } },
       });
+
+      return true;
     } catch {
       // Ignore race conditions
+      return false;
     }
   }
 

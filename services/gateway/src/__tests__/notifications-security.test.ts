@@ -363,6 +363,52 @@ describe('Notifications - Tests de Sécurité', () => {
       expect(prisma.notification.updateMany).not.toHaveBeenCalled();
       expect(count).toBe(0);
     });
+
+    it('markPostNotificationsAsRead ne marque que les notifs du post (filtre context.postId)', async () => {
+      prisma.notification.findMany.mockResolvedValue([
+        { id: 'p1', userId: 'user123', context: { postId: 'post1' } },
+        { id: 'p2', userId: 'user123', context: { postId: 'other-post' } },
+        { id: 'p3', userId: 'user123', context: null },
+      ]);
+      prisma.notification.updateMany.mockResolvedValue({ count: 1 });
+
+      const count = await service.markPostNotificationsAsRead('user123', 'post1');
+
+      expect(prisma.notification.findMany).toHaveBeenCalledWith({
+        where: { userId: 'user123', isRead: false },
+      });
+      expect(prisma.notification.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['p1'] } },
+        data: { isRead: true, readAt: expect.any(Date) },
+      });
+      expect(count).toBe(1);
+    });
+
+    it('markNotificationsByTypesAsRead filtre par type (colonne réelle)', async () => {
+      prisma.notification.updateMany.mockResolvedValue({ count: 2 });
+
+      const count = await service.markNotificationsByTypesAsRead('user123', [
+        'friend_request',
+        'contact_request',
+      ]);
+
+      expect(prisma.notification.updateMany).toHaveBeenCalledWith({
+        where: {
+          userId: 'user123',
+          isRead: false,
+          type: { in: ['friend_request', 'contact_request'] },
+        },
+        data: { isRead: true, readAt: expect.any(Date) },
+      });
+      expect(count).toBe(2);
+    });
+
+    it('markNotificationsByTypesAsRead no-op si la liste de types est vide', async () => {
+      const count = await service.markNotificationsByTypesAsRead('user123', []);
+
+      expect(prisma.notification.updateMany).not.toHaveBeenCalled();
+      expect(count).toBe(0);
+    });
   });
 
   describe('Rate Limiting', () => {

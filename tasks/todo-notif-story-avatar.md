@@ -21,3 +21,14 @@
 - Keep story ring + story opening + profil/conversation/message entries + mood/presence badge.
 - [x] Fix duplicate story menu entry: remove custom "Voir les stories" (SDK already adds a single "Voir la story").
 - Presence audit: PresenceManager complete (socket user:status + presence:snapshot + REST refresh + disk persist + away decay). OK.
+
+## 4. Revue « consommé → marqué lu » étendue (2e itération)
+- [x] Gateway: `markPostNotificationsAsRead(userId, postId)` (filtre context.postId) + emit counts.
+- [x] Gateway: `markNotificationsByTypesAsRead(userId, types)` (filtre colonne type) + emit counts.
+- [x] Gateway: `recordView` retourne `boolean` (1ère vue) ; route /posts/:id/view marque les notifs du post (borné à la 1ère vue).
+- [x] Gateway: route `POST /notifications/read-by-types`.
+- [x] SDK `NotificationService.markRead(types:)`.
+- [x] iOS `StatusBubbleController.show` → enregistre la vue du statut (sauf le sien) → notif friend_new_mood lue.
+- [x] iOS `FriendRequestListViewModel.loadRequests` → marque friend_request/contact_request/friend_accepted/contact_accepted lus.
+- Couvert auto (déjà /view côté iOS): feed posts vus, stories vues.
+- Limite connue: réactions sur TON propre contenu se vident au tap de la notif (recordView ignore l'auteur, par design anti-inflation de vues).

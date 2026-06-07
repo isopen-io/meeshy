@@ -204,6 +204,15 @@ final class FriendRequestListViewModel: ObservableObject {
         do {
             let response = try await friendService.receivedRequests()
             requests = response.data
+            // Écran consulté → les notifications de demandes d'ajout / nouveaux
+            // ajouts ne doivent plus apparaître comme non lues. Fire-and-forget :
+            // le gateway marque ces types lus et ré-émet `notification:counts`.
+            Task {
+                try? await NotificationService.shared.markRead(types: [
+                    "friend_request", "contact_request",
+                    "friend_accepted", "contact_accepted"
+                ])
+            }
         } catch {
             errorMessage = String(localized: "friends.requests.load_error", defaultValue: "Erreur lors du chargement", bundle: .main)
         }

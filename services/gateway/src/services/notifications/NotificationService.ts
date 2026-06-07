@@ -2937,6 +2937,87 @@ export class NotificationService {
   }
 
   /**
+   * Marque toutes les notifications liées à un post (story / statut / post feed)
+   * comme lues. Appelé quand l'utilisateur consomme le contenu (ouverture du
+   * viewer de story, vue d'un post dans le feed, ouverture d'un statut) afin
+   * que les notifications « X a publié une story / un statut / un post », ainsi
+   * que les réactions / commentaires sur ce post, ne restent pas non lues.
+   *
+   * Même contrainte que pour les conversations : MongoDB ne sait pas filtrer sur
+   * `context.postId` (JSON), donc on récupère les non-lues puis on filtre en
+   * mémoire avant un `updateMany` ciblé par ids. Émet `notification:counts`.
+   */
+  async markPostNotificationsAsRead(userId: string, postId: string): Promise<number> {
+    try {
+      const notifications = await this.prisma.notification.findMany({
+        where: { userId, isRead: false },
+      });
+
+      const relevantIds = notifications
+        .filter((n: any) => {
+          if (!n.context || typeof n.context !== 'object') return false;
+          return n.context.postId === postId;
+        })
+        .map((n: any) => n.id as string);
+
+      if (relevantIds.length === 0) {
+        return 0;
+      }
+
+      const result = await this.prisma.notification.updateMany({
+        where: { id: { in: relevantIds } },
+        data: { isRead: true, readAt: new Date() },
+      });
+
+      this.emitCountsUpdate(userId).catch(() => {});
+
+      return result.count;
+    } catch (error) {
+      notificationLogger.error('Failed to mark post notifications as read', {
+        error,
+        userId,
+        postId,
+      });
+      return 0;
+    }
+  }
+
+  /**
+   * Marque comme lues toutes les notifications de l'utilisateur dont le `type`
+   * est dans la liste fournie. Utilisé quand l'utilisateur ouvre un écran qui
+   * consomme une catégorie entière de notifications (ex : l'écran des demandes
+   * d'ajout consomme `friend_request` / `contact_request` / `friend_accepted`).
+   *
+   * `type` est une vraie colonne : on peut filtrer directement via `updateMany`.
+   * Émet `notification:counts`.
+   */
+  async markNotificationsByTypesAsRead(userId: string, types: string[]): Promise<number> {
+    try {
+      if (!Array.isArray(types) || types.length === 0) {
+        return 0;
+      }
+
+      const result = await this.prisma.notification.updateMany({
+        where: { userId, isRead: false, type: { in: types } },
+        data: { isRead: true, readAt: new Date() },
+      });
+
+      if (result.count > 0) {
+        this.emitCountsUpdate(userId).catch(() => {});
+      }
+
+      return result.count;
+    } catch (error) {
+      notificationLogger.error('Failed to mark notifications by types as read', {
+        error,
+        userId,
+        types,
+      });
+      return 0;
+    }
+  }
+
+  /**
    * Compte les notifications non lues
    */
   async getUnreadCount(userId: string): Promise<number> {
