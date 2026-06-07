@@ -37,7 +37,7 @@ import { Separator } from '@/components/ui/separator';
 import { SoundFeedback } from '@/hooks/use-accessibility';
 import { useFieldValidation } from '@/hooks/use-field-validation';
 import { usePhoneValidation } from '@/hooks/use-phone-validation';
-import { COUNTRY_CODES } from '@/constants/countries';
+import { COUNTRY_CODES, findCountryByCode, detectDefaultCountry, formatPhoneWithDialCode } from '@/constants/countries';
 import type { CountryCode } from 'libphonenumber-js';
 import { invalidateAuthCache } from '@/hooks/use-auth';
 
@@ -125,7 +125,9 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
   const [isChangingPhone, setIsChangingPhone] = useState(false);
   const [isSavingPhone, setIsSavingPhone] = useState(false);
   const [newPhone, setNewPhone] = useState('');
-  const [selectedPhoneCountry, setSelectedPhoneCountry] = useState(COUNTRY_CODES[0]);
+  const [selectedPhoneCountry, setSelectedPhoneCountry] = useState(
+    () => findCountryByCode((user as { phoneCountryCode?: string })?.phoneCountryCode) ?? detectDefaultCountry()
+  );
   const [pendingPhone, setPendingPhone] = useState<string | null>(null);
   const [pendingPhoneCode, setPendingPhoneCode] = useState('');
   const [showPendingPhoneVerification, setShowPendingPhoneVerification] = useState(false);
@@ -1282,7 +1284,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
                   <Input
                     id="settings-phoneNumber"
                     type="tel"
-                    value={user.phoneNumber || ''}
+                    value={formatPhoneWithDialCode(user.phoneNumber, (user as { phoneCountryCode?: string }).phoneCountryCode)}
                     disabled
                     className="bg-muted w-full pl-10 pr-24"
                     placeholder={t('profile.personalInfo.phoneNumberPlaceholder', 'Aucun numéro')}

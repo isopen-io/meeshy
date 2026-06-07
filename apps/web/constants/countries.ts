@@ -1,49 +1,127 @@
+import {
+  getCountries,
+  getCountryCallingCode,
+  parsePhoneNumber,
+} from 'libphonenumber-js';
 
-// Country codes for phone input
-export const COUNTRY_CODES = [
-  { code: 'FR', dial: '+33', flag: '🇫🇷', name: 'France' },
-  { code: 'US', dial: '+1', flag: '🇺🇸', name: 'États-Unis' },
-  { code: 'GB', dial: '+44', flag: '🇬🇧', name: 'Royaume-Uni' },
-  { code: 'DE', dial: '+49', flag: '🇩🇪', name: 'Allemagne' },
-  { code: 'ES', dial: '+34', flag: '🇪🇸', name: 'Espagne' },
-  { code: 'IT', dial: '+39', flag: '🇮🇹', name: 'Italie' },
-  { code: 'PT', dial: '+351', flag: '🇵🇹', name: 'Portugal' },
-  { code: 'BE', dial: '+32', flag: '🇧🇪', name: 'Belgique' },
-  { code: 'CH', dial: '+41', flag: '🇨🇭', name: 'Suisse' },
-  { code: 'CA', dial: '+1', flag: '🇨🇦', name: 'Canada' },
-  { code: 'MA', dial: '+212', flag: '🇲🇦', name: 'Maroc' },
-  { code: 'DZ', dial: '+213', flag: '🇩🇿', name: 'Algérie' },
-  { code: 'TN', dial: '+216', flag: '🇹🇳', name: 'Tunisie' },
-  { code: 'SN', dial: '+221', flag: '🇸🇳', name: 'Sénégal' },
-  { code: 'CI', dial: '+225', flag: '🇨🇮', name: 'Côte d\'Ivoire' },
-  { code: 'CM', dial: '+237', flag: '🇨🇲', name: 'Cameroun' },
-  { code: 'BJ', dial: '+229', flag: '🇧🇯', name: 'Bénin' },
-  { code: 'BF', dial: '+226', flag: '🇧🇫', name: 'Burkina Faso' },
-  { code: 'NE', dial: '+227', flag: '🇳🇪', name: 'Niger' },
-  { code: 'ML', dial: '+223', flag: '🇲🇱', name: 'Mali' },
-  { code: 'GN', dial: '+224', flag: '🇬🇳', name: 'Guinée' },
-  { code: 'TG', dial: '+228', flag: '🇹🇬', name: 'Togo' },
-  { code: 'GA', dial: '+241', flag: '🇬🇦', name: 'Gabon' },
-  { code: 'CG', dial: '+242', flag: '🇨🇬', name: 'Congo' },
-  { code: 'CD', dial: '+243', flag: '🇨🇩', name: 'RDC' },
-  { code: 'MG', dial: '+261', flag: '🇲🇬', name: 'Madagascar' },
-  { code: 'RU', dial: '+7', flag: '🇷🇺', name: 'Russie' },
-  { code: 'CN', dial: '+86', flag: '🇨🇳', name: 'Chine' },
-  { code: 'JP', dial: '+81', flag: '🇯🇵', name: 'Japon' },
-  { code: 'IN', dial: '+91', flag: '🇮🇳', name: 'Inde' },
-  { code: 'BR', dial: '+55', flag: '🇧🇷', name: 'Brésil' },
-  { code: 'MX', dial: '+52', flag: '🇲🇽', name: 'Mexique' },
-  { code: 'AR', dial: '+54', flag: '🇦🇷', name: 'Argentine' },
-  { code: 'CO', dial: '+57', flag: '🇨🇴', name: 'Colombie' },
-  { code: 'PE', dial: '+51', flag: '🇵🇪', name: 'Pérou' },
-  { code: 'CL', dial: '+56', flag: '🇨🇱', name: 'Chili' },
-  { code: 'TR', dial: '+90', flag: '🇹🇷', name: 'Turquie' },
-  { code: 'EG', dial: '+20', flag: '🇪🇬', name: 'Égypte' },
-  { code: 'SA', dial: '+966', flag: '🇸🇦', name: 'Arabie saoudite' },
-  { code: 'AE', dial: '+971', flag: '🇦🇪', name: 'Émirats arabes unis' },
-  { code: 'ZA', dial: '+27', flag: '🇿🇦', name: 'Afrique du Sud' },
-  { code: 'NG', dial: '+234', flag: '🇳🇬', name: 'Nigéria' },
-  { code: 'KE', dial: '+254', flag: '🇰🇪', name: 'Kenya' },
-  { code: 'AU', dial: '+61', flag: '🇦🇺', name: 'Australie' },
-  { code: 'NZ', dial: '+64', flag: '🇳🇿', name: 'Nouvelle-Zélande' },
+/**
+ * Représentation d'un pays pour la saisie/lecture d'un numéro de téléphone.
+ * `code` = ISO 3166-1 alpha-2, `dial` = indicatif international (ex: "+33").
+ */
+export type Country = {
+  code: string;
+  dial: string;
+  flag: string;
+  name: string;
+};
+
+// Backward-compatible alias (certains composants typent via `typeof COUNTRY_CODES[0]`).
+export type CountryOption = Country;
+
+/**
+ * Pays mis en tête de liste (les plus courants pour Meeshy).
+ * Tous les autres pays restent disponibles, triés alphabétiquement à la suite.
+ * France reste en première position (défaut historique `COUNTRY_CODES[0]`).
+ */
+const PRIORITY: readonly string[] = [
+  'FR', 'US', 'GB', 'DE', 'ES', 'IT', 'PT', 'BE', 'CH', 'CA', 'MA', 'DZ', 'TN',
+  'SN', 'CI', 'CM', 'BJ', 'BF', 'NE', 'ML', 'GN', 'TG', 'GA', 'CG', 'CD', 'MG',
+  'RU', 'CN', 'JP', 'IN', 'BR', 'MX', 'AR', 'CO', 'PE', 'CL', 'TR', 'EG', 'SA',
+  'AE', 'ZA', 'NG', 'KE', 'AU', 'NZ',
 ];
+
+const REGIONAL_INDICATOR_BASE = 127397; // 0x1F1E6 - 'A'.charCodeAt(0)
+
+const flagFor = (code: string): string =>
+  code
+    .toUpperCase()
+    .replace(/./g, (char) =>
+      String.fromCodePoint(REGIONAL_INDICATOR_BASE + char.charCodeAt(0))
+    );
+
+const regionNames: Intl.DisplayNames | null = (() => {
+  try {
+    return new Intl.DisplayNames(['fr'], { type: 'region' });
+  } catch {
+    return null;
+  }
+})();
+
+const nameFor = (code: string): string => regionNames?.of(code) ?? code;
+
+const buildCountries = (): Country[] => {
+  const all: Country[] = getCountries().map((code) => ({
+    code,
+    dial: `+${getCountryCallingCode(code)}`,
+    flag: flagFor(code),
+    name: nameFor(code),
+  }));
+
+  const rank = new Map(PRIORITY.map((code, index) => [code, index]));
+
+  return all.sort((a, b) => {
+    const ra = rank.get(a.code);
+    const rb = rank.get(b.code);
+    if (ra !== undefined && rb !== undefined) return ra - rb;
+    if (ra !== undefined) return -1;
+    if (rb !== undefined) return 1;
+    return a.name.localeCompare(b.name, 'fr');
+  });
+};
+
+/** Liste complète de tous les indicatifs pays (ISO + indicatif + drapeau + nom). */
+export const COUNTRY_CODES: Country[] = buildCountries();
+
+const byCode = new Map(COUNTRY_CODES.map((country) => [country.code, country]));
+
+export const findCountryByCode = (code?: string | null): Country | undefined =>
+  code ? byCode.get(code.toUpperCase()) : undefined;
+
+export const getDialCode = (code?: string | null): string =>
+  findCountryByCode(code)?.dial ?? '';
+
+export const getCountryName = (code?: string | null): string =>
+  findCountryByCode(code)?.name ?? code ?? '';
+
+/** Pays par défaut (France) lorsque rien ne peut être déduit. */
+export const DEFAULT_COUNTRY: Country = findCountryByCode('FR') ?? COUNTRY_CODES[0];
+
+/**
+ * Déduit le pays à présélectionner depuis la locale du navigateur.
+ * Retombe sur la France si aucune région exploitable n'est trouvée.
+ */
+export const detectDefaultCountry = (): Country => {
+  if (typeof navigator !== 'undefined' && navigator.language) {
+    const region = navigator.language.split('-')[1]?.toUpperCase();
+    const match = findCountryByCode(region);
+    if (match) return match;
+  }
+  return DEFAULT_COUNTRY;
+};
+
+/**
+ * Garantit qu'un numéro est toujours affiché précédé de son indicatif pays.
+ * - Numéro déjà au format international (+...) -> formatage international lisible.
+ * - Numéro national -> préfixé par l'indicatif du pays fourni.
+ */
+export const formatPhoneWithDialCode = (
+  phoneNumber?: string | null,
+  countryCode?: string | null
+): string => {
+  if (!phoneNumber) return '';
+  const trimmed = phoneNumber.trim();
+  if (!trimmed) return '';
+
+  if (trimmed.startsWith('+')) {
+    try {
+      const parsed = parsePhoneNumber(trimmed);
+      if (parsed) return parsed.formatInternational();
+    } catch {
+      // numéro partiel ou non parseable : on retourne tel quel (déjà préfixé).
+    }
+    return trimmed;
+  }
+
+  const dial = getDialCode(countryCode);
+  return dial ? `${dial} ${trimmed}` : trimmed;
+};
