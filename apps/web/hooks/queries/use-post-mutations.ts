@@ -13,6 +13,12 @@ import { useAuthStore } from '@/stores/auth-store';
 const HEART_EMOJI = '❤️';
 const SOCKET_ACK_TIMEOUT_MS = 10_000;
 
+// Monotonic counter so two optimistic posts created within the same
+// millisecond never collide on `_temp_${Date.now()}` (same React key +
+// ambiguous reconciliation when the real post arrives).
+let optimisticPostSeq = 0;
+const nextOptimisticPostId = () => `_temp_${Date.now()}_${++optimisticPostSeq}`;
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -63,7 +69,7 @@ export function useCreatePostMutation() {
       const previous = queryClient.getQueryData<InfiniteFeedData>(queryKeys.posts.infinite('feed'));
 
       const optimisticPost: Post = {
-        id: `_temp_${Date.now()}`,
+        id: nextOptimisticPostId(),
         authorId: currentUser?.id ?? '',
         type: data.type ?? 'POST',
         visibility: data.visibility ?? 'PUBLIC',

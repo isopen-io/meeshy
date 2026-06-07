@@ -12,6 +12,12 @@ import { useAuthStore } from '@/stores/auth-store';
 const HEART_EMOJI = '❤️';
 const SOCKET_ACK_TIMEOUT_MS = 10_000;
 
+// Monotonic counter so two optimistic comments created within the same
+// millisecond never collide on `_temp_${Date.now()}` (which would give them
+// the same React key + make socket/refetch reconciliation ambiguous).
+let optimisticCommentSeq = 0;
+const nextOptimisticCommentId = () => `_temp_${Date.now()}_${++optimisticCommentSeq}`;
+
 // ---------------------------------------------------------------------------
 // Cache helpers
 // ---------------------------------------------------------------------------
@@ -61,7 +67,7 @@ export function useCreateCommentMutation() {
 
       if (!parentId) {
         const optimisticComment: PostComment = {
-          id: `_temp_${Date.now()}`,
+          id: nextOptimisticCommentId(),
           postId,
           authorId: currentUser?.id ?? '',
           parentId: null,
