@@ -33,6 +33,11 @@ public final class NotificationToastManager: ObservableObject {
     public let notificationMarkedRead = PassthroughSubject<String, Never>()
     public let notificationWasDeleted = PassthroughSubject<String, Never>()
 
+    /// Émis quand toutes les notifications d'une conversation viennent d'être
+    /// marquées lues (ouverture de la conversation). Permet à la liste in-app
+    /// de mettre à jour ses lignes immédiatement, avant le refresh serveur.
+    public let conversationNotificationsRead = PassthroughSubject<String, Never>()
+
     /// Optional hook the app target uses to inject the current iOS Focus
     /// filter snapshot. The SDK can't observe `SetFocusFilterIntent` directly
     /// (it lives in the app target), so we ask for a pull closure instead.
@@ -67,9 +72,15 @@ public final class NotificationToastManager: ObservableObject {
             dismissToast()
         }
 
+        // Le contenu de la conversation est consommé : ses notifications ne
+        // doivent plus apparaître comme non lues. On informe d'abord la liste
+        // in-app (mise à jour optimiste instantanée), puis on marque côté serveur
+        // (qui ré-émet `notification:counts` → la cloche/badge se recalent), et
+        // enfin on rafraîchit le compteur pour récupérer la valeur autoritative.
+        conversationNotificationsRead.send(conversationId)
+
         Task {
-            try? await Task.sleep(nanoseconds: Self.refreshDelay)
-            guard !Task.isCancelled else { return }
+            try? await NotificationService.shared.markConversationRead(conversationId: conversationId)
             await refreshUnreadCount()
         }
     }
@@ -146,9 +157,17 @@ public final class NotificationToastManager: ObservableObject {
         Logger.socket.info("[RT-DIAG] in-app notification received via SOCKET notification:new conv=\(event.conversationId ?? "none", privacy: .public) type=\(String(describing: event.notificationType), privacy: .public)")
 
         // Muting logic: suppress the in-app toast if the user is already
-        // viewing the relevant content.
+        // viewing the relevant content. Le contenu étant consommé en direct,
+        // la notification ne doit pas rester non lue : on la marque lue côté
+        // serveur (qui ré-émet `notification:counts`). On NE l'incrémente pas
+        // localement (on sort avant `incrementInAppNotificationUnread`).
         if let convId = event.conversationId, convId == activeConversationId {
             Logger.socket.info("[RT-DIAG] in-app notification suppressed (conversation is active) conv=\(convId, privacy: .public)")
+            let notificationId = event.id
+            Task {
+                try? await NotificationService.shared.markAsRead(notificationId: notificationId)
+            }
+            notificationMarkedRead.send(notificationId)
             return
         }
 

@@ -401,6 +401,13 @@ final class NotificationListViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        manager.conversationNotificationsRead
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] conversationId in
+                self?.handleConversationReadEvent(conversationId)
+            }
+            .store(in: &cancellables)
+
         manager.notificationWasDeleted
             .receive(on: DispatchQueue.main)
             .sink { [weak self] notificationId in
@@ -421,6 +428,16 @@ final class NotificationListViewModel: ObservableObject {
     private func handleReadEvent(_ notificationId: String) {
         guard let idx = notifications.firstIndex(where: { $0.id == notificationId }) else { return }
         notifications[idx] = notifications[idx].withReadState(true)
+    }
+
+    /// Marque localement toutes les lignes liées à une conversation comme lues
+    /// (ouverture de la conversation → contenu consommé). Mise à jour optimiste :
+    /// le compteur autoritatif est ensuite recalé par `notification:counts`.
+    private func handleConversationReadEvent(_ conversationId: String) {
+        for idx in notifications.indices
+        where notifications[idx].context?.conversationId == conversationId && !notifications[idx].isRead {
+            notifications[idx] = notifications[idx].withReadState(true)
+        }
     }
 
     // MARK: - Loading

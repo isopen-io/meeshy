@@ -4,6 +4,7 @@ import { PostType } from '@meeshy/shared/prisma/client';
 import type { Post } from '@meeshy/shared/types/post';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
+import { NotificationService } from '../../services/notifications/NotificationService';
 import { MediaService } from '../../services/MediaService';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import type { OrphanMediaCleanupService } from '../../services/storage/OrphanMediaCleanupService';
@@ -236,7 +237,18 @@ export function registerInteractionRoutes(
 
       const { postId } = request.params;
       const { duration } = (request.body as any) ?? {};
-      await postService.recordView(postId, authContext.registeredUser.id, duration);
+      const viewerId = authContext.registeredUser.id;
+      const isNewView = await postService.recordView(postId, viewerId, duration);
+
+      // Contenu consommé (première vue réelle) → les notifications liées à ce
+      // post (X a publié une story / un statut / un post, réactions, commentaires)
+      // ne doivent plus apparaître comme non lues. Borné à la première vue pour
+      // éviter de rejouer la requête à chaque impression répétée du feed.
+      // Fire-and-forget : ne bloque pas la réponse, émet `notification:counts`.
+      if (isNewView) {
+        const notificationService = new NotificationService(prisma, (fastify as any).io);
+        notificationService.markPostNotificationsAsRead(viewerId, postId).catch(() => {});
+      }
 
       // If this is a story, broadcast the view to the story author
       const socialEvents = fastify.socialEvents;

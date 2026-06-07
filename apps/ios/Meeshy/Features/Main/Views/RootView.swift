@@ -20,6 +20,10 @@ import MeeshyUI
 struct StoryViewerRequest: Identifiable, Equatable {
     let id: String
     var initialAction: StoryViewerInitialAction? = nil
+    /// Quand `true`, le viewer s'ouvre sur la première story non vue du groupe
+    /// (entrées « toucher le profil / l'avatar / le tray »). Les deep links /
+    /// notifications ciblant un contenu précis gardent `false`.
+    var startAtFirstUnviewed: Bool = false
 }
 
 /// Named magic numbers for the iPhone root-view audio overlay layout.
@@ -95,7 +99,8 @@ struct RootView: View {
                     onStoryViewRequest: { userId, _ in
                         Logger.messages.info("[RootView] onStoryViewRequest userId=\(userId, privacy: .public) isEmpty=\(userId.isEmpty)")
                         guard !userId.isEmpty else { return }
-                        storyViewerCoordinator.present(StoryViewerRequest(id: userId))
+                        // Tap sur l'avatar/le tray → première story non vue.
+                        storyViewerCoordinator.present(StoryViewerRequest(id: userId, startAtFirstUnviewed: true))
                     },
                     onNewConversation: { showNewConversation = true }
                 )
@@ -374,6 +379,7 @@ struct RootView: View {
                     storyViewerCoordinator.dismiss()
                     router.navigateToStoryReply(replyContext, conversationListViewModel: conversationViewModel)
                 },
+                startAtFirstUnviewed: request.startAtFirstUnviewed,
                 presentationSource: "RootView.fromConv",
                 initialAction: request.initialAction
             )

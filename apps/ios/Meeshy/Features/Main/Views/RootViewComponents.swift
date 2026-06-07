@@ -641,6 +641,7 @@ struct ThemedFeedOverlay: View {
                     showStoryViewer = false
                     router.navigateToStoryReply(replyContext, conversationListViewModel: conversationListViewModel)
                 },
+                startAtFirstUnviewed: true,
                 presentationSource: "FeedOverlay"
             )
             .environmentObject(router)

@@ -39,6 +39,35 @@ public final class NotificationService: @unchecked Sendable {
         return response.count ?? 0
     }
 
+    /// Marque toutes les notifications d'une conversation comme lues.
+    /// Appelé à l'ouverture d'une conversation : le contenu étant consommé,
+    /// ses notifications ne doivent plus apparaître comme non lues.
+    /// Retourne le nombre de notifications marquées.
+    @discardableResult
+    public func markConversationRead(conversationId: String) async throws -> Int {
+        let response: MarkReadResponse = try await api.request(
+            endpoint: "/notifications/conversation/\(conversationId)/read",
+            method: "POST"
+        )
+        return response.count ?? 0
+    }
+
+    /// Marque comme lues toutes les notifications dont le type est dans `types`.
+    /// Appelé quand un écran consomme une catégorie entière (ex : l'écran des
+    /// demandes d'ajout consomme `friend_request` / `contact_request` /
+    /// `friend_accepted`). Retourne le nombre de notifications marquées.
+    @discardableResult
+    public func markRead(types: [String]) async throws -> Int {
+        struct Body: Encodable { let types: [String] }
+        let bodyData = try JSONEncoder().encode(Body(types: types))
+        let response: MarkReadResponse = try await api.request(
+            endpoint: "/notifications/read-by-types",
+            method: "POST",
+            body: bodyData
+        )
+        return response.count ?? 0
+    }
+
     public func delete(notificationId: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/notifications/\(notificationId)")
     }

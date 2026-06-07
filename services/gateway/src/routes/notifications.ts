@@ -291,6 +291,130 @@ export async function notificationRoutes(fastify: FastifyInstance) {
   );
 
   // ============================================
+  // POST /notifications/conversation/:conversationId/read
+  // Marque toutes les notifications d'une conversation comme lues.
+  // Appelé à l'ouverture d'une conversation : le contenu étant consommé,
+  // les notifications associées ne doivent plus apparaître comme non lues.
+  // ============================================
+
+  fastify.post(
+    '/notifications/conversation/:conversationId/read',
+    {
+      onRequest: [fastify.authenticate],
+      schema: {
+        description: "Mark all notifications of a conversation as read (content consumed)",
+        tags: ['notifications'],
+        summary: 'Mark conversation notifications as read',
+        params: {
+          type: 'object',
+          properties: {
+            conversationId: { type: 'string', description: 'Conversation ID' },
+          },
+          required: ['conversationId'],
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              count: {
+                type: 'number',
+                description: 'Number of notifications marked as read',
+              },
+            },
+          },
+          401: errorResponseSchema,
+          500: errorResponseSchema,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const { userId } = request.user as any;
+        const { conversationId } = request.params as any;
+
+        const count = await notificationService.markConversationNotificationsAsRead(
+          userId,
+          conversationId
+        );
+
+        return {
+          success: true,
+          count,
+        };
+      } catch (error) {
+        fastify.log.error({ error }, 'Error marking conversation notifications as read');
+        return reply.code(500).send({
+          success: false,
+          error: 'Failed to mark conversation notifications as read',
+        });
+      }
+    }
+  );
+
+  // ============================================
+  // POST /notifications/read-by-types
+  // Marque comme lues toutes les notifications de l'utilisateur dont le type
+  // est dans la liste fournie. Appelé quand un écran consomme une catégorie
+  // entière (ex : l'écran des demandes d'ajout consomme friend_request /
+  // contact_request / friend_accepted).
+  // ============================================
+
+  fastify.post(
+    '/notifications/read-by-types',
+    {
+      onRequest: [fastify.authenticate],
+      schema: {
+        description: 'Mark all notifications of the given types as read',
+        tags: ['notifications'],
+        summary: 'Mark notifications as read by type',
+        body: {
+          type: 'object',
+          required: ['types'],
+          properties: {
+            types: {
+              type: 'array',
+              items: { type: 'string' },
+              minItems: 1,
+              maxItems: 30,
+            },
+          },
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              count: { type: 'number' },
+            },
+          },
+          401: errorResponseSchema,
+          500: errorResponseSchema,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const { userId } = request.user as any;
+        const { types } = request.body as { types: string[] };
+
+        const count = await notificationService.markNotificationsByTypesAsRead(userId, types);
+
+        return {
+          success: true,
+          count,
+        };
+      } catch (error) {
+        fastify.log.error({ error }, 'Error marking notifications by types as read');
+        return reply.code(500).send({
+          success: false,
+          error: 'Failed to mark notifications as read',
+        });
+      }
+    }
+  );
+
+  // ============================================
   // DELETE /notifications/:id - Supprimer
   // ============================================
 

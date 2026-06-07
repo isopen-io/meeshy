@@ -587,6 +587,7 @@ struct ConversationView: View {
                         router.navigateToStoryReply(replyContext, conversationListViewModel: conversationListViewModel)
                     },
                     singleGroup: true,
+                    startAtFirstUnviewed: true,
                     presentationSource: "ConversationView.header"
                 )
                 // Re-inject env objects required by StoryViewerView for its
