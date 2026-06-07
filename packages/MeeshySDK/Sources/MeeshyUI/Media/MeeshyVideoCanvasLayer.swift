@@ -9,7 +9,7 @@ import Foundation
 /// pure CALayer compositing for performance (backdrop blur MPS, filters,
 /// transforms). This atom keeps that architecture intact while sharing
 /// the AVPlayer wiring with the SwiftUI side (`MeeshyVideoSurface`).
-public final class MeeshyVideoCanvasLayer: CALayer {
+public final class MeeshyVideoCanvasLayer: CALayer, @unchecked Sendable {
 
     /// The AVPlayerLayer that renders the video. Public so callers can
     /// observe `isReadyForDisplay` if needed.
@@ -97,16 +97,14 @@ public final class MeeshyVideoCanvasLayer: CALayer {
     private func observeItem(_ item: AVPlayerItem) {
         statusObserver = item.observe(\.status, options: [.new]) { [weak self] item, _ in
             guard item.status == .readyToPlay else { return }
-            DispatchQueue.main.async { [weak self] in
-                self?.onReadyToPlay?()
-            }
+            Task { @MainActor in self?.onReadyToPlay?() }
         }
         endObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: item,
             queue: .main
         ) { [weak self] _ in
-            self?.onPlaybackEnded?()
+            Task { @MainActor in self?.onPlaybackEnded?() }
         }
     }
 }
