@@ -595,10 +595,10 @@ final class CallStatsReducerTests: XCTestCase {
     private func codec(_ id: String, _ mime: String) -> CallStats.RawEntry {
         CallStats.RawEntry(id: id, type: "codec", mimeType: mime)
     }
-    private func inbound(_ kind: String, packets: Int, codecId: String? = nil, lost: Int = 0) -> CallStats.RawEntry {
+    private func inbound(_ kind: String, packets: Int, codecId: String? = nil, lost: Int = 0, bytes: Int = 0) -> CallStats.RawEntry {
         CallStats.RawEntry(
             id: "in-\(kind)", type: "inbound-rtp", kind: kind, codecId: codecId,
-            values: ["packetsReceived": Double(packets), "packetsLost": Double(lost)]
+            values: ["packetsReceived": Double(packets), "packetsLost": Double(lost), "bytesReceived": Double(bytes)]
         )
     }
     private func outbound(_ kind: String, packets: Int, bytes: Int = 0) -> CallStats.RawEntry {
@@ -639,6 +639,24 @@ final class CallStatsReducerTests: XCTestCase {
         ])
         XCTAssertEqual(stats.outboundPacketsSent, 1000)
         XCTAssertEqual(stats.bandwidth, 51000)
+    }
+
+    func test_reduce_sumsInboundBytesReceived() {
+        // bytesReceived (cumulative) is summed across all inbound-rtp streams —
+        // paired with bandwidth (bytesSent) to report total data spent.
+        let stats = CallStats.reduce(entries: [
+            inbound("audio", packets: 200, bytes: 2000),
+            inbound("video", packets: 800, bytes: 90000)
+        ])
+        XCTAssertEqual(stats.bytesReceived, 92000)
+    }
+
+    func test_connectionQualityLabel_collapsesCriticalIntoPoor() {
+        XCTAssertEqual(CallManager.connectionQualityLabel(for: .excellent), "excellent")
+        XCTAssertEqual(CallManager.connectionQualityLabel(for: .good), "good")
+        XCTAssertEqual(CallManager.connectionQualityLabel(for: .fair), "fair")
+        XCTAssertEqual(CallManager.connectionQualityLabel(for: .poor), "poor")
+        XCTAssertEqual(CallManager.connectionQualityLabel(for: .critical), "poor")
     }
 
     func test_reduce_resolvesRealCodecName_notGraphReference() {
