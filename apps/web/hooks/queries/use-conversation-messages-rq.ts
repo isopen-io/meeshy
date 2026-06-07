@@ -166,11 +166,15 @@ export function useConversationMessagesRQ(
     if (!data?.messages) return [];
 
     // Tri DESC par createdAt (plus récent en premier)
-    // Le composant MessagesDisplay inverse l'ordre pour l'affichage
+    // Le composant MessagesDisplay inverse l'ordre pour l'affichage.
+    // Départage déterministe par id quand deux messages partagent le même
+    // timestamp (même milliseconde) : sans cela l'ordre relatif est instable
+    // entre deux rendus et React réconcilie/permute des cellules pour rien.
     return [...data.messages].sort((a, b) => {
       const dateA = new Date(a.createdAt).getTime();
       const dateB = new Date(b.createdAt).getTime();
-      return dateB - dateA;
+      if (dateB !== dateA) return dateB - dateA;
+      return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
     });
   }, [data?.messages]);
 

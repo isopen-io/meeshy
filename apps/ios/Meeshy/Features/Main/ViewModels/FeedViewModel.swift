@@ -159,7 +159,15 @@ class FeedViewModel: ObservableObject {
 
             if response.success {
                 let fetched = response.data.map { $0.toFeedPost(preferredLanguages: self.preferredLanguages) }
-                posts = fetched
+                // Protective merge — same class of fix as MessageStore.publish:
+                // a `.stale` cache load kicks off this background refresh, and a
+                // socket `post:created` / `post:reposted` can insert a post at
+                // index 0 WHILE the fetch is in flight. A straight `posts =
+                // fetched` would erase that just-arrived post (it flashes in,
+                // then vanishes). Preserve only real-time posts strictly newer
+                // than the server head so server-side deletions within the
+                // fetched range still take effect.
+                posts = Self.mergePreservingRealtimeHead(fetched: fetched, existing: posts)
                 nextCursor = response.pagination?.nextCursor
                 hasMore = response.pagination?.hasMore ?? false
                 prefetchMedia(around: 0)
@@ -193,6 +201,21 @@ class FeedViewModel: ObservableObject {
 
         isLoading = false
         hasLoaded = true
+    }
+
+    /// Merges a freshly-fetched feed page with the in-memory list, preserving
+    /// real-time posts (socket `post:created` / `post:reposted`, inserted at
+    /// index 0) that arrived DURING a background refresh. Only posts strictly
+    /// newer than the newest fetched post AND absent from the fetched set are
+    /// preserved, so server-side deletions inside the fetched range still
+    /// apply. Pure + static so it is unit-testable without a live ViewModel.
+    static func mergePreservingRealtimeHead(fetched: [FeedPost], existing: [FeedPost]) -> [FeedPost] {
+        guard let newestFetched = fetched.first else { return fetched }
+        let fetchedIds = Set(fetched.map(\.id))
+        let realtimeHead = existing.filter {
+            $0.timestamp > newestFetched.timestamp && !fetchedIds.contains($0.id)
+        }
+        return realtimeHead.isEmpty ? fetched : realtimeHead + fetched
     }
 
     // MARK: - Load More (Infinite Scroll)
