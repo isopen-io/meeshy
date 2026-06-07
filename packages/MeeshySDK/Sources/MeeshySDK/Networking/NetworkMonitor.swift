@@ -60,7 +60,7 @@ public final class NetworkMonitor: ObservableObject, @unchecked Sendable, Networ
             .eraseToAnyPublisher()
     }
 
-    internal init() {
+    internal init(startMonitor: Bool = true) {
         monitor = NWPathMonitor()
 
         monitor.pathUpdateHandler = { [weak self] path in
@@ -87,7 +87,14 @@ public final class NetworkMonitor: ObservableObject, @unchecked Sendable, Networ
             }
         }
 
-        monitor.start(queue: monitorQueue)
+        // En test, `startMonitor: false` évite de démarrer le vrai NWPathMonitor :
+        // ses path-updates réels (réseau online → envoie `false`) entraient en
+        // concurrence avec `simulateOffline()` (envoie `true`) et, via le
+        // `debounce(500ms)` qui ne garde que la dernière valeur, pouvaient
+        // coalescer en `false` → `filter { $0 }` ne fire jamais → timeout flaky.
+        if startMonitor {
+            monitor.start(queue: monitorQueue)
+        }
     }
 
     deinit {
@@ -101,7 +108,7 @@ extension NetworkMonitor {
     /// Each instance starts its own `NWPathMonitor`; remember to drop the reference
     /// at the end of the test so the monitor cancels via `deinit`.
     public static func makeForTesting() -> NetworkMonitor {
-        NetworkMonitor()
+        NetworkMonitor(startMonitor: false)
     }
 
     public func simulateOffline() {

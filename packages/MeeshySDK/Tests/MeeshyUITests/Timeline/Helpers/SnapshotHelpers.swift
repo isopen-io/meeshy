@@ -78,7 +78,15 @@ enum SnapshotHelpers {
         let size = deviceSize(for: device)
         SnapshotTesting.assertSnapshot(
             of: hosted,
-            as: .image(layout: .fixed(width: size.width, height: size.height)),
+            // `perceptualPrecision` tolère le drift de rendu sub-pixel
+            // (anti-aliasing, hinting de texte) entre point-releases iOS — les
+            // baselines ont été enregistrées sur iOS 18.2 mais le CI tourne sur
+            // un autre 18.x. 0.98 laisse passer ces micro-écarts tout en
+            // attrapant les vraies régressions de layout/couleur. `precision`
+            // 0.99 autorise au plus 1 % de pixels franchement différents.
+            as: .image(precision: 0.99,
+                       perceptualPrecision: 0.98,
+                       layout: .fixed(width: size.width, height: size.height)),
             named: name,
             record: record,
             file: file,
