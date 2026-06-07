@@ -54,6 +54,9 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     private var ignoreOffer = false
     private var isSettingRemoteAnswerPending = false
     private(set) var isPolite = false
+    // P0-4 — flag set by `restartIce()` so the next `createOffer()` injects
+    // `IceRestart: true` constraint, forcing new ICE credentials in the SDP.
+    private var pendingIceRestart = false
 
     private(set) var videoFilterPipeline = VideoFilterPipeline()
     private var transcriptionDataChannel: RTCDataChannel?
@@ -531,6 +534,10 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
     }
 
+    func restartIce() {
+        pendingIceRestart = true
+    }
+
     func createOffer() async throws -> SessionDescription {
         guard let pc = peerConnection else { throw WebRTCError.noPeerConnection }
 
@@ -551,7 +558,14 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // the per-section direction). The pre-added `.sendRecv` transceivers
         // (audio + video) already declare the send/receive intent, so we pass
         // empty constraints and let Unified-Plan drive the m-line layout.
-        let constraints = RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)
+        // P0-4 — If an ICE restart was requested, inject the IceRestart constraint
+        // so the SDP offer carries new ICE credentials and triggers a full ICE re-gather.
+        var mandatoryConstraints: [String: String]? = nil
+        if pendingIceRestart {
+            mandatoryConstraints = ["IceRestart": "true"]
+            pendingIceRestart = false
+        }
+        let constraints = RTCMediaConstraints(mandatoryConstraints: mandatoryConstraints, optionalConstraints: nil)
 
         let sdp: RTCSessionDescription = try await withCheckedThrowingContinuation { continuation in
             pc.offer(for: constraints) { sdp, error in
@@ -1423,6 +1437,7 @@ final class P2PWebRTCClient: WebRTCClientProviding {
 
     func updateIceServers(_ iceServers: [IceServer]) {}
     func setNegotiationRole(isPolite: Bool) {}
+    func restartIce() {}
 
     func createOffer() async throws -> SessionDescription { throw WebRTCError.notSupported }
     func createAnswer(for offer: SessionDescription) async throws -> SessionDescription { throw WebRTCError.notSupported }

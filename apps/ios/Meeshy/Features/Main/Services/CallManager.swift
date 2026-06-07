@@ -185,6 +185,9 @@ final class CallManager: ObservableObject {
     /// cancel it cleanly instead of leaking it for the remaining sleep.
     private var sdpOfferTimeoutTask: Task<Void, Never>?
     private var pendingRemoteOffer: SessionDescription?
+    // P0-3 — ICE candidates generated while the socket is down are buffered
+    // here and replayed after the socket reconnects + emitCallJoin fires.
+    private var pendingIceCandidates: [[String: Any]] = []
     private var cancellables = Set<AnyCancellable>()
     private let audioSessionQueue = DispatchQueue(label: "me.meeshy.callmanager.audiosession")
 
@@ -247,6 +250,7 @@ final class CallManager: ObservableObject {
         setupSocketListeners()
         startNetworkMonitoring()
         startAudioInterruptionMonitoring()
+        startAudioRouteChangeMonitoring()
         Logger.calls.info("CallManager initialized")
     }
 
@@ -303,6 +307,48 @@ final class CallManager: ObservableObject {
             rtc.unlockForConfiguration()
         @unknown default:
             break
+        }
+    }
+
+    // P0-8 — reconcile `isSpeaker` when iOS changes the audio route (headset
+    // plug/unplug, Bluetooth connect/disconnect, AirPlay). Without this, the
+    // UI speaker button stays out of sync: the user taps "speaker on", plugs
+    // headphones → audio routes to headphones but `isSpeaker` stays true;
+    // unplugging then re-routes to the built-in speaker unexpectedly.
+    @MainActor
+    private func startAudioRouteChangeMonitoring() {
+        NotificationCenter.default.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let reasonRaw = (notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt) ?? 0
+            Task { @MainActor [weak self] in
+                self?.handleAudioRouteChange(reasonRaw: reasonRaw)
+            }
+        }
+    }
+
+    @MainActor
+    private func handleAudioRouteChange(reasonRaw: UInt) {
+        guard callState.isActive else { return }
+        let reason = AVAudioSession.RouteChangeReason(rawValue: reasonRaw) ?? .unknown
+        switch reason {
+        case .newDeviceAvailable:
+            // Headset / Bluetooth connected — route left speaker automatically.
+            isSpeaker = false
+            Logger.calls.info("Audio route: new device available — isSpeaker = false")
+        case .oldDeviceUnavailable:
+            // Headset / Bluetooth disconnected — iOS routes back to built-in;
+            // re-apply the current speaker preference so RTCAudioSession follows.
+            applySpeakerRoute()
+            Logger.calls.info("Audio route: device removed — re-applying speaker route (isSpeaker=\(self.isSpeaker))")
+        case .override:
+            // Software override (our own `overrideOutputAudioPort`); no action needed.
+            break
+        default:
+            // Category change, wake-from-sleep, etc. — re-apply to stay consistent.
+            applySpeakerRoute()
         }
     }
 
@@ -1725,6 +1771,7 @@ final class CallManager: ObservableObject {
         sdpOfferTimeoutTask?.cancel()
         sdpOfferTimeoutTask = nil
         pendingRemoteOffer = nil
+        pendingIceCandidates = []
         thermalMonitor.stopMonitoring()
         activeAudioEffect = nil
         hasLocalVideoTrack = false
@@ -1991,6 +2038,7 @@ final class CallManager: ObservableObject {
                 guard self.callState.isActive, let callId = self.currentCallId else { return }
                 Logger.calls.info("Socket reconnected — re-joining call room \(callId)")
                 MessageSocketManager.shared.emitCallJoin(callId: callId)
+                self.flushPendingIceCandidates()
             }
             .store(in: &cancellables)
 
@@ -2286,12 +2334,17 @@ extension CallManager: WebRTCServiceDelegate {
             if let sdpMid = candidate.sdpMid {
                 payload["sdpMid"] = sdpMid
             }
-            MessageSocketManager.shared.emitCallSignal(
-                callId: callId,
-                type: "ice-candidate",
-                payload: payload
-            )
-            Logger.calls.debug("Sent ICE candidate for call: \(callId)")
+            if MessageSocketManager.shared.isConnected {
+                MessageSocketManager.shared.emitCallSignal(
+                    callId: callId,
+                    type: "ice-candidate",
+                    payload: payload
+                )
+                Logger.calls.debug("Sent ICE candidate for call: \(callId)")
+            } else {
+                self.pendingIceCandidates.append(["callId": callId, "payload": payload])
+                Logger.calls.debug("Buffered ICE candidate (socket down) for call: \(callId)")
+            }
         }
     }
 
@@ -2452,6 +2505,21 @@ extension CallManager: WebRTCServiceDelegate {
             }
             self.emitCallOffer(callId: callId, toUserId: userId, isVideo: self.isVideoEnabled, sdp: offer)
             Logger.calls.info("ICE restart offer sent for call: \(callId)")
+        }
+    }
+
+    // P0-3 — replay ICE candidates buffered while the socket was down.
+    // Called after `emitCallJoin` on socket reconnect so the gateway has
+    // already re-admitted us to the call room before forwarding candidates.
+    private func flushPendingIceCandidates() {
+        guard !pendingIceCandidates.isEmpty else { return }
+        let candidates = pendingIceCandidates
+        pendingIceCandidates = []
+        Logger.calls.info("Flushing \(candidates.count) buffered ICE candidate(s) after socket reconnect")
+        for entry in candidates {
+            guard let callId = entry["callId"] as? String,
+                  let payload = entry["payload"] as? [String: Any] else { continue }
+            MessageSocketManager.shared.emitCallSignal(callId: callId, type: "ice-candidate", payload: payload)
         }
     }
 }

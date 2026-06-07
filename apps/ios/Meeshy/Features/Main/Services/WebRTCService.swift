@@ -377,6 +377,9 @@ final class WebRTCService {
         Logger.webrtc.info("Performing ICE restart")
         hasRemoteDescription = false
         iceCandidateBuffer.removeAll()
+        // P0-4 — signal the peer connection to embed new ICE credentials in the
+        // next offer (IceRestart:true constraint → full ICE re-gather, new ufrag/pwd).
+        client.restartIce()
         return await createOffer()
     }
 
