@@ -796,21 +796,9 @@ struct CallView: View {
                 }
             }
 
-            // Camera flip — only when video is capturing (flipping a stopped
-            // capturer is a no-op). §7.1/§7.3: hidden on iOS-on-Mac (single
-            // .unspecified camera → switchCamera is a no-op there).
-            if callManager.isVideoEnabled && !isOnMac {
-                callControlButton(
-                    icon: "camera.rotate.fill",
-                    color: .white,
-                    bgColor: .white,
-                    isActive: false,
-                    caption: String(localized: "call.control.flipCamera.caption", defaultValue: "Pivoter", bundle: .main),
-                    label: String(localized: "call.control.flipCamera", defaultValue: "Basculer la caméra avant/arrière", bundle: .main)
-                ) {
-                    callManager.switchCamera()
-                }
-            }
+            // §7.1/§7.3 — camera control: front/back flip on iPhone, a named
+            // device picker (Continuity / USB) on Mac/iPad with multiple cameras.
+            cameraControl
 
             // Video toggle stays visible even when video is disabled so the user
             // can re-enable it.
@@ -831,6 +819,66 @@ struct CallView: View {
             endCallButton
         }
         .padding(.horizontal, 16)
+        // §7.1 — populate the camera list when video turns on so `cameraControl`
+        // can decide flip vs device picker (Continuity/USB on Mac/iPad).
+        .task(id: callManager.isVideoEnabled) {
+            if callManager.isVideoEnabled { callManager.refreshAvailableCameras() }
+        }
+    }
+
+    /// §7.1/§7.3 — front/back flip on iPhone; a named device picker on Mac/iPad
+    /// when multiple cameras (incl. Continuity/USB) are available. Hidden when
+    /// video is off, or on Mac with a single camera (flip would be a no-op).
+    @ViewBuilder
+    private var cameraControl: some View {
+        if callManager.isVideoEnabled {
+            if callManager.availableCameras.count > 1
+                && (isOnMac || callManager.availableCameras.contains(where: { $0.isExternal })) {
+                cameraPickerMenu
+            } else if !isOnMac {
+                callControlButton(
+                    icon: "camera.rotate.fill",
+                    color: .white,
+                    bgColor: .white,
+                    isActive: false,
+                    caption: String(localized: "call.control.flipCamera.caption", defaultValue: "Pivoter", bundle: .main),
+                    label: String(localized: "call.control.flipCamera", defaultValue: "Basculer la caméra avant/arrière", bundle: .main)
+                ) {
+                    callManager.switchCamera()
+                }
+            }
+        }
+    }
+
+    /// §7.1 — named camera picker (Continuity / USB / built-in) for Mac/iPad.
+    private var cameraPickerMenu: some View {
+        Menu {
+            ForEach(callManager.availableCameras) { cam in
+                Button {
+                    callManager.selectCamera(id: cam.id)
+                } label: {
+                    Label(
+                        cam.displayName,
+                        systemImage: callManager.selectedCameraId == cam.id ? "checkmark" : "camera"
+                    )
+                }
+            }
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: "camera.badge.ellipsis")
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundColor(.white.opacity(0.9))
+                    .callControlGlass(diameter: 56, isActive: false, tint: .white)
+                Text(String(localized: "call.control.camera.caption", defaultValue: "Caméra", bundle: .main))
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(theme.textMuted)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(width: 68)
+        }
+        .pressable()
+        .accessibilityLabel(String(localized: "call.control.camera", defaultValue: "Choisir la caméra", bundle: .main))
     }
 
     // MARK: - UI Components
