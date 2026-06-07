@@ -479,12 +479,12 @@ final class MessageListViewController: UIViewController {
                         onConsumeViewOnce: consumeViewOnceHandler,
                         onRequestTranslation: requestTranslationHandler,
                         onShowTranslationDetail: showTranslationHandler,
-                        onCallBack: callBackHandler,
                         onPlayAudio: { [weak self] attachmentId in
                             self?.conversationViewModel?.playAudio(attachmentId: attachmentId)
                         },
                         allAudioItems: allAudioItems,
                         onScrollToMessage: scrollHandler,
+                        onCallBack: callBackHandler,
                         isLastInGroup: true,
                         isLastReceivedMessage: isLastReceived,
                         isLastSentMessage: isLastSent,

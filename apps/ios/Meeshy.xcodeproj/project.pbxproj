@@ -190,6 +190,7 @@
 		BBLB0001000100010001BLD /* BubbleContentBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLB0001000100010001REF /* BubbleContentBuilder.swift */; };
 		BBLC0001000100010001BLD /* BubbleContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLC0001000100010001REF /* BubbleContent.swift */; };
 		BBLD0001000100010001BLD /* BubbleStandardLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLD0001000100010001REF /* BubbleStandardLayout.swift */; };
+		BCNV0001000100010001BLD /* BubbleCallNoticeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCNV0001000100010001REF /* BubbleCallNoticeView.swift */; };
 		BBLE0001000100010001BLD /* BubbleEquatableTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLE0001000100010001REF /* BubbleEquatableTests.swift */; };
 		BBLF0001000100010001BLD /* BubbleLanguageFlagController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLF0001000100010001REF /* BubbleLanguageFlagController.swift */; };
 		BBLG0001000100010001BLD /* BubbleBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLG0001000100010001REF /* BubbleBackground.swift */; };
@@ -786,6 +787,7 @@
 		BBLB0001000100010001REF /* BubbleContentBuilder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleContentBuilder.swift; sourceTree = SOURCE_ROOT; };
 		BBLC0001000100010001REF /* BubbleContent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleContent.swift; sourceTree = SOURCE_ROOT; };
 		BBLD0001000100010001REF /* BubbleStandardLayout.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift; sourceTree = SOURCE_ROOT; };
+		BCNV0001000100010001REF /* BubbleCallNoticeView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleCallNoticeView.swift; sourceTree = SOURCE_ROOT; };
 		BBLE0001000100010001REF /* BubbleEquatableTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/BubbleEquatableTests.swift; sourceTree = SOURCE_ROOT; };
 		BBLF0001000100010001REF /* BubbleLanguageFlagController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleLanguageFlagController.swift; sourceTree = SOURCE_ROOT; };
 		BBLG0001000100010001REF /* BubbleBackground.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleBackground.swift; sourceTree = SOURCE_ROOT; };
@@ -1694,6 +1696,7 @@
 				BBLX0001000100010001REF /* BubbleExpandableText.swift */,
 				BBLV0001000100010001REF /* BubbleSystemViews.swift */,
 				BBLD0001000100010001REF /* BubbleStandardLayout.swift */,
+				BCNV0001000100010001REF /* BubbleCallNoticeView.swift */,
 				BBLF0001000100010001REF /* BubbleLanguageFlagController.swift */,
 				BBLN0001000100010001REF /* BubbleSecondaryContent.swift */,
 				BBLP0001000100010001REF /* BubbleEphemeralLifecycle.swift */,
@@ -2523,6 +2526,7 @@
 				BBLX0001000100010001BLD /* BubbleExpandableText.swift in Sources */,
 				BBLV0001000100010001BLD /* BubbleSystemViews.swift in Sources */,
 				BBLD0001000100010001BLD /* BubbleStandardLayout.swift in Sources */,
+				BCNV0001000100010001BLD /* BubbleCallNoticeView.swift in Sources */,
 				BBLF0001000100010001BLD /* BubbleLanguageFlagController.swift in Sources */,
 				BBLN0001000100010001BLD /* BubbleSecondaryContent.swift in Sources */,
 				BBLP0001000100010001BLD /* BubbleEphemeralLifecycle.swift in Sources */,
