@@ -225,7 +225,7 @@ final class FeedViewModelTests: XCTestCase {
         }
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: initialPosts, hasMore: true, nextCursor: "cursor-page2"))
 
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
         XCTAssertEqual(sut.posts.count, 10)
 
         // Stub the next page
@@ -255,7 +255,7 @@ final class FeedViewModelTests: XCTestCase {
         }
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: initialPosts, hasMore: true, nextCursor: "c2"))
 
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         // Next page returns a duplicate
         let dupeAndNew = [
@@ -279,7 +279,7 @@ final class FeedViewModelTests: XCTestCase {
         }
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: initialPosts, hasMore: true, nextCursor: "c2"))
 
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
         let initialRequestCount = api.requestCount
 
         // Post at index 0 is far from end (threshold = 20-5 = 15), so no load
@@ -295,7 +295,7 @@ final class FeedViewModelTests: XCTestCase {
         let posts = (0..<6).map { Self.makeAPIPost(id: "p\($0)") }
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: posts, hasMore: false))
 
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
         let initialRequestCount = api.requestCount
 
         let triggerPost = sut.posts[5]
@@ -323,7 +323,7 @@ final class FeedViewModelTests: XCTestCase {
             posts: initialPosts, hasMore: true, nextCursor: "cursor-page2"
         ))
 
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
         let initialRequestCount = api.requestCount
 
         // Stub a different response for the second page so we'd notice if
@@ -357,7 +357,7 @@ final class FeedViewModelTests: XCTestCase {
         let (sut, api, _, _) = makeSUT()
         let post = Self.makeAPIPost(id: "like-test", likeCount: 10)
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [post]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         XCTAssertEqual(sut.posts[0].likes, 10)
         XCTAssertFalse(sut.posts[0].isLiked)
@@ -381,7 +381,7 @@ final class FeedViewModelTests: XCTestCase {
         let (sut, api, _, _) = makeSUT(offlineQueue: queue)
         let post = Self.makeAPIPost(id: "rollback-test", likeCount: 5)
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [post]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         await sut.likePost("rollback-test")
 
@@ -393,7 +393,7 @@ final class FeedViewModelTests: XCTestCase {
         let (sut, api, _, _) = makeSUT()
         let post = Self.makeAPIPost(id: "unlike-test", likeCount: 8)
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [post]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         // First like
         let likeResponse: SimpleAPIResponse = JSONStub.decode("""
@@ -421,7 +421,7 @@ final class FeedViewModelTests: XCTestCase {
     func test_likePost_withInvalidPostId_doesNothing() async {
         let (sut, api, _, _) = makeSUT()
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1")]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
         let initialRequestCount = api.requestCount
 
         await sut.likePost("nonexistent-id")
@@ -437,7 +437,7 @@ final class FeedViewModelTests: XCTestCase {
         let queue = MockOfflineQueue()
         let (sut, api, _, _) = makeSUT(offlineQueue: queue)
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", commentCount: 3)]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         await sut.sendComment(postId: "p1", content: "Nice post!")
 
@@ -455,7 +455,7 @@ final class FeedViewModelTests: XCTestCase {
         let queue = MockOfflineQueue()
         let (sut, api, _, _) = makeSUT(offlineQueue: queue)
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1")]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         await sut.sendComment(postId: "p1", content: "reply", parentId: "c1")
 
@@ -468,7 +468,7 @@ final class FeedViewModelTests: XCTestCase {
         queue.enqueueResult = .failure(APIError.networkError(URLError(.timedOut)))
         let (sut, api, _, _) = makeSUT(offlineQueue: queue)
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", commentCount: 3)]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         await sut.sendComment(postId: "p1", content: "failing comment")
 
@@ -486,7 +486,7 @@ final class FeedViewModelTests: XCTestCase {
         let queue = MockOfflineQueue()
         let (sut, api, _, _) = makeSUT(offlineQueue: queue)
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", likeCount: 5)]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         await sut.likePost("p1")
         XCTAssertTrue(sut.posts[0].isLiked, "optimistic like applied")
@@ -507,7 +507,7 @@ final class FeedViewModelTests: XCTestCase {
         let queue = MockOfflineQueue()
         let (sut, api, _, _) = makeSUT(offlineQueue: queue)
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", likeCount: 5)]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         await sut.likePost("p1")
         guard let payload = queue.enqueueCalls.first?.payload as? ToggleLikePostPayload else {
@@ -525,7 +525,7 @@ final class FeedViewModelTests: XCTestCase {
         let queue = MockOfflineQueue()
         let (sut, api, _, _) = makeSUT(offlineQueue: queue)
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1", commentCount: 3)]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         await sut.sendComment(postId: "p1", content: "doomed comment")
         XCTAssertEqual(sut.posts[0].commentCount, 4, "optimistic comment inserted")
@@ -562,7 +562,7 @@ final class FeedViewModelTests: XCTestCase {
         let (sut, api, _, _) = makeSUT()
         let posts = [Self.makeAPIPost(id: "p1"), Self.makeAPIPost(id: "p2")]
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: posts))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         XCTAssertEqual(sut.posts.count, 2)
 
@@ -575,7 +575,7 @@ final class FeedViewModelTests: XCTestCase {
     func test_deletePost_failure_restoresPost() async {
         let (sut, api, _, postService) = makeSUT()
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [Self.makeAPIPost(id: "p1")]))
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         postService.deleteResult = .failure(APIError.networkError(URLError(.timedOut)))
 
@@ -738,7 +738,7 @@ final class FeedViewModelTests: XCTestCase {
         api.stub("/posts/feed", result: Self.makePaginatedResponse())
 
         // Initial load to prime state
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
         XCTAssertTrue(sut.hasLoaded)
 
         // Simulate new posts arriving
