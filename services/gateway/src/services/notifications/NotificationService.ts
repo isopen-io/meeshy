@@ -2881,6 +2881,10 @@ export class NotificationService {
   /**
    * Marque toutes les notifications d'une conversation comme lues
    * Note: Filtre simplifié car Prisma MongoDB ne supporte pas les filtres JSON complexes
+   *
+   * Émet `notification:counts` après marquage (si `io` est branché) afin que la
+   * cloche in-app et le badge se mettent à jour en temps réel dès que
+   * l'utilisateur ouvre la conversation (contenu consommé → notifications lues).
    */
   async markConversationNotificationsAsRead(userId: string, conversationId: string): Promise<number> {
     try {
@@ -2894,30 +2898,34 @@ export class NotificationService {
 
       // Filtrer côté application pour trouver celles liées à cette conversation
       // Note: Vérifier que context existe et n'est pas null (anciennes données)
-      const relevantNotifications = notifications.filter((n: any) => {
-        // Ignorer les notifications avec context null ou invalide
-        if (!n.context || typeof n.context !== 'object') {
-          notificationLogger.warn('Notification with invalid context found', {
-            notificationId: n.id,
-            userId: n.userId,
-            contextValue: n.context
-          });
-          return false;
-        }
-        return n.context.conversationId === conversationId;
-      });
+      const relevantIds = notifications
+        .filter((n: any) => {
+          // Ignorer les notifications avec context null ou invalide
+          if (!n.context || typeof n.context !== 'object') {
+            notificationLogger.warn('Notification with invalid context found', {
+              notificationId: n.id,
+              userId: n.userId,
+              contextValue: n.context
+            });
+            return false;
+          }
+          return n.context.conversationId === conversationId;
+        })
+        .map((n: any) => n.id as string);
 
-      // Marquer comme lues
-      let count = 0;
-      for (const notif of relevantNotifications) {
-        await this.prisma.notification.update({
-          where: { id: notif.id },
-          data: { isRead: true, readAt: new Date() }
-        });
-        count++;
+      if (relevantIds.length === 0) {
+        return 0;
       }
 
-      return count;
+      const result = await this.prisma.notification.updateMany({
+        where: { id: { in: relevantIds } },
+        data: { isRead: true, readAt: new Date() },
+      });
+
+      // Rafraîchir les compteurs côté client (cloche + badge) en temps réel.
+      this.emitCountsUpdate(userId).catch(() => {});
+
+      return result.count;
     } catch (error) {
       notificationLogger.error('Failed to mark conversation notifications as read', {
         error,

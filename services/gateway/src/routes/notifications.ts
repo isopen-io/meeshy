@@ -291,6 +291,68 @@ export async function notificationRoutes(fastify: FastifyInstance) {
   );
 
   // ============================================
+  // POST /notifications/conversation/:conversationId/read
+  // Marque toutes les notifications d'une conversation comme lues.
+  // Appelé à l'ouverture d'une conversation : le contenu étant consommé,
+  // les notifications associées ne doivent plus apparaître comme non lues.
+  // ============================================
+
+  fastify.post(
+    '/notifications/conversation/:conversationId/read',
+    {
+      onRequest: [fastify.authenticate],
+      schema: {
+        description: "Mark all notifications of a conversation as read (content consumed)",
+        tags: ['notifications'],
+        summary: 'Mark conversation notifications as read',
+        params: {
+          type: 'object',
+          properties: {
+            conversationId: { type: 'string', description: 'Conversation ID' },
+          },
+          required: ['conversationId'],
+        },
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              success: { type: 'boolean' },
+              count: {
+                type: 'number',
+                description: 'Number of notifications marked as read',
+              },
+            },
+          },
+          401: errorResponseSchema,
+          500: errorResponseSchema,
+        },
+      },
+    },
+    async (request: FastifyRequest, reply: FastifyReply) => {
+      try {
+        const { userId } = request.user as any;
+        const { conversationId } = request.params as any;
+
+        const count = await notificationService.markConversationNotificationsAsRead(
+          userId,
+          conversationId
+        );
+
+        return {
+          success: true,
+          count,
+        };
+      } catch (error) {
+        fastify.log.error({ error }, 'Error marking conversation notifications as read');
+        return reply.code(500).send({
+          success: false,
+          error: 'Failed to mark conversation notifications as read',
+        });
+      }
+    }
+  );
+
+  // ============================================
   // DELETE /notifications/:id - Supprimer
   // ============================================
 

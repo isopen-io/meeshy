@@ -286,13 +286,11 @@ private struct ConversationHeaderAvatarView: View {
     }
 
     private func avatarContextMenu(for userId: String, name: String) -> [AvatarContextMenuItem] {
+        // NB : l'entrée « Voir la story » est ajoutée automatiquement par
+        // `MeeshyAvatar` dès qu'un `onViewStory` est fourni et qu'une story
+        // existe (`storyState != .none`). On ne la duplique donc pas ici —
+        // on n'ajoute que les entrées profil / conversation / message.
         var items: [AvatarContextMenuItem] = []
-        if storyViewModel.hasStories(forUserId: userId) {
-            items.append(AvatarContextMenuItem(label: "Voir les stories", icon: "play.circle.fill") {
-                headerState.storyUserIdForHeader = userId
-                headerState.showStoryViewerFromHeader = true
-            })
-        }
         if isDirect {
             items.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.circle.fill") {
                 onViewProfile?()

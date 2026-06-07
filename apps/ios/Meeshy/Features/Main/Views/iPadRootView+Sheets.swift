@@ -55,6 +55,7 @@ extension iPadRootView {
                         showStoryViewerFromConv = false
                         handleStoryReply(replyContext)
                     },
+                    startAtFirstUnviewed: true,
                     presentationSource: "iPadRootView.conv"
                 )
                 // Re-inject env objects required by StoryViewerView for its
@@ -84,6 +85,7 @@ extension iPadRootView {
                         storyViewerCoordinator.dismiss()
                         handleStoryReply(replyContext)
                     },
+                    startAtFirstUnviewed: request.startAtFirstUnviewed,
                     presentationSource: "iPadRootView.fromConv",
                     initialAction: request.initialAction
                 )

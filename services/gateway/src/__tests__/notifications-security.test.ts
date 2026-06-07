@@ -49,7 +49,9 @@ jest.mock('../utils/logger', () => ({
 jest.mock('../utils/logger-enhanced', () => ({
   notificationLogger: {
     info: jest.fn(),
-    debug: jest.fn()
+    debug: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn()
   },
   securityLogger: {
     logViolation: jest.fn()
@@ -325,20 +327,41 @@ describe('Notifications - Tests de Sécurité', () => {
     });
 
     it('Vérifie userId dans markConversationNotificationsAsRead', async () => {
-      prisma.notification.updateMany.mockResolvedValue({ count: 3 });
+      // MongoDB ne sait pas filtrer sur context.conversationId (JSON) : le service
+      // récupère les non-lues de l'utilisateur (scopées par userId) puis filtre en
+      // mémoire avant un updateMany ciblé par ids.
+      prisma.notification.findMany.mockResolvedValue([
+        { id: 'n1', userId: 'user123', context: { conversationId: 'conv456' } },
+        { id: 'n2', userId: 'user123', context: { conversationId: 'other-conv' } },
+        { id: 'n3', userId: 'user123', context: null },
+      ]);
+      prisma.notification.updateMany.mockResolvedValue({ count: 1 });
 
-      await service.markConversationNotificationsAsRead('user123', 'conv456');
+      const count = await service.markConversationNotificationsAsRead('user123', 'conv456');
 
-      expect(prisma.notification.updateMany).toHaveBeenCalledWith({
-        where: {
-          userId: 'user123', // Vérifie userId
-          conversationId: 'conv456',
-          isRead: false
-        },
-        data: {
-          isRead: true
-        }
+      // IDOR: la lecture initiale est scopée par userId
+      expect(prisma.notification.findMany).toHaveBeenCalledWith({
+        where: { userId: 'user123', isRead: false },
       });
+
+      // Seule la notification de conv456 est marquée lue
+      expect(prisma.notification.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: ['n1'] } },
+        data: { isRead: true, readAt: expect.any(Date) },
+      });
+
+      expect(count).toBe(1);
+    });
+
+    it('markConversationNotificationsAsRead ne marque rien si aucune notification ne matche', async () => {
+      prisma.notification.findMany.mockResolvedValue([
+        { id: 'n2', userId: 'user123', context: { conversationId: 'other-conv' } },
+      ]);
+
+      const count = await service.markConversationNotificationsAsRead('user123', 'conv456');
+
+      expect(prisma.notification.updateMany).not.toHaveBeenCalled();
+      expect(count).toBe(0);
     });
   });
 

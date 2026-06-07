@@ -108,6 +108,28 @@ final class NotificationServiceTests: XCTestCase {
         XCTAssertEqual(count, 0)
     }
 
+    // MARK: - markConversationRead
+
+    func test_markConversationRead_callsCorrectEndpoint() async throws {
+        let response = MarkReadResponse(success: true, count: 2)
+        mock.stub("/notifications/conversation/conv1/read", result: response)
+
+        let count = try await service.markConversationRead(conversationId: "conv1")
+
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/notifications/conversation/conv1/read")
+        XCTAssertEqual(mock.lastRequest?.method, "POST")
+        XCTAssertEqual(count, 2)
+    }
+
+    func test_markConversationRead_nilCount_returnsZero() async throws {
+        let response = MarkReadResponse(success: true, count: nil)
+        mock.stub("/notifications/conversation/conv1/read", result: response)
+
+        let count = try await service.markConversationRead(conversationId: "conv1")
+
+        XCTAssertEqual(count, 0)
+    }
+
     // MARK: - delete
 
     func test_delete_callsCorrectEndpoint() async throws {

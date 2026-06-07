@@ -39,6 +39,19 @@ public final class NotificationService: @unchecked Sendable {
         return response.count ?? 0
     }
 
+    /// Marque toutes les notifications d'une conversation comme lues.
+    /// Appelé à l'ouverture d'une conversation : le contenu étant consommé,
+    /// ses notifications ne doivent plus apparaître comme non lues.
+    /// Retourne le nombre de notifications marquées.
+    @discardableResult
+    public func markConversationRead(conversationId: String) async throws -> Int {
+        let response: MarkReadResponse = try await api.request(
+            endpoint: "/notifications/conversation/\(conversationId)/read",
+            method: "POST"
+        )
+        return response.count ?? 0
+    }
+
     public func delete(notificationId: String) async throws {
         let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/notifications/\(notificationId)")
     }

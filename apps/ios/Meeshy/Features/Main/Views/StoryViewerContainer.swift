@@ -17,6 +17,9 @@ struct StoryViewerContainer: View {
     var onReplyToStory: ((ReplyContext) -> Void)? = nil
     var singleGroup: Bool = false
     var initialStoryIndex: Int = 0
+    /// Forwarded to `StoryViewerView` : ouvre le viewer sur la première story
+    /// non vue (points d'entrée « toucher le profil / avatar / tray »).
+    var startAtFirstUnviewed: Bool = false
     var presentationSource: String = "unknown"
     /// Phase F: forwarded to `StoryViewerView` so a notification-launched
     /// viewer can auto-open the comments overlay or viewers sheet on appear.
@@ -40,6 +43,7 @@ struct StoryViewerContainer: View {
                         currentGroupIndex: 0,
                         isPresented: $isPresented,
                         initialStoryIndex: initialStoryIndex,
+                        startAtFirstUnviewed: startAtFirstUnviewed,
                         initialAction: initialAction
                     )
                     .transition(.identity)
@@ -51,6 +55,7 @@ struct StoryViewerContainer: View {
                         isPresented: $isPresented,
                         onReplyToStory: onReplyToStory,
                         initialStoryIndex: initialStoryIndex,
+                        startAtFirstUnviewed: startAtFirstUnviewed,
                         initialAction: initialAction
                     )
                     .transition(.identity)

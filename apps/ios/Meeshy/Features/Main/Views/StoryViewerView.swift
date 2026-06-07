@@ -84,6 +84,13 @@ struct StoryViewerView: View {
     var preloadedVideoURLs: [String: URL] = [:]
     var preloadedAudioURLs: [String: URL] = [:]
     var initialStoryIndex: Int = 0
+    /// Quand `true` (et sans slide explicite), le viewer s'ouvre directement sur
+    /// la PREMIÈRE story non vue du groupe courant (fallback : index 0 si tout est
+    /// déjà vu). Utilisé par les points d'entrée « toucher le profil / l'avatar /
+    /// le tray » pour afficher la première nouvelle story. Les points d'entrée
+    /// ciblant une slide précise (réponse à une story, deep link de notification)
+    /// gardent `false` + `initialStoryIndex` explicite.
+    var startAtFirstUnviewed: Bool = false
     /// One-shot side-effect for the notification flow (Phase F): when set, the
     /// viewer auto-opens either the comments overlay or the viewers sheet on
     /// first appear, then pauses the timer so the user can read what they
@@ -351,6 +358,10 @@ struct StoryViewerView: View {
         .onAppear {
             if initialStoryIndex > 0, currentGroupIndex < groups.count {
                 currentStoryIndex = min(initialStoryIndex, groups[currentGroupIndex].stories.count - 1)
+            } else if startAtFirstUnviewed, currentGroupIndex < groups.count,
+                      let firstUnviewed = groups[currentGroupIndex].stories.firstIndex(where: { !$0.isViewed }) {
+                // Toucher le profil → afficher directement la première story non vue.
+                currentStoryIndex = firstUnviewed
             }
             // A5 — skip past stories whose 24h visibility window has elapsed.
             // Cache TTL > 24h is intentional (avoid redownloading avatars)
