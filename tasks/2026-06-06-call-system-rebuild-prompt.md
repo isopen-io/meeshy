@@ -1042,6 +1042,26 @@ Vérifié dans le code de `main` (et non d'après les notes) :
 
 ---
 
+### 2026-06-06 (suite 9) — §7.1 picker Continuity Camera livré (branche `claude/calls-p2-sota`)
+
+#### Livré (tags `calls-sota-p7.1` data + `p7.2` UI)
+
+**§7.1 picker Continuity/USB camera** (Mac/iPad) — additif, ne touche PAS la FSM ; le flip front/back iPhone reste identique.
+- `p7.1` (`5d0d0f7`) **data** : `CameraCatalog` pur (`CameraDeviceOption`/`CameraFacing`, ordre front→back→external + nom + tiebreak uniqueID, de-dup, suffixe « (2) » pour noms identiques — **6 tests purs**) ; protocole `WebRTCClientProviding.availableCameras()`/`switchToCamera(uniqueID:)` (real client : enum `RTCCameraVideoCapturer.captureDevices`, external via `deviceType` iOS 17 ; switch = même stop→reselect→start que `switchCamera`) ; stub + `MockWebRTCClient` mis à jour ; passthrough `WebRTCService` ; `CallManager.availableCameras`/`selectedCameraId`/`refreshAvailableCameras()`/`selectCamera(id:)`.
+- `p7.2` (`a471859`) **UI** : `cameraControl` (flip iPhone vs Menu device picker Mac/iPad si >1 caméra + externe), `cameraPickerMenu` (liste nommée + checkmark actif), refresh `.task(id: isVideoEnabled)`.
+
+#### État FINAL — il ne reste que 2 items, TOUS exigent build Xcode + device
+
+1. **§3.1 réducteur `CallEventQueue`** : scaffold pur, 13 écritures `callState =` à sérialiser. Gros refactor FSM live.
+2. **Suppression `.offering`** (P0 tâche 1) : contenu (1 case enum + 1 assignation `CallManager:2008` + ~5 sites de match), mais **change les transitions FSM live de l'appel sortant** (bridge ringing→connecting l.1203, catch-up ICE l.2288). Mal fait sans device → caller bloqué « Sonnerie ». La spec impose validation device + progressive.
+
+> **Tout le reste de la spec est implémenté.** Le système d'appels est fonctionnellement complet E2E. Les 2 items restants sont des changements FSM live à faire **uniquement avec Xcode + 2 iPhones + Mac**.
+
+#### Tous les tags de la session (locaux — push tags 403)
+`p3.1`→`p3.3` (P3 messages système E2E), `p2.4` (thermal §5.6), `p2.5` (bannière reconnecting §4.3), `p2.7` (fix double-frame vidéo), `p7.1`+`p7.2` (§7.1 Continuity picker), + docs `p2.6`/`p2.8`/`p7.x`. Branche : `claude/calls-p2-sota`.
+
+---
+
 ### 📍 ÉTAT ACTUEL (référence — antérieure, conservée)
 
 **Branche active** : `claude/friendly-ride-H5qtI` (PR #315). Voir « suite 5 » ci-dessus pour l'état à jour. (Tranches antérieures : branches `claude/admiring-faraday-ZMpBt` PR #314 + `feat/calls-sota-rebuild`, tags `calls-sota-p0.1`→`p1.9`, mergées sur `main`.)
