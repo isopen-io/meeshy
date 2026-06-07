@@ -1073,9 +1073,13 @@ public struct ReplyReference: Codable, Sendable {
     public var storyReactionCount: Int?
     public var storyCommentCount: Int?
     public var storyThumbnailUrl: String?
+    /// Emoji de l'humeur citée. Non-nil ⇒ cette réponse cite un mood/statut
+    /// (rendu dédié : emoji + contenu + date) plutôt qu'une story générique.
+    /// `storyPublishedAt` porte alors la date de publication du mood.
+    public var moodEmoji: String?
 
     public init(messageId: String = "", authorName: String, previewText: String, isMe: Bool = false, authorColor: String? = nil, attachmentType: String? = nil, attachmentThumbnailUrl: String? = nil, isStoryReply: Bool = false,
-                storyPublishedAt: Date? = nil, storyReactionCount: Int? = nil, storyCommentCount: Int? = nil, storyThumbnailUrl: String? = nil) {
+                storyPublishedAt: Date? = nil, storyReactionCount: Int? = nil, storyCommentCount: Int? = nil, storyThumbnailUrl: String? = nil, moodEmoji: String? = nil) {
         self.messageId = messageId
         self.authorName = authorName
         self.previewText = previewText
@@ -1088,6 +1092,7 @@ public struct ReplyReference: Codable, Sendable {
         self.storyReactionCount = storyReactionCount
         self.storyCommentCount = storyCommentCount
         self.storyThumbnailUrl = storyThumbnailUrl
+        self.moodEmoji = moodEmoji
     }
 }
 

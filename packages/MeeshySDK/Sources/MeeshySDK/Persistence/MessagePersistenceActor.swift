@@ -1188,6 +1188,19 @@ public actor MessagePersistenceActor {
                     // On construit un ReplyReference riche pour BubbleStoryReplyPreview.
                     if let story = api.storyReplyTo {
                         let trimmed = story.previewText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        // Réponse à un mood : rendu dédié (emoji + contenu + date).
+                        if let emoji = story.moodEmoji {
+                            let ref = ReplyReference(
+                                messageId: story.id,
+                                authorName: "",
+                                previewText: trimmed,
+                                isMe: false,
+                                isStoryReply: true,
+                                storyPublishedAt: story.createdAt,
+                                moodEmoji: emoji
+                            )
+                            return try? encoder.encode(ref)
+                        }
                         let ref = ReplyReference(
                             messageId: story.id,
                             authorName: "",

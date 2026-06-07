@@ -53,7 +53,8 @@ struct BubbleQuotedReply: View, Equatable {
             storyPublishedAt: reply.storyPublishedAt,
             storyReactionCount: reply.storyReactionCount,
             storyCommentCount: reply.storyCommentCount,
-            storyThumbnailUrl: reply.storyThumbnailUrl
+            storyThumbnailUrl: reply.storyThumbnailUrl,
+            moodEmoji: reply.moodEmoji
         )
     }
 
@@ -70,12 +71,22 @@ struct BubbleQuotedReply: View, Equatable {
         let storyReactionCount: Int?
         let storyCommentCount: Int?
         let storyThumbnailUrl: String?
+        let moodEmoji: String?
     }
 
     private var theme: ThemeManager { ThemeManager.shared }
 
     private var mentionTint: Color {
         Color(hex: "818CF8") // indigo400 — distinct des liens URL
+    }
+
+    /// Titre de la citation. Pour un mood échoé par le serveur, `authorName`
+    /// peut être vide → on retombe sur le libellé localisé "Humeur".
+    private var quotedTitle: String {
+        if reply.isMe { return String(localized: "bubble.reply.you", defaultValue: "Vous", bundle: .main) }
+        if !reply.authorName.isEmpty { return reply.authorName }
+        if reply.moodEmoji != nil { return String(localized: "bubble.reply.mood", defaultValue: "Humeur", bundle: .main) }
+        return reply.authorName
     }
 
     var body: some View {
@@ -98,12 +109,14 @@ struct BubbleQuotedReply: View, Equatable {
 
             HStack(spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(reply.isMe ? String(localized: "bubble.reply.you", defaultValue: "Vous", bundle: .main) : reply.authorName)
+                    Text(quotedTitle)
                         .font(.system(size: 12, weight: .bold))
                         .foregroundColor(nameColor)
                         .lineLimit(1)
 
-                    if reply.isStoryReply {
+                    if reply.moodEmoji != nil {
+                        BubbleMoodReplyPreview(reply: reply, previewColor: previewColor)
+                    } else if reply.isStoryReply {
                         BubbleStoryReplyPreview(reply: reply, previewColor: previewColor)
                     } else {
                         HStack(spacing: 5) {
@@ -182,6 +195,50 @@ struct BubbleQuotedReply: View, Equatable {
         guard let type, !type.isEmpty else { return nil }
         if let exact = AttachmentKind(rawValue: type) { return exact }
         return AttachmentKind(mimeType: type)
+    }
+}
+
+// MARK: - Mood reply preview
+
+/// Citation d'une réponse à un mood/statut : emoji + contenu entier + date.
+/// Le contenu du mood vit dans `reply.previewText`, l'emoji dans
+/// `reply.moodEmoji`, la date dans `reply.storyPublishedAt`.
+struct BubbleMoodReplyPreview: View, Equatable {
+    let reply: ReplyReference
+    let previewColor: Color
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.previewColor == rhs.previewColor &&
+        lhs.reply.moodEmoji == rhs.reply.moodEmoji &&
+        lhs.reply.previewText == rhs.reply.previewText &&
+        lhs.reply.storyPublishedAt == rhs.reply.storyPublishedAt
+    }
+
+    var body: some View {
+        HStack(spacing: 5) {
+            if let emoji = reply.moodEmoji {
+                Text(emoji)
+                    .font(.system(size: 13))
+            }
+
+            if let date = reply.storyPublishedAt {
+                Text(date, style: .relative)
+                    .font(.system(size: 10))
+                    .foregroundColor(previewColor.opacity(0.8))
+            }
+
+            if !reply.previewText.isEmpty {
+                if reply.storyPublishedAt != nil {
+                    Text("\u{2022}")
+                        .font(.system(size: 8))
+                        .foregroundColor(previewColor.opacity(0.6))
+                }
+                Text(reply.previewText)
+                    .font(.system(size: 11))
+                    .foregroundColor(previewColor)
+                    .lineLimit(2)
+            }
+        }
     }
 }
 

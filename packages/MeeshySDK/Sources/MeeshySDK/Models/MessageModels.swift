@@ -278,9 +278,12 @@ public struct APIStoryReplyTarget: Decodable, Sendable {
     public let createdAt: Date
     public let thumbnailUrl: String?
     public let previewText: String
+    /// Présent quand le post cité est un mood/statut — déclenche le rendu
+    /// dédié (emoji + contenu + date) côté bulle.
+    public let moodEmoji: String?
 
     private enum CodingKeys: String, CodingKey {
-        case id, reactionCount, commentCount, createdAt, thumbnailUrl, previewText
+        case id, reactionCount, commentCount, createdAt, thumbnailUrl, previewText, moodEmoji
     }
 
     nonisolated(unsafe) private static let isoFractional: ISO8601DateFormatter = {
@@ -297,6 +300,7 @@ public struct APIStoryReplyTarget: Decodable, Sendable {
         commentCount = try c.decode(Int.self, forKey: .commentCount)
         thumbnailUrl = try c.decodeIfPresent(String.self, forKey: .thumbnailUrl)
         previewText = try c.decode(String.self, forKey: .previewText)
+        moodEmoji = try c.decodeIfPresent(String.self, forKey: .moodEmoji)
         // `createdAt` est décodé depuis une String puis parsé ici — agnostique
         // de la `dateDecodingStrategy` du JSONDecoder appelant (la prod utilise
         // une stratégie `.custom`, les tests `.iso8601`). Tolère les
@@ -576,6 +580,16 @@ extension APIMessage {
             // counts + publish date) — lets the quoted-reply citation show
             // the real story preview instead of a bare "Story" placeholder.
             if let target = storyReplyTo {
+                // Réponse à un mood : rendu dédié (emoji + contenu + date).
+                if let emoji = target.moodEmoji {
+                    return ReplyReference(
+                        messageId: target.id, authorName: "",
+                        previewText: target.previewText,
+                        isStoryReply: true,
+                        storyPublishedAt: target.createdAt,
+                        moodEmoji: emoji
+                    )
+                }
                 return ReplyReference(
                     messageId: target.id, authorName: "Story",
                     previewText: target.previewText.isEmpty ? "\u{1F4F7} Story" : target.previewText,

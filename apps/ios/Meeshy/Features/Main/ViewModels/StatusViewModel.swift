@@ -198,12 +198,15 @@ class StatusViewModel: ObservableObject {
 
     // MARK: - Mood Tap Handler
 
-    func moodTapHandler(for userId: String) -> ((CGPoint) -> Void)? {
+    /// - Parameter repliesInline: vrai quand le mood est affiché dans la barre de
+    ///   la conversation directe de son auteur — toucher son contenu répond alors
+    ///   immédiatement (sans pop-up de confirmation).
+    func moodTapHandler(for userId: String, repliesInline: Bool = false) -> ((CGPoint) -> Void)? {
         guard statusForUser(userId: userId) != nil else { return nil }
         return { [weak self] point in
             guard let entry = self?.statusForUser(userId: userId) else { return }
             Task { @MainActor in
-                StatusBubbleController.shared.show(entry: entry, anchor: point)
+                StatusBubbleController.shared.show(entry: entry, anchor: point, repliesInline: repliesInline)
             }
         }
     }
