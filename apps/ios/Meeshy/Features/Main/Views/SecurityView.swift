@@ -411,7 +411,12 @@ struct SecurityView: View {
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(theme.textMuted)
 
-                        Text(user?.phoneNumber ?? String(localized: "settings.security.not_set", defaultValue: "Non defini", bundle: .main))
+                        Text({
+                            if let phone = user?.phoneNumber, !phone.isEmpty {
+                                return "\(CountryPicker.flag(forPhoneNumber: phone)) \(phone)"
+                            }
+                            return String(localized: "settings.security.not_set", defaultValue: "Non defini", bundle: .main)
+                        }())
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(user?.phoneNumber != nil ? theme.textPrimary : theme.textMuted)
                     }

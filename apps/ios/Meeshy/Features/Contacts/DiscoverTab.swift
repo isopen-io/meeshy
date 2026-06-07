@@ -6,6 +6,8 @@ import MessageUI
 
 struct DiscoverTab: View {
     @ObservedObject var viewModel: DiscoverViewModel
+    var isActive: Bool = true
+    var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
@@ -16,6 +18,7 @@ struct DiscoverTab: View {
 
     var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
+            ContactsScrollSentinel()
             VStack(spacing: 16) {
                 inviteSection
                 searchSection
@@ -23,6 +26,7 @@ struct DiscoverTab: View {
             .padding(.top, 8)
             .padding(.bottom, 20)
         }
+        .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
     }
 
     // MARK: - Invite Section

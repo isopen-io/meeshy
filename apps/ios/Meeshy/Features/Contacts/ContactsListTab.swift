@@ -5,6 +5,8 @@ import MeeshyUI
 
 struct ContactsListTab: View {
     @ObservedObject var viewModel: ContactsListViewModel
+    var isActive: Bool = true
+    var onScrollOffsetChange: (CGFloat) -> Void = { _ in }
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
@@ -89,6 +91,7 @@ struct ContactsListTab: View {
         VStack(spacing: 0) {
             searchBar
             ScrollView(.vertical, showsIndicators: false) {
+                ContactsScrollSentinel()
                 LazyVStack(spacing: 0) {
                     ForEach(Array(viewModel.filteredFriends.enumerated()), id: \.element.id) { index, friend in
                         contactRow(friend, index: index)
@@ -96,6 +99,7 @@ struct ContactsListTab: View {
                 }
                 .padding(.top, 4)
             }
+            .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
         }
     }
 

@@ -57,3 +57,56 @@ extension Date {
         return formatter.string(from: self)
     }
 }
+
+// MARK: - Collapsing-header scroll plumbing
+//
+// Each Contacts tab reports its vertical scroll offset up to `ContactsHubView`
+// so the hub's `CollapsibleHeader` collapses while the tab chips and the search
+// bar stay pinned below the header.
+//
+// Usage in a tab:
+// ```
+// ScrollView {
+//     ContactsScrollSentinel()   // first child
+//     ...content...
+// }
+// .reportsContactsScroll(active: isActive, onChange: onScrollOffsetChange)
+// ```
+
+enum ContactsScrollOffset {
+    static let space = "contactsScroll"
+}
+
+struct ContactsScrollOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+/// Zero-height marker placed as the FIRST child inside a `ScrollView`'s content.
+/// Reports the content top within the scroll viewport: `0` at rest, negative once
+/// scrolled up.
+struct ContactsScrollSentinel: View {
+    var body: some View {
+        GeometryReader { proxy in
+            Color.clear.preference(
+                key: ContactsScrollOffsetKey.self,
+                value: proxy.frame(in: .named(ContactsScrollOffset.space)).minY
+            )
+        }
+        .frame(height: 0)
+    }
+}
+
+extension View {
+    /// Apply to a `ScrollView` that contains a `ContactsScrollSentinel` as its
+    /// first child. Forwards the offset (only while `active`, so off-screen paged
+    /// tabs stay silent) to drive the hub's collapsing header.
+    func reportsContactsScroll(active: Bool, onChange: @escaping (CGFloat) -> Void) -> some View {
+        coordinateSpace(name: ContactsScrollOffset.space)
+            .onPreferenceChange(ContactsScrollOffsetKey.self) { value in
+                if active { onChange(value) }
+            }
+    }
+}

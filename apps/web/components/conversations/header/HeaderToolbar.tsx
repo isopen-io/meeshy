@@ -2,14 +2,19 @@
 
 import { memo } from 'react';
 import { motion } from 'framer-motion';
-import { Video, Link2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Phone, Video, Link2 } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { ConversationParticipantsDrawer } from '../conversation-participants-drawer';
 import { CreateLinkButton } from '../create-link-button';
 import { HeaderActions } from './HeaderActions';
@@ -28,7 +33,7 @@ interface HeaderToolbarProps {
   isMuted: boolean;
   isArchived: boolean;
   isLoadingPreferences: boolean;
-  onStartCall?: () => void;
+  onStartCall?: (type?: 'audio' | 'video') => void;
   onOpenGallery?: () => void;
   onOpenSettings: () => void;
   onParticipantRemoved: (userId: string) => void;
@@ -80,26 +85,38 @@ export const HeaderToolbar = memo(function HeaderToolbar({
   return (
     <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0 self-center">
       {conversation.type === 'direct' && onStartCall && canUseVideoCalls && (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  onClick={onStartCall}
-                  className="rounded-full h-10 w-10 p-0 hover:bg-gradient-to-br hover:from-blue-500/10 hover:to-indigo-500/10 transition-colors duration-200"
-                  aria-label={t('conversationHeader.startVideoCall') || 'Démarrer un appel vidéo'}
-                >
-                  <Video className="h-5 w-5" aria-hidden="true" />
-                </Button>
-              </motion.div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>{t('conversationHeader.startVideoCall') || 'Démarrer un appel vidéo'}</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <DropdownMenu>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <motion.button
+                    type="button"
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="inline-flex items-center justify-center rounded-full h-10 w-10 p-0 hover:bg-gradient-to-br hover:from-blue-500/10 hover:to-indigo-500/10 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    aria-label={t('conversationHeader.startCall') || 'Appeler'}
+                  >
+                    <Phone className="h-5 w-5" aria-hidden="true" />
+                  </motion.button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>{t('conversationHeader.startCall') || 'Appeler'}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => onStartCall('audio')}>
+              <Phone className="h-4 w-4 mr-2" aria-hidden="true" />
+              {t('conversationHeader.startAudioCall') || 'Appel audio'}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onStartCall('video')}>
+              <Video className="h-4 w-4 mr-2" aria-hidden="true" />
+              {t('conversationHeader.startVideoCall') || 'Appel vidéo'}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
 
       {showParticipantsDrawer && (

@@ -395,7 +395,12 @@ struct ProfileView: View {
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(theme.textMuted)
                         
-                        Text(user?.phoneNumber ?? "—")
+                        Text({
+                            if let phone = user?.phoneNumber, !phone.isEmpty {
+                                return "\(CountryPicker.flag(forPhoneNumber: phone)) \(phone)"
+                            }
+                            return "—"
+                        }())
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(user?.phoneNumber != nil ? theme.textPrimary : theme.textMuted)
                     }

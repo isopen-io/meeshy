@@ -7,6 +7,16 @@ import { Input } from '@/components/ui/input';
 import { Mail, Phone, Clock, MapPin, Edit2, Save, X } from 'lucide-react';
 import { apiService } from '@/services/api.service';
 import { toast } from 'sonner';
+import {
+  COUNTRY_CODES,
+  getDialCode,
+  getCountryName,
+  formatPhoneWithDialCode,
+  flagForCountry,
+  resolveCountry,
+  nationalNumber,
+  toE164,
+} from '@/constants/countries';
 
 interface UserContactInfoProps {
   user: unknown;
@@ -42,34 +52,19 @@ const TIMEZONES = [
   'Australia/Sydney'
 ];
 
-const COUNTRIES = [
-  { code: 'US', name: 'États-Unis', phoneCode: '+1' },
-  { code: 'CA', name: 'Canada', phoneCode: '+1' },
-  { code: 'FR', name: 'France', phoneCode: '+33' },
-  { code: 'GB', name: 'Royaume-Uni', phoneCode: '+44' },
-  { code: 'DE', name: 'Allemagne', phoneCode: '+49' },
-  { code: 'IT', name: 'Italie', phoneCode: '+39' },
-  { code: 'ES', name: 'Espagne', phoneCode: '+34' },
-  { code: 'BE', name: 'Belgique', phoneCode: '+32' },
-  { code: 'CH', name: 'Suisse', phoneCode: '+41' },
-  { code: 'PT', name: 'Portugal', phoneCode: '+351' },
-  { code: 'NL', name: 'Pays-Bas', phoneCode: '+31' },
-  { code: 'JP', name: 'Japon', phoneCode: '+81' },
-  { code: 'CN', name: 'Chine', phoneCode: '+86' },
-  { code: 'AU', name: 'Australie', phoneCode: '+61' }
-];
-
 export function UserContactInfoSection({
   user,
   userId,
   onUpdate
 }: UserContactInfoProps) {
+  const resolvedCountry = resolveCountry(user.phoneNumber, (user as unknown).phoneCountryCode);
+
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     email: user.email || '',
-    phoneNumber: user.phoneNumber || '',
-    phoneCountryCode: (user as unknown).phoneCountryCode || 'FR',
+    phoneNumber: nationalNumber(user.phoneNumber),
+    phoneCountryCode: resolvedCountry.code,
     timezone: (user as unknown).timezone || 'Europe/Paris'
   });
 
@@ -80,8 +75,8 @@ export function UserContactInfoSection({
   const handleCancel = () => {
     setFormData({
       email: user.email || '',
-      phoneNumber: user.phoneNumber || '',
-      phoneCountryCode: (user as unknown).phoneCountryCode || 'FR',
+      phoneNumber: nationalNumber(user.phoneNumber),
+      phoneCountryCode: resolveCountry(user.phoneNumber, (user as unknown).phoneCountryCode).code,
       timezone: (user as unknown).timezone || 'Europe/Paris'
     });
     setEditing(false);
@@ -90,9 +85,12 @@ export function UserContactInfoSection({
   const handleSave = async () => {
     try {
       setSaving(true);
+      const e164 = formData.phoneNumber
+        ? toE164(formData.phoneNumber, formData.phoneCountryCode) ?? formData.phoneNumber
+        : null;
       const response = await apiService.patch<AdminApiResponse<unknown>>(`/admin/users/${userId}`, {
         email: formData.email,
-        phoneNumber: formData.phoneNumber || null,
+        phoneNumber: e164,
         phoneCountryCode: formData.phoneCountryCode,
         timezone: formData.timezone
       });
@@ -107,14 +105,6 @@ export function UserContactInfoSection({
     } finally {
       setSaving(false);
     }
-  };
-
-  const getCountryName = (code: string) => {
-    return COUNTRIES.find(c => c.code === code)?.name || code;
-  };
-
-  const getPhoneCode = (code: string) => {
-    return COUNTRIES.find(c => c.code === code)?.phoneCode || '';
   };
 
   return (
@@ -180,9 +170,9 @@ export function UserContactInfoSection({
                 value={formData.phoneCountryCode}
                 onChange={(e) => handleChange('phoneCountryCode', e.target.value)}
               >
-                {COUNTRIES.map(country => (
+                {COUNTRY_CODES.map(country => (
                   <option key={country.code} value={country.code}>
-                    {country.name} ({country.phoneCode})
+                    {country.flag} {country.name} ({country.dial})
                   </option>
                 ))}
               </select>
@@ -190,7 +180,7 @@ export function UserContactInfoSection({
 
             <div className="space-y-2">
               <label className="text-sm font-medium dark:text-gray-200">
-                Téléphone {getPhoneCode(formData.phoneCountryCode)}
+                Téléphone {getDialCode(formData.phoneCountryCode)}
               </label>
               <Input
                 type="tel"
@@ -230,7 +220,8 @@ export function UserContactInfoSection({
                   Téléphone:
                 </span>
                 <span className="font-medium dark:text-gray-200">
-                  {getPhoneCode((user as unknown).phoneCountryCode || 'FR')} {user.phoneNumber}
+                  {flagForCountry(resolveCountry(user.phoneNumber, (user as unknown).phoneCountryCode).code)}{' '}
+                  {formatPhoneWithDialCode(user.phoneNumber, (user as unknown).phoneCountryCode)}
                 </span>
               </div>
             )}
@@ -240,7 +231,8 @@ export function UserContactInfoSection({
                 Pays:
               </span>
               <span className="font-medium dark:text-gray-200">
-                {getCountryName((user as unknown).phoneCountryCode || 'FR')}
+                {flagForCountry(resolveCountry(user.phoneNumber, (user as unknown).phoneCountryCode).code)}{' '}
+                {getCountryName(resolveCountry(user.phoneNumber, (user as unknown).phoneCountryCode).code)}
               </span>
             </div>
             {(user as unknown).timezone && (
