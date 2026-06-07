@@ -12,7 +12,10 @@ import {
   getDialCode,
   getCountryName,
   formatPhoneWithDialCode,
-  detectDefaultCountry,
+  flagForCountry,
+  resolveCountry,
+  nationalNumber,
+  toE164,
 } from '@/constants/countries';
 
 interface UserContactInfoProps {
@@ -54,12 +57,14 @@ export function UserContactInfoSection({
   userId,
   onUpdate
 }: UserContactInfoProps) {
+  const resolvedCountry = resolveCountry(user.phoneNumber, (user as unknown).phoneCountryCode);
+
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     email: user.email || '',
-    phoneNumber: user.phoneNumber || '',
-    phoneCountryCode: (user as unknown).phoneCountryCode || detectDefaultCountry().code,
+    phoneNumber: nationalNumber(user.phoneNumber),
+    phoneCountryCode: resolvedCountry.code,
     timezone: (user as unknown).timezone || 'Europe/Paris'
   });
 
@@ -70,8 +75,8 @@ export function UserContactInfoSection({
   const handleCancel = () => {
     setFormData({
       email: user.email || '',
-      phoneNumber: user.phoneNumber || '',
-      phoneCountryCode: (user as unknown).phoneCountryCode || detectDefaultCountry().code,
+      phoneNumber: nationalNumber(user.phoneNumber),
+      phoneCountryCode: resolveCountry(user.phoneNumber, (user as unknown).phoneCountryCode).code,
       timezone: (user as unknown).timezone || 'Europe/Paris'
     });
     setEditing(false);
@@ -80,9 +85,12 @@ export function UserContactInfoSection({
   const handleSave = async () => {
     try {
       setSaving(true);
+      const e164 = formData.phoneNumber
+        ? toE164(formData.phoneNumber, formData.phoneCountryCode) ?? formData.phoneNumber
+        : null;
       const response = await apiService.patch<AdminApiResponse<unknown>>(`/admin/users/${userId}`, {
         email: formData.email,
-        phoneNumber: formData.phoneNumber || null,
+        phoneNumber: e164,
         phoneCountryCode: formData.phoneCountryCode,
         timezone: formData.timezone
       });
@@ -212,6 +220,7 @@ export function UserContactInfoSection({
                   Téléphone:
                 </span>
                 <span className="font-medium dark:text-gray-200">
+                  {flagForCountry(resolveCountry(user.phoneNumber, (user as unknown).phoneCountryCode).code)}{' '}
                   {formatPhoneWithDialCode(user.phoneNumber, (user as unknown).phoneCountryCode)}
                 </span>
               </div>
@@ -222,7 +231,8 @@ export function UserContactInfoSection({
                 Pays:
               </span>
               <span className="font-medium dark:text-gray-200">
-                {getCountryName((user as unknown).phoneCountryCode || 'FR')}
+                {flagForCountry(resolveCountry(user.phoneNumber, (user as unknown).phoneCountryCode).code)}{' '}
+                {getCountryName(resolveCountry(user.phoneNumber, (user as unknown).phoneCountryCode).code)}
               </span>
             </div>
             {(user as unknown).timezone && (

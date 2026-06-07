@@ -88,16 +88,52 @@ public struct CountryPicker: View {
         "ZM": "+260", "ZW": "+263",
     ]
 
-    /// Drapeau emoji dérivé du code ISO (indicateurs régionaux Unicode).
+    /// Emoji globe affiché en repli quand aucun drapeau pays n'est disponible.
+    public static let globeFlag = "🌐"
+
+    /// Drapeau emoji dérivé du code ISO (indicateurs régionaux Unicode),
+    /// ou le globe 🌐 si le code n'est pas un couple de lettres valide.
     private static func flag(for iso: String) -> String {
+        let letters = iso.uppercased()
+        guard letters.count == 2, letters.allSatisfy({ $0.isLetter && $0.isASCII }) else {
+            return globeFlag
+        }
         let base: UInt32 = 127397 // 0x1F1E6 - "A"
         var result = ""
-        for scalar in iso.uppercased().unicodeScalars {
+        for scalar in letters.unicodeScalars {
             if let flagScalar = Unicode.Scalar(base + scalar.value) {
                 result.unicodeScalars.append(flagScalar)
             }
         }
-        return result
+        return result.isEmpty ? globeFlag : result
+    }
+
+    /// Drapeau d'un pays par code ISO, ou le globe 🌐 si inconnu.
+    public static func flag(forCountryCode iso: String?) -> String {
+        guard let iso, countries.contains(where: { $0.id == iso.uppercased() }) else {
+            return globeFlag
+        }
+        return flag(for: iso)
+    }
+
+    /// Déduit le pays d'un numéro international (E.164 ou préfixé `00`) par
+    /// correspondance du plus long indicatif. Indispensable pour afficher le
+    /// bon drapeau quel que soit le `phoneCountryCode` stocké.
+    public static func country(forPhoneNumber number: String?) -> CountryCode? {
+        guard let number, !number.isEmpty else { return nil }
+        let normalized = number.hasPrefix("00") ? "+" + number.dropFirst(2) : number
+        guard normalized.hasPrefix("+") else { return nil }
+        // `countries` est trié pays prioritaires d'abord ; on garde le plus long
+        // indicatif correspondant, en préférant le pays prioritaire en cas d'égalité
+        // (ex. +44 -> GB plutôt que GG/JE/IM ; +1 -> US plutôt que CA).
+        let matches = countries.filter { normalized.hasPrefix($0.dialCode) }
+        guard let longest = matches.map(\.dialCode.count).max() else { return nil }
+        return matches.first { $0.dialCode.count == longest }
+    }
+
+    /// Drapeau correspondant à un numéro de téléphone, ou le globe 🌐 en repli.
+    public static func flag(forPhoneNumber number: String?) -> String {
+        country(forPhoneNumber: number)?.flag ?? globeFlag
     }
 
     private static func buildCountries() -> [CountryCode] {

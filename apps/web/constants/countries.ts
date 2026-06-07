@@ -2,6 +2,7 @@ import {
   getCountries,
   getCountryCallingCode,
   parsePhoneNumber,
+  type CountryCode as LibCountryCode,
 } from 'libphonenumber-js';
 
 /**
@@ -32,12 +33,17 @@ const PRIORITY: readonly string[] = [
 
 const REGIONAL_INDICATOR_BASE = 127397; // 0x1F1E6 - 'A'.charCodeAt(0)
 
-const flagFor = (code: string): string =>
-  code
+/** Emoji globe affiché en repli quand aucun drapeau pays n'est disponible. */
+export const GLOBE_FLAG = '🌐';
+
+const flagFor = (code: string): string => {
+  if (!/^[A-Za-z]{2}$/.test(code)) return GLOBE_FLAG;
+  return code
     .toUpperCase()
     .replace(/./g, (char) =>
       String.fromCodePoint(REGIONAL_INDICATOR_BASE + char.charCodeAt(0))
     );
+};
 
 const regionNames: Intl.DisplayNames | null = (() => {
   try {
@@ -97,6 +103,75 @@ export const detectDefaultCountry = (): Country => {
     if (match) return match;
   }
   return DEFAULT_COUNTRY;
+};
+
+/** Drapeau d'un pays, ou le globe 🌐 si le code est inconnu/absent. */
+export const flagForCountry = (code?: string | null): string =>
+  findCountryByCode(code)?.flag ?? GLOBE_FLAG;
+
+/**
+ * Déduit le pays directement à partir d'un numéro international (E.164 ou
+ * préfixé `00`). C'est la source la plus fiable : un numéro +44... est
+ * britannique quel que soit le `phoneCountryCode` stocké.
+ */
+export const countryFromPhoneNumber = (phoneNumber?: string | null): Country | undefined => {
+  if (!phoneNumber) return undefined;
+  const trimmed = phoneNumber.trim();
+  if (!trimmed.startsWith('+') && !trimmed.startsWith('00')) return undefined;
+  try {
+    const normalized = trimmed.startsWith('00') ? `+${trimmed.slice(2)}` : trimmed;
+    const parsed = parsePhoneNumber(normalized);
+    return parsed?.country ? findCountryByCode(parsed.country) : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * Source de vérité « à quel pays appartient ce numéro ? » :
+ * 1. pays déduit du numéro lui-même (le plus fiable pour un E.164)
+ * 2. `phoneCountryCode` stocké
+ * 3. pays déduit de la locale (sinon France)
+ */
+export const resolveCountry = (
+  phoneNumber?: string | null,
+  phoneCountryCode?: string | null
+): Country =>
+  countryFromPhoneNumber(phoneNumber) ??
+  findCountryByCode(phoneCountryCode) ??
+  detectDefaultCountry();
+
+/** Partie nationale d'un numéro (sans indicatif), pour l'édition. */
+export const nationalNumber = (phoneNumber?: string | null): string => {
+  if (!phoneNumber) return '';
+  const trimmed = phoneNumber.trim();
+  if (!trimmed.startsWith('+') && !trimmed.startsWith('00')) return trimmed;
+  try {
+    const normalized = trimmed.startsWith('00') ? `+${trimmed.slice(2)}` : trimmed;
+    const parsed = parsePhoneNumber(normalized);
+    return parsed?.formatNational() ?? trimmed;
+  } catch {
+    return trimmed;
+  }
+};
+
+/**
+ * (Re)construit un E.164 à partir d'une saisie (nationale ou internationale)
+ * et d'un code pays. Le code pays fait foi pour une saisie nationale, ce qui
+ * permet de corriger « pour de bon » un numéro mal rattaché.
+ */
+export const toE164 = (input?: string | null, countryCode?: string | null): string | null => {
+  if (!input) return null;
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = countryCode
+      ? parsePhoneNumber(trimmed, countryCode.toUpperCase() as LibCountryCode)
+      : parsePhoneNumber(trimmed);
+    return parsed?.isValid() ? parsed.format('E.164') : null;
+  } catch {
+    return null;
+  }
 };
 
 /**
