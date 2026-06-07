@@ -196,14 +196,20 @@ export class MeeshySocketIOManager {
       connectTimeout: 45000, // 45s - Timeout pour la connexion initiale
       // Autoriser reconnexion rapide
       allowEIO3: true,
+      // Bandwidth sprint Phase A: lower the deflate threshold from 1024→256 so
+      // frequent mid-size events (reaction:added, read-status:updated,
+      // per-user presence, typing payloads with display names) are compressed
+      // too. Their JSON keys are highly repetitive → strong deflate ratio.
+      // Context takeover stays disabled to cap per-connection memory at the
+      // 100k+ concurrent socket scale.
       perMessageDeflate: {
-        threshold: 1024,
+        threshold: 256,
         zlibDeflateOptions: { level: 6, memLevel: 7 },
         clientNoContextTakeover: true,
         serverNoContextTakeover: true,
       },
       httpCompression: {
-        threshold: 1024,
+        threshold: 256,
       },
     });
 

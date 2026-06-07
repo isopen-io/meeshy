@@ -27,6 +27,10 @@ export async function registerDownloadRoutes(
   fastify.get(
     '/attachments/:attachmentId',
     {
+      // Never compress: media is already compressed (mime-db non-compressible)
+      // and text attachments are served via Range (206) where re-compression
+      // would corrupt Content-Range/Content-Length.
+      compress: false,
       schema: {
         description: 'Stream the original file by attachment ID. Returns the file with appropriate content-type headers for inline display. Supports cross-origin requests with CORS headers. Files are cached for 1 year (immutable).',
         tags: ['attachments'],
@@ -131,6 +135,7 @@ export async function registerDownloadRoutes(
   fastify.get(
     '/attachments/:attachmentId/thumbnail',
     {
+      compress: false, // already-compressed JPEG thumbnail
       schema: {
         description: 'Stream the thumbnail image for an attachment. Only available for image attachments. Thumbnails are JPEG format, optimized for fast loading in lists and previews. Supports CORS and aggressive caching.',
         tags: ['attachments'],
@@ -208,6 +213,8 @@ export async function registerDownloadRoutes(
   fastify.get(
     '/attachments/file/*',
     {
+      // Never compress: binary/media stream with Range (206) support.
+      compress: false,
       schema: {
         description: 'Stream a file by its file path. Supports Range requests for audio/video seeking. Determines MIME type from file extension. Allows iframe embedding for PDFs and other documents. CORS-enabled for cross-origin access.',
         tags: ['attachments'],

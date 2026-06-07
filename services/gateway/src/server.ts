@@ -12,6 +12,8 @@
 import './env';
 
 import fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import compress from '@fastify/compress';
+import { constants as zlibConstants } from 'zlib';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
@@ -404,6 +406,25 @@ class MeeshyServer {
 
     // Register sensible plugin for httpErrors
     await this.server.register(sensible);
+
+    // HTTP response compression (Brotli > gzip > deflate).
+    // Bandwidth sprint Phase A: all JSON/text API responses are compressed
+    // transparently. Already-compressed media (jpeg/png/webp/mp3/mp4/...) is
+    // skipped automatically because mime-db marks those content-types as
+    // non-compressible, so range requests on attachment downloads are untouched.
+    await this.server.register(compress, {
+      global: true,
+      threshold: 1024, // skip tiny payloads where header overhead dominates
+      encodings: ['br', 'gzip', 'deflate'],
+      brotliOptions: {
+        params: {
+          // Quality 5 is the sweet spot for dynamic JSON: ~gzip-9 ratio at a
+          // fraction of brotli-11 CPU cost.
+          [zlibConstants.BROTLI_PARAM_QUALITY]: 5,
+        },
+      },
+      zlibOptions: { level: 6 },
+    });
 
     // Register multipart plugin for file uploads
     await this.server.register(multipart, {
