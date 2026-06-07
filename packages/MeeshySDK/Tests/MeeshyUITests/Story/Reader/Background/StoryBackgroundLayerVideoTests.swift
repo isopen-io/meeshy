@@ -38,12 +38,17 @@ final class StoryBackgroundLayerVideoTests: XCTestCase {
         XCTAssertEqual(avLayer?.player?.rate, 0)
     }
 
-    func test_resolveVideoGravity_landscapeVideo_returnsResizeAspect() {
+    /// With no explicit override the background fills the canvas regardless of
+    /// the video's orientation. The orientation-based auto-pick was removed on
+    /// 2026-05-29 (user feedback): a landscape background flipped to letterbox
+    /// once its bitmap loaded async, hiding the background behind its own bars.
+    /// Fit/fill is now driven exclusively by the double-tap override.
+    func test_resolveVideoGravity_landscapeVideo_noOverride_returnsResizeAspectFill() {
         let canvas = CGSize(width: 1080, height: 1920)
         let landscape = CGSize(width: 1920, height: 1080)
         let gravity = StoryBackgroundLayer.resolveVideoGravity(
             naturalSize: landscape, canvasSize: canvas, override: nil)
-        XCTAssertEqual(gravity, .resizeAspect)
+        XCTAssertEqual(gravity, .resizeAspectFill)
     }
 
     func test_resolveVideoGravity_portraitVideo_returnsResizeAspectFill() {

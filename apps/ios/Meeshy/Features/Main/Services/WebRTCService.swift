@@ -156,6 +156,21 @@ final class WebRTCService {
         client.toggleVideo(enabled)
     }
 
+    var hasLocalVideoTrack: Bool { client.hasLocalVideoTrack }
+
+    /// §5.4 — mid-call audio→video upgrade (FaceTime-style). Builds the camera
+    /// track, attaches it to the reserved video transceiver and flips to
+    /// sendRecv. Returns true when a renegotiation (createOffer) is required.
+    func upgradeToVideo() async throws -> Bool {
+        try await client.enableLocalVideo()
+    }
+
+    /// §5.4 — mid-call video→audio downgrade. Returns true when a renegotiation
+    /// is required.
+    func downgradeFromVideo() async -> Bool {
+        await client.disableLocalVideo()
+    }
+
     func switchCamera() {
         Task {
             do {

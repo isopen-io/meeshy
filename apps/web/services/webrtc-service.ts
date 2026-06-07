@@ -39,9 +39,37 @@ export interface WebRTCServiceConfig {
   onIceConnectionStateChange?: (state: RTCIceConnectionState) => void;
   onConnectionQualityChange?: (quality: ConnectionQualityLevel) => void;
   onError?: (error: Error) => void;
+  /**
+   * Emitted whenever the service produces a local SDP that must be relayed to
+   * the remote peer OUTSIDE the initial explicit offer/answer flow — i.e. for
+   * renegotiation (audio↔video switch) and ICE restart. The initial offer and
+   * answer are still returned by createOffer()/createAnswer() for the caller to
+   * send. Without this, ICE restart and mid-call media changes never reach the
+   * peer (the old restartIce() created an offer but dropped it on the floor).
+   */
+  onLocalDescription?: (description: RTCSessionDescriptionInit) => void;
 }
 
+/**
+ * Adaptive video encoding ladder. Driven by the quality control loop: under
+ * sustained loss/RTT we drop bitrate/resolution (compression that preserves
+ * perceived quality by shedding resolution before framerate — see
+ * degradationPreference 'maintain-framerate').
+ */
+export type VideoQualityTier = 'high' | 'medium' | 'low' | 'audio-only';
+
+const VIDEO_ENCODING_LADDER: Record<
+  Exclude<VideoQualityTier, 'audio-only'>,
+  { maxBitrate: number; maxFramerate: number; scaleResolutionDownBy: number }
+> = {
+  high: { maxBitrate: 1_500_000, maxFramerate: 30, scaleResolutionDownBy: 1 },
+  medium: { maxBitrate: 600_000, maxFramerate: 25, scaleResolutionDownBy: 2 },
+  low: { maxBitrate: 250_000, maxFramerate: 15, scaleResolutionDownBy: 4 },
+};
+
 const QUALITY_MONITOR_INTERVAL_MS = 3_000;
+// Grace window before an ICE 'disconnected' escalates to a restart.
+const ICE_DISCONNECT_GRACE_MS = 3_000;
 
 export class WebRTCService {
   private peerConnection: RTCPeerConnection | null = null;
@@ -50,6 +78,28 @@ export class WebRTCService {
   private participantId: string | null = null;
   private qualityMonitorInterval: ReturnType<typeof setInterval> | null = null;
   private serverIceServers: RTCIceServer[] | null = null;
+
+  // Perfect-negotiation state (W3C pattern). The polite peer yields on glare;
+  // the impolite peer wins. Role is assigned deterministically from the two
+  // user ids so both peers compute the same answer without coordination.
+  private polite = false;
+  private makingOffer = false;
+  private isSettingRemoteAnswerPending = false;
+  private ignoreOffer = false;
+  // Auto-renegotiation (onnegotiationneeded → negotiate) is suppressed during
+  // the initial explicit offer/answer to avoid a duplicate first offer. It is
+  // armed once the connection is established so mid-call media changes (A/V
+  // switch) renegotiate automatically.
+  private autoNegotiate = false;
+  // Stable handle to the (always pre-allocated) video transceiver so an
+  // audio-only call can be upgraded to video by flipping direction + attaching
+  // a track — never by addTransceiver mid-call (which desyncs m-line order).
+  private videoTransceiver: RTCRtpTransceiver | null = null;
+  private currentVideoTier: VideoQualityTier = 'high';
+  // Grace timer for a transient ICE 'disconnected' before escalating to an ICE
+  // restart. A blip often self-heals within a couple of seconds; restarting
+  // immediately causes needless churn.
+  private disconnectGraceTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(config: WebRTCServiceConfig = {}) {
     this.config = {
@@ -60,6 +110,19 @@ export class WebRTCService {
 
   setIceServers(iceServers: RTCIceServer[]): void {
     this.serverIceServers = iceServers;
+  }
+
+  /**
+   * Assign the perfect-negotiation role deterministically. Both peers call this
+   * with (localUserId, remoteUserId); the lexicographically smaller id is the
+   * polite peer. Identical result on both sides, no signaling required.
+   */
+  setNegotiationRole(localUserId: string, remoteUserId: string): void {
+    this.polite = localUserId < remoteUserId;
+  }
+
+  isPolite(): boolean {
+    return this.polite;
   }
 
   /**
@@ -278,29 +341,54 @@ export class WebRTCService {
         if (state) {
           this.config.onIceConnectionStateChange?.(state);
 
-          // Handle ICE failures - attempt restart
+          // Unstable-connection playbook (SOTA):
+          //  - 'disconnected' is often a transient blip → wait a short grace
+          //    window; only restart if it has not self-healed.
+          //  - 'failed' is terminal for the current ICE transport → restart now.
+          //  - any healthy state cancels a pending grace timer.
           if (state === 'failed') {
-            logger.error('[WebRTCService] ICE connection failed, attempting restart...', {
+            this.clearDisconnectGraceTimer();
+            logger.error('[WebRTCService] ICE connection failed, restarting ICE...', {
               participantId,
               state,
             });
-
-            // Attempt ICE restart
             this.restartIce().catch((error) => {
               logger.error('[WebRTCService] ICE restart attempt failed', { error });
             });
           } else if (state === 'disconnected') {
-            logger.warn('[WebRTCService] ICE connection disconnected', {
+            logger.warn('[WebRTCService] ICE disconnected, starting grace timer', {
               participantId,
               state,
             });
-            // Note: disconnected state can recover on its own, so we don't restart immediately
+            this.clearDisconnectGraceTimer();
+            this.disconnectGraceTimer = setTimeout(() => {
+              this.disconnectGraceTimer = null;
+              const current = this.peerConnection?.iceConnectionState;
+              if (current === 'disconnected' || current === 'failed') {
+                logger.warn('[WebRTCService] ICE still down after grace, restarting ICE', {
+                  participantId,
+                  current,
+                });
+                this.restartIce().catch((error) => {
+                  logger.error('[WebRTCService] ICE restart after grace failed', { error });
+                });
+              }
+            }, ICE_DISCONNECT_GRACE_MS);
+          } else if (state === 'connected' || state === 'completed') {
+            this.clearDisconnectGraceTimer();
           }
         }
       };
 
       this.peerConnection.onnegotiationneeded = () => {
-        logger.debug('[WebRTCService] Negotiation needed', { participantId });
+        logger.debug('[WebRTCService] Negotiation needed', { participantId, autoNegotiate: this.autoNegotiate });
+        // Only auto-renegotiate once the initial offer/answer is done. The
+        // initial negotiation is driven explicitly (createOffer/createAnswer);
+        // afterwards a direction change (A/V switch) lands here and must
+        // produce a fresh offer through the perfect-negotiation path.
+        if (this.autoNegotiate) {
+          void this.negotiate();
+        }
       };
 
       logger.info('[WebRTCService] Peer connection created successfully', { participantId });
@@ -431,16 +519,21 @@ export class WebRTCService {
 
       logger.debug('[WebRTCService] Creating offer', { participantId: this.participantId });
 
-      const offer = await this.peerConnection.createOffer({
-        offerToReceiveAudio: true,
-        offerToReceiveVideo: true,
-      });
+      // No legacy offerToReceiveAudio/Video constraints: the pre-allocated
+      // transceivers already declare send/recv intent. Mixing the legacy
+      // Plan-B constraints with Unified-Plan transceivers is a known cause of
+      // one-way media (duplicate/extra m-sections).
+      const offer = await this.peerConnection.createOffer();
 
       if (offer.sdp) {
         offer.sdp = this.mungeSdp(offer.sdp);
       }
 
       await this.peerConnection.setLocalDescription(offer);
+
+      // Initial offer is on the wire; arm auto-renegotiation for later media
+      // changes (A/V switch fires onnegotiationneeded).
+      this.autoNegotiate = true;
 
       logger.info('[WebRTCService] Offer created and set as local description', {
         participantId: this.participantId,
@@ -478,6 +571,10 @@ export class WebRTCService {
 
       // Set local description (answer)
       await this.peerConnection.setLocalDescription(answer);
+
+      // Initial answer is on the wire; arm auto-renegotiation for later media
+      // changes initiated locally (A/V switch).
+      this.autoNegotiate = true;
 
       logger.info('[WebRTCService] Answer created and set as local description', {
         participantId: this.participantId,
@@ -609,43 +706,273 @@ export class WebRTCService {
   }
 
   /**
-   * Restart ICE connection (for recovering from failures)
+   * Restart ICE to recover from a dropped/blocked transport. Unlike the old
+   * implementation (which created an offer and silently discarded it), this
+   * drives a real renegotiation whose offer is emitted to the peer via
+   * onLocalDescription — keeping all streams, senders and transceivers alive.
    */
   async restartIce(): Promise<void> {
-    try {
-      if (!this.peerConnection) {
-        throw new Error('Peer connection not initialized');
-      }
+    await this.negotiate({ iceRestart: true });
+  }
 
-      logger.info('[WebRTCService] Attempting ICE restart', {
+  /**
+   * Single offer path for every renegotiation (A/V switch, ICE restart). Guards
+   * against re-entrancy (makingOffer) and emits the offer through
+   * onLocalDescription so the caller's signaling relays it. The remote applies
+   * it via handleRenegotiationOffer (glare-safe).
+   */
+  async negotiate(options: { iceRestart?: boolean } = {}): Promise<void> {
+    if (!this.peerConnection) {
+      throw new Error('Peer connection not initialized');
+    }
+    if (this.makingOffer) {
+      logger.debug('[WebRTCService] negotiate() skipped: offer already in flight', {
         participantId: this.participantId,
       });
-
-      // Create new offer with iceRestart option
-      const offer = await this.peerConnection.createOffer({ iceRestart: true });
-
+      return;
+    }
+    try {
+      this.makingOffer = true;
+      const offer = await this.peerConnection.createOffer(
+        options.iceRestart ? { iceRestart: true } : undefined
+      );
       if (offer.sdp) {
         offer.sdp = this.mungeSdp(offer.sdp);
       }
-
-      // Set as local description
       await this.peerConnection.setLocalDescription(offer);
-
-      logger.info('[WebRTCService] ICE restart offer created', {
+      logger.info('[WebRTCService] Renegotiation offer created', {
         participantId: this.participantId,
+        iceRestart: Boolean(options.iceRestart),
       });
-
-      // The offer needs to be sent to the remote peer via signaling
-      // This will be handled by the onIceCandidate callback
-      if (this.config.onIceCandidate && offer.sdp) {
-        // Note: In a real implementation, you'd send this via your signaling mechanism
-        logger.debug('[WebRTCService]', 'ICE restart offer ready to be sent');
+      const local = this.peerConnection.localDescription;
+      if (local) {
+        this.config.onLocalDescription?.({ type: local.type, sdp: local.sdp });
       }
     } catch (error) {
-      logger.error('[WebRTCService] ICE restart failed', { error });
-      const err = error instanceof Error ? error : new Error('ICE restart failed');
+      logger.error('[WebRTCService] negotiate() failed', { error });
+      const err = error instanceof Error ? error : new Error('Renegotiation failed');
       this.config.onError?.(err);
       throw err;
+    } finally {
+      this.makingOffer = false;
+    }
+  }
+
+  /**
+   * Apply a renegotiation OFFER that arrives on an already-established
+   * connection (A/V switch or ICE restart from the peer). Implements the W3C
+   * perfect-negotiation collision guard: the impolite peer ignores a colliding
+   * offer; the polite peer rolls back and accepts it. On success it produces an
+   * answer and emits it via onLocalDescription.
+   */
+  async handleRenegotiationOffer(offer: RTCSessionDescriptionInit): Promise<void> {
+    if (!this.peerConnection) {
+      throw new Error('Peer connection not initialized');
+    }
+    const pc = this.peerConnection;
+    const readyForOffer =
+      !this.makingOffer &&
+      (pc.signalingState === 'stable' || this.isSettingRemoteAnswerPending);
+    const offerCollision = !readyForOffer;
+
+    this.ignoreOffer = !this.polite && offerCollision;
+    if (this.ignoreOffer) {
+      logger.warn('[WebRTCService] Ignoring colliding offer (impolite peer)', {
+        participantId: this.participantId,
+        signalingState: pc.signalingState,
+      });
+      return;
+    }
+
+    try {
+      if (offerCollision) {
+        // Polite peer yields: roll our local offer back to stable before
+        // applying the remote offer.
+        await pc.setLocalDescription({ type: 'rollback' } as RTCSessionDescriptionInit);
+      }
+      await pc.setRemoteDescription(new RTCSessionDescription(offer));
+      const answer = await pc.createAnswer();
+      if (answer.sdp) {
+        answer.sdp = this.mungeSdp(answer.sdp);
+      }
+      await pc.setLocalDescription(answer);
+      const local = pc.localDescription;
+      if (local) {
+        this.config.onLocalDescription?.({ type: local.type, sdp: local.sdp });
+      }
+      logger.info('[WebRTCService] Renegotiation answer sent', {
+        participantId: this.participantId,
+      });
+    } catch (error) {
+      logger.error('[WebRTCService] handleRenegotiationOffer failed', { error });
+      const err = error instanceof Error ? error : new Error('Renegotiation answer failed');
+      this.config.onError?.(err);
+      throw err;
+    }
+  }
+
+  /**
+   * Set the remote ANSWER to one of our renegotiation offers. Mirrors
+   * setRemoteDescription but maintains the perfect-negotiation pending flag.
+   */
+  async setRemoteAnswer(answer: RTCSessionDescriptionInit): Promise<void> {
+    if (!this.peerConnection) {
+      throw new Error('Peer connection not initialized');
+    }
+    try {
+      this.isSettingRemoteAnswerPending = true;
+      await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+    } finally {
+      this.isSettingRemoteAnswerPending = false;
+    }
+  }
+
+  /**
+   * Attach local media using PRE-ALLOCATED transceivers. Audio is always
+   * sendrecv. Video is ALWAYS reserved as an m-line — sendrecv (with the camera
+   * track) when the call starts as video, recvonly (no track) for an audio-only
+   * call — so it can later be upgraded by flipping direction + replaceTrack
+   * without an addTransceiver (which would reorder m-lines).
+   */
+  addLocalMedia(stream: MediaStream, options: { sendVideo: boolean }): void {
+    if (!this.peerConnection) {
+      throw new Error('Peer connection not initialized');
+    }
+    this.localStream = stream;
+    const audioTrack = stream.getAudioTracks()[0] ?? null;
+    const videoTrack = stream.getVideoTracks()[0] ?? null;
+
+    this.peerConnection.addTransceiver(audioTrack ?? 'audio', {
+      direction: 'sendrecv',
+      streams: [stream],
+    });
+
+    if (options.sendVideo && videoTrack) {
+      // Hint the encoder toward camera content (drop resolution before
+      // framerate under constraint).
+      try { videoTrack.contentHint = 'motion'; } catch { /* not supported */ }
+      this.videoTransceiver = this.peerConnection.addTransceiver(videoTrack, {
+        direction: 'sendrecv',
+        streams: [stream],
+      });
+    } else {
+      // Reserve the video m-line without lighting the camera/LED.
+      this.videoTransceiver = this.peerConnection.addTransceiver('video', {
+        direction: 'recvonly',
+      });
+    }
+  }
+
+  /**
+   * Upgrade an audio call to video (or re-enable the camera): attach the track
+   * to the reserved video transceiver and flip it to sendrecv. The direction
+   * change fires onnegotiationneeded → negotiate(), so the peer receives a
+   * fresh offer and starts rendering our tile. FaceTime-style asymmetric — we
+   * control our own outbound video only.
+   */
+  async enableVideoSend(track: MediaStreamTrack): Promise<void> {
+    if (!this.videoTransceiver) {
+      throw new Error('Video transceiver not initialized');
+    }
+    try { track.contentHint = 'motion'; } catch { /* not supported */ }
+    if (this.localStream) {
+      this.localStream.addTrack(track);
+    }
+    await this.videoTransceiver.sender.replaceTrack(track);
+    if (this.videoTransceiver.direction !== 'sendrecv') {
+      this.videoTransceiver.direction = 'sendrecv';
+    }
+    // direction change schedules onnegotiationneeded; ensure renegotiation even
+    // if it was already stable (replaceTrack alone does not renegotiate).
+    if (this.autoNegotiate) {
+      await this.negotiate();
+    }
+    await this.applyVideoEncoding(this.currentVideoTier === 'audio-only' ? 'high' : this.currentVideoTier);
+  }
+
+  /**
+   * Downgrade video→audio (turn my camera off): stop sending video, release the
+   * track, and flip the transceiver to recvonly so we still receive the peer's
+   * video. Renegotiates so the peer drops our tile.
+   */
+  async disableVideoSend(): Promise<void> {
+    if (!this.videoTransceiver) return;
+    const sender = this.videoTransceiver.sender;
+    const track = sender.track;
+    await sender.replaceTrack(null);
+    if (track) {
+      track.stop();
+      this.localStream?.removeTrack(track);
+    }
+    if (this.videoTransceiver.direction !== 'recvonly') {
+      this.videoTransceiver.direction = 'recvonly';
+    }
+    if (this.autoNegotiate) {
+      await this.negotiate();
+    }
+  }
+
+  /**
+   * Adaptive bitrate / compression. Maps a quality tier to encoder parameters
+   * via setParameters (no renegotiation) and pins degradationPreference to
+   * 'maintain-framerate' so motion stays smooth (resolution is shed first).
+   * 'audio-only' stops outbound video entirely as a last-resort survival mode.
+   */
+  async applyVideoEncoding(tier: VideoQualityTier): Promise<void> {
+    this.currentVideoTier = tier;
+    const sender = this.videoTransceiver?.sender
+      ?? this.peerConnection?.getSenders().find((s) => s.track?.kind === 'video')
+      ?? null;
+    if (!sender || typeof sender.getParameters !== 'function') return;
+
+    if (tier === 'audio-only') {
+      await this.disableVideoSend().catch(() => { /* best effort */ });
+      return;
+    }
+
+    const params = sender.getParameters();
+    if (!params.encodings || params.encodings.length === 0) {
+      params.encodings = [{}];
+    }
+    const ladder = VIDEO_ENCODING_LADDER[tier];
+    params.encodings[0].maxBitrate = ladder.maxBitrate;
+    params.encodings[0].maxFramerate = ladder.maxFramerate;
+    params.encodings[0].scaleResolutionDownBy = ladder.scaleResolutionDownBy;
+    // Cast: degradationPreference is valid per spec but missing from some lib.dom versions.
+    (params as RTCRtpSendParameters & { degradationPreference?: string }).degradationPreference =
+      'maintain-framerate';
+    try {
+      await sender.setParameters(params);
+      logger.debug('[WebRTCService] Applied video encoding tier', {
+        participantId: this.participantId,
+        tier,
+        ...ladder,
+      });
+    } catch (error) {
+      logger.warn('[WebRTCService] setParameters failed', { error });
+    }
+  }
+
+  /**
+   * Bound the receive jitter buffers: keep audio near-zero latency, allow a
+   * little video buffering to smooth jitter. Prevents latency from ballooning
+   * under load (never saturate). Best-effort: not all browsers expose the knob.
+   */
+  setJitterBufferTargets(): void {
+    if (!this.peerConnection) return;
+    for (const receiver of this.peerConnection.getReceivers()) {
+      const target = receiver.track?.kind === 'video' ? 200 : 0;
+      try {
+        (receiver as RTCRtpReceiver & { jitterBufferTarget?: number | null }).jitterBufferTarget =
+          target;
+      } catch { /* unsupported — NetEq defaults apply */ }
+    }
+  }
+
+  private clearDisconnectGraceTimer(): void {
+    if (this.disconnectGraceTimer) {
+      clearTimeout(this.disconnectGraceTimer);
+      this.disconnectGraceTimer = null;
     }
   }
 
@@ -775,6 +1102,7 @@ export class WebRTCService {
 
     // Stop quality monitor
     this.stopQualityMonitor();
+    this.clearDisconnectGraceTimer();
 
     // Stop all local tracks
     if (this.localStream) {
@@ -794,6 +1122,11 @@ export class WebRTCService {
     }
 
     this.participantId = null;
+    this.videoTransceiver = null;
+    this.autoNegotiate = false;
+    this.makingOffer = false;
+    this.isSettingRemoteAnswerPending = false;
+    this.ignoreOffer = false;
 
     logger.info('[WebRTCService]', 'Connection closed and cleaned up');
   }

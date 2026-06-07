@@ -9,7 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
-import { WebRTCService } from '@/services/webrtc-service';
+import { WebRTCService, type VideoQualityTier } from '@/services/webrtc-service';
 import { useCallStore } from '@/stores/call-store';
 import { logger } from '@/utils/logger';
 import { toast } from 'sonner';
@@ -119,6 +119,22 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
             }
           },
 
+          // Renegotiation / ICE-restart SDP (A/V switch, recovery). Relayed via
+          // the same call:signal channel as the initial offer/answer.
+          onLocalDescription: (description) => {
+            const socket = meeshySocketIOService.getSocket();
+            if (!socket || !userId || userId === '') {
+              logger.error('[useWebRTCP2P]', 'Cannot relay renegotiation SDP: socket/userId missing', { participantId });
+              return;
+            }
+            const signal: WebRTCSignal =
+              description.type === 'answer'
+                ? { type: 'answer', from: userId, to: participantId, sdp: description.sdp ?? '' }
+                : { type: 'offer', from: userId, to: participantId, sdp: description.sdp ?? '' };
+            socket.emit(CLIENT_EVENTS.CALL_SIGNAL, { callId, signal } as CallSignalEvent, () => {});
+            logger.info('[useWebRTCP2P]', 'Renegotiation SDP relayed', { participantId, type: description.type });
+          },
+
           onConnectionStateChange: (state) => {
             logger.debug('[useWebRTCP2P]', 'Connection state changed', {
               participantId,
@@ -133,6 +149,8 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
             } else if (state === 'connected') {
               setConnecting(false);
               toast.success('Connected!');
+              // Bound the receive jitter buffers now that media flows.
+              webrtcServicesRef.current.get(participantId)?.setJitterBufferTargets();
             }
           },
 
@@ -169,6 +187,11 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
             callId,
             iceServersCount: iceServers.length,
           });
+        }
+
+        // Deterministic polite/impolite role for glare-free renegotiation.
+        if (userId && userId !== '') {
+          service.setNegotiationRole(userId, participantId);
         }
 
         webrtcServicesRef.current.set(participantId, service);
@@ -265,9 +288,11 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         const peerConnection = service.createPeerConnection(targetUserId);
         addPeerConnection(targetUserId, peerConnection);
 
-        // Add local stream tracks
-        stream.getTracks().forEach((track) => {
-          service.addTrack(track, stream);
+        // Attach local media through pre-allocated transceivers. The video
+        // m-line is always reserved (recvonly when the camera is off) so the
+        // call can be upgraded audio→video later without an addTransceiver.
+        service.addLocalMedia(stream, {
+          sendVideo: stream.getVideoTracks().some((t) => t.enabled),
         });
 
         // Create offer
@@ -334,9 +359,11 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         const peerConnection = service.createPeerConnection(fromUserId);
         addPeerConnection(fromUserId, peerConnection);
 
-        // Add local stream tracks
-        stream.getTracks().forEach((track) => {
-          service.addTrack(track, stream);
+        // Attach local media through pre-allocated transceivers. The video
+        // m-line is always reserved (recvonly when the camera is off) so the
+        // call can be upgraded audio→video later without an addTransceiver.
+        service.addLocalMedia(stream, {
+          sendVideo: stream.getVideoTracks().some((t) => t.enabled),
         });
 
         // Create answer (this applies the remote description / offer)
@@ -451,6 +478,55 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
   );
 
   /**
+   * Turn the local camera ON mid-call (audio→video upgrade, FaceTime-style).
+   * Acquires a single camera track and attaches it to every peer (cloning for
+   * additional peers), flipping each reserved video transceiver to sendrecv
+   * and renegotiating. Works while ringing or connected.
+   */
+  const enableVideo = useCallback(async (): Promise<void> => {
+    const services = Array.from(webrtcServicesRef.current.values());
+    if (services.length === 0) return;
+    const cam = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: 'user',
+        width: { ideal: 1280, max: 1280 },
+        height: { ideal: 720, max: 720 },
+        frameRate: { ideal: 30, max: 30 },
+      },
+    });
+    const baseTrack = cam.getVideoTracks()[0];
+    if (!baseTrack) return;
+    await Promise.all(
+      services.map((service, index) =>
+        service.enableVideoSend(index === 0 ? baseTrack : baseTrack.clone())
+      )
+    );
+    logger.info('[useWebRTCP2P]', 'Local video enabled (upgrade)', { callId });
+  }, [callId]);
+
+  /**
+   * Turn the local camera OFF mid-call (video→audio downgrade). Stops outbound
+   * video on every peer and flips the transceiver to recvonly so we keep
+   * receiving theirs.
+   */
+  const disableVideo = useCallback(async (): Promise<void> => {
+    await Promise.all(
+      Array.from(webrtcServicesRef.current.values()).map((service) => service.disableVideoSend())
+    );
+    logger.info('[useWebRTCP2P]', 'Local video disabled (downgrade)', { callId });
+  }, [callId]);
+
+  /**
+   * Apply an adaptive video quality tier to every peer (compression / survival
+   * under congestion). 'audio-only' drops outbound video entirely.
+   */
+  const applyQualityTier = useCallback(async (tier: VideoQualityTier): Promise<void> => {
+    await Promise.all(
+      Array.from(webrtcServicesRef.current.values()).map((service) => service.applyVideoEncoding(tier))
+    );
+  }, []);
+
+  /**
    * Cleanup on unmount or call end
    */
   const cleanup = useCallback(() => {
@@ -525,15 +601,28 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
         callId,
       });
 
+      const existingService = webrtcServicesRef.current.get(signal.from);
+      const isEstablished = remoteDescriptionSetRef.current.has(signal.from);
+
       switch (signal.type) {
         case 'offer':
-          // Convert flat signal to RTCSessionDescriptionInit
-          handleOffer({ type: 'offer', sdp: signal.sdp }, signal.from);
+          // A second offer on an established connection is a renegotiation
+          // (A/V switch or ICE restart) — apply it in place (glare-safe)
+          // instead of tearing down and rebuilding the peer connection.
+          if (existingService && isEstablished) {
+            void existingService.handleRenegotiationOffer({ type: 'offer', sdp: signal.sdp });
+          } else {
+            handleOffer({ type: 'offer', sdp: signal.sdp }, signal.from);
+          }
           break;
 
         case 'answer':
-          // Convert flat signal to RTCSessionDescriptionInit
-          handleAnswer({ type: 'answer', sdp: signal.sdp }, signal.from);
+          // Answer to one of our renegotiation offers vs. the initial answer.
+          if (existingService && isEstablished) {
+            void existingService.setRemoteAnswer({ type: 'answer', sdp: signal.sdp });
+          } else {
+            handleAnswer({ type: 'answer', sdp: signal.sdp }, signal.from);
+          }
           break;
 
         case 'ice-candidate':
@@ -563,6 +652,9 @@ export function useWebRTCP2P({ callId, userId, onError }: UseWebRTCP2POptions) {
     initializeLocalStream,
     ensureLocalStream,
     createOffer,
+    enableVideo,
+    disableVideo,
+    applyQualityTier,
     cleanup,
   };
 }

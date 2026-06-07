@@ -30,24 +30,40 @@ jest.mock('@/services/meeshy-socketio.service', () => ({
 // Mock WebRTC Service
 const mockCreatePeerConnection = jest.fn();
 const mockAddTrack = jest.fn();
+const mockAddLocalMedia = jest.fn();
 const mockCreateOffer = jest.fn();
 const mockCreateAnswer = jest.fn();
 const mockSetRemoteDescription = jest.fn();
+const mockSetRemoteAnswer = jest.fn();
+const mockHandleRenegotiationOffer = jest.fn();
 const mockAddIceCandidate = jest.fn();
 const mockGetLocalStream = jest.fn();
 const mockClose = jest.fn();
 const mockSetIceServers = jest.fn();
+const mockSetNegotiationRole = jest.fn();
+const mockEnableVideoSend = jest.fn();
+const mockDisableVideoSend = jest.fn();
+const mockApplyVideoEncoding = jest.fn();
+const mockSetJitterBufferTargets = jest.fn();
 
 jest.mock('@/services/webrtc-service', () => ({
   WebRTCService: jest.fn().mockImplementation((options?: any) => ({
     createPeerConnection: mockCreatePeerConnection,
     addTrack: mockAddTrack,
+    addLocalMedia: mockAddLocalMedia,
     createOffer: mockCreateOffer,
     createAnswer: mockCreateAnswer,
     setRemoteDescription: mockSetRemoteDescription,
+    setRemoteAnswer: mockSetRemoteAnswer,
+    handleRenegotiationOffer: mockHandleRenegotiationOffer,
     addIceCandidate: mockAddIceCandidate,
     getLocalStream: mockGetLocalStream,
     setIceServers: mockSetIceServers,
+    setNegotiationRole: mockSetNegotiationRole,
+    enableVideoSend: mockEnableVideoSend,
+    disableVideoSend: mockDisableVideoSend,
+    applyVideoEncoding: mockApplyVideoEncoding,
+    setJitterBufferTargets: mockSetJitterBufferTargets,
     close: mockClose,
     options,
   })),
@@ -111,6 +127,8 @@ describe('useWebRTCP2P', () => {
       { kind: 'video', id: 'video-track' },
       { kind: 'audio', id: 'audio-track' },
     ],
+    getAudioTracks: () => [{ kind: 'audio', id: 'audio-track', enabled: true }],
+    getVideoTracks: () => [{ kind: 'video', id: 'video-track', enabled: true }],
   } as unknown as MediaStream;
 
   const mockPeerConnection = {
@@ -246,7 +264,7 @@ describe('useWebRTCP2P', () => {
 
       expect(mockCreatePeerConnection).toHaveBeenCalledWith(mockTargetUserId);
       expect(mockAddPeerConnection).toHaveBeenCalledWith(mockTargetUserId, mockPeerConnection);
-      expect(mockAddTrack).toHaveBeenCalled();
+      expect(mockAddLocalMedia).toHaveBeenCalled();
       expect(mockCreateOffer).toHaveBeenCalled();
       expect(mockEmit).toHaveBeenCalledWith(
         CLIENT_EVENTS.CALL_SIGNAL,
@@ -380,6 +398,115 @@ describe('useWebRTCP2P', () => {
       expect(mockAddIceCandidate).toHaveBeenCalledWith(
         expect.objectContaining({ candidate: 'candidate:early' })
       );
+    });
+  });
+
+  describe('Renegotiation routing (A/V switch / ICE restart)', () => {
+    const getSignalHandler = () => {
+      const call = [...mockOn.mock.calls].reverse().find((c) => c[0] === SERVER_EVENTS.CALL_SIGNAL);
+      return call?.[1] as (event: any) => void;
+    };
+
+    const establish = async (result: any) => {
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      const signalHandler = getSignalHandler();
+      // Initial answer establishes the connection (sets remote description).
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'answer', from: mockTargetUserId, to: mockUserId, sdp: 'answer-sdp' },
+        });
+      });
+      return signalHandler;
+    };
+
+    it('assigns a deterministic negotiation role when creating a service', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      expect(mockSetNegotiationRole).toHaveBeenCalledWith(mockUserId, mockTargetUserId);
+    });
+
+    it('routes a SECOND offer on an established connection to handleRenegotiationOffer (no rebuild)', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      const signalHandler = await establish(result);
+
+      mockCreateAnswer.mockClear();
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'offer', from: mockTargetUserId, to: mockUserId, sdp: 'reoffer-sdp' },
+        });
+      });
+
+      expect(mockHandleRenegotiationOffer).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'offer', sdp: 'reoffer-sdp' })
+      );
+      // Must NOT tear down and rebuild via the initial-offer path.
+      expect(mockCreateAnswer).not.toHaveBeenCalled();
+    });
+
+    it('routes an answer on an established connection to setRemoteAnswer', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      const signalHandler = await establish(result);
+
+      await act(async () => {
+        signalHandler({
+          callId: mockCallId,
+          signal: { type: 'answer', from: mockTargetUserId, to: mockUserId, sdp: 'reanswer-sdp' },
+        });
+      });
+
+      expect(mockSetRemoteAnswer).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'answer', sdp: 'reanswer-sdp' })
+      );
+    });
+  });
+
+  describe('Mid-call A/V switch (FaceTime-style)', () => {
+    it('enableVideo acquires a camera track and enables sending on the peer', async () => {
+      const camTrack = { kind: 'video', id: 'cam', clone: jest.fn() };
+      const camStream = { getVideoTracks: () => [camTrack] };
+      (global.navigator as any).mediaDevices = {
+        getUserMedia: jest.fn().mockResolvedValue(camStream),
+      };
+
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      await act(async () => {
+        await result.current.enableVideo();
+      });
+
+      expect((global.navigator as any).mediaDevices.getUserMedia).toHaveBeenCalled();
+      expect(mockEnableVideoSend).toHaveBeenCalledWith(camTrack);
+      expect(camTrack.clone).not.toHaveBeenCalled(); // single peer → no clone
+    });
+
+    it('disableVideo stops sending on the peer', async () => {
+      const { result } = renderHook(() =>
+        useWebRTCP2P({ callId: mockCallId, userId: mockUserId })
+      );
+      await act(async () => {
+        await result.current.createOffer(mockTargetUserId);
+      });
+      await act(async () => {
+        await result.current.disableVideo();
+      });
+
+      expect(mockDisableVideoSend).toHaveBeenCalled();
     });
   });
 

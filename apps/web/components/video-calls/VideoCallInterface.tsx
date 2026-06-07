@@ -35,7 +35,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     currentCall,
     controls,
     toggleAudio,
-    toggleVideo,
+    setControls,
     reset,
   } = useCallStore();
 
@@ -57,7 +57,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   }, []);
 
   // Initialize WebRTC
-  const { initializeLocalStream, createOffer, connectionState } = useWebRTCP2P({
+  const { initializeLocalStream, createOffer, connectionState, enableVideo, disableVideo, applyQualityTier } = useWebRTCP2P({
     callId,
     userId: user?.id,
     onError: handleWebRTCError,
@@ -91,6 +91,21 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
 
   // Check if any audio effect is active
   const audioEffectsActive = Object.values(effectsState).some(effect => effect.enabled);
+
+  // Adaptive compression control loop: feed observed connection quality back
+  // into the encoder so outbound video sheds bitrate/resolution under
+  // congestion (degradationPreference 'maintain-framerate') rather than
+  // freezing. Only acts while we are actually sending video.
+  useEffect(() => {
+    const level = qualityStats?.level;
+    if (!level || !controls.videoEnabled) return;
+    const tier = level === 'excellent' || level === 'good'
+      ? 'high'
+      : level === 'fair'
+        ? 'medium'
+        : 'low';
+    applyQualityTier(tier).catch(() => { /* best effort, never throw in render effect */ });
+  }, [qualityStats?.level, controls.videoEnabled, applyQualityTier]);
 
   // Initialize local stream on mount
   useEffect(() => {
@@ -289,9 +304,23 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     }
   };
 
-  const handleToggleVideo = () => {
+  const handleToggleVideo = async () => {
     const newEnabled = !controls.videoEnabled;
-    toggleVideo();
+    try {
+      // Real audio↔video switch: acquire/release the camera and renegotiate
+      // (FaceTime-style asymmetric) instead of merely toggling track.enabled.
+      if (newEnabled) {
+        await enableVideo();
+      } else {
+        await disableVideo();
+      }
+    } catch (error) {
+      logger.error('[VideoCallInterface]', 'Video toggle failed: ' + (error instanceof Error ? error.message : 'unknown'));
+      toast.error('Unable to switch video');
+      return;
+    }
+
+    setControls({ videoEnabled: newEnabled });
 
     const socket = meeshySocketIOService.getSocket();
     if (socket) {

@@ -316,6 +316,12 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         // Le cycle Task→self→Task se ferme dès le `return` de la Task :
         // pas de leak persistant.
         currentLoadTask = Task { @MainActor in
+            // A configure() that superseded this one (or a teardown) cancels the
+            // task before it runs. Bail out *before* awaiting the loader: a
+            // cancelled task must never register a fetch continuation it will
+            // then abandon — that leaks a suspended load (and hangs any awaiter
+            // of `currentLoadTask.value`).
+            guard !Task.isCancelled else { return }
             // (1) Fast-path image cache (composer preview / disk-backed reader).
             if let imageCache,
                let cached = await imageCache.cachedImage(for: cacheKey)?.cgImage {
