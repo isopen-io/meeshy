@@ -473,9 +473,13 @@ public actor DiskCacheStore: ReadableCacheStore {
     private nonisolated static func cacheIfWithinBudget(_ image: UIImage, key: String) {
         let cost = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
         guard cost > 0, cost <= maxCacheableDecodedBytes else { return }
-        Task { @MainActor in
-            Self._imageCache.setObject(image, forKey: key as NSString, cost: cost)
-        }
+        // Insert synchronously. `NSCache` mutations are thread-safe, so the
+        // previous `Task { @MainActor … }` deferral bought nothing and created a
+        // race: the image wasn't resident yet when `image(for:)` returned, so a
+        // synchronous `cachedImage(for:)` immediately after still missed (and
+        // the UI showed a thumbHash flash for one extra frame). Matches the
+        // direct insertion already used by `warmedImage(for:)`.
+        Self._imageCache.setObject(image, forKey: key as NSString, cost: cost)
     }
 
     /// Configure the in-memory UIImage cache limits at app startup.
