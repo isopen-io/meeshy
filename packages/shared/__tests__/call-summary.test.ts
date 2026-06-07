@@ -160,6 +160,12 @@ describe('formatCallDataSize', () => {
   it('renders GB past 1000 MB', () => {
     expect(formatCallDataSize(1_100_000_000)).toBe('1.1 GB');
   });
+
+  it('promotes the unit when rounding crosses the boundary (no "1000 KB")', () => {
+    expect(formatCallDataSize(999_700)).toBe('1 MB');   // 999.7 KB → 1 MB
+    expect(formatCallDataSize(999_400)).toBe('999 KB');  // stays KB
+    expect(formatCallDataSize(999_960_000)).toBe('1 GB'); // 999.96 MB → 1 GB
+  });
 });
 
 describe('buildCallSummaryMetadata', () => {

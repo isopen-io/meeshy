@@ -237,18 +237,11 @@ function resolveDataSpent(
   return { bytesTotal: null, bytesEstimated: false };
 }
 
-/**
- * Build the structured call metadata persisted on the summary `Message`, or
- * `null` when no summary should be created (same gating as `buildCallSummary`).
- * Pure: no I/O, deterministic for given inputs.
- */
-export function buildCallSummaryMetadata(
+/** Derive the structured metadata from an already-computed `CallSummary`. */
+function metadataFromSummary(
+  summary: CallSummary,
   input: CallSummaryMetadataInput
-): CallSummaryMetadata | null {
-  const summary = buildCallSummary(input);
-  if (summary === null) {
-    return null;
-  }
+): CallSummaryMetadata {
   const { bytesTotal, bytesEstimated } = resolveDataSpent(
     summary.outcome,
     summary.callType,
@@ -270,6 +263,34 @@ export function buildCallSummaryMetadata(
 }
 
 /**
+ * Build the structured call metadata persisted on the summary `Message`, or
+ * `null` when no summary should be created (same gating as `buildCallSummary`).
+ * Pure: no I/O, deterministic for given inputs.
+ */
+export function buildCallSummaryMetadata(
+  input: CallSummaryMetadataInput
+): CallSummaryMetadata | null {
+  const summary = buildCallSummary(input);
+  return summary === null ? null : metadataFromSummary(summary, input);
+}
+
+/**
+ * Build BOTH the human-readable summary (text `content`) and the structured
+ * metadata in a single pass, sharing one `buildCallSummary` computation.
+ * Returns `null` when no summary should be posted. Used by the gateway so it
+ * does not compute the summary twice.
+ */
+export function buildCallSummaryWithMetadata(
+  input: CallSummaryMetadataInput
+): { summary: CallSummary; metadata: CallSummaryMetadata } | null {
+  const summary = buildCallSummary(input);
+  if (summary === null) {
+    return null;
+  }
+  return { summary, metadata: metadataFromSummary(summary, input) };
+}
+
+/**
  * Format a byte count as a short, human-readable data size using DECIMAL units
  * (1 KB = 1000 B, matching how data plans / WhatsApp / Telegram report usage):
  * "0 KB", "512 KB", "2.4 MB", "1.1 GB". Sub-KB values round up to "1 KB" so a
@@ -283,20 +304,27 @@ export function formatCallDataSize(bytes: number): string {
   if (kb < 1) {
     return '1 KB';
   }
-  if (kb < 1000) {
+  // Use the post-rounding value for the unit cutover so e.g. 999.7 KB promotes
+  // to "1 MB" rather than printing "1000 KB".
+  if (Math.round(kb) < 1000) {
     return `${Math.round(kb)} KB`;
   }
-  const mb = kb / 1000;
-  if (mb < 1000) {
+  const mb = bytes / 1_000_000;
+  if (roundDecimal(mb) < 1000) {
     return `${formatDecimal(mb)} MB`;
   }
-  const gb = mb / 1000;
+  const gb = bytes / 1_000_000_000;
   return `${formatDecimal(gb)} GB`;
+}
+
+/** One decimal place, half-away-from-zero. */
+function roundDecimal(value: number): number {
+  return Math.round(value * 10) / 10;
 }
 
 /** One decimal place, trailing ".0" stripped: 2.40 → "2.4", 3.00 → "3". */
 function formatDecimal(value: number): string {
-  const rounded = Math.round(value * 10) / 10;
+  const rounded = roundDecimal(value);
   return Number.isInteger(rounded) ? `${rounded}` : rounded.toFixed(1);
 }
 

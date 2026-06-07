@@ -2402,14 +2402,14 @@ extension CallManager: WebRTCServiceDelegate {
         }
     }
 
-    nonisolated func webRTCService(_ service: WebRTCService, didCollectStats stats: CallStats, level: VideoQualityLevel) {
+    nonisolated func webRTCService(_ service: WebRTCService, didCollectStats stats: CallStats, level: VideoQualityLevel, packetLossPercent: Double) {
         Task { @MainActor [weak self] in
             guard let self, let callId = self.currentCallId else { return }
             MessageSocketManager.shared.emitCallQualityReport(
                 callId: callId,
                 level: Self.connectionQualityLabel(for: level),
                 rtt: stats.roundTripTimeMs,
-                packetLoss: 0,
+                packetLoss: packetLossPercent,
                 bytesSent: stats.bandwidth,
                 bytesReceived: stats.bytesReceived
             )

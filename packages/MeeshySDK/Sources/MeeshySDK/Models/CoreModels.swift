@@ -798,7 +798,9 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         deliveredCount = try c.decodeIfPresent(Int.self, forKey: .deliveredCount) ?? 0
         readCount = try c.decodeIfPresent(Int.self, forKey: .readCount) ?? 0
         cachedTimeString = try c.decodeIfPresent(String.self, forKey: .cachedTimeString)
-        callSummary = try c.decodeIfPresent(CallSummaryMetadata.self, forKey: .callSummary)
+        // Tolerant: a malformed / future-shape call-summary blob must not fail
+        // the whole cached-message decode (mirrors the APIMessage path).
+        callSummary = try? c.decodeIfPresent(CallSummaryMetadata.self, forKey: .callSummary)
         // Legacy migration: merge old isViewOnce/isBlurred bools into effects
         if let legacyViewOnce = try c.decodeIfPresent(Bool.self, forKey: .isViewOnce), legacyViewOnce {
             effects.flags.insert(.viewOnce)

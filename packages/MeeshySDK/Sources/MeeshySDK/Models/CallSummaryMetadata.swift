@@ -151,16 +151,22 @@ public extension CallSummaryMetadata {
         guard bytes > 0 else { return "0 KB" }
         let kb = Double(bytes) / 1000
         if kb < 1 { return "1 KB" }
-        if kb < 1000 { return "\(Int(kb.rounded())) KB" }
-        let mb = kb / 1000
-        if mb < 1000 { return "\(decimal(mb)) MB" }
-        let gb = mb / 1000
+        // Use the post-rounding value for the unit cutover so e.g. 999.7 KB
+        // promotes to "1 MB" rather than printing "1000 KB".
+        if Int(kb.rounded()) < 1000 { return "\(Int(kb.rounded())) KB" }
+        let mb = Double(bytes) / 1_000_000
+        if roundDecimal(mb) < 1000 { return "\(decimal(mb)) MB" }
+        let gb = Double(bytes) / 1_000_000_000
         return "\(decimal(gb)) GB"
+    }
+
+    private static func roundDecimal(_ value: Double) -> Double {
+        (value * 10).rounded() / 10
     }
 
     /// One decimal place, trailing ".0" stripped: 2.40 → "2.4", 3.00 → "3".
     private static func decimal(_ value: Double) -> String {
-        let rounded = (value * 10).rounded() / 10
+        let rounded = roundDecimal(value)
         if rounded == rounded.rounded() {
             return String(Int(rounded))
         }

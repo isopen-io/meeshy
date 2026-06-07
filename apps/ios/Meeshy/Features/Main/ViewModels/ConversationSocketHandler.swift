@@ -361,12 +361,14 @@ final class ConversationSocketHandler {
                     //    would insert a DUPLICATE row. Drop it — the legacy
                     //    behaviour was correct for this specific case.
                     let isOwnEcho = apiMsg.senderId == userId
-                    // System messages (e.g. call summaries) are server-generated
-                    // and carry no clientMessageId, yet the initiator IS the
-                    // attributed sender — so they'd be dropped as a cid-less own
-                    // echo, leaving the caller without a realtime call bubble
-                    // until the next REST sync. They dedup by serverId in
-                    // upsertFromAPIMessages, so letting them through is safe.
+                    // System messages (e.g. call summaries) are server-generated.
+                    // The `message:new` socket BROADCAST omits `clientMessageId`
+                    // (MeeshySocketIOManager._broadcastNewMessage), yet the
+                    // initiator IS the attributed sender — so they'd be dropped
+                    // here as a cid-less own echo, leaving the caller without a
+                    // realtime call bubble until the next REST sync. They dedup by
+                    // serverId in upsertFromAPIMessages, so letting them through is
+                    // safe.
                     let isSystemMessage = apiMsg.messageSource == "system"
                     if isOwnEcho, !isSystemMessage, (apiMsg.clientMessageId ?? "").isEmpty {
                         return

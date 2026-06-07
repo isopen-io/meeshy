@@ -13,8 +13,12 @@
 import { PrismaClient, CallMode, CallStatus, CallEndReason, ParticipantRole, Prisma } from '@meeshy/shared/prisma/client';
 import { logger } from '../utils/logger';
 import { CALL_ERROR_CODES } from '@meeshy/shared/types/video-call';
-import { buildCallSummary, buildCallSummaryMetadata, callSummaryClientMessageId } from '@meeshy/shared/utils/call-summary';
+import { buildCallSummaryWithMetadata, callSummaryClientMessageId } from '@meeshy/shared/utils/call-summary';
 import { TURNCredentialService } from './TURNCredentialService';
+
+/** Floor a finite, non-negative byte counter; anything else → null. */
+const clampNonNegativeInt = (value?: number | null): number | null =>
+  typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.floor(value) : null;
 
 const TERMINAL_STATUSES: CallStatus[] = [
   CallStatus.ended,
@@ -1153,11 +1157,22 @@ export class CallService {
     if (current === null) {
       return;
     }
-    if (typeof stats.bytesSent === 'number' && Number.isFinite(stats.bytesSent)) {
-      data.bytesSent = Math.max(current.bytesSent ?? 0, Math.floor(stats.bytesSent));
-    }
-    if (typeof stats.bytesReceived === 'number' && Number.isFinite(stats.bytesReceived)) {
-      data.bytesReceived = Math.max(current.bytesReceived ?? 0, Math.floor(stats.bytesReceived));
+    // "Data spent" is a per-DEVICE figure. Each participant reports its OWN
+    // cumulative sent/received, so maxing the two fields independently across
+    // participants would mix endpoints and over-count asymmetric calls (e.g.
+    // one side sends video). Instead, keep the (sent, received) pair from the
+    // single report with the largest TOTAL — a coherent one-device view that is
+    // also monotonic across a given participant's growing counters.
+    const reportSent = clampNonNegativeInt(stats.bytesSent);
+    const reportReceived = clampNonNegativeInt(stats.bytesReceived);
+    if (reportSent !== null || reportReceived !== null) {
+      const nextSent = reportSent ?? current.bytesSent ?? 0;
+      const nextReceived = reportReceived ?? current.bytesReceived ?? 0;
+      const currentTotal = (current.bytesSent ?? 0) + (current.bytesReceived ?? 0);
+      if (nextSent + nextReceived > currentTotal) {
+        data.bytesSent = nextSent;
+        data.bytesReceived = nextReceived;
+      }
     }
     if (stats.level === 'excellent' || stats.level === 'good' || stats.level === 'fair' || stats.level === 'poor') {
       data.networkQuality = stats.level;
@@ -1216,21 +1231,12 @@ export class CallService {
 
     const metadataType = (call.metadata as Record<string, unknown> | null)?.type;
     const callType = typeof metadataType === 'string' ? metadataType : null;
-    const summary = buildCallSummary({
-      status: call.status,
-      endReason: call.endReason,
-      callType,
-      durationSeconds: call.duration
-    });
-    if (!summary) {
-      return null;
-    }
-
-    // Structured call facts the client renders into a rich, actionable bubble
-    // (direction resolved per-viewer from initiatorId, media glyph, outcome
-    // tint, and the "duration · data · quality" line). Persisted on
-    // `Message.metadata`; survives both the socket broadcast and REST history.
-    const callMetadata = buildCallSummaryMetadata({
+    // Compute the human-readable label AND the structured call facts the client
+    // renders into a rich, actionable bubble (direction resolved per-viewer from
+    // initiatorId, media glyph, outcome tint, and the "duration · data · quality"
+    // line) in a single pass. Persisted on `Message.metadata`; survives both the
+    // socket broadcast and REST history.
+    const built = buildCallSummaryWithMetadata({
       status: call.status,
       endReason: call.endReason,
       callType,
@@ -1241,6 +1247,10 @@ export class CallService {
       bytesReceived: call.bytesReceived,
       networkQuality: call.networkQuality
     });
+    if (!built) {
+      return null;
+    }
+    const { summary, metadata: callMetadata } = built;
 
     // `Message.senderId` references a Participant (not a User); resolve the
     // initiator's participant row in this conversation to attribute the
