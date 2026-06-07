@@ -25,7 +25,13 @@
       "security": "Segurança",
       "theme": "Tema",
       "fonts": "Fontes",
-      "stats": "Estatísticas"
+      "stats": "Estatísticas",
+      "message": "Mensagens",
+      "video": "Vídeo",
+      "document": "Documentos",
+      "media": "Mídia",
+      "application": "Aplicativo",
+      "beta": "Beta"
     },
     "profile": {
       "title": "Perfil",
@@ -75,7 +81,9 @@
         "profileUpdated": "Perfil atualizado com sucesso",
         "updateError": "Erro ao atualizar perfil",
         "confirm": "Confirmar",
-        "uploading": "Enviando..."
+        "uploading": "Enviando...",
+        "edit": "Editar",
+        "languageUpdated": "Idioma atualizado"
       },
       "email": {
         "available": "Email disponível",
@@ -104,6 +112,89 @@
         "available": "Nome de usuário disponível",
         "alreadyUsed": "Este nome de usuário já está em uso",
         "error": "Erro durante a alteração"
+      },
+      "account": {
+        "email": {
+          "title": "Alterar e-mail",
+          "description": "Atualizar seu endereço de e-mail com verificação",
+          "currentEmail": "E-mail atual",
+          "newEmail": "Novo e-mail",
+          "newEmailPlaceholder": "seu.novo.email@exemplo.com",
+          "verificationCode": "Código de verificação",
+          "verificationCodePlaceholder": "Insira o código de 6 dígitos",
+          "verificationHelp": "Verifique seu novo e-mail para obter o código de verificação",
+          "sendCode": "Enviar código de verificação",
+          "verify": "Verificar e-mail",
+          "codeSent": "Código de verificação enviado para seu novo e-mail",
+          "updateSuccess": "E-mail atualizado com sucesso",
+          "sending": "Enviando...",
+          "verifying": "Verificando...",
+          "errors": {
+            "emailRequired": "O e-mail é obrigatório",
+            "invalidEmail": "Formato de e-mail inválido",
+            "requestFailed": "Falha ao solicitar a alteração de e-mail",
+            "codeRequired": "O código de verificação é obrigatório",
+            "verifyFailed": "Falha ao verificar o e-mail"
+          }
+        },
+        "username": {
+          "title": "Alterar nome de usuário",
+          "description": "Atualizar seu nome de usuário único",
+          "currentUsername": "Nome de usuário atual",
+          "newUsername": "Novo nome de usuário",
+          "newUsernamePlaceholder": "Insira seu novo nome de usuário",
+          "available": "Nome de usuário disponível",
+          "notAvailable": "Nome de usuário já está em uso",
+          "update": "Atualizar nome de usuário",
+          "updateSuccess": "Nome de usuário atualizado com sucesso",
+          "updating": "Atualizando...",
+          "errors": {
+            "usernameRequired": "O nome de usuário é obrigatório",
+            "usernameNotAvailable": "O nome de usuário não está disponível",
+            "updateFailed": "Falha ao atualizar o nome de usuário"
+          }
+        },
+        "delete": {
+          "title": "Excluir conta",
+          "description": "Excluir permanentemente sua conta e todos os dados associados",
+          "warning": "Aviso: Esta ação não pode ser desfeita",
+          "consequence1": "Todas as suas mensagens serão excluídas permanentemente",
+          "consequence2": "Seu perfil e configurações serão removidos",
+          "consequence3": "Você será desconectado imediatamente",
+          "consequence4": "Esta ação é irreversível",
+          "deleteButton": "Excluir minha conta",
+          "confirmTitle": "Confirmar exclusão da conta",
+          "confirmDescription": "Por favor, insira sua senha para continuar com a exclusão da conta.",
+          "passwordLabel": "Sua senha",
+          "passwordPlaceholder": "Insira sua senha",
+          "continue": "Continuar",
+          "finalConfirmTitle": "Confirmação final",
+          "finalWarning": "Esta é sua última chance. Esta ação é permanente e irreversível.",
+          "confirmTextLabel": "Digite \"DELETE\" para confirmar",
+          "finalConfirm": "Excluir permanentemente",
+          "deleteSuccess": "Conta excluída com sucesso",
+          "deleting": "Excluindo...",
+          "errors": {
+            "passwordRequired": "A senha é obrigatória",
+            "confirmTextMismatch": "Por favor, digite \"DELETE\" para confirmar",
+            "deleteFailed": "Falha ao excluir a conta"
+          }
+        }
+      },
+      "verification": {
+        "resend": "Reenviar",
+        "sending": "Enviando...",
+        "email": {
+          "verified": "E-mail verificado",
+          "notVerified": "E-mail não verificado"
+        },
+        "phone": {
+          "start": "Verificar por SMS",
+          "sendCode": "Enviar código",
+          "enterCode": "Código recebido por SMS",
+          "verified": "Telefone verificado",
+          "notVerified": "Telefone não verificado"
+        }
       }
     },
     "translation": {
@@ -451,6 +542,273 @@
         "backToSettings": "Voltar às configurações",
         "tryAgain": "Tentar alterar email novamente",
         "backToHome": "Voltar ao início"
+      }
+    },
+    "register": {
+      "errors": {
+        "usernameExists": "Este nome de usuário já está em uso",
+        "emailExists": "Este e-mail já está registrado",
+        "phoneExists": "Este número de telefone já está registrado"
+      }
+    },
+    "application": {
+      "appearance": {
+        "title": "Aparência",
+        "description": "Personalizar a aparência visual do aplicativo",
+        "theme": {
+          "label": "Tema",
+          "description": "Escolher entre modo claro, escuro ou automático"
+        },
+        "accentColor": {
+          "label": "Cor de destaque",
+          "description": "Escolher a cor principal para elementos destacados e botões"
+        },
+        "fontFamily": {
+          "label": "Família de fontes",
+          "description": "Escolher a tipografia para a interface"
+        },
+        "fontSize": {
+          "label": "Tamanho da fonte",
+          "description": "Ajustar o tamanho do texto em todo o aplicativo"
+        }
+      },
+      "languages": {
+        "title": "Idiomas",
+        "description": "Configurar suas preferências de idioma",
+        "interface": {
+          "label": "Idioma da interface",
+          "description": "Idioma para menus e botões"
+        },
+        "system": {
+          "label": "Idioma do sistema",
+          "description": "Idioma principal para suas mensagens"
+        },
+        "regional": {
+          "label": "Idioma regional",
+          "description": "Idioma secundário (opcional)"
+        },
+        "custom": {
+          "label": "Idioma personalizado",
+          "description": "Destino de tradução específico (opcional)"
+        }
+      },
+      "layout": {
+        "title": "Layout",
+        "description": "Personalizar o layout e o comportamento da interface",
+        "compact": {
+          "label": "Modo compacto",
+          "description": "Reduzir o espaçamento para exibir mais conteúdo"
+        },
+        "sidebar": {
+          "label": "Posição da barra lateral",
+          "description": "Escolher onde a barra lateral aparece",
+          "left": "Esquerda",
+          "right": "Direita"
+        },
+        "avatars": {
+          "label": "Mostrar avatares",
+          "description": "Exibir fotos de perfil nas mensagens"
+        },
+        "animations": {
+          "label": "Animações",
+          "description": "Habilitar transições e efeitos de interface"
+        }
+      },
+      "accessibility": {
+        "title": "Acessibilidade",
+        "description": "Melhorar a acessibilidade e usabilidade",
+        "highContrast": {
+          "label": "Alto contraste",
+          "description": "Aumentar o contraste para melhor visibilidade"
+        },
+        "reducedMotion": {
+          "label": "Movimento reduzido",
+          "description": "Minimizar animações e efeitos de movimento"
+        },
+        "screenReader": {
+          "label": "Otimizado para leitor de tela",
+          "description": "Otimizar a interface para leitores de tela"
+        }
+      },
+      "advanced": {
+        "title": "Avançado",
+        "description": "Recursos avançados e preferências",
+        "beta": {
+          "label": "Recursos beta",
+          "description": "Acessar recursos experimentais (podem ser instáveis)"
+        },
+        "keyboard": {
+          "label": "Atalhos de teclado",
+          "description": "Habilitar atalhos de teclado para navegação mais rápida"
+        },
+        "telemetry": {
+          "label": "Telemetria",
+          "description": "Compartilhar dados de uso anônimos para melhorar o aplicativo"
+        },
+        "tutorials": {
+          "label": "Mostrar tutoriais",
+          "description": "Exibir mensagens de tutoriais e guias de integração",
+          "reset": "Tutoriais redefinidos",
+          "resetButton": "Redefinir"
+        }
+      }
+    },
+    "consentDialog": {
+      "title": "Consentimento necessário",
+      "description": "Alguns recursos requerem seu consentimento explícito para processar dados sensíveis. Por favor, revise e aceite as permissões necessárias abaixo.",
+      "violationsTitle": "As seguintes ações requerem consentimento adicional:",
+      "labels": {
+        "voiceDataConsent": "Processamento de dados de voz",
+        "audioTranscription": "Transcrição de áudio",
+        "videoRecording": "Gravação de vídeo",
+        "biometricData": "Processamento de dados biométricos",
+        "locationSharing": "Compartilhamento de localização",
+        "analytics": "Dados de análise e uso"
+      },
+      "descriptions": {
+        "voiceDataConsent": "Permite o processamento de suas gravações de voz para serviços de transcrição e tradução. Seus dados de voz são processados com segurança e usados apenas para os recursos que você ativa.",
+        "audioTranscription": "Habilita a transcrição automática de mensagens de áudio. As transcrições são geradas em servidores seguros e armazenadas apenas de acordo com suas preferências de retenção.",
+        "videoRecording": "Permite a gravação e o processamento de videochamadas. Os dados de vídeo são criptografados e acessíveis apenas aos participantes autorizados.",
+        "biometricData": "Habilita o uso de autenticação biométrica (impressão digital, reconhecimento facial) para segurança aprimorada.",
+        "locationSharing": "Permite compartilhar sua localização com os participantes da conversa. Os dados de localização nunca são armazenados permanentemente e compartilhados apenas quando você escolher explicitamente.",
+        "analytics": "Nos ajuda a melhorar o Meeshy coletando estatísticas de uso anônimas. Nenhum dado pessoal ou conteúdo de mensagem é incluído.",
+        "default": "Este recurso requer seu consentimento para processar dados sensíveis em conformidade com a LGPD e o RGPD."
+      },
+      "legalNote": "Você pode revogar esses consentimentos a qualquer momento nas suas configurações de privacidade. Saiba mais em nossa Política de privacidade.",
+      "buttons": {
+        "accept": "Aceitar e continuar",
+        "cancel": "Cancelar",
+        "submitting": "Processando..."
+      },
+      "errors": {
+        "allRequired": "Todos os consentimentos necessários devem ser aceitos para continuar",
+        "submitFailed": "Falha ao salvar as preferências de consentimento. Por favor, tente novamente."
+      }
+    },
+    "media": {
+      "title": "Mídia e arquivos",
+      "description": "Configurar as definições de áudio, vídeo e documentos",
+      "sections": {
+        "audio": {
+          "title": "Áudio e transcrição",
+          "description": "Mensagens de voz, transcrição, TTS e clonagem de voz"
+        },
+        "video": {
+          "title": "Vídeo e chamadas",
+          "description": "Qualidade de vídeo, efeitos e configurações de chamada"
+        },
+        "document": {
+          "title": "Documentos e arquivos",
+          "description": "Configurações de download, visualização e armazenamento"
+        }
+      }
+    },
+    "betaPlayground": {
+      "title": "Beta Playground - Modelos IA Edge",
+      "description": "Teste e experimente com modelos de IA que funcionam diretamente no seu navegador",
+      "enableEdgeModels": "Ativar modelos Edge",
+      "enableToTest": "Ative os modelos Edge para começar a testar as funcionalidades de IA do navegador",
+      "tabs": {
+        "llm": "LLM Edge",
+        "llmShort": "LLM",
+        "translation": "Tradução",
+        "translationShort": "Trad.",
+        "transcription": "Transcrição",
+        "transcriptionShort": "Áudio",
+        "tts": "Síntese de voz",
+        "ttsShort": "TTS"
+      },
+      "llm": {
+        "title": "LLM Edge - Geração de texto no navegador",
+        "description": "Teste a geração de texto com o modelo de IA integrado do Chrome que funciona completamente no seu navegador",
+        "inputLabel": "Seu prompt",
+        "inputPlaceholder": "Faça uma pergunta ou dê uma instrução...",
+        "outputLabel": "Resposta gerada",
+        "notAvailableTitle": "LLM Edge não disponível",
+        "notAvailableMessage": "Esta função requer Chrome Canary com o flag de IA integrada ativado. Visite chrome://flags/#optimization-guide-on-device-model para ativá-lo."
+      },
+      "translation": {
+        "title": "Tradução no navegador",
+        "description": "Traduza texto usando a API de tradução nativa do navegador",
+        "sourceLanguage": "Idioma de origem",
+        "targetLanguage": "Idioma de destino",
+        "inputLabel": "Texto a traduzir",
+        "inputPlaceholder": "Insira o texto a ser traduzido...",
+        "outputLabel": "Tradução",
+        "notAvailableTitle": "API de tradução não disponível",
+        "notAvailableMessage": "Esta função requer Chrome 125+ com a API de tradução habilitada. Pode ainda estar em desenvolvimento."
+      },
+      "transcription": {
+        "title": "Reconhecimento de voz",
+        "description": "Converta fala em texto usando a API Web Speech",
+        "recording": "Gravando...",
+        "outputLabel": "Transcrição",
+        "notAvailableTitle": "Reconhecimento de voz não disponível",
+        "notAvailableMessage": "Seu navegador não suporta a API Web Speech. Tente usar o Chrome ou Edge."
+      },
+      "tts": {
+        "title": "Síntese de voz",
+        "description": "Converta texto em fala usando a síntese de voz do navegador",
+        "voiceLabel": "Voz",
+        "selectVoice": "Selecionar uma voz",
+        "inputLabel": "Texto a pronunciar",
+        "inputPlaceholder": "Insira o texto a converter em fala...",
+        "speaking": "Reproduzindo...",
+        "notAvailableTitle": "Síntese de voz não disponível",
+        "notAvailableMessage": "Seu navegador não suporta a API Speech Synthesis."
+      },
+      "actions": {
+        "test": "Testar",
+        "generating": "Gerando...",
+        "translating": "Traduzindo...",
+        "startRecording": "Iniciar gravação",
+        "stopRecording": "Parar gravação",
+        "speak": "Ler",
+        "stopSpeaking": "Parar"
+      },
+      "metrics": {
+        "status": "Estado",
+        "statusValues": {
+          "idle": "Inativo",
+          "loading": "Carregando...",
+          "running": "Em andamento...",
+          "success": "Sucesso",
+          "error": "Erro"
+        },
+        "latency": "Latência",
+        "tokensPerSecond": "Tokens/seg",
+        "charactersProcessed": "Caracteres",
+        "error": "Erro"
+      },
+      "capabilities": {
+        "available": "Disponível",
+        "notAvailable": "Não disponível"
+      },
+      "compatibility": {
+        "title": "Compatibilidade do navegador",
+        "description": "Verifique quais funcionalidades de IA Edge são suportadas pelo seu navegador",
+        "webLLM": "Web LLM (IA integrada Chrome)",
+        "translation": "API de tradução",
+        "speechRecognition": "Reconhecimento de voz",
+        "speechSynthesis": "Síntese de voz",
+        "note": "Nota: Algumas funcionalidades podem exigir versões específicas do navegador ou flags experimentais. Os modelos de IA Edge funcionam completamente no seu navegador para máxima privacidade e velocidade."
+      },
+      "errors": {
+        "emptyInput": "Por favor, insira texto primeiro",
+        "llmNotAvailable": "A API Web LLM não está disponível no seu navegador",
+        "llmFailed": "Erro ao gerar texto",
+        "translationNotAvailable": "A API de tradução não está disponível no seu navegador",
+        "translationFailed": "Erro ao traduzir",
+        "transcriptionNotAvailable": "O reconhecimento de voz não está disponível no seu navegador",
+        "transcriptionFailed": "Erro na transcrição de áudio",
+        "ttsNotAvailable": "A síntese de voz não está disponível no seu navegador",
+        "ttsFailed": "Erro ao reproduzir o texto"
+      },
+      "success": {
+        "llm": "Texto gerado com sucesso",
+        "translation": "Texto traduzido com sucesso",
+        "transcriptionStarted": "Gravação iniciada",
+        "tts": "Leitura concluída"
       }
     }
   }

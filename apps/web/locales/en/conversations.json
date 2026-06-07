@@ -413,6 +413,20 @@
       "single": "This file is already added",
       "multiple": "{count} files are already added"
     },
-    "pasteTooLongTxtCreated": "Text too long: a .txt file has been created automatically"
+    "pasteTooLongTxtCreated": "Text too long: a .txt file has been created automatically",
+    "pinned": "Conversation pinned",
+    "unpinned": "Conversation unpinned",
+    "pinError": "Failed to pin conversation",
+    "muted": "Notifications muted",
+    "unmuted": "Notifications enabled",
+    "muteError": "Failed to update notifications",
+    "archived": "Conversation archived",
+    "unarchived": "Conversation unarchived",
+    "archiveError": "Failed to archive conversation",
+    "reactionRemoved": "Reaction removed",
+    "reactionError": "Failed to update reaction",
+    "unreadMessages": "unread messages",
+    "pinned_label": "pinned",
+    "muted_label": "muted"
   }
 }

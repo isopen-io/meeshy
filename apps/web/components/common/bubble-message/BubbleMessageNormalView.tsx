@@ -163,11 +163,18 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
     await handleCopyMessage(displayContent);
   }, [handleCopyMessage, displayContent]);
 
+  const senderName = message.sender?.displayName ?? message.sender?.username ?? '';
+  const articleLabel = isOwnMessage
+    ? displayContent
+    : `${senderName}: ${displayContent}`;
+
   return (
     <TooltipProvider>
       <motion.div
         id={`message-${message.id}`}
         ref={messageRef}
+        role="article"
+        aria-label={articleLabel}
         className={cn(
           "bubble-message group/message grid grid-cols-10 gap-1 sm:gap-1.5 px-2 sm:px-4",
           isLastInGroup

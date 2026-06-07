@@ -30,9 +30,14 @@ export function ConnectionStatusIndicator({
     return null;
   }
 
+  const statusLabel = isReconnecting ? "Reconnexion en cours..." : "Connexion perdue — cliquez pour reconnecter";
+
   return (
     <button
       onClick={handleReconnect}
+      aria-label={statusLabel}
+      aria-live="polite"
+      aria-atomic="true"
       className={cn(
         "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-[color,background-color,border-color,opacity] cursor-pointer hover:opacity-80",
         isReconnecting
@@ -40,16 +45,15 @@ export function ConnectionStatusIndicator({
           : "bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/30",
         className
       )}
-      title={isReconnecting ? "Reconnexion en cours..." : "Cliquez pour reconnecter"}
     >
       {isReconnecting ? (
         <>
-          <span className="animate-spin">🟡</span>
+          <span aria-hidden="true" className="animate-spin">🟡</span>
           <span>Reconnct</span>
         </>
       ) : (
         <>
-          <span>🔴</span>
+          <span aria-hidden="true">🔴</span>
           <span>Connect</span>
         </>
       )}

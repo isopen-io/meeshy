@@ -51,7 +51,10 @@ export const MessageNameDate = memo(function MessageNameDate({
         </span>
       )}
       <span className="text-gray-400 dark:text-gray-500">•</span>
-      <time className="text-xs text-gray-500 dark:text-gray-400">
+      <time
+        className="text-xs text-gray-500 dark:text-gray-400"
+        dateTime={new Date(message.createdAt).toISOString()}
+      >
         {formatRelativeDate(message.createdAt, { t })}
       </time>
     </div>

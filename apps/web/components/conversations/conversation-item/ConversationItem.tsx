@@ -70,46 +70,46 @@ export const ConversationItem = memo(function ConversationItem({
     e.stopPropagation();
     try {
       await prefsStore.togglePin(conversation.id, !localIsPinned);
-      toast.success(localIsPinned ? 'Conversation désépinglée' : 'Conversation épinglée');
+      toast.success(t(localIsPinned ? 'conversations.unpinned' : 'conversations.pinned'));
     } catch (error) {
       console.error('Error toggling pin:', error);
-      toast.error('Erreur lors de l\'épinglage');
+      toast.error(t('conversations.pinError'));
     }
-  }, [conversation.id, localIsPinned, prefsStore]);
+  }, [conversation.id, localIsPinned, prefsStore, t]);
 
   const handleToggleMute = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
       await prefsStore.toggleMute(conversation.id, !localIsMuted);
-      toast.success(localIsMuted ? 'Notifications activées' : 'Notifications désactivées');
+      toast.success(t(localIsMuted ? 'conversations.unmuted' : 'conversations.muted'));
     } catch (error) {
       console.error('Error toggling mute:', error);
-      toast.error('Erreur lors de la modification');
+      toast.error(t('conversations.muteError'));
     }
-  }, [conversation.id, localIsMuted, prefsStore]);
+  }, [conversation.id, localIsMuted, prefsStore, t]);
 
   const handleToggleArchive = useCallback(async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
       await prefsStore.toggleArchive(conversation.id, !localIsArchived);
-      toast.success(localIsArchived ? 'Conversation désarchivée' : 'Conversation archivée');
+      toast.success(t(localIsArchived ? 'conversations.unarchived' : 'conversations.archived'));
     } catch (error) {
       console.error('Error toggling archive:', error);
-      toast.error('Erreur lors de l\'archivage');
+      toast.error(t('conversations.archiveError'));
     }
-  }, [conversation.id, localIsArchived, prefsStore]);
+  }, [conversation.id, localIsArchived, prefsStore, t]);
 
   const handleSetReaction = useCallback(async (e: React.MouseEvent, emoji: string) => {
     e.stopPropagation();
     try {
       const newReaction = localReaction === emoji ? null : emoji;
       await prefsStore.setReaction(conversation.id, newReaction);
-      toast.success(newReaction ? `Réaction ${emoji} ajoutée` : 'Réaction supprimée');
+      toast.success(newReaction ? `${emoji}` : t('conversations.reactionRemoved'));
     } catch (error) {
       console.error('Error setting reaction:', error);
-      toast.error('Erreur lors de la modification');
+      toast.error(t('conversations.reactionError'));
     }
-  }, [conversation.id, localReaction, prefsStore]);
+  }, [conversation.id, localReaction, prefsStore, t]);
 
   const handleShowDetails = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
@@ -203,9 +203,19 @@ export const ConversationItem = memo(function ConversationItem({
     return isAnonymous ? `${senderName} (anonyme)` : senderName;
   }, []);
 
+  const unreadLabel = conversation.unreadCount && conversation.unreadCount > 0
+    ? `, ${conversation.unreadCount} ${t('conversations.unreadMessages') || 'unread'}`
+    : '';
+  const ariaLabel = `${conversationName}${unreadLabel}${localIsPinned ? `, ${t('conversations.pinned') || 'pinned'}` : ''}${localIsMuted ? `, ${t('conversations.muted') || 'muted'}` : ''}`;
+
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-selected={isSelected}
+      aria-label={ariaLabel}
       onClick={onClick}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } }}
       onMouseEnter={prefetchOnMouseEnter}
       onMouseLeave={prefetchOnMouseLeave}
       className={cn(
@@ -285,9 +295,12 @@ export const ConversationItem = memo(function ConversationItem({
             </h3>
           </div>
           {conversation.lastMessage && (
-            <span className="text-xs text-muted-foreground flex-shrink-0">
+            <time
+              className="text-xs text-muted-foreground flex-shrink-0"
+              dateTime={new Date(conversation.lastMessage.createdAt).toISOString()}
+            >
               {formatTime(conversation.lastMessage.createdAt)}
-            </span>
+            </time>
           )}
         </div>
 
@@ -305,6 +318,7 @@ export const ConversationItem = memo(function ConversationItem({
       {conversation.unreadCount !== undefined && conversation.unreadCount > 0 && (
         <Badge
           variant="destructive"
+          aria-label={`${conversation.unreadCount} ${t('conversations.unreadMessages') || 'unread messages'}`}
           className="ml-2 flex-shrink-0 h-5 min-w-[20px] px-1.5"
         >
           {conversation.unreadCount > 99 ? '99+' : conversation.unreadCount}

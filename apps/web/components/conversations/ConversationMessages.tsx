@@ -463,7 +463,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
       )}
 
       {/* Messages */}
-      <div className="px-2">
+      <div className="px-2" role="log" aria-label="Messages" aria-live="polite" aria-relevant="additions">
         {/* 
           Logique d'affichage selon reverseOrder:
           - reverseOrder=false (BubbleStream): garde [récent...ancien] = Récent EN HAUT

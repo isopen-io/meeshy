@@ -415,6 +415,20 @@
       "single": "Este arquivo já foi adicionado",
       "multiple": "{count} arquivos já foram adicionados"
     },
-    "pasteTooLongTxtCreated": "Texto muito longo: um arquivo .txt foi criado automaticamente"
+    "pasteTooLongTxtCreated": "Texto muito longo: um arquivo .txt foi criado automaticamente",
+    "pinned": "Conversa fixada",
+    "unpinned": "Conversa desafixada",
+    "pinError": "Erro ao fixar a conversa",
+    "muted": "Notificações silenciadas",
+    "unmuted": "Notificações ativadas",
+    "muteError": "Erro ao modificar notificações",
+    "archived": "Conversa arquivada",
+    "unarchived": "Conversa desarquivada",
+    "archiveError": "Erro ao arquivar a conversa",
+    "reactionRemoved": "Reação removida",
+    "reactionError": "Erro ao atualizar a reação",
+    "unreadMessages": "mensagens não lidas",
+    "pinned_label": "fixada",
+    "muted_label": "silenciada"
   }
 }
