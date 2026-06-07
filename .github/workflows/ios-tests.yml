@@ -29,9 +29,18 @@ on:
       - '.github/workflows/ios-tests.yml'
   workflow_dispatch:
 
+# A hung xctest must never sit for GitHub's 6h default. A new push on the same
+# ref cancels stale in-progress runs so we never accumulate multi-hour zombies.
+concurrency:
+  group: ios-tests-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   sdk-tests:
     runs-on: macos-15
+    # Hard cap: the suite normally finishes in <15 min (incl. the one-time 18.2
+    # runtime download). 25 min fails fast if a test deadlocks instead of hanging.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -62,6 +71,8 @@ jobs:
             -scheme MeeshySDK-Package \
             -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.sim_id }}" \
             -resultBundlePath TestResults.xcresult \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 180 \
             -quiet
         working-directory: packages/MeeshySDK
 
@@ -79,6 +90,7 @@ jobs:
 
   ios-tests:
     runs-on: macos-15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -111,6 +123,8 @@ jobs:
             -destination "platform=iOS Simulator,id=${{ steps.sim.outputs.sim_id }}" \
             -only-testing:MeeshyTests \
             -resultBundlePath TestResults.xcresult \
+            -test-timeouts-enabled YES \
+            -maximum-test-execution-time-allowance 180 \
             -quiet
 
       - name: Surface test failures
