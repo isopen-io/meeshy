@@ -475,6 +475,13 @@ function isTopicTooSimilar(topic: string, recentTopics: string[]): boolean {
  * giving up. Without this, validateInterventions silently dropped every planned
  * message (prod regression 2026-05-30: agent produced reactions only).
  */
+// Canonical form for tolerant name matching: strip diacritics, lowercase, drop
+// all whitespace. Weak models routinely mangle names — drop accents
+// ("Israël" → "israel"), split/join words ("inocentguesseu" ↔ "inocent guesseu").
+function canonName(s: string): string {
+  return s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().replace(/\s+/g, '');
+}
+
 function resolveControlledUser(
   rawAsUserId: string,
   controlledUsers: ControlledUser[],
@@ -482,17 +489,11 @@ function resolveControlledUser(
 ): ControlledUser | undefined {
   const direct = byId.get(rawAsUserId);
   if (direct) return direct;
-  const needle = rawAsUserId.trim().toLowerCase();
+  const needle = canonName(rawAsUserId);
   if (!needle) return undefined;
-  // Also compare with all whitespace stripped: the LLM frequently splits or
-  // joins names (username "inocentguesseu" → "inocent guesseu", and vice-versa).
-  const needleTight = needle.replace(/\s+/g, '');
-  return controlledUsers.find((u) => {
-    const dn = u.displayName?.trim().toLowerCase() ?? '';
-    const un = u.username?.trim().toLowerCase() ?? '';
-    if (dn === needle || un === needle) return true;
-    return dn.replace(/\s+/g, '') === needleTight || un.replace(/\s+/g, '') === needleTight;
-  });
+  return controlledUsers.find(
+    (u) => canonName(u.displayName ?? '') === needle || canonName(u.username ?? '') === needle,
+  );
 }
 
 function validateInterventions(
