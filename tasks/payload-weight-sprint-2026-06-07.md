@@ -105,8 +105,8 @@ Plan SOTA (grouper par jeu-de-langues pour éviter N sérialisations) :
 ## Phase D — Média / Translator
 | Item | Détail |
 |---|---|
-| **D1** Opus partout (voice/TTS) | remplacer WAV intermédiaire + MP3 par Opus 24-32 kbps mono : −60 à −80 % vs MP3, −95 % vs WAV. |
-| **D2** Supprimer base64 interne TTS | générer/transporter binaire de bout en bout (ZMQ frames binaires déjà là) ; économie +33 %. |
+| **D1** Opus partout (voice/TTS) | 🟡 **Encodage livré, défaut OFF**. Util pur `utils/audio_format.py::export_options` → Opus = `libopus` mono basse bande (VoIP, `-ac 1`, bitrate `TTS_OPUS_BITRATE=32k`). Câblé dans `synthesizer._convert_format`. **Défaut `TTS_DEFAULT_FORMAT` reste `mp3`** : passer à `opus` casserait les clients non encore migrés au décodage Opus (cf. décision « breaking si versionné »). Activation = flip env **après** Phase E (web + iOS). 8 tests purs verts. |
+| **D2** Supprimer base64 interne TTS | ✅ **Livré (non-breaking)**. Le base64 n'était qu'un round-trip *interne* synthétiseur → handler ZMQ (la frame ZMQ vers la gateway était déjà binaire). Supprimé : `synthesizer` ne produit plus de base64 (`mime_type_for`), le cache (`translation_stage._load_cached_audio`) non plus, et `zmq_audio_handler` lit les octets via `read_audio_bytes` (disque d'abord, base64 = fallback legacy). Économie CPU + ~33 % mémoire dans le hot-path audio @100k msg/s. Embeddings vocaux (D3) gardent base64 — hors scope. |
 | **D3** Embeddings binaires + quantisés | float32→float16 (ou int8) + frame binaire (pas base64) : 4 KB→1-2 KB. |
 | **D4** WebP/AVIF + variantes responsive | 🟡 **Thumbnails WebP livrés** : `generateThumbnail`/`FromBuffer` encodent en WebP (−25-35 % vs JPEG-80) ; serving Content-Type dérivé de l'extension (`.webp`→webp, legacy→jpeg, rétrocompatible) ; util pur `thumbnail.ts` + 7 tests Sharp réels. **Reste** : variantes WebP/AVIF de l'image pleine résolution + `srcset` par largeur (AVIF indispo dans le Sharp de ce container ; à faire en env. avec libheif/aom). |
 | **D5** Dédup média content-addressed | stockage par hash (SHA256) → 1 seule copie des fichiers identiques. |

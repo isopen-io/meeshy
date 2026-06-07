@@ -4,9 +4,8 @@ Synthesizer - Synthèse TTS et conversion audio
 
 Responsabilités:
 - Synthèse TTS avec clonage vocal
-- Conversion de formats audio
+- Conversion de formats audio (Opus basse bande par défaut, D1)
 - Calcul de durée audio
-- Encodage base64 pour transmission
 - Gestion des paramètres de synthèse
 - Segmentation intelligente pour textes longs
 """
@@ -21,6 +20,8 @@ import asyncio
 from typing import Optional, Dict, Any, List, Tuple
 from dataclasses import dataclass
 from pathlib import Path
+
+from utils.audio_format import export_options, mime_type_for
 
 logger = logging.getLogger(__name__)
 
@@ -468,11 +469,9 @@ class Synthesizer:
             duration_ms = await self._get_duration_ms(output_path)
             processing_time = int((time.time() - start_time) * 1000)
 
-            # Encoder l'audio en base64 pour transmission au Gateway
-            audio_data_base64, audio_mime_type = await self._encode_audio_base64(
-                output_path,
-                output_format
-            )
+            # D2: pas d'encodage base64 — le handler ZMQ lit les octets depuis
+            # `output_path` directement (multipart binaire), zéro round-trip.
+            audio_mime_type = mime_type_for(output_format)
 
             logger.info(
                 f"[Synthesizer] ✅ Synthèse terminée: {output_filename} "
@@ -491,7 +490,7 @@ class Synthesizer:
                 text_length=len(text),
                 model_used=model,
                 model_info=model_info,
-                audio_data_base64=audio_data_base64,
+                audio_data_base64=None,
                 audio_mime_type=audio_mime_type
             )
 
@@ -522,12 +521,15 @@ class Synthesizer:
 
             logger.debug(f"[Synthesizer] Conversion {source_ext} → {target_format}")
 
+            # D1: Opus → libopus mono basse bande (VoIP) ; autres formats inchangés.
+            opts = export_options(target_format)
+
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(
                 None,
                 lambda: AudioSegment.from_file(input_path, format=source_ext).export(
                     output_path,
-                    format=target_format
+                    **opts
                 )
             )
 
@@ -611,46 +613,6 @@ class Synthesizer:
         except Exception as e:
             logger.warning(f"[Synthesizer] Erreur ajustement vitesse: {e}")
             return audio_path
-
-    async def _encode_audio_base64(
-        self,
-        audio_path: str,
-        audio_format: str
-    ) -> tuple[Optional[str], Optional[str]]:
-        """
-        Encode un fichier audio en base64 pour transmission.
-
-        Args:
-            audio_path: Chemin du fichier audio
-            audio_format: Format audio (mp3, wav, etc.)
-
-        Returns:
-            Tuple (audio_base64, mime_type)
-        """
-        try:
-            import base64
-
-            loop = asyncio.get_event_loop()
-
-            def read_and_encode():
-                with open(audio_path, 'rb') as f:
-                    audio_bytes = f.read()
-                return base64.b64encode(audio_bytes).decode('utf-8')
-
-            audio_data_base64 = await loop.run_in_executor(None, read_and_encode)
-            audio_mime_type = f"audio/{audio_format}"
-
-            logger.debug(
-                f"[Synthesizer] Audio encodé en base64: "
-                f"{len(audio_data_base64)} chars"
-            )
-
-            return audio_data_base64, audio_mime_type
-
-        except Exception as e:
-            logger.warning(f"[Synthesizer] Erreur encodage base64: {e}")
-            return None, None
-
 
 # Alias pour compatibilité
 TTSResult = UnifiedTTSResult
