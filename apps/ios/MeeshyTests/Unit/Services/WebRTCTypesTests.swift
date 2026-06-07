@@ -74,3 +74,55 @@ final class VideoThermalProfileTests: XCTestCase {
         XCTAssertEqual(c.minScaleDownBy, 1.0, accuracy: 0.0001)
     }
 }
+
+// §7.1 — Continuity / external camera catalog (pure ordering/labeling).
+final class CameraCatalogTests: XCTestCase {
+    private func desc(_ id: String, _ name: String, _ facing: CameraFacing) -> CameraCatalog.Descriptor {
+        CameraCatalog.Descriptor(uniqueID: id, localizedName: name, facing: facing)
+    }
+
+    func test_emptyInput_returnsEmpty() {
+        XCTAssertTrue(CameraCatalog.options(from: []).isEmpty)
+    }
+
+    func test_ordersFrontBackThenExternal() {
+        let options = CameraCatalog.options(from: [
+            desc("ext1", "Studio Display Camera", .external),
+            desc("back1", "Back Camera", .back),
+            desc("front1", "Front Camera", .front)
+        ])
+        XCTAssertEqual(options.map(\.id), ["front1", "back1", "ext1"])
+        XCTAssertEqual(options.map(\.facing), [.front, .back, .external])
+    }
+
+    func test_deduplicatesByUniqueID() {
+        let options = CameraCatalog.options(from: [
+            desc("front1", "Front Camera", .front),
+            desc("front1", "Front Camera", .front)
+        ])
+        XCTAssertEqual(options.count, 1)
+        XCTAssertEqual(options.first?.displayName, "Front Camera")
+    }
+
+    func test_disambiguatesIdenticalExternalNames() {
+        let options = CameraCatalog.options(from: [
+            desc("ext1", "iPhone Camera", .external),
+            desc("ext2", "iPhone Camera", .external)
+        ])
+        XCTAssertEqual(options.map(\.displayName), ["iPhone Camera", "iPhone Camera (2)"])
+        XCTAssertEqual(options.map(\.id), ["ext1", "ext2"])
+    }
+
+    func test_externalOptionFlagsIsExternal() {
+        let options = CameraCatalog.options(from: [desc("ext1", "Continuity Camera", .external)])
+        XCTAssertTrue(options.first?.isExternal == true)
+    }
+
+    func test_sortsAlphabeticallyWithinSameFacing() {
+        let options = CameraCatalog.options(from: [
+            desc("b", "Zoom Cam", .external),
+            desc("a", "Apple Studio", .external)
+        ])
+        XCTAssertEqual(options.map(\.displayName), ["Apple Studio", "Zoom Cam"])
+    }
+}

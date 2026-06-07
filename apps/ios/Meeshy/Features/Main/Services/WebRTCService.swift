@@ -166,6 +166,21 @@ final class WebRTCService {
         }
     }
 
+    // §7.1 — Continuity / external camera picker passthrough.
+    func availableCameras() -> [CameraDeviceOption] {
+        client.availableCameras()
+    }
+
+    func switchToCamera(uniqueID: String) {
+        Task {
+            do {
+                try await client.switchToCamera(uniqueID: uniqueID)
+            } catch {
+                Logger.webrtc.error("Failed to switch to camera \(uniqueID): \(error.localizedDescription)")
+            }
+        }
+    }
+
     // MARK: - Comfort Noise
 
     func handleRemoteAudioMuted(_ muted: Bool) {

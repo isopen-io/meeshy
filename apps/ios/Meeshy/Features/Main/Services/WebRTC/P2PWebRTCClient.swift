@@ -758,6 +758,52 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         Logger.webrtc.info("Switched to \(self.usingFrontCamera ? "front" : "back") camera")
     }
 
+    // §7.1 — Continuity / external camera picker (Mac/iPad). Enumerate the
+    // capture devices and project them into the framework-agnostic catalog so
+    // the UI can present named cameras instead of a meaningless front/back flip.
+    func availableCameras() -> [CameraDeviceOption] {
+        let descriptors = RTCCameraVideoCapturer.captureDevices().map { device in
+            CameraCatalog.Descriptor(
+                uniqueID: device.uniqueID,
+                localizedName: device.localizedName,
+                facing: Self.facing(for: device)
+            )
+        }
+        return CameraCatalog.options(from: descriptors)
+    }
+
+    private static func facing(for device: AVCaptureDevice) -> CameraFacing {
+        switch device.position {
+        case .front: return .front
+        case .back: return .back
+        default:
+            // iOS-on-Mac / iPad: Continuity & USB cameras report `.unspecified`
+            // with an external-class device type.
+            if #available(iOS 17.0, *), device.deviceType == .external || device.deviceType == .continuityCamera {
+                return .external
+            }
+            return .unspecified
+        }
+    }
+
+    // §7.1 — switch to a specific capture device by uniqueID. Mirrors
+    // `switchCamera` (stop → reselect format → start) but targets a named device
+    // (Continuity / USB) rather than toggling front/back.
+    func switchToCamera(uniqueID: String) async throws {
+        guard let capturer = videoCapturer else { return }
+        guard let camera = RTCCameraVideoCapturer.captureDevices().first(where: { $0.uniqueID == uniqueID }) else {
+            throw WebRTCError.noCameraAvailable
+        }
+        guard let selectedFormat = selectFormat(for: camera) else {
+            throw WebRTCError.noCameraFormatAvailable
+        }
+        await capturer.stopCapture()
+        let fps = targetFrameRate(for: selectedFormat)
+        try await capturer.startCapture(with: camera, format: selectedFormat, fps: fps)
+        usingFrontCamera = (camera.position == .front)
+        Logger.webrtc.info("[WEBRTC] switched to camera \(camera.localizedName, privacy: .public)")
+    }
+
     func getStats() async -> CallStats? {
         guard let pc = peerConnection else { return nil }
         // Project the framework's `RTCStatisticsReport` into `[CallStats.RawEntry]`
@@ -1311,6 +1357,8 @@ final class P2PWebRTCClient: WebRTCClientProviding {
     func toggleVideo(_ enabled: Bool) {}
     func applyVideoEncoding(maxBitrateBps: Int, maxFramerate: Int, scaleResolutionDownBy: Double) {}
     func switchCamera() async throws {}
+    func availableCameras() -> [CameraDeviceOption] { [] }
+    func switchToCamera(uniqueID: String) async throws {}
     func getStats() async -> CallStats? { nil }
     func createDataChannel(label: String) -> Bool { false }
     func sendDataChannelMessage(_ data: Data) {}

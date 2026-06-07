@@ -217,6 +217,10 @@ final class MockWebRTCClient: WebRTCClientProviding {
         lastVideoEncoding = (maxBitrateBps, maxFramerate, scaleResolutionDownBy)
     }
     func switchCamera() async throws {}
+    var availableCamerasResult: [CameraDeviceOption] = []
+    private(set) var lastSwitchToCameraId: String?
+    func availableCameras() -> [CameraDeviceOption] { availableCamerasResult }
+    func switchToCamera(uniqueID: String) async throws { lastSwitchToCameraId = uniqueID }
     func getStats() async -> CallStats? { nil }
     func createDataChannel(label: String) -> Bool { false }
     func sendDataChannelMessage(_ data: Data) {}
