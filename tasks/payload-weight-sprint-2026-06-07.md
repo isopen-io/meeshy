@@ -52,9 +52,9 @@ chaque frame WebSocket, chaque blob média.
 |---|---|---|
 | **A1** Compression REST Brotli/gzip | ✅ **Livré** | `@fastify/compress` global, br q5 / gzip 6, seuil 1 Ko. Médias auto-exclus (mime-db non-compressible) → range requests intacts. |
 | **A2** Tuning deflate WebSocket | ✅ **Livré** | seuil `perMessageDeflate` 1024→256 : compresse reaction/read-status/presence/typing. Context-takeover off (mémoire @100k sockets). |
-| **A3** Filtre langue REST (opt-in) | ⏳ À faire | `GET /messages?languages=fr,en` → ne sérialiser que les traductions demandées. Additif, défaut = comportement actuel. |
-| **A4** Trim participants liste conv | ⏳ À faire | Retirer `firstName/lastName` du `select` participants (`core.ts`). Déjà non rendus. |
-| **A5** Trim métadonnées attachement | ⏳ À faire | Liste messages : ne renvoyer que `id/mimeType/thumbnailUrl/fileSize/(w,h)`. Le reste (codec/bitrate/segments) déplacé au détail. |
+| **A3** Filtre langue REST (opt-in) | ✅ **Livré** | `GET /messages?languages=fr,en` → un seul param filtre les traductions **texte ET audio** (Prisme). Additif, défaut = toutes les langues. Param plumbé via `transformTranslationsToArray(opts)` + `cleanAttachmentsForApi(langFilter)`. 6 tests unitaires verts. Adoption client = E3. |
+| **A4** Trim participants liste conv | ✅ **Déjà fait** | `conversationListParticipantSelect` (T17) ne contient déjà ni `firstName/lastName` ni `permissions`. Sender de message aussi trimmé (T16, `messageSenderUserSelect`). Rien à faire. |
+| **A5** Trim métadonnées attachement | ⚠️ **Écarté (risque>gain)** | `attachmentMediaSelect` porte `transcription`+`translations` (Prisme audio) **nécessaires** au rendu instantané en liste. Les scalaires (codec/bitrate/fps) sont petits. Le vrai poids = les traductions audio multi-langues → déjà couvert par A3. Pas de trim scalaire agressif. |
 
 ## Phase B — Filtrage par destinataire + compaction (breaking, versionné)
 | Item | Détail |

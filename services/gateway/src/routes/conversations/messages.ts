@@ -108,10 +108,16 @@ const logger = enhancedLogger.child({ module: 'messages' });
  * Nettoie les attachments pour l'API en transformant les valeurs invalides
  * Fixe spécifiquement voiceSimilarityScore: false -> null pour compatibilité schéma
  */
-function cleanAttachmentsForApi(attachments: any[]): any[] {
+function cleanAttachmentsForApi(attachments: any[], languageFilter?: readonly string[]): any[] {
   if (!attachments || !Array.isArray(attachments)) {
     return attachments;
   }
+
+  // Bandwidth opt-in : restreindre les traductions audio (Prisme) aux langues
+  // demandées, miroir exact du filtre appliqué aux traductions texte.
+  const langSet = languageFilter && languageFilter.length > 0
+    ? new Set(languageFilter.map((l) => l.toLowerCase()))
+    : null;
 
   if (attachments.length > 0) {
     logger.debug(`🧹 [CLEAN] Nettoyage de ${attachments.length} attachment(s) pour l'API`);
@@ -162,6 +168,7 @@ function cleanAttachmentsForApi(attachments: any[]): any[] {
 
       const cleanedTranslations: any = {};
       for (const [lang, translation] of Object.entries(cleaned.translations)) {
+        if (langSet && !langSet.has(lang.toLowerCase())) continue;
         const trans = translation as any;
         cleanedTranslations[lang] = {
           ...trans,
@@ -312,7 +319,8 @@ export function registerMessagesRoutes(
           include_reactions: { type: 'string', enum: ['true', 'false'], description: 'Include detailed reactions list (default false). Note: reactionSummary and reactionCount are always included.' },
           include_translations: { type: 'string', enum: ['true', 'false'], description: 'Include translations (default true)' },
           include_status: { type: 'string', enum: ['true', 'false'], description: 'Include per-user read status entries (default false)' },
-          include_replies: { type: 'string', enum: ['true', 'false'], description: 'Include replyTo message details (default true)' }
+          include_replies: { type: 'string', enum: ['true', 'false'], description: 'Include replyTo message details (default true)' },
+          languages: { type: 'string', description: 'Comma-separated Prisme languages (e.g. "fr,en"). When set, only these languages are serialized in BOTH text and audio translations; absent = all languages. Bandwidth opt-in.' }
         }
       },
       response: {
@@ -365,7 +373,8 @@ export function registerMessagesRoutes(
         include_reactions: includeReactionsStr = 'false',
         include_translations: includeTranslationsStr = 'true',
         include_status: includeStatusStr = 'false',
-        include_replies: includeRepliesStr = 'true'
+        include_replies: includeRepliesStr = 'true',
+        languages: languagesStr
       } = request.query;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
@@ -375,6 +384,16 @@ export function registerMessagesRoutes(
       const includeTranslations = includeTranslationsStr === 'true';
       const includeStatus = includeStatusStr === 'true';
       const includeReplies = includeRepliesStr === 'true';
+
+      // Bandwidth opt-in : filtrage des traductions (texte + audio) aux seules
+      // langues du Prisme demandées par le client. Absent/vide = toutes les
+      // langues (comportement historique). Normalisé, dédupliqué, borné.
+      const languageFilter = languagesStr
+        ? Array.from(new Set(
+            languagesStr.split(',').map((l) => l.trim().toLowerCase()).filter(Boolean)
+          )).slice(0, 20)
+        : undefined;
+      const hasLanguageFilter = !!languageFilter && languageFilter.length > 0;
 
       // Forward watermark mode (local-first incremental gap backfill): fetch
       // messages created strictly after the client's high-water mark, oldest
@@ -950,7 +969,7 @@ export function registerMessagesRoutes(
             isOnline: message.sender.user?.isOnline ?? message.sender.isOnline ?? null,
             lastActiveAt: message.sender.user?.lastActiveAt ?? message.sender.lastActiveAt ?? null,
           } : null,
-          attachments: cleanAttachmentsForApi(message.attachments),
+          attachments: cleanAttachmentsForApi(message.attachments, languageFilter),
           _count: message._count
         };
 
@@ -959,7 +978,8 @@ export function registerMessagesRoutes(
           // Transformer JSON vers array pour rétrocompatibilité frontend
           mappedMessage.translations = transformTranslationsToArray(
             message.id,
-            message.translations as Record<string, any>
+            message.translations as Record<string, any>,
+            hasLanguageFilter ? { languages: languageFilter } : undefined
           );
         }
         if (includeReactions && message.reactions) {
