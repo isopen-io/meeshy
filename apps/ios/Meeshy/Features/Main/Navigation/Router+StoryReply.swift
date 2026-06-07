@@ -15,7 +15,7 @@ extension Router {
         let authId: String
         switch context {
         case .story(_, let authorId, _, _, _, _, _, _): authId = authorId
-        case .status(_, let authorId, _, _, _): authId = authorId
+        case .status(_, let authorId, _, _, _, _): authId = authorId
         }
 
         if let existingConv = conversationListViewModel.conversations.first(where: {

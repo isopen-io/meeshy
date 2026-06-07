@@ -121,7 +121,15 @@ final class Router: ObservableObject {
     /// view applies it. Lives on Router so any view can set it (StoryViewerContainer
     /// is presented from multiple parents — RootView, iPadRootView, ConversationView,
     /// FeedOverlay) without each parent maintaining its own copy.
-    @Published var pendingReplyContext: ReplyContext?
+    @Published var pendingReplyContext: ReplyContext? {
+        didSet { if pendingReplyContext != nil { replyContextVersion &+= 1 } }
+    }
+
+    /// Incrémenté à chaque pose d'un `pendingReplyContext`. Permet à une
+    /// `ConversationView` DÉJÀ visible (réponse à un mood affiché dans sa propre
+    /// barre directe) d'appliquer le contexte sans dépendre d'un `onAppear` qui
+    /// ne se redéclenche pas quand on « navigue » vers la conversation courante.
+    @Published var replyContextVersion: Int = 0
 
     /// iPad two-column mode: when set, route requests are forwarded here
     /// instead of being pushed onto the NavigationStack path.

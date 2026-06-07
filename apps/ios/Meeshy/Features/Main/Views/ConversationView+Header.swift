@@ -415,7 +415,7 @@ private struct ConversationHeaderAvatarView: View {
                         headerState.showStoryViewerFromHeader = true
                     }
                 } : nil,
-                onMoodTap: isDirect ? statusViewModel.moodTapHandler(for: conversation?.participantUserId ?? "") : nil,
+                onMoodTap: isDirect ? statusViewModel.moodTapHandler(for: conversation?.participantUserId ?? "", repliesInline: true) : nil,
                 contextMenuItems: directContextMenu
             )
         }

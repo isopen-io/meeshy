@@ -1775,15 +1775,30 @@ extension APIPost {
 public enum ReplyContext {
     case story(storyId: String, authorId: String, authorName: String, preview: String,
                publishedAt: Date? = nil, reactionCount: Int? = nil, commentCount: Int? = nil, thumbnailUrl: String? = nil)
-    case status(statusId: String, authorId: String, authorName: String, emoji: String, content: String?)
+    case status(statusId: String, authorId: String, authorName: String, emoji: String, content: String?, publishedAt: Date? = nil)
+
+    /// Identifiant de l'auteur cité — utilisé pour résoudre/ouvrir la DM
+    /// correspondante avant d'amorcer la réponse.
+    public var authorId: String {
+        switch self {
+        case .story(_, let authorId, _, _, _, _, _, _): return authorId
+        case .status(_, let authorId, _, _, _, _): return authorId
+        }
+    }
 
     public var toReplyReference: ReplyReference {
         switch self {
         case .story(let storyId, _, let authorName, let preview, let publishedAt, let reactionCount, let commentCount, let thumbnailUrl):
             return ReplyReference(messageId: storyId, authorName: authorName, previewText: preview, isStoryReply: true,
                                   storyPublishedAt: publishedAt, storyReactionCount: reactionCount, storyCommentCount: commentCount, storyThumbnailUrl: thumbnailUrl)
-        case .status(let statusId, _, let authorName, let emoji, let content):
-            return ReplyReference(messageId: statusId, authorName: authorName, previewText: "\(emoji) \(content ?? "")", isStoryReply: true)
+        case .status(let statusId, _, let authorName, let emoji, let content, let publishedAt):
+            // Réponse à un mood : le contenu entier va dans previewText, l'emoji
+            // et la date sont portés séparément pour un rendu dédié (emoji +
+            // contenu + date). `isStoryReply` reste vrai pour router l'envoi via
+            // `storyReplyToId` (le mood est un post côté backend).
+            return ReplyReference(messageId: statusId, authorName: authorName,
+                                  previewText: content ?? "", isStoryReply: true,
+                                  storyPublishedAt: publishedAt, moodEmoji: emoji)
         }
     }
 }
