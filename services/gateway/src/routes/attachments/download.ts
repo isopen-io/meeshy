@@ -5,6 +5,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AttachmentService } from '../../services/attachments';
+import { thumbnailContentType } from '../../services/attachments/thumbnail';
 import { createReadStream } from 'fs';
 import { stat } from 'fs/promises';
 import { resolve as pathResolve, sep as pathSep } from 'path';
@@ -152,7 +153,7 @@ export async function registerDownloadRoutes(
         },
         response: {
           200: {
-            description: 'Thumbnail stream returned successfully (image/jpeg)',
+            description: 'Thumbnail stream returned successfully (image/webp for new uploads, image/jpeg for legacy)',
             type: 'string',
             format: 'binary'
           },
@@ -188,7 +189,9 @@ export async function registerDownloadRoutes(
           });
         }
 
-        reply.header('Content-Type', 'image/jpeg');
+        // WebP thumbnails (sprint D4) advertise image/webp; legacy thumbnails
+        // (always JPEG bytes whatever their extension) stay image/jpeg.
+        reply.header('Content-Type', thumbnailContentType(thumbnailPath));
         reply.header('Content-Disposition', 'inline');
         reply.header('Cross-Origin-Resource-Policy', 'cross-origin');
         reply.header('Access-Control-Allow-Origin', '*');

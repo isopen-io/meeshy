@@ -108,7 +108,7 @@ Plan SOTA (grouper par jeu-de-langues pour éviter N sérialisations) :
 | **D1** Opus partout (voice/TTS) | remplacer WAV intermédiaire + MP3 par Opus 24-32 kbps mono : −60 à −80 % vs MP3, −95 % vs WAV. |
 | **D2** Supprimer base64 interne TTS | générer/transporter binaire de bout en bout (ZMQ frames binaires déjà là) ; économie +33 %. |
 | **D3** Embeddings binaires + quantisés | float32→float16 (ou int8) + frame binaire (pas base64) : 4 KB→1-2 KB. |
-| **D4** WebP/AVIF + variantes responsive | transcodage à l'upload, `srcset` / variantes par largeur. PNG 8-15 MB → AVIF 0.4-0.8 MB. |
+| **D4** WebP/AVIF + variantes responsive | 🟡 **Thumbnails WebP livrés** : `generateThumbnail`/`FromBuffer` encodent en WebP (−25-35 % vs JPEG-80) ; serving Content-Type dérivé de l'extension (`.webp`→webp, legacy→jpeg, rétrocompatible) ; util pur `thumbnail.ts` + 7 tests Sharp réels. **Reste** : variantes WebP/AVIF de l'image pleine résolution + `srcset` par largeur (AVIF indispo dans le Sharp de ce container ; à faire en env. avec libheif/aom). |
 | **D5** Dédup média content-addressed | stockage par hash (SHA256) → 1 seule copie des fichiers identiques. |
 | **D6** TTS à la demande, pas broadcast N langues | ne synthétiser/pousser l'audio que pour les langues réellement consommées. |
 
