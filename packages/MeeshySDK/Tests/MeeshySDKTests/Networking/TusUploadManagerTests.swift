@@ -105,6 +105,52 @@ final class TusUploadManagerTests: XCTestCase {
         XCTAssertEqual(queueProgress.files.count, 1)
     }
 
+    // MARK: - computeQueueProgress (failed-file exclusion)
+
+    /// A permanently-failed file must be excluded from the batch aggregates so a
+    /// single failure can't freeze the progress bar's count/percentage below 100%
+    /// forever — but it must remain in `files` (status `.error`) for the UI.
+    func test_computeQueueProgress_excludesErrorFilesFromAggregates_butKeepsThemInList() {
+        let ok = FileUploadProgress(
+            fileId: "f1", fileName: "a.jpg", fileSize: 100,
+            status: .complete, percentage: 100, bytesUploaded: 100,
+            error: nil, attachmentId: nil)
+        let failed = FileUploadProgress(
+            fileId: "f2", fileName: "b.jpg", fileSize: 200,
+            status: .error, percentage: 30, bytesUploaded: 60,
+            error: "boom", attachmentId: nil)
+
+        let progress = TusUploadManager.computeQueueProgress(from: [ok, failed])
+
+        XCTAssertEqual(progress.totalFiles, 1, "error files must not inflate totalFiles")
+        XCTAssertEqual(progress.completedFiles, 1)
+        XCTAssertEqual(progress.totalBytes, 100, "error-file bytes excluded from totalBytes")
+        XCTAssertEqual(progress.uploadedBytes, 100)
+        XCTAssertEqual(progress.globalPercentage, 100,
+                       "the successful file reaches 100% despite a sibling failure")
+        XCTAssertEqual(progress.files.count, 2, "the failed file stays in files for the UI")
+        XCTAssertTrue(progress.files.contains { $0.status == .error })
+    }
+
+    /// With no failed files the aggregate is unchanged from the naive sum
+    /// (regression guard: the exclusion must not alter the happy path).
+    func test_computeQueueProgress_withoutErrors_aggregatesAllFiles() {
+        let f1 = FileUploadProgress(
+            fileId: "f1", fileName: "a", fileSize: 100,
+            status: .complete, percentage: 100, bytesUploaded: 100, error: nil, attachmentId: nil)
+        let f2 = FileUploadProgress(
+            fileId: "f2", fileName: "b", fileSize: 100,
+            status: .uploading, percentage: 50, bytesUploaded: 50, error: nil, attachmentId: nil)
+
+        let progress = TusUploadManager.computeQueueProgress(from: [f1, f2])
+
+        XCTAssertEqual(progress.totalFiles, 2)
+        XCTAssertEqual(progress.completedFiles, 1)
+        XCTAssertEqual(progress.totalBytes, 200)
+        XCTAssertEqual(progress.uploadedBytes, 150)
+        XCTAssertEqual(progress.globalPercentage, 75)
+    }
+
     // MARK: - TusUploadResult
 
     func test_tusUploadResult_toMessageAttachment_mapsFieldsCorrectly() {

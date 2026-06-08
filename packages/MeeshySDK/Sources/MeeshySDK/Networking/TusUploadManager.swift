@@ -131,6 +131,10 @@ public actor TusUploadManager {
                     processQueue()
                 } catch {
                     activeCount -= 1
+                    // Mark the failed file `.error` so it stops being surfaced as an
+                    // in-flight `.uploading` file forever (stale "Envoi…" indicator)
+                    // and is excluded from the batch aggregates by `emitProgress`.
+                    markFileFailed(fileName: fileURL.lastPathComponent, error: error)
                     continuation.resume(throwing: error)
                     processQueue()
                 }
@@ -411,17 +415,42 @@ public actor TusUploadManager {
 
     private static let logger = Logger(subsystem: "com.meeshy.sdk", category: "tus-upload")
 
-    private func emitProgress() {
-        let files = Array(progressMap.values)
-        let totalBytes = files.reduce(Int64(0)) { $0 + $1.fileSize }
-        let uploadedBytes = files.reduce(Int64(0)) { $0 + $1.bytesUploaded }
-        let completedFiles = files.filter { $0.status == .complete }.count
+    /// Flip a queued/uploading file's progress row to `.error`, preserving its
+    /// last bytes/percentage, and re-emit. Resolves the row by `fileName` (the
+    /// same lookup `performTusUpload` uses) since the dispatch queue item only
+    /// carries the URL. No-op if the row is already gone.
+    private func markFileFailed(fileName: String, error: Error) {
+        guard let fileId = progressMap.first(where: { $0.value.fileName == fileName })?.key,
+              let prev = progressMap[fileId] else { return }
+        progressMap[fileId] = FileUploadProgress(
+            fileId: prev.fileId, fileName: prev.fileName, fileSize: prev.fileSize,
+            status: .error, percentage: prev.percentage, bytesUploaded: prev.bytesUploaded,
+            error: error.localizedDescription, attachmentId: prev.attachmentId
+        )
+        emitProgress()
+    }
 
-        let progress = UploadQueueProgress(
-            files: files, totalFiles: files.count, completedFiles: completedFiles,
+    private func emitProgress() {
+        progressSubject.send(Self.computeQueueProgress(from: Array(progressMap.values)))
+    }
+
+    /// Pure aggregation of per-file progress into the batch-level
+    /// `UploadQueueProgress`. **Permanently-failed (`.error`) files are excluded
+    /// from the aggregates** (totalFiles / completedFiles / totalBytes /
+    /// uploadedBytes / globalPercentage) so a single failure doesn't freeze the
+    /// progress bar's count and percentage below 100% forever. The failed file
+    /// stays in `files` (status `.error`) so the UI can still surface it; the
+    /// message-level failure UI owns showing the actual error. With no `.error`
+    /// files the result is identical to the previous behaviour.
+    nonisolated static func computeQueueProgress(from files: [FileUploadProgress]) -> UploadQueueProgress {
+        let active = files.filter { $0.status != .error }
+        let totalBytes = active.reduce(Int64(0)) { $0 + $1.fileSize }
+        let uploadedBytes = active.reduce(Int64(0)) { $0 + $1.bytesUploaded }
+        let completedFiles = active.filter { $0.status == .complete }.count
+        return UploadQueueProgress(
+            files: files, totalFiles: active.count, completedFiles: completedFiles,
             totalBytes: totalBytes, uploadedBytes: uploadedBytes,
             globalPercentage: totalBytes > 0 ? Double(uploadedBytes) / Double(totalBytes) * 100 : 0
         )
-        progressSubject.send(progress)
     }
 }
