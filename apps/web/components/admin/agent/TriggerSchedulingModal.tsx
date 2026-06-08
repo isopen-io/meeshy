@@ -295,7 +295,7 @@ export default memo(function TriggerSchedulingModal({
               <span>Trigger programme a <strong>{scheduledTimer.label}</strong></span>
               <span className="text-xs text-amber-500">({formatDuration(scheduledTimer.target - now)})</span>
             </div>
-            <Button variant="ghost" size="sm" onClick={handleCancelSchedule} className="h-6 w-6 p-0 text-amber-600 hover:text-amber-800">
+            <Button variant="ghost" size="sm" onClick={handleCancelSchedule} className="h-6 w-6 p-0 text-amber-600 hover:text-amber-800" aria-label="Cancel schedule">
               <X className="h-3.5 w-3.5" />
             </Button>
           </div>

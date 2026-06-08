@@ -113,10 +113,10 @@ export function AnonymousForm({
             </div>
           </div>
           {usernameCheckStatus === 'taken' && (
-            <p className="text-xs text-red-500">Ce pseudo est déjà utilisé</p>
+            <p className="text-xs text-red-500">{t('usernameAlreadyTaken')}</p>
           )}
           {usernameCheckStatus === 'available' && (
-            <p className="text-xs text-green-600">Ce pseudo est disponible</p>
+            <p className="text-xs text-green-600">{t('usernameAvailable')}</p>
           )}
           {usernameCheckStatus === 'idle' && (
             <>
@@ -151,10 +151,10 @@ export function AnonymousForm({
             )}
           </div>
           {usernameCheckStatus === 'taken' && (
-            <p className="text-xs text-red-500">Ce pseudo est déjà utilisé</p>
+            <p className="text-xs text-red-500">{t('usernameAlreadyTaken')}</p>
           )}
           {usernameCheckStatus === 'available' && (
-            <p className="text-xs text-green-600">Ce pseudo est disponible</p>
+            <p className="text-xs text-green-600">{t('usernameAvailable')}</p>
           )}
           {usernameCheckStatus === 'idle' && (
             <>

@@ -21,6 +21,7 @@ import {
   Type,
 } from 'lucide-react';
 import { agentAdminService, type AgentStatsData } from '@/services/agent-admin.service';
+import { useI18n } from '@/hooks/useI18n';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
 
 import { toast } from 'sonner';
@@ -47,6 +48,7 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export function AgentOverviewTab() {
+  const { t } = useI18n('admin');
   const [stats, setStats] = useState<AgentStatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -304,12 +306,12 @@ export function AgentOverviewTab() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <Clock className="h-4 w-4 text-indigo-500" />
-              Activité récente
+              {t('agentOverview.recentActivity')}
             </CardTitle>
           </CardHeader>
           <CardContent>
             {recentActivity.length === 0 ? (
-              <p className="text-sm text-gray-400 italic py-4 text-center">Aucune activité récente</p>
+              <p className="text-sm text-gray-400 italic py-4 text-center">{t('agentOverview.noActivity')}</p>
             ) : (
               <div className="space-y-1.5 max-h-[240px] overflow-y-auto">
                 {recentActivity.map((entry) => (

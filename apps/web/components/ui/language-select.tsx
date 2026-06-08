@@ -10,6 +10,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { useI18n } from '@/hooks/useI18n';
 
 interface Language {
   code: string;
@@ -34,6 +35,7 @@ export function LanguageSelect({
   disabled = false,
   className,
 }: LanguageSelectProps) {
+  const { t } = useI18n('components');
   const [open, setOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
 
@@ -100,7 +102,7 @@ export function LanguageSelect({
           <div className="max-h-[200px] overflow-y-auto">
             {filteredLanguages.length === 0 ? (
               <div className="py-6 text-center text-sm text-muted-foreground">
-                Aucune langue trouvée
+                {t('languageSelect.noLanguageFound')}
               </div>
             ) : (
               <div className="p-1">

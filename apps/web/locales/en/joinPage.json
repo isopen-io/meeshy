@@ -63,6 +63,7 @@
     "redirecting": "Redirecting to your conversation",
     "joinError": "Error joining the conversation",
     "usernameAlreadyTaken": "This username is already taken",
+    "usernameAvailable": "Username is available",
     "suggestedUsername": "Suggested username: {username}",
     "firstNameRequired": "First name and last name are required",
     "connectionError": "Connection error"

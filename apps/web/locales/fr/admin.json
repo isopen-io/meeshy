@@ -40,5 +40,49 @@
     "match": "correspondance",
     "matches": "correspondances",
     "invalidRegex": "regex invalide"
+  },
+  "agentOverview": {
+    "recentActivity": "Activité récente",
+    "noActivity": "Aucune activité récente"
+  },
+  "agentLive": {
+    "selectConversation": "Sélectionnez une conversation pour superviser son état en temps réel",
+    "liveTitle": "Live : {id}...",
+    "loading": "Chargement..."
+  },
+  "rankingFilters": {
+    "filtersTitle": "Filtres de classement",
+    "entityType": "Type d'entité",
+    "selectType": "Sélectionnez le type",
+    "entityUsers": "Utilisateurs",
+    "entityConversations": "Conversations",
+    "entityMessages": "Messages",
+    "entityLinks": "Liens",
+    "criterion": "Critère",
+    "selectCriterion": "Sélectionnez le critère",
+    "filterCriteria": "Filtrer les critères...",
+    "noCriterion": "Aucun critère trouvé",
+    "period": "Période",
+    "selectPeriod": "Sélectionnez la période",
+    "period1d": "Dernier jour (24h)",
+    "period7d": "Dernière semaine (7j)",
+    "period30d": "Dernier mois (30j)",
+    "period90d": "Dernier trimestre (90j)",
+    "period180d": "Dernier semestre (180j)",
+    "period365d": "Dernière année (365j)",
+    "periodAll": "Tous les temps",
+    "resultsCount": "Nombre de résultats"
+  },
+  "userDetail": {
+    "languagePreferences": "Préférences de Langue",
+    "edit": "Modifier"
+  },
+  "translationMonitor": {
+    "loading": "Chargement des métriques...",
+    "messages": "Messages",
+    "translated": "Traduits",
+    "languageBreakdown": "Répartition par langue",
+    "messagesUnit": "messages",
+    "errorsUnit": "erreurs"
   }
 }

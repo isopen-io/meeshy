@@ -18,6 +18,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/hooks/useI18n';
 
 interface TranslationMetrics {
   // Métriques de base
@@ -61,6 +62,7 @@ export function TranslationMonitor({
   showDetails = true,
   refreshInterval = 5000
 }: TranslationMonitorProps) {
+  const { t } = useI18n('admin');
   const [metrics, setMetrics] = useState<TranslationMetrics | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -153,7 +155,7 @@ export function TranslationMonitor({
         {isLoading && !metrics && (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-            <span className="ml-2 text-gray-600">Chargement des métriques...</span>
+            <span className="ml-2 text-gray-600">{t('translationMonitor.loading')}</span>
           </div>
         )}
 
@@ -164,7 +166,7 @@ export function TranslationMonitor({
               <div className="bg-blue-50 p-4 rounded-lg">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-blue-700 text-sm font-medium">Messages</p>
+                    <p className="text-blue-700 text-sm font-medium">{t('translationMonitor.messages')}</p>
                     <p className="text-2xl font-bold text-blue-900">{metrics.totalMessages}</p>
                   </div>
                   <Languages className="h-8 w-8 text-blue-600 opacity-60" />
@@ -174,7 +176,7 @@ export function TranslationMonitor({
               <div className="bg-green-50 p-4 rounded-lg">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-green-700 text-sm font-medium">Traduits</p>
+                    <p className="text-green-700 text-sm font-medium">{t('translationMonitor.translated')}</p>
                     <p className="text-2xl font-bold text-green-900">{metrics.translatedMessages}</p>
                     <p className="text-green-600 text-xs">{translationRate.toFixed(1)}%</p>
                   </div>
@@ -267,7 +269,7 @@ export function TranslationMonitor({
 
                 {/* Répartition par langue */}
                 <div>
-                  <h4 className="font-medium text-gray-900 mb-3">Répartition par langue</h4>
+                  <h4 className="font-medium text-gray-900 mb-3">{t('translationMonitor.languageBreakdown')}</h4>
                   <div className="space-y-3">
                     {Object.entries(metrics.languageBreakdown)
                       .sort(([, a], [, b]) => b.count - a.count)
@@ -278,9 +280,9 @@ export function TranslationMonitor({
                               {lang.toUpperCase()}
                             </Badge>
                             <div>
-                              <p className="font-medium">{data.count} messages</p>
+                              <p className="font-medium">{data.count} {t('translationMonitor.messagesUnit')}</p>
                               <p className="text-sm text-gray-600">
-                                {data.avgTime}ms • {data.errorRate}% erreurs
+                                {data.avgTime}ms • {data.errorRate}% {t('translationMonitor.errorsUnit')}
                               </p>
                             </div>
                           </div>

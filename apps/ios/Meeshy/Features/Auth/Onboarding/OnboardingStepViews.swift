@@ -45,6 +45,9 @@ struct GlassTextField: View {
                             .font(.system(size: 16))
                             .foregroundColor(.secondary)
                     }
+                    .accessibilityLabel(String(localized: "onboarding.field.toggle-password",
+                                               defaultValue: "Toggle password visibility",
+                                               bundle: .main))
                 }
 
                 if isValidating {
@@ -771,6 +774,9 @@ struct StepLanguageView: View {
                         Button(action: { searchText = "" }) {
                             Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
                         }
+                        .accessibilityLabel(String(localized: "onboarding.step.language.clear-search",
+                                                   defaultValue: "Clear search",
+                                                   bundle: .main))
                     }
                 }
                 .padding(12)

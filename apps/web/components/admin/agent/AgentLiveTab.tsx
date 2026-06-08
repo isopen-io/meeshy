@@ -15,6 +15,7 @@ import {
   type ToneProfileEntry,
   type RecentConversationActivity,
 } from '@/services/agent-admin.service';
+import { useI18n } from '@/hooks/useI18n';
 import dynamic from 'next/dynamic';
 
 const AgentScheduleTimeline = dynamic(() => import('./AgentScheduleTimeline'), {
@@ -366,6 +367,7 @@ function MetricsCard({ data }: { data: LiveStateData }) {
 // ── Main Live Tab ─────────────────────────────────────────────────────────
 
 export function AgentLiveTab() {
+  const { t } = useI18n('admin');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [liveState, setLiveState] = useState<LiveStateData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -448,7 +450,7 @@ export function AgentLiveTab() {
             <CardContent className="text-center py-16">
               <Eye className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
               <p className="text-sm text-gray-400">
-                Sélectionnez une conversation pour superviser son état en temps réel
+                {t('agentLive.selectConversation')}
               </p>
             </CardContent>
           </Card>
@@ -458,7 +460,7 @@ export function AgentLiveTab() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 min-w-0">
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
-                  {liveState?.conversationId ? `Live : ${liveState.conversationId.slice(0, 12)}...` : 'Chargement...'}
+                  {liveState?.conversationId ? t('agentLive.liveTitle').replace('{id}', liveState.conversationId.slice(0, 12)) : t('agentLive.loading')}
                 </h3>
               </div>
               <div className="flex items-center gap-2 shrink-0">
