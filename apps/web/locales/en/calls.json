@@ -75,7 +75,9 @@
       "connectionError": "Connection error",
       "videoSwitchFailed": "Failed to switch video",
       "cameraSwitched": "Camera switched",
-      "cameraSwitchFailed": "Failed to switch camera"
+      "cameraSwitchFailed": "Failed to switch camera",
+      "videoSuspendedPoorConnection": "Weak connection — video paused to keep the call going",
+      "videoResumed": "Connection recovered — video back on"
     },
     "permissions": {
       "title": {

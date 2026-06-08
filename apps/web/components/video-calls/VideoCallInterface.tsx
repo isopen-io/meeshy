@@ -12,6 +12,11 @@ import { useWebRTCP2P } from '@/hooks/use-webrtc-p2p';
 import { useAudioEffects } from '@/hooks/use-audio-effects';
 import { useCallQuality } from '@/hooks/use-call-quality';
 import { useActivePeerConnection } from '@/hooks/use-active-peer-connection';
+import {
+  createDegradationState,
+  reduceDegradation,
+  type DegradationState,
+} from '@/lib/calls/adaptive-degradation';
 import { VideoStream } from './VideoStream';
 import { CallControls } from './CallControls';
 import { CallStatusIndicator } from './CallStatusIndicator';
@@ -48,6 +53,11 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   const [callDuration, setCallDuration] = useState(0);
   const [showAudioEffects, setShowAudioEffects] = useState(false);
   const [showStats, setShowStats] = useState(false);
+  // Survival mode: outbound video auto-dropped because the link could not
+  // sustain even the lowest tier. Distinct from the user's camera intent
+  // (controls.videoEnabled) — the user still WANTS video, the network can't.
+  const [videoSuspended, setVideoSuspended] = useState(false);
+  const degradationRef = React.useRef<DegradationState>(createDegradationState());
 
   // New state for fullscreen mode and disconnected participants
   const [fullscreenParticipantId, setFullscreenParticipantId] = useState<string | null>(null);
@@ -101,20 +111,70 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   // Check if any audio effect is active
   const audioEffectsActive = Object.values(effectsState).some(effect => effect.enabled);
 
-  // Adaptive compression control loop: feed observed connection quality back
-  // into the encoder so outbound video sheds bitrate/resolution under
-  // congestion (degradationPreference 'maintain-framerate') rather than
-  // freezing. Only acts while we are actually sending video.
+  // Emit a media-toggle to the peer (drives the remote avatar placeholder),
+  // mirroring the manual camera button. Used by the survival controller when it
+  // auto-suspends/resumes outbound video.
+  const emitVideoToggle = useCallback((enabled: boolean) => {
+    const socket = meeshySocketIOService.getSocket();
+    if (socket) {
+      (socket as unknown).emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled });
+    }
+  }, [callId]);
+
+  // Adaptive compression + graceful-degradation control loop. Feeds observed
+  // connection quality into a hysteresis state machine that:
+  //   1. sheds the encoder down the bitrate ladder under congestion
+  //      (degradationPreference 'maintain-framerate' — resolution before motion),
+  //   2. DROPS outbound video to audio-only after sustained 'poor' quality so
+  //      the call survives a link that can't carry even minimal video, and
+  //   3. brings video back once the link has clearly recovered.
+  // The user's camera intent (controls.videoEnabled) is authoritative — the
+  // controller never re-enables video the user turned off.
   useEffect(() => {
     const level = qualityStats?.level;
-    if (!level || !controls.videoEnabled) return;
-    const tier = level === 'excellent' || level === 'good'
-      ? 'high'
-      : level === 'fair'
-        ? 'medium'
-        : 'low';
-    applyQualityTier(tier).catch(() => { /* best effort, never throw in render effect */ });
-  }, [qualityStats?.level, controls.videoEnabled, applyQualityTier]);
+    if (!level) return;
+
+    if (!controls.videoEnabled) {
+      // User turned the camera off: forget any survival state and clear the
+      // suspended flag so we never fight the user's intent.
+      degradationRef.current = createDegradationState();
+      if (videoSuspended) setVideoSuspended(false);
+      return;
+    }
+
+    const { state, action } = reduceDegradation(degradationRef.current, {
+      level,
+      userWantsVideo: controls.videoEnabled,
+    });
+    degradationRef.current = state;
+
+    switch (action.type) {
+      case 'set-tier':
+        applyQualityTier(action.tier).catch(() => { /* best effort */ });
+        break;
+      case 'suspend-video':
+        setVideoSuspended(true);
+        disableVideo()
+          .then(() => {
+            emitVideoToggle(false);
+            toast.warning(t('calls.toasts.videoSuspendedPoorConnection'));
+          })
+          .catch(() => { /* best effort; stays in survival, retries next tick */ });
+        break;
+      case 'resume-video':
+        enableVideo()
+          .then(() => {
+            setVideoSuspended(false);
+            emitVideoToggle(true);
+            toast.success(t('calls.toasts.videoResumed'));
+          })
+          .catch(() => {
+            // Re-acquire failed: revert to survival so a later good streak retries.
+            degradationRef.current = { ...degradationRef.current, sending: false, goodStreak: 0 };
+          });
+        break;
+    }
+  }, [qualityStats?.level, controls.videoEnabled, videoSuspended, applyQualityTier, disableVideo, enableVideo, emitVideoToggle, t]);
 
   // Initialize local stream on mount
   useEffect(() => {
@@ -524,8 +584,16 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       />
 
       {/* Connection Quality Badge */}
-      <div className="absolute top-4 right-4">
+      <div className="absolute top-4 right-4 flex flex-col items-end gap-2">
         <ConnectionQualityBadge stats={qualityStats} showAlways={showStats} />
+        {/* Discreet survival indicator: the network dropped our video to keep
+            the call alive (Prisme: subtle, non-intrusive). The user's camera
+            intent is unchanged — video comes back automatically on recovery. */}
+        {videoSuspended && controls.videoEnabled && (
+          <div className="rounded-full bg-amber-500/90 px-3 py-1 text-xs font-medium text-white shadow">
+            {t('calls.toasts.videoSuspendedPoorConnection')}
+          </div>
+        )}
       </div>
 
       {/* Audio Effects Panel (Sliding from bottom) */}

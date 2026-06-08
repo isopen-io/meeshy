@@ -75,7 +75,9 @@
       "connectionError": "Erro de conexão",
       "videoSwitchFailed": "Falha ao trocar vídeo",
       "cameraSwitched": "Câmera trocada",
-      "cameraSwitchFailed": "Falha ao trocar câmera"
+      "cameraSwitchFailed": "Falha ao trocar câmera",
+      "videoSuspendedPoorConnection": "Conexão fraca — vídeo pausado para manter a chamada",
+      "videoResumed": "Conexão recuperada — vídeo reativado"
     },
     "permissions": {
       "title": {
