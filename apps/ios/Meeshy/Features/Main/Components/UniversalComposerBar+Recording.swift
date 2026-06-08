@@ -127,7 +127,7 @@ extension UniversalComposerBar {
                 .frame(width: 44, height: 44)
                 .contentShape(Rectangle())
             }
-            .accessibilityLabel("Annuler l'enregistrement")
+            .accessibilityLabel(String(localized: "composer.recording.cancel", defaultValue: "Cancel recording", bundle: .main))
             .accessibilityHint("Supprime le message vocal en cours")
 
             // Live waveform — fills available horizontal space.
@@ -158,7 +158,7 @@ extension UniversalComposerBar {
             }
             .frame(width: 54, alignment: .trailing)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel("Enregistrement en cours, \(formatDuration(effectiveDuration))")
+            .accessibilityLabel(String(localized: "composer.recording.inProgress", defaultValue: "Recording in progress", bundle: .main) + ", \(formatDuration(effectiveDuration))")
 
             // Stop → attachments button — stops recording and drops the audio
             // into the composer's attachment tray, editable before sending.
@@ -186,7 +186,7 @@ extension UniversalComposerBar {
                 .contentShape(Rectangle())
             }
             .animation(.easeInOut(duration: 0.2), value: canSend)
-            .accessibilityLabel("Arreter et ajouter aux pieces jointes")
+            .accessibilityLabel(String(localized: "composer.recording.stopAndAttach", defaultValue: "Stop and add to attachments", bundle: .main))
             .accessibilityHint("Place le message vocal dans les pieces jointes pour l'editer avant l'envoi")
 
             // Send button — stops recording and sends the message immediately
@@ -223,7 +223,7 @@ extension UniversalComposerBar {
                 .contentShape(Rectangle())
             }
             .animation(.easeInOut(duration: 0.2), value: canSend)
-            .accessibilityLabel("Envoyer le message vocal")
+            .accessibilityLabel(String(localized: "composer.recording.send", defaultValue: "Send voice message", bundle: .main))
             .accessibilityHint(canSend
                 ? "Termine et envoie l'enregistrement"
                 : "Maintenez encore pour atteindre la duree minimum")

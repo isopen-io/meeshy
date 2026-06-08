@@ -98,7 +98,7 @@ extension ConversationView {
                         Image(systemName: "lock.fill")
                             .font(.system(size: 9, weight: .semibold))
                             .foregroundColor(theme.success)
-                            .accessibilityLabel("Conversation chiffrée")
+                            .accessibilityLabel(String(localized: "conversation.encrypted", defaultValue: "Encrypted conversation", bundle: .main))
                     }
 
                     // Category tag

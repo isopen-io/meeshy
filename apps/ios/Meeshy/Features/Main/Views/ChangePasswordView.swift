@@ -17,7 +17,7 @@ struct ChangePasswordView: View {
     @State private var showSuccess = false
     @FocusState private var focusedField: Field?
 
-    private let accentColor = "08D9D6"
+    private let accentColor = "6366F1"
 
     private enum Field {
         case current, newPass, confirm

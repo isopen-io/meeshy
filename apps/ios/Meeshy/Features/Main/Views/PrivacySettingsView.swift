@@ -10,7 +10,7 @@ struct PrivacySettingsView: View {
     private var theme: ThemeManager { ThemeManager.shared }
     @ObservedObject private var prefs = UserPreferencesManager.shared
 
-    private let accentColor = "08D9D6"
+    private let accentColor = "6366F1"
 
     var body: some View {
         ZStack {
@@ -98,8 +98,8 @@ struct PrivacySettingsView: View {
     // MARK: - Contacts & Groups
 
     private var contactsSection: some View {
-        settingsSection(title: String(localized: "settings.privacy.contacts_groups", defaultValue: "Contacts & Groupes", bundle: .main), icon: "person.2.fill", color: "4ECDC4") {
-            privacyToggle(icon: "person.badge.plus", title: String(localized: "settings.privacy.contact_requests", defaultValue: "Demandes de contact", bundle: .main), color: "4ECDC4",
+        settingsSection(title: String(localized: "settings.privacy.contacts_groups", defaultValue: "Contacts & Groupes", bundle: .main), icon: "person.2.fill", color: "6366F1") {
+            privacyToggle(icon: "person.badge.plus", title: String(localized: "settings.privacy.contact_requests", defaultValue: "Demandes de contact", bundle: .main), color: "6366F1",
                           keyPath: \.allowContactRequests)
 
             privacyToggle(icon: "person.3.fill", title: String(localized: "settings.privacy.group_invites", defaultValue: "Invitations de groupe", bundle: .main), color: "45B7D1",

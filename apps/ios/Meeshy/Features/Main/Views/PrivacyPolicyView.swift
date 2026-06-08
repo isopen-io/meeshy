@@ -11,7 +11,7 @@ struct PrivacyPolicyView: View {
 
     @State private var selectedLanguage = "fr"
 
-    private let accentColor = "45B7D1"
+    private let accentColor = "6366F1"
 
     private let sections: [String: [(title: String, content: String)]] = [
         "fr": [

@@ -9,7 +9,7 @@ struct LicensesView: View {
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
 
-    private let accentColor = "4ECDC4"
+    private let accentColor = "6366F1"
 
     private let licenses: [OpenSourceLicense] = [
         OpenSourceLicense(name: "Socket.IO Client Swift", author: "Socket.IO", licenseType: "MIT", url: "https://github.com/socketio/socket.io-client-swift"),

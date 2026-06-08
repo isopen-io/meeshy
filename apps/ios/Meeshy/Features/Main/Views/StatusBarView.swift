@@ -53,7 +53,7 @@ struct StatusBarView: View {
                 // Loading indicator
                 if viewModel.isLoadingMore {
                     ProgressView()
-                        .tint(Color(hex: "4ECDC4"))
+                        .tint(MeeshyColors.indigo400)
                         .frame(width: 30)
                 }
             }
@@ -106,7 +106,7 @@ struct StatusBarView: View {
             .padding(.vertical, 8)
             .glassCard(cornerRadius: 20)
         }
-        .breathingGlow(color: Color(hex: "08D9D6"), intensity: 0.3)
+        .breathingGlow(color: MeeshyColors.indigo500, intensity: 0.3)
     }
 
     // MARK: - Status Pill

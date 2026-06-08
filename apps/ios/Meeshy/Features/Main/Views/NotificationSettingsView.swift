@@ -10,7 +10,7 @@ struct NotificationSettingsView: View {
     private var theme: ThemeManager { ThemeManager.shared }
     @ObservedObject private var prefs = UserPreferencesManager.shared
 
-    private let accentColor = "08D9D6"
+    private let accentColor = "6366F1"
 
     var body: some View {
         ZStack {
