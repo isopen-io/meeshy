@@ -18,6 +18,7 @@ import { User } from '@/types';
 import { toast } from 'sonner';
 import { apiService } from '@/services/api.service';
 import { getUserInitials } from '@/utils/user';
+import { useI18n } from '@/hooks/useI18n';
 
 interface InviteUserModalProps {
   isOpen: boolean;
@@ -34,6 +35,7 @@ export function InviteUserModal({
   currentParticipants,
   onUserInvited 
 }: InviteUserModalProps) {
+  const { t } = useI18n('conversations');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<User[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -155,7 +157,7 @@ export function InviteUserModal({
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Rechercher des utilisateurs..."
+              placeholder={t('conversationDetails.inviteSearchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10"

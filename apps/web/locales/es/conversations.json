@@ -311,7 +311,8 @@
       "directConversationBadge": "Conversación directa",
       "fallbackUser": "Usuario",
       "reactionAdded": "Reacción {emoji} añadida",
-      "reactionRemoved": "Reacción eliminada"
+      "reactionRemoved": "Reacción eliminada",
+      "inviteSearchPlaceholder": "Buscar usuarios..."
     },
     "conversationImage": {
       "title": "Cambiar la imagen de la conversación",
