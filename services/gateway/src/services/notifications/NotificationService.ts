@@ -1060,31 +1060,32 @@ export class NotificationService {
     },
     memberIds: string[]
   ): Promise<number> {
-    let count = 0;
-    for (const userId of mentionedUserIds) {
-      if (userId === commonData.senderId) continue;
-      if (!memberIds.includes(userId)) continue;
-
-      // Anti-spam: rate limit per sender:recipient pair
+    const eligibleUserIds = mentionedUserIds.filter(userId => {
+      if (userId === commonData.senderId) return false;
+      if (!memberIds.includes(userId)) return false;
       if (!this.shouldCreateMentionNotification(commonData.senderId, userId)) {
         notificationLogger.info('Batch mention blocked (rate limit)', {
           senderId: commonData.senderId,
           recipientId: userId,
         });
-        continue;
+        return false;
       }
+      return true;
+    });
 
-      const notification = await this.createMentionNotification({
-        mentionedUserId: userId,
-        mentionerUserId: commonData.senderId,
-        messageId: commonData.messageId,
-        conversationId: commonData.conversationId,
-        messagePreview: commonData.messageContent,
-      });
+    const results = await Promise.all(
+      eligibleUserIds.map(userId =>
+        this.createMentionNotification({
+          mentionedUserId: userId,
+          mentionerUserId: commonData.senderId,
+          messageId: commonData.messageId,
+          conversationId: commonData.conversationId,
+          messagePreview: commonData.messageContent,
+        })
+      )
+    );
 
-      if (notification) count++;
-    }
-    return count;
+    return results.filter(Boolean).length;
   }
 
   // ==============================================
