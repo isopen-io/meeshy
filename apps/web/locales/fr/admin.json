@@ -193,5 +193,9 @@
     "updated": "Configuration mise à jour",
     "saveError": "Erreur lors de la sauvegarde",
     "pendingPropagation": "Config sauvegardée — propagation au service agent en attente (cache stale possible quelques minutes)"
+  },
+  "security": {
+    "enable2FA": "Activer 2FA",
+    "disable2FA": "Désactiver 2FA"
   }
 }

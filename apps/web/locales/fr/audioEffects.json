@@ -320,5 +320,10 @@
       "active": "Actif",
       "inactive": "Inactif"
     }
+  },
+  "microphone": {
+    "noMicDetected": "Aucun microphone détecté.",
+    "error": "Erreur microphone.",
+    "accessError": "Impossible d'accéder au microphone."
   }
 }

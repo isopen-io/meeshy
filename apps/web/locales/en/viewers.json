@@ -42,6 +42,9 @@
     "disableWordWrap": "Disable word wrap",
     "copy": "Copy content",
     "fullscreen": "Open fullscreen",
-    "download": "Download"
+    "download": "Download",
+    "copied": "Copied to clipboard",
+    "copyError": "Unable to copy",
+    "loadError": "Unable to load file"
   }
 }

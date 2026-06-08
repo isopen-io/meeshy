@@ -42,6 +42,9 @@
     "disableWordWrap": "Desactivar ajuste de línea",
     "copy": "Copiar contenido",
     "fullscreen": "Abrir en pantalla completa",
-    "download": "Descargar"
+    "download": "Descargar",
+    "copied": "Copiado al portapapeles",
+    "copyError": "No se pudo copiar",
+    "loadError": "No se pudo cargar el archivo"
   }
 }

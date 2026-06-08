@@ -193,5 +193,9 @@
     "updated": "Configuração atualizada",
     "saveError": "Erro ao salvar configuração",
     "pendingPropagation": "Config salva — propagação ao serviço de agente pendente (cache pode demorar alguns minutos)"
+  },
+  "security": {
+    "enable2FA": "Ativar 2FA",
+    "disable2FA": "Desativar 2FA"
   }
 }

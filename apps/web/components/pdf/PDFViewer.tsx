@@ -74,7 +74,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
   const onDocumentLoadError = (error: Error) => {
     console.error('Erreur chargement PDF:', error);
     setHasError(true);
-    setErrorMessage('Impossible de charger le PDF');
+    setErrorMessage(t('pdf.loadError'));
     setIsLoading(false);
   };
 
