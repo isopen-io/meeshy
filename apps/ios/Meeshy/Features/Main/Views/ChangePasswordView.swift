@@ -340,7 +340,7 @@ struct ChangePasswordView: View {
                 HapticFeedback.error()
                 switch error {
                 case .serverError(400, _):
-                    errorMessage = String(localized: "auth.password.change.error.current", defaultValue: "Mot de passe actuel incorrect", bundle: .main)
+                    errorMessage = String(localized: "auth.password.change.error.current", defaultValue: "Incorrect current password", bundle: .main)
                 default:
                     errorMessage = error.errorDescription
                 }
@@ -353,7 +353,7 @@ struct ChangePasswordView: View {
                 }
             } catch {
                 HapticFeedback.error()
-                errorMessage = String(localized: "common.error.generic", defaultValue: "Une erreur est survenue", bundle: .main)
+                errorMessage = String(localized: "common.error.generic", defaultValue: "An error occurred", bundle: .main)
             }
             isSaving = false
         }

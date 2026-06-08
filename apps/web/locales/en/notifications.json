@@ -164,7 +164,123 @@
             "reset": "Preferences reset",
             "permissionGranted": "Notifications allowed",
             "permissionDenied": "Notifications denied",
-            "loading": "Loading preferences..."
+            "loading": "Loading preferences...",
+            "noPreferences": "No preferences available",
+            "saving": "Saving...",
+            "missingConsents": "Missing required consents:",
+            "allowButton": "Allow",
+            "channels": {
+                "title": "Notification channels",
+                "description": "Choose how you want to receive notifications",
+                "push": {
+                    "label": "Push notifications",
+                    "description": "Receive notifications in the browser"
+                },
+                "email": {
+                    "label": "Email notifications",
+                    "description": "Receive a summary by email"
+                },
+                "sound": {
+                    "label": "Notification sounds",
+                    "description": "Play a sound for new notifications"
+                },
+                "vibration": {
+                    "label": "Vibration",
+                    "description": "Vibrate for new notifications (mobile)"
+                }
+            },
+            "types": {
+                "title": "Notification types",
+                "description": "Choose the events you want to be notified about",
+                "newMessage": {
+                    "label": "New messages",
+                    "description": "Notifications for new messages received"
+                },
+                "reply": {
+                    "label": "Replies",
+                    "description": "When someone replies to your messages"
+                },
+                "mention": {
+                    "label": "Mentions",
+                    "description": "When you are mentioned (@) in a message"
+                },
+                "reaction": {
+                    "label": "Reactions",
+                    "description": "Notifications for reactions to your messages"
+                },
+                "contactRequest": {
+                    "label": "Contact requests",
+                    "description": "Notifications for new contact requests"
+                },
+                "groupInvite": {
+                    "label": "Group invitations",
+                    "description": "When you are invited to join a group"
+                },
+                "memberJoined": {
+                    "label": "New members",
+                    "description": "When a member joins a group"
+                },
+                "memberLeft": {
+                    "label": "Members left",
+                    "description": "When a member leaves a group"
+                },
+                "conversation": {
+                    "label": "Conversation activity",
+                    "description": "Updates and changes in conversations"
+                },
+                "missedCall": {
+                    "label": "Missed calls",
+                    "description": "Notifications for missed calls"
+                },
+                "voicemail": {
+                    "label": "Voice messages",
+                    "description": "Notifications for new voice messages"
+                },
+                "system": {
+                    "label": "System notifications",
+                    "description": "Important updates and announcements"
+                }
+            },
+            "dnd": {
+                "title": "Do not disturb",
+                "description": "Set a notification-free time range",
+                "enableLabel": "Enable \"Do not disturb\"",
+                "enableDescription": "Suspend notifications for a defined period",
+                "startTime": "Start time",
+                "endTime": "End time",
+                "activePeriodNote": "During this period, you will not receive any push or sound notifications."
+            },
+            "display": {
+                "title": "Notification display",
+                "description": "Control what is shown in notifications",
+                "preview": {
+                    "label": "Message preview",
+                    "description": "Show message content in the notification"
+                },
+                "senderName": {
+                    "label": "Sender name",
+                    "description": "Show sender name in the notification"
+                },
+                "group": {
+                    "label": "Group notifications",
+                    "description": "Group multiple notifications into one"
+                },
+                "badge": {
+                    "label": "Notification badge",
+                    "description": "Show the number of unread notifications"
+                }
+            },
+            "permissionsTitle": "Permission status",
+            "permissionStatusTitle": "Current notification permission status",
+            "browserNotifications": "Browser notifications",
+            "permissionStatus": {
+                "granted": "Allowed",
+                "denied": "Denied",
+                "pending": "Pending"
+            },
+            "permissionDeniedInstructions": "Notifications were denied. You can re-enable them in your browser settings.",
+            "unsupported": "Notifications are not supported by your browser.",
+            "resetButton": "Reset to defaults"
         },
         "connectionStatus": {
             "connected": "Connected",
