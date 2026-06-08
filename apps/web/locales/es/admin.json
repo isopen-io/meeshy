@@ -1,0 +1,44 @@
+{
+  "ranking": {
+    "users": "Clasificación de usuarios",
+    "conversations": "Clasificación de conversaciones",
+    "messages": "Clasificación de mensajes",
+    "links": "Clasificación de enlaces",
+    "default": "Clasificación",
+    "resultsUnit": "resultados",
+    "retry": "Reintentar",
+    "empty": "No se encontraron resultados"
+  },
+  "scanLog": {
+    "title": "Registros de análisis",
+    "empty": "Sin registros de análisis"
+  },
+  "filter": {
+    "all": "Todos",
+    "sent": "Enviados",
+    "skip": "Omitidos",
+    "error": "Errores"
+  },
+  "trigger": {
+    "auto": "Auto",
+    "manual": "Manual",
+    "timeout": "Timeout",
+    "message": "Mensaje",
+    "reply": "Respuesta"
+  },
+  "timeAgo": {
+    "now": "ahora",
+    "minutes": "min",
+    "hours": "h",
+    "days": "d"
+  },
+  "regexTester": {
+    "title": "Probar regex contra texto de muestra",
+    "placeholder": "Pega un extracto de conversación aquí para ver qué patrones coinciden…",
+    "test": "Probar",
+    "noPatterns": "No hay patrones definidos para este tema.",
+    "match": "coincidencia",
+    "matches": "coincidencias",
+    "invalidRegex": "regex inválido"
+  }
+}

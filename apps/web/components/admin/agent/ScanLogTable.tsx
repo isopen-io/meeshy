@@ -7,21 +7,12 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { List, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { agentAdminService, type ScanLogSummary, type ScanLogsFilters } from '@/services/agent-admin.service';
+import { useI18n } from '@/hooks/useI18n';
 import dynamic from 'next/dynamic';
 
 const ScanLogDetail = dynamic(() => import('./ScanLogDetail'), {
   loading: () => <div className="h-40 animate-pulse bg-slate-200 dark:bg-slate-700 rounded" />,
 });
-
-function formatTimeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'maintenant';
-  if (mins < 60) return `${mins}min`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}j`;
-}
 
 const OUTCOME_STYLES: Record<string, string> = {
   messages_sent: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800',
@@ -30,25 +21,39 @@ const OUTCOME_STYLES: Record<string, string> = {
   error: 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800',
 };
 
-const TRIGGER_LABELS: Record<string, string> = {
-  auto: 'Auto',
-  manual: 'Manuel',
-  timeout: 'Timeout',
-  user_message: 'Message',
-  reply_to: 'Reply',
-};
-
 type ScanLogTableProps = {
   conversationId?: string;
 };
 
 export default memo(function ScanLogTable({ conversationId }: ScanLogTableProps = {}) {
+  const { t } = useI18n('admin');
   const [logs, setLogs] = useState<ScanLogSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
   const [filters, setFilters] = useState<ScanLogsFilters>({ limit: 15, conversationId });
+
+  const formatTimeAgo = useCallback((dateStr: string): string => {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return t('timeAgo.now');
+    if (mins < 60) return `${mins}${t('timeAgo.minutes')}`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}${t('timeAgo.hours')}`;
+    return `${Math.floor(hours / 24)}${t('timeAgo.days')}`;
+  }, [t]);
+
+  const getTriggerLabel = useCallback((trigger: string): string => {
+    const labels: Record<string, string> = {
+      auto: t('trigger.auto'),
+      manual: t('trigger.manual'),
+      timeout: t('trigger.timeout'),
+      user_message: t('trigger.message'),
+      reply_to: t('trigger.reply'),
+    };
+    return labels[trigger] ?? trigger;
+  }, [t]);
 
   const fetchLogs = useCallback(async () => {
     setLoading(true);
@@ -66,6 +71,13 @@ export default memo(function ScanLogTable({ conversationId }: ScanLogTableProps 
   const limit = filters.limit ?? 15;
   const hasMore = page * limit < total;
 
+  const filterButtons = [
+    { key: 'all', label: t('filter.all'), outcome: undefined },
+    { key: 'messages_sent', label: t('filter.sent'), outcome: 'messages_sent' },
+    { key: 'skipped', label: t('filter.skip'), outcome: 'skipped' },
+    { key: 'error', label: t('filter.error'), outcome: 'error' },
+  ];
+
   return (
     <>
       <Card>
@@ -73,22 +85,22 @@ export default memo(function ScanLogTable({ conversationId }: ScanLogTableProps 
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm flex items-center gap-2">
               <List className="h-4 w-4 text-indigo-500" />
-              Scan Logs
+              {t('scanLog.title')}
               <Badge variant="outline" className="text-[10px] tabular-nums">{total}</Badge>
             </CardTitle>
             <div className="flex items-center gap-2">
-              {['all', 'messages_sent', 'skipped', 'error'].map(o => (
+              {filterButtons.map(({ key, label, outcome }) => (
                 <Button
-                  key={o}
-                  variant={filters.outcome === (o === 'all' ? undefined : o) && (o !== 'all' || !filters.outcome) ? 'default' : 'outline'}
+                  key={key}
+                  variant={filters.outcome === outcome && (key !== 'all' || !filters.outcome) ? 'default' : 'outline'}
                   size="sm"
                   className="h-6 text-[10px] px-2"
                   onClick={() => {
-                    setFilters(prev => ({ ...prev, outcome: o === 'all' ? undefined : o }));
+                    setFilters(prev => ({ ...prev, outcome }));
                     setPage(1);
                   }}
                 >
-                  {o === 'all' ? 'Tous' : o === 'messages_sent' ? 'Sent' : o === 'skipped' ? 'Skip' : 'Error'}
+                  {label}
                 </Button>
               ))}
             </div>
@@ -98,7 +110,7 @@ export default memo(function ScanLogTable({ conversationId }: ScanLogTableProps 
           {loading ? (
             <div className="flex justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></div>
           ) : logs.length === 0 ? (
-            <div className="text-sm text-gray-400 text-center py-12">Aucun scan log</div>
+            <div className="text-sm text-gray-400 text-center py-12">{t('scanLog.empty')}</div>
           ) : (
             <ScrollArea className="max-h-[500px]">
               <div className="space-y-1">
@@ -116,7 +128,7 @@ export default memo(function ScanLogTable({ conversationId }: ScanLogTableProps 
                         <span className="text-xs text-gray-600 dark:text-gray-300 truncate">
                           {log.conversation?.title ?? log.conversationId.slice(0, 12)}
                         </span>
-                        <Badge variant="outline" className="text-[8px] shrink-0">{TRIGGER_LABELS[log.trigger] ?? log.trigger}</Badge>
+                        <Badge variant="outline" className="text-[8px] shrink-0">{getTriggerLabel(log.trigger)}</Badge>
                       </div>
                       <div className="flex items-center gap-3 shrink-0 text-[10px] tabular-nums text-gray-400">
                         {log.messagesSent > 0 ? (

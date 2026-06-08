@@ -23,6 +23,8 @@
     "formattedView": "Visualização formatada",
     "rawView": "Visualização bruta",
     "download": "Baixar arquivo Markdown",
+    "delete": "Excluir este arquivo Markdown",
+    "fullscreen": "Abrir em tela cheia",
     "close": "Fechar",
     "escToClose": "Pressione Esc para fechar"
   }

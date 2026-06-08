@@ -303,7 +303,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
         {/* Main Content */}
         <div className="flex-1 flex flex-col">
           {/* Top Bar */}
-          <header className="bg-white shadow-sm border-b px-4 sm:px-6 py-4">
+          <header className="bg-white dark:bg-gray-800 shadow-sm border-b dark:border-gray-700 px-4 sm:px-6 py-4">
             <div className="flex items-center justify-between">
               {/* Mobile Menu Button + Title */}
               <div className="flex items-center gap-3">

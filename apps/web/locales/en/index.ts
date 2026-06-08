@@ -28,6 +28,7 @@ import editMessage from './editMessage.json';
 import deleteMessage from './deleteMessage.json';
 import languages from './languages.json';
 import viewers from './viewers.json';
+import admin from './admin.json';
 
 export default {
   common,
@@ -60,6 +61,7 @@ export default {
   deleteMessage,
   languages,
   viewers,
+  admin,
 };
 
 export {
@@ -93,4 +95,5 @@ export {
   deleteMessage,
   languages,
   viewers,
+  admin,
 };
