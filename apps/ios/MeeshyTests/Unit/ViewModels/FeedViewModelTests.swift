@@ -169,7 +169,9 @@ final class FeedViewModelTests: XCTestCase {
         let (sut, api, _, _) = makeSUT()
         api.errorToThrow = APIError.networkError(URLError(.notConnectedToInternet))
 
-        await sut.loadFeed()
+        // forceRefresh bypasses the cache read so a stale residual from a
+        // prior test's Task.detached save doesn't short-circuit this one.
+        await sut.loadFeed(forceRefresh: true)
 
         XCTAssertTrue(sut.posts.isEmpty)
         XCTAssertTrue(sut.hasLoaded)
@@ -180,8 +182,10 @@ final class FeedViewModelTests: XCTestCase {
         let (sut, api, _, _) = makeSUT()
         api.stub("/posts/feed", result: Self.makePaginatedResponse())
 
-        let task1 = Task { await sut.loadFeed() }
-        let task2 = Task { await sut.loadFeed() }
+        // forceRefresh bypasses cache so both tasks hit the API guard rather
+        // than serving stale data before the guard is reached.
+        let task1 = Task { await sut.loadFeed(forceRefresh: true) }
+        let task2 = Task { await sut.loadFeed(forceRefresh: true) }
 
         await task1.value
         await task2.value
