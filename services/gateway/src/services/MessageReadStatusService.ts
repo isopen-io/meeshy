@@ -250,7 +250,7 @@ export class MessageReadStatusService {
    * C'est le remplacement SOTA du N+1 loop dans _broadcastNewMessage.
    * Returns Map<participantId, unreadCount>.
    */
-  async getUnreadCountsForParticipants(
+  async getUnreadCountsByParticipantIds(
     participantIds: string[],
     conversationId: string
   ): Promise<Map<string, number>> {

@@ -105,7 +105,7 @@ export async function registerMessageRateLimiter(fastify: FastifyInstance) {
       'x-ratelimit-remaining': false,
       'x-ratelimit-reset': false
     }
-  });
+  } as any);
 }
 
 /**
