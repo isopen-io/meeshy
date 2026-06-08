@@ -162,6 +162,17 @@
   },
   "globalConfig": {
     "defaultProvider": "Default Provider",
-    "globalScheduler": "Global Scheduler"
+    "globalScheduler": "Global Scheduler",
+    "active": "Active",
+    "disabled": "Disabled",
+    "none": "None"
+  },
+  "agentConfig": {
+    "titleNew": "New agent configuration",
+    "titleEdit": "Edit configuration",
+    "created": "Configuration created",
+    "updated": "Configuration updated",
+    "saveError": "Error saving configuration",
+    "pendingPropagation": "Config saved — propagation to agent service pending (cache may take a few minutes)"
   }
 }

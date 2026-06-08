@@ -16,14 +16,6 @@ import { toast } from 'sonner';
 import { useI18n } from '@/hooks/useI18n';
 
 const CONVERSATION_TYPES = ['group', 'channel', 'public', 'global', 'broadcast'] as const;
-const TYPE_LABELS: Record<string, string> = {
-  direct: 'Direct',
-  group: 'Groupe',
-  public: 'Public',
-  global: 'Globale',
-  broadcast: 'Communication',
-  channel: 'Canal',
-};
 
 export function AgentGlobalConfigTab() {
   const { t } = useI18n('admin');
@@ -131,7 +123,7 @@ export function AgentGlobalConfigTab() {
         <div className="flex items-center gap-3">
           <Badge variant={form.enabled ? 'default' : 'destructive'} className="text-xs">
             <Shield className="h-3 w-3 mr-1" />
-            {form.enabled ? 'Actif' : 'Désactivé'}
+            {form.enabled ? t('globalConfig.active') : t('globalConfig.disabled')}
           </Badge>
           <Switch checked={form.enabled ?? true} onCheckedChange={v => updateField('enabled', v)} />
         </div>
@@ -198,7 +190,7 @@ export function AgentGlobalConfigTab() {
               <Input
                 value={form.fallbackProvider ?? ''}
                 onChange={e => updateField('fallbackProvider', e.target.value || null)}
-                placeholder="Aucun"
+                placeholder={t('globalConfig.none')}
                 className="bg-white dark:bg-gray-800"
               />
             </div>
@@ -210,7 +202,7 @@ export function AgentGlobalConfigTab() {
               <Input
                 value={form.fallbackModel ?? ''}
                 onChange={e => updateField('fallbackModel', e.target.value || null)}
-                placeholder="Aucun"
+                placeholder={t('globalConfig.none')}
                 className="bg-white dark:bg-gray-800"
               />
             </div>
@@ -314,7 +306,7 @@ export function AgentGlobalConfigTab() {
                     className="cursor-pointer select-none"
                     onClick={() => toggleConversationType(type)}
                   >
-                    {TYPE_LABELS[type] ?? type}
+                    {t(`agent.overview.conversationType.${type}`) ?? type}
                   </Badge>
                 );
               })}
