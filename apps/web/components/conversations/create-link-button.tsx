@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
 import { useUser } from '@/stores';
 import { useLanguage } from '@/hooks/use-language';
+import { useI18n } from '@/hooks/useI18n';
 import { generateLinkName } from '@/utils/link-name-generator';
 import { conversationsService } from '@/services/conversations.service';
 import { authManager } from '@/services/auth-manager.service';
@@ -51,6 +52,7 @@ export function CreateLinkButton({
   const storeUser = useUser();
   const currentUser = propCurrentUser || storeUser; // Utiliser la prop en priorité, sinon le store
   const { detectedInterfaceLanguage } = useLanguage();
+  const { t } = useI18n('conversations');
 
   // Messages traduits selon la langue de l'interface
   const getTranslatedMessages = (lang: string) => {
@@ -121,12 +123,12 @@ export function CreateLinkButton({
 
   const createQuickLink = async (conversationId: string, config: QuickLinkConfig) => {
     if (!currentUser) {
-      toast.error('Impossible de créer le lien : utilisateur non connecté');
+      toast.error(t('createLinkButton.notAuthenticated'));
       return;
     }
 
     if (!conversationId) {
-      toast.error('Impossible de créer le lien : conversation non identifiée');
+      toast.error(t('createLinkButton.noConversation'));
       return;
     }
 
@@ -198,11 +200,11 @@ export function CreateLinkButton({
       } else {
         const error = await response.json();
         console.error('Erreur API:', error);
-        toast.error(error.message || 'Erreur lors de la création du lien');
+        toast.error(error.message || t('createLinkButton.error'));
       }
     } catch (error) {
       console.error('Erreur création lien:', error);
-      toast.error('Erreur lors de la création du lien');
+      toast.error(t('createLinkButton.error'));
     } finally {
       setIsCreating(false);
     }

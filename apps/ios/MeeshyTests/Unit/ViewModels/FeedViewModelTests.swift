@@ -196,7 +196,7 @@ final class FeedViewModelTests: XCTestCase {
         """)
         api.stub("/posts/feed", result: failResponse)
 
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         XCTAssertTrue(sut.posts.isEmpty)
         XCTAssertTrue(sut.hasLoaded)

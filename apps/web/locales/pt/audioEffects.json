@@ -12,7 +12,6 @@
     "reset": "Redefinir",
     "resetAll": "Redefinir Tudo",
     "disableAll": "Desativar todos os efeitos",
-
     "controls": {
       "speed": {
         "ariaLabel": "Ajustar velocidade de reprodução"
@@ -34,7 +33,6 @@
         "expandLess": "Ver menos transcrição"
       }
     },
-
     "recorder": {
       "initializing": "Inicializando...",
       "audioEffects": "Efeitos de áudio",
@@ -51,7 +49,6 @@
         "cannotAccessMicrophone": "Não é possível acessar o microfone."
       }
     },
-
     "voiceCoder": {
       "title": "Perfect Voice",
       "description": "Correção automática da afinação da sua voz para cantar afinado",
@@ -88,9 +85,16 @@
       "harmonization": {
         "label": "Harmonias vocais",
         "tooltip": "Adiciona vozes de acompanhamento harmônicas à sua voz principal para um efeito coral"
+      },
+      "tooltip": {
+        "title": "Perfect Voice - Auto-Tune",
+        "description": "Correção automática da afinação da sua voz ao cantar.",
+        "retuneSpeedHint": "Velocidade de correção",
+        "scaleHint": "Notas permitidas",
+        "strengthHint": "Intensidade do efeito",
+        "naturalVibratoHint": "Preserva a naturalidade"
       }
     },
-
     "babyVoice": {
       "title": "Voz de Criança",
       "pitch": {
@@ -106,7 +110,6 @@
         "tooltip": "Adiciona um efeito de sopro suave e aéreo característico de uma voz infantil"
       }
     },
-
     "demonVoice": {
       "title": "Voz de Demônio",
       "pitch": {
@@ -122,7 +125,6 @@
         "tooltip": "Efeito de reverberação como em uma catedral escura e profunda"
       }
     },
-
     "backSound": {
       "title": "Ambiente de Fundo",
       "uploadLabel": "Carregar um arquivo de áudio",
@@ -143,7 +145,6 @@
         "labelMinutes": "Minutos"
       }
     },
-
     "effects": {
       "voice-coder": {
         "name": "Voz Perfeita",
@@ -211,7 +212,6 @@
           "custom": "Personalizado"
         }
       },
-
       "baby-voice": {
         "name": "Voz Infantil",
         "shortName": "Infantil",
@@ -235,7 +235,6 @@
           }
         }
       },
-
       "demon-voice": {
         "name": "Voz Demoníaca",
         "shortName": "Demoníaca",
@@ -259,7 +258,6 @@
           }
         }
       },
-
       "back-sound": {
         "name": "Som de Fundo",
         "shortName": "Fundo",
@@ -291,12 +289,10 @@
         }
       }
     },
-
     "presets": {
       "custom": "Personalizado",
       "customDescription": "Suas próprias configurações"
     },
-
     "timeline": {
       "title": "Linha do Tempo dos Efeitos",
       "duration": "Duração",
@@ -314,12 +310,10 @@
         "parameterChanges": "Modificações"
       }
     },
-
     "badge": {
       "hasEffects": "Efeitos de áudio",
       "clickToView": "Clique para ver a linha do tempo"
     },
-
     "status": {
       "on": "Ativado",
       "off": "Desativado",

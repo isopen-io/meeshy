@@ -70,10 +70,10 @@ export const ConversationItem = memo(function ConversationItem({
     e.stopPropagation();
     try {
       await prefsStore.togglePin(conversation.id, !localIsPinned);
-      toast.success(localIsPinned ? 'Conversation désépinglée' : 'Conversation épinglée');
+      toast.success(localIsPinned ? t('conversationHeader.unpinned') : t('conversationHeader.pinned'));
     } catch (error) {
       console.error('Error toggling pin:', error);
-      toast.error('Erreur lors de l\'épinglage');
+      toast.error(t('conversationHeader.pinError'));
     }
   }, [conversation.id, localIsPinned, prefsStore]);
 
@@ -81,10 +81,10 @@ export const ConversationItem = memo(function ConversationItem({
     e.stopPropagation();
     try {
       await prefsStore.toggleMute(conversation.id, !localIsMuted);
-      toast.success(localIsMuted ? 'Notifications activées' : 'Notifications désactivées');
+      toast.success(localIsMuted ? t('conversationHeader.unmuted') : t('conversationHeader.muted'));
     } catch (error) {
       console.error('Error toggling mute:', error);
-      toast.error('Erreur lors de la modification');
+      toast.error(t('conversationHeader.muteError'));
     }
   }, [conversation.id, localIsMuted, prefsStore]);
 
@@ -92,10 +92,10 @@ export const ConversationItem = memo(function ConversationItem({
     e.stopPropagation();
     try {
       await prefsStore.toggleArchive(conversation.id, !localIsArchived);
-      toast.success(localIsArchived ? 'Conversation désarchivée' : 'Conversation archivée');
+      toast.success(localIsArchived ? t('conversationHeader.unarchived') : t('conversationHeader.archived'));
     } catch (error) {
       console.error('Error toggling archive:', error);
-      toast.error('Erreur lors de l\'archivage');
+      toast.error(t('conversationHeader.archiveError'));
     }
   }, [conversation.id, localIsArchived, prefsStore]);
 
@@ -104,10 +104,10 @@ export const ConversationItem = memo(function ConversationItem({
     try {
       const newReaction = localReaction === emoji ? null : emoji;
       await prefsStore.setReaction(conversation.id, newReaction);
-      toast.success(newReaction ? `Réaction ${emoji} ajoutée` : 'Réaction supprimée');
+      toast.success(newReaction ? t('conversationDetails.reactionAdded').replace('{emoji}', emoji) : t('conversationDetails.reactionRemoved'));
     } catch (error) {
       console.error('Error setting reaction:', error);
-      toast.error('Erreur lors de la modification');
+      toast.error(t('conversationDetails.reactionError'));
     }
   }, [conversation.id, localReaction, prefsStore]);
 

@@ -76,7 +76,7 @@ export function AccessDenied({
 
   return (
     <div className={`min-h-screen flex items-center justify-center p-4 ${styles.bg} ${className}`}>
-      <Card className="w-full max-w-md shadow-lg border-0 bg-white/80 backdrop-blur-sm">
+      <Card className="w-full max-w-md shadow-lg border-0 bg-background/80 backdrop-blur-sm">
         <CardHeader className="text-center pb-4">
           <div className="flex justify-center mb-4">
             <div className={`p-3 rounded-full bg-white/50 shadow-sm`}>

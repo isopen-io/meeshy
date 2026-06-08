@@ -178,10 +178,10 @@ export function ConversationSettingsModal({
   const displayTitle = useMemo(() => {
     if (isDirect && otherUser) {
       return otherUser.displayName || otherUser.username ||
-        [otherUser.firstName, otherUser.lastName].filter(Boolean).join(' ') || 'Utilisateur';
+        [otherUser.firstName, otherUser.lastName].filter(Boolean).join(' ') || t('conversationDetails.fallbackUser');
     }
-    return conversation.title || 'Conversation';
-  }, [isDirect, otherUser, conversation.title]);
+    return conversation.title || t('conversationDetails.conversation');
+  }, [isDirect, otherUser, conversation.title, t]);
 
   // Statut en temps réel de l'autre utilisateur
   const otherUserStatus = useMemo(() => {
@@ -363,10 +363,10 @@ export function ConversationSettingsModal({
       setConvTitle(trimmed);
       onConversationUpdate?.(updatedConv);
       setIsEditingTitle(false);
-      toast.success('Titre mis à jour');
+      toast.success(t('conversationDetails.nameUpdated'));
     } catch (error) {
       console.error('Erreur sauvegarde titre:', error);
-      toast.error('Erreur lors de la sauvegarde du titre');
+      toast.error(t('conversationDetails.updateError'));
     } finally {
       setIsSavingTitle(false);
     }
@@ -394,10 +394,10 @@ export function ConversationSettingsModal({
       setConvDescription(trimmed);
       onConversationUpdate?.(updatedConv);
       setIsEditingDescription(false);
-      toast.success('Description mise à jour');
+      toast.success(t('conversationDetails.descriptionUpdated'));
     } catch (error) {
       console.error('Erreur sauvegarde description:', error);
-      toast.error('Erreur lors de la sauvegarde de la description');
+      toast.error(t('conversationDetails.descriptionError'));
     } finally {
       setIsSavingDescription(false);
     }
@@ -421,14 +421,14 @@ export function ConversationSettingsModal({
         await conversationsService.updateConversation(conversation.id, updatedData);
 
         onConversationUpdate?.(updatedData as unknown);
-        toast.success('Image mise à jour');
+        toast.success(t('conversationDetails.imageUpdated'));
         setIsImageUploadDialogOpen(false);
       } else {
         throw new Error('Upload failed');
       }
     } catch (error) {
       console.error('Error uploading image:', error);
-      toast.error('Erreur lors de l\'upload de l\'image');
+      toast.error(t('conversationDetails.imageUploadError'));
     } finally {
       setIsUploadingImage(false);
     }
@@ -446,14 +446,14 @@ export function ConversationSettingsModal({
         await conversationsService.updateConversation(conversation.id, updatedData);
 
         onConversationUpdate?.(updatedData as unknown);
-        toast.success('Bannière mise à jour');
+        toast.success(t('conversationDetails.bannerUpdated'));
         setIsBannerUploadDialogOpen(false);
       } else {
         throw new Error('Upload failed');
       }
     } catch (error) {
       console.error('Error uploading banner:', error);
-      toast.error('Erreur lors de l\'upload de la bannière');
+      toast.error(t('conversationDetails.bannerError'));
     } finally {
       setIsUploadingBanner(false);
     }
@@ -841,7 +841,7 @@ export function ConversationSettingsModal({
                                 size="icon"
                                 onClick={() => setReaction('')}
                                 className="h-8 w-8 text-amber-600 hover:text-amber-700"
-                                aria-label="Supprimer la réaction"
+                                aria-label={t('conversationDetails.removeReaction')}
                               >
                                 <X className="h-4 w-4" />
                               </Button>
@@ -1001,7 +1001,7 @@ export function ConversationSettingsModal({
                         {(conversation as unknown).bannerImage ? (
                           <img
                             src={(conversation as unknown).bannerImage}
-                            alt="Bannière"
+                            alt={t('conversationDetails.bannerAlt')}
                             className="w-full h-full object-cover"
                           />
                         ) : (
@@ -1026,7 +1026,7 @@ export function ConversationSettingsModal({
                         {(conversation as unknown).bannerImage && conversation.type === 'direct' && (
                           <div className="absolute top-3 right-3">
                             <Badge className="backdrop-blur-sm bg-white/20 text-white border-white/30">
-                              Conversation directe
+                              {t('conversationDetails.directConversationBadge')}
                             </Badge>
                           </div>
                         )}
@@ -1080,7 +1080,7 @@ export function ConversationSettingsModal({
                                     setIsEditingTitle(true);
                                   }}
                                   className="h-7 w-7 opacity-0 group-hover/title:opacity-100 transition-opacity"
-                                  aria-label="Modifier le titre"
+                                  aria-label={t('conversationDetails.editTitle')}
                                 >
                                   <Pencil className="h-3.5 w-3.5" />
                                 </Button>
@@ -1109,7 +1109,7 @@ export function ConversationSettingsModal({
                                   onClick={cancelTitleEdit}
                                   disabled={isSavingTitle}
                                   className="h-7 w-7 text-red-600 hover:text-red-700 flex-shrink-0"
-                                  aria-label="Annuler"
+                                  aria-label={t('conversationDetails.cancel')}
                                 >
                                   <X className="h-3.5 w-3.5" />
                                 </Button>
@@ -1120,7 +1120,7 @@ export function ConversationSettingsModal({
                                   onClick={saveTitleInline}
                                   disabled={isSavingTitle}
                                   className="h-7 w-7 text-green-600 hover:text-green-700 flex-shrink-0"
-                                  aria-label="Valider"
+                                  aria-label={t('conversationDetails.confirm')}
                                 >
                                   {isSavingTitle ? (
                                     <Loader2 className="h-3.5 w-3.5 animate-spin" />

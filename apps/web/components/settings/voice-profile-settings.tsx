@@ -184,7 +184,7 @@ export function VoiceProfileSettings() {
   // Create profile handler
   const handleCreateProfile = useCallback(async () => {
     if (!recordedBlob) {
-      toast.error('Aucun enregistrement disponible');
+      toast.error(t('voiceProfile.errors.noRecording'));
       return;
     }
 

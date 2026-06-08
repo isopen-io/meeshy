@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { User } from '@/types';
 import { Rocket, Sparkles, Zap, Beaker, Flag, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/useI18n';
 
 interface BetaPlaygroundProps {
   user?: User | null;
@@ -15,6 +16,7 @@ interface BetaPlaygroundProps {
 }
 
 export default function BetaPlayground({ _user }: BetaPlaygroundProps) {
+  const { t } = useI18n('settings');
   const [betaFeatures, setBetaFeatures] = useState({
     aiAssistant: false,
     voiceCloning: false,
@@ -30,7 +32,7 @@ export default function BetaPlayground({ _user }: BetaPlaygroundProps) {
 
   const updateFeature = (key: string, value: boolean) => {
     setBetaFeatures(prev => ({ ...prev, [key]: value }));
-    toast.success(value ? 'Beta feature enabled' : 'Beta feature disabled');
+    toast.success(value ? t('betaPlayground.featureEnabled') : t('betaPlayground.featureDisabled'));
   };
 
   const features = [
