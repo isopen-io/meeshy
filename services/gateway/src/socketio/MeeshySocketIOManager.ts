@@ -564,7 +564,7 @@ export class MeeshySocketIOManager {
     this.io.on('connection', (socket) => {
       this.stats.total_connections++;
       this.stats.active_connections++;
-      console.log(`[RT-DIAG] socket connected id=${socket.id} activeConnections=${this.stats.active_connections}`);
+      logger.debug({ socketId: socket.id, activeConnections: this.stats.active_connections }, 'socket connected');
 
       this.authHandler.handleTokenAuthentication(socket);
 

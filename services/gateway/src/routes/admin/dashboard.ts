@@ -3,6 +3,9 @@ import { logError } from '../../utils/logger';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
 
+const DASHBOARD_CACHE_KEY = 'admin:dashboard:stats';
+const DASHBOARD_CACHE_TTL = 600; // 10 minutes
+
 // Middleware pour vérifier les permissions dashboard
 const requireDashboardPermission = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as UnifiedAuthRequest).authContext;
@@ -28,21 +31,35 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
   /**
    * GET /api/admin/dashboard
    * Récupère les statistiques complètes du tableau de bord administrateur
+   * Cache Redis 10 min — les stats dashboard n'ont pas besoin d'être en temps réel.
    */
   fastify.get('/dashboard', {
     onRequest: [fastify.authenticate, requireDashboardPermission]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const cacheKey = 'admin:dashboard:stats';
-      const cached = await getCacheStore().get(cacheKey);
+      const now = new Date();
+      const cacheStore = getCacheStore();
+
+      const cached = await cacheStore.get(DASHBOARD_CACHE_KEY);
       if (cached) {
-        return reply.send(JSON.parse(cached));
+        const authContext = (request as UnifiedAuthRequest).authContext;
+        const userPermissions = {
+          role: authContext.registeredUser.role,
+          canManageUsers: ['BIGBOSS', 'ADMIN'].includes(authContext.registeredUser.role),
+          canManageContent: ['BIGBOSS', 'ADMIN', 'MODERATOR'].includes(authContext.registeredUser.role),
+          canViewAnalytics: ['BIGBOSS', 'ADMIN', 'AUDIT', 'ANALYST'].includes(authContext.registeredUser.role),
+          canManageReports: ['BIGBOSS', 'ADMIN', 'MODERATOR'].includes(authContext.registeredUser.role)
+        };
+        reply.header('Cache-Control', 'private, max-age=600');
+        return reply.send({
+          success: true,
+          data: { ...JSON.parse(cached), userPermissions, timestamp: now.toISOString() }
+        });
       }
 
-      const now = new Date();
       const last24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-      // Toutes les statistiques en un seul roundtrip MongoDB
+      // Toutes les queries en un seul Promise.all pour minimiser la latence totale
       const [
         totalUsers,
         activeUsers,
@@ -61,7 +78,7 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
         newUsers,
         newConversations,
         newMessages,
-        newAnonymousUsers
+        newAnonymousUsers,
       ] = await Promise.all([
         fastify.prisma.user.count(),
         fastify.prisma.user.count({ where: { isActive: true } }),
@@ -80,19 +97,40 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
         fastify.prisma.user.count({ where: { createdAt: { gte: last24Hours } } }),
         fastify.prisma.conversation.count({ where: { createdAt: { gte: last24Hours } } }),
         fastify.prisma.message.count({ where: { createdAt: { gte: last24Hours }, deletedAt: null } }),
-        fastify.prisma.participant.count({ where: { type: 'anonymous', joinedAt: { gte: last24Hours } } })
+        fastify.prisma.participant.count({ where: { type: 'anonymous', joinedAt: { gte: last24Hours } } }),
       ]);
 
       const topLanguages = [
         { language: 'fr', count: 0 },
         { language: 'en', count: 0 }
       ];
-
-      // Statistiques par rôle et par type (simplifiées pour éviter les erreurs circulaires)
       const usersByRole: Record<string, number> = {};
       const messagesByType: Record<string, number> = {};
 
-      // Récupérer les permissions de l'utilisateur
+      const statistics = {
+        totalUsers,
+        activeUsers,
+        inactiveUsers,
+        adminUsers,
+        totalAnonymousUsers,
+        activeAnonymousUsers,
+        inactiveAnonymousUsers,
+        totalMessages,
+        totalCommunities,
+        totalTranslations,
+        totalShareLinks,
+        activeShareLinks,
+        totalReports,
+        totalInvitations,
+        topLanguages,
+        usersByRole,
+        messagesByType,
+      };
+      const recentActivity = { newUsers, newConversations, newMessages, newAnonymousUsers };
+
+      // Mettre en cache les stats (sans les permissions qui sont par-utilisateur)
+      await cacheStore.set(DASHBOARD_CACHE_KEY, JSON.stringify({ statistics, recentActivity }), DASHBOARD_CACHE_TTL);
+
       const authContext = (request as UnifiedAuthRequest).authContext;
       const userPermissions = {
         role: authContext.registeredUser.role,
@@ -102,47 +140,37 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
         canManageReports: ['BIGBOSS', 'ADMIN', 'MODERATOR'].includes(authContext.registeredUser.role)
       };
 
-      const responseBody = {
+      reply.header('Cache-Control', 'private, max-age=600');
+      return reply.send({
         success: true,
-        data: {
-          statistics: {
-            totalUsers,
-            activeUsers,
-            inactiveUsers,
-            adminUsers,
-            totalAnonymousUsers,
-            activeAnonymousUsers,
-            inactiveAnonymousUsers,
-            totalMessages,
-            totalCommunities,
-            totalTranslations,
-            totalShareLinks,
-            activeShareLinks,
-            totalReports,
-            totalInvitations,
-            topLanguages,
-            usersByRole,
-            messagesByType
-          },
-          recentActivity: {
-            newUsers,
-            newConversations,
-            newMessages,
-            newAnonymousUsers
-          },
-          userPermissions,
-          timestamp: now.toISOString()
-        }
-      };
-
-      getCacheStore().set(cacheKey, JSON.stringify(responseBody), 60).catch(() => {});
-      return reply.send(responseBody);
+        data: { statistics, recentActivity, userPermissions, timestamp: now.toISOString() }
+      });
     } catch (error) {
       logError(fastify.log, 'Error fetching admin dashboard stats:', error);
       return reply.status(500).send({
         success: false,
         message: 'Erreur lors de la récupération des statistiques'
       });
+    }
+  });
+
+  /**
+   * POST /api/admin/dashboard/invalidate-cache
+   * Force l'invalidation du cache dashboard (BIGBOSS/ADMIN uniquement)
+   */
+  fastify.post('/dashboard/invalidate-cache', {
+    onRequest: [fastify.authenticate, requireDashboardPermission]
+  }, async (request: FastifyRequest, reply: FastifyReply) => {
+    const authContext = (request as UnifiedAuthRequest).authContext;
+    if (!['BIGBOSS', 'ADMIN'].includes(authContext.registeredUser.role)) {
+      return reply.status(403).send({ success: false, message: 'BIGBOSS ou ADMIN requis' });
+    }
+    try {
+      await getCacheStore().del(DASHBOARD_CACHE_KEY);
+      return reply.send({ success: true, message: 'Cache dashboard invalidé' });
+    } catch (error) {
+      logError(fastify.log, 'Error invalidating dashboard cache:', error);
+      return reply.status(500).send({ success: false, message: 'Erreur invalidation cache' });
     }
   });
 }
