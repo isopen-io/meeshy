@@ -249,87 +249,71 @@ struct BubbleReactionsOverlay: View, Equatable {
 
 // MARK: - Comet-landing modifier
 
-/// Anime l'entree d'une pill de reaction comme une comete qui s'ecrase :
-/// 1. Phase ZOOM : la pill demarre fortement zoomee (~2.6x) et legerement
-///    decalee en haut, comme un emoji qui fonce vers la bulle.
-/// 2. Phase DEZOOM : un ressort rapide ramene l'echelle a 1.0 et l'offset
-///    a zero — l'impact.
-/// 3. Phase SHAKE : 2-3 oscillations decroissantes de rotation/translation
-///    simulent le tremblement post-impact, puis stabilisation.
+/// Anime l'entree d'une pill de reaction comme une comete qui s'ecrase.
+/// Utilise `PhaseAnimator` (iOS 17+) pour orchestrer les 3 phases sans
+/// DispatchQueue.asyncAfter ni @State supplementaires.
 ///
-/// Une pill deja presente (`isNew == false`) est rendue a son etat final
-/// sans aucune animation : pas de re-jeu sur un simple re-render de liste.
+/// Phases :
+///   .launch  → pill fortement zoomee (2.6x) et decalee en haut (-18pt)
+///   .land    → ressort rapide ramene a 1.0 / 0 — l'impact (+ haptic)
+///   .shake   → oscillations decroissantes (rotation + micro-X) post-impact
+///   .rest    → etat final stable
+///
+/// Une pill deja presente (`isNew == false`) saute directement a .rest.
 private struct CometPillModifier: ViewModifier {
     let isNew: Bool
 
-    /// `progress` pilote zoom + offset (0 = comete lointaine, 1 = posee).
-    @State private var progress: CGFloat
-    /// `shake` pilote l'amplitude des oscillations post-impact (1 -> 0).
-    @State private var shake: CGFloat = 0
-    /// Phase angulaire des oscillations — avance pendant le tremblement.
-    @State private var wobblePhase: CGFloat = 0
-    @State private var didStart = false
-
-    init(isNew: Bool) {
-        self.isNew = isNew
-        // Pills deja vues : etat final immediat. Pills neuves : etat
-        // "comete" initial, l'animation est declenchee dans onAppear.
-        _progress = State(initialValue: isNew ? 0 : 1)
+    private enum Phase: CaseIterable {
+        case launch, land, shake, rest
     }
 
-    // Echelle : 2.6x au depart, 1.0 a l'arrivee.
-    private var scale: CGFloat {
-        let cometScale: CGFloat = 2.6
-        return cometScale - (cometScale - 1.0) * progress
-    }
-
-    // Offset : la comete tombe depuis le haut (-18pt) vers sa place.
-    private var dropOffset: CGFloat {
-        -18 * (1 - progress)
-    }
-
-    // Tremblement : 3 oscillations sinusoidales dont l'amplitude decroit
-    // avec `shake`. Rotation legere + micro-translation horizontale.
-    private var wobbleAngle: Angle {
-        .degrees(Double(sin(wobblePhase * .pi * 6) * shake * 9))
-    }
-
-    private var wobbleX: CGFloat {
-        cos(wobblePhase * .pi * 6) * shake * 3
-    }
-
+    @ViewBuilder
     func body(content: Content) -> some View {
-        content
-            .scaleEffect(scale)
-            .rotationEffect(wobbleAngle)
-            .offset(x: wobbleX, y: dropOffset)
-            .onAppear {
-                guard isNew, !didStart else { return }
-                didStart = true
-                startCometLanding()
+        if isNew {
+            PhaseAnimator(Phase.allCases, trigger: isNew) { phase in
+                content
+                    .scaleEffect(scale(for: phase))
+                    .rotationEffect(rotation(for: phase))
+                    .offset(x: offsetX(for: phase), y: offsetY(for: phase))
+            } animation: { phase in
+                switch phase {
+                case .launch: return .none
+                case .land:   return .spring(response: 0.32, dampingFraction: 0.55)
+                case .shake:  return .easeOut(duration: 0.42)
+                case .rest:   return .none
+                }
             }
+            .onAppear { HapticFeedback.light() }
+        } else {
+            content
+        }
     }
 
-    private func startCometLanding() {
-        // Phase 1+2 — dezoom : ressort rapide et un peu rebondissant qui
-        // ramene la comete a sa place finale.
-        withAnimation(.spring(response: 0.32, dampingFraction: 0.55)) {
-            progress = 1
+    private func scale(for phase: Phase) -> CGFloat {
+        switch phase {
+        case .launch: return 2.6
+        case .land, .shake, .rest: return 1.0
         }
-        HapticFeedback.light()
+    }
 
-        // Phase 3 — shake : declenche a l'impact (~0.18s apres le lancement).
-        // On amorce `shake` a 1, on fait avancer `wobblePhase` lineairement
-        // pour generer les oscillations, puis on amortit `shake` vers 0.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
-            shake = 1
-            wobblePhase = 0
-            withAnimation(.linear(duration: 0.42)) {
-                wobblePhase = 1
-            }
-            withAnimation(.easeOut(duration: 0.42)) {
-                shake = 0
-            }
+    private func offsetY(for phase: Phase) -> CGFloat {
+        switch phase {
+        case .launch: return -18
+        case .land, .shake, .rest: return 0
+        }
+    }
+
+    private func rotation(for phase: Phase) -> Angle {
+        switch phase {
+        case .launch, .land, .rest: return .zero
+        case .shake: return .degrees(4)
+        }
+    }
+
+    private func offsetX(for phase: Phase) -> CGFloat {
+        switch phase {
+        case .launch, .land, .rest: return 0
+        case .shake: return 2
         }
     }
 }
