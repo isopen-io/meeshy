@@ -379,6 +379,7 @@ export class StatusService {
     this.cleanupInterval = setInterval(() => {
       this.clearOldCacheEntries();
     }, this.CACHE_CLEANUP_INTERVAL_MS);
+    this.cleanupInterval.unref?.();
 
     logger.info(`🧹 Cache cleanup démarré (intervalle: ${this.CACHE_CLEANUP_INTERVAL_MS}ms)`);
   }
