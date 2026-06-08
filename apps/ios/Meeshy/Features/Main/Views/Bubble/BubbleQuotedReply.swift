@@ -77,7 +77,7 @@ struct BubbleQuotedReply: View, Equatable {
     private var theme: ThemeManager { ThemeManager.shared }
 
     private var mentionTint: Color {
-        Color(hex: "818CF8") // indigo400 — distinct des liens URL
+        MeeshyColors.indigo400 // distinct des liens URL
     }
 
     /// Titre de la citation. Pour un mood échoé par le serveur, `authorName`

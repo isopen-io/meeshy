@@ -39,10 +39,10 @@ struct RequestsTab: View {
                 } label: {
                     HStack(spacing: 4) {
                         Text(filter.rawValue)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.footnote.weight(.semibold))
                         if count > 0 {
                             Text("(\(count))")
-                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                .font(.caption.weight(.bold))
                         }
                     }
                     .foregroundColor(activeFilter == filter ? .white : MeeshyColors.indigo500)
@@ -115,25 +115,25 @@ struct RequestsTab: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(name)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 if let username = sender?.username {
                     Text("@\(username)")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.caption.weight(.medium))
                         .foregroundColor(theme.textMuted)
                 }
 
                 if let message = request.message, !message.isEmpty {
                     Text(message)
-                        .font(.system(size: 13))
+                        .font(.footnote)
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(2)
                 }
 
                 Text(request.createdAt.relativeTimeString)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundColor(theme.textMuted)
             }
 
@@ -144,7 +144,7 @@ struct RequestsTab: View {
                     Task { await viewModel.reject(requestId: request.id) }
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.caption.weight(.bold))
                         .foregroundColor(theme.textMuted)
                         .frame(width: 36, height: 36)
                         .background(Circle().fill(theme.textMuted.opacity(0.12)))
@@ -155,13 +155,13 @@ struct RequestsTab: View {
                     Task { await viewModel.accept(requestId: request.id) }
                 } label: {
                     Image(systemName: "checkmark")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.caption.weight(.bold))
                         .foregroundColor(.white)
                         .frame(width: 36, height: 36)
                         .background(
                             Circle().fill(
                                 LinearGradient(
-                                    colors: [MeeshyColors.success, Color(hex: "2ECC71")],
+                                    colors: [MeeshyColors.success, MeeshyColors.success.opacity(0.7)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
@@ -208,25 +208,25 @@ struct RequestsTab: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(name)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 if let username = receiver?.username {
                     Text("@\(username)")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.caption.weight(.medium))
                         .foregroundColor(theme.textMuted)
                 }
 
                 Text(request.createdAt.relativeTimeString)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundColor(theme.textMuted)
             }
 
             Spacer()
 
             Text(String(localized: "contacts.requests.pending", defaultValue: "En attente", bundle: .main))
-                .font(.system(size: 11, weight: .semibold))
+                .font(.caption2.weight(.semibold))
                 .foregroundColor(MeeshyColors.warning)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -238,7 +238,7 @@ struct RequestsTab: View {
                 Task { await viewModel.cancel(requestId: request.id) }
             } label: {
                 Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundColor(MeeshyColors.error)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
@@ -264,7 +264,7 @@ struct RequestsTab: View {
                 .foregroundColor(theme.textMuted.opacity(0.4))
                 .accessibilityHidden(true)
             Text(text)
-                .font(.system(size: 16, weight: .semibold))
+                .font(.callout.weight(.semibold))
                 .foregroundColor(theme.textMuted)
             Spacer()
         }

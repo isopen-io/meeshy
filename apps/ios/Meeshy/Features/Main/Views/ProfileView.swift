@@ -713,7 +713,7 @@ struct ProfileView: View {
             .foregroundColor(.white)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(Capsule().fill(verified ? Color(hex: "4ADE80") : Color(hex: "F59E0B")))
+            .background(Capsule().fill(verified ? MeeshyColors.success : MeeshyColors.warning))
     }
 
     private func statCard(value: String, label: String, color: String) -> some View {

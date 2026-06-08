@@ -931,7 +931,7 @@ struct BubbleStandardLayout: View {
     }
 
     private var mentionTint: Color {
-        Color(hex: "818CF8") // indigo400 — distinct des liens URL
+        MeeshyColors.indigo400 // distinct des liens URL
     }
 
     @ViewBuilder

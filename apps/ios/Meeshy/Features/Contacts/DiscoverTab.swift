@@ -43,12 +43,12 @@ struct DiscoverTab: View {
     private var emailInviteCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label(String(localized: "contacts.discover.email.title", defaultValue: "Inviter par email", bundle: .main), systemImage: "envelope.fill")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
 
             HStack(spacing: 10) {
                 TextField(String(localized: "contacts.discover.email.placeholder", defaultValue: "Adresse email", bundle: .main), text: $viewModel.emailText)
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                     .foregroundColor(theme.textPrimary)
                     .keyboardType(.emailAddress)
                     .autocorrectionDisabled()
@@ -62,7 +62,7 @@ struct DiscoverTab: View {
                     Task { await viewModel.sendEmailInvitation() }
                 } label: {
                     Text(String(localized: "common.send", defaultValue: "Envoyer", bundle: .main))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.footnote.weight(.semibold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
@@ -85,12 +85,12 @@ struct DiscoverTab: View {
     private var smsInviteCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label(String(localized: "contacts.discover.sms.title", defaultValue: "Inviter par SMS", bundle: .main), systemImage: "message.fill")
-                .font(.system(size: 14, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
 
             HStack(spacing: 10) {
                 TextField(String(localized: "contacts.discover.sms.placeholder", defaultValue: "Numero de telephone", bundle: .main), text: $viewModel.phoneText)
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                     .foregroundColor(theme.textPrimary)
                     .keyboardType(.phonePad)
                     .padding(.horizontal, 12)
@@ -106,7 +106,7 @@ struct DiscoverTab: View {
                     }
                 } label: {
                     Text(String(localized: "common.send", defaultValue: "Envoyer", bundle: .main))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.footnote.weight(.semibold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 10)
@@ -139,9 +139,9 @@ struct DiscoverTab: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "person.crop.circle.badge.plus")
-                    .font(.system(size: 16, weight: .medium))
+                    .font(.callout.weight(.medium))
                 Text(String(localized: "contacts.discover.import", defaultValue: "Importer mes contacts", bundle: .main))
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.subheadline.weight(.semibold))
             }
             .foregroundColor(MeeshyColors.indigo500)
             .frame(maxWidth: .infinity)
@@ -173,7 +173,7 @@ struct DiscoverTab: View {
                         .font(.system(size: 32, weight: .light))
                         .foregroundColor(theme.textMuted.opacity(0.4))
                     Text(String(localized: "contacts.discover.no-results", defaultValue: "Aucun utilisateur trouve", bundle: .main))
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.subheadline.weight(.medium))
                         .foregroundColor(theme.textMuted)
                 }
                 .frame(maxWidth: .infinity)
@@ -186,11 +186,11 @@ struct DiscoverTab: View {
     private var searchBar: some View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .medium))
+                .font(.subheadline.weight(.medium))
                 .foregroundColor(theme.textMuted)
 
             TextField(String(localized: "contacts.discover.search-placeholder", defaultValue: "Rechercher un utilisateur Meeshy", bundle: .main), text: $viewModel.searchQuery)
-                .font(.system(size: 14))
+                .font(.subheadline)
                 .foregroundColor(theme.textPrimary)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
@@ -209,7 +209,7 @@ struct DiscoverTab: View {
                     viewModel.searchResults = []
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
+                        .font(.subheadline)
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -253,11 +253,11 @@ struct DiscoverTab: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(name)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
                 Text("@\(user.username)")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.caption.weight(.medium))
                     .foregroundColor(theme.textMuted)
             }
             .onTapGesture {

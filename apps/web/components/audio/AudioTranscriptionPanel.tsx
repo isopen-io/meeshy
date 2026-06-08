@@ -3,6 +3,7 @@
 import React, { memo, useMemo } from 'react';
 import { FileText, AlertTriangle, Globe, ChevronDown, ChevronUp } from 'lucide-react';
 import { LANGUAGE_NAMES } from '@/utils/audio-effects-config';
+import { useI18n } from '@/hooks/useI18n';
 
 interface AudioTranscriptionPanelProps {
   transcription?: { text: string; language: string; confidence?: number };
@@ -35,6 +36,7 @@ export const AudioTranscriptionPanel = memo<AudioTranscriptionPanelProps>(({
   onRequestTranscription,
   onRequestTranslation,
 }) => {
+  const { t } = useI18n('audioEffects');
 
   // Extraire les 10 premiers mots pour l'aperçu
   const transcriptionPreview = useMemo(() => {
@@ -94,16 +96,16 @@ export const AudioTranscriptionPanel = memo<AudioTranscriptionPanelProps>(({
                     type="button"
                     onClick={onToggleExpanded}
                     aria-expanded={isExpanded}
-                    aria-label={isExpanded ? "Voir moins de transcription" : "Voir plus de transcription"}
+                    aria-label={isExpanded ? t('controls.transcription.expandLess') : t('controls.transcription.expandMore')}
                     className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1 rounded px-1.5 py-0.5 transition-colors"
                   >
                     {isExpanded ? (
                       <>
-                        Voir moins <ChevronUp className="w-3 h-3" aria-hidden="true" />
+                        {t('controls.transcription.expandLess')} <ChevronUp className="w-3 h-3" aria-hidden="true" />
                       </>
                     ) : (
                       <>
-                        Voir plus <ChevronDown className="w-3 h-3" aria-hidden="true" />
+                        {t('controls.transcription.expandMore')} <ChevronDown className="w-3 h-3" aria-hidden="true" />
                       </>
                     )}
                   </button>
