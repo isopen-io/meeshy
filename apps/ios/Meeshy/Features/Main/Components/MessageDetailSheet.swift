@@ -28,16 +28,16 @@ enum DetailTab: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .language: return String(localized: "message-detail.tab.language", defaultValue: "Langue", bundle: .main)
-        case .views: return String(localized: "message-detail.tab.views", defaultValue: "Vues", bundle: .main)
+        case .language: return String(localized: "message-detail.tab.language", defaultValue: "Language", bundle: .main)
+        case .views: return String(localized: "message-detail.tab.views", defaultValue: "Views", bundle: .main)
         case .reactions: return String(localized: "message-detail.tab.reactions", defaultValue: "Reactions", bundle: .main)
-        case .react: return String(localized: "message-detail.tab.react", defaultValue: "Reagir", bundle: .main)
-        case .report: return String(localized: "message-detail.tab.report", defaultValue: "Signaler", bundle: .main)
-        case .delete: return String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main)
-        case .forward: return String(localized: "message-detail.tab.forward", defaultValue: "Transferer", bundle: .main)
+        case .react: return String(localized: "message-detail.tab.react", defaultValue: "React", bundle: .main)
+        case .report: return String(localized: "message-detail.tab.report", defaultValue: "Report", bundle: .main)
+        case .delete: return String(localized: "common.delete", defaultValue: "Delete", bundle: .main)
+        case .forward: return String(localized: "message-detail.tab.forward", defaultValue: "Forward", bundle: .main)
         case .sentiment: return String(localized: "message-detail.tab.sentiment", defaultValue: "Sentiment", bundle: .main)
         case .transcription: return String(localized: "message-detail.tab.transcription", defaultValue: "Transcription", bundle: .main)
-        case .edits: return String(localized: "message-detail.tab.history", defaultValue: "Historique", bundle: .main)
+        case .edits: return String(localized: "message-detail.tab.history", defaultValue: "History", bundle: .main)
         }
     }
 
@@ -66,12 +66,12 @@ private enum ViewsFilter: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .sent: return String(localized: "message-detail.views.sent", defaultValue: "Envoye", bundle: .main)
-        case .delivered: return String(localized: "message-detail.views.delivered", defaultValue: "Distribue", bundle: .main)
-        case .read: return String(localized: "message-detail.views.read", defaultValue: "Lu", bundle: .main)
-        case .notSeen: return String(localized: "message-detail.views.not-seen", defaultValue: "Pas vu", bundle: .main)
-        case .listened: return String(localized: "message-detail.views.listened", defaultValue: "Ecoute", bundle: .main)
-        case .watched: return String(localized: "message-detail.views.watched", defaultValue: "Vu", bundle: .main)
+        case .sent: return String(localized: "message-detail.views.sent", defaultValue: "Sent", bundle: .main)
+        case .delivered: return String(localized: "message-detail.views.delivered", defaultValue: "Delivered", bundle: .main)
+        case .read: return String(localized: "message-detail.views.read", defaultValue: "Read", bundle: .main)
+        case .notSeen: return String(localized: "message-detail.views.not-seen", defaultValue: "Not seen", bundle: .main)
+        case .listened: return String(localized: "message-detail.views.listened", defaultValue: "Listened", bundle: .main)
+        case .watched: return String(localized: "message-detail.views.watched", defaultValue: "Seen", bundle: .main)
         }
     }
 
@@ -359,12 +359,12 @@ struct MessageDetailSheet: View {
                         .frame(width: 42, height: 42)
 
                     Image(systemName: item.icon)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.callout.weight(.semibold))
                         .foregroundColor(accent)
                 }
 
                 Text(item.label)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundColor(isActive ? accent : theme.textSecondary)
                     .lineLimit(1)
             }
@@ -450,14 +450,14 @@ struct MessageDetailSheet: View {
                     .fill(originalColor)
                     .frame(width: 8, height: 8)
                 Image(systemName: "text.bubble.fill")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundColor(originalColor)
                 Text(String(format: String(localized: "message-detail.original", defaultValue: "Original \u{2022} %@", bundle: .main), Self.languageName(for: originalLang)))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                 Spacer()
                 Text(originalLang.uppercased())
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .font(.system(.caption2, design: .monospaced).weight(.bold))
                     .foregroundColor(originalColor)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
@@ -476,17 +476,17 @@ struct MessageDetailSheet: View {
             // Original content preview (text or transcription for audio messages)
             if !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(message.content)
-                    .font(.system(size: 13))
+                    .font(.footnote)
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(3)
                     .padding(.horizontal, 4)
             } else if let transcription {
                 HStack(spacing: 6) {
                     Image(systemName: "waveform")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.caption2.weight(.medium))
                         .foregroundColor(originalColor.opacity(0.7))
                     Text(transcription.text)
-                        .font(.system(size: 13))
+                        .font(.footnote)
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(3)
                 }
@@ -503,20 +503,20 @@ struct MessageDetailSheet: View {
                             .fill(langColor)
                             .frame(width: 6, height: 6)
                         Text(Self.languageName(for: selectedCode))
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.caption.weight(.semibold))
                             .foregroundColor(langColor)
                         Spacer()
                         Button {
                             withAnimation(.easeInOut(duration: 0.2)) { selectedLanguageCode = nil }
                         } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 14))
+                                .font(.subheadline)
                                 .foregroundColor(theme.textMuted)
                         }
                     }
 
                     Text(translated)
-                        .font(.system(size: 14))
+                        .font(.subheadline)
                         .foregroundColor(theme.textPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -544,7 +544,7 @@ struct MessageDetailSheet: View {
 
             if let translationError {
                 Text(translationError)
-                    .font(.system(size: 11))
+                    .font(.caption2)
                     .foregroundColor(MeeshyColors.error)
                     .padding(.horizontal, 8)
                     .padding(.top, 4)
@@ -615,9 +615,9 @@ struct MessageDetailSheet: View {
 
                 // Flag + name
                 Text(lang.flag)
-                    .font(.system(size: 16))
+                    .font(.callout)
                 Text(lang.name)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.footnote.weight(.medium))
                     .foregroundColor(isSelected ? langColor : theme.textPrimary)
 
                 Spacer()
@@ -629,7 +629,7 @@ struct MessageDetailSheet: View {
                         .tint(langColor)
                 } else if hasTranslation {
                     Text(String((translations[lang.code] ?? "").prefix(60)) + (translations[lang.code]?.count ?? 0 > 60 ? "..." : ""))
-                        .font(.system(size: 11))
+                        .font(.caption2)
                         .foregroundColor(theme.textMuted)
                         .lineLimit(1)
                         .frame(maxWidth: 180, alignment: .trailing)
@@ -638,31 +638,32 @@ struct MessageDetailSheet: View {
                         Task { await translateTo(lang.code, from: originalLang) }
                     } label: {
                         Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.caption2.weight(.medium))
                             .foregroundColor(langColor.opacity(0.6))
                     }
 
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.caption.weight(.medium))
                         .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(0.5))
                 } else if let audioForLang = mergedTranslatedAudios.first(where: { $0.targetLanguage.lowercased() == lang.code.lowercased() }) {
                     HStack(spacing: 3) {
                         Image(systemName: "waveform")
-                            .font(.system(size: 9, weight: .medium))
+                            .font(.caption2.weight(.medium))
+                            .minimumScaleFactor(0.8)
                             .foregroundColor(langColor.opacity(0.6))
                         Text(String(audioForLang.transcription.prefix(50)) + (audioForLang.transcription.count > 50 ? "..." : ""))
-                            .font(.system(size: 11))
+                            .font(.caption2)
                             .foregroundColor(theme.textMuted)
                             .lineLimit(1)
                     }
                     .frame(maxWidth: 180, alignment: .trailing)
 
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.caption.weight(.medium))
                         .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(0.5))
                 } else {
                     Text(String(localized: "message-detail.translate", defaultValue: "Traduire", bundle: .main))
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.caption2.weight(.medium))
                         .foregroundColor(langColor)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
@@ -894,12 +895,12 @@ struct MessageDetailSheet: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: filter.icon)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption2.weight(.medium))
                 Text(filter.label)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.caption.weight(.medium))
                 if let count {
                     Text("\(count)")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(.system(.caption2, design: .monospaced).weight(.bold))
                         .foregroundColor(isSelected ? accent : theme.textMuted)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
@@ -938,11 +939,11 @@ struct MessageDetailSheet: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(message.senderName ?? "Inconnu")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.callout.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
 
                     Text(formatDateFR(message.createdAt))
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.caption.weight(.medium))
                         .foregroundColor(theme.textMuted)
                 }
 
