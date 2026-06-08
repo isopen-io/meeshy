@@ -1554,7 +1554,7 @@ export class MeeshySocketIOManager {
             select: { id: true, userId: true }
           });
 
-          // Calculer le unreadCount pour tous les participants en batch (3 requêtes au lieu de N×3)
+          // Calculer le unreadCount pour tous les participants en batch (1 query au lieu de N)
           const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
           const readStatusService = new MessageReadStatusService(this.prisma);
 
