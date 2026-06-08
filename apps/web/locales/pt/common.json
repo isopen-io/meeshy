@@ -201,6 +201,16 @@
       "description": "Ocorreu um erro inesperado. Por favor, tente novamente.",
       "details": "Detalhes do erro",
       "reload": "Recarregar página"
-    }
+    },
+    "download": "Baixar",
+    "play": "Reproduzir",
+    "pause": "Pausar",
+    "mute": "Silenciar",
+    "unmute": "Ativar som",
+    "enterFullscreen": "Tela cheia",
+    "exitFullscreen": "Sair da tela cheia",
+    "zoomIn": "Ampliar",
+    "zoomOut": "Reduzir",
+    "rotate": "Girar"
   }
 }

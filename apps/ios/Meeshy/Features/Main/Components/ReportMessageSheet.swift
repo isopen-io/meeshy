@@ -19,7 +19,7 @@ struct ReportMessageSheet: View {
             ScrollView {
                 VStack(spacing: 16) {
                     Text(String(localized: "report.message.title", defaultValue: "Why are you reporting this message?", bundle: .main))
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.callout.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, 8)
@@ -31,11 +31,11 @@ struct ReportMessageSheet: View {
                     if selectedType != nil {
                         VStack(alignment: .leading, spacing: 6) {
                             Text(String(localized: "report.message.details.label", defaultValue: "Details (optional)", bundle: .main))
-                                .font(.system(size: 13, weight: .medium))
+                                .font(.footnote.weight(.medium))
                                 .foregroundColor(theme.textSecondary)
 
                             TextField(String(localized: "report.message.details.placeholder", defaultValue: "Describe the issue...", bundle: .main), text: $reason, axis: .vertical)
-                                .font(.system(size: 14))
+                                .font(.subheadline)
                                 .lineLimit(3...6)
                                 .padding(12)
                                 .background(
@@ -90,16 +90,16 @@ struct ReportMessageSheet: View {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: type.icon)
-                    .font(.system(size: 16))
+                    .font(.callout)
                     .foregroundColor(isSelected ? accent : theme.textSecondary)
                     .frame(width: 24)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(type.label)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.subheadline.weight(.medium))
                         .foregroundColor(theme.textPrimary)
                     Text(type.description)
-                        .font(.system(size: 12))
+                        .font(.caption)
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(1)
                 }
@@ -108,7 +108,7 @@ struct ReportMessageSheet: View {
 
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 20))
+                        .font(.title3)
                         .foregroundColor(accent)
                         .transition(.scale.combined(with: .opacity))
                 }

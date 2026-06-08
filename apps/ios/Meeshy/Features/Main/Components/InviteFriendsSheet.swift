@@ -108,6 +108,7 @@ struct InviteFriendsSheet: View {
                             .font(.system(size: 20))
                             .foregroundStyle(.ultraThinMaterial)
                     }
+                    .accessibilityLabel(String(localized: "common.close", defaultValue: "Close", bundle: .main))
                 }
             }
             .task {
