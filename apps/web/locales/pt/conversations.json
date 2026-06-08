@@ -131,7 +131,16 @@
             "settings": "Configurações",
             "encryptionE2EE": "Criptografia de ponta a ponta",
             "encryptionHybrid": "Criptografia híbrida",
-            "encryptionServer": "Criptografia no servidor"
+            "encryptionServer": "Criptografia no servidor",
+            "reactions": "Reações"
+        },
+        "messageSearch": {
+            "placeholder": "Pesquisar na conversa…",
+            "noResults": "Nenhum resultado",
+            "searchError": "Ocorreu um erro durante a pesquisa."
+        },
+        "pinnedMessage": {
+            "dismiss": "Fechar mensagem fixada"
         },
         "conversationUI": {
             "participants": "Participantes",

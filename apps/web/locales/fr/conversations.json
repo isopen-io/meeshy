@@ -131,7 +131,16 @@
             "settings": "Paramètres",
             "encryptionE2EE": "Chiffrement de bout en bout",
             "encryptionHybrid": "Chiffrement hybride",
-            "encryptionServer": "Chiffrement serveur"
+            "encryptionServer": "Chiffrement serveur",
+            "reactions": "Réactions"
+        },
+        "messageSearch": {
+            "placeholder": "Rechercher dans la conversation…",
+            "noResults": "Aucun résultat",
+            "searchError": "Une erreur est survenue lors de la recherche."
+        },
+        "pinnedMessage": {
+            "dismiss": "Fermer le message épinglé"
         },
         "conversationUI": {
             "participants": "Participants",

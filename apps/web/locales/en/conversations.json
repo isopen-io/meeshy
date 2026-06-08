@@ -129,7 +129,16 @@
             "settings": "Settings",
             "encryptionE2EE": "End-to-end encryption",
             "encryptionHybrid": "Hybrid encryption",
-            "encryptionServer": "Server encryption"
+            "encryptionServer": "Server encryption",
+            "reactions": "Reactions"
+        },
+        "messageSearch": {
+            "placeholder": "Search in conversation…",
+            "noResults": "No results",
+            "searchError": "An error occurred during search."
+        },
+        "pinnedMessage": {
+            "dismiss": "Dismiss pinned message"
         },
         "conversationUI": {
             "participants": "Participants",

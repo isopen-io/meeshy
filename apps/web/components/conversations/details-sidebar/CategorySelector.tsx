@@ -284,6 +284,7 @@ export function CategorySelector({ conversationId, currentUser, onCategoryUpdate
                               e.stopPropagation();
                               handleEditCategory(category.id);
                             }}
+                            aria-label={t('conversationDetails.save')}
                           >
                             <Check className="h-3 w-3 text-green-600" />
                           </Button>
@@ -296,6 +297,7 @@ export function CategorySelector({ conversationId, currentUser, onCategoryUpdate
                               setEditingCategoryId(null);
                               setEditingCategoryName('');
                             }}
+                            aria-label={t('conversationDetails.cancel')}
                           >
                             <XIcon className="h-3 w-3 text-red-600" />
                           </Button>
@@ -317,6 +319,7 @@ export function CategorySelector({ conversationId, currentUser, onCategoryUpdate
                                 setEditingCategoryName(category.name);
                               }}
                               title={t('conversationDetails.editCategory')}
+                              aria-label={t('conversationDetails.editCategory')}
                             >
                               <Pencil className="h-3 w-3 text-blue-600" />
                             </Button>
@@ -329,6 +332,7 @@ export function CategorySelector({ conversationId, currentUser, onCategoryUpdate
                                 handleDeleteCategory(category.id, category.name);
                               }}
                               title={t('conversationDetails.deleteCategory')}
+                              aria-label={t('conversationDetails.deleteCategory')}
                             >
                               <Trash2 className="h-3 w-3 text-red-600" />
                             </Button>

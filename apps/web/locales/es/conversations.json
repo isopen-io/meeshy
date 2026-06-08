@@ -131,7 +131,16 @@
             "settings": "Configuración",
             "encryptionE2EE": "Cifrado de extremo a extremo",
             "encryptionHybrid": "Cifrado híbrido",
-            "encryptionServer": "Cifrado del servidor"
+            "encryptionServer": "Cifrado del servidor",
+            "reactions": "Reacciones"
+        },
+        "messageSearch": {
+            "placeholder": "Buscar en la conversación…",
+            "noResults": "Sin resultados",
+            "searchError": "Se ha producido un error durante la búsqueda."
+        },
+        "pinnedMessage": {
+            "dismiss": "Cerrar mensaje fijado"
         },
         "conversationUI": {
             "participants": "Participantes",

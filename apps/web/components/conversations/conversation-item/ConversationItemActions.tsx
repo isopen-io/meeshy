@@ -60,7 +60,7 @@ export const ConversationItemActions = memo(function ConversationItemActions({
             isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"
           )}
           onClick={(e) => e.stopPropagation()}
-          aria-label="Actions de la conversation"
+          aria-label={t('conversationHeader.menuActions')}
         >
           <MoreVertical className="h-4 w-4" />
         </Button>
@@ -68,12 +68,12 @@ export const ConversationItemActions = memo(function ConversationItemActions({
       <DropdownMenuContent align="end" className="w-48">
         <DropdownMenuItem onClick={onShowDetails}>
           <Settings className="mr-2 h-4 w-4" />
-          <span>Paramètres</span>
+          <span>{t('conversationHeader.settings')}</span>
         </DropdownMenuItem>
 
         <DropdownMenuItem onClick={onTogglePin}>
           <Pin className="mr-2 h-4 w-4" />
-          <span>{isPinned ? 'Désépingler' : 'Épingler'}</span>
+          <span>{t(isPinned ? 'conversationHeader.unpin' : 'conversationHeader.pin')}</span>
         </DropdownMenuItem>
 
         <DropdownMenuItem onClick={onToggleMute}>
@@ -82,12 +82,12 @@ export const ConversationItemActions = memo(function ConversationItemActions({
           ) : (
             <BellOff className="mr-2 h-4 w-4" />
           )}
-          <span>{isMuted ? 'Activer notifications' : 'Désactiver notifications'}</span>
+          <span>{t(isMuted ? 'conversationHeader.unmute' : 'conversationHeader.mute')}</span>
         </DropdownMenuItem>
 
         <DropdownMenuItem onClick={onToggleArchive}>
           <Archive className="mr-2 h-4 w-4" />
-          <span>{isArchived ? 'Désarchiver' : 'Archiver'}</span>
+          <span>{t(isArchived ? 'conversationHeader.unarchive' : 'conversationHeader.archive')}</span>
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
@@ -102,7 +102,7 @@ export const ConversationItemActions = memo(function ConversationItemActions({
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <Smile className="mr-2 h-4 w-4" />
-            <span>Réactions</span>
+            <span>{t('conversationHeader.reactions')}</span>
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="w-auto p-2">
             {/* Grid 3 colonnes x 2 rangées pour les 6 emojis */}

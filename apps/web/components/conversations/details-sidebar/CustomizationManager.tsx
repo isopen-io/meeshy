@@ -134,6 +134,7 @@ export function CustomizationManager({ conversationId, currentUser, onPreference
               variant="ghost"
               className="h-8 w-8 p-0"
               onClick={handleSaveCustomName}
+              aria-label={t('conversationDetails.save')}
             >
               <Check className="h-4 w-4 text-green-600" />
             </Button>
@@ -203,6 +204,7 @@ export function CustomizationManager({ conversationId, currentUser, onPreference
               variant="ghost"
               className="h-8 w-8 p-0"
               onClick={handleSaveReaction}
+              aria-label={t('conversationDetails.save')}
             >
               <Check className="h-4 w-4 text-green-600" />
             </Button>
