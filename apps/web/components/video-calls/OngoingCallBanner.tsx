@@ -10,6 +10,7 @@ import React from 'react';
 import { Phone, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/hooks/useI18n';
 
 interface OngoingCallBannerProps {
   callId: string;
@@ -28,12 +29,18 @@ export function OngoingCallBanner({
   onDismiss,
   className,
 }: OngoingCallBannerProps) {
-  // Format duration MM:SS
+  const { t } = useI18n('calls');
+
   const formatDuration = (seconds: number): string => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+
+  const participantLabel = t(
+    participantCount === 1 ? 'calls.banner.participant' : 'calls.banner.participants',
+    { count: String(participantCount) }
+  );
 
   return (
     <div
@@ -57,10 +64,10 @@ export function OngoingCallBanner({
 
           <div className="flex flex-col">
             <p className="text-white font-semibold text-sm">
-              Call in progress
+              {t('calls.banner.inProgress')}
             </p>
             <p className="text-white/80 text-xs">
-              {participantCount} participant{participantCount !== 1 ? 's' : ''} • {formatDuration(duration)}
+              {participantLabel} • {formatDuration(duration)}
             </p>
           </div>
         </div>
@@ -70,10 +77,10 @@ export function OngoingCallBanner({
           <Button
             size="sm"
             onClick={onJoin}
-            className="bg-white text-green-700 hover:bg-green-50 font-semibold"
+            className="bg-white/90 dark:bg-white/10 text-green-700 dark:text-white hover:bg-white/80 dark:hover:bg-white/20 font-semibold"
           >
             <Phone className="w-4 h-4 mr-1" />
-            Join
+            {t('calls.banner.join')}
           </Button>
 
           <Button
@@ -81,7 +88,7 @@ export function OngoingCallBanner({
             variant="ghost"
             onClick={onDismiss}
             className="text-white hover:bg-white/10 w-8 h-8"
-            aria-label="Dismiss"
+            aria-label={t('calls.banner.dismiss')}
           >
             <X className="w-4 h-4" />
           </Button>

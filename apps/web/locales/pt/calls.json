@@ -1,0 +1,25 @@
+{
+  "calls": {
+    "loading": "Carregando chamada...",
+    "banner": {
+      "inProgress": "Chamada em andamento",
+      "participant": "{count} participante",
+      "participants": "{count} participantes",
+      "join": "Entrar",
+      "dismiss": "Dispensar"
+    },
+    "error": {
+      "title": "Erro na chamada",
+      "message": "Ocorreu um erro inesperado durante a chamada.",
+      "tryAgain": "Tentar novamente",
+      "returnHome": "Voltar ao início",
+      "troubleshooting": {
+        "title": "Solução de problemas:",
+        "permissions": "Certifique-se de ter concedido permissões de câmera e microfone",
+        "browser": "Verifique se seu navegador suporta videochamadas (Chrome, Firefox, Safari)",
+        "https": "Certifique-se de estar usando uma conexão HTTPS",
+        "refresh": "Tente recarregar a página"
+      }
+    }
+  }
+}

@@ -728,11 +728,11 @@ extension ConversationView {
 
     func labelForAttachment(_ attachment: MessageAttachment) -> String {
         switch attachment.type {
-        case .image: return "Photo"
-        case .video: return "Video"
-        case .audio: return attachment.durationFormatted ?? "Audio"
-        case .file: return attachment.originalName.isEmpty ? "Fichier" : attachment.originalName
-        case .location: return "Position"
+        case .image: return String(localized: "attachment.label.photo", defaultValue: "Photo", bundle: .main)
+        case .video: return String(localized: "attachment.label.video", defaultValue: "Video", bundle: .main)
+        case .audio: return attachment.durationFormatted ?? String(localized: "attachment.label.audio", defaultValue: "Audio", bundle: .main)
+        case .file: return attachment.originalName.isEmpty ? String(localized: "attachment.label.file", defaultValue: "File", bundle: .main) : attachment.originalName
+        case .location: return String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main)
         }
     }
 

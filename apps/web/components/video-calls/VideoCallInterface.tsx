@@ -22,6 +22,7 @@ import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-even
 import { logger } from '@/utils/logger';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/hooks/useI18n';
 
 interface VideoCallInterfaceProps {
   callId: string;
@@ -29,6 +30,7 @@ interface VideoCallInterfaceProps {
 
 export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   const { user } = useAuth();
+  const { t } = useI18n('calls');
   const {
     localStream,
     remoteStreams,
@@ -500,7 +502,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   if (!user || !user.id) {
     return (
       <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
-        <div className="text-white text-lg">Loading call...</div>
+        <div className="text-white text-lg">{t('calls.loading')}</div>
       </div>
     );
   }
