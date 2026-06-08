@@ -35,6 +35,8 @@ export class StatusHandler {
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
   private identityCache = new Map<string, CachedIdentity>();
+  private typingThrottleMap = new Map<string, number>();
+  private static readonly TYPING_THROTTLE_MS = 2_000;
 
   constructor(deps: StatusHandlerDependencies) {
     this.prisma = deps.prisma;
@@ -46,6 +48,12 @@ export class StatusHandler {
 
   invalidateIdentityCache(userId: string): void {
     this.identityCache.delete(userId);
+  }
+
+  clearTypingThrottle(userId: string): void {
+    for (const key of this.typingThrottleMap.keys()) {
+      if (key.startsWith(`${userId}:`)) this.typingThrottleMap.delete(key);
+    }
   }
 
   /**
@@ -97,6 +105,18 @@ export class StatusHandler {
         conversationId: normalizedId,
         isTyping: true
       };
+
+      const throttleKey = `${userId}:${normalizedId}`;
+      const now = Date.now();
+      const lastEmitAt = this.typingThrottleMap.get(throttleKey) ?? 0;
+      if (now - lastEmitAt < StatusHandler.TYPING_THROTTLE_MS) return;
+      this.typingThrottleMap.set(throttleKey, now);
+      if (this.typingThrottleMap.size > 10_000) {
+        const stale = now - StatusHandler.TYPING_THROTTLE_MS * 10;
+        for (const [k, ts] of this.typingThrottleMap) {
+          if (ts < stale) this.typingThrottleMap.delete(k);
+        }
+      }
 
       const room = ROOMS.conversation(normalizedId);
       socket.to(room).emit(SERVER_EVENTS.TYPING_START, typingEvent);

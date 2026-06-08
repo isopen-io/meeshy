@@ -363,24 +363,34 @@ export function registerCoreRoutes(
       // Optimisation : Calculer tous les unreadCounts avec le système de curseur
       const conversationIds = conversations.map(c => c.id);
 
-      const currentUserParticipants = userId ? await prisma.participant.findMany({
-        where: {
-          conversationId: { in: conversationIds },
-          userId: userId,
-          isActive: true
-        },
-        select: {
-          conversationId: true,
-          role: true,
-          joinedAt: true
+      // Extract current user's participant data from already-fetched participants (take:5 per conv).
+      // For DMs and small groups the current user is always in the first 5 — zero extra DB queries.
+      // Only fall back to a batch query for large groups where the current user wasn't in top 5.
+      const currentUserRoleMap = new Map<string, string>();
+      const currentUserJoinedAtMap = new Map<string, Date | null>();
+      const convsMissingCurrentUser: string[] = [];
+
+      if (userId) {
+        for (const conv of conversations) {
+          const found = (conv as any).participants.find((p: any) => p.userId === userId);
+          if (found) {
+            currentUserRoleMap.set(conv.id, found.role);
+            currentUserJoinedAtMap.set(conv.id, found.joinedAt);
+          } else {
+            convsMissingCurrentUser.push(conv.id);
+          }
         }
-      }) : [];
-      const currentUserRoleMap = new Map(
-        currentUserParticipants.map(p => [p.conversationId, p.role])
-      );
-      const currentUserJoinedAtMap = new Map(
-        currentUserParticipants.map(p => [p.conversationId, p.joinedAt])
-      );
+        if (convsMissingCurrentUser.length > 0) {
+          const remaining = await prisma.participant.findMany({
+            where: { conversationId: { in: convsMissingCurrentUser }, userId, isActive: true },
+            select: { conversationId: true, role: true, joinedAt: true }
+          });
+          for (const p of remaining) {
+            currentUserRoleMap.set(p.conversationId, p.role);
+            currentUserJoinedAtMap.set(p.conversationId, p.joinedAt);
+          }
+        }
+      }
 
       // Collect all unique member userIds (optimized: only from returned conversations)
       // Filter out null userIds (anonymous participants have userId: null)
