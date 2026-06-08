@@ -81,7 +81,7 @@ export async function registerMessageRateLimiter(fastify: FastifyInstance) {
   await fastify.register(rateLimit, {
     max: 20,
     timeWindow: '1 minute',
-    store: makeRedisStore(60_000),
+    store: makeRedisStore(60_000) as any,
     keyGenerator: (request: FastifyRequest) => {
       // Rate limit par utilisateur
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -117,7 +117,7 @@ export async function registerGlobalRateLimiter(fastify: FastifyInstance) {
     global: true,
     max: 300, // Augmenté de 100 à 300 pour l'édition de liens
     timeWindow: '1 minute',
-    store: makeRedisStore(60_000),
+    store: makeRedisStore(60_000) as any,
     keyGenerator: (request: FastifyRequest) => {
       return `global:${request.ip}`;
     },

@@ -1557,7 +1557,7 @@ export class MeeshySocketIOManager {
           const readStatusService = new MessageReadStatusService(this.prisma);
 
           const participantIds = participants.map(p => p.id);
-          const unreadCountMap = await readStatusService.getUnreadCountsForParticipants(participantIds, normalizedId);
+          const unreadCountMap = await readStatusService.getUnreadCountsForParticipantIds(participantIds, normalizedId);
 
           const connectedUserIds = new Set(this.getConnectedUsers());
 

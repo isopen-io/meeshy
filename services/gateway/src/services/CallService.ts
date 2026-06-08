@@ -60,7 +60,7 @@ const CALL_SUMMARY_MESSAGE_INCLUDE = {
     }
   },
   attachments: true
-} satisfies Prisma.MessageInclude;
+} as const satisfies Prisma.MessageInclude;
 
 // Type for CallSession with populated participants
 type CallSessionWithParticipants = Prisma.CallSessionGetPayload<{
@@ -1278,7 +1278,7 @@ export class CallService {
           originalLanguage: 'fr',
           messageType: 'system',
           messageSource: 'system',
-          metadata: callMetadata ?? undefined,
+          metadata: callMetadata ? (callMetadata as Prisma.InputJsonValue) : undefined,
           clientMessageId: callSummaryClientMessageId(call.id)
         },
         include: CALL_SUMMARY_MESSAGE_INCLUDE
