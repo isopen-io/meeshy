@@ -8,6 +8,9 @@
  */
 
 import type { Socket } from 'socket.io';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'SocketHelpers' });
 
 /**
  * Represents a connected socket's identity.
@@ -99,7 +102,7 @@ export async function normalizeConversationId(
     }
     return conversationId;
   } catch (error) {
-    console.error('❌ [NORMALIZE] Erreur normalisation:', error);
+    logger.error('Erreur normalisation', error as Error);
     return conversationId;
   }
 }

@@ -101,6 +101,7 @@ export class RedisCacheStore implements CacheStore {
         }
       }
     }, 60000);
+    this.cleanupInterval.unref?.();
   }
 
   private getMemory(key: string): string | null {

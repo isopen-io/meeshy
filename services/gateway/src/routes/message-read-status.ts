@@ -7,6 +7,8 @@ import { validateParams, validateQuery } from '../validation/helpers.js';
 import { MessageIdParamSchema, ConversationIdParamSchema, ReadStatusesQuerySchema, DeliveryReceiptParamsSchema } from '../validation/message-read-status-schemas.js';
 import { resolveConversationId } from '../utils/conversation-id-cache.js';
 import { sendSuccess } from '../utils/response.js';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+const logger = enhancedLogger.child({ module: 'MessageReadStatusRoutes' });
 
 interface MessageParams {
   messageId: string;
@@ -95,7 +97,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       });
 
     } catch (error) {
-      console.error('[MessageReadStatus] Error fetching message read status:', error);
+      logger.error('Error fetching message read status', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la récupération du statut de lecture'
@@ -171,7 +173,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       });
 
     } catch (error) {
-      console.error('[MessageReadStatus] Error fetching conversation read statuses:', error);
+      logger.error('Error fetching conversation read statuses', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la récupération des statuts de lecture'
@@ -244,7 +246,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
             type: 'read'
           });
         } catch (socketError) {
-          console.error('[MessageReadStatus] Erreur lors de la diffusion Socket.IO:', socketError);
+          logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);
           // Ne pas faire échouer la requête si Socket.IO échoue
         }
       }
@@ -252,7 +254,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       return sendSuccess(reply, { markedCount });
 
     } catch (error) {
-      console.error('[MessageReadStatus] Error marking messages as read:', error);
+      logger.error('Error marking messages as read', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la mise à jour du statut de lecture'
@@ -325,14 +327,14 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
             type: 'received'
           });
         } catch (socketError) {
-          console.error('[MessageReadStatus] Erreur lors de la diffusion Socket.IO:', socketError);
+          logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);
         }
       }
 
       return sendSuccess(reply, { markedCount });
 
     } catch (error) {
-      console.error('[MessageReadStatus] Error marking messages as received:', error);
+      logger.error('Error marking messages as received', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la mise à jour du statut de réception'
@@ -439,7 +441,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
             type: 'received'
           });
         } catch (socketError) {
-          console.error('[MessageReadStatus] Erreur lors de la diffusion Socket.IO:', socketError);
+          logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);
         }
       }
 
@@ -449,7 +451,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       });
 
     } catch (error) {
-      console.error('[MessageReadStatus] Error processing delivery receipt:', error);
+      logger.error('Error processing delivery receipt', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la mise à jour du statut de livraison'

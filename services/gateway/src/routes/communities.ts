@@ -21,6 +21,9 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../middleware/auth';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'CommunitiesRoutes' });
 
 // Enum des roles de communaute (aligne avec shared/types/community.ts)
 enum CommunityRole {
@@ -185,7 +188,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
         }
       });
     } catch (error) {
-      console.error('[COMMUNITIES] Error checking identifier availability:', error);
+      logger.error('Error checking identifier availability', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Failed to check identifier availability'
@@ -339,7 +342,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
         }
       });
     } catch (error) {
-      console.error('Error fetching communities:', error);
+      logger.error('Error fetching communities', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to fetch communities'
@@ -523,7 +526,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
         }
       });
     } catch (error) {
-      console.error('[GATEWAY] Error searching communities:', error);
+      logger.error('Error searching communities', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to search communities'
@@ -611,7 +614,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
 
       return reply.send({ success: true, data });
     } catch (error) {
-      console.error('Error fetching community:', error);
+      logger.error('Error fetching community', error as Error);
       return reply.status(500).send({ success: false, error: 'Failed to fetch user communities' });
     }
   });
@@ -768,7 +771,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
         data: flattenCommunityCounts(community)
       });
     } catch (error) {
-      console.error('Error fetching community:', error);
+      logger.error('Error fetching community', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to fetch community'
@@ -889,7 +892,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
         data: flattenCommunityCounts(community)
       });
     } catch (error) {
-      console.error('Error creating community:', error);
+      logger.error('Error creating community', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to create community'
@@ -1048,7 +1051,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
         }
       });
     } catch (error) {
-      console.error('Error fetching community members:', error);
+      logger.error('Error fetching community members', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to fetch community members'
@@ -1213,7 +1216,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
         data: member
       });
     } catch (error) {
-      console.error('Error adding community member:', error);
+      logger.error('Error adding community member', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to add community member'
@@ -1347,7 +1350,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
         data: updatedMember
       });
     } catch (error) {
-      console.error('[COMMUNITIES] Error updating member role:', error);
+      logger.error('Error updating member role', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to update member role'
@@ -1466,7 +1469,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
         data: { message: 'Member removed successfully' }
       });
     } catch (error) {
-      console.error('Error removing community member:', error);
+      logger.error('Error removing community member', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to remove community member'
@@ -1614,7 +1617,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
         data: flattenCommunityCounts(updatedCommunity)
       });
     } catch (error) {
-      console.error('Error updating community:', error);
+      logger.error('Error updating community', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to update community'
@@ -1715,7 +1718,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
         data: { message: 'Community deleted successfully' }
       });
     } catch (error) {
-      console.error('Error deleting community:', error);
+      logger.error('Error deleting community', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to delete community'
@@ -1876,7 +1879,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
         data: conversations
       });
     } catch (error) {
-      console.error('Error fetching community conversations:', error);
+      logger.error('Error fetching community conversations', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to fetch community conversations'
@@ -2000,7 +2003,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
         data: member
       });
     } catch (error) {
-      console.error('[COMMUNITIES] Error joining community:', error);
+      logger.error('Error joining community', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to join community'
@@ -2106,7 +2109,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
         data: { message: 'Successfully left community' }
       });
     } catch (error) {
-      console.error('[COMMUNITIES] Error leaving community:', error);
+      logger.error('Error leaving community', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to leave community'
@@ -2272,7 +2275,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
         data: member
       });
     } catch (error) {
-      console.error('[COMMUNITIES] Error inviting to community:', error);
+      logger.error('Error inviting to community', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to invite user to community'
