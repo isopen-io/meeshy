@@ -5,6 +5,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import NextImage from 'next/image';
 import { X, ChevronLeft, ChevronRight, Download, MessageSquare, Maximize2, Trash2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import {
@@ -325,12 +326,14 @@ export function AttachmentGallery({
             {loading ? (
               <div className="text-white">{t('gallery.loading')}</div>
             ) : currentAttachment && currentAttachmentUrl ? (
-              <div className="w-full h-full flex items-center justify-center">
-                <img
+              <div className="relative w-full h-full">
+                <NextImage
                   src={currentAttachmentUrl}
                   alt={currentAttachment.originalName}
-                  className="w-full h-full object-contain"
-                  style={{ maxWidth: '100%', maxHeight: '100%' }}
+                  fill
+                  sizes="100vw"
+                  className="object-contain"
+                  loading="eager"
                 />
               </div>
             ) : (

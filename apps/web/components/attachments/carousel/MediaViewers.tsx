@@ -5,6 +5,7 @@
 'use client';
 
 import React from 'react';
+import NextImage from 'next/image';
 import { Image, Loader2, CheckCircle, Maximize } from 'lucide-react';
 import { CompactVideoPlayer } from '../../video/VideoPlayer';
 
@@ -42,16 +43,27 @@ export const ImageViewer = React.memo(function ImageViewer({
       title="Cliquez pour voir en plein écran"
     >
       {thumbnailUrl || fileUrl ? (
-        <img
-          src={thumbnailUrl || fileUrl || ''}
-          alt={file.name}
-          className="w-full h-full object-contain"
-          loading="lazy"
-          decoding="async"
-          onError={(_e) => {
-            console.error('Failed to load image:', file.name);
-          }}
-        />
+        (() => {
+          const src = thumbnailUrl || fileUrl || '';
+          return src.startsWith('blob:') ? (
+            <img
+              src={src}
+              alt={file.name}
+              className="w-full h-full object-contain"
+              loading="lazy"
+              decoding="async"
+            />
+          ) : (
+            <NextImage
+              src={src}
+              alt={file.name}
+              fill
+              sizes="(max-width: 768px) 90vw, 200px"
+              className="object-contain"
+              loading="lazy"
+            />
+          );
+        })()
       ) : isLoadingThumbnail ? (
         <div className="flex flex-col items-center gap-1">
           <div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
