@@ -847,6 +847,10 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             existing = msg
         }
         _messagesDidChange.send(msg.conversationId)
+        // If the edited message is the conversation's last message, the list-row
+        // preview still shows the pre-edit text — refresh it in place.
+        await refreshLastMessagePreviewIfEdited(
+            conversationId: msg.conversationId, messageId: msg.id, newContent: msg.content)
     }
 
     private func handleDeletedMessage(_ event: MessageDeletedEvent) async {
@@ -856,6 +860,61 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             msg.content = ""
         }
         _messagesDidChange.send(event.conversationId)
+        // If the deleted message was the conversation's last message, the list-row
+        // preview still shows the (now-deleted) text — recompute it from the most
+        // recent surviving message, mirroring the gateway's `deletedAt: null` REST list.
+        await recomputeLastMessagePreviewAfterDeletion(
+            conversationId: event.conversationId, deletedMessageId: event.messageId)
+    }
+
+    /// Updates a conversation row's `lastMessagePreview` when the edited message
+    /// is that row's `lastMessageId`. No-op otherwise (editing an older message
+    /// leaves the preview untouched). Fires `_conversationsDidChange` only when a
+    /// row actually changed.
+    private func refreshLastMessagePreviewIfEdited(
+        conversationId: String, messageId: String, newContent: String
+    ) async {
+        let list = await cache.conversations.load(for: "list").snapshot() ?? []
+        guard list.first(where: { $0.id == conversationId })?.lastMessageId == messageId else { return }
+        await cache.conversations.update(for: "list") { conversations in
+            var updated = conversations
+            if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
+                updated[idx].lastMessagePreview = newContent
+            }
+            return updated
+        }
+        _conversationsDidChange.send()
+    }
+
+    /// Recomputes a conversation row's last-message fields when the deleted
+    /// message was that row's `lastMessageId`, picking the most recent surviving
+    /// (non-deleted) message from the messages cache. If the cache holds no
+    /// replacement (older messages never loaded), the row is left untouched — the
+    /// next REST list refresh (which filters `deletedAt: null`) corrects it —
+    /// rather than wrongly clearing a preview that should show an earlier message.
+    private func recomputeLastMessagePreviewAfterDeletion(
+        conversationId: String, deletedMessageId: String
+    ) async {
+        let list = await cache.conversations.load(for: "list").snapshot() ?? []
+        guard list.first(where: { $0.id == conversationId })?.lastMessageId == deletedMessageId else { return }
+        let messages = await cache.messages.load(for: conversationId).snapshot() ?? []
+        guard let newLast = messages
+            .filter({ $0.deletedAt == nil && $0.id != deletedMessageId })
+            .max(by: { $0.createdAt < $1.createdAt })
+        else { return }
+        await cache.conversations.update(for: "list") { conversations in
+            var updated = conversations
+            if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
+                updated[idx].lastMessagePreview = newLast.content
+                updated[idx].lastMessageId = newLast.id
+                if let name = newLast.senderName ?? newLast.senderUsername, !name.isEmpty {
+                    updated[idx].lastMessageSenderName = name
+                }
+                updated[idx].lastMessageAt = newLast.createdAt
+            }
+            return updated
+        }
+        _conversationsDidChange.send()
     }
 
     private func handleReactionAdded(_ event: ReactionUpdateEvent) async {
