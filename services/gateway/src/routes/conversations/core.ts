@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { enhancedLogger } from '../../utils/logger-enhanced';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { conversationStatsService } from '../../services/ConversationStatsService';
 import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
@@ -30,6 +31,8 @@ import type {
 import { buildCursorPaginationMeta } from '../../utils/pagination';
 import { sendWithETag } from '../../utils/etag';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+
+const logger = enhancedLogger.child({ module: 'conversations/core' });
 
 /**
  * Participant fields fetched + serialized per participant in the GET
@@ -62,6 +65,8 @@ export const conversationListParticipantSelect = {
       id: true,
       username: true,
       displayName: true,
+      firstName: true,
+      lastName: true,
       avatar: true,
       isOnline: true,
       lastActiveAt: true
@@ -392,42 +397,15 @@ export function registerCoreRoutes(
         }
       }
 
-      // Collect all unique member userIds (optimized: only from returned conversations)
-      // Filter out null userIds (anonymous participants have userId: null)
-      const allMemberUserIds = new Set<string>();
-      for (const conv of conversations) {
-        for (const member of (conv as any).participants) {
-          if (member.userId) {
-            allMemberUserIds.add(member.userId);
-          }
-        }
-      }
-
       // === OPTIMIZED: Parallelize independent queries ===
+      // firstName/lastName now fetched via conversationListParticipantSelect.user.select —
+      // memberUsers query eliminated (iter-8).
       t0 = performance.now();
 
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
       const readStatusService = new MessageReadStatusService(prisma);
 
-      const [memberUsers, totalCount, unreadCountMap] = await Promise.all([
-        // Fetch user data with firstName/lastName for DM name resolution
-        // (participant.user select only has displayName, not firstName/lastName)
-        allMemberUserIds.size > 0
-          ? prisma.user.findMany({
-              where: { id: { in: Array.from(allMemberUserIds) } },
-              select: {
-                id: true,
-                username: true,
-                displayName: true,
-                firstName: true,
-                lastName: true,
-                avatar: true,
-                isOnline: true,
-                lastActiveAt: true
-              }
-            })
-          : Promise.resolve([]),
-
+      const [totalCount, unreadCountMap] = await Promise.all([
         // Count (if requested) - skip when using cursor pagination
         (!beforeCursor && (includeCount || offset === 0))
           ? prisma.conversation.count({ where: whereClause })
@@ -447,10 +425,6 @@ export function registerCoreRoutes(
       const presenceChecker = (fastify as any).presenceChecker as
         | { isOnline: (id: string) => boolean; bulk: (ids: readonly string[]) => Map<string, boolean> }
         | undefined;
-      const userMap = new Map(memberUsers.map(u => {
-        const liveOnline = presenceChecker?.isOnline(u.id);
-        return [u.id, liveOnline === undefined ? u : { ...u, isOnline: liveOnline }];
-      }));
 
       // Calculate hasMore. Two strategies:
       //   1. When we have a real `totalCount` (includeCount=true OR
@@ -473,20 +447,18 @@ export function registerCoreRoutes(
       const conversationsWithUnreadCount = conversations.map((conversation) => {
         const unreadCount = unreadCountMap.get(conversation.id) || 0;
 
-        // Merge user data for all participants (never filter out — SDK needs them for DM name resolution)
+        // Merge presence override. firstName/lastName now come directly from m.user
+        // (participant select was extended in iter-8 — no separate memberUsers query needed).
         const membersWithUser = conversation.participants
           .slice(0, 5)
           .map((m: any) => {
-            const mergedUser = m.userId
-              ? (userMap.get(m.userId) ? userMap.get(m.userId) : m.user ?? null)
-              : null;
-            // Override participant.isOnline aussi (pour les anonymes, on regarde l'id participant)
             const liveOnline = presenceChecker?.isOnline(m.userId ?? m.id);
             return {
               ...m,
-              avatar: m.avatar,
               isOnline: liveOnline === undefined ? m.isOnline : liveOnline,
-              user: mergedUser
+              user: m.userId
+                ? { ...m.user, isOnline: liveOnline === undefined ? m.user?.isOnline : liveOnline }
+                : null
             };
           });
 
@@ -535,14 +507,12 @@ export function registerCoreRoutes(
         };
       });
 
-      // === PERFORMANCE LOGGING (OPTIMIZED) ===
       const totalTime = performance.now() - perfStart;
-      console.log('===============================================');
-      console.log('[CONVERSATIONS_PERF] Query performance breakdown (OPTIMIZED v2)');
-      console.log(`  - conversationsQuery: ${perfTimings.conversationsQuery?.toFixed(2)}ms`);
-      console.log(`  - parallelQueries (users+unread+count): ${perfTimings.parallelQueries?.toFixed(2)}ms`);
-      console.log(`  TOTAL: ${totalTime.toFixed(2)}ms`);
-      console.log('===============================================');
+      logger.debug('CONVERSATIONS_PERF', {
+        conversationsQuery: perfTimings.conversationsQuery?.toFixed(2),
+        parallelQueries: perfTimings.parallelQueries?.toFixed(2),
+        total: totalTime.toFixed(2)
+      });
 
       // Build cursor pagination meta
       const lastConversation = conversationsWithUnreadCount.length > 0

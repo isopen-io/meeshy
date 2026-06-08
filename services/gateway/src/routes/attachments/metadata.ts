@@ -85,6 +85,14 @@ export async function registerMetadataRoutes(
           });
         }
 
+        const etag = `"${attachment.id}-${(attachment as any).updatedAt?.getTime() ?? 0}"`;
+        if (request.headers['if-none-match'] === etag) {
+          return reply.code(304).send();
+        }
+
+        reply.header('Cache-Control', 'private, max-age=3600, stale-while-revalidate=86400');
+        reply.header('ETag', etag);
+
         return reply.status(200).send({
           success: true,
           data: {
