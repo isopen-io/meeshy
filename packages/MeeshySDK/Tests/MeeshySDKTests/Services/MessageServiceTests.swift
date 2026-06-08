@@ -37,7 +37,7 @@ final class MessageServiceTests: XCTestCase {
             reactionCount: nil, currentUserReactions: nil,
             deliveredToAllAt: nil, readByAllAt: nil,
             deliveredCount: nil, readCount: nil, effectFlags: nil, translations: nil,
-            mentionedUsers: nil
+            mentionedUsers: nil, callSummary: nil
         )
     }
 

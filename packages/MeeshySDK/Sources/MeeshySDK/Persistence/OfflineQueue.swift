@@ -664,6 +664,16 @@ public actor OfflineQueue {
 
     // MARK: - Pending Count
 
+    /// Raw `OutboxKind` values that MUST NOT keep the « Synchronisation… »
+    /// indicator visible (`countsTowardSyncIndicator == false`). Shared by the
+    /// count query AND the SyncPill UI-items query so the badge count and the
+    /// rotating pill can never disagree about which rows are user-relevant — a
+    /// `markAsRead` that lingers must be invisible in BOTH, not counted out of
+    /// one while still rotating in the other.
+    private static let syncIndicatorExcludedKinds: [String] = OutboxKind.allCases
+        .filter { !$0.countsTowardSyncIndicator }
+        .map(\.rawValue)
+
     /// Counts rows currently in `.pending` or `.inflight` state and updates
     /// `pendingCountSubject`. Called after every enqueue/dequeue/retryItem
     /// touchpoint. Falls back to the in-memory mirror if no pool is wired.
@@ -678,9 +688,7 @@ public actor OfflineQueue {
         // Seules les opérations qui justifient l'indicateur « Synchronisation… »
         // sont comptées — un accusé de lecture (`markAsRead`) coincé ne doit
         // pas maintenir le bandeau alors que la conversation est synchronisée.
-        let excludedKinds = OutboxKind.allCases
-            .filter { !$0.countsTowardSyncIndicator }
-            .map(\.rawValue)
+        let excludedKinds = Self.syncIndicatorExcludedKinds
         let count: Int = (try? await pool.read { db in
             try OutboxRecord
                 .filter([OutboxStatus.pending.rawValue, OutboxStatus.inflight.rawValue]
@@ -692,17 +700,26 @@ public actor OfflineQueue {
         await refreshPendingUIItems()
     }
 
-    /// Reads the head of the outbox table (rows in `.pending`, `.inflight` or
-    /// `.failed` ordered by `createdAt` ascending, capped at
+    /// Reads the head of the outbox table (rows in `.pending`, `.inflight`,
+    /// `.failed` or `.exhausted` ordered by `createdAt` ascending, capped at
     /// `pendingUIItemsLimit`) and pushes the corresponding `OutboxUIItem`
     /// snapshots onto `pendingUIItemsSubject`. Decoding cost is paid once on
     /// each outbox mutation, never on the SwiftUI render path.
+    ///
+    /// Applies the SAME `syncIndicatorExcludedKinds` filter as the count query
+    /// (`refreshPendingCount`): a `markAsRead` row is a background read receipt,
+    /// not a user-initiated operation. Without this filter the SyncPill rotated
+    /// through "Synchronisation des lus" for every conversation merely opened —
+    /// phantom operations the user never started — while the badge count (which
+    /// already excludes them) read zero. The pill must surface only rows that
+    /// represent real work the user is waiting on.
     private func refreshPendingUIItems() async {
         guard let pool = outboxPool else {
             pendingUIItemsSubject.send([])
             return
         }
         let limit = Self.pendingUIItemsLimit
+        let excludedKinds = Self.syncIndicatorExcludedKinds
         let records: [OutboxRecord] = (try? await pool.read { db in
             try OutboxRecord
                 .filter([
@@ -714,6 +731,7 @@ public actor OfflineQueue {
                     // T14 GC bounds how long they linger.
                     OutboxStatus.exhausted.rawValue
                 ].contains(Column("status")))
+                .filter(!excludedKinds.contains(Column("kind")))
                 .order(Column("createdAt").asc)
                 .limit(limit)
                 .fetchAll(db)
