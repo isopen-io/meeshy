@@ -311,20 +311,18 @@ struct ProfileView: View {
 
     @ViewBuilder
     private var bannerImage: some View {
-        if let bannerURL = user?.banner, let url = URL(string: bannerURL) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                case .failure:
-                    bannerPlaceholder
-                default:
-                    bannerPlaceholder
-                        .overlay(ProgressView().tint(Color(hex: accentColor)))
-                }
-            }
+        if let bannerURL = user?.banner, !bannerURL.isEmpty {
+            // CachedBannerImage : cache 3-tiers (NSCache -> disque -> reseau) avec
+            // warm-sync synchrone depuis le disque a l'init. Le banner reapparait
+            // instantanement a chaque retour sur le profil, sans refetch reseau ni
+            // re-decodage full-res (l'AsyncImage natif re-fetchait + re-decodait a
+            // chaque rendu). Le blur ThumbHash s'affiche en attendant le full image.
+            CachedBannerImage(
+                urlString: bannerURL,
+                thumbHash: user?.bannerThumbHash,
+                fallbackColor: accentColor,
+                height: 120
+            )
         } else {
             bannerPlaceholder
         }
