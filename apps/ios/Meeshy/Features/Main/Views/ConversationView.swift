@@ -804,7 +804,7 @@ struct ConversationView: View {
                         viewModel.ephemeralDuration = duration
                     }
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { overlayState.longPressEnabled = true }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { overlayState.longPressEnabled = true }
                 if typingDotConnection == nil {
                     typingDotConnection = typingDotPublisher.connect()
                 }

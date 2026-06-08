@@ -228,6 +228,8 @@ private final class TestableWebRTCClient: WebRTCClientProviding {
     }
     func sendDataChannelMessage(_ data: Data) { lastSentData = data }
     func disconnect() { disconnectCallCount += 1; isConnected = false }
+    private(set) var restartIceCallCount = 0
+    func restartIce() { restartIceCallCount += 1 }
     func setAudioEffect(_ effect: AudioEffectConfig?) throws {}
     func updateAudioEffectParams(_ config: AudioEffectConfig) throws {}
 }

@@ -195,6 +195,12 @@
       "addReaction": "Agregar una reacción",
       "reportSuccess": "Reporte enviado con éxito",
       "reportError": "Error al reportar"
+    },
+    "errorBoundary": {
+      "title": "¡Vaya! Algo salió mal",
+      "description": "Ocurrió un error inesperado. Por favor, inténtalo de nuevo.",
+      "details": "Detalles del error",
+      "reload": "Recargar página"
     }
   }
 }

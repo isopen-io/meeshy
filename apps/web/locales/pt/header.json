@@ -31,6 +31,8 @@
     "continueChat": "Continuar conversa",
     "signUp": "Cadastrar",
     "language": "Idioma",
-    "interfaceLanguage": "Idioma da interface"
+    "interfaceLanguage": "Idioma da interface",
+    "openMenu": "Abrir menu",
+    "closeMenu": "Fechar menu"
   }
 }

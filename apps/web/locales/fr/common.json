@@ -2,7 +2,7 @@
   "common": {
     "languageNames": {
       "en": "Anglais",
-      "fr": "Français", 
+      "fr": "Français",
       "pt": "Portugais",
       "es": "Espagnol",
       "de": "Allemand",
@@ -195,7 +195,12 @@
       "addReaction": "Ajouter une réaction",
       "reportSuccess": "Signalement envoyé avec succès",
       "reportError": "Erreur lors du signalement"
+    },
+    "errorBoundary": {
+      "title": "Oups ! Une erreur s'est produite",
+      "description": "Une erreur inattendue s'est produite. Veuillez réessayer.",
+      "details": "Détails de l'erreur",
+      "reload": "Recharger la page"
     }
   }
 }
-
