@@ -1577,6 +1577,8 @@ final class CallManager: ObservableObject {
     // MARK: - Screen Capture Monitoring
 
     private func startScreenCaptureMonitoring() {
+        // Garantir qu'un seul observateur est actif — évite les doublons sur reconnexion
+        stopScreenCaptureMonitoring()
         screenCaptureObserver = NotificationCenter.default.addObserver(
             forName: UIScreen.capturedDidChangeNotification,
             object: nil,
@@ -1608,6 +1610,8 @@ final class CallManager: ObservableObject {
     // MARK: - Background/Foreground Monitoring (H1)
 
     private func startBackgroundMonitoring() {
+        // Garantir un seul observateur actif par type — évite les doublons sur reconnexion
+        stopBackgroundMonitoring()
         backgroundObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didEnterBackgroundNotification,
             object: nil,

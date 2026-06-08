@@ -77,7 +77,17 @@ export interface CallSummary {
   readonly callType: CallSummaryMediaType;
   /** Non-negative, integer-clamped duration in seconds. */
   readonly durationSeconds: number;
-  /** Human-readable French label, e.g. "Appel vidéo · 04:32". */
+  /**
+   * Language-neutral key used by clients to render localized label.
+   * Pattern: `{outcome}_{callType}` e.g. "completed_video", "missed_audio".
+   * Replaces the former French hardcoded `content` string.
+   */
+  readonly contentKey: string;
+  /**
+   * Fallback human-readable label in French (kept for backward compat with
+   * gateway message body until all clients consume `contentKey`).
+   * @deprecated Use `contentKey` for new rendering code.
+   */
   readonly content: string;
 }
 
@@ -113,8 +123,26 @@ export function formatCallDuration(seconds: number): string {
 const normalizeMediaType = (callType?: string | null): CallSummaryMediaType =>
   callType === 'video' ? 'video' : 'audio';
 
-const mediaLabel = (callType: CallSummaryMediaType): string =>
-  callType === 'video' ? 'Appel vidéo' : 'Appel audio';
+/**
+ * Stable i18n key for a call outcome + media type combination.
+ * Clients (iOS/web) use this to look up the localized string in their own
+ * translation bundle rather than relying on a server-side French label.
+ * Format: `call_{outcome}_{callType}` — never changes, safe to persist.
+ */
+export function callContentKey(outcome: CallSummaryOutcome, callType: CallSummaryMediaType): string {
+  return `call_${outcome}_${callType}`;
+}
+
+const FRENCH_LABELS: Record<string, (duration: number) => string> = {
+  call_completed_video: d => `Appel vidéo · ${formatCallDuration(d)}`,
+  call_completed_audio: d => `Appel audio · ${formatCallDuration(d)}`,
+  call_missed_video: _ => 'Appel vidéo manqué',
+  call_missed_audio: _ => 'Appel audio manqué',
+  call_rejected_video: _ => 'Appel refusé',
+  call_rejected_audio: _ => 'Appel refusé',
+  call_failed_video: _ => 'Appel vidéo interrompu',
+  call_failed_audio: _ => 'Appel audio interrompu',
+};
 
 /**
  * Resolve the user-facing outcome from the terminal status + end reason.
@@ -146,16 +174,9 @@ function resolveOutcome(status: string, endReason?: string | null): CallSummaryO
 }
 
 function contentFor(outcome: CallSummaryOutcome, callType: CallSummaryMediaType, durationSeconds: number): string {
-  switch (outcome) {
-    case 'completed':
-      return `${mediaLabel(callType)} · ${formatCallDuration(durationSeconds)}`;
-    case 'missed':
-      return `${mediaLabel(callType)} manqué`;
-    case 'rejected':
-      return 'Appel refusé';
-    case 'failed':
-      return `${mediaLabel(callType)} interrompu`;
-  }
+  const key = callContentKey(outcome, callType);
+  const labelFn = FRENCH_LABELS[key];
+  return labelFn ? labelFn(durationSeconds) : key;
 }
 
 /**
@@ -175,6 +196,7 @@ export function buildCallSummary(input: CallSummaryInput): CallSummary | null {
     outcome,
     callType,
     durationSeconds,
+    contentKey: callContentKey(outcome, callType),
     content: contentFor(outcome, callType, durationSeconds)
   };
 }

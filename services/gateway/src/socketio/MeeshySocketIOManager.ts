@@ -115,6 +115,9 @@ export class MeeshySocketIOManager {
   private socketToUser: Map<string, string> = new Map();
   private userSockets: Map<string, Set<string>> = new Map();
 
+  // Rate limiter in-memory par socket (clé → timestamps des requêtes)
+  private socketRateLimits: Map<string, number[]> = new Map();
+
   // Cache immutable identifier → ObjectId (populated on first lookup)
   private conversationIdCache = new Map<string, string>();
 
@@ -565,6 +568,18 @@ export class MeeshySocketIOManager {
       });
 
       socket.on(CLIENT_EVENTS.REQUEST_TRANSLATION, async (data: { messageId: string; targetLanguage: string }) => {
+        // Rate limit: 10 requêtes/min par socket pour éviter la saturation ZMQ
+        const rateLimitKey = `translation_request:${socket.id}`;
+        const now = Date.now();
+        const windowMs = 60_000;
+        const maxRequests = 10;
+        const existing = this.socketRateLimits.get(rateLimitKey) ?? [];
+        const recent = existing.filter(t => now - t < windowMs);
+        if (recent.length >= maxRequests) {
+          socket.emit(SERVER_EVENTS.ERROR, { message: 'Rate limit exceeded for translation requests' });
+          return;
+        }
+        this.socketRateLimits.set(rateLimitKey, [...recent, now]);
         try { await this._handleTranslationRequest(socket, data); } catch (error) { logger.error('[REQUEST_TRANSLATION] Error:', error); }
       });
 
@@ -701,6 +716,8 @@ export class MeeshySocketIOManager {
         logger.warn('🔬 [CALL-DIAG] socket disconnect', { socketId: socket.id, reason });
         this.authHandler.handleDisconnection(socket).catch((error) => logger.error('[DISCONNECT] Error:', error));
         this.stats.active_connections--;
+        // Nettoyage du rate limiter in-memory à la déconnexion
+        this.socketRateLimits.delete(`translation_request:${socket.id}`);
       });
     });
   }
@@ -1342,23 +1359,17 @@ export class MeeshySocketIOManager {
 
       // Lancer les 2 requêtes en parallèle
       const [translationsResult, statsResult] = await Promise.allSettled([
-        // Récupérer les traductions existantes du message (format JSON)
+        // Utiliser les traductions déjà présentes sur l'objet message (pas de query DB)
         (async () => {
           if (!message.id) return [];
           try {
-            const messageWithTranslations = await this.prisma.message.findUnique({
-              where: { id: message.id },
-              select: {
-                translations: true
-              }
-            });
-            // Transformer JSON vers array pour frontend
+            // `message.translations` est déjà le champ JSON MongoDB — éviter un findUnique redondant
             return transformTranslationsToArray(
               message.id,
-              messageWithTranslations?.translations as Record<string, any>
+              (message as any).translations as Record<string, any>
             );
           } catch (error) {
-            logger.warn(`⚠️ [DEBUG] Erreur récupération traductions pour ${message.id}:`, error);
+            logger.warn(`⚠️ [DEBUG] Erreur transformation traductions pour ${message.id}:`, error);
             return [];
           }
         })(),
@@ -1534,20 +1545,18 @@ export class MeeshySocketIOManager {
             select: { id: true, userId: true }
           });
 
-          // Calculer le unreadCount pour chaque participant et émettre l'événement
+          // Calculer le unreadCount pour tous les participants en batch (3 requêtes au lieu de N×3)
           const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
           const readStatusService = new MessageReadStatusService(this.prisma);
+
+          const participantIds = participants.map(p => p.id);
+          const unreadCountMap = await readStatusService.getUnreadCountsForParticipants(participantIds, normalizedId);
 
           const connectedUserIds = new Set(this.getConnectedUsers());
 
           for (const participant of participants) {
             const roomTarget = participant.userId || participant.id;
-            // Pass `participant.id` (not `roomTarget`) — the cursor's
-            // participantId column is the Participant.id. Using the userId
-            // here previously caused every registered recipient to fall
-            // through to a stale "count all historical messages" path and
-            // see inflated unread counts (e.g. 75).
-            const unreadCount = await readStatusService.getUnreadCount(participant.id, normalizedId);
+            const unreadCount = unreadCountMap.get(participant.id) ?? 0;
 
             // Émettre vers le socket personnel de l'utilisateur
             this.io.to(ROOMS.user(roomTarget)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {

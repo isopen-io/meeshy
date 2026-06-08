@@ -17,7 +17,9 @@ export function useMessagesQuery(
   return useQuery({
     queryKey: queryKeys.messages.list(conversationId ?? ''),
     queryFn: () => conversationsService.getMessages(conversationId!, 1, limit),
-    // staleTime: Infinity (Socket.IO gère le temps réel)
+    staleTime: Infinity,       // Socket.IO est source de vérité — pas de refetch automatique
+    gcTime: 30 * 60 * 1000,   // 30 min en mémoire
+    refetchOnWindowFocus: false,
     enabled: !!conversationId && enabled,
     select: (data) => data.messages,
   });
@@ -38,7 +40,9 @@ export function useInfiniteMessagesQuery(
       if (!lastPage.hasMore) return undefined;
       return allPages.length + 1;
     },
-    // staleTime: Infinity (Socket.IO gère le temps réel)
+    staleTime: Infinity,       // Socket.IO est source de vérité — pas de refetch automatique
+    gcTime: 30 * 60 * 1000,   // 30 min en mémoire
+    refetchOnWindowFocus: false,
     enabled: !!conversationId && enabled,
     select: (data) => ({
       pages: data.pages,

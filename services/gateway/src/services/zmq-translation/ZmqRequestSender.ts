@@ -64,6 +64,12 @@ export class ZmqRequestSender {
   async sendTranslationRequest(request: TranslationRequest, existingTaskId?: string): Promise<string> {
     const taskId = existingTaskId ?? randomUUID();
 
+    // Dédupliquer les langues cibles (normalisation lowercase)
+    const uniqueTargetLanguages = [...new Set(request.targetLanguages.map(l => l.toLowerCase()))];
+    if (uniqueTargetLanguages.length === 0) {
+      throw new Error('targetLanguages must not be empty after deduplication');
+    }
+
     // Préparer le message de commande
     const requestMessage = {
       type: 'translation',  // Type explicite pour routage
@@ -71,7 +77,7 @@ export class ZmqRequestSender {
       messageId: request.messageId,
       text: request.text,
       sourceLanguage: request.sourceLanguage,
-      targetLanguages: request.targetLanguages,
+      targetLanguages: uniqueTargetLanguages,
       conversationId: request.conversationId,
       modelType: request.modelType || 'basic',
       timestamp: Date.now()
@@ -82,13 +88,21 @@ export class ZmqRequestSender {
     logger.info(`   📋 messageId: ${request.messageId}`);
     logger.info(`   📋 text: "${request.text}"`);
     logger.info(`   📋 sourceLanguage: ${request.sourceLanguage}`);
-    logger.info(`   📋 targetLanguages: [${request.targetLanguages.join(', ')}]`);
+    logger.info(`   📋 targetLanguages: [${uniqueTargetLanguages.join(', ')}]`);
     logger.info(`   📋 conversationId: ${request.conversationId}`);
     logger.info(`   🎨 modelType: ${requestMessage.modelType}`);
     logger.info(`   📋 message size: ${JSON.stringify(requestMessage).length} chars`);
 
-    // Envoyer la commande via PUSH (garantit distribution équitable)
-    await this.connectionManager.send(requestMessage);
+    // Envoyer la commande via PUSH avec timeout (5s) pour détecter les pannes translator
+    const sendTimeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`ZMQ send timeout after 5s for taskId=${taskId}`)), 5_000)
+    );
+    try {
+      await Promise.race([this.connectionManager.send(requestMessage), sendTimeout]);
+    } catch (error) {
+      logger.error(`❌ [ZMQ-Client] Échec envoi PUSH taskId=${taskId}:`, error);
+      throw error;
+    }
 
     // Stocker la requête en cours pour traçabilité
     this.pendingRequests.set(taskId, {
@@ -98,7 +112,7 @@ export class ZmqRequestSender {
 
     this.stats.translationRequests++;
 
-    logger.info(`📤 [ZMQ-Client] Commande PUSH envoyée: taskId=${taskId}, conversationId=${request.conversationId}, langues=${request.targetLanguages.length}, message=${JSON.stringify(requestMessage)}`);
+    logger.info(`📤 [ZMQ-Client] Commande PUSH envoyée: taskId=${taskId}, conversationId=${request.conversationId}, langues=${uniqueTargetLanguages.length}`);
 
     return taskId;
   }
