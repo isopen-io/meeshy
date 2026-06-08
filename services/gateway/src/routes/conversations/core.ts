@@ -134,7 +134,7 @@ export function registerCoreRoutes(
         identifier
       });
     } catch (error) {
-      console.error('[CONVERSATIONS] Error checking identifier availability:', error);
+      logger.error('error checking identifier availability', { error });
       return sendInternalError(reply, 'Failed to check identifier availability');
     }
   });
@@ -546,7 +546,7 @@ export function registerCoreRoutes(
       reply.send(responseBody);
 
     } catch (error) {
-      console.error('Error fetching conversations:', error);
+      logger.error('error fetching conversations', { error });
       sendInternalError(reply, 'Error retrieving conversations');
     }
   });
@@ -674,7 +674,7 @@ export function registerCoreRoutes(
           unreadCount = await readStatusService.getUnreadCount(participant.id, conversationId);
         }
       } catch (unreadError) {
-        console.warn('⚠️ Failed to compute unreadCount for conversation', conversationId, unreadError);
+        logger.warn('failed to compute unreadCount for conversation', { conversationId, error: unreadError });
       }
 
       // Marquer automatiquement toutes les notifications de cette conversation comme lues.
@@ -702,7 +702,7 @@ export function registerCoreRoutes(
         }
       } catch (notifError) {
         // Ne pas bloquer la réponse si le marquage des notifications échoue
-        console.error(`❌ Erreur lors du marquage auto des notifications pour conversation ${conversationId}:`, notifError);
+        logger.error('error marking auto notifications for conversation', { conversationId, error: notifError });
       }
 
       return sendSuccess(reply, {
@@ -715,7 +715,7 @@ export function registerCoreRoutes(
       });
 
     } catch (error) {
-      console.error('Error fetching conversation:', error);
+      logger.error('error fetching conversation', { error });
       sendInternalError(reply, 'Error retrieving conversation');
     }
   });
@@ -952,7 +952,7 @@ export function registerCoreRoutes(
           }
         }
       } catch (broadcastError) {
-        console.error('Erreur lors de la diffusion CONVERSATION_NEW:', broadcastError);
+        logger.error('error broadcasting CONVERSATION_NEW', { error: broadcastError });
         // Non bloquant : la conversation est créée, les clients la verront
         // au prochain delta sync ou via la notification legacy ci-dessous.
       }
@@ -983,11 +983,11 @@ export function registerCoreRoutes(
                 conversationTitle: displayTitle,
                 conversationType: type
               });
-              console.log(`📩 Notification d'invitation envoyée à ${participantId} pour la conversation ${conversation.id}`);
+              logger.debug('invitation notification sent', { participantId, conversationId: conversation.id });
             }
           }
         } catch (notifError) {
-          console.error('Erreur lors de l\'envoi des notifications d\'invitation:', notifError);
+          logger.error('error sending invitation notifications', { error: notifError });
           // Ne pas bloquer la création de la conversation
         }
       }
@@ -1124,7 +1124,7 @@ export function registerCoreRoutes(
       return sendSuccess(reply, updatedConversation);
 
     } catch (error) {
-      console.error('Error updating conversation:', error);
+      logger.error('error updating conversation', { error });
       sendInternalError(reply, 'Error updating conversation');
     }
   });
@@ -1213,7 +1213,7 @@ export function registerCoreRoutes(
       return sendSuccess(reply, { message: 'Conversation supprimée avec succès' });
 
     } catch (error) {
-      console.error('Error deleting conversation:', error);
+      logger.error('error deleting conversation', { error });
       sendInternalError(reply, 'Erreur lors de la suppression de la conversation');
     }
   });
@@ -1364,7 +1364,7 @@ export function registerCoreRoutes(
       });
 
     } catch (error) {
-      console.error('Error fetching conversation analysis:', error);
+      logger.error('error fetching conversation analysis', { error });
       sendInternalError(reply, 'Error fetching conversation analysis');
     }
   });
