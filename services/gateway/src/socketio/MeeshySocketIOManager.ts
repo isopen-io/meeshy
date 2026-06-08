@@ -129,6 +129,10 @@ export class MeeshySocketIOManager {
   private conversationIdCache = new Map<string, string>();
   private readonly CONVERSATION_ID_CACHE_MAX = 2000;
 
+  // Cache presence snapshot par userId — évite 2 queries Prisma par reconnexion (TTL 60s)
+  private presenceSnapshotCache = new Map<string, { users: Array<{ userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }>; cachedAt: number }>();
+  private readonly PRESENCE_SNAPSHOT_CACHE_TTL_MS = 60_000;
+
   // Statistiques
   private stats = {
     total_connections: 0,
@@ -411,6 +415,14 @@ export class MeeshySocketIOManager {
    */
   private async _emitPresenceSnapshot(socket: any, userId: string, isAnonymous: boolean): Promise<void> {
     try {
+      const cached = this.presenceSnapshotCache.get(userId);
+      if (cached && Date.now() - cached.cachedAt < this.PRESENCE_SNAPSHOT_CACHE_TTL_MS) {
+        const users = cached.users.map(u => ({ ...u, isOnline: this.connectedUsers.has(u.userId) }));
+        socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
+        logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts (cache) sent to ${userId}`);
+        return;
+      }
+
       // Trouver toutes les conversations du user/participant
       const participantRows = isAnonymous
         ? await this.prisma.participant.findMany({
@@ -468,6 +480,7 @@ export class MeeshySocketIOManager {
         });
       }
 
+      this.presenceSnapshotCache.set(userId, { users, cachedAt: Date.now() });
       socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
       logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts sent to ${userId} (${users.filter(u => u.isOnline).length} online)`);
     } catch (error) {
