@@ -761,3 +761,32 @@ final class CallReliabilityPolicyTests: XCTestCase {
         XCTAssertEqual(outcome, .fail)
     }
 }
+
+// MARK: - CallPillStatus (minimised call pill never shows a running timer pre-connection)
+
+final class CallPillStatusTests: XCTestCase {
+
+    func test_connected_isConnected_showsDuration() {
+        XCTAssertEqual(CallPillStatus.from(.connected), .connected)
+        XCTAssertTrue(CallPillStatus.from(.connected).isConnected,
+                      "only an established call shows the live duration (green)")
+    }
+
+    func test_ringing_isNotConnected() {
+        XCTAssertEqual(CallPillStatus.from(.ringing(isOutgoing: true)), .ringing)
+        XCTAssertEqual(CallPillStatus.from(.ringing(isOutgoing: false)), .ringing)
+        XCTAssertFalse(CallPillStatus.from(.ringing(isOutgoing: true)).isConnected,
+                       "a ringing call must NOT show a running 00:00 timer")
+    }
+
+    func test_offeringAndConnecting_mapToConnecting_notConnected() {
+        XCTAssertEqual(CallPillStatus.from(.offering), .connecting)
+        XCTAssertEqual(CallPillStatus.from(.connecting), .connecting)
+        XCTAssertFalse(CallPillStatus.from(.connecting).isConnected)
+    }
+
+    func test_reconnecting_isNotConnected() {
+        XCTAssertEqual(CallPillStatus.from(.reconnecting(attempt: 2)), .reconnecting)
+        XCTAssertFalse(CallPillStatus.from(.reconnecting(attempt: 2)).isConnected)
+    }
+}
