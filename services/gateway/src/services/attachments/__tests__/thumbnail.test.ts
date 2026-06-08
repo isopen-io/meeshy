@@ -1,17 +1,20 @@
 import sharp from 'sharp';
 import {
   createImageThumbnail,
+  createResponsiveVariants,
+  variantPathFor,
   thumbnailPathFor,
   thumbnailContentType,
   THUMBNAIL_MAX_SIZE,
+  RESPONSIVE_VARIANT_WIDTHS,
 } from '../thumbnail';
 
 // A non-trivial source image so JPEG vs WebP sizing is meaningful.
-const sourceImage = async (): Promise<Buffer> =>
+const sourceImage = async (width = 1200, height = 800): Promise<Buffer> =>
   sharp({
     create: {
-      width: 1200,
-      height: 800,
+      width,
+      height,
       channels: 3,
       background: { r: 180, g: 90, b: 30 },
     },
@@ -44,6 +47,59 @@ describe('createImageThumbnail', () => {
       .jpeg({ quality: 80 })
       .toBuffer();
     expect(webpThumb.length).toBeLessThan(jpegThumb.length);
+  });
+});
+
+describe('createResponsiveVariants', () => {
+  it('emits a WebP variant per target width strictly smaller than the source', async () => {
+    // 1600px source: 640 and 1080 are smaller; 1920 is larger → dropped.
+    const variants = await createResponsiveVariants(await sourceImage(1600, 1000));
+    expect(variants.map((v) => v.width)).toEqual([640, 1080]);
+    expect(variants.every((v) => v.format === 'webp')).toBe(true);
+    expect(variants.every((v) => isWebp(v.buffer))).toBe(true);
+  });
+
+  it('preserves aspect ratio for each variant', async () => {
+    const variants = await createResponsiveVariants(await sourceImage(1600, 1000));
+    for (const v of variants) {
+      expect(v.height).toBe(Math.round((v.width * 1000) / 1600));
+    }
+  });
+
+  it('never upscales — a source smaller than every target yields no variants', async () => {
+    const variants = await createResponsiveVariants(await sourceImage(500, 300));
+    expect(variants).toEqual([]);
+  });
+
+  it('orders variants ascending by width (and thus by byte size)', async () => {
+    const variants = await createResponsiveVariants(await sourceImage(2400, 1600));
+    const widths = variants.map((v) => v.width);
+    expect(widths).toEqual([...widths].sort((a, b) => a - b));
+    for (let i = 1; i < variants.length; i++) {
+      expect(variants[i].buffer.length).toBeGreaterThanOrEqual(variants[i - 1].buffer.length);
+    }
+  });
+
+  it('honours custom widths', async () => {
+    const variants = await createResponsiveVariants(await sourceImage(1600, 1000), {
+      widths: [320, 800],
+    });
+    expect(variants.map((v) => v.width)).toEqual([320, 800]);
+  });
+
+  it('exposes the default responsive width ladder', () => {
+    expect([...RESPONSIVE_VARIANT_WIDTHS]).toEqual([640, 1080, 1920]);
+  });
+});
+
+describe('variantPathFor', () => {
+  it('suffixes the source path with _{width}w.webp', () => {
+    expect(variantPathFor('2026/06/u1/photo.png', 640)).toBe('2026/06/u1/photo_640w.webp');
+    expect(variantPathFor('2026/06/u1/photo.jpeg', 1080)).toBe('2026/06/u1/photo_1080w.webp');
+  });
+
+  it('handles a path without extension', () => {
+    expect(variantPathFor('2026/06/u1/photo', 640)).toBe('2026/06/u1/photo_640w.webp');
   });
 });
 

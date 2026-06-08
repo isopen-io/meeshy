@@ -29,6 +29,7 @@ export interface SocketAttachment {
   readonly fileUrl: string;
   readonly thumbnailUrl?: string | null;
   readonly thumbHash?: string | null;
+  readonly imageVariants?: unknown;
   readonly width?: number | null;
   readonly height?: number | null;
   readonly duration?: number | null;
@@ -61,6 +62,7 @@ export function serializeAttachmentForSocket(
     fileUrl: raw.fileUrl as string,
     thumbnailUrl: (raw.thumbnailUrl as string | null | undefined) ?? null,
     thumbHash: (raw.thumbHash as string | null | undefined) ?? null,
+    imageVariants: raw.imageVariants ?? null,
     width: (raw.width as number | null | undefined) ?? null,
     height: (raw.height as number | null | undefined) ?? null,
     duration: (raw.duration as number | null | undefined) ?? null,
