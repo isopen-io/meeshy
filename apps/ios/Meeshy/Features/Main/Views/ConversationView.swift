@@ -472,9 +472,9 @@ struct ConversationView: View {
             VStack(spacing: 8) {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(Color(hex: "4ECDC4"))
+                    .foregroundColor(MeeshyColors.indigo400)
                     .padding(8)
-                    .background(Circle().fill(Color(hex: "4ECDC4").opacity(0.15)))
+                    .background(Circle().fill(MeeshyColors.indigo400.opacity(0.15)))
 
                 Text(String(localized: "conversation.view.e2e_notice", defaultValue: "Les messages dans cette conversation sont chiffrés de bout en bout. Personne, pas même Meeshy, ne peut les lire.", bundle: .main))
                     .font(.system(size: 12))

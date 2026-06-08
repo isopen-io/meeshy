@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
+import { useI18n } from '@/hooks/useI18n';
 
 interface PPTXViewerProps {
   attachment: UploadedAttachmentResponse;
@@ -30,8 +31,8 @@ export const PPTXViewer: React.FC<PPTXViewerProps> = ({
   onDelete,
   canDelete = false
 }) => {
+  const { t } = useI18n('viewers');
   const [hasError, setHasError] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
 
   const attachmentFileUrl = attachment.fileUrl;
 
@@ -40,7 +41,6 @@ export const PPTXViewer: React.FC<PPTXViewerProps> = ({
 
   const handleIframeError = () => {
     setHasError(true);
-    setErrorMessage('Impossible de charger la présentation');
   };
 
   const handleOpenInNewTab = () => {
@@ -71,9 +71,9 @@ export const PPTXViewer: React.FC<PPTXViewerProps> = ({
           <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800">
             <div className="flex flex-col items-center gap-2 text-gray-600 dark:text-gray-400">
               <AlertTriangle className="w-12 h-12" />
-              <span className="text-sm text-center px-4">{errorMessage}</span>
+              <span className="text-sm text-center px-4">{t('pptx.loadError')}</span>
               <p className="text-xs text-center px-4 text-gray-500">
-                Le fichier doit être accessible publiquement pour être visualisé
+                {t('pptx.publicRequired')}
               </p>
               <Button
                 onClick={handleOpenInNewTab}
@@ -81,7 +81,7 @@ export const PPTXViewer: React.FC<PPTXViewerProps> = ({
                 className="mt-2 bg-orange-600 hover:bg-orange-700 text-white"
               >
                 <Presentation className="w-4 h-4 mr-2" />
-                Télécharger le fichier
+                {t('pptx.downloadFile')}
               </Button>
             </div>
           </div>
@@ -104,7 +104,7 @@ export const PPTXViewer: React.FC<PPTXViewerProps> = ({
             size="sm"
             variant="destructive"
             className="absolute top-2 right-2 w-8 h-8 p-0 opacity-0 hover:opacity-100 focus-visible:opacity-100 transition-opacity"
-            title="Supprimer cette présentation"
+            title={t('pptx.delete')}
           >
             <X className="w-4 h-4" />
           </Button>
@@ -129,7 +129,7 @@ export const PPTXViewer: React.FC<PPTXViewerProps> = ({
               size="sm"
               variant="ghost"
               className="w-8 h-8 p-0"
-              title="Ouvrir en plein écran"
+              title={t('pptx.fullscreen')}
             >
               <Maximize className="w-4 h-4" />
             </Button>
@@ -140,7 +140,7 @@ export const PPTXViewer: React.FC<PPTXViewerProps> = ({
             href={attachment.fileUrl}
             download={attachment.originalName}
             className="flex-shrink-0 p-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-full transition-colors duration-200"
-            title="Télécharger"
+            title={t('pptx.download')}
             onClick={(e) => e.stopPropagation()}
           >
             <Download className="w-4 h-4 text-gray-600 dark:text-gray-300" />

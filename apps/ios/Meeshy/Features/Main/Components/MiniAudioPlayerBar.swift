@@ -121,7 +121,7 @@ struct MiniAudioPlayerBar: View {
             // Avatar conv (fallback indigo gradient placeholder)
             Circle()
                 .fill(LinearGradient(
-                    colors: [Color(hex: "6366F1"), Color(hex: "4338CA")],
+                    colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
                     startPoint: .topLeading, endPoint: .bottomTrailing))
                 .frame(width: 36, height: 36)
                 .overlay(
@@ -139,7 +139,7 @@ struct MiniAudioPlayerBar: View {
                     .lineLimit(1)
                 ProgressView(value: max(0, min(1, coordinator.progress)))
                     .progressViewStyle(.linear)
-                    .tint(Color(hex: "6366F1"))
+                    .tint(MeeshyColors.indigo500)
                     .frame(height: 2)
             }
 
