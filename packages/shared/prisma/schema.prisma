@@ -293,6 +293,7 @@ model User {
   // Unified participant model (replaces conversations + anonymousParticipants)
   participations Participant[]
 
+  @@index([isOnline, lastActiveAt(sort: Desc)]) // Optimisation: présence — "utilisateurs en ligne triés par activité"
   @@index([systemLanguage]) // Prisme Linguistique: language extraction queries et Optimisation: utilisateurs par langue (broadcast ciblé)
   @@index([deviceLocale])   // Prisme Linguistique: 4th-priority locale resolution
   @@index([lastActiveAt]) // Optimisation: utilisateurs actifs récemment 
@@ -1082,6 +1083,8 @@ model ConversationReadCursor {
   @@unique([conversationId, participantId], name: "conversation_participant_cursor")
   @@index([participantId])
   @@index([unreadCount])
+  @@index([participantId, lastReadAt])   // Optimisation: batch unread count par participant
+  @@index([conversationId, participantId, lastReadAt]) // Optimisation: requêtes curseur combinées
 }
 
 /// Réaction emoji sur un message par un utilisateur
@@ -1250,6 +1253,7 @@ model Notification {
   @@index([userId, createdAt(sort: Desc)])
   @@index([createdAt])
   @@index([type])
+  @@index([userId, isRead, createdAt(sort: Desc)]) // Optimisation: pagination non-lus par user
 }
 
 /// Fonctionnalités et consentements utilisateur (1:1 avec User)
@@ -1665,6 +1669,7 @@ model CallSession {
   @@index([conversationId])
   @@index([status])
   @@index([startedAt])
+  @@index([conversationId, status, startedAt]) // Optimisation: active call lookup par conversation
 }
 
 /// Call Participant - Represents a user participating in a call

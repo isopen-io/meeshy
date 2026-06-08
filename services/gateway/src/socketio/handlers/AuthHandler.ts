@@ -9,6 +9,7 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import jwt from 'jsonwebtoken';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketAuthenticateSchema } from '../../validation/socket-event-schemas.js';
+import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
 
 export interface AuthHandlerDependencies {
   prisma: PrismaClient;
@@ -107,7 +108,13 @@ export class AuthHandler {
       if (userId) {
         const user = await this.prisma.user.findUnique({
           where: { id: userId },
-          select: { id: true, systemLanguage: true }
+          select: {
+            id: true,
+            systemLanguage: true,
+            regionalLanguage: true,
+            customDestinationLanguage: true,
+            deviceLocale: true,
+          }
         });
 
         if (!user) {
@@ -115,11 +122,16 @@ export class AuthHandler {
           return;
         }
 
+        const resolvedLanguages = resolveUserLanguagesOrdered(user, {
+          deviceLocale: user.deviceLocale ?? undefined,
+        });
+
         const socketUser: SocketUser = {
           id: user.id,
           socketId: socket.id,
           isAnonymous: false,
           language: language || user.systemLanguage || 'en',
+          resolvedLanguages,
           userId: user.id
         };
 
@@ -175,7 +187,13 @@ export class AuthHandler {
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, systemLanguage: true }
+      select: {
+        id: true,
+        systemLanguage: true,
+        regionalLanguage: true,
+        customDestinationLanguage: true,
+        deviceLocale: true,
+      }
     });
 
     if (!user) {
@@ -183,11 +201,16 @@ export class AuthHandler {
       return;
     }
 
+    const resolvedLanguages = resolveUserLanguagesOrdered(user, {
+      deviceLocale: user.deviceLocale ?? undefined,
+    });
+
     const socketUser: SocketUser = {
       id: user.id,
       socketId: socket.id,
       isAnonymous: false,
       language: user.systemLanguage || 'en',
+      resolvedLanguages,
       userId: user.id
     };
 
@@ -249,6 +272,7 @@ export class AuthHandler {
       socketId: socket.id,
       isAnonymous: true,
       language: language || participant.language || 'en',
+      resolvedLanguages: [],
       participantId: participant.id,
       displayName: participant.displayName,
       sessionToken

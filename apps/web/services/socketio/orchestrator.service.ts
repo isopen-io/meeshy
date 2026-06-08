@@ -76,6 +76,7 @@ export class SocketIOOrchestrator {
 
   // Message queue for messages sent before socket is ready
   private pendingMessages: PendingMessage[] = [];
+  private pendingMessageTimeouts: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private isProcessingQueue: boolean = false;
   private readonly MAX_QUEUE_SIZE = 50;
   private readonly MESSAGE_QUEUE_TIMEOUT = 120000; // 2 minutes — handles brief offline gaps
@@ -182,6 +183,13 @@ export class SocketIOOrchestrator {
     while (this.pendingMessages.length > 0) {
       const pending = this.pendingMessages.shift();
       if (!pending) continue;
+
+      // Annuler le timeout individuel puisqu'on traite maintenant le message
+      const pendingTimeout = this.pendingMessageTimeouts.get(pending.clientMessageId);
+      if (pendingTimeout) {
+        clearTimeout(pendingTimeout);
+        this.pendingMessageTimeouts.delete(pending.clientMessageId);
+      }
 
       // Check if message has expired
       if (Date.now() - pending.timestamp > this.MESSAGE_QUEUE_TIMEOUT) {
@@ -385,6 +393,17 @@ export class SocketIOOrchestrator {
           timestamp: Date.now(),
           resolve
         };
+
+        // Timeout par message pour éviter la fuite mémoire sur onglet longue durée
+        const timeoutId = setTimeout(() => {
+          const idx = this.pendingMessages.indexOf(pending);
+          if (idx !== -1) {
+            this.pendingMessages.splice(idx, 1);
+            this.pendingMessageTimeouts.delete(resolvedClientMessageId);
+            resolve({ success: false });
+          }
+        }, this.MESSAGE_QUEUE_TIMEOUT);
+        this.pendingMessageTimeouts.set(resolvedClientMessageId, timeoutId);
 
         this.pendingMessages.push(pending);
         logger.debug('[SocketIOOrchestrator]', `Message queued (${this.pendingMessages.length} in queue)`);

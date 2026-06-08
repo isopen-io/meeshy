@@ -10,6 +10,7 @@
 'use client';
 
 import React, { useState, useCallback, useMemo } from 'react';
+import NextImage from 'next/image';
 import dynamic from 'next/dynamic';
 import { FileImage, FileText, Music, Video, File, Maximize } from 'lucide-react';
 import { Attachment, getAttachmentType } from '@meeshy/shared/types/attachment';
@@ -128,19 +129,6 @@ export const AttachmentPreviewReply = React.memo(function AttachmentPreviewReply
     setTextLightboxOpen(true);
   }, []);
 
-  // Handler pour erreur de chargement d'image
-  const handleImageError = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
-    const img = e.currentTarget;
-    img.style.display = 'none';
-    const parent = img.parentElement;
-    if (parent) {
-      parent.classList.add('bg-gray-100', 'dark:bg-gray-700', 'flex', 'items-center', 'justify-center');
-      const icon = document.createElement('div');
-      icon.innerHTML = '📷';
-      icon.className = 'text-2xl opacity-50';
-      parent.appendChild(icon);
-    }
-  }, []);
 
   if (!attachmentsWithUrls.length) {
     return null;
@@ -168,13 +156,13 @@ export const AttachmentPreviewReply = React.memo(function AttachmentPreviewReply
               tabIndex={0}
               aria-label={`Ouvrir l'image ${attachment.originalName || attachment.fileName}`}
             >
-              <img
+              <NextImage
                 src={safeFileUrl}
                 alt={`Aperçu de l'image ${attachment.originalName || attachment.fileName}`}
-                className="w-full h-full object-cover"
-                onError={handleImageError}
+                fill
+                sizes="60px"
+                className="object-cover"
                 loading="lazy"
-                role="img"
               />
             </div>
           );

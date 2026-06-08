@@ -5,6 +5,7 @@ import {
   formatCallDuration,
   formatCallDataSize,
   callSummaryClientMessageId,
+  callContentKey,
   type CallSummaryInput,
   type CallSummaryMetadataInput
 } from '../utils/call-summary';
@@ -51,8 +52,16 @@ describe('buildCallSummary — completed calls', () => {
       outcome: 'completed',
       callType: 'audio',
       durationSeconds: 272,
+      contentKey: 'call_completed_audio',
       content: 'Appel audio · 04:32'
     });
+  });
+
+  it('exposes a stable contentKey for i18n consumers', () => {
+    expect(callContentKey('completed', 'audio')).toBe('call_completed_audio');
+    expect(callContentKey('missed', 'video')).toBe('call_missed_video');
+    expect(callContentKey('rejected', 'audio')).toBe('call_rejected_audio');
+    expect(callContentKey('failed', 'video')).toBe('call_failed_video');
   });
 
   it('labels a completed video call with its duration', () => {

@@ -52,7 +52,14 @@ const nextConfig: NextConfig = {
   
   // Configuration des images
   images: {
-    domains: ['localhost', 'meeshy.me', 'gate.meeshy.me', 'ml.meeshy.me'],
+    remotePatterns: [
+      { protocol: 'http', hostname: 'localhost', port: '3000', pathname: '/**' },
+      { protocol: 'https', hostname: 'meeshy.me', pathname: '/**' },
+      { protocol: 'https', hostname: 'gate.meeshy.me', pathname: '/**' },
+      { protocol: 'https', hostname: 'ml.meeshy.me', pathname: '/**' },
+      { protocol: 'https', hostname: '*.meeshy.me', pathname: '/**' },
+      { protocol: 'https', hostname: '*.meeshy.local', pathname: '/**' },
+    ],
     formats: ['image/webp', 'image/avif'],
     deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],

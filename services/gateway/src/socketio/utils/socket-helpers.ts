@@ -22,6 +22,13 @@ export interface SocketUser {
   socketId: string;
   isAnonymous: boolean;
   language: string;
+  /**
+   * Ordered list of languages this socket can consume, derived from
+   * resolveUserLanguagesOrdered() at connection time.
+   * Priority: systemLanguage → regionalLanguage → customDestinationLanguage → deviceLocale.
+   * Empty for anonymous users (they use `language` only).
+   */
+  resolvedLanguages: string[];
   /** For anonymous participants: the participant.id */
   participantId?: string;
   /** For registered users: the user.id */
