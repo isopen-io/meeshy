@@ -311,6 +311,7 @@ export function registerMessagesRoutes(
           around: { type: 'string', description: 'Load messages around this messageId (for search jump)' },
           include_reactions: { type: 'string', enum: ['true', 'false'], description: 'Include detailed reactions list (default false). Note: reactionSummary and reactionCount are always included.' },
           include_translations: { type: 'string', enum: ['true', 'false'], description: 'Include translations (default true)' },
+          languages: { type: 'string', description: 'Comma-separated ISO 639-1 codes to filter translations (e.g. fr,en). When set, only translations for listed languages are returned, reducing payload size.' },
           include_status: { type: 'string', enum: ['true', 'false'], description: 'Include per-user read status entries (default false)' },
           include_replies: { type: 'string', enum: ['true', 'false'], description: 'Include replyTo message details (default true)' }
         }
@@ -364,9 +365,13 @@ export function registerMessagesRoutes(
         around,
         include_reactions: includeReactionsStr = 'false',
         include_translations: includeTranslationsStr = 'true',
+        languages: languagesStr,
         include_status: includeStatusStr = 'false',
         include_replies: includeRepliesStr = 'true'
       } = request.query;
+      const languageFilter: Set<string> | null = languagesStr
+        ? new Set(languagesStr.split(',').map((l: string) => l.trim().toLowerCase()).filter(Boolean))
+        : null;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
@@ -956,11 +961,13 @@ export function registerMessagesRoutes(
 
         // Relations optionnelles (selon paramètres include_*)
         if (includeTranslations && message.translations) {
-          // Transformer JSON vers array pour rétrocompatibilité frontend
-          mappedMessage.translations = transformTranslationsToArray(
+          const allTranslations = transformTranslationsToArray(
             message.id,
             message.translations as Record<string, any>
           );
+          mappedMessage.translations = languageFilter
+            ? allTranslations.filter(t => languageFilter.has(t.targetLanguage.toLowerCase()))
+            : allTranslations;
         }
         if (includeReactions && message.reactions) {
           mappedMessage.reactions = message.reactions;

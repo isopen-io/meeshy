@@ -100,6 +100,32 @@ final class MessageServiceTests: XCTestCase {
         )
     }
 
+    /// Prisme Linguistique bandwidth optimization: when `languages` is provided,
+    /// the SDK appends `?languages=fr,en` so the gateway returns only the
+    /// requested translations, reducing payload by ~50% in multilingual conversations.
+    func testListForwardsLanguagesFilterWhenProvided() async throws {
+        let expected = makeMessagesResponse()
+        mock.stub("/conversations/\(convId)/messages", result: expected)
+
+        _ = try await service.list(conversationId: convId, languages: ["fr", "en"])
+
+        let queryItems = try XCTUnwrap(mock.lastRequest?.queryItems)
+        let langItem = queryItems.first { $0.name == "languages" }
+        XCTAssertNotNil(langItem, "list(languages:) must forward the languages filter; got \(queryItems)")
+        XCTAssertEqual(langItem?.value, "fr,en")
+    }
+
+    func testListOmitsLanguagesParamWhenNil() async throws {
+        let expected = makeMessagesResponse()
+        mock.stub("/conversations/\(convId)/messages", result: expected)
+
+        _ = try await service.list(conversationId: convId, languages: nil)
+
+        let queryItems = try XCTUnwrap(mock.lastRequest?.queryItems)
+        XCTAssertFalse(queryItems.contains { $0.name == "languages" },
+                       "list(languages: nil) must not append ?languages; got \(queryItems)")
+    }
+
     // MARK: - listBefore
 
     func testListBeforeCallsWithCorrectEndpoint() async throws {
