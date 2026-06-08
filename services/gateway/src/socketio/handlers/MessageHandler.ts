@@ -124,7 +124,7 @@ export class MessageHandler {
       }
 
       const { participantId, userId, isAnonymous } = userContext;
-      handlerLogger.debug({ conversationId: validated.conversationId, userId: userId ?? participantId, isAnonymous }, 'message:send received');
+      handlerLogger.debug('message:send received', { conversationId: validated.conversationId, userId: userId ?? participantId, isAnonymous });
 
       const rateLimitAllowed = await this.rateLimiter.checkLimit(userId || participantId, SOCKET_RATE_LIMITS.MESSAGE_SEND);
       if (!rateLimitAllowed) {
@@ -579,7 +579,7 @@ export class MessageHandler {
         // reconcile via the REST / socket ACK path which carries the cid.
         this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
       }
-      handlerLogger.debug({ conversationId: normalizedId, messageId: message.id, senderUserId: senderUserId ?? 'anon' }, 'message:new emitted');
+      handlerLogger.debug('message:new emitted', { conversationId: normalizedId, messageId: message.id, senderUserId: senderUserId ?? 'anon' });
 
       // Notify each participant's user room that the conversation has
       // been updated (lastMessageAt advanced) so their conversation
@@ -609,7 +609,7 @@ export class MessageHandler {
             updatePayload
           );
         }
-        handlerLogger.debug({ conversationId: normalizedId, recipients: participants.filter((p) => p.userId).length }, 'conversation:updated emitted');
+        handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: participants.filter((p) => p.userId).length });
       } catch (err) {
         console.warn('[BROADCAST] CONVERSATION_UPDATED emit failed:', err);
       }
