@@ -51,7 +51,7 @@ struct BubbleFooter: View, Equatable {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Renvoyer le message")
+                    .accessibilityLabel(String(localized: "bubble.footer.resend", defaultValue: "Resend message", bundle: .main))
                 } else {
                     deliveryView(tint: compactMetaColor, readTint: readColor)
                 }
@@ -189,7 +189,7 @@ struct BubbleFooter: View, Equatable {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Renvoyer le message")
+                .accessibilityLabel(String(localized: "bubble.footer.resend", defaultValue: "Resend message", bundle: .main))
             } else {
                 deliveryView(tint: metaColor, readTint: readColor)
             }
@@ -219,8 +219,8 @@ struct BubbleFooter: View, Equatable {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Voir le statut de lecture")
-                .accessibilityHint("Ouvre le detail du message a l'onglet Vues")
+                .accessibilityLabel(String(localized: "bubble.footer.readStatus", defaultValue: "View read status", bundle: .main))
+                .accessibilityHint(String(localized: "bubble.footer.readStatus.hint", defaultValue: "Opens message detail at the Views tab", bundle: .main))
             } else {
                 check
             }

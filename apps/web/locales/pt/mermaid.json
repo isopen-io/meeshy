@@ -1,0 +1,14 @@
+{
+  "mermaid": {
+    "error": {
+      "emptyContent": "O conteúdo do diagrama está vazio",
+      "invalidSyntax": "Sintaxe Mermaid inválida",
+      "syntaxError": "Erro de sintaxe no diagrama Mermaid",
+      "renderError": "Não é possível renderizar o diagrama",
+      "invalidDiagram": "Diagrama Mermaid inválido",
+      "diagramContent": "Conteúdo do diagrama",
+      "criticalError": "Erro crítico no diagrama Mermaid",
+      "criticalErrorSubtitle": "O diagrama não pôde ser renderizado. Verifique a sintaxe."
+    }
+  }
+}

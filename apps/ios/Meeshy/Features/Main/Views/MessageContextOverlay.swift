@@ -123,7 +123,7 @@ struct MessageContextOverlay: View {
             HapticFeedback.light()
             onDismiss()
         }
-        .accessibilityLabel("Fermer le menu contextuel")
+        .accessibilityLabel(String(localized: "contextMenu.close", defaultValue: "Close context menu", bundle: .main))
         .accessibilityAddTraits(.isButton)
     }
 
