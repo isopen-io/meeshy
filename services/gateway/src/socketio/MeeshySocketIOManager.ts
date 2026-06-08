@@ -192,7 +192,7 @@ export class MeeshySocketIOManager {
         credentials: true
       },
       // CORRECTION CRITIQUE: Configuration timeouts pour détecter déconnexions abruptes
-      pingTimeout: 20000,  // CALL-FIX 2026-06-06: 10s→20s. Le pong peut tarder >10s sous charge WebRTC (CPU saturé) → faux "ping timeout"/"transport close" qui tuaient le signaling d'appel. 20s = défaut Socket.IO, tolère le jitter.
+      pingTimeout: 60000,  // 60s — tolère CPU saturé sous charge WebRTC/traduction. pingTimeout DOIT être > pingInterval sinon le client time-out avant le prochain ping (bug: 20s < 25s causait des déconnexions fantômes).
       pingInterval: 25000, // 25s - Intervalle entre les pings (par défaut)
       connectTimeout: 45000, // 45s - Timeout pour la connexion initiale
       // Autoriser reconnexion rapide
@@ -1540,16 +1540,18 @@ export class MeeshySocketIOManager {
 
           const connectedUserIds = new Set(this.getConnectedUsers());
 
-          for (const participant of participants) {
-            const roomTarget = participant.userId || participant.id;
-            // Pass `participant.id` (not `roomTarget`) — the cursor's
-            // participantId column is the Participant.id. Using the userId
-            // here previously caused every registered recipient to fall
-            // through to a stale "count all historical messages" path and
-            // see inflated unread counts (e.g. 75).
-            const unreadCount = await readStatusService.getUnreadCount(participant.id, normalizedId);
+          // Batch : calculer tous les unreadCounts en parallèle (évite N+1 DB calls)
+          // getUnreadCount prend participant.id (Participant.id) — pas userId
+          const unreadResults = await Promise.all(
+            participants.map(async (participant) => {
+              const unreadCount = await readStatusService.getUnreadCount(participant.id, normalizedId);
+              return { participant, unreadCount };
+            })
+          );
 
-            // Émettre vers le socket personnel de l'utilisateur
+          for (const { participant, unreadCount } of unreadResults) {
+            const roomTarget = participant.userId || participant.id;
+
             this.io.to(ROOMS.user(roomTarget)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
               conversationId: normalizedId,
               unreadCount

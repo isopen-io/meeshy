@@ -207,6 +207,26 @@ export class MessagesService {
     }
   }
 
+  async getPinnedMessages(conversationId: string, limit = 50, offset = 0): Promise<Message[]> {
+    try {
+      const response = await apiService.get<{ success: boolean; data: unknown[] }>(
+        `/conversations/${conversationId}/pinned-messages`,
+        { params: { limit, offset } }
+      );
+      return (response.data?.data ?? []).map((m) => transformersService.transformMessage(m as Message));
+    } catch {
+      return [];
+    }
+  }
+
+  async pinMessage(conversationId: string, messageId: string): Promise<void> {
+    await apiService.post(`/conversations/${conversationId}/messages/${messageId}/pin`, {});
+  }
+
+  async unpinMessage(conversationId: string, messageId: string): Promise<void> {
+    await apiService.post(`/conversations/${conversationId}/messages/${messageId}/unpin`, {});
+  }
+
   /**
    * Crée un nouveau controller pour une requête
    */

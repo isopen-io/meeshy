@@ -236,6 +236,7 @@ export const BubbleMessageNormalView = memo(function BubbleMessageNormalView({
               messageReactionsHook={messageReactionsHook}
               onNavigateToMessage={onNavigateToMessage}
               t={tBubble}
+              isSending={(message as unknown)._localStatus === 'sending'}
             />
 
             {/* Actions Bar */}

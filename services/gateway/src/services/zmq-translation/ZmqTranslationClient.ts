@@ -48,10 +48,15 @@ export interface ZMQClientStats {
   memory_usage_mb: number;
 }
 
-// Timeout for ZMQ translation requests (30 seconds)
-const ZMQ_REQUEST_TIMEOUT_MS = 30_000;
-// Maximum number of retries before emitting an error
-const ZMQ_MAX_RETRIES = 3;
+// Timeout for ZMQ translation requests.
+// 45 s — assez long pour absorber un pic CPU sur le translator sans déclencher
+// des retries intempestifs qui créeraient des doublons si la 1ère requête est
+// simplement lente (pas morte). Le translator doit dédupliquer les taskId.
+const ZMQ_REQUEST_TIMEOUT_MS = 45_000;
+// Maximum number of retries before emitting an error.
+// Réduit à 2 : chaque retry re-pousse dans la file — 3 tentatives sur un
+// translator saturé = 3× la charge CPU pour la même traduction.
+const ZMQ_MAX_RETRIES = 2;
 // Long-running voice pipeline (voice_translate / voice_translate_async) can take
 // several minutes (Whisper + NLLB + Chatterbox). Resending after 30 s would
 // duplicate the same job 4× in the translator worker pool and saturate CPU.

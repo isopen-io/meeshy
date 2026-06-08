@@ -516,6 +516,7 @@ model Participant {
   @@index([conversationId])
   @@index([userId])
   @@index([userId, isActive])
+  @@index([conversationId, userId, isActive]) // Filtre "membres actifs d'une conversation" — hot path list conversations
   @@index([type])
   @@index([sessionTokenHash])
 }
@@ -682,6 +683,7 @@ model Message {
   @@index([conversationId])
   @@index([conversationId, deletedAt, createdAt]) // Optimisation: requête lastMessage avec tri
   @@index([senderId])
+  @@index([senderId, createdAt(sort: Desc)]) // Timeline utilisateur — requêtes "messages d'un utilisateur"
   @@index([messageSource])
   @@index([createdAt])
 }
@@ -1238,6 +1240,7 @@ model Notification {
   @@index([userId, isRead])
   @@index([userId, type])
   @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, expiresAt]) // Cleanup TTL — job de nettoyage des notifications expirées
   @@index([createdAt])
   @@index([type])
 }

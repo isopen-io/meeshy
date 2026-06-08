@@ -17,58 +17,65 @@ const DeliveryIndicator = memo(function DeliveryIndicator({
   isOwnMessage,
   messageId,
   conversationId,
+  isSending = false,
 }: {
   isOwnMessage: boolean;
   messageId: string;
   conversationId: string;
+  isSending?: boolean;
 }) {
   const messageSummary = useMessageReadStatus(messageId);
   const conversationSummary = useReadStatusSummary(conversationId);
 
   if (!isOwnMessage) return null;
 
+  // Horloge pendant l'envoi (message optimiste pas encore confirmé par le serveur)
+  if (isSending) {
+    return (
+      <svg className="h-3 w-3 text-white/50 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-label="Envoi en cours">
+        <circle cx="12" cy="12" r="10" />
+        <polyline points="12 6 12 12 16 14" />
+      </svg>
+    );
+  }
+
   // Per-message status takes priority, fallback to conversation-level summary
   const summary = messageSummary || conversationSummary;
 
   if (!summary) {
-    // No status info yet — show single gray check (sent)
-    return <Check className="h-3 w-3 text-white/60 flex-shrink-0" />;
+    return <Check className="h-3 w-3 text-white/60 flex-shrink-0" aria-label="Envoyé" />;
   }
 
   const { totalMembers, deliveredCount, readCount } = summary;
 
-  // Read by all: double blue/green checks
   if (totalMembers > 0 && readCount >= totalMembers) {
     return (
-      <span className="inline-flex -space-x-1.5 flex-shrink-0">
+      <span className="inline-flex -space-x-1.5 flex-shrink-0" aria-label="Lu par tous">
         <Check className="h-3 w-3 text-sky-300" />
         <Check className="h-3 w-3 text-sky-300" />
       </span>
     );
   }
 
-  // At least some have read: double blue checks
   if (readCount > 0) {
     return (
-      <span className="inline-flex -space-x-1.5 flex-shrink-0">
+      <span className="inline-flex -space-x-1.5 flex-shrink-0" aria-label="Lu">
         <Check className="h-3 w-3 text-sky-300" />
         <Check className="h-3 w-3 text-sky-300" />
       </span>
     );
   }
 
-  // Delivered but not read: double gray/white checks
   if (deliveredCount > 0) {
     return (
-      <span className="inline-flex -space-x-1.5 flex-shrink-0">
+      <span className="inline-flex -space-x-1.5 flex-shrink-0" aria-label="Distribué">
         <Check className="h-3 w-3 text-white/60" />
         <Check className="h-3 w-3 text-white/60" />
       </span>
     );
   }
 
-  // Sent only: single gray/white check
-  return <Check className="h-3 w-3 text-white/60 flex-shrink-0" />;
+  return <Check className="h-3 w-3 text-white/60 flex-shrink-0" aria-label="Envoyé" />;
 });
 
 interface MessageContentProps {
@@ -94,6 +101,7 @@ interface MessageContentProps {
   messageReactionsHook: UseReactionsQueryReturn;
   onNavigateToMessage?: (messageId: string) => void;
   t: (key: string) => string;
+  isSending?: boolean;
 }
 
 export const MessageContent = memo(function MessageContent({
@@ -108,6 +116,7 @@ export const MessageContent = memo(function MessageContent({
   messageReactionsHook,
   onNavigateToMessage,
   t,
+  isSending = false,
 }: MessageContentProps) {
   if (!message.content || !message.content.trim()) {
     return null;
@@ -172,6 +181,7 @@ export const MessageContent = memo(function MessageContent({
                 isOwnMessage={isOwnMessage}
                 messageId={message.id}
                 conversationId={conversationId || message.conversationId}
+                isSending={isSending}
               />
             </div>
           )}

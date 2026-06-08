@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
+import { sendWithETag } from '../../utils/etag';
 import bcrypt from 'bcryptjs';
 import { normalizeEmail, capitalizeName, normalizeDisplayName, normalizePhoneNumber, normalizePhoneWithCountry } from '../../utils/normalize';
 import { buildPaginationMeta } from '../../utils/pagination';
@@ -1030,10 +1031,11 @@ export async function getUserById(fastify: FastifyInstance) {
         isMeeshyer: true,
       };
 
-      return reply.status(200).send({
-        success: true,
-        data: publicUserProfile
-      });
+      const responseBody = { success: true, data: publicUserProfile };
+
+      // ETag conditionnel — profil utilisateur peu volatile (avatar, bio)
+      if (sendWithETag(request, reply, responseBody)) return;
+      return reply.status(200).send(responseBody);
 
     } catch (error) {
       logError(fastify.log, 'Get user profile error:', error);

@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { NotificationService } from '../services/notifications/NotificationService';
 import { NotificationFormatter } from '../services/notifications/NotificationFormatter';
 import { validatePagination } from '../utils/pagination';
+import { sendWithETag } from '../utils/etag';
 import {
   notificationSchema,
   errorResponseSchema,
@@ -108,14 +109,17 @@ export async function notificationRoutes(fastify: FastifyInstance) {
           notificationService.getUnreadCount(userId),
         ]);
 
-        // Formatter UNE SEULE FOIS avec NotificationFormatter
-        return NotificationFormatter.formatPaginatedResponse({
+        const responseBody = NotificationFormatter.formatPaginatedResponse({
           notifications: rawNotifications,
           total,
           offset: pagination.offset,
           limit: pagination.limit,
           unreadCount,
         });
+
+        // ETag conditionnel: évite de retransmettre le payload si rien n'a changé
+        if (sendWithETag(request, reply, responseBody)) return;
+        return responseBody;
       } catch (error) {
         fastify.log.error({ error }, 'Error fetching notifications');
         return reply.code(500).send({

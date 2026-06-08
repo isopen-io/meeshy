@@ -22,6 +22,8 @@ export const queryKeys = {
       [...queryKeys.messages.list(conversationId), messageId] as const,
     statusDetails: (messageId: string) =>
       [...queryKeys.messages.all, 'status-details', messageId] as const,
+    pinned: (conversationId: string) =>
+      [...queryKeys.messages.list(conversationId), 'pinned'] as const,
   },
 
   users: {

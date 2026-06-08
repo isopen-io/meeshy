@@ -163,7 +163,7 @@ export const ConversationList = memo(function ConversationList({
 
           return (
             <ConversationGroup
-              key={`group-${group.type}-${group.categoryId || groupIndex}`}
+              key={group.categoryId ? `category-${group.categoryId}` : `group-${group.type}`}
               type={group.type}
               categoryId={group.categoryId}
               categoryName={group.categoryName}
@@ -175,11 +175,11 @@ export const ConversationList = memo(function ConversationList({
               t={t}
               categoriesLength={categories.length}
             >
-              {group.conversations.map((conversation, convIndex) => {
+              {group.conversations.map((conversation) => {
                 const prefs = preferencesMap.get(conversation.id);
                 return (
                   <ConversationItem
-                    key={`${group.type}-${conversation.id}-${convIndex}`}
+                    key={conversation.id}
                     conversation={conversation}
                     isSelected={selectedConversation?.id === conversation.id}
                     currentUser={currentUser}
