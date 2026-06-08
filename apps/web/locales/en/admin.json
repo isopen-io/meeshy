@@ -40,5 +40,29 @@
     "match": "match",
     "matches": "matches",
     "invalidRegex": "invalid regex"
+  },
+  "conversations": {
+    "editConfig": "Edit configuration",
+    "deleteConfig": "Delete configuration"
+  },
+  "overview": {
+    "noRecentActivity": "No recent activity"
+  },
+  "live": {
+    "selectConversation": "Select a conversation to monitor its state in real time"
+  },
+  "userDetail": {
+    "languagePreferences": "Language Preferences"
+  },
+  "rankingFilters": {
+    "title": "Ranking Filters",
+    "selectType": "Select type",
+    "selectCriterion": "Select criterion",
+    "selectPeriod": "Select period",
+    "filterCriteria": "Filter criteria...",
+    "noCriteriaFound": "No criteria found"
+  },
+  "scheduler": {
+    "cancelTrigger": "Cancel scheduled trigger"
   }
 }

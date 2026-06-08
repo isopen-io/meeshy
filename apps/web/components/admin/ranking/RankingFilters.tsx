@@ -1,8 +1,11 @@
+'use client';
+
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Star, Users, MessageSquare, FileText, LinkIcon, Calendar } from 'lucide-react';
 import { RANKING_CRITERIA } from './constants';
+import { useI18n } from '@/hooks/useI18n';
 
 interface RankingFiltersProps {
   entityType: 'users' | 'conversations' | 'messages' | 'links';
@@ -39,6 +42,7 @@ export function RankingFilters({
   onLimitChange,
   onCriteriaSearchChange
 }: RankingFiltersProps) {
+  const { t } = useI18n('admin');
   const criteriaList = React.useMemo(() => {
     const criteria = RANKING_CRITERIA[entityType];
     if (criteriaSearch) {
@@ -54,7 +58,7 @@ export function RankingFilters({
       <CardHeader className="bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20">
         <CardTitle className="flex items-center space-x-2">
           <Star className="h-5 w-5 text-yellow-600" />
-          <span>Filtres de classement</span>
+          <span>{t('rankingFilters.title')}</span>
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-6">
@@ -66,7 +70,7 @@ export function RankingFilters({
               </label>
               <Select value={entityType} onValueChange={onEntityTypeChange}>
                 <SelectTrigger className="border-yellow-300 focus:ring-yellow-500">
-                  <SelectValue placeholder="Sélectionnez le type" />
+                  <SelectValue placeholder={t('rankingFilters.selectType')} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="users">
@@ -103,13 +107,13 @@ export function RankingFilters({
               </label>
               <Select value={criterion} onValueChange={onCriterionChange}>
                 <SelectTrigger className="border-yellow-300 focus:ring-yellow-500">
-                  <SelectValue placeholder="Sélectionnez le critère" />
+                  <SelectValue placeholder={t('rankingFilters.selectCriterion')} />
                 </SelectTrigger>
                 <SelectContent className="max-h-[400px]">
                   <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 p-2 border-b border-gray-200 dark:border-gray-700">
                     <input
                       type="text"
-                      placeholder="Filtrer les critères..."
+                      placeholder={t('rankingFilters.filterCriteria')}
                       value={criteriaSearch}
                       onChange={(e) => onCriteriaSearchChange(e.target.value)}
                       className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 dark:bg-gray-800 dark:text-gray-100"
@@ -132,7 +136,7 @@ export function RankingFilters({
                       })
                     ) : (
                       <div className="p-4 text-sm text-center text-gray-500 dark:text-gray-400">
-                        Aucun critère trouvé
+                        {t('rankingFilters.noCriteriaFound')}
                       </div>
                     )}
                   </div>
@@ -148,7 +152,7 @@ export function RankingFilters({
               </label>
               <Select value={period} onValueChange={onPeriodChange}>
                 <SelectTrigger className="border-yellow-300 focus:ring-yellow-500">
-                  <SelectValue placeholder="Sélectionnez la période" />
+                  <SelectValue placeholder={t('rankingFilters.selectPeriod')} />
                 </SelectTrigger>
                 <SelectContent>
                   {PERIODS.map((p) => (

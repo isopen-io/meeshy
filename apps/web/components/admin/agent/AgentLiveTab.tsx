@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useI18n } from '@/hooks/useI18n';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
@@ -366,6 +367,7 @@ function MetricsCard({ data }: { data: LiveStateData }) {
 // ── Main Live Tab ─────────────────────────────────────────────────────────
 
 export function AgentLiveTab() {
+  const { t } = useI18n('admin');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [liveState, setLiveState] = useState<LiveStateData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -448,7 +450,7 @@ export function AgentLiveTab() {
             <CardContent className="text-center py-16">
               <Eye className="h-12 w-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
               <p className="text-sm text-gray-400">
-                Sélectionnez une conversation pour superviser son état en temps réel
+                {t('live.selectConversation')}
               </p>
             </CardContent>
           </Card>

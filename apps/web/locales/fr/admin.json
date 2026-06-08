@@ -40,5 +40,29 @@
     "match": "correspondance",
     "matches": "correspondances",
     "invalidRegex": "regex invalide"
+  },
+  "conversations": {
+    "editConfig": "Modifier la configuration",
+    "deleteConfig": "Supprimer la configuration"
+  },
+  "overview": {
+    "noRecentActivity": "Aucune activité récente"
+  },
+  "live": {
+    "selectConversation": "Sélectionnez une conversation pour superviser son état en temps réel"
+  },
+  "userDetail": {
+    "languagePreferences": "Préférences de Langue"
+  },
+  "rankingFilters": {
+    "title": "Filtres de classement",
+    "selectType": "Sélectionnez le type",
+    "selectCriterion": "Sélectionnez le critère",
+    "selectPeriod": "Sélectionnez la période",
+    "filterCriteria": "Filtrer les critères...",
+    "noCriteriaFound": "Aucun critère trouvé"
+  },
+  "scheduler": {
+    "cancelTrigger": "Annuler le trigger planifié"
   }
 }

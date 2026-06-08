@@ -18,6 +18,7 @@ import {
 } from '@/services/agent-admin.service';
 import { toast } from 'sonner';
 import dynamic from 'next/dynamic';
+import { useI18n } from '@/hooks/useI18n';
 
 const ScanHistoryChart = dynamic(() => import('./ScanHistoryChart'), {
   loading: () => <div className="h-80 animate-pulse bg-slate-200 dark:bg-slate-700 rounded" />,
@@ -61,6 +62,7 @@ function budgetGlow(ratio: number): string {
 export default memo(function TriggerSchedulingModal({
   conversationId, conversationTitle, open, onOpenChange,
 }: TriggerSchedulingModalProps) {
+  const { t } = useI18n('admin');
   const [schedule, setSchedule] = useState<AgentScheduleData | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [currentNode, setCurrentNode] = useState<string | null>(null);
@@ -295,7 +297,7 @@ export default memo(function TriggerSchedulingModal({
               <span>Trigger programme a <strong>{scheduledTimer.label}</strong></span>
               <span className="text-xs text-amber-500">({formatDuration(scheduledTimer.target - now)})</span>
             </div>
-            <Button variant="ghost" size="sm" onClick={handleCancelSchedule} className="h-6 w-6 p-0 text-amber-600 hover:text-amber-800">
+            <Button variant="ghost" size="sm" onClick={handleCancelSchedule} className="h-6 w-6 p-0 text-amber-600 hover:text-amber-800" aria-label={t('scheduler.cancelTrigger')}>
               <X className="h-3.5 w-3.5" />
             </Button>
           </div>

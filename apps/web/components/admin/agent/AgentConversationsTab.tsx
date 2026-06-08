@@ -15,6 +15,7 @@ import { UserDisplay } from './UserDisplay';
 import { useDebounce } from 'use-debounce';
 import { toast } from 'sonner';
 import dynamic from 'next/dynamic';
+import { useI18n } from '@/hooks/useI18n';
 
 const TriggerSchedulingModal = dynamic(() => import('./TriggerSchedulingModal'), {
   loading: () => null,
@@ -50,6 +51,7 @@ function formatTimeAgo(dateStr: string | null | undefined): string {
 }
 
 export function AgentConversationsTab() {
+  const { t } = useI18n('admin');
   const [configs, setConfigs] = useState<AgentConfigData[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -325,7 +327,7 @@ export function AgentConversationsTab() {
 
                       {/* Actions */}
                       <div className="flex gap-0.5 shrink-0">
-                        <Button variant="ghost" size="sm" onClick={() => handleEdit(config)} className="h-7 w-7 p-0">
+                        <Button variant="ghost" size="sm" onClick={() => handleEdit(config)} className="h-7 w-7 p-0" aria-label={t('conversations.editConfig')}>
                           <Settings className="h-3.5 w-3.5" />
                         </Button>
                         <Button
@@ -333,6 +335,7 @@ export function AgentConversationsTab() {
                           size="sm"
                           onClick={() => handleDelete(config.conversationId)}
                           className="text-red-500 hover:text-red-700 h-7 w-7 p-0"
+                          aria-label={t('conversations.deleteConfig')}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
