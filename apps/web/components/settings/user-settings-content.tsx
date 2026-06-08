@@ -31,7 +31,7 @@ export function UserSettingsContent({ user, localSettings, onSettingUpdate, chil
         <TabsList className="grid w-full grid-cols-1">
           <TabsTrigger value="translation" className="gap-2">
             <Globe className="h-4 w-4" />
-            Traduction
+            {t('tabs.translation')}
           </TabsTrigger>
         </TabsList>
 
@@ -39,15 +39,15 @@ export function UserSettingsContent({ user, localSettings, onSettingUpdate, chil
           {/* Configuration des langues */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Configuration des langues</CardTitle>
+              <CardTitle className="text-lg">{t('translation.mainLanguages.configurationTitle')}</CardTitle>
               <CardDescription>
-                Définissez vos langues système et régionale
+                {t('translation.mainLanguages.configurationDescription')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="systemLanguage">Langue système</Label>
+                  <Label htmlFor="systemLanguage">{t('translation.mainLanguages.systemLanguage')}</Label>
                   <LanguageSelector
                     value={localSettings.systemLanguage || ''}
                     onValueChange={(value) => onSettingUpdate('systemLanguage', value)}
@@ -57,7 +57,7 @@ export function UserSettingsContent({ user, localSettings, onSettingUpdate, chil
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="regionalLanguage">Langue régionale</Label>
+                  <Label htmlFor="regionalLanguage">{t('translation.mainLanguages.regionalLanguage')}</Label>
                   <LanguageSelector
                     value={localSettings.regionalLanguage || ''}
                     onValueChange={(value) => onSettingUpdate('regionalLanguage', value)}
@@ -68,7 +68,7 @@ export function UserSettingsContent({ user, localSettings, onSettingUpdate, chil
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="customDestinationLanguage">Langue de destination personnalisée</Label>
+                <Label htmlFor="customDestinationLanguage">{t('translation.mainLanguages.customDestinationLanguage')}</Label>
                 <LanguageSelector
                   value={localSettings.customDestinationLanguage || ''}
                   onValueChange={(value) => onSettingUpdate('customDestinationLanguage', value)}
@@ -81,19 +81,19 @@ export function UserSettingsContent({ user, localSettings, onSettingUpdate, chil
           {/* Paramètres de traduction */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Paramètres de traduction</CardTitle>
+              <CardTitle className="text-lg">{t('translation.autoTranslation.settingsTitle')}</CardTitle>
               <CardDescription>
-                Configurez le comportement de la traduction automatique
+                {t('translation.autoTranslation.description')}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <Label htmlFor="autoTranslate" className="text-base font-medium">
-                    Traduction automatique
+                    {t('translation.autoTranslation.enabled')}
                   </Label>
                   <p className="text-sm text-muted-foreground">
-                    Activer la traduction automatique des messages reçus
+                    {t('translation.autoTranslation.enabledDescription')}
                   </p>
                 </div>
                 <Switch

@@ -169,7 +169,7 @@ final class FeedViewModelTests: XCTestCase {
         let (sut, api, _, _) = makeSUT()
         api.errorToThrow = APIError.networkError(URLError(.notConnectedToInternet))
 
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         XCTAssertTrue(sut.posts.isEmpty)
         XCTAssertTrue(sut.hasLoaded)

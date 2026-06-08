@@ -54,7 +54,7 @@ struct SectionHeaderView: View {
                 // Section name
                 Text(section.name)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(isDropTarget ? Color(hex: section.color) : (isDark ? Color(hex: "EEF2FF") : Color(hex: "1E1B4B")))
+                    .foregroundColor(isDropTarget ? Color(hex: section.color) : (isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950))
 
                 // Count badge
                 Text("\(count)")
@@ -137,7 +137,7 @@ struct ConversationPreviewView: View {
                     HStack(spacing: 6) {
                         Text(conversation.name)
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(isDark ? Color(hex: "EEF2FF") : Color(hex: "1E1B4B"))
+                            .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                             .lineLimit(1)
 
                         if conversation.userState.isPinned {

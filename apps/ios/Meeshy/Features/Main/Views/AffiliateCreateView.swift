@@ -85,7 +85,7 @@ struct AffiliateCreateView: View {
             if let errorMessage {
                 Text(errorMessage)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Color(hex: "EF4444"))
+                    .foregroundColor(MeeshyColors.error)
             }
         }
     }
