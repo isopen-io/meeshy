@@ -195,7 +195,7 @@ export function AgentLlmTab() {
 
         {/* Parameters */}
         <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
-          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Paramètres de génération</h3>
+          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">{t('llm.generationSettings')}</h3>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
@@ -231,7 +231,7 @@ export function AgentLlmTab() {
 
         {/* Budget */}
         <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
-          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Gestion du Budget</h3>
+          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">{t('llm.budgetManagement')}</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <div className="flex items-center">

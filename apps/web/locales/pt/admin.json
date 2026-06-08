@@ -137,5 +137,13 @@
   "translationMonitor": {
     "loadingMetrics": "Carregando métricas...",
     "languageBreakdown": "Distribuição por idioma"
+  },
+  "llm": {
+    "generationSettings": "Configurações de geração",
+    "budgetManagement": "Gestão de orçamento"
+  },
+  "globalConfig": {
+    "defaultProvider": "Provedor padrão",
+    "globalScheduler": "Agendador global"
   }
 }
