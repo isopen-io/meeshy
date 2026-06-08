@@ -74,12 +74,12 @@ export function UserLanguageSection({
       });
 
       if (response.data?.success) {
-        toast.success('Préférences de langue mises à jour');
+        toast.success(t('userDetail.languagePreferencesSaved'));
         setEditing(false);
         onUpdate();
       }
     } catch (error: unknown) {
-      toast.error(error.message || 'Erreur lors de la mise à jour');
+      toast.error((error as Error).message || t('userDetail.languagePreferencesError'));
     } finally {
       setSaving(false);
     }
@@ -95,7 +95,7 @@ export function UserLanguageSection({
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center space-x-2 dark:text-gray-100">
             <Languages className="h-5 w-5" />
-            <span>{t('admin.userDetail.languagePreferences')}</span>
+            <span>{t('userDetail.languagePreferences')}</span>
           </CardTitle>
           {!editing ? (
             <Button

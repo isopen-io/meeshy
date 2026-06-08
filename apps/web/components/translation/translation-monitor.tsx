@@ -155,7 +155,7 @@ export function TranslationMonitor({
         {isLoading && !metrics && (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-            <span className="ml-2 text-gray-600">{t('admin.translationMonitor.loadingMetrics')}</span>
+            <span className="ml-2 text-gray-600">{t('translationMonitor.loadingMetrics')}</span>
           </div>
         )}
 
@@ -269,7 +269,7 @@ export function TranslationMonitor({
 
                 {/* Répartition par langue */}
                 <div>
-                  <h4 className="font-medium text-gray-900 mb-3">Répartition par langue</h4>
+                  <h4 className="font-medium text-gray-900 mb-3">{t('translationMonitor.languageBreakdown')}</h4>
                   <div className="space-y-3">
                     {Object.entries(metrics.languageBreakdown)
                       .sort(([, a], [, b]) => b.count - a.count)

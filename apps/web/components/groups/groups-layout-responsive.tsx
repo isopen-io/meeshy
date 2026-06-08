@@ -394,13 +394,13 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
               {isLoading ? (
                 <div className="p-4 text-center">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                  <p className="mt-2 text-sm text-muted-foreground">Chargement...</p>
+                  <p className="mt-2 text-sm text-muted-foreground">{tGroups('list.loadingInProgress')}</p>
                 </div>
               ) : groups.length === 0 ? (
                 <div className="p-4 text-center text-muted-foreground">
                   <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>{tGroups('groups.noGroups')}</p>
-                  <p className="text-xs">{tGroups('groups.noGroupsDescription')}</p>
+                  <p>{tGroups('noGroups')}</p>
+                  <p className="text-xs">{tGroups('noGroupsDescription')}</p>
                 </div>
               ) : (
                 <div className="p-2">
@@ -573,7 +573,7 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
                       {selectedGroup._count?.members || 0} membres
                     </div>
                     <div>
-                      {tGroups('groups.details.createdOn') + ' '}{new Date(selectedGroup.createdAt).toLocaleDateString()}
+                      {tGroups('details.createdOn') + ' '}{new Date(selectedGroup.createdAt).toLocaleDateString()}
                     </div>
                   </div>
                 </CardContent>
@@ -587,9 +587,9 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
               <Users className="h-16 w-16 mx-auto mb-4 text-muted-foreground/50" />
-              <h3 className="text-lg font-medium mb-2">{tGroups('groups.list.selectCommunity')}</h3>
+              <h3 className="text-lg font-medium mb-2">{tGroups('list.selectCommunity')}</h3>
               <p className="text-muted-foreground">
-                {tGroups('groups.list.selectCommunityDescription')}
+                {tGroups('list.selectCommunityDescription')}
               </p>
             </div>
           </div>

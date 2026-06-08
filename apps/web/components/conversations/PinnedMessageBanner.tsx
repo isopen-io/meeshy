@@ -7,6 +7,7 @@ import { Pin, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiService } from '@/services/api.service';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+import { useI18n } from '@/hooks/useI18n';
 
 interface PinnedMessage {
   id: string;
@@ -30,6 +31,7 @@ interface PinnedMessageBannerProps {
 }
 
 export function PinnedMessageBanner({ conversationId, onNavigateToMessage }: PinnedMessageBannerProps) {
+  const { t } = useI18n('conversations');
   const [dismissed, setDismissed] = useState(false);
   const queryClient = useQueryClient();
 
@@ -107,7 +109,7 @@ export function PinnedMessageBanner({ conversationId, onNavigateToMessage }: Pin
           <button
             type="button"
             onClick={() => setDismissed(true)}
-            aria-label="Fermer le message épinglé"
+            aria-label={t('pinnedBanner.close')}
             className={cn(
               'flex-shrink-0 p-0.5 rounded',
               'text-amber-600 dark:text-amber-400',
