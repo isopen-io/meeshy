@@ -472,13 +472,20 @@ final class ConversationSocketHandler {
             .sink { [weak self] event in
                 guard let self, let persistence = self.persistence else { return }
                 // Write through persistence; store observation surfaces the reaction.
+                // Pass the server's authoritative `aggregation.count` as a cap so an
+                // echo of the user's OWN reaction (keyed by the resolved
+                // Participant.id) can't pile a second row on top of the optimistic
+                // row (keyed by the currentUserId sentinel) — which rendered a
+                // single tap as "2". Other users' reactions still land because the
+                // cap rises with each genuine new reactor.
                 Task {
                     try? await persistence.appendReaction(
                         localId: event.messageId,
                         reactionId: UUID().uuidString,
                         messageId: event.messageId,
                         participantId: event.participantId,
-                        emoji: event.emoji
+                        emoji: event.emoji,
+                        maxCount: event.aggregation?.count
                     )
                 }
             }

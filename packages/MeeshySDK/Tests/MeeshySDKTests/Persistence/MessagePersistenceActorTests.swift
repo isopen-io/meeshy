@@ -1205,4 +1205,86 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertEqual(remaining, ["ex_recent", "pend_old"],
             "recent exhausted (still retriable) + old non-terminal rows must survive")
     }
+
+    // MARK: - appendReaction authoritative cap (own-reaction echo double-count)
+
+    private func reactions(in conv: String) throws -> [MeeshyReaction] {
+        let rows = try actor.messages(for: conv, limit: 10)
+        return (rows.first?.reactionsJson)
+            .flatMap { try? JSONDecoder().decode([MeeshyReaction].self, from: $0) } ?? []
+    }
+
+    /// The exact bug: a fresh tap writes the optimistic row keyed by the
+    /// `currentUserId` sentinel, then the server echoes the SAME reaction keyed
+    /// by the resolved `Participant.id`. Without the cap the two distinct keys
+    /// both persist → the pill renders "2". With `maxCount: 1` the echo is
+    /// dropped, leaving exactly one row — still keyed by `currentUserId`, so the
+    /// "I reacted" highlight stays correct.
+    func test_appendReaction_cap_dropsOwnEcho_noDoubleCount() async throws {
+        let conv = "c_capdup"
+        let msgId = "m_capdup"
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv)])
+
+        try await actor.appendReaction(localId: msgId, reactionId: "r_opt",
+            messageId: msgId, participantId: "me", emoji: "👍")
+        try await actor.appendReaction(localId: msgId, reactionId: "r_echo",
+            messageId: msgId, participantId: "participant_42", emoji: "👍",
+            maxCount: 1)
+
+        let rows = try reactions(in: conv)
+        XCTAssertEqual(rows.count, 1, "the own-reaction echo must not double-count")
+        XCTAssertEqual(rows.first?.participantId, "me",
+            "the surviving row keeps the currentUserId sentinel so ownership stays correct")
+    }
+
+    /// The cap rises with each genuine new reactor: another user's reaction
+    /// (count now 2 server-side) must still land.
+    func test_appendReaction_cap_belowAuthoritative_appendsOtherUser() async throws {
+        let conv = "c_capother"
+        let msgId = "m_capother"
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv)])
+
+        try await actor.appendReaction(localId: msgId, reactionId: "r_me",
+            messageId: msgId, participantId: "me", emoji: "👍")
+        try await actor.appendReaction(localId: msgId, reactionId: "r_other",
+            messageId: msgId, participantId: "participant_99", emoji: "👍",
+            maxCount: 2)
+
+        let rows = try reactions(in: conv)
+        XCTAssertEqual(rows.count, 2, "a second distinct reactor is below the cap and must append")
+        XCTAssertEqual(Set(rows.map(\.participantId)), ["me", "participant_99"])
+    }
+
+    /// Regression guard: the default (`maxCount: nil`) keeps the legacy unbounded
+    /// behaviour for the optimistic / rollback write paths.
+    func test_appendReaction_noCap_appendsUnbounded() async throws {
+        let conv = "c_capnil"
+        let msgId = "m_capnil"
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv)])
+
+        try await actor.appendReaction(localId: msgId, reactionId: "r_a",
+            messageId: msgId, participantId: "pa", emoji: "👍")
+        try await actor.appendReaction(localId: msgId, reactionId: "r_b",
+            messageId: msgId, participantId: "pb", emoji: "👍")
+
+        XCTAssertEqual(try reactions(in: conv).count, 2,
+            "without a cap two distinct participants both persist (legacy behaviour)")
+    }
+
+    /// The cap is scoped per emoji: a cap on 👍 must not block a 🎉 echo.
+    func test_appendReaction_cap_isPerEmoji() async throws {
+        let conv = "c_capemoji"
+        let msgId = "m_capemoji"
+        try await actor.upsertFromAPIMessages([makeAPIMessage(id: msgId, conversationId: conv)])
+
+        try await actor.appendReaction(localId: msgId, reactionId: "r_thumb",
+            messageId: msgId, participantId: "me", emoji: "👍")
+        try await actor.appendReaction(localId: msgId, reactionId: "r_party",
+            messageId: msgId, participantId: "participant_7", emoji: "🎉",
+            maxCount: 1)
+
+        let rows = try reactions(in: conv)
+        XCTAssertEqual(Set(rows.map(\.emoji)), ["👍", "🎉"],
+            "a 👍 cap of 1 must not suppress a distinct 🎉 reaction")
+    }
 }
