@@ -292,6 +292,9 @@ model User {
 
   // Unified participant model (replaces conversations + anonymousParticipants)
   participations Participant[]
+
+  @@index([systemLanguage]) // Prisme Linguistique: language extraction queries
+  @@index([deviceLocale])   // Prisme Linguistique: 4th-priority locale resolution
 }
 
 /// Conversation entre utilisateurs (direct, group, public, global)
