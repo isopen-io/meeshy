@@ -83,12 +83,6 @@ export function useI18n(namespace: string = 'common', options: UseI18nOptions = 
         translations = translations[ns];
       }
       
-      // Mettre en cache (seulement en production, avec garde de taille)
-      if (useCache) {
-        if (translationsCache.size >= TRANSLATIONS_CACHE_MAX) {
-          translationsCache.delete(translationsCache.keys().next().value!);
-        }
-        translationsCache.set(cacheKey, translations);
       // Mettre en cache (seulement en production) — LRU bounded
       if (useCache) {
         setCachedTranslation(cacheKey, translations);
