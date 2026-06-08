@@ -101,7 +101,17 @@ struct SyncPill: View {
         .adaptiveOnChange(of: entries.count) { _, newCount in
             rotator.setItemCount(newCount)
         }
-        .onReceive(dotTimer) { _ in dotPhase += 1 }
+        .onReceive(dotTimer) { _ in
+            // Le pulse/points n'a de sens que si le pill affiche une entrée.
+            // `entries` est vide la majorité du temps (connecté + synchronisé →
+            // branche EmptyView). Sans ce garde, `dotPhase += 1` ré-évalue le
+            // body de SyncPill 2x/s en permanence pour ne rien afficher — un
+            // réveil render inutile sur l'écran principal (toujours monté via
+            // ConnectionBanner). La rotation, elle, est déjà coupée par
+            // SyncPillRotator quand itemCount == 0 ; on aligne le pulse dessus.
+            guard !entries.isEmpty else { return }
+            dotPhase += 1
+        }
     }
 
     @ViewBuilder
