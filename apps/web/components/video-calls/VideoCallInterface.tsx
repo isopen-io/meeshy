@@ -5,7 +5,7 @@
 
 'use client';
 
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useEffect, useCallback, useMemo, useState } from 'react';
 import { useCallStore } from '@/stores/call-store';
 import { useAuth } from '@/hooks/use-auth';
 import { useWebRTCP2P } from '@/hooks/use-webrtc-p2p';
@@ -13,10 +13,9 @@ import { useAudioEffects } from '@/hooks/use-audio-effects';
 import { useCallQuality } from '@/hooks/use-call-quality';
 import { useActivePeerConnection } from '@/hooks/use-active-peer-connection';
 import {
-  createDegradationState,
-  reduceDegradation,
-  type DegradationState,
-} from '@/lib/calls/adaptive-degradation';
+  useAdaptiveDegradation,
+  type AdaptiveDegradationActions,
+} from '@/hooks/use-adaptive-degradation';
 import { VideoStream } from './VideoStream';
 import { CallControls } from './CallControls';
 import { CallStatusIndicator } from './CallStatusIndicator';
@@ -53,11 +52,6 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   const [callDuration, setCallDuration] = useState(0);
   const [showAudioEffects, setShowAudioEffects] = useState(false);
   const [showStats, setShowStats] = useState(false);
-  // Survival mode: outbound video auto-dropped because the link could not
-  // sustain even the lowest tier. Distinct from the user's camera intent
-  // (controls.videoEnabled) — the user still WANTS video, the network can't.
-  const [videoSuspended, setVideoSuspended] = useState(false);
-  const degradationRef = React.useRef<DegradationState>(createDegradationState());
 
   // New state for fullscreen mode and disconnected participants
   const [fullscreenParticipantId, setFullscreenParticipantId] = useState<string | null>(null);
@@ -122,59 +116,31 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   }, [callId]);
 
   // Adaptive compression + graceful-degradation control loop. Feeds observed
-  // connection quality into a hysteresis state machine that:
-  //   1. sheds the encoder down the bitrate ladder under congestion
-  //      (degradationPreference 'maintain-framerate' — resolution before motion),
-  //   2. DROPS outbound video to audio-only after sustained 'poor' quality so
-  //      the call survives a link that can't carry even minimal video, and
-  //   3. brings video back once the link has clearly recovered.
-  // The user's camera intent (controls.videoEnabled) is authoritative — the
-  // controller never re-enables video the user turned off.
-  useEffect(() => {
-    const level = qualityStats?.level;
-    if (!level) return;
+  // connection quality into a hysteresis state machine that (1) sheds the
+  // encoder down the bitrate ladder under congestion, (2) DROPS outbound video
+  // to audio-only after sustained 'poor' quality so the call survives a link
+  // that can't carry even minimal video, and (3) brings video back once the
+  // link has clearly recovered. The user's camera intent (controls.videoEnabled)
+  // is authoritative — the controller never re-enables video the user turned off.
+  const degradationActions = useMemo<AdaptiveDegradationActions>(() => ({
+    applyTier: (tier) => { applyQualityTier(tier).catch(() => { /* best effort */ }); },
+    suspend: async () => {
+      await disableVideo();
+      emitVideoToggle(false);
+      toast.warning(t('calls.toasts.videoSuspendedPoorConnection'));
+    },
+    resume: async () => {
+      await enableVideo();
+      emitVideoToggle(true);
+      toast.success(t('calls.toasts.videoResumed'));
+    },
+  }), [applyQualityTier, disableVideo, enableVideo, emitVideoToggle, t]);
 
-    if (!controls.videoEnabled) {
-      // User turned the camera off: forget any survival state and clear the
-      // suspended flag so we never fight the user's intent.
-      degradationRef.current = createDegradationState();
-      if (videoSuspended) setVideoSuspended(false);
-      return;
-    }
-
-    const { state, action } = reduceDegradation(degradationRef.current, {
-      level,
-      userWantsVideo: controls.videoEnabled,
-    });
-    degradationRef.current = state;
-
-    switch (action.type) {
-      case 'set-tier':
-        applyQualityTier(action.tier).catch(() => { /* best effort */ });
-        break;
-      case 'suspend-video':
-        setVideoSuspended(true);
-        disableVideo()
-          .then(() => {
-            emitVideoToggle(false);
-            toast.warning(t('calls.toasts.videoSuspendedPoorConnection'));
-          })
-          .catch(() => { /* best effort; stays in survival, retries next tick */ });
-        break;
-      case 'resume-video':
-        enableVideo()
-          .then(() => {
-            setVideoSuspended(false);
-            emitVideoToggle(true);
-            toast.success(t('calls.toasts.videoResumed'));
-          })
-          .catch(() => {
-            // Re-acquire failed: revert to survival so a later good streak retries.
-            degradationRef.current = { ...degradationRef.current, sending: false, goodStreak: 0 };
-          });
-        break;
-    }
-  }, [qualityStats?.level, controls.videoEnabled, videoSuspended, applyQualityTier, disableVideo, enableVideo, emitVideoToggle, t]);
+  const { videoSuspended } = useAdaptiveDegradation({
+    qualityStats,
+    userWantsVideo: controls.videoEnabled,
+    actions: degradationActions,
+  });
 
   // Initialize local stream on mount
   useEffect(() => {
