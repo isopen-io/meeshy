@@ -173,4 +173,30 @@ final class MessageDayLabelTests: XCTestCase {
             "Wednesday 13 May"
         )
     }
+
+    // MARK: - Mémoïsation des formatters (le cache ne doit pas fuir entre locales)
+
+    func test_label_interleavedLocales_eachKeepsOwnFormatter() {
+        // J-3 → branche weekday. Le cache de formatters est keyé par locale ;
+        // un appel en_US ne doit jamais renvoyer le formatter fr_FR (ni l'inverse).
+        let now = date(2026, 5, 20, 14, 30)
+        let target = date(2026, 5, 17, 10, 0)
+        let fr = MessageDayLabel.label(for: target, now: now, calendar: makeCalendar(), locale: Locale(identifier: "fr_FR"))
+        let en = MessageDayLabel.label(for: target, now: now, calendar: makeCalendar(), locale: Locale(identifier: "en_US"))
+        let frAgain = MessageDayLabel.label(for: target, now: now, calendar: makeCalendar(), locale: Locale(identifier: "fr_FR"))
+        XCTAssertEqual(fr, "Dimanche")
+        XCTAssertEqual(en, "Sunday")
+        XCTAssertEqual(frAgain, "Dimanche")
+    }
+
+    func test_label_repeatedCalls_stableOutput_fullDate() {
+        // J-7 → branche fullDate. Le formatter mémoïsé doit produire une sortie
+        // identique à chaque appel (lecture seule, aucune mutation post-création).
+        let now = date(2026, 5, 20, 14, 30)
+        let target = date(2026, 5, 13, 10, 0)
+        let first = MessageDayLabel.label(for: target, now: now, calendar: makeCalendar(), locale: locale)
+        let second = MessageDayLabel.label(for: target, now: now, calendar: makeCalendar(), locale: locale)
+        XCTAssertEqual(first, "Mercredi 13 mai")
+        XCTAssertEqual(second, first)
+    }
 }
