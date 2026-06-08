@@ -217,7 +217,9 @@ struct ConversationView: View {
     @EnvironmentObject var conversationListViewModel: ConversationListViewModel
     @StateObject var viewModel: ConversationViewModel
     /// Observes ONLY typing state — avoids full-view re-render on every keystroke.
-    @ObservedObject private var typingObserver: ConversationStateStore
+    /// `internal` (not `private`): accessed by the `ConversationView+ScrollIndicators`
+    /// extension, which lives in a separate file (private is file-scoped).
+    @ObservedObject var typingObserver: ConversationStateStore
     @State var messageText = ""
     @StateObject var audioRecorder = AudioRecorderManager()
     @StateObject var scrollButtonAudioPlayer = AudioPlayerManager()
