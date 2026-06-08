@@ -932,10 +932,11 @@ export class MessageHandler {
         select: { id: true, userId: true, joinedAt: true }
       });
 
-      // Batch: 3 total DB queries instead of 3N sequential queries
+      // Batch: 1 cursor query + N parallel counts instead of 3N sequential queries
       const unreadCounts = await this.readStatusService.getUnreadCountsForParticipants(
-        participants.map(p => p.id),
-        conversationId
+        participants,
+        conversationId,
+        senderId
       );
 
       await Promise.all(participants.map(async (participant) => {

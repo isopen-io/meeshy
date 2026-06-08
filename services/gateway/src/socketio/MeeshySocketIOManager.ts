@@ -1558,9 +1558,6 @@ export class MeeshySocketIOManager {
           const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
           const readStatusService = new MessageReadStatusService(this.prisma);
 
-          const participantIds = participants.map(p => p.id);
-          const unreadCountMap = await readStatusService.getUnreadCountsForParticipants(participantIds, normalizedId);
-
           const connectedUserIds = new Set(this.getConnectedUsers());
 
           // Batch all unread-count queries in parallel instead of sequential N+1
