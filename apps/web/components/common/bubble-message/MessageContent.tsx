@@ -2,7 +2,7 @@
 
 import { memo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Check } from 'lucide-react';
+import { Check, CornerUpRight } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { MarkdownMessage } from '@/components/messages/MarkdownMessage';
@@ -76,6 +76,7 @@ interface MessageContentProps {
     id: string;
     content: string;
     conversationId: string;
+    forwardedFromId?: string;
     replyTo?: {
       id: string;
       content: string;
@@ -127,6 +128,17 @@ export const MessageContent = memo(function MessageContent({
         )}
       >
         <CardContent className="px-3.5 py-2.5 w-full break-words overflow-hidden overflow-wrap-anywhere">
+          {/* Forwarded indicator */}
+          {message.forwardedFromId && (
+            <div className={cn(
+              "flex items-center gap-1 mb-1.5 text-xs font-medium",
+              isOwnMessage ? "text-indigo-200" : "text-gray-400 dark:text-gray-500"
+            )}>
+              <CornerUpRight className="h-3 w-3 flex-shrink-0" />
+              <span>{t('bubble.forwarded') || 'Transféré'}</span>
+            </div>
+          )}
+
           {/* Message de réponse (replyTo) */}
           {message.replyTo && (
             <MessageReplyPreview
