@@ -176,10 +176,29 @@ export class StatusService {
     if (this.disconnectedUsers.has(userId)) return;
 
     const now = Date.now();
-    const lastUpdate = this.activityCache.get(userId) || 0;
 
-    // Throttling: 1 update max toutes les 5 secondes
-    if (now - lastUpdate < this.ACTIVITY_THROTTLE_MS) {
+    // Distributed throttle via Redis NX (works across gateway instances)
+    // Falls back to in-memory cache when Redis is unavailable
+    const throttleKey = `status:throttle:${userId}`;
+    let throttled = false;
+    try {
+      const redis = this.cache.getNativeClient?.();
+      if (redis) {
+        // SET NX EX 5 — only succeeds once per 5s window across all instances
+        const set = await redis.set(throttleKey, '1', 'EX', 5, 'NX');
+        throttled = set === null; // null = key existed → throttle
+      } else {
+        // Fallback: in-memory throttle
+        const lastUpdate = this.activityCache.get(userId) || 0;
+        throttled = now - lastUpdate < this.ACTIVITY_THROTTLE_MS;
+      }
+    } catch {
+      // Redis error: fall through to in-memory
+      const lastUpdate = this.activityCache.get(userId) || 0;
+      throttled = now - lastUpdate < this.ACTIVITY_THROTTLE_MS;
+    }
+
+    if (throttled) {
       this.metrics.throttledRequests++;
       return;
     }

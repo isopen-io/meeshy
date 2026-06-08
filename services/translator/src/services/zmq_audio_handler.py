@@ -377,43 +377,32 @@ class AudioHandler:
             translated_audios_metadata = []
 
             for t in result.translations.values():
-                # Décoder l'audio base64 → bytes pour envoi binaire
                 audio_bytes = None
-                if t.audio_data_base64:
+                # D2: prefer raw bytes (no base64 round-trip), fall back to base64 or file
+                if t.audio_bytes:
+                    audio_bytes = t.audio_bytes
+                elif t.audio_data_base64:
                     try:
                         audio_bytes = base64.b64decode(t.audio_data_base64)
-                        binary_frames.append(audio_bytes)
-
-                        # Enregistrer l'indice du frame binaire
-                        audio_key = f"audio_{t.language}"
-                        binary_frames_info[audio_key] = {
-                            'index': frame_index,
-                            'size': len(audio_bytes),
-                            'mimeType': t.audio_mime_type or 'audio/mp3'
-                        }
-                        frame_index += 1
-
-                        logger.debug(f"[MULTIPART] Frame {frame_index-1}: audio {t.language} ({len(audio_bytes)} bytes)")
                     except Exception as e:
                         logger.warning(f"[MULTIPART] Erreur décodage audio {t.language}: {e}")
                 elif t.audio_path and os.path.exists(t.audio_path):
-                    # Si pas de base64, charger depuis le fichier
                     try:
                         with open(t.audio_path, 'rb') as f:
                             audio_bytes = f.read()
-                        binary_frames.append(audio_bytes)
-
-                        audio_key = f"audio_{t.language}"
-                        binary_frames_info[audio_key] = {
-                            'index': frame_index,
-                            'size': len(audio_bytes),
-                            'mimeType': t.audio_mime_type or 'audio/mp3'
-                        }
-                        frame_index += 1
-
-                        logger.debug(f"[MULTIPART] Frame {frame_index-1}: audio {t.language} depuis fichier ({len(audio_bytes)} bytes)")
                     except Exception as e:
                         logger.warning(f"[MULTIPART] Erreur lecture fichier audio {t.language}: {e}")
+
+                if audio_bytes:
+                    binary_frames.append(audio_bytes)
+                    audio_key = f"audio_{t.language}"
+                    binary_frames_info[audio_key] = {
+                        'index': frame_index,
+                        'size': len(audio_bytes),
+                        'mimeType': t.audio_mime_type or 'audio/mp3'
+                    }
+                    frame_index += 1
+                    logger.debug(f"[MULTIPART] Frame {frame_index-1}: audio {t.language} ({len(audio_bytes)} bytes)")
 
                 # Metadata sans base64 (contient juste le mapping vers le frame)
                 translated_audio_dict = {
@@ -685,15 +674,16 @@ class AudioHandler:
 
             translation = translation_data['translation']
 
-            # Décoder l'audio base64 → bytes pour envoi binaire (multipart)
+            # D2: prefer raw bytes (no base64 round-trip), fall back to base64 or file
             audio_bytes = None
-            if translation.audio_data_base64:
+            if getattr(translation, 'audio_bytes', None):
+                audio_bytes = translation.audio_bytes
+            elif translation.audio_data_base64:
                 try:
                     audio_bytes = base64.b64decode(translation.audio_data_base64)
                 except Exception as e:
                     logger.warning(f"[MULTIPART] Erreur décodage audio {translation.language}: {e}")
             elif translation.audio_path and os.path.exists(translation.audio_path):
-                # Si pas de base64, charger depuis le fichier
                 try:
                     with open(translation.audio_path, 'rb') as f:
                         audio_bytes = f.read()

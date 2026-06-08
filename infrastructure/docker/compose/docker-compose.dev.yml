@@ -154,6 +154,13 @@ services:
     container_name: meeshy-dev-translator
     restart: unless-stopped
     profiles: ["full"]
+    deploy:
+      resources:
+        limits:
+          memory: ${TRANSLATOR_MEM_LIMIT:-8g}
+          cpus: ${TRANSLATOR_CPU_LIMIT:-4}
+        reservations:
+          memory: ${TRANSLATOR_MEM_RESERVE:-4g}
     environment:
       <<: *common-env
       DATABASE_TYPE: MONGODB
@@ -189,10 +196,10 @@ services:
       - meeshy-dev-network
     healthcheck:
       test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+      interval: 10s
+      timeout: 5s
+      retries: 2
+      start_period: 120s
 
   # ===========================================================================
   # GATEWAY - API Service (profile: full)

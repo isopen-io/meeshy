@@ -3,10 +3,10 @@ import Foundation
 // MARK: - Protocol
 
 public protocol MessageServiceProviding: Sendable {
-    func list(conversationId: String, offset: Int, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse
-    func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse
-    func listAfter(conversationId: String, after: Date, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse
-    func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse
+    func list(conversationId: String, offset: Int, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse
+    func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse
+    func listAfter(conversationId: String, after: Date, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse
+    func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse
     func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData
     func edit(messageId: String, content: String) async throws -> APIMessage
     func delete(conversationId: String, messageId: String) async throws
@@ -44,28 +44,35 @@ public final class MessageService: MessageServiceProviding, @unchecked Sendable 
     ///   warm-cache refreshes (GRDB already holds them, the socket pushes
     ///   future updates). Defaults to `true` so first-open / cold-start
     ///   call sites keep their existing behaviour.
-    public func list(conversationId: String, offset: Int = 0, limit: Int = 30, includeReplies: Bool = true, includeTranslations: Bool = true) async throws -> MessagesAPIResponse {
-        try await api.request(
-            endpoint: "/conversations/\(conversationId)/messages",
-            queryItems: [
-                URLQueryItem(name: "limit", value: "\(limit)"),
-                URLQueryItem(name: "offset", value: "\(offset)"),
-                URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
-                URLQueryItem(name: "include_translations", value: "\(includeTranslations)"),
-            ]
-        )
+    /// - Parameter languages: E3 — Prisme filter. When provided, the gateway
+    ///   returns only translations for those language codes, reducing payload
+    ///   for clients that only display 1–4 languages. Pass `nil` to get all
+    ///   translations (legacy behaviour). Typically sourced from
+    ///   `MeeshyUser.preferredContentLanguages`.
+    public func list(conversationId: String, offset: Int = 0, limit: Int = 30, includeReplies: Bool = true, includeTranslations: Bool = true, languages: [String]? = nil) async throws -> MessagesAPIResponse {
+        var items: [URLQueryItem] = [
+            URLQueryItem(name: "limit", value: "\(limit)"),
+            URLQueryItem(name: "offset", value: "\(offset)"),
+            URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
+            URLQueryItem(name: "include_translations", value: "\(includeTranslations)"),
+        ]
+        if let langs = languages, !langs.isEmpty {
+            items.append(URLQueryItem(name: "languages", value: langs.joined(separator: ",")))
+        }
+        return try await api.request(endpoint: "/conversations/\(conversationId)/messages", queryItems: items)
     }
 
-    public func listBefore(conversationId: String, before: String, limit: Int = 30, includeReplies: Bool = true, includeTranslations: Bool = true) async throws -> MessagesAPIResponse {
-        try await api.request(
-            endpoint: "/conversations/\(conversationId)/messages",
-            queryItems: [
-                URLQueryItem(name: "before", value: before),
-                URLQueryItem(name: "limit", value: "\(limit)"),
-                URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
-                URLQueryItem(name: "include_translations", value: "\(includeTranslations)"),
-            ]
-        )
+    public func listBefore(conversationId: String, before: String, limit: Int = 30, includeReplies: Bool = true, includeTranslations: Bool = true, languages: [String]? = nil) async throws -> MessagesAPIResponse {
+        var items: [URLQueryItem] = [
+            URLQueryItem(name: "before", value: before),
+            URLQueryItem(name: "limit", value: "\(limit)"),
+            URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
+            URLQueryItem(name: "include_translations", value: "\(includeTranslations)"),
+        ]
+        if let langs = languages, !langs.isEmpty {
+            items.append(URLQueryItem(name: "languages", value: langs.joined(separator: ",")))
+        }
+        return try await api.request(endpoint: "/conversations/\(conversationId)/messages", queryItems: items)
     }
 
     /// Forward watermark backfill (local-first gap recovery, T9). Returns
@@ -76,28 +83,30 @@ public final class MessageService: MessageServiceProviding, @unchecked Sendable 
     /// missed-message gap of any size contiguously. The instant is serialized
     /// with fractional seconds so a millisecond-precise watermark survives the
     /// round trip.
-    public func listAfter(conversationId: String, after: Date, limit: Int = 30, includeReplies: Bool = true, includeTranslations: Bool = true) async throws -> MessagesAPIResponse {
-        try await api.request(
-            endpoint: "/conversations/\(conversationId)/messages",
-            queryItems: [
-                URLQueryItem(name: "after", value: Self.watermarkFormatter.string(from: after)),
-                URLQueryItem(name: "limit", value: "\(limit)"),
-                URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
-                URLQueryItem(name: "include_translations", value: "\(includeTranslations)"),
-            ]
-        )
+    public func listAfter(conversationId: String, after: Date, limit: Int = 30, includeReplies: Bool = true, includeTranslations: Bool = true, languages: [String]? = nil) async throws -> MessagesAPIResponse {
+        var items: [URLQueryItem] = [
+            URLQueryItem(name: "after", value: Self.watermarkFormatter.string(from: after)),
+            URLQueryItem(name: "limit", value: "\(limit)"),
+            URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
+            URLQueryItem(name: "include_translations", value: "\(includeTranslations)"),
+        ]
+        if let langs = languages, !langs.isEmpty {
+            items.append(URLQueryItem(name: "languages", value: langs.joined(separator: ",")))
+        }
+        return try await api.request(endpoint: "/conversations/\(conversationId)/messages", queryItems: items)
     }
 
-    public func listAround(conversationId: String, around: String, limit: Int = 30, includeReplies: Bool = true, includeTranslations: Bool = true) async throws -> MessagesAPIResponse {
-        try await api.request(
-            endpoint: "/conversations/\(conversationId)/messages",
-            queryItems: [
-                URLQueryItem(name: "around", value: around),
-                URLQueryItem(name: "limit", value: "\(limit)"),
-                URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
-                URLQueryItem(name: "include_translations", value: "\(includeTranslations)"),
-            ]
-        )
+    public func listAround(conversationId: String, around: String, limit: Int = 30, includeReplies: Bool = true, includeTranslations: Bool = true, languages: [String]? = nil) async throws -> MessagesAPIResponse {
+        var items: [URLQueryItem] = [
+            URLQueryItem(name: "around", value: around),
+            URLQueryItem(name: "limit", value: "\(limit)"),
+            URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
+            URLQueryItem(name: "include_translations", value: "\(includeTranslations)"),
+        ]
+        if let langs = languages, !langs.isEmpty {
+            items.append(URLQueryItem(name: "languages", value: langs.joined(separator: ",")))
+        }
+        return try await api.request(endpoint: "/conversations/\(conversationId)/messages", queryItems: items)
     }
 
     public func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData {
