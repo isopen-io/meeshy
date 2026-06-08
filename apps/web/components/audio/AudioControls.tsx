@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { formatTime } from '@/utils/audio-formatters';
 import { LANGUAGE_NAMES } from '@/utils/audio-effects-config';
+import { useI18n } from '@/hooks/useI18n';
 import type { TranslatedAudioData } from '@meeshy/shared/types/socketio-events';
 
 // Langues disponibles pour la traduction
@@ -95,6 +96,7 @@ export const AudioControls = memo<AudioControlsProps>(({
   requestTranscription,
   requestTranslation,
 }) => {
+  const { t } = useI18n('audioEffects');
   return (
     <div className="flex items-center justify-center gap-2">
       {/* Timer */}
@@ -143,7 +145,7 @@ export const AudioControls = memo<AudioControlsProps>(({
                   width: '4px',
                   touchAction: 'none',
                 }}
-                aria-label="Ajuster la vitesse de lecture"
+                aria-label={t('controls.speed.ariaLabel')}
               />
             </div>
             <div className="text-[11px] font-bold text-blue-600 dark:text-blue-400 whitespace-nowrap">
@@ -303,8 +305,8 @@ export const AudioControls = memo<AudioControlsProps>(({
       {isTranscribing ? (
         <button
           className="relative z-10 flex-shrink-0 inline-flex items-center justify-center w-5 h-5 cursor-wait"
-          title="Transcription en cours..."
-          aria-label="Transcription en cours"
+          title={t('controls.transcription.inProgress.title')}
+          aria-label={t('controls.transcription.inProgress.ariaLabel')}
           disabled
         >
           <Loader2 className="w-3 h-3 text-blue-500 animate-spin" />
@@ -313,8 +315,8 @@ export const AudioControls = memo<AudioControlsProps>(({
         <button
           onClick={() => setIsTranscriptionExpanded(!isTranscriptionExpanded)}
           className="relative z-10 flex-shrink-0 inline-flex items-center justify-center w-5 h-5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors cursor-pointer"
-          title="Voir la transcription"
-          aria-label="Afficher/masquer la transcription"
+          title={t('controls.transcription.view.title')}
+          aria-label={t('controls.transcription.view.toggleAriaLabel')}
           aria-expanded={isTranscriptionExpanded}
         >
           <FileText className="w-3 h-3 text-green-600 dark:text-green-400" />
@@ -323,8 +325,8 @@ export const AudioControls = memo<AudioControlsProps>(({
         <button
           onClick={requestTranscription}
           className="relative z-10 flex-shrink-0 inline-flex items-center justify-center w-5 h-5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors cursor-pointer"
-          title={transcriptionError || "Transcrire l'audio (texte)"}
-          aria-label="Demander la transcription"
+          title={transcriptionError || t('controls.transcription.request.title')}
+          aria-label={t('controls.transcription.request.ariaLabel')}
         >
           <FileText className={`w-3 h-3 ${transcriptionError ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`} />
         </button>

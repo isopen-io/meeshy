@@ -362,7 +362,7 @@ extension FeedView {
                             RoundedRectangle(cornerRadius: 10)
                                 .fill(
                                     LinearGradient(
-                                        colors: [Color(hex: "2ECC71"), Color(hex: "27AE60")],
+                                        colors: [MeeshyColors.success, MeeshyColors.success.opacity(0.7)],
                                         startPoint: .topLeading,
                                         endPoint: .bottomTrailing
                                     )
@@ -665,7 +665,7 @@ struct FeedComposerSheet: View {
                     Button { showCamera = true; HapticFeedback.light() } label: {
                         Image(systemName: "camera.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "FF6B6B"))
+                            .foregroundColor(MeeshyColors.error)
                     }
                     Button { showEmojiPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "face.smiling.fill")
@@ -680,7 +680,7 @@ struct FeedComposerSheet: View {
                     Button { showLocationPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "location.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "2ECC71"))
+                            .foregroundColor(MeeshyColors.success)
                     }
                     Button { showAudioComposer = true; HapticFeedback.light() } label: {
                         Image(systemName: "mic.fill")

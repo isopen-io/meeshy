@@ -149,7 +149,7 @@ struct ConversationPreviewView: View {
                         if conversation.userState.isMuted {
                             Image(systemName: "bell.slash.fill")
                                 .font(.system(size: 9))
-                                .foregroundColor(isDark ? Color(hex: "818CF8").opacity(0.5) : Color(hex: "6366F1").opacity(0.4))
+                                .foregroundColor(isDark ? MeeshyColors.indigo400.opacity(0.5) : MeeshyColors.indigo500.opacity(0.4))
                         }
                     }
 
@@ -164,11 +164,11 @@ struct ConversationPreviewView: View {
                             .foregroundColor(Color(hex: accentColor))
                         } else {
                             Circle()
-                                .fill(Color(hex: "2ECC71"))
+                                .fill(MeeshyColors.success)
                                 .frame(width: 8, height: 8)
                             Text(String(localized: "status.online", defaultValue: "En ligne"))
                                 .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(Color(hex: "2ECC71"))
+                                .foregroundColor(MeeshyColors.success)
                         }
                     }
                 }

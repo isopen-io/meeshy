@@ -209,7 +209,7 @@ struct AffiliateView: View {
                         .foregroundColor(theme.textMuted)
                     Label(String(localized: "affiliate.token.signups", defaultValue: "\(token.referralCount) inscrit(s)", bundle: .main), systemImage: "person.fill.checkmark")
                         .font(.system(size: 12))
-                        .foregroundColor(Color(hex: "2ECC71"))
+                        .foregroundColor(MeeshyColors.success)
                 }
             }
 
@@ -246,7 +246,7 @@ struct AffiliateView: View {
             } label: {
                 Image(systemName: "trash")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(Color(hex: "EF4444"))
+                    .foregroundColor(MeeshyColors.error)
             }
         }
         .padding(.horizontal, 14)

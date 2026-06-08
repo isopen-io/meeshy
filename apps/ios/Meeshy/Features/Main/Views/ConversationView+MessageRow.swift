@@ -501,12 +501,12 @@ extension ConversationView {
         HStack(spacing: 8) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 11))
-                .foregroundColor(Color(hex: "FF6B6B"))
+                .foregroundColor(MeeshyColors.error)
                 .accessibilityHidden(true)
 
             Text(String(localized: "conversation.view.send_failed", defaultValue: "Échec de l'envoi", bundle: .main))
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(Color(hex: "FF6B6B"))
+                .foregroundColor(MeeshyColors.error)
 
             Text("·")
                 .foregroundColor(theme.textMuted)

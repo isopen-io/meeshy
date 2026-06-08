@@ -13,6 +13,28 @@
     "resetAll": "Reset All",
     "disableAll": "Disable all effects",
 
+    "controls": {
+      "speed": {
+        "ariaLabel": "Adjust playback speed"
+      },
+      "transcription": {
+        "inProgress": {
+          "title": "Transcription in progress...",
+          "ariaLabel": "Transcription in progress"
+        },
+        "view": {
+          "title": "View transcription",
+          "toggleAriaLabel": "Show/hide transcription"
+        },
+        "request": {
+          "title": "Transcribe audio (text)",
+          "ariaLabel": "Request transcription"
+        },
+        "expandMore": "Show more transcription",
+        "expandLess": "Show less transcription"
+      }
+    },
+
     "recorder": {
       "initializing": "Initializing...",
       "audioEffects": "Audio effects",

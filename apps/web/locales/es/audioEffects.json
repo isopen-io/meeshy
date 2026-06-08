@@ -13,6 +13,28 @@
     "resetAll": "Restablecer todo",
     "disableAll": "Desactivar todos los efectos",
 
+    "controls": {
+      "speed": {
+        "ariaLabel": "Ajustar velocidad de reproducción"
+      },
+      "transcription": {
+        "inProgress": {
+          "title": "Transcripción en curso...",
+          "ariaLabel": "Transcripción en curso"
+        },
+        "view": {
+          "title": "Ver transcripción",
+          "toggleAriaLabel": "Mostrar/ocultar transcripción"
+        },
+        "request": {
+          "title": "Transcribir audio (texto)",
+          "ariaLabel": "Solicitar transcripción"
+        },
+        "expandMore": "Ver más transcripción",
+        "expandLess": "Ver menos transcripción"
+      }
+    },
+
     "recorder": {
       "initializing": "Inicializando...",
       "audioEffects": "Efectos de audio",

@@ -370,7 +370,7 @@ fileprivate struct BubbleGridCell: View {
                         .frame(width: 18, height: 18)
                         .background(
                             Circle()
-                                .fill(Color(hex: "FF6B6B").opacity(0.85))
+                                .fill(MeeshyColors.error.opacity(0.85))
                         )
                 }
                 .padding(6)

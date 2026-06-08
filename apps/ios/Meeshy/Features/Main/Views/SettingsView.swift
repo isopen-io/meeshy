@@ -619,15 +619,15 @@ struct SettingsView: View {
                 Text(String(localized: "settings.logout.title", defaultValue: "Déconnexion", bundle: .main))
                     .font(.system(size: 15, weight: .semibold))
             }
-            .foregroundColor(Color(hex: "EF4444"))
+            .foregroundColor(MeeshyColors.error)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(hex: "EF4444").opacity(0.1))
+                    .fill(MeeshyColors.error.opacity(0.1))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color(hex: "EF4444").opacity(0.3), lineWidth: 1)
+                            .stroke(MeeshyColors.error.opacity(0.3), lineWidth: 1)
                     )
             )
         }
