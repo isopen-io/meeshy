@@ -195,6 +195,19 @@
           }
         }
       }
+    },
+    "post": {
+      "pinned": "Pinned",
+      "menu": "Post menu",
+      "edit": "Edit",
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "delete": "Delete",
+      "like": "Like post",
+      "unlike": "Unlike post",
+      "repost": "Repost",
+      "bookmark": "Bookmark",
+      "removeBookmark": "Remove bookmark"
     }
   }
 }

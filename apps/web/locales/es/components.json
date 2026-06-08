@@ -195,6 +195,19 @@
           }
         }
       }
+    },
+    "post": {
+      "pinned": "Fijado",
+      "menu": "Menú de publicación",
+      "edit": "Editar",
+      "pin": "Fijar",
+      "unpin": "Desfijar",
+      "delete": "Eliminar",
+      "like": "Me gusta",
+      "unlike": "Ya no me gusta",
+      "repost": "Repostear",
+      "bookmark": "Guardar",
+      "removeBookmark": "Quitar de guardados"
     }
   }
 }
