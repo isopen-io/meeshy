@@ -63,11 +63,11 @@ struct ProfileLanguagePickerSheet: View {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: "xmark.circle")
-                    .font(.system(size: 20))
+                    .font(.title3)
                     .foregroundColor(theme.textMuted)
                     .frame(width: 36)
                 Text(String(localized: "language-picker.none", defaultValue: "Aucune", bundle: .main))
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.body.weight(.medium))
                     .foregroundColor(theme.textPrimary)
                 Spacer()
                 if selectedCode.isEmpty {
@@ -95,15 +95,15 @@ struct ProfileLanguagePickerSheet: View {
         } label: {
             HStack(spacing: 12) {
                 Text(lang.flag)
-                    .font(.system(size: 24))
+                    .font(.title2)
                     .frame(width: 36)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(lang.nativeName)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.body.weight(.medium))
                         .foregroundColor(theme.textPrimary)
                     Text(lang.name)
-                        .font(.system(size: 12))
+                        .font(.caption)
                         .foregroundColor(theme.textMuted)
                 }
 

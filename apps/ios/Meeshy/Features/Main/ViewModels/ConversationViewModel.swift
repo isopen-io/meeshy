@@ -192,6 +192,11 @@ class ConversationViewModel: ObservableObject {
     /// translation is replaced with the one matching the new preference.
     @Published var preferredLanguageRevision: Int = 0
 
+    /// Resolution cache for `preferredTranslation(for:)` — invalidated on language revision bump.
+    /// Uses double-Optional semantics: key absent = not cached, .some(nil) = cached as "show original".
+    private var translationResolutionCache: [String: MessageTranslation?] = [:]
+    private var cachedRevisionForTranslation: Int = -1
+
     /// Active live location sessions in this conversation
     @Published var activeLiveLocations: [ActiveLiveLocation] = []
 
@@ -930,7 +935,7 @@ class ConversationViewModel: ObservableObject {
                     let needsDecryption = self.isDirect
                         && mapped.contains { $0.isEncrypted && !$0.content.isEmpty }
                     guard needsDecryption else {
-                        self.messages = mapped
+                        self.messages = self.mergeIntoMessages(mapped)
                         return
                     }
                     Task { @MainActor [weak self] in
@@ -939,10 +944,22 @@ class ConversationViewModel: ObservableObject {
                         await self.decryptMessagesIfNeeded(&decrypted)
                         // Drop a stale decrypt that lost the race to a newer refresh.
                         guard generation == self.storeRefreshGeneration else { return }
-                        self.messages = decrypted
+                        self.messages = self.mergeIntoMessages(decrypted)
                     }
                 }
             }
+    }
+
+    /// Merges `incoming` messages into the current `messages` array, preserving
+    /// any in-memory messages not yet reflected in the GRDB snapshot (e.g., a
+    /// socket delivery that raced the REST load). Deduplicates by `id` so a
+    /// message received from both the initial REST response and the socket
+    /// never appears twice. Result is sorted by `createdAt`.
+    private func mergeIntoMessages(_ incoming: [Message]) -> [Message] {
+        let incomingIds = Set(incoming.map(\.id))
+        let preserved = messages.filter { !incomingIds.contains($0.id) }
+        guard !preserved.isEmpty else { return incoming }
+        return (incoming + preserved).sorted { $0.createdAt < $1.createdAt }
     }
 
     private func subscribeToQueueReconciliation() {
@@ -1246,7 +1263,8 @@ class ConversationViewModel: ObservableObject {
                 offset: 0,
                 limit: 30,
                 includeReplies: true,
-                includeTranslations: !warmCache
+                includeTranslations: !warmCache,
+                languages: nil
             )
 
             // Upsert authoritative server data into GRDB; the MessageStore observation
@@ -2799,7 +2817,7 @@ class ConversationViewModel: ObservableObject {
             while collected.count < maxTotal {
                 let response = try await messageService.listAfter(
                     conversationId: conversationId, after: cursor, limit: pageSize,
-                    includeReplies: true, includeTranslations: true
+                    includeReplies: true, includeTranslations: true, languages: nil
                 )
                 let page = response.data  // ascending (oldest-after-watermark first), per gateway contract
                 guard !page.isEmpty else { break }
@@ -3034,10 +3052,12 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Extract Text Translations from REST Responses
 
     private func extractTextTranslations(from apiMessages: [APIMessage]) {
+        let prismeLangs = Set(preferredLanguages.map { $0.lowercased() })
         for msg in apiMessages {
             guard let translations = msg.translations, !translations.isEmpty else { continue }
             var existing = messageTranslations[msg.id] ?? []
             for t in translations {
+                guard prismeLangs.contains(t.targetLanguage.lowercased()) else { continue }
                 let mt = MessageTranslation(
                     id: t.id,
                     messageId: t.messageId,
@@ -3054,17 +3074,20 @@ class ConversationViewModel: ObservableObject {
                 }
             }
             messageTranslations[msg.id] = existing
+            translationResolutionCache.removeValue(forKey: msg.id)
         }
     }
 
     private func hydrateTranslationsFromCache() async {
         let msgIds = messages.map(\.id)
+        let prismeLangs = Set(preferredLanguages.map { $0.lowercased() })
 
         // 1. In-memory CacheCoordinator (fast, volatile)
         let cached = await CacheCoordinator.shared.cachedTranslations(for: msgIds)
         for (msgId, translations) in cached {
             var existing = messageTranslations[msgId] ?? []
             for t in translations {
+                guard prismeLangs.contains(t.targetLanguage.lowercased()) else { continue }
                 let mt = MessageTranslation(
                     id: t.id,
                     messageId: t.messageId,
@@ -3081,6 +3104,7 @@ class ConversationViewModel: ObservableObject {
                 }
             }
             messageTranslations[msgId] = existing
+            translationResolutionCache.removeValue(forKey: msgId)
         }
 
         // 2. GRDB fallback — for message IDs not covered by the volatile cache,
@@ -3099,6 +3123,7 @@ class ConversationViewModel: ObservableObject {
         for (msgId, records) in grdbTranslations {
             var existing = messageTranslations[msgId] ?? []
             for r in records {
+                guard prismeLangs.contains(r.targetLanguage.lowercased()) else { continue }
                 let mt = MessageTranslation(
                     id: r.id,
                     messageId: msgId,
@@ -3115,6 +3140,7 @@ class ConversationViewModel: ObservableObject {
                 }
             }
             messageTranslations[msgId] = existing
+            translationResolutionCache.removeValue(forKey: msgId)
         }
     }
 
@@ -3144,9 +3170,11 @@ class ConversationViewModel: ObservableObject {
 
         guard !grouped.isEmpty else { return }
 
+        let prismeLangs = Set(preferredLanguages.map { $0.lowercased() })
         for (msgId, records) in grouped {
             var existing = messageTranslations[msgId] ?? []
             for r in records {
+                guard prismeLangs.contains(r.targetLanguage.lowercased()) else { continue }
                 let mt = MessageTranslation(
                     id: r.id,
                     messageId: msgId,
@@ -3163,6 +3191,7 @@ class ConversationViewModel: ObservableObject {
                 }
             }
             messageTranslations[msgId] = existing
+            translationResolutionCache.removeValue(forKey: msgId)
         }
     }
 
@@ -3195,21 +3224,37 @@ class ConversationViewModel: ObservableObject {
         if let override = activeTranslationOverrides[messageId] {
             return override
         }
-        guard let translations = messageTranslations[messageId], !translations.isEmpty else { return nil }
+        if cachedRevisionForTranslation != preferredLanguageRevision {
+            translationResolutionCache.removeAll()
+            cachedRevisionForTranslation = preferredLanguageRevision
+        }
+        switch translationResolutionCache[messageId] {
+        case .some(let cached):
+            return cached
+        case .none:
+            break
+        }
+        guard let translations = messageTranslations[messageId], !translations.isEmpty else {
+            translationResolutionCache.updateValue(nil, forKey: messageId)
+            return nil
+        }
 
-        // Determine original language of this message
         let originalLang = messageIndex(for: messageId)
             .map { messages[$0].originalLanguage.lowercased() }
 
         let langs = preferredLanguages
         for lang in langs {
             let langLower = lang.lowercased()
-            // If the original is already in this preferred language, show original (no translation needed)
-            if let orig = originalLang, orig == langLower { return nil }
+            if let orig = originalLang, orig == langLower {
+                translationResolutionCache.updateValue(nil, forKey: messageId)
+                return nil
+            }
             if let match = translations.first(where: { $0.targetLanguage.lowercased() == langLower }) {
+                translationResolutionCache[messageId] = match
                 return match
             }
         }
+        translationResolutionCache.updateValue(nil, forKey: messageId)
         return nil
     }
 

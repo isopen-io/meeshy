@@ -60,6 +60,13 @@ export interface SocketUser {
   socketId: string;
   isAnonymous: boolean;
   language: string;
+  /**
+   * Ordered list of languages this socket can consume, derived from
+   * resolveUserLanguagesOrdered() at connection time.
+   * Priority: systemLanguage → regionalLanguage → customDestinationLanguage → deviceLocale.
+   * Empty for anonymous users (they use `language` only).
+   */
+  resolvedLanguages: string[];
   /** For anonymous participants: the participant.id */
   participantId?: string;
   /** For registered users: the user.id */
@@ -115,8 +122,12 @@ export class MeeshySocketIOManager {
   private socketToUser: Map<string, string> = new Map();
   private userSockets: Map<string, Set<string>> = new Map();
 
-  // Cache immutable identifier → ObjectId (populated on first lookup)
+  // Rate limiter in-memory par socket (clé → timestamps des requêtes)
+  private socketRateLimits: Map<string, number[]> = new Map();
+
+  // Cache immutable identifier → ObjectId (populated on first lookup, bounded to 2000 entries LRU)
   private conversationIdCache = new Map<string, string>();
+  private readonly CONVERSATION_ID_CACHE_MAX = 2000;
 
   // Statistiques
   private stats = {
@@ -343,6 +354,11 @@ export class MeeshySocketIOManager {
         select: { id: true, identifier: true }
       });
       if (conversation) {
+        // Evict oldest entry when cap reached (simple FIFO bounded LRU)
+        if (this.conversationIdCache.size >= this.CONVERSATION_ID_CACHE_MAX) {
+          const firstKey = this.conversationIdCache.keys().next().value;
+          if (firstKey !== undefined) this.conversationIdCache.delete(firstKey);
+        }
         this.conversationIdCache.set(conversationId, conversation.id);
         return conversation.id;
       }
@@ -565,6 +581,18 @@ export class MeeshySocketIOManager {
       });
 
       socket.on(CLIENT_EVENTS.REQUEST_TRANSLATION, async (data: { messageId: string; targetLanguage: string }) => {
+        // Rate limit: 10 requêtes/min par socket pour éviter la saturation ZMQ
+        const rateLimitKey = `translation_request:${socket.id}`;
+        const now = Date.now();
+        const windowMs = 60_000;
+        const maxRequests = 10;
+        const existing = this.socketRateLimits.get(rateLimitKey) ?? [];
+        const recent = existing.filter(t => now - t < windowMs);
+        if (recent.length >= maxRequests) {
+          socket.emit(SERVER_EVENTS.ERROR, { message: 'Rate limit exceeded for translation requests' });
+          return;
+        }
+        this.socketRateLimits.set(rateLimitKey, [...recent, now]);
         try { await this._handleTranslationRequest(socket, data); } catch (error) { logger.error('[REQUEST_TRANSLATION] Error:', error); }
       });
 
@@ -681,26 +709,15 @@ export class MeeshySocketIOManager {
         try { await this.locationHandler.handleLiveLocationStop(socket, data); } catch (error) { logger.error('[LOCATION_LIVE_STOP] Error:', error); }
       });
 
-      // CALL-DIAG (temp instrumentation — remove on rollback): capture disconnect
-      // reason + rooms to diagnose socket churn. `disconnecting` fires while the
-      // socket's rooms are still populated (the `disconnect` event fires after
-      // Socket.IO has already emptied them), so this is the only place we can see
-      // which user room / call room the dropping socket belonged to.
-      socket.on('disconnecting', (reason: string) => {
-        try {
-          const rooms = Array.from(socket.rooms || []).filter((r) => r !== socket.id);
-          logger.warn('🔬 [CALL-DIAG] socket disconnecting', {
-            socketId: socket.id,
-            reason,
-            rooms
-          });
-        } catch (e) { /* never throw from instrumentation */ }
-      });
-
       socket.on('disconnect', (reason: string) => {
         logger.warn('🔬 [CALL-DIAG] socket disconnect', { socketId: socket.id, reason });
+        const disconnectedUserId = this.socketToUser.get(socket.id);
+        if (disconnectedUserId) this.statusHandler.invalidateIdentityCache(disconnectedUserId);
+        logger.debug('socket disconnect', { socketId: socket.id, reason });
         this.authHandler.handleDisconnection(socket).catch((error) => logger.error('[DISCONNECT] Error:', error));
         this.stats.active_connections--;
+        // Nettoyage du rate limiter in-memory à la déconnexion
+        this.socketRateLimits.delete(`translation_request:${socket.id}`);
       });
     });
   }
@@ -1190,10 +1207,14 @@ export class MeeshySocketIOManager {
   }
 
   private _findUsersForLanguage(targetLanguage: string): SocketUser[] {
+    const lang = targetLanguage.toLowerCase();
     const targetUsers: SocketUser[] = [];
 
-    for (const [userId, user] of this.connectedUsers) {
-      if (user.language === targetLanguage) {
+    for (const [, user] of this.connectedUsers) {
+      const matches =
+        user.resolvedLanguages.includes(lang) ||
+        user.language.toLowerCase() === lang;
+      if (matches) {
         targetUsers.push(user);
       }
     }
@@ -1213,19 +1234,24 @@ export class MeeshySocketIOManager {
     if (!socketIds || socketIds.size === 0) return;
 
     const originalLanguage = String(payload.originalLanguage || 'fr').toLowerCase();
-    const socketsByLanguage = new Map<string, string[]>();
+    const socketsByLanguageKey = new Map<string, { socketIds: string[]; langs: string[] }>();
     for (const socketId of socketIds) {
       const userId = this.socketToUser.get(socketId);
-      const lang = String((userId && this.connectedUsers.get(userId)?.language) || originalLanguage).toLowerCase();
-      const bucket = socketsByLanguage.get(lang);
-      if (bucket) bucket.push(socketId);
-      else socketsByLanguage.set(lang, [socketId]);
+      const socketUser = userId ? this.connectedUsers.get(userId) : undefined;
+      const langs: string[] =
+        socketUser && socketUser.resolvedLanguages.length > 0
+          ? socketUser.resolvedLanguages
+          : [String(socketUser?.language || originalLanguage).toLowerCase()];
+      const key = langs.join(',');
+      const bucket = socketsByLanguageKey.get(key);
+      if (bucket) bucket.socketIds.push(socketId);
+      else socketsByLanguageKey.set(key, { socketIds: [socketId], langs });
     }
 
-    for (const [lang, socketsForLang] of socketsByLanguage) {
-      const filtered = filterMessagePayloadForLanguages(payload, [lang, originalLanguage]);
+    for (const { socketIds: socketsForLangs, langs } of socketsByLanguageKey.values()) {
+      const filtered = filterMessagePayloadForLanguages(payload, [...langs, originalLanguage]);
       let emitter: any = this.io;
-      for (const socketId of socketsForLang) emitter = emitter.to(socketId);
+      for (const socketId of socketsForLangs) emitter = emitter.to(socketId);
       emitter.emit(SERVER_EVENTS.MESSAGE_NEW, filtered);
     }
   }
@@ -1342,23 +1368,17 @@ export class MeeshySocketIOManager {
 
       // Lancer les 2 requêtes en parallèle
       const [translationsResult, statsResult] = await Promise.allSettled([
-        // Récupérer les traductions existantes du message (format JSON)
+        // Utiliser les traductions déjà présentes sur l'objet message (pas de query DB)
         (async () => {
           if (!message.id) return [];
           try {
-            const messageWithTranslations = await this.prisma.message.findUnique({
-              where: { id: message.id },
-              select: {
-                translations: true
-              }
-            });
-            // Transformer JSON vers array pour frontend
+            // `message.translations` est déjà le champ JSON MongoDB — éviter un findUnique redondant
             return transformTranslationsToArray(
               message.id,
-              messageWithTranslations?.translations as Record<string, any>
+              (message as any).translations as Record<string, any>
             );
           } catch (error) {
-            logger.warn(`⚠️ [DEBUG] Erreur récupération traductions pour ${message.id}:`, error);
+            logger.warn(`⚠️ [DEBUG] Erreur transformation traductions pour ${message.id}:`, error);
             return [];
           }
         })(),
@@ -1480,13 +1500,11 @@ export class MeeshySocketIOManager {
       const room = ROOMS.conversation(normalizedId);
       // 1. Broadcast vers tous les clients de la conversation.
       //
-      // Bandwidth sprint Phase B1 (flag `SOCKET_LANG_FILTER`, OFF par défaut) :
-      // au lieu d'un emit room unique portant TOUTES les langues, on regroupe
-      // les sockets de la room par langue préférée (déjà connue via
-      // `SocketUser.language`, zéro requête DB) et on émet un payload filtré une
-      // seule fois par langue distincte. Le contenu original est toujours
-      // préservé. Désactivé tant que non validé en staging (mesure avant/après).
-      if (process.env.SOCKET_LANG_FILTER === 'true') {
+      // Bandwidth sprint Phase B1 — per-language filtered broadcast.
+      // Groups room sockets by preferred language (zero DB query, from connectedUsers map)
+      // and sends a trimmed payload once per distinct language. Original content preserved.
+      // Disable explicitly with SOCKET_LANG_FILTER=false if rollback needed.
+      if (process.env.SOCKET_LANG_FILTER !== 'false') {
         this._emitMessageNewByLanguage(room, messagePayload);
       } else {
         this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
@@ -1534,21 +1552,30 @@ export class MeeshySocketIOManager {
             select: { id: true, userId: true }
           });
 
-          // Calculer le unreadCount pour chaque participant et émettre l'événement
+          // Calculer le unreadCount pour tous les participants en batch (3 requêtes au lieu de N×3)
           const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
           const readStatusService = new MessageReadStatusService(this.prisma);
+
+          const participantIds = participants.map(p => p.id);
+          const unreadCountMap = await readStatusService.getUnreadCountsForParticipants(participantIds, normalizedId);
 
           const connectedUserIds = new Set(this.getConnectedUsers());
 
           for (const participant of participants) {
             const roomTarget = participant.userId || participant.id;
-            // Pass `participant.id` (not `roomTarget`) — the cursor's
-            // participantId column is the Participant.id. Using the userId
-            // here previously caused every registered recipient to fall
-            // through to a stale "count all historical messages" path and
-            // see inflated unread counts (e.g. 75).
-            const unreadCount = await readStatusService.getUnreadCount(participant.id, normalizedId);
+            const unreadCount = unreadCountMap.get(participant.id) ?? 0;
+          // Batch all unread-count queries in parallel instead of sequential N+1
+          const unreadResults = await Promise.all(
+            participants.map(async (participant) => {
+              const roomTarget = participant.userId || participant.id;
+              // Pass `participant.id` (not `roomTarget`) — the cursor's
+              // participantId column is the Participant.id.
+              const unreadCount = await readStatusService.getUnreadCount(participant.id, normalizedId);
+              return { participant, roomTarget, unreadCount };
+            })
+          );
 
+          for (const { participant, roomTarget, unreadCount } of unreadResults) {
             // Émettre vers le socket personnel de l'utilisateur
             this.io.to(ROOMS.user(roomTarget)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
               conversationId: normalizedId,

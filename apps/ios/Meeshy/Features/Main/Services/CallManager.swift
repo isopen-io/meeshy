@@ -124,11 +124,6 @@ final class CallManager: ObservableObject {
 
     // MARK: - Internal
 
-    /// Phase 0 scaffold — owned but not yet wired into transitions.
-    /// Subsequent phases migrate transition logic from CallManager into this actor.
-    /// Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §2.2
-    private let eventQueue = CallEventQueue()
-
     private let webRTCService: WebRTCService
     private let ringbackPlayer = RingbackTonePlayer()
     // PERF-011: replace Timer.scheduledTimer with cancellable @MainActor Tasks.
@@ -185,8 +180,11 @@ final class CallManager: ObservableObject {
     /// cancel it cleanly instead of leaking it for the remaining sleep.
     private var sdpOfferTimeoutTask: Task<Void, Never>?
     private var pendingRemoteOffer: SessionDescription?
+    // P0-3 — ICE candidates generated while the socket is down are buffered
+    // here and replayed after the socket reconnects + emitCallJoin fires.
+    private var pendingIceCandidates: [[String: Any]] = []
     private var cancellables = Set<AnyCancellable>()
-    private let audioSessionQueue = DispatchQueue(label: "me.meeshy.callmanager.audiosession")
+    fileprivate let audioSessionQueue = DispatchQueue(label: "me.meeshy.callmanager.audiosession")
 
     // Screen capture monitoring
     private var screenCaptureObserver: NSObjectProtocol?
@@ -247,6 +245,7 @@ final class CallManager: ObservableObject {
         setupSocketListeners()
         startNetworkMonitoring()
         startAudioInterruptionMonitoring()
+        startAudioRouteChangeMonitoring()
         Logger.calls.info("CallManager initialized")
     }
 
@@ -296,13 +295,57 @@ final class CallManager: ObservableObject {
                 return
             }
             Logger.calls.info("Audio interruption ended (shouldResume) — re-enabling RTCAudioSession")
-            let rtc = RTCAudioSession.sharedInstance()
-            rtc.lockForConfiguration()
-            rtc.audioSessionDidActivate(AVAudioSession.sharedInstance())
-            rtc.isAudioEnabled = true
-            rtc.unlockForConfiguration()
+            audioSessionQueue.sync {
+                let rtc = RTCAudioSession.sharedInstance()
+                rtc.lockForConfiguration()
+                rtc.audioSessionDidActivate(AVAudioSession.sharedInstance())
+                rtc.isAudioEnabled = true
+                rtc.unlockForConfiguration()
+            }
         @unknown default:
             break
+        }
+    }
+
+    // P0-8 — reconcile `isSpeaker` when iOS changes the audio route (headset
+    // plug/unplug, Bluetooth connect/disconnect, AirPlay). Without this, the
+    // UI speaker button stays out of sync: the user taps "speaker on", plugs
+    // headphones → audio routes to headphones but `isSpeaker` stays true;
+    // unplugging then re-routes to the built-in speaker unexpectedly.
+    @MainActor
+    private func startAudioRouteChangeMonitoring() {
+        NotificationCenter.default.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let reasonRaw = (notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt) ?? 0
+            Task { @MainActor [weak self] in
+                self?.handleAudioRouteChange(reasonRaw: reasonRaw)
+            }
+        }
+    }
+
+    @MainActor
+    private func handleAudioRouteChange(reasonRaw: UInt) {
+        guard callState.isActive else { return }
+        let reason = AVAudioSession.RouteChangeReason(rawValue: reasonRaw) ?? .unknown
+        switch reason {
+        case .newDeviceAvailable:
+            // Headset / Bluetooth connected — route left speaker automatically.
+            isSpeaker = false
+            Logger.calls.info("Audio route: new device available — isSpeaker = false")
+        case .oldDeviceUnavailable:
+            // Headset / Bluetooth disconnected — iOS routes back to built-in;
+            // re-apply the current speaker preference so RTCAudioSession follows.
+            applySpeakerRoute()
+            Logger.calls.info("Audio route: device removed — re-applying speaker route (isSpeaker=\(self.isSpeaker))")
+        case .override:
+            // Software override (our own `overrideOutputAudioPort`); no action needed.
+            break
+        default:
+            // Category change, wake-from-sleep, etc. — re-apply to stay consistent.
+            applySpeakerRoute()
         }
     }
 
@@ -1411,10 +1454,10 @@ final class CallManager: ObservableObject {
                         break
                     case .restartICE:
                         didAttemptConnectingRestart = true
-                        Logger.calls.warning("[CALL-DIAG] .connecting watchdog (\(Int(elapsed))s) — ICE restart")
+                        Logger.calls.info(".connecting watchdog (\(Int(elapsed))s) → triggering ICE restart")
                         self.attemptReconnection()
                     case .fail:
-                        Logger.calls.error("[CALL-DIAG] .connecting watchdog (\(Int(elapsed))s) — failing call")
+                        Logger.calls.error(".connecting watchdog (\(Int(elapsed))s) — failing call")
                         self.endCallInternal(reason: .failed(String(localized: "call.error.timeout")))
                         return
                     }
@@ -1433,12 +1476,12 @@ final class CallManager: ObservableObject {
                     ) {
                     case .healthy:
                         halfOpenSettled = true
-                        Logger.calls.info("[CALL-DIAG] media bidirectional (inAudio=\(stats.inboundAudioPackets) inVideo=\(stats.inboundVideoPackets) out=\(stats.outboundPacketsSent))")
+                        Logger.calls.debug("media bidirectional (inAudio=\(stats.inboundAudioPackets) inVideo=\(stats.inboundVideoPackets) out=\(stats.outboundPacketsSent))")
                     case .waiting:
                         break
                     case .healHalfOpen:
                         halfOpenSettled = true
-                        Logger.calls.warning("[CALL-DIAG] half-open detected (in=0 out=\(stats.outboundPacketsSent)) after \(Int(elapsed))s — auto ICE restart")
+                        Logger.calls.warning("half-open detected (in=0 out=\(stats.outboundPacketsSent)) after \(Int(elapsed))s — auto ICE restart")
                         self.attemptReconnection()
                     }
                 case .reconnecting:
@@ -1466,25 +1509,27 @@ final class CallManager: ObservableObject {
         //     device module silently ("no sound on 1st call"). Log only.
         //   - Mac (`callUsesCallKit == false`, iOS-app-on-Mac): `didActivate`
         //     never fires, so this `[AUDIO_FALLBACK]` IS the activation path.
-        let rtc = RTCAudioSession.sharedInstance()
         if !callUsesCallKit {
             Logger.calls.warning("[AUDIO_FALLBACK] Mac (no CallKit didActivate) — activation manuelle de RTCAudioSession")
-            rtc.lockForConfiguration()
-            do {
-                let configuration = RTCAudioSessionConfiguration.webRTC()
-                configuration.category = AVAudioSession.Category.playAndRecord.rawValue
-                // CALL-FIX 2026-06-06 (macOS) — `.default` avoids the voice-processing
-                // I/O unit that faults on the mic uplink on iOS-app-on-Mac.
-                configuration.mode = AVAudioSession.Mode.default.rawValue
-                configuration.categoryOptions = [.allowBluetoothHFP, .duckOthers]
-                try rtc.setConfiguration(configuration, active: true)
-                rtc.isAudioEnabled = true
-                Logger.calls.info("[AUDIO_FALLBACK] RTCAudioSession activée manuellement (mode=\(configuration.mode), category=\(configuration.category))")
-            } catch {
-                Logger.calls.error("[AUDIO_FALLBACK] échec activation manuelle: \(error.localizedDescription)")
+            audioSessionQueue.sync {
+                let rtc = RTCAudioSession.sharedInstance()
+                rtc.lockForConfiguration()
+                do {
+                    let configuration = RTCAudioSessionConfiguration.webRTC()
+                    configuration.category = AVAudioSession.Category.playAndRecord.rawValue
+                    // CALL-FIX 2026-06-06 (macOS) — `.default` avoids the voice-processing
+                    // I/O unit that faults on the mic uplink on iOS-app-on-Mac.
+                    configuration.mode = AVAudioSession.Mode.default.rawValue
+                    configuration.categoryOptions = [.allowBluetoothHFP, .duckOthers]
+                    try rtc.setConfiguration(configuration, active: true)
+                    rtc.isAudioEnabled = true
+                    Logger.calls.info("[AUDIO_FALLBACK] RTCAudioSession activée manuellement (mode=\(configuration.mode), category=\(configuration.category))")
+                } catch {
+                    Logger.calls.error("[AUDIO_FALLBACK] échec activation manuelle: \(error.localizedDescription)")
+                }
+                rtc.unlockForConfiguration()
             }
-            rtc.unlockForConfiguration()
-        } else if !rtc.isAudioEnabled {
+        } else if !RTCAudioSession.sharedInstance().isAudioEnabled {
             Logger.calls.warning("[AUDIO] connected but RTCAudioSession not yet active — awaiting CallKit provider:didActivate (do NOT self-activate on iPhone/iPad)")
         }
 
@@ -1577,6 +1622,8 @@ final class CallManager: ObservableObject {
     // MARK: - Screen Capture Monitoring
 
     private func startScreenCaptureMonitoring() {
+        // Garantir qu'un seul observateur est actif — évite les doublons sur reconnexion
+        stopScreenCaptureMonitoring()
         screenCaptureObserver = NotificationCenter.default.addObserver(
             forName: UIScreen.capturedDidChangeNotification,
             object: nil,
@@ -1608,6 +1655,8 @@ final class CallManager: ObservableObject {
     // MARK: - Background/Foreground Monitoring (H1)
 
     private func startBackgroundMonitoring() {
+        // Garantir un seul observateur actif par type — évite les doublons sur reconnexion
+        stopBackgroundMonitoring()
         backgroundObserver = NotificationCenter.default.addObserver(
             forName: UIApplication.didEnterBackgroundNotification,
             object: nil,
@@ -1725,6 +1774,7 @@ final class CallManager: ObservableObject {
         sdpOfferTimeoutTask?.cancel()
         sdpOfferTimeoutTask = nil
         pendingRemoteOffer = nil
+        pendingIceCandidates = []
         thermalMonitor.stopMonitoring()
         activeAudioEffect = nil
         hasLocalVideoTrack = false
@@ -1804,49 +1854,48 @@ final class CallManager: ObservableObject {
         // between A2DP and HFP, causing periodic ~200ms audio glitches). HFP
         // already covers BT headsets via the SCO bidirectional voice link.
         configuration.categoryOptions = [.allowBluetoothHFP, .duckOthers]
+        let activateNow = !callUsesCallKit
 
-        let session = RTCAudioSession.sharedInstance()
-        Logger.calls.info("[AUDIO_SESS] lockForConfiguration")
-        session.lockForConfiguration()
-        defer {
-            Logger.calls.info("[AUDIO_SESS] unlockForConfiguration")
-            session.unlockForConfiguration()
-        }
-        do {
-            Logger.calls.info("[AUDIO_SESS] setConfiguration call")
-            // CALL-FIX 2026-06-06 — iOS defers activation to CallKit's
-            // provider:didActivate (active:false here). On iOS-app-on-Mac there is
-            // no CallKit, so activate NOW (active:true) — otherwise this call would
-            // DEACTIVATE the session the ring-sound manager just brought up, cutting
-            // the ringback/ringtone after a few hundred ms. The [AUDIO_FALLBACK] at
-            // connect then finds it already active (no-op).
-            // When CallKit drives the call it activates the session via
-            // provider:didActivate (active:false here). Without CallKit (Mac, or a
-            // foreground in-app call) WE own activation, so activate now — otherwise
-            // this would DEACTIVATE the session the ring-sound manager just brought
-            // up. The [AUDIO_FALLBACK] at connect then finds it already active.
-            let activateNow = !callUsesCallKit
-            try session.setConfiguration(configuration, active: activateNow)
-            Logger.calls.info("RTCAudioSession pre-configured — video: \(isVideo), activeNow=\(activateNow)")
-        } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == 4099 {
-            // "Session deactivation failed" — le call précédent a laissé
-            // AVAudioSession dans un état non-deactivable depuis ce process
-            // (CallKit gère la deactivation via provider:didDeactivate:).
-            // Bénin : RTCAudioSession.useManualAudio est déjà setté, et
-            // CallKit pilote l'activation via didActivate. Downgrade en
-            // warning pour ne pas polluer les crash dashboards.
-            Logger.calls.warning("RTCAudioSession setConfiguration deactivation skipped — CallKit owns the session lifecycle (\(error.localizedDescription))")
-        } catch {
-            Logger.calls.error("RTCAudioSession configuration failed: \(error.localizedDescription)")
+        audioSessionQueue.sync {
+            let session = RTCAudioSession.sharedInstance()
+            Logger.calls.info("[AUDIO_SESS] lockForConfiguration")
+            session.lockForConfiguration()
+            defer {
+                Logger.calls.info("[AUDIO_SESS] unlockForConfiguration")
+                session.unlockForConfiguration()
+            }
+            do {
+                Logger.calls.info("[AUDIO_SESS] setConfiguration call")
+                // CALL-FIX 2026-06-06 — iOS defers activation to CallKit's
+                // provider:didActivate (active:false here). On iOS-app-on-Mac there is
+                // no CallKit, so activate NOW (active:true) — otherwise this call would
+                // DEACTIVATE the session the ring-sound manager just brought up, cutting
+                // the ringback/ringtone after a few hundred ms. The [AUDIO_FALLBACK] at
+                // connect then finds it already active (no-op).
+                // When CallKit drives the call it activates the session via
+                // provider:didActivate (active:false here). Without CallKit (Mac, or a
+                // foreground in-app call) WE own activation, so activate now — otherwise
+                // this would DEACTIVATE the session the ring-sound manager just brought
+                // up. The [AUDIO_FALLBACK] at connect then finds it already active.
+                try session.setConfiguration(configuration, active: activateNow)
+                Logger.calls.info("RTCAudioSession pre-configured — video: \(isVideo), activeNow=\(activateNow)")
+            } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == 4099 {
+                // "Session deactivation failed" — le call précédent a laissé
+                // AVAudioSession dans un état non-deactivable depuis ce process
+                // (CallKit gère la deactivation via provider:didDeactivate:).
+                // Bénin : RTCAudioSession.useManualAudio est déjà setté, et
+                // CallKit pilote l'activation via didActivate. Downgrade en
+                // warning pour ne pas polluer les crash dashboards.
+                Logger.calls.warning("RTCAudioSession setConfiguration deactivation skipped — CallKit owns the session lifecycle (\(error.localizedDescription))")
+            } catch {
+                Logger.calls.error("RTCAudioSession configuration failed: \(error.localizedDescription)")
+            }
         }
     }
 
     fileprivate func applySpeakerRoute() {
         guard callState.isActive else { return }
         let speaker = isSpeaker
-        let session = RTCAudioSession.sharedInstance()
-        session.lockForConfiguration()
-        defer { session.unlockForConfiguration() }
 
         // CRITIQUE simulator : `.none` (= défaut earpiece/Receiver) ne route
         // PAS vers les haut-parleurs macOS sur iOS Simulator. L'audio est
@@ -1869,11 +1918,16 @@ final class CallManager: ObservableObject {
         let port: AVAudioSession.PortOverride = (speaker || forceSpeakerForMac) ? .speaker : .none
         #endif
 
-        do {
-            try session.overrideOutputAudioPort(port)
-            Logger.calls.info("Audio route override applied: \(port.rawValue) (isSpeaker=\(speaker))")
-        } catch {
-            Logger.calls.error("Audio route change failed: \(error.localizedDescription)")
+        audioSessionQueue.sync {
+            let session = RTCAudioSession.sharedInstance()
+            session.lockForConfiguration()
+            defer { session.unlockForConfiguration() }
+            do {
+                try session.overrideOutputAudioPort(port)
+                Logger.calls.info("Audio route override applied: \(port.rawValue) (isSpeaker=\(speaker))")
+            } catch {
+                Logger.calls.error("Audio route change failed: \(error.localizedDescription)")
+            }
         }
     }
 
@@ -1881,10 +1935,12 @@ final class CallManager: ObservableObject {
         // CallKit deactivates the AVAudioSession on its own when the call ends.
         // We only flip RTCAudioSession.isAudioEnabled; setActive(false) is the
         // job of provider:didDeactivate:.
-        let session = RTCAudioSession.sharedInstance()
-        session.lockForConfiguration()
-        session.isAudioEnabled = false
-        session.unlockForConfiguration()
+        audioSessionQueue.sync {
+            let session = RTCAudioSession.sharedInstance()
+            session.lockForConfiguration()
+            session.isAudioEnabled = false
+            session.unlockForConfiguration()
+        }
     }
 
     // MARK: - Socket.IO Signaling
@@ -1926,25 +1982,33 @@ final class CallManager: ObservableObject {
             .store(in: &cancellables)
 
         socket.callSignalOfferReceived
-            .receive(on: DispatchQueue.main)
+            .receive(on: DispatchQueue.global(qos: .userInitiated))
             .sink { [weak self] event in
                 guard let sdpString = event.signal.sdp else { return }
                 let sdp = SessionDescription(type: .offer, sdp: sdpString)
-                self?.handleSignalOffer(callId: event.callId, sdp: sdp, generation: event.signal.negotiationId ?? 0)
+                let callId = event.callId
+                let generation = event.signal.negotiationId ?? 0
+                Task { @MainActor [weak self] in
+                    self?.handleSignalOffer(callId: callId, sdp: sdp, generation: generation)
+                }
             }
             .store(in: &cancellables)
 
         socket.callAnswerReceived
-            .receive(on: DispatchQueue.main)
+            .receive(on: DispatchQueue.global(qos: .userInitiated))
             .sink { [weak self] event in
                 guard let sdpString = event.signal.sdp else { return }
                 let sdp = SessionDescription(type: .answer, sdp: sdpString)
-                self?.handleRemoteAnswer(callId: event.callId, sdp: sdp, generation: event.signal.negotiationId ?? 0)
+                let callId = event.callId
+                let generation = event.signal.negotiationId ?? 0
+                Task { @MainActor [weak self] in
+                    self?.handleRemoteAnswer(callId: callId, sdp: sdp, generation: generation)
+                }
             }
             .store(in: &cancellables)
 
         socket.callICECandidateReceived
-            .receive(on: DispatchQueue.main)
+            .receive(on: DispatchQueue.global(qos: .userInitiated))
             .sink { [weak self] event in
                 guard let candidateString = event.signal.candidate else { return }
                 let candidate = IceCandidate(
@@ -1952,7 +2016,11 @@ final class CallManager: ObservableObject {
                     sdpMLineIndex: Int32(event.signal.sdpMLineIndex ?? 0),
                     candidate: candidateString
                 )
-                self?.handleRemoteICECandidate(callId: event.callId, candidate: candidate, generation: event.signal.negotiationId ?? 0)
+                let callId = event.callId
+                let generation = event.signal.negotiationId ?? 0
+                Task { @MainActor [weak self] in
+                    self?.handleRemoteICECandidate(callId: callId, candidate: candidate, generation: generation)
+                }
             }
             .store(in: &cancellables)
 
@@ -1991,6 +2059,7 @@ final class CallManager: ObservableObject {
                 guard self.callState.isActive, let callId = self.currentCallId else { return }
                 Logger.calls.info("Socket reconnected — re-joining call room \(callId)")
                 MessageSocketManager.shared.emitCallJoin(callId: callId)
+                self.flushPendingIceCandidates()
             }
             .store(in: &cancellables)
 
@@ -2107,7 +2176,7 @@ final class CallManager: ObservableObject {
         let remoteId = remoteUserId ?? ""
         let polite = Self.isPolitePeer(localUserId: localId, remoteUserId: remoteId)
         webRTCService.setNegotiationRole(isPolite: polite)
-        Logger.calls.info("[CALL-DIAG] negotiation role: \(polite ? "polite" : "impolite") (local=\(localId, privacy: .public) remote=\(remoteId, privacy: .public))")
+        Logger.calls.debug("negotiation role: \(polite ? "polite" : "impolite") (local=\(localId, privacy: .public) remote=\(remoteId, privacy: .public))")
     }
 
     /// §3.5 — accept an incoming signal of `generation` unless it is stale
@@ -2286,12 +2355,17 @@ extension CallManager: WebRTCServiceDelegate {
             if let sdpMid = candidate.sdpMid {
                 payload["sdpMid"] = sdpMid
             }
-            MessageSocketManager.shared.emitCallSignal(
-                callId: callId,
-                type: "ice-candidate",
-                payload: payload
-            )
-            Logger.calls.debug("Sent ICE candidate for call: \(callId)")
+            if MessageSocketManager.shared.isConnected {
+                MessageSocketManager.shared.emitCallSignal(
+                    callId: callId,
+                    type: "ice-candidate",
+                    payload: payload
+                )
+                Logger.calls.debug("Sent ICE candidate for call: \(callId)")
+            } else {
+                self.pendingIceCandidates.append(["callId": callId, "payload": payload])
+                Logger.calls.debug("Buffered ICE candidate (socket down) for call: \(callId)")
+            }
         }
     }
 
@@ -2454,6 +2528,21 @@ extension CallManager: WebRTCServiceDelegate {
             Logger.calls.info("ICE restart offer sent for call: \(callId)")
         }
     }
+
+    // P0-3 — replay ICE candidates buffered while the socket was down.
+    // Called after `emitCallJoin` on socket reconnect so the gateway has
+    // already re-admitted us to the call room before forwarding candidates.
+    private func flushPendingIceCandidates() {
+        guard !pendingIceCandidates.isEmpty else { return }
+        let candidates = pendingIceCandidates
+        pendingIceCandidates = []
+        Logger.calls.info("Flushing \(candidates.count) buffered ICE candidate(s) after socket reconnect")
+        for entry in candidates {
+            guard let callId = entry["callId"] as? String,
+                  let payload = entry["payload"] as? [String: Any] else { continue }
+            MessageSocketManager.shared.emitCallSignal(callId: callId, type: "ice-candidate", payload: payload)
+        }
+    }
 }
 
 // MARK: - CallKit Delegate Proxy
@@ -2526,11 +2615,13 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         // Forcing it again creates desync between AVAudioSession and RTCAudioSession,
         // visible as alternating routes (Receiver/Speaker) in logs and silent calls.
         // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §3.2
-        let rtc = RTCAudioSession.sharedInstance()
-        rtc.lockForConfiguration()
-        rtc.audioSessionDidActivate(audioSession)
-        rtc.isAudioEnabled = true
-        rtc.unlockForConfiguration()
+        manager?.audioSessionQueue.sync {
+            let rtc = RTCAudioSession.sharedInstance()
+            rtc.lockForConfiguration()
+            rtc.audioSessionDidActivate(audioSession)
+            rtc.isAudioEnabled = true
+            rtc.unlockForConfiguration()
+        }
 
         // Audit P2-iOS-2 — `overrideOutputAudioPort` is only honored once
         // RTCAudioSession's audio engine has actually started. Calling it
@@ -2566,11 +2657,13 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
     }
 
     func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
-        let rtc = RTCAudioSession.sharedInstance()
-        rtc.lockForConfiguration()
-        rtc.isAudioEnabled = false
-        rtc.audioSessionDidDeactivate(audioSession)
-        rtc.unlockForConfiguration()
+        manager?.audioSessionQueue.sync {
+            let rtc = RTCAudioSession.sharedInstance()
+            rtc.lockForConfiguration()
+            rtc.isAudioEnabled = false
+            rtc.audioSessionDidDeactivate(audioSession)
+            rtc.unlockForConfiguration()
+        }
         Logger.calls.info("CallKit audio session deactivated; RTCAudioSession disabled")
     }
 }

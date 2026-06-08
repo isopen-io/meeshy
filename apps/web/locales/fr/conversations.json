@@ -423,7 +423,29 @@
       "single": "Ce fichier est déjà ajouté",
       "multiple": "{count} fichiers sont déjà ajoutés"
     },
-    "pasteTooLongTxtCreated": "Texte trop long : un fichier .txt a été créé automatiquement"
+    "pasteTooLongTxtCreated": "Texte trop long : un fichier .txt a été créé automatiquement",
+    "filter": {
+      "all": "Toutes",
+      "public": "Public",
+      "group": "Groupe",
+      "global": "Globale",
+      "direct": "Direct",
+      "unread": "Non lues",
+      "archived": "Archivées"
+    },
+    "noContacts": "Aucun contact",
+    "noContactsDescription": "Vous n'avez pas encore de contacts. Connectez-vous avec d'autres utilisateurs.",
+    "noNotifications": "Aucune notification",
+    "noNotificationsDescription": "Vous êtes à jour avec toutes vos notifications.",
+    "noArchivedConversations": "Aucune conversation archivée",
+    "noArchivedConversationsDescription": "Archivez des conversations pour les retrouver plus tard.",
+    "noSearchResults": "Aucun résultat",
+    "noSearchResultsWithQuery": "Aucun résultat pour \"{query}\". Essayez une autre recherche.",
+    "noSearchResultsDescription": "Aucun résultat trouvé.",
+    "errorTitle": "Une erreur s'est produite",
+    "errorDescription": "Nous n'avons pas pu charger les données. Veuillez réessayer.",
+    "retry": "Réessayer",
+    "reconnecting": "Reconnexion en cours...",
+    "clickToReconnect": "Cliquez pour reconnecter"
   }
 }
-

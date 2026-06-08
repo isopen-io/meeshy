@@ -9,13 +9,23 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLanguageStore } from '@/stores';
 
 // Cache global pour éviter de recharger les mêmes fichiers
+// Bounded: 2 locales × ~25 namespaces = ~50 max entries in practice.
+const TRANSLATIONS_CACHE_MAX = 100; 
+// Bounded LRU cache for i18n namespace files (max 80 entries = 20 namespaces × 4 languages)
+const I18N_CACHE_MAX = 80; 
 const translationsCache = new Map<string, Record<string, any>>();
+
+function setCachedTranslation(key: string, value: Record<string, any>) {
+  if (translationsCache.size >= I18N_CACHE_MAX) {
+    const firstKey = translationsCache.keys().next().value;
+    if (firstKey !== undefined) translationsCache.delete(firstKey);
+  }
+  translationsCache.set(key, value);
+}
 
 // Fonction pour vider le cache (utile lors de changements de structure)
 export function clearTranslationsCache() {
   translationsCache.clear();
-  if (process.env.NODE_ENV === 'development') {
-  }
 }
 
 interface UseI18nOptions {
@@ -73,9 +83,15 @@ export function useI18n(namespace: string = 'common', options: UseI18nOptions = 
         translations = translations[ns];
       }
       
-      // Mettre en cache (seulement en production)
+      // Mettre en cache (seulement en production, avec garde de taille)
       if (useCache) {
+        if (translationsCache.size >= TRANSLATIONS_CACHE_MAX) {
+          translationsCache.delete(translationsCache.keys().next().value!);
+        }
         translationsCache.set(cacheKey, translations);
+      // Mettre en cache (seulement en production) — LRU bounded
+      if (useCache) {
+        setCachedTranslation(cacheKey, translations);
       }
       
       return translations;

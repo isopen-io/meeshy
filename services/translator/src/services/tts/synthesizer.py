@@ -51,9 +51,11 @@ class UnifiedTTSResult:
     text_length: int
     model_used: 'TTSModel'
     model_info: 'TTSModelInfo'
-    # Audio en base64 pour transmission directe au Gateway (pas de fichier partagé)
-    audio_data_base64: Optional[str] = None
+    # D2 — raw bytes preferred over base64 for internal ZMQ pipeline (no encode/decode round-trip)
+    audio_bytes: Optional[bytes] = None
     audio_mime_type: Optional[str] = None
+    # Legacy base64 field kept for backward compat with HTTP endpoints
+    audio_data_base64: Optional[str] = None
 
 
 class Synthesizer:

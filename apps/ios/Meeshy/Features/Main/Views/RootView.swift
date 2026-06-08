@@ -314,6 +314,7 @@ struct RootView: View {
         .environmentObject(statusViewModel)
         .environmentObject(conversationViewModel)
         .environmentObject(storyViewerCoordinator)
+        .environmentObject(StatusBubbleController.shared)
         // Propagate story viewer presentation state down to chrome (sync
         // pill, etc.) so they can skip rendering while a `fullScreenCover`
         // story is on top. Read by `ConnectionBanner` via
@@ -590,6 +591,7 @@ struct RootView: View {
                 .environmentObject(conversationViewModel)
                 .environmentObject(router)
                 .environmentObject(statusViewModel)
+                .environmentObject(StatusBubbleController.shared)
                 .presentationDetents([.medium, .large])
             }
         }
@@ -601,6 +603,7 @@ struct RootView: View {
         .sheet(isPresented: $showNewConversation) {
             NewConversationView()
                 .environmentObject(statusViewModel)
+                .environmentObject(StatusBubbleController.shared)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }

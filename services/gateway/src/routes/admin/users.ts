@@ -49,7 +49,8 @@ import { UserManagementService } from '../../services/admin/user-management.serv
 import { UserAuditService } from '../../services/admin/user-audit.service';
 import { sanitizationService } from '../../services/admin/user-sanitization.service';
 import { permissionsService } from '../../services/admin/permissions.service';
-import { UnifiedAuthContext, UnifiedAuthRequest} from '../../middleware/auth';
+import { UnifiedAuthContext, UnifiedAuthRequest, authUserCacheKey } from '../../middleware/auth';
+import { getCacheStore } from '../../services/CacheStore';
 import {
   requireUserViewAccess,
   requireUserModifyAccess,
@@ -411,6 +412,8 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         authContext.registeredUser!.id
       );
 
+      try { await getCacheStore().del(authUserCacheKey(request.params.userId)); } catch { /* best-effort */ }
+
       // Log d'audit
       await userAuditService.logUpdateRole(
         authContext.registeredUser!.id,
@@ -497,6 +500,8 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         validatedData as UpdateStatusDTO,
         authContext.registeredUser!.id
       );
+
+      try { await getCacheStore().del(authUserCacheKey(request.params.userId)); } catch { /* best-effort */ }
 
       // Log d'audit
       await userAuditService.logUpdateStatus(

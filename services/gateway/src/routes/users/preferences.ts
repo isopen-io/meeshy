@@ -491,6 +491,7 @@ export async function getUserStats(fastify: FastifyInstance) {
         };
       });
 
+      reply.header('Cache-Control', 'private, max-age=300, stale-while-revalidate=3600');
       return reply.send({
         success: true,
         data: {

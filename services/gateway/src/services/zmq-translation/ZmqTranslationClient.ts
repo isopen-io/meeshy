@@ -58,6 +58,11 @@ const ZMQ_MAX_RETRIES = 3;
 // → Single shot, long deadman timeout, no retry.
 const ZMQ_VOICE_TRANSLATE_DEADMAN_MS = 15 * 60_000; // 15 minutes
 
+// Circuit breaker: open after this many consecutive errors
+const CB_FAILURE_THRESHOLD = 5;
+// Stay open for this duration before auto-resetting to closed
+const CB_COOLDOWN_MS = 30_000;
+
 export class ZmqTranslationClient extends EventEmitter {
   private connectionManager: ZmqConnectionManager;
   private messageHandler: ZmqMessageHandler;
@@ -75,6 +80,10 @@ export class ZmqTranslationClient extends EventEmitter {
 
   // Retry counts per taskId (cleaned up on completion or final timeout)
   private retryCount: Map<string, number> = new Map();
+
+  // Circuit breaker state
+  private cbConsecutiveErrors: number = 0;
+  private cbOpenedAt: number | null = null;
 
   // Statistiques
   private stats: ZMQClientStats = {
@@ -182,6 +191,30 @@ export class ZmqTranslationClient extends EventEmitter {
     'voice_translate_async',
   ]);
 
+  private _cbIsOpen(): boolean {
+    if (this.cbOpenedAt === null) return false;
+    if (Date.now() - this.cbOpenedAt >= CB_COOLDOWN_MS) {
+      this.cbOpenedAt = null;
+      this.cbConsecutiveErrors = 0;
+      logger.info('[CB] Circuit breaker reset — translator may be back');
+      return false;
+    }
+    return true;
+  }
+
+  private _cbRecordSuccess(): void {
+    this.cbConsecutiveErrors = 0;
+    this.cbOpenedAt = null;
+  }
+
+  private _cbRecordError(): void {
+    this.cbConsecutiveErrors++;
+    if (this.cbConsecutiveErrors >= CB_FAILURE_THRESHOLD && this.cbOpenedAt === null) {
+      this.cbOpenedAt = Date.now();
+      logger.warn(`[CB] Circuit breaker OPEN after ${this.cbConsecutiveErrors} consecutive errors — blocking ZMQ for ${CB_COOLDOWN_MS / 1000}s`);
+    }
+  }
+
   /**
    * Configure le forwarding des événements du handler vers le client
    */
@@ -189,6 +222,7 @@ export class ZmqTranslationClient extends EventEmitter {
     // Translation events
     this.messageHandler.on('translationCompleted', (event) => {
       this.stats.results_received++;
+      this._cbRecordSuccess();
       this.retryCount.delete(event.taskId);
       this.requestSender.removePendingRequest(event.taskId);
       this.emit('translationCompleted', event);
@@ -199,6 +233,7 @@ export class ZmqTranslationClient extends EventEmitter {
       if (event.error === 'translation pool full') {
         this.stats.pool_full_rejections++;
       }
+      this._cbRecordError();
       this.retryCount.delete(event.taskId);
       this.requestSender.removePendingRequest(event.taskId);
       this.emit('translationError', event);
@@ -387,6 +422,9 @@ export class ZmqTranslationClient extends EventEmitter {
    * Envoie une requête de traduction
    */
   async sendTranslationRequest(request: TranslationRequest): Promise<string> {
+    if (this._cbIsOpen()) {
+      throw new Error('ZMQ circuit breaker OPEN: translator unavailable, request rejected');
+    }
     const taskId = await this.requestSender.sendTranslationRequest(request);
     this.stats.requests_sent++;
     this._registerRequestTimeout(
@@ -406,6 +444,9 @@ export class ZmqTranslationClient extends EventEmitter {
    * Envoie une requête de processing audio
    */
   async sendAudioProcessRequest(request: Omit<AudioProcessRequest, 'type'>): Promise<string> {
+    if (this._cbIsOpen()) {
+      throw new Error('ZMQ circuit breaker OPEN: translator unavailable, request rejected');
+    }
     const taskId = await this.requestSender.sendAudioProcessRequest(request);
     this.stats.requests_sent++;
     this._registerRequestTimeout(

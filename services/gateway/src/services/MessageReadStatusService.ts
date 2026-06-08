@@ -164,6 +164,53 @@ export class MessageReadStatusService {
   }
 
   /**
+   * Batched variant for multiple participants in the same conversation.
+   * Reduces N×3 DB queries to 1 cursor batch + 1 participant batch + N parallel counts.
+   * Returns a Map<participantId, unreadCount>. Accepts pre-resolved participant rows
+   * (id + joinedAt) to avoid redundant participant lookups.
+   */
+  async getUnreadCountsForParticipants(
+    participants: ReadonlyArray<{ id: string; joinedAt: Date | null }>,
+    conversationId: string,
+    senderId: string
+  ): Promise<Map<string, number>> {
+    if (participants.length === 0) return new Map();
+
+    try {
+      const participantIds = participants.map((p) => p.id);
+
+      // Batch fetch all cursors in a single query
+      const cursors = await this.prisma.conversationReadCursor.findMany({
+        where: { participantId: { in: participantIds }, conversationId },
+        select: { participantId: true, lastReadAt: true },
+      });
+      const cursorMap = new Map(cursors.map((c) => [c.participantId, c.lastReadAt]));
+
+      // Run message counts in parallel, one per participant
+      const results = await Promise.all(
+        participants.map(async (p) => {
+          const lastReadAt = cursorMap.get(p.id) ?? null;
+          const floor: Date | null = lastReadAt ?? p.joinedAt ?? null;
+          const count = await this.prisma.message.count({
+            where: {
+              conversationId,
+              deletedAt: null,
+              senderId: { not: senderId },
+              ...(floor ? { createdAt: { gt: floor } } : {}),
+            },
+          });
+          return [p.id, count] as const;
+        })
+      );
+
+      return new Map(results);
+    } catch (error) {
+      logger.error("[MessageReadStatus] Error batch-computing unread counts", error);
+      return new Map(participants.map((p) => [p.id, 0]));
+    }
+  }
+
+  /**
    * Calcule le unreadCount pour plusieurs conversations d'un utilisateur.
    * Batched variant of `getUnreadCount` — same fresh-compute contract,
    * same stale-cursor avoidance. Returns 0 for any conversation in which
@@ -193,6 +240,85 @@ export class MessageReadStatusService {
     } catch (error) {
       logger.error("[MessageReadStatus] Error getting unread counts", error);
       return new Map();
+    }
+  }
+
+  /**
+   * Calcule le unreadCount pour N participants d'une même conversation en 3 requêtes
+   * (participants, cursors, messages) au lieu de N×3 requêtes individuelles.
+   *
+   * C'est le remplacement SOTA du N+1 loop dans _broadcastNewMessage.
+   * Returns Map<participantId, unreadCount>.
+   */
+  async getUnreadCountsForParticipants(
+    participantIds: string[],
+    conversationId: string
+  ): Promise<Map<string, number>> {
+    if (participantIds.length === 0) return new Map();
+
+    try {
+      // 1. Récupérer joinedAt pour chaque participant (une requête)
+      const participants = await this.prisma.participant.findMany({
+        where: {
+          conversationId,
+          id: { in: participantIds },
+          isActive: true,
+        },
+        select: { id: true, joinedAt: true },
+      });
+
+      if (participants.length === 0) {
+        return new Map(participantIds.map(id => [id, 0]));
+      }
+
+      // 2. Récupérer tous les curseurs de ces participants (une requête)
+      const cursors = await this.prisma.conversationReadCursor.findMany({
+        where: {
+          conversationId,
+          participantId: { in: participantIds },
+        },
+        select: { participantId: true, lastReadAt: true },
+      });
+
+      const cursorByParticipant = new Map(cursors.map(c => [c.participantId, c.lastReadAt]));
+
+      // 3. Déterminer le floor le plus ancien pour minimiser la fenêtre de messages
+      const floors = participants.map(p => cursorByParticipant.get(p.id) ?? p.joinedAt ?? null);
+      const validFloors = floors.filter((f): f is Date => f !== null);
+      const earliestFloor = validFloors.length > 0
+        ? validFloors.reduce((min, f) => f < min ? f : min)
+        : null;
+
+      // 4. Récupérer tous les messages pertinents depuis le floor le plus ancien (une requête)
+      const messages = await this.prisma.message.findMany({
+        where: {
+          conversationId,
+          deletedAt: null,
+          ...(earliestFloor ? { createdAt: { gt: earliestFloor } } : {}),
+        },
+        select: { createdAt: true, senderId: true },
+      });
+
+      // 5. Compter en mémoire pour chaque participant
+      const result = new Map<string, number>();
+      for (const p of participants) {
+        const floor = cursorByParticipant.get(p.id) ?? p.joinedAt ?? null;
+        const count = messages.filter(m =>
+          m.senderId !== p.id &&
+          (floor === null || m.createdAt > floor)
+        ).length;
+        result.set(p.id, count);
+      }
+
+      // Zéro pour les participants non trouvés
+      for (const id of participantIds) {
+        if (!result.has(id)) result.set(id, 0);
+      }
+
+      return result;
+    } catch (error) {
+      logger.error("[MessageReadStatus] Error getting unread counts for participants:", error);
+      return new Map(participantIds.map(id => [id, 0]));
     }
   }
 

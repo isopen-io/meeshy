@@ -327,6 +327,8 @@ export function Header({
             className="md:hidden"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             aria-label={isMobileMenuOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
+            aria-expanded={isMobileMenuOpen}
+            aria-controls="mobile-nav"
           >
             {isMobileMenuOpen ? (
               <X className="h-6 w-6" />
@@ -338,7 +340,7 @@ export function Header({
 
         {/* Mobile Menu */}
         {isMobileMenuOpen && (
-          <div className="md:hidden py-4 border-t">
+          <div id="mobile-nav" className="md:hidden py-4 border-t" role="navigation" aria-label="Menu mobile">
             <nav className="flex flex-col space-y-4">
               {/* Mode Chat */}
               {mode === 'chat' && (

@@ -515,7 +515,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
         do {
             let response = try await messageService.list(
-                conversationId: conversationId, offset: 0, limit: 30, includeReplies: true, includeTranslations: true
+                conversationId: conversationId, offset: 0, limit: 30, includeReplies: true, includeTranslations: true, languages: nil
             )
             let userId = await currentUserId()
             let username = await currentUsername()
@@ -539,7 +539,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     public func fetchOlderMessages(for conversationId: String, before messageId: String) async {
         do {
             let response = try await messageService.listBefore(
-                conversationId: conversationId, before: messageId, limit: 30, includeReplies: true, includeTranslations: true
+                conversationId: conversationId, before: messageId, limit: 30, includeReplies: true, includeTranslations: true, languages: nil
             )
             let userId = await currentUserId()
             let username = await currentUsername()

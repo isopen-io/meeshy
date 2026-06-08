@@ -726,7 +726,19 @@ export class MessageProcessor {
         );
       }
 
-      for (const audioAtt of audioAttachments) {
+      // Resolve sender userId once (shared across all attachments)
+      let resolvedSenderId = senderId;
+      const senderParticipant = await this.prisma.participant.findUnique({
+        where: { id: senderId },
+        select: { userId: true }
+      });
+      if (senderParticipant?.userId) {
+        resolvedSenderId = senderParticipant.userId;
+      }
+
+      const uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
+
+      await Promise.all(audioAttachments.map(async (audioAtt) => {
         let mobileTranscription: any = undefined;
         if (audioAtt.metadata && typeof audioAtt.metadata === 'object') {
           const metadata = audioAtt.metadata as any;
@@ -735,20 +747,9 @@ export class MessageProcessor {
           }
         }
 
-        const uploadBasePath = process.env.UPLOAD_PATH || '/app/uploads';
         const audioPath = audioAtt.filePath ? path.join(uploadBasePath, audioAtt.filePath) : '';
 
-        // Resolve sender userId if needed
-        let resolvedSenderId = senderId;
-        const senderParticipant = await this.prisma.participant.findUnique({
-          where: { id: senderId },
-          select: { userId: true }
-        });
-        if (senderParticipant?.userId) {
-          resolvedSenderId = senderParticipant.userId;
-        }
-
-        await this.translationService.processAudioAttachment({
+        await this.translationService!.processAudioAttachment({
           messageId,
           attachmentId: audioAtt.id,
           conversationId,
@@ -760,7 +761,7 @@ export class MessageProcessor {
           generateVoiceClone: true,
           modelType: 'medium'
         });
-      }
+      }));
     } catch (error) {
       logger.error('[MessageProcessor] Error processing audio attachments', error);
     }

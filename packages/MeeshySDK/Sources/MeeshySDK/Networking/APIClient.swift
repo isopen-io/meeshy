@@ -377,6 +377,10 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             urlRequest.httpBody = body
         }
 
+        // E1 — Declare Brotli + gzip support explicitly so the gateway's @fastify/compress
+        // returns compressed responses. URLSession does not always advertise Brotli unless told.
+        urlRequest.setValue("br, gzip, deflate", forHTTPHeaderField: "Accept-Encoding")
+
         // Caller-provided headers are applied last so they win over defaults
         // (relevant for `X-Client-Mutation-Id` which has no built-in setter).
         if let headers {

@@ -83,20 +83,20 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
   // Hook pour fixer les z-index des popovers Radix UI
   useFixRadixZIndex();
 
-  // Stable ref for the getMessageById callback — identity never changes, but always reads latest translatedMessages
-  const getMessageByIdRef = useRef((messageId: string) =>
-    (translatedMessages as Message[]).find(msg => msg.id === messageId)
+  const translatedMessagesRef = useRef(translatedMessages);
+  translatedMessagesRef.current = translatedMessages;
+
+  const getMessageById = useCallback(
+    (messageId: string) =>
+      (translatedMessagesRef.current as Message[]).find(msg => msg.id === messageId),
+    []
   );
-  getMessageByIdRef.current = (messageId: string) =>
-    (translatedMessages as Message[]).find(msg => msg.id === messageId);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      meeshySocketIOService.setGetMessageByIdCallback(
-        (messageId: string) => getMessageByIdRef.current(messageId)
-      );
+      meeshySocketIOService.setGetMessageByIdCallback(getMessageById);
     }
-  }, []);
+  }, [getMessageById]);
 
   // Utiliser le ref externe SI fourni, sinon créer un ref local
   const internalScrollAreaRef = useRef<HTMLDivElement>(null);
@@ -495,6 +495,10 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
           isTranslating={isTranslating}
           onRetryMessage={onRetryMessage}
           onCancelMessage={onCancelMessage}
+          containerRef={scrollAreaRef}
+          hasMore={hasMore}
+          isLoadingMore={isLoadingMore}
+          onLoadMore={onLoadMore}
         />
       </div>
 

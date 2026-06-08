@@ -34,6 +34,7 @@ extension iPadRootView {
                     .environmentObject(conversationViewModel)
                     .environmentObject(router)
                     .environmentObject(statusViewModel)
+                    .environmentObject(StatusBubbleController.shared)
                     .presentationDetents([.medium, .large])
                 }
             }
@@ -43,6 +44,7 @@ extension iPadRootView {
             .sheet(isPresented: $showNewConversation) {
                 NewConversationView()
                     .environmentObject(statusViewModel)
+                    .environmentObject(StatusBubbleController.shared)
                     .presentationDetents([.large])
                     .presentationDragIndicator(.visible)
             }

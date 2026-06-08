@@ -292,6 +292,12 @@ model User {
 
   // Unified participant model (replaces conversations + anonymousParticipants)
   participations Participant[]
+
+  @@index([isOnline, lastActiveAt(sort: Desc)]) // Optimisation: présence — "utilisateurs en ligne triés par activité"
+  @@index([systemLanguage]) // Prisme Linguistique: language extraction queries et Optimisation: utilisateurs par langue (broadcast ciblé)
+  @@index([deviceLocale])   // Prisme Linguistique: 4th-priority locale resolution
+  @@index([lastActiveAt]) // Optimisation: utilisateurs actifs récemment 
+  @@index([isActive, lastActiveAt]) // Optimisation: utilisateurs actifs triés
 }
 
 /// Conversation entre utilisateurs (direct, group, public, global)
@@ -682,7 +688,10 @@ model Message {
   @@index([conversationId])
   @@index([conversationId, deletedAt, createdAt]) // Optimisation: requête lastMessage avec tri
   @@index([senderId])
+  @@index([senderId, conversationId]) // Optimisation: messages d'un user dans une conv
   @@index([messageSource])
+  @@index([conversationId, messageSource]) // Filtrage rapide messages système (call summaries)
+  @@index([replyToId]) // Expansion thread — évite full-scan sur replyToId nullable
   @@index([createdAt])
 }
 
@@ -939,6 +948,8 @@ model MessageStatusEntry {
   @@index([participantId])
   @@index([readAt])
   @@index([deliveredAt])
+  @@index([conversationId, participantId, readAt]) // Comptage non-lus par participant dans une conversation
+  @@index([participantId, conversationId]) // Historique lecture d'un participant toutes conversations
 }
 
 /// Per-attachment status entry for each user
@@ -1073,6 +1084,8 @@ model ConversationReadCursor {
   @@unique([conversationId, participantId], name: "conversation_participant_cursor")
   @@index([participantId])
   @@index([unreadCount])
+  @@index([participantId, lastReadAt])   // Optimisation: batch unread count par participant
+  @@index([conversationId, participantId, lastReadAt]) // Optimisation: requêtes curseur combinées
 }
 
 /// Réaction emoji sur un message par un utilisateur
@@ -1241,6 +1254,7 @@ model Notification {
   @@index([userId, createdAt(sort: Desc)])
   @@index([createdAt])
   @@index([type])
+  @@index([userId, isRead, createdAt(sort: Desc)]) // Optimisation: pagination non-lus par user
 }
 
 /// Fonctionnalités et consentements utilisateur (1:1 avec User)
@@ -1656,6 +1670,7 @@ model CallSession {
   @@index([conversationId])
   @@index([status])
   @@index([startedAt])
+  @@index([conversationId, status, startedAt]) // Optimisation: active call lookup par conversation
 }
 
 /// Call Participant - Represents a user participating in a call

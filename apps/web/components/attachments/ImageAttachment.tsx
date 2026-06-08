@@ -5,6 +5,7 @@
 'use client';
 
 import React, { useCallback } from 'react';
+import NextImage from 'next/image';
 import { X } from 'lucide-react';
 import { Attachment, formatFileSize } from '@meeshy/shared/types/attachment';
 import {
@@ -92,24 +93,25 @@ export const ImageAttachment = React.memo(function ImageAttachment({
             aria-label={`Ouvrir l'image ${attachment.originalName}`}
           >
             <div className={`relative bg-gray-100 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden hover:border-blue-400 dark:hover:border-blue-500 transition-[border-color,box-shadow] hover:shadow-lg dark:hover:shadow-blue-500/30 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${imageCount <= 2 ? 'inline-flex items-center justify-center max-h-[320px]' : sizeClasses} ${aspectRatioClass}`}>
-              <img
-                src={imageUrl}
-                alt={attachment.originalName}
-                className={`${
-                  imageCount <= 2
-                    ? 'max-w-full max-h-[320px] w-auto h-auto object-contain'
-                    : 'w-full h-full object-cover'
-                }`}
-                loading="lazy"
-                decoding="async"
-                onError={(e) => {
-                  if (e.currentTarget.src !== attachment.fileUrl) {
-                    e.currentTarget.src = attachment.fileUrl;
-                  } else {
-                    e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23ddd" width="100" height="100"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999"%3EImage%3C/text%3E%3C/svg%3E';
-                  }
-                }}
-              />
+              {imageCount <= 2 ? (
+                <NextImage
+                  src={imageUrl}
+                  alt={attachment.originalName}
+                  width={attachment.width ?? 320}
+                  height={attachment.height ?? 320}
+                  className="max-w-full max-h-[320px] w-auto h-auto object-contain"
+                  loading="lazy"
+                />
+              ) : (
+                <NextImage
+                  src={imageUrl}
+                  alt={attachment.originalName}
+                  fill
+                  sizes="(max-width: 768px) 45vw, 200px"
+                  className="object-cover"
+                  loading="lazy"
+                />
+              )}
 
               {canDelete && (
                 <button

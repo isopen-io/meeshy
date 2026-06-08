@@ -18,11 +18,14 @@ import logging
 import time
 import json
 import re
+from collections import OrderedDict
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
+
+MAX_MEMORY_CACHE_SIZE = 500
 
 # Flag de disponibilité Redis
 REDIS_AVAILABLE = False
@@ -68,7 +71,7 @@ class RedisService:
 
         self.redis_url = redis_url or os.getenv("REDIS_URL", "redis://localhost:6379")
         self.redis: Optional[aioredis.Redis] = None
-        self.memory_cache: Dict[str, CacheEntry] = {}
+        self.memory_cache: OrderedDict[str, CacheEntry] = OrderedDict()
         self.is_redis_available = False
         self.permanently_disabled = not REDIS_AVAILABLE
         self.connection_attempts = 0
@@ -166,12 +169,12 @@ class RedisService:
                 logger.warning(f"[REDIS] Erreur get ({error_type}) - fallback mémoire")
                 self._handle_redis_error()
 
-        # Fallback cache mémoire
+        # Fallback cache mémoire (LRU: move to end on access)
         entry = self.memory_cache.get(key)
         if entry and entry.expires_at > time.time():
+            self.memory_cache.move_to_end(key)
             return entry.value
 
-        # Supprimer si expiré
         if entry:
             del self.memory_cache[key]
 
@@ -193,9 +196,12 @@ class RedisService:
                 logger.warning(f"[REDIS] Erreur set ({error_type}) - fallback mémoire")
                 self._handle_redis_error()
 
-        # Fallback cache mémoire
+        # Fallback cache mémoire (LRU, bounded)
         expires_at = time.time() + (ex if ex else 3600)  # 1 heure par défaut
         self.memory_cache[key] = CacheEntry(value=value, expires_at=expires_at)
+        self.memory_cache.move_to_end(key)
+        while len(self.memory_cache) > MAX_MEMORY_CACHE_SIZE:
+            self.memory_cache.popitem(last=False)
         return True
 
     async def setex(self, key: str, seconds: int, value: str) -> bool:
