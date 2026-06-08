@@ -41,7 +41,6 @@ extension ConversationView {
             isAudioPlaying: scrollButtonAudioPlayer.isPlaying,
             isOffline: isOffline,
             isSearchingQuotedMessage: viewModel.isSearchingQuotedMessage,
-            typingDotPhase: headerState.typingDotPhase,
             accentColor: accentColor,
             secondaryColor: secondaryColor,
             onScrollToBottom: {
