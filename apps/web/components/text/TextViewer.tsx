@@ -66,7 +66,7 @@ export const TextViewer: React.FC<TextViewerProps> = ({
       } catch (error) {
         console.error('Erreur chargement fichier texte:', error);
         setHasError(true);
-        setErrorMessage('Impossible de charger le fichier');
+        setErrorMessage(t('text.loadError'));
       } finally {
         setIsLoading(false);
       }
@@ -79,11 +79,11 @@ export const TextViewer: React.FC<TextViewerProps> = ({
     try {
       await navigator.clipboard.writeText(content);
       setIsCopied(true);
-      toast.success('Copié dans le presse-papiers');
+      toast.success(t('text.copied'));
       setTimeout(() => setIsCopied(false), 2000);
     } catch (error) {
       console.error('Erreur copie:', error);
-      toast.error('Impossible de copier');
+      toast.error(t('text.copyError'));
     }
   };
 

@@ -14,6 +14,7 @@ import { AgentConfigDialog } from './AgentConfigDialog';
 import { UserDisplay } from './UserDisplay';
 import { useDebounce } from 'use-debounce';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
 import dynamic from 'next/dynamic';
 
 const TriggerSchedulingModal = dynamic(() => import('./TriggerSchedulingModal'), {
@@ -50,6 +51,7 @@ function formatTimeAgo(dateStr: string | null | undefined): string {
 }
 
 export function AgentConversationsTab() {
+  const { t } = useI18n('admin');
   const [configs, setConfigs] = useState<AgentConfigData[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -73,7 +75,7 @@ export function AgentConversationsTab() {
         setHasMore(response.pagination?.hasMore ?? false);
       }
     } catch {
-      if (!isSilent) toast.error('Erreur lors du chargement des configurations');
+      if (!isSilent) toast.error(t('agent.toasts.configLoadError'));
     } finally {
       if (!isSilent) setLoading(false);
     }
@@ -91,9 +93,9 @@ export function AgentConversationsTab() {
       setConfigs(prev => prev.map(c =>
         c.conversationId === config.conversationId ? { ...c, enabled: !c.enabled } : c
       ));
-      toast.success(`Agent ${!config.enabled ? 'activé' : 'désactivé'}`);
+      toast.success(t(config.enabled ? 'agent.toasts.agentDisabled' : 'agent.toasts.agentEnabled'));
     } catch {
-      toast.error('Erreur lors de la mise à jour');
+      toast.error(t('agent.toasts.updateError'));
     }
   };
 
@@ -102,9 +104,9 @@ export function AgentConversationsTab() {
     try {
       await agentAdminService.deleteConfig(conversationId);
       setConfigs(prev => prev.filter(c => c.conversationId !== conversationId));
-      toast.success('Configuration supprimée');
+      toast.success(t('agent.toasts.configDeleted'));
     } catch {
-      toast.error('Erreur lors de la suppression');
+      toast.error(t('agent.toasts.deleteError'));
     }
   };
 
@@ -112,14 +114,14 @@ export function AgentConversationsTab() {
     try {
       if (config.isScanning) {
         await agentAdminService.stopScan(config.conversationId);
-        toast.success('Interruption demandée');
+        toast.success(t('agent.toasts.triggerInterrupted'));
       } else {
         await agentAdminService.triggerScan(config.conversationId);
-        toast.success('Scan déclenché');
+        toast.success(t('agent.toasts.scanTriggered'));
       }
       setTimeout(() => fetchConfigs(true), 1000);
     } catch {
-      toast.error('Erreur lors du déclenchement');
+      toast.error(t('agent.toasts.scanTriggerError'));
     }
   };
 

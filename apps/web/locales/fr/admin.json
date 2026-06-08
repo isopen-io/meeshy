@@ -141,7 +141,24 @@
       "queueItemAlreadySent": "Message déjà envoyé",
       "queueItemDeleteError": "Erreur lors de la suppression",
       "queueItemEdited": "Message modifié",
-      "queueItemEditError": "Erreur lors de la modification"
+      "queueItemEditError": "Erreur lors de la modification",
+      "conversationConfigUpdated": "Config conversation mise à jour",
+      "archetypesLoadError": "Erreur lors du chargement des archétypes",
+      "configLoadError": "Erreur lors du chargement des configurations",
+      "agentEnabled": "Agent activé",
+      "agentDisabled": "Agent désactivé",
+      "configDeleted": "Configuration supprimée",
+      "deleteError": "Erreur lors de la suppression"
+    },
+    "scheduling": {
+      "fixedTime": "Heure fixe",
+      "delay": "Dans X temps",
+      "frequency": "Fréquence",
+      "timerWarning": "Ce timer est perdu si vous fermez la page ou le navigateur.",
+      "dragToMove": "glisser pour déplacer",
+      "notAvailable": "Schedule non disponible",
+      "triggerNow": "Déclencher maintenant",
+      "stop": "STOP!"
     }
   },
   "agentLive": {
@@ -196,6 +213,10 @@
   },
   "security": {
     "enable2FA": "Activer 2FA",
-    "disable2FA": "Désactiver 2FA"
+    "disable2FA": "Désactiver 2FA",
+    "accountUnlocked": "Compte déverrouillé avec succès",
+    "twoFactorEnabled": "2FA activé avec succès",
+    "twoFactorDisabled": "2FA désactivé avec succès",
+    "disabled": "Désactivé"
   }
 }

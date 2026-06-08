@@ -346,7 +346,7 @@ export default memo(function TriggerSchedulingModal({
                         className={`w-full h-8 text-xs gap-1.5 ${!isScanning ? 'border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/50' : ''}`}
                       >
                         {triggering ? <Loader2 className="h-3 w-3 animate-spin" /> : (isScanning ? <Square className="h-2.5 w-2.5 fill-current" /> : <Zap className="h-3 w-3" />)}
-                        {isScanning ? 'STOP!' : 'Declencher maintenant'}
+                        {isScanning ? t('agent.scheduling.stop') : t('agent.scheduling.triggerNow')}
                       </Button>
                     </div>
 
@@ -354,7 +354,7 @@ export default memo(function TriggerSchedulingModal({
                     <div className="p-2.5 sm:p-3 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 space-y-2">
                       <div className="flex items-center gap-1.5">
                         <Clock className="h-3 w-3 text-indigo-500" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Heure fixe</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{t('agent.scheduling.fixedTime')}</span>
                       </div>
                       <div className="flex gap-1.5">
                         <Input
@@ -379,7 +379,7 @@ export default memo(function TriggerSchedulingModal({
                     <div className="p-2.5 sm:p-3 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 space-y-2">
                       <div className="flex items-center gap-1.5">
                         <Timer className="h-3 w-3 text-indigo-500" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Dans X temps</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{t('agent.scheduling.delay')}</span>
                       </div>
                       <div className="flex gap-1.5">
                         <Input
@@ -414,7 +414,7 @@ export default memo(function TriggerSchedulingModal({
                     <div className="p-2.5 sm:p-3 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 space-y-2">
                       <div className="flex items-center gap-1.5">
                         <RotateCcw className="h-3 w-3 text-indigo-500" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Frequence</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{t('agent.scheduling.frequency')}</span>
                       </div>
                       <div className="flex gap-1.5 items-center">
                         <div className="flex-1 flex gap-1 items-center min-w-0">
@@ -452,7 +452,7 @@ export default memo(function TriggerSchedulingModal({
                   {scheduledTimer && (
                     <div className="text-[10px] text-amber-500 flex items-center gap-1">
                       <AlertTriangle className="h-3 w-3 shrink-0" />
-                      Ce timer est perdu si vous fermez la page ou le navigateur.
+                      {t('agent.scheduling.timerWarning')}
                     </div>
                   )}
 
@@ -561,7 +561,7 @@ export default memo(function TriggerSchedulingModal({
                                     {isNext && dragPct !== null
                                       ? formatTime(now + (dragPct / 100) * timelineData.horizonMs)
                                       : formatTime(ts)}
-                                    {isNext && <span className="block text-[8px] text-center text-indigo-300 dark:text-indigo-600">glisser pour deplacer</span>}
+                                    {isNext && <span className="block text-[8px] text-center text-indigo-300 dark:text-indigo-600">{t('agent.scheduling.dragToMove')}</span>}
                                   </div>
                                 </div>
                               </div>
@@ -672,7 +672,7 @@ export default memo(function TriggerSchedulingModal({
                   {!schedule && (
                     <div className="flex items-center gap-2 text-sm text-gray-400 py-4">
                       <AlertTriangle className="h-4 w-4" />
-                      <span>Schedule non disponible</span>
+                      <span>{t('agent.scheduling.notAvailable')}</span>
                     </div>
                   )}
                 </div>

@@ -14,6 +14,7 @@ import { agentAdminService, type ArchetypeData } from '@/services/agent-admin.se
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
 
 const TONE_COLORS: Record<string, string> = {
   enthousiaste: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
@@ -30,6 +31,7 @@ const EMOJI_LABELS: Record<string, string> = {
 };
 
 export function AgentArchetypesTab() {
+  const { t } = useI18n('admin');
   const [archetypes, setArchetypes] = useState<ArchetypeData[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -41,7 +43,7 @@ export function AgentArchetypesTab() {
           setArchetypes(Array.isArray(response.data) ? response.data : []);
         }
       } catch {
-        toast.error('Erreur lors du chargement des archétypes');
+        toast.error(t('agent.toasts.archetypesLoadError'));
       } finally {
         setLoading(false);
       }

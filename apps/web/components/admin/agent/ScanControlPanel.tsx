@@ -17,10 +17,12 @@ import {
   type AgentGlobalConfigUpsert,
 } from '@/services/agent-admin.service';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
 
 type Scope = 'global' | 'conversation';
 
 export default memo(function ScanControlPanel() {
+  const { t } = useI18n('admin');
   const [scope, setScope] = useState<Scope>('global');
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -116,22 +118,22 @@ export default memo(function ScanControlPanel() {
       if (scope === 'global') {
         const res = await agentAdminService.updateGlobalConfig(globalForm);
         if (res.success) {
-          toast.success('Config globale mise a jour');
+          toast.success(t('agent.toasts.globalConfigUpdated'));
           fetchGlobal();
         } else {
-          toast.error('Erreur');
+          toast.error(t('agent.toasts.globalConfigUpdateError'));
         }
       } else if (selectedConvId) {
         const res = await agentAdminService.upsertConfig(selectedConvId, convForm);
         if (res.success) {
-          toast.success('Config conversation mise a jour');
+          toast.success(t('agent.toasts.conversationConfigUpdated'));
           fetchConv(selectedConvId);
         } else {
-          toast.error('Erreur');
+          toast.error(t('agent.toasts.updateError'));
         }
       }
     } catch {
-      toast.error('Erreur reseau');
+      toast.error(t('agent.toasts.networkError'));
     } finally {
       setSaving(false);
     }

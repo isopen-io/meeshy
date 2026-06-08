@@ -75,7 +75,8 @@
       "connectionError": "Erro de conexão",
       "videoSwitchFailed": "Falha ao trocar vídeo",
       "cameraSwitched": "Câmera trocada",
-      "cameraSwitchFailed": "Falha ao trocar câmera"
+      "cameraSwitchFailed": "Falha ao trocar câmera",
+      "joinFailed": "Falha ao entrar na chamada"
     },
     "permissions": {
       "title": {

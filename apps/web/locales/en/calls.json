@@ -75,7 +75,8 @@
       "connectionError": "Connection error",
       "videoSwitchFailed": "Failed to switch video",
       "cameraSwitched": "Camera switched",
-      "cameraSwitchFailed": "Failed to switch camera"
+      "cameraSwitchFailed": "Failed to switch camera",
+      "joinFailed": "Failed to join call"
     },
     "permissions": {
       "title": {
