@@ -495,6 +495,7 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
           isTranslating={isTranslating}
           onRetryMessage={onRetryMessage}
           onCancelMessage={onCancelMessage}
+          containerRef={scrollAreaRef}
         />
       </div>
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useMemo, useEffect, memo } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { toast } from 'sonner';
 import { MessageSquare } from 'lucide-react';
 import { BubbleMessage } from './BubbleMessage';
@@ -9,6 +10,8 @@ import { messageTranslationService } from '@/services/message-translation.servic
 import { useFixRadixZIndex } from '@/hooks/use-fix-z-index';
 import { useI18n } from '@/hooks/useI18n';
 import type { User, Message, MessageWithTranslations, ConversationType, TranslationModel } from '@meeshy/shared/types';
+
+const VIRTUAL_THRESHOLD = 100;
 
 interface MessagesDisplayProps {
   messages: Message[];
@@ -72,7 +75,7 @@ export const MessagesDisplay = memo(function MessagesDisplay({
   onCancelMessage,
   addTranslatingState,
   isTranslating,
-  _containerRef,
+  containerRef,
   onLoadMore,
   hasMore = false,
   isLoadingMore = false
@@ -80,9 +83,10 @@ export const MessagesDisplay = memo(function MessagesDisplay({
 
   // Hook pour fixer les z-index des popovers Radix UI
   useFixRadixZIndex();
-  
+
   // Hook pour les traductions
   const { t } = useI18n('bubbleStream');
+
 
   // États pour contrôler l'affichage des messages depuis le parent
   const [messageDisplayStates, setMessageDisplayStates] = useState<Record<string, {
@@ -245,6 +249,18 @@ export const MessagesDisplay = memo(function MessagesDisplay({
     return reverseOrder ? [...transformedMessages].reverse() : transformedMessages;
   }, [messages, translatedMessages, reverseOrder]);
 
+  // TanStack Virtual — activated above VIRTUAL_THRESHOLD items when a scroll container ref is provided.
+  // Always called (React hooks rules); `enabled: false` when below threshold or no ref.
+  const isVirtualized = containerRef != null && displayMessages.length >= VIRTUAL_THRESHOLD;
+  const virtualizer = useVirtualizer({
+    count: displayMessages.length,
+    getScrollElement: () => (isVirtualized ? containerRef!.current : null),
+    estimateSize: () => 88,
+    overscan: 10,
+    enabled: isVirtualized,
+    measureElement: (el) => el.getBoundingClientRect().height,
+  });
+
   // Initialiser l'état d'affichage pour les nouveaux messages
   useEffect(() => {
     setMessageDisplayStates(prev => {
@@ -343,66 +359,88 @@ export const MessagesDisplay = memo(function MessagesDisplay({
     );
   }
 
+  const renderBubble = (message: (typeof displayMessages)[number], index: number) => {
+    const state = messageDisplayStates[message.id] || {
+      currentDisplayLanguage: message.originalLanguage,
+      isTranslating: false,
+    };
+    const prevMsg = index > 0 ? displayMessages[index - 1] : null;
+    const nextMsg = index < displayMessages.length - 1 ? displayMessages[index + 1] : null;
+    const senderId = message.sender?.id;
+    const isFirstInGroup = !prevMsg?.sender?.id || prevMsg.sender.id !== senderId;
+    const isLastInGroup = !nextMsg?.sender?.id || nextMsg.sender.id !== senderId;
+    const localStatus = (message as unknown)._localStatus as string | undefined;
+    const tempId = (message as unknown)._tempId as string | undefined;
+    const isSending = localStatus === 'sending';
+    const isFailed = localStatus === 'failed';
+    return (
+      <div className={isSending || isFailed ? 'opacity-70' : undefined}>
+        <BubbleMessage
+          message={message as unknown}
+          currentUser={currentUser}
+          userLanguage={userLanguage}
+          usedLanguages={usedLanguages}
+          onForceTranslation={handleForceTranslation}
+          onEditMessage={onEditMessage}
+          onDeleteMessage={onDeleteMessage}
+          onReplyMessage={onReplyMessage}
+          onNavigateToMessage={onNavigateToMessage}
+          onImageClick={onImageClick}
+          onLanguageSwitch={handleLanguageSwitch}
+          currentDisplayLanguage={state.currentDisplayLanguage}
+          isTranslating={checkIsTranslating(message.id, state.currentDisplayLanguage)}
+          translationError={state.translationError}
+          conversationType={conversationType}
+          userRole={userRole}
+          conversationId={conversationId}
+          isAnonymous={isAnonymous}
+          currentAnonymousUserId={currentAnonymousUserId}
+          isFirstInGroup={isFirstInGroup}
+          isLastInGroup={isLastInGroup}
+        />
+        {isFailed && tempId && onRetryMessage && onCancelMessage && (
+          <FailedMessageBar
+            tempId={tempId}
+            content={message.content || (message as unknown).originalContent || ''}
+            originalLanguage={message.originalLanguage || 'fr'}
+            replyToId={(message as unknown).replyToId}
+            onRetry={onRetryMessage}
+            onCancel={onCancelMessage}
+            t={t}
+          />
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className={`${className} bubble-message-container flex flex-col pb-6 max-w-full overflow-visible`}>
-      {displayMessages.map((message, index) => {
-        const state = messageDisplayStates[message.id] || {
-          currentDisplayLanguage: message.originalLanguage,
-          isTranslating: false
-        };
-
-        const prevMsg = index > 0 ? displayMessages[index - 1] : null;
-        const nextMsg = index < displayMessages.length - 1 ? displayMessages[index + 1] : null;
-        const senderId = message.sender?.id;
-        const prevSenderId = prevMsg ? prevMsg.sender?.id : null;
-        const nextSenderId = nextMsg ? nextMsg.sender?.id : null;
-        const isFirstInGroup = !prevSenderId || prevSenderId !== senderId;
-        const isLastInGroup = !nextSenderId || nextSenderId !== senderId;
-
-        const localStatus = (message as unknown)._localStatus as string | undefined;
-        const tempId = (message as unknown)._tempId as string | undefined;
-        const isSending = localStatus === 'sending';
-        const isFailed = localStatus === 'failed';
-
-        return (
-          <div key={message.id} className={isSending || isFailed ? 'opacity-70' : undefined}>
-            <BubbleMessage
-              message={message as unknown}
-              currentUser={currentUser}
-              userLanguage={userLanguage}
-              usedLanguages={usedLanguages}
-              onForceTranslation={handleForceTranslation}
-              onEditMessage={onEditMessage}
-              onDeleteMessage={onDeleteMessage}
-              onReplyMessage={onReplyMessage}
-              onNavigateToMessage={onNavigateToMessage}
-              onImageClick={onImageClick}
-              onLanguageSwitch={handleLanguageSwitch}
-              currentDisplayLanguage={state.currentDisplayLanguage}
-              isTranslating={checkIsTranslating(message.id, state.currentDisplayLanguage)}
-              translationError={state.translationError}
-              conversationType={conversationType}
-              userRole={userRole}
-              conversationId={conversationId}
-              isAnonymous={isAnonymous}
-              currentAnonymousUserId={currentAnonymousUserId}
-              isFirstInGroup={isFirstInGroup}
-              isLastInGroup={isLastInGroup}
-            />
-            {isFailed && tempId && onRetryMessage && onCancelMessage && (
-              <FailedMessageBar
-                tempId={tempId}
-                content={message.content || (message as unknown).originalContent || ''}
-                originalLanguage={message.originalLanguage || 'fr'}
-                replyToId={(message as unknown).replyToId}
-                onRetry={onRetryMessage}
-                onCancel={onCancelMessage}
-                t={t}
-              />
-            )}
+      {isVirtualized ? (
+        <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
+          {virtualizer.getVirtualItems().map((vi) => (
+            <div
+              key={vi.key}
+              data-index={vi.index}
+              ref={virtualizer.measureElement}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                transform: `translateY(${vi.start}px)`,
+              }}
+            >
+              {renderBubble(displayMessages[vi.index], vi.index)}
+            </div>
+          ))}
+        </div>
+      ) : (
+        displayMessages.map((message, index) => (
+          <div key={message.id}>
+            {renderBubble(message, index)}
           </div>
-        );
-      })}
+        ))
+      )}
 
       {/* Load more button for infinite scroll - EN BAS */}
       {hasMore && onLoadMore && (
