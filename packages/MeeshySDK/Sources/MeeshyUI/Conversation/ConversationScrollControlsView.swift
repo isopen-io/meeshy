@@ -199,6 +199,16 @@ public struct ConversationScrollControlsView: View {
             || unreadAttachmentSymbol != nil
     }
 
+    /// Whether the rich attachment preview should appear on the scroll-to-bottom
+    /// pill. Gated on `unreadCount > 0` exactly like the text preview line: the
+    /// attachment inputs come from `lastUnreadMessage`, which is only cleared on
+    /// an explicit tap — so once the conversation is read (count 0) a mere typing
+    /// indicator would otherwise keep surfacing the already-read last message's
+    /// attachment preview (stale, inaccurate).
+    nonisolated static func shouldShowAttachmentPreview(unreadCount: Int, hasAttachmentPreview: Bool) -> Bool {
+        unreadCount > 0 && hasAttachmentPreview
+    }
+
     /// Unified rich preview used for BOTH single and multiple unreads. Shows
     /// the count headline when more than one message is pending, followed by a
     /// preview of the LAST received message — its text, or for media its type
@@ -208,7 +218,7 @@ public struct ConversationScrollControlsView: View {
         HStack(spacing: 10) {
             // Left: rich attachment preview (audio play / image|video thumbnail
             // / type glyph) of the last unread message.
-            if hasAttachmentPreview {
+            if Self.shouldShowAttachmentPreview(unreadCount: unreadCount, hasAttachmentPreview: hasAttachmentPreview) {
                 unreadAttachmentPreview
             }
 

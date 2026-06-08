@@ -41,4 +41,24 @@ final class ConversationScrollControlsViewTests: XCTestCase {
             "André, Bob"
         )
     }
+
+    // MARK: - shouldShowAttachmentPreview (no stale preview once read)
+
+    func test_shouldShowAttachmentPreview_withUnreadAndAttachment_isTrue() {
+        XCTAssertTrue(
+            ConversationScrollControlsView.shouldShowAttachmentPreview(unreadCount: 2, hasAttachmentPreview: true))
+    }
+
+    /// Conversation is READ (count 0) but the last unread message's attachment
+    /// inputs linger (only cleared on tap). A mere typing indicator must NOT
+    /// resurface the now-read message's attachment preview.
+    func test_shouldShowAttachmentPreview_noUnread_isFalse_evenWithAttachment() {
+        XCTAssertFalse(
+            ConversationScrollControlsView.shouldShowAttachmentPreview(unreadCount: 0, hasAttachmentPreview: true))
+    }
+
+    func test_shouldShowAttachmentPreview_noAttachment_isFalse() {
+        XCTAssertFalse(
+            ConversationScrollControlsView.shouldShowAttachmentPreview(unreadCount: 3, hasAttachmentPreview: false))
+    }
 }
