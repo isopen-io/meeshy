@@ -22,7 +22,7 @@ interface LanguageSelectProps {
   languages: Language[];
   value: string;
   onValueChange: (value: string) => void;
-  placeholder?: string;
+  placeholder?: string | undefined;
   disabled?: boolean;
   className?: string;
 }
@@ -31,7 +31,7 @@ export function LanguageSelect({
   languages,
   value,
   onValueChange,
-  placeholder = "Sélectionner une langue",
+  placeholder,
   disabled = false,
   className,
 }: LanguageSelectProps) {
@@ -72,7 +72,7 @@ export function LanguageSelect({
               <span>{selectedLanguage.name}</span>
             </span>
           ) : (
-            placeholder
+            placeholder ?? t('languageSelect.placeholder')
           )}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -83,7 +83,7 @@ export function LanguageSelect({
           <div className="flex items-center border-b px-3 py-2">
             <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
             <Input
-              placeholder="Rechercher une langue..."
+              placeholder={t('languageSelect.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="border-0 h-8 focus-visible:ring-0 focus-visible:ring-offset-0 px-0"
@@ -102,7 +102,7 @@ export function LanguageSelect({
           <div className="max-h-[200px] overflow-y-auto">
             {filteredLanguages.length === 0 ? (
               <div className="py-6 text-center text-sm text-muted-foreground">
-                {t('components.languageSelect.notFound')}
+                {t('languageSelect.notFound')}
               </div>
             ) : (
               <div className="p-1">

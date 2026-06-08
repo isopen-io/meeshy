@@ -136,7 +136,9 @@
       }
     },
     "languageSelect": {
-      "notFound": "No language found"
+      "notFound": "No language found",
+      "placeholder": "Select a language",
+      "searchPlaceholder": "Search a language..."
     },
     "bubbleStream": {
       "title": "Message Stream",

@@ -18,15 +18,7 @@ interface RankingFiltersProps {
   onCriteriaSearchChange: (search: string) => void;
 }
 
-const PERIODS = [
-  { value: '1d', label: 'Dernier jour (24h)' },
-  { value: '7d', label: 'Dernière semaine (7j)' },
-  { value: '30d', label: 'Dernier mois (30j)' },
-  { value: '90d', label: 'Dernier trimestre (90j)' },
-  { value: '180d', label: 'Dernier semestre (180j)' },
-  { value: '365d', label: 'Dernière année (365j)' },
-  { value: 'all', label: 'Tous les temps' }
-];
+const PERIOD_KEYS = ['1d', '7d', '30d', '90d', '180d', '365d', 'all'] as const;
 
 export function RankingFilters({
   entityType,
@@ -41,6 +33,12 @@ export function RankingFilters({
   onCriteriaSearchChange
 }: RankingFiltersProps) {
   const { t } = useI18n('admin');
+
+  const periods = PERIOD_KEYS.map(key => ({
+    value: key,
+    label: t(`ranking.period${key === 'all' ? 'All' : key}`),
+  }));
+
   const criteriaList = React.useMemo(() => {
     const criteria = RANKING_CRITERIA[entityType];
     if (criteriaSearch) {
@@ -56,7 +54,7 @@ export function RankingFilters({
       <CardHeader className="bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20">
         <CardTitle className="flex items-center space-x-2">
           <Star className="h-5 w-5 text-yellow-600" />
-          <span>Filtres de classement</span>
+          <span>{t('ranking.filtersTitle')}</span>
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-6">
@@ -64,35 +62,35 @@ export function RankingFilters({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Type d&apos;entité
+                {t('ranking.entityType')}
               </label>
               <Select value={entityType} onValueChange={onEntityTypeChange}>
                 <SelectTrigger className="border-yellow-300 focus:ring-yellow-500">
-                  <SelectValue placeholder={t('admin.ranking.selectEntity')} />
+                  <SelectValue placeholder={t('ranking.selectEntity')} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="users">
                     <div className="flex items-center space-x-2">
                       <Users className="h-4 w-4" />
-                      <span>Utilisateurs</span>
+                      <span>{t('ranking.entityUsers')}</span>
                     </div>
                   </SelectItem>
                   <SelectItem value="conversations">
                     <div className="flex items-center space-x-2">
                       <MessageSquare className="h-4 w-4" />
-                      <span>Conversations</span>
+                      <span>{t('ranking.entityConversations')}</span>
                     </div>
                   </SelectItem>
                   <SelectItem value="messages">
                     <div className="flex items-center space-x-2">
                       <FileText className="h-4 w-4" />
-                      <span>Messages</span>
+                      <span>{t('ranking.entityMessages')}</span>
                     </div>
                   </SelectItem>
                   <SelectItem value="links">
                     <div className="flex items-center space-x-2">
                       <LinkIcon className="h-4 w-4" />
-                      <span>Liens</span>
+                      <span>{t('ranking.entityLinks')}</span>
                     </div>
                   </SelectItem>
                 </SelectContent>
@@ -101,17 +99,17 @@ export function RankingFilters({
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Critère
+                {t('ranking.criterion')}
               </label>
               <Select value={criterion} onValueChange={onCriterionChange}>
                 <SelectTrigger className="border-yellow-300 focus:ring-yellow-500">
-                  <SelectValue placeholder={t('admin.ranking.selectCriterion')} />
+                  <SelectValue placeholder={t('ranking.selectCriterion')} />
                 </SelectTrigger>
                 <SelectContent className="max-h-[400px]">
-                  <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 p-2 border-b border-gray-200 dark:border-gray-700">
+                  <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 p-2 border-b border-gray-200 dark:border-gray-700">
                     <input
                       type="text"
-                      placeholder="Filtrer les critères..."
+                      placeholder={t('ranking.filterCriteria')}
                       value={criteriaSearch}
                       onChange={(e) => onCriteriaSearchChange(e.target.value)}
                       className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 dark:bg-gray-800 dark:text-gray-100"
@@ -134,7 +132,7 @@ export function RankingFilters({
                       })
                     ) : (
                       <div className="p-4 text-sm text-center text-gray-500 dark:text-gray-400">
-                        Aucun critère trouvé
+                        {t('ranking.noCriteriaFound')}
                       </div>
                     )}
                   </div>
@@ -146,14 +144,14 @@ export function RankingFilters({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Période
+                {t('ranking.period')}
               </label>
               <Select value={period} onValueChange={onPeriodChange}>
                 <SelectTrigger className="border-yellow-300 focus:ring-yellow-500">
-                  <SelectValue placeholder={t('admin.ranking.selectPeriod')} />
+                  <SelectValue placeholder={t('ranking.selectPeriod')} />
                 </SelectTrigger>
                 <SelectContent>
-                  {PERIODS.map((p) => (
+                  {periods.map((p) => (
                     <SelectItem key={p.value} value={p.value}>
                       <div className="flex items-center space-x-2">
                         <Calendar className="h-4 w-4" />
@@ -167,11 +165,11 @@ export function RankingFilters({
 
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Nombre de résultats
+                {t('ranking.resultsCount')}
               </label>
               <Select value={limit.toString()} onValueChange={(value) => onLimitChange(parseInt(value))}>
                 <SelectTrigger className="border-yellow-300 focus:ring-yellow-500">
-                  <SelectValue placeholder="Nombre de résultats" />
+                  <SelectValue placeholder={t('ranking.resultsCount')} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="10">Top 10</SelectItem>

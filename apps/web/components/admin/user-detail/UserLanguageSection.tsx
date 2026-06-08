@@ -74,12 +74,12 @@ export function UserLanguageSection({
       });
 
       if (response.data?.success) {
-        toast.success('Préférences de langue mises à jour');
+        toast.success(t('userDetail.updateSuccess'));
         setEditing(false);
         onUpdate();
       }
     } catch (error: unknown) {
-      toast.error(error.message || 'Erreur lors de la mise à jour');
+      toast.error(error.message || t('userDetail.updateSuccess'));
     } finally {
       setSaving(false);
     }
@@ -95,7 +95,7 @@ export function UserLanguageSection({
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center space-x-2 dark:text-gray-100">
             <Languages className="h-5 w-5" />
-            <span>{t('admin.userDetail.languagePreferences')}</span>
+            <span>{t('userDetail.languagePreferences')}</span>
           </CardTitle>
           {!editing ? (
             <Button
@@ -105,7 +105,7 @@ export function UserLanguageSection({
               className="dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 dark:text-gray-200"
             >
               <Edit2 className="h-4 w-4 mr-1" />
-              Modifier
+              {t('userDetail.edit')}
             </Button>
           ) : (
             <div className="flex space-x-2">
@@ -117,7 +117,7 @@ export function UserLanguageSection({
                 className="dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 dark:text-gray-200"
               >
                 <X className="h-4 w-4 mr-1" />
-                Annuler
+                {t('userDetail.cancel')}
               </Button>
               <Button
                 size="sm"
@@ -126,7 +126,7 @@ export function UserLanguageSection({
                 className="dark:bg-blue-700 dark:hover:bg-blue-800"
               >
                 <Save className="h-4 w-4 mr-1" />
-                {saving ? 'Sauvegarde...' : 'Sauvegarder'}
+                {saving ? t('userDetail.saving') : t('userDetail.save')}
               </Button>
             </div>
           )}
@@ -136,7 +136,7 @@ export function UserLanguageSection({
         {editing ? (
           <>
             <div className="space-y-2">
-              <label className="text-sm font-medium dark:text-gray-200">Langue système</label>
+              <label className="text-sm font-medium dark:text-gray-200">{t('userDetail.systemLanguage')}</label>
               <select
                 className="w-full p-2 border dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-800 dark:text-gray-100"
                 value={formData.systemLanguage}
@@ -147,57 +147,57 @@ export function UserLanguageSection({
                 ))}
               </select>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Langue principale de l&apos;interface
+                {t('userDetail.systemLanguageHint')}
               </p>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium dark:text-gray-200">Langue régionale</label>
+              <label className="text-sm font-medium dark:text-gray-200">{t('userDetail.regionalLanguage')}</label>
               <select
                 className="w-full p-2 border dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-800 dark:text-gray-100"
                 value={formData.regionalLanguage}
                 onChange={(e) => handleChange('regionalLanguage', e.target.value)}
               >
-                <option value="">Aucune</option>
+                <option value="">{t('userDetail.none')}</option>
                 {LANGUAGES.map(lang => (
                   <option key={lang.code} value={lang.code}>{lang.name}</option>
                 ))}
               </select>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Langue secondaire pour le contenu régional
+                {t('userDetail.regionalLanguageHint')}
               </p>
             </div>
 
             <div className="space-y-2">
               <label className="text-sm font-medium dark:text-gray-200">
-                Langue destination personnalisée
+                {t('userDetail.customDestination')}
               </label>
               <select
                 className="w-full p-2 border dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-800 dark:text-gray-100"
                 value={formData.customDestinationLanguage}
                 onChange={(e) => handleChange('customDestinationLanguage', e.target.value)}
               >
-                <option value="">Aucune</option>
+                <option value="">{t('userDetail.none')}</option>
                 {LANGUAGES.map(lang => (
                   <option key={lang.code} value={lang.code}>{lang.name}</option>
                 ))}
               </select>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Langue de destination pour la traduction personnalisée
+                {t('userDetail.customDestinationHint')}
               </p>
             </div>
           </>
         ) : (
           <div className="space-y-3">
             <div className="flex items-center text-sm">
-              <span className="w-48 text-gray-600 dark:text-gray-400">Langue système:</span>
+              <span className="w-48 text-gray-600 dark:text-gray-400">{t('userDetail.systemLanguageLabel')}</span>
               <span className="font-medium dark:text-gray-200">
                 {getLanguageName(user.systemLanguage)}
               </span>
             </div>
             {user.regionalLanguage && (
               <div className="flex items-center text-sm">
-                <span className="w-48 text-gray-600 dark:text-gray-400">Langue régionale:</span>
+                <span className="w-48 text-gray-600 dark:text-gray-400">{t('userDetail.regionalLanguageLabel')}</span>
                 <span className="font-medium dark:text-gray-200">
                   {getLanguageName(user.regionalLanguage)}
                 </span>
@@ -205,7 +205,7 @@ export function UserLanguageSection({
             )}
             {user.customDestinationLanguage && (
               <div className="flex items-center text-sm">
-                <span className="w-48 text-gray-600 dark:text-gray-400">Langue destination:</span>
+                <span className="w-48 text-gray-600 dark:text-gray-400">{t('userDetail.destinationLabel')}</span>
                 <span className="font-medium dark:text-gray-200">
                   {getLanguageName(user.customDestinationLanguage)}
                 </span>

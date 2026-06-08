@@ -136,7 +136,9 @@
       }
     },
     "languageSelect": {
-      "notFound": "No se encontró ningún idioma"
+      "notFound": "No se encontró ningún idioma",
+      "placeholder": "Seleccionar un idioma",
+      "searchPlaceholder": "Buscar un idioma..."
     },
     "bubbleStream": {
       "title": "Flujo de mensajes",

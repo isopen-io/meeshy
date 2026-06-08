@@ -97,7 +97,7 @@ export function TranslationMonitor({
       
       setMetrics(mockMetrics);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur de chargement');
+      setError(err instanceof Error ? err.message : t('translationMonitor.loadingMetrics'));
     } finally {
       setIsLoading(false);
     }
@@ -128,7 +128,7 @@ export function TranslationMonitor({
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
         <CardTitle className="text-lg font-semibold flex items-center gap-2">
           <Activity className="h-5 w-5 text-blue-600" />
-          Monitoring Traductions
+          {t('translationMonitor.title')}
         </CardTitle>
         <Button
           variant="outline"
@@ -146,7 +146,7 @@ export function TranslationMonitor({
           <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
             <div className="flex items-center gap-2 text-red-700">
               <AlertCircle className="h-4 w-4" />
-              <span className="text-sm font-medium">Erreur de monitoring</span>
+              <span className="text-sm font-medium">{t('translationMonitor.errorMonitoring')}</span>
             </div>
             <p className="text-red-600 text-sm mt-1">{error}</p>
           </div>
@@ -155,7 +155,7 @@ export function TranslationMonitor({
         {isLoading && !metrics && (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-            <span className="ml-2 text-gray-600">{t('admin.translationMonitor.loadingMetrics')}</span>
+            <span className="ml-2 text-gray-600">{t('translationMonitor.loadingMetrics')}</span>
           </div>
         )}
 
@@ -166,7 +166,7 @@ export function TranslationMonitor({
               <div className="bg-blue-50 p-4 rounded-lg">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-blue-700 text-sm font-medium">Messages</p>
+                    <p className="text-blue-700 text-sm font-medium">{t('translationMonitor.messages')}</p>
                     <p className="text-2xl font-bold text-blue-900">{metrics.totalMessages}</p>
                   </div>
                   <Languages className="h-8 w-8 text-blue-600 opacity-60" />
@@ -176,7 +176,7 @@ export function TranslationMonitor({
               <div className="bg-green-50 p-4 rounded-lg">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-green-700 text-sm font-medium">Traduits</p>
+                    <p className="text-green-700 text-sm font-medium">{t('translationMonitor.translated')}</p>
                     <p className="text-2xl font-bold text-green-900">{metrics.translatedMessages}</p>
                     <p className="text-green-600 text-xs">{translationRate.toFixed(1)}%</p>
                   </div>
@@ -187,7 +187,7 @@ export function TranslationMonitor({
               <div className="bg-amber-50 p-4 rounded-lg">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-amber-700 text-sm font-medium">En attente</p>
+                    <p className="text-amber-700 text-sm font-medium">{t('translationMonitor.pending')}</p>
                     <p className="text-2xl font-bold text-amber-900">{metrics.pendingTranslations}</p>
                   </div>
                   <Clock className="h-8 w-8 text-amber-600 opacity-60" />
@@ -197,7 +197,7 @@ export function TranslationMonitor({
               <div className="bg-red-50 p-4 rounded-lg">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-red-700 text-sm font-medium">Erreurs</p>
+                    <p className="text-red-700 text-sm font-medium">{t('translationMonitor.errors')}</p>
                     <p className="text-2xl font-bold text-red-900">{metrics.errorCount}</p>
                     <p className="text-red-600 text-xs">{errorRate.toFixed(1)}%</p>
                   </div>
@@ -209,7 +209,7 @@ export function TranslationMonitor({
             {/* Barre de progression globale */}
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Progression des traductions</span>
+                <span className="text-gray-600">{t('translationMonitor.progressLabel')}</span>
                 <span className="font-medium">{translationRate.toFixed(1)}%</span>
               </div>
               <Progress value={translationRate} className="h-2" />
@@ -222,7 +222,7 @@ export function TranslationMonitor({
                   <div className="text-center p-3 bg-gray-50 rounded-lg">
                     <div className="flex items-center justify-center gap-1 text-gray-600 text-sm mb-1">
                       <Zap className="h-4 w-4" />
-                      Temps moyen
+                      {t('translationMonitor.avgTime')}
                     </div>
                     <p className="font-bold text-lg">{metrics.avgTranslationTime}ms</p>
                   </div>
@@ -238,7 +238,7 @@ export function TranslationMonitor({
                   <div className="text-center p-3 bg-gray-50 rounded-lg">
                     <div className="flex items-center justify-center gap-1 text-gray-600 text-sm mb-1">
                       <TrendingUp className="h-4 w-4" />
-                      Débit
+                      {t('translationMonitor.throughput')}
                     </div>
                     <p className="font-bold text-lg">{metrics.throughput}/s</p>
                   </div>
@@ -248,11 +248,11 @@ export function TranslationMonitor({
                 <div className="bg-blue-50 p-4 rounded-lg">
                   <h4 className="font-medium text-blue-900 mb-3 flex items-center gap-2">
                     <Activity className="h-4 w-4" />
-                    Activité en temps réel
+                    {t('translationMonitor.realTimeActivity')}
                   </h4>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <p className="text-blue-700 text-sm">Traductions actives</p>
+                      <p className="text-blue-700 text-sm">{t('translationMonitor.activeTranslations')}</p>
                       <div className="flex items-center gap-2">
                         <p className="text-2xl font-bold text-blue-900">{metrics.activeTranslations}</p>
                         {metrics.activeTranslations > 0 && (
@@ -261,7 +261,7 @@ export function TranslationMonitor({
                       </div>
                     </div>
                     <div>
-                      <p className="text-blue-700 text-sm">File d&apos;attente</p>
+                      <p className="text-blue-700 text-sm">{t('translationMonitor.queue')}</p>
                       <p className="text-2xl font-bold text-blue-900">{metrics.queueSize}</p>
                     </div>
                   </div>
@@ -269,7 +269,7 @@ export function TranslationMonitor({
 
                 {/* Répartition par langue */}
                 <div>
-                  <h4 className="font-medium text-gray-900 mb-3">Répartition par langue</h4>
+                  <h4 className="font-medium text-gray-900 mb-3">{t('translationMonitor.languageBreakdown')}</h4>
                   <div className="space-y-3">
                     {Object.entries(metrics.languageBreakdown)
                       .sort(([, a], [, b]) => b.count - a.count)
@@ -280,9 +280,9 @@ export function TranslationMonitor({
                               {lang.toUpperCase()}
                             </Badge>
                             <div>
-                              <p className="font-medium">{data.count} messages</p>
+                              <p className="font-medium">{data.count} {t('translationMonitor.messagesUnit')}</p>
                               <p className="text-sm text-gray-600">
-                                {data.avgTime}ms • {data.errorRate}% erreurs
+                                {data.avgTime}ms • {data.errorRate}% {t('translationMonitor.errorsUnit')}
                               </p>
                             </div>
                           </div>
@@ -304,7 +304,7 @@ export function TranslationMonitor({
 
                 {/* Dernière mise à jour */}
                 <div className="text-center text-sm text-gray-500">
-                  Dernière mise à jour: {metrics.lastUpdated.toLocaleTimeString()}
+                  {t('translationMonitor.lastUpdated')} {metrics.lastUpdated.toLocaleTimeString()}
                 </div>
               </>
             )}
