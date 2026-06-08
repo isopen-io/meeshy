@@ -180,8 +180,8 @@ final class FeedViewModelTests: XCTestCase {
         let (sut, api, _, _) = makeSUT()
         api.stub("/posts/feed", result: Self.makePaginatedResponse())
 
-        let task1 = Task { await sut.loadFeed() }
-        let task2 = Task { await sut.loadFeed() }
+        let task1 = Task { await sut.loadFeed(forceRefresh: true) }
+        let task2 = Task { await sut.loadFeed(forceRefresh: true) }
 
         await task1.value
         await task2.value
