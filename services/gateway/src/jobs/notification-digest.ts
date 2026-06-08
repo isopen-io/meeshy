@@ -99,7 +99,9 @@ export class NotificationDigestJob {
       this.doWork();
       // Then every 24h
       this.intervalId = setInterval(() => this.doWork(), 24 * 60 * 60 * 1000);
+      this.intervalId.unref?.();
     }, delayMs);
+    this.timeoutId.unref?.();
   }
 
   stop(): void {

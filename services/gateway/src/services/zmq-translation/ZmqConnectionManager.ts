@@ -13,6 +13,9 @@
 
 import type { Push, Subscriber, Context } from 'zeromq';
 import * as zmq from 'zeromq';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'ZmqConnectionManager' });
 
 export interface ConnectionManagerConfig {
   host: string;
@@ -41,30 +44,26 @@ export class ZmqConnectionManager {
    */
   async initialize(): Promise<void> {
     try {
-      console.log(`🔧 Début initialisation ZMQ Connection Manager...`);
+      logger.debug('Initializing ZMQ Connection Manager');
 
-      // Créer le contexte ZMQ
       this.context = new zmq.Context();
-      console.log(`🔧 Contexte ZMQ créé`);
 
-      // Socket PUSH pour envoyer les commandes de traduction
       this.pushSocket = new zmq.Push();
       await this.pushSocket.connect(`tcp://${this.config.host}:${this.config.pushPort}`);
-      console.log(`🔧 Socket PUSH connecté à ${this.config.host}:${this.config.pushPort}`);
 
-      // Socket SUB pour recevoir les résultats
       this.subSocket = new zmq.Subscriber();
       await this.subSocket.connect(`tcp://${this.config.host}:${this.config.subPort}`);
-      await this.subSocket.subscribe(''); // S'abonner à tous les messages
-      console.log(`🔧 Socket SUB connecté à ${this.config.host}:${this.config.subPort}`);
+      await this.subSocket.subscribe('');
 
       this.isConnected = true;
-      console.log('✅ ZMQ Connection Manager initialisé avec succès');
-      console.log(`🔌 Socket PUSH connecté: ${this.config.host}:${this.config.pushPort} (envoi commandes)`);
-      console.log(`🔌 Socket SUB connecté: ${this.config.host}:${this.config.subPort} (réception résultats)`);
+      logger.info('ZMQ Connection Manager initialized', {
+        pushPort: this.config.pushPort,
+        subPort: this.config.subPort,
+        host: this.config.host,
+      });
 
     } catch (error) {
-      console.error(`❌ Erreur initialisation Connection Manager: ${error}`);
+      logger.error('ZMQ Connection Manager initialization failed', error as Error);
       throw error;
     }
   }
@@ -80,7 +79,7 @@ export class ZmqConnectionManager {
     try {
       await this.pushSocket.send(JSON.stringify(payload));
     } catch (error) {
-      console.error(`❌ Erreur envoi message: ${error}`);
+      logger.error('ZMQ send failed', error as Error);
       throw error;
     }
   }
@@ -104,7 +103,7 @@ export class ZmqConnectionManager {
     // Envoyer en multipart
     await this.pushSocket.send(frames);
 
-    console.log(`[ZMQ-Client] Multipart envoyé: ${frames.length} frames, total ${frames.reduce((sum, f) => sum + f.length, 0)} bytes`);
+    logger.debug('ZMQ multipart sent', { frames: frames.length, bytes: frames.reduce((sum, f) => sum + f.length, 0) });
   }
 
   /**
@@ -142,7 +141,7 @@ export class ZmqConnectionManager {
    */
   async sendPing(): Promise<void> {
     if (!this.pushSocket) {
-      console.warn('⚠️ [ZMQ] Health check skipped: socket PUSH non initialisé');
+      logger.warn('Health check skipped: PUSH socket not initialized');
       return;
     }
 
@@ -154,7 +153,7 @@ export class ZmqConnectionManager {
 
       await this.pushSocket.send(JSON.stringify(pingMessage));
     } catch (error) {
-      console.error(`❌ [ZMQ] Health check ping failed on port ${this.config.pushPort}:`, error);
+      logger.error('ZMQ health check ping failed', error as Error, { port: this.config.pushPort });
     }
   }
 
@@ -162,7 +161,7 @@ export class ZmqConnectionManager {
    * Ferme les sockets et nettoie les ressources
    */
   async close(): Promise<void> {
-    console.log('🛑 Arrêt Connection Manager...');
+    logger.info('Closing ZMQ Connection Manager');
 
     this.isConnected = false;
 
@@ -181,10 +180,10 @@ export class ZmqConnectionManager {
         this.context = null;
       }
 
-      console.log('✅ Connection Manager arrêté');
+      logger.info('ZMQ Connection Manager closed');
 
     } catch (error) {
-      console.error(`❌ Erreur arrêt Connection Manager: ${error}`);
+      logger.error('Error closing ZMQ Connection Manager', error as Error);
     }
   }
 

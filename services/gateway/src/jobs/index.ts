@@ -14,6 +14,9 @@ import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
 import { MagicLinkService } from '../services/MagicLinkService';
 import { getCacheStore } from '../services/CacheStore';
 import { GeoIPService } from '../services/GeoIPService';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'BackgroundJobs' });
 
 export class BackgroundJobsManager {
   private cleanupTokensJob: CleanupExpiredTokens;
@@ -39,11 +42,11 @@ export class BackgroundJobsManager {
    */
   startAll(): void {
     if (this.isRunning) {
-      console.warn('[BackgroundJobs] Jobs already running');
+      logger.warn('Jobs already running');
       return;
     }
 
-    console.log('[BackgroundJobs] Starting all background jobs...');
+    logger.info('Starting all background jobs');
 
     this.cleanupTokensJob.start();
     this.unlockAccountsJob.start();
@@ -52,7 +55,7 @@ export class BackgroundJobsManager {
     this.mutationLogCleanupJob.start();
 
     this.isRunning = true;
-    console.log('[BackgroundJobs] ✅ All background jobs started successfully');
+    logger.info('All background jobs started successfully');
   }
 
   /**
@@ -60,11 +63,11 @@ export class BackgroundJobsManager {
    */
   stopAll(): void {
     if (!this.isRunning) {
-      console.warn('[BackgroundJobs] Jobs not running');
+      logger.warn('Jobs not running');
       return;
     }
 
-    console.log('[BackgroundJobs] Stopping all background jobs...');
+    logger.info('Stopping all background jobs');
 
     this.cleanupTokensJob.stop();
     this.unlockAccountsJob.stop();
@@ -73,14 +76,14 @@ export class BackgroundJobsManager {
     this.mutationLogCleanupJob.stop();
 
     this.isRunning = false;
-    console.log('[BackgroundJobs] ✅ All background jobs stopped successfully');
+    logger.info('All background jobs stopped successfully');
   }
 
   /**
    * Run all jobs manually
    */
   async runAll(): Promise<void> {
-    console.log('[BackgroundJobs] Running all jobs manually...');
+    logger.info('Running all jobs manually');
 
     await this.cleanupTokensJob.runNow();
     await this.unlockAccountsJob.runNow();
@@ -88,7 +91,7 @@ export class BackgroundJobsManager {
     await this.deliveryQueueCleanupJob.runNow();
     await this.mutationLogCleanupJob.runNow();
 
-    console.log('[BackgroundJobs] ✅ All jobs completed');
+    logger.info('All jobs completed');
   }
 
   /**
