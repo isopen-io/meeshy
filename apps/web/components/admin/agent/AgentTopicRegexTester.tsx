@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Loader2, FlaskConical } from 'lucide-react';
 import { agentAdminService } from '@/services/agent-admin.service';
+import { useI18n } from '@/hooks/useI18n';
 
 interface Props {
   topicId: string;
@@ -15,6 +16,7 @@ interface Props {
  * pour cohérence avec ce que le strategist verrait).
  */
 export function AgentTopicRegexTester({ topicId }: Props) {
+  const { t } = useI18n('admin');
   const [sampleText, setSampleText] = useState('');
   const [matches, setMatches] = useState<Record<string, number> | null>(null);
   const [loading, setLoading] = useState(false);
@@ -40,13 +42,13 @@ export function AgentTopicRegexTester({ topicId }: Props) {
     <div className="space-y-2">
       <div className="flex items-center gap-2">
         <FlaskConical className="h-4 w-4 text-indigo-600" />
-        <h4 className="font-medium text-sm">Tester regex contre texte sample</h4>
+        <h4 className="font-medium text-sm">{t('regexTester.title')}</h4>
       </div>
       <textarea
         value={sampleText}
         onChange={(e) => setSampleText(e.target.value)}
         className="w-full border border-slate-300 dark:border-slate-700 dark:bg-slate-900 rounded-md p-2 text-sm h-20"
-        placeholder="Colle un extrait de conversation ici pour voir quels patterns matchent…"
+        placeholder={t('regexTester.placeholder')}
       />
       <button
         type="button"
@@ -55,7 +57,7 @@ export function AgentTopicRegexTester({ topicId }: Props) {
         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
       >
         {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-        Tester
+        {t('regexTester.test')}
       </button>
 
       {error && (
@@ -63,7 +65,7 @@ export function AgentTopicRegexTester({ topicId }: Props) {
       )}
 
       {matches && Object.keys(matches).length === 0 && (
-        <div className="text-sm text-slate-500">Aucun pattern défini pour ce topic.</div>
+        <div className="text-sm text-slate-500">{t('regexTester.noPatterns')}</div>
       )}
 
       {matches && Object.keys(matches).length > 0 && (
@@ -77,7 +79,9 @@ export function AgentTopicRegexTester({ topicId }: Props) {
                     : 'text-slate-400'
                 }
               >
-                {count >= 0 ? `${count} match${count !== 1 ? 'es' : ''}` : 'regex invalide'}
+                {count >= 0
+                  ? `${count} ${count !== 1 ? t('regexTester.matches') : t('regexTester.match')}`
+                  : t('regexTester.invalidRegex')}
               </span>
               <span className="text-slate-500"> — </span>
               <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">{pattern}</code>

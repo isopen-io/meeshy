@@ -36,6 +36,7 @@ import anonymousChatErrorHandler from './anonymousChatErrorHandler.json';
 import contact from './contact.json';
 import reportMessage from './reportMessage.json';
 import viewers from './viewers.json';
+import admin from './admin.json';
 
 export default {
   common,
@@ -76,6 +77,7 @@ export default {
   contact,
   reportMessage,
   viewers,
+  admin,
 };
 
 export {
@@ -117,4 +119,5 @@ export {
   contact,
   reportMessage,
   viewers,
+  admin,
 };

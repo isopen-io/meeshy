@@ -23,6 +23,8 @@
     "formattedView": "Formatted view",
     "rawView": "Raw view",
     "download": "Download Markdown file",
+    "delete": "Delete this Markdown file",
+    "fullscreen": "Open fullscreen",
     "close": "Close",
     "escToClose": "Press Escape to close"
   }

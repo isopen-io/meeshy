@@ -1,3 +1,5 @@
+'use client';
+
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +10,7 @@ import { UserRankCard } from './UserRankCard';
 import { ConversationRankCard } from './ConversationRankCard';
 import { MessageRankCard } from './MessageRankCard';
 import { LinkRankCard } from './LinkRankCard';
+import { useI18n } from '@/hooks/useI18n';
 
 interface RankingTableProps {
   entityType: 'users' | 'conversations' | 'messages' | 'links';
@@ -26,6 +29,8 @@ export function RankingTable({
   error,
   onRetry
 }: RankingTableProps) {
+  const { t } = useI18n('admin');
+
   const renderRankCard = (item: RankingItem) => {
     switch (entityType) {
       case 'users':
@@ -43,16 +48,11 @@ export function RankingTable({
 
   const getTitle = () => {
     switch (entityType) {
-      case 'users':
-        return 'Classement des utilisateurs';
-      case 'conversations':
-        return 'Classement des conversations';
-      case 'messages':
-        return 'Classement des messages';
-      case 'links':
-        return 'Classement des liens';
-      default:
-        return 'Classement';
+      case 'users': return t('ranking.users');
+      case 'conversations': return t('ranking.conversations');
+      case 'messages': return t('ranking.messages');
+      case 'links': return t('ranking.links');
+      default: return t('ranking.default');
     }
   };
 
@@ -65,7 +65,7 @@ export function RankingTable({
             <span>{getTitle()}</span>
           </div>
           <Badge variant="outline" className="text-yellow-600 border-yellow-600">
-            {rankings.length} résultats
+            {rankings.length} {t('ranking.resultsUnit')}
           </Badge>
         </CardTitle>
       </CardHeader>
@@ -78,12 +78,12 @@ export function RankingTable({
           <div className="text-center py-12">
             <p className="text-red-600 dark:text-red-400">{error}</p>
             <Button onClick={onRetry} className="mt-4 bg-yellow-600 hover:bg-yellow-700">
-              Réessayer
+              {t('ranking.retry')}
             </Button>
           </div>
         ) : rankings.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
-            Aucun résultat trouvé
+            {t('ranking.empty')}
           </div>
         ) : (
           <div className="space-y-3">

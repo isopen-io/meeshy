@@ -23,6 +23,8 @@
     "formattedView": "Vue formatée",
     "rawView": "Vue brute",
     "download": "Télécharger le fichier Markdown",
+    "delete": "Supprimer ce fichier Markdown",
+    "fullscreen": "Ouvrir en plein écran",
     "close": "Fermer",
     "escToClose": "Appuyez sur Échap pour fermer"
   }

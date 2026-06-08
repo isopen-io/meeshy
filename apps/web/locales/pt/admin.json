@@ -1,0 +1,44 @@
+{
+  "ranking": {
+    "users": "Classificação de usuários",
+    "conversations": "Classificação de conversas",
+    "messages": "Classificação de mensagens",
+    "links": "Classificação de links",
+    "default": "Classificação",
+    "resultsUnit": "resultados",
+    "retry": "Tentar novamente",
+    "empty": "Nenhum resultado encontrado"
+  },
+  "scanLog": {
+    "title": "Logs de varredura",
+    "empty": "Nenhum log de varredura"
+  },
+  "filter": {
+    "all": "Todos",
+    "sent": "Enviados",
+    "skip": "Ignorados",
+    "error": "Erros"
+  },
+  "trigger": {
+    "auto": "Auto",
+    "manual": "Manual",
+    "timeout": "Timeout",
+    "message": "Mensagem",
+    "reply": "Resposta"
+  },
+  "timeAgo": {
+    "now": "agora",
+    "minutes": "min",
+    "hours": "h",
+    "days": "d"
+  },
+  "regexTester": {
+    "title": "Testar regex contra texto de amostra",
+    "placeholder": "Cole um trecho de conversa aqui para ver quais padrões correspondem…",
+    "test": "Testar",
+    "noPatterns": "Nenhum padrão definido para este tópico.",
+    "match": "correspondência",
+    "matches": "correspondências",
+    "invalidRegex": "regex inválido"
+  }
+}

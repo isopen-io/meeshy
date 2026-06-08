@@ -66,7 +66,6 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
   const [content, setContent] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
   const [showRaw, setShowRaw] = useState(false);
   const { theme, resolvedTheme } = useTheme();
 
@@ -88,9 +87,8 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
         const text = await response.text();
         setContent(text);
       } catch (error) {
-        console.error('Erreur chargement markdown:', error);
+        console.error('Markdown load error:', error);
         setHasError(true);
-        setErrorMessage('Impossible de charger le fichier');
       } finally {
         setIsLoading(false);
       }
@@ -132,7 +130,7 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
         ) : hasError ? (
           <div className="flex flex-col items-center justify-center py-12 gap-2 text-gray-600 dark:text-gray-400">
             <AlertTriangle className="w-12 h-12" />
-            <span className="text-sm">{errorMessage}</span>
+            <span className="text-sm">{t('markdown.loadError')}</span>
           </div>
         ) : showRaw ? (
           <pre className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-mono">

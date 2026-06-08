@@ -1,0 +1,44 @@
+{
+  "ranking": {
+    "users": "User Rankings",
+    "conversations": "Conversation Rankings",
+    "messages": "Message Rankings",
+    "links": "Link Rankings",
+    "default": "Rankings",
+    "resultsUnit": "results",
+    "retry": "Retry",
+    "empty": "No results found"
+  },
+  "scanLog": {
+    "title": "Scan Logs",
+    "empty": "No scan logs"
+  },
+  "filter": {
+    "all": "All",
+    "sent": "Sent",
+    "skip": "Skip",
+    "error": "Error"
+  },
+  "trigger": {
+    "auto": "Auto",
+    "manual": "Manual",
+    "timeout": "Timeout",
+    "message": "Message",
+    "reply": "Reply"
+  },
+  "timeAgo": {
+    "now": "just now",
+    "minutes": "min",
+    "hours": "h",
+    "days": "d"
+  },
+  "regexTester": {
+    "title": "Test regex against sample text",
+    "placeholder": "Paste a conversation excerpt here to see which patterns match…",
+    "test": "Test",
+    "noPatterns": "No patterns defined for this topic.",
+    "match": "match",
+    "matches": "matches",
+    "invalidRegex": "invalid regex"
+  }
+}
