@@ -76,6 +76,7 @@ export function useAdaptiveDegradation({
 
     const { state, action } = reduceDegradation(stateRef.current, {
       level: qualityStats.level,
+      timestamp: qualityStats.timestamp.getTime(),
       userWantsVideo: true,
     });
     stateRef.current = state;

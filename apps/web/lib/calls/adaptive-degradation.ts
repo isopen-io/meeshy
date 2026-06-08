@@ -5,14 +5,22 @@
  * connection quality stays bad despite the encoder already running at the
  * lowest video tier, the survival move is to DROP outbound video entirely and
  * keep the call alive on audio only — then bring video back once the link has
- * recovered for a sustained window. Hysteresis (asymmetric streak thresholds)
+ * recovered for a sustained window. Hysteresis (asymmetric DURATION thresholds)
  * prevents flapping (relighting the camera + renegotiating every couple of
  * seconds).
  *
+ * Thresholds are expressed in WALL-CLOCK TIME (milliseconds), not in a number
+ * of samples. This is deliberate: the quality monitor's cadence is an
+ * implementation detail that can change (and real networks deliver stats at
+ * irregular intervals). A duration-based streak ("poor for >=6s") behaves
+ * identically whether stats arrive every 1s or every 4s, whereas a sample count
+ * silently changes meaning with the interval. This is the standard approach for
+ * congestion/quality state machines.
+ *
  * This module is intentionally pure (no WebRTC, no React): it maps a stream of
- * quality samples to discrete actions, so the policy is fully unit-testable.
- * The orchestration (applying tiers, suspending/resuming the camera, emitting
- * media-toggle) stays app-side in the call UI.
+ * timestamped quality samples to discrete actions, so the policy is fully
+ * unit-testable. The orchestration (applying tiers, suspending/resuming the
+ * camera, emitting media-toggle) stays app-side in the call UI.
  */
 
 import type { ConnectionQualityLevel } from '@meeshy/shared/types/video-call';
@@ -29,34 +37,38 @@ export type DegradationAction =
 export interface DegradationState {
   /** true while we are sending (or intend to send) video; false in audio-only survival. */
   readonly sending: boolean;
-  readonly poorStreak: number;
-  readonly goodStreak: number;
+  /** Timestamp (ms) the current sustained 'poor' streak began, while sending. */
+  readonly poorSince: number | null;
+  /** Timestamp (ms) the current sustained 'good' streak began, while suspended. */
+  readonly goodSince: number | null;
   readonly lastTier: VideoSendTier | null;
 }
 
 export interface DegradationSample {
   readonly level: ConnectionQualityLevel;
+  /** Sample time in epoch milliseconds (e.g. `stats.timestamp.getTime()`). */
+  readonly timestamp: number;
   /** The user's intent (camera button). When false the policy is fully idle. */
   readonly userWantsVideo: boolean;
 }
 
 /**
- * Consecutive 'poor' samples (at ~2s cadence ⇒ ~6s) before we drop to
- * audio-only. We only get here after already shedding to the 'low' tier, so a
- * sustained poor reading means even minimal video cannot survive the link.
+ * Sustained 'poor' duration before dropping to audio-only. We only get here
+ * after already shedding to the 'low' tier, so a poor link sustained this long
+ * means even minimal video cannot survive.
  */
-export const SUSPEND_AFTER_POOR_SAMPLES = 3;
+export const SUSPEND_AFTER_POOR_MS = 6000;
 
 /**
- * Consecutive 'good'/'excellent' samples (~10s) before we bring video back.
+ * Sustained 'good'/'excellent' duration before bringing video back.
  * Deliberately longer than the suspend threshold: re-upgrading is expensive
  * (camera re-acquire + renegotiation), so we require the link to have clearly
  * settled to avoid oscillation.
  */
-export const RESUME_AFTER_GOOD_SAMPLES = 5;
+export const RESUME_AFTER_GOOD_MS = 10000;
 
 export function createDegradationState(): DegradationState {
-  return { sending: true, poorStreak: 0, goodStreak: 0, lastTier: null };
+  return { sending: true, poorSince: null, goodSince: null, lastTier: null };
 }
 
 function tierForLevel(level: ConnectionQualityLevel): VideoSendTier {
@@ -65,9 +77,15 @@ function tierForLevel(level: ConnectionQualityLevel): VideoSendTier {
   return 'low';
 }
 
+function tierAction(tier: VideoSendTier, lastTier: VideoSendTier | null): DegradationAction {
+  // Only emit a tier change when it actually differs — avoids redundant
+  // setParameters churn every monitoring tick.
+  return tier === lastTier ? { type: 'none' } : { type: 'set-tier', tier };
+}
+
 /**
- * Advance the policy by one quality sample. Returns the next state and the
- * action the caller must apply. Deterministic and side-effect free.
+ * Advance the policy by one timestamped quality sample. Returns the next state
+ * and the action the caller must apply. Deterministic and side-effect free.
  */
 export function reduceDegradation(
   state: DegradationState,
@@ -80,41 +98,49 @@ export function reduceDegradation(
   }
 
   if (state.sending) {
-    const poorStreak = sample.level === 'poor' ? state.poorStreak + 1 : 0;
+    if (sample.level === 'poor') {
+      const poorSince = state.poorSince ?? sample.timestamp;
 
-    // Sustained poor while already at the lowest video tier → audio-only.
-    if (poorStreak >= SUSPEND_AFTER_POOR_SAMPLES) {
+      // Poor sustained long enough while already at the lowest tier → audio-only.
+      if (sample.timestamp - poorSince >= SUSPEND_AFTER_POOR_MS) {
+        return {
+          state: { sending: false, poorSince: null, goodSince: null, lastTier: null },
+          action: { type: 'suspend-video' },
+        };
+      }
+
+      // Shed to the lowest video tier while the poor streak builds.
       return {
-        state: { sending: false, poorStreak: 0, goodStreak: 0, lastTier: null },
-        action: { type: 'suspend-video' },
+        state: { sending: true, poorSince, goodSince: null, lastTier: 'low' },
+        action: tierAction('low', state.lastTier),
       };
     }
 
+    // Non-poor: map level → tier and clear the poor streak.
     const tier = tierForLevel(sample.level);
-    const nextState: DegradationState = {
-      sending: true,
-      poorStreak,
-      goodStreak: 0,
-      lastTier: tier,
-    };
-    // Only emit a tier change when it actually differs — avoids redundant
-    // setParameters churn every monitoring tick.
-    const action: DegradationAction =
-      tier === state.lastTier ? { type: 'none' } : { type: 'set-tier', tier };
-    return { state: nextState, action };
-  }
-
-  // Audio-only survival: wait for a sustained good streak before resuming.
-  const isGood = sample.level === 'excellent' || sample.level === 'good';
-  const isPoor = sample.level === 'poor';
-  const goodStreak = isGood ? state.goodStreak + 1 : isPoor ? 0 : state.goodStreak;
-
-  if (goodStreak >= RESUME_AFTER_GOOD_SAMPLES) {
     return {
-      state: { sending: true, poorStreak: 0, goodStreak: 0, lastTier: 'high' },
-      action: { type: 'resume-video' },
+      state: { sending: true, poorSince: null, goodSince: null, lastTier: tier },
+      action: tierAction(tier, state.lastTier),
     };
   }
 
-  return { state: { ...state, goodStreak }, action: { type: 'none' } };
+  // Audio-only survival: require a sustained good streak before resuming.
+  const isGood = sample.level === 'excellent' || sample.level === 'good';
+  if (isGood) {
+    const goodSince = state.goodSince ?? sample.timestamp;
+    if (sample.timestamp - goodSince >= RESUME_AFTER_GOOD_MS) {
+      return {
+        state: { sending: true, poorSince: null, goodSince: null, lastTier: 'high' },
+        action: { type: 'resume-video' },
+      };
+    }
+    return { state: { ...state, goodSince }, action: { type: 'none' } };
+  }
+
+  // A 'poor' sample wipes the recovery timer; 'fair' holds it (neither advances
+  // nor resets — a brief dip shouldn't restart the whole recovery window).
+  if (sample.level === 'poor') {
+    return { state: { ...state, goodSince: null }, action: { type: 'none' } };
+  }
+  return { state, action: { type: 'none' } };
 }

@@ -41,6 +41,7 @@
       "unmute": "Activer le micro",
       "videoOff": "Désactiver la vidéo",
       "videoOn": "Activer la vidéo",
+      "videoPausedWeak": "Vidéo en pause (connexion faible)",
       "switchCamera": "Changer de caméra",
       "speakerOff": "Désactiver le haut-parleur",
       "speakerOn": "Activer le haut-parleur",
@@ -68,6 +69,8 @@
       "participant": "Participant",
       "micMuted": "Microphone coupé",
       "videoOff": "Caméra désactivée",
+      "videoSuspended": "Vidéo en pause",
+      "videoSuspendedHint": "Connexion faible · reprise auto",
       "fullscreen": "Plein écran",
       "dragToMove": "Glisser pour déplacer"
     },

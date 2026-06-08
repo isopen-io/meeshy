@@ -1,7 +1,8 @@
 /**
  * Integration tests for the adaptive degradation hook — specifically that the
  * controller accumulates samples across monitoring ticks (NOT level transitions)
- * so the audio-only fallback actually fires under a sustained poor link.
+ * so the audio-only fallback actually fires under a sustained poor link, and
+ * that the time-based thresholds are honoured via each sample's timestamp.
  */
 
 import { renderHook, act, waitFor } from '@testing-library/react';
@@ -10,24 +11,24 @@ import {
   type AdaptiveDegradationActions,
 } from '@/hooks/use-adaptive-degradation';
 import {
-  SUSPEND_AFTER_POOR_SAMPLES,
-  RESUME_AFTER_GOOD_SAMPLES,
+  SUSPEND_AFTER_POOR_MS,
+  RESUME_AFTER_GOOD_MS,
 } from '@/lib/calls/adaptive-degradation';
 import type {
   ConnectionQualityStats,
   ConnectionQualityLevel,
 } from '@meeshy/shared/types/video-call';
 
-// Each call yields a DISTINCT object (new reference) — mirrors useCallQuality
-// emitting a fresh stats object every tick even when the level is unchanged.
-function sample(level: ConnectionQualityLevel): ConnectionQualityStats {
+// Each call yields a DISTINCT object (new reference) with an explicit timestamp,
+// mirroring useCallQuality emitting a fresh stats object every tick.
+function sample(level: ConnectionQualityLevel, atMs: number): ConnectionQualityStats {
   return {
     level,
     packetLoss: 0,
     rtt: 0,
     bitrate: { audio: 0, video: 0 },
     jitter: 0,
-    timestamp: new Date(),
+    timestamp: new Date(atMs),
     bytesSent: 0,
     bytesReceived: 0,
   };
@@ -45,18 +46,21 @@ function makeActions(): AdaptiveDegradationActions & {
   };
 }
 
+const TICK = 2000;
+const POOR_TICKS = SUSPEND_AFTER_POOR_MS / TICK + 1; // enough ticks to cross the duration
+const GOOD_TICKS = RESUME_AFTER_GOOD_MS / TICK + 1;
+
 describe('useAdaptiveDegradation', () => {
   it('drops to audio-only after sustained poor across ticks (the real-world bug)', async () => {
     const actions = makeActions();
     const { rerender } = renderHook(
       ({ qualityStats }) =>
         useAdaptiveDegradation({ qualityStats, userWantsVideo: true, actions }),
-      { initialProps: { qualityStats: sample('good') as ConnectionQualityStats } }
+      { initialProps: { qualityStats: sample('good', 0) as ConnectionQualityStats } }
     );
 
-    // Feed N distinct 'poor' samples (same level, new object each tick).
-    for (let i = 0; i < SUSPEND_AFTER_POOR_SAMPLES; i++) {
-      rerender({ qualityStats: sample('poor') });
+    for (let i = 1; i <= POOR_TICKS; i++) {
+      rerender({ qualityStats: sample('poor', i * TICK) });
     }
 
     await waitFor(() => expect(actions.suspend).toHaveBeenCalledTimes(1));
@@ -65,7 +69,7 @@ describe('useAdaptiveDegradation', () => {
 
   it('processes each sample once even if re-rendered with the same object', () => {
     const actions = makeActions();
-    const poor = sample('poor');
+    const poor = sample('poor', 1000);
     const { rerender } = renderHook(
       ({ qualityStats }) =>
         useAdaptiveDegradation({ qualityStats, userWantsVideo: true, actions }),
@@ -76,7 +80,6 @@ describe('useAdaptiveDegradation', () => {
     rerender({ qualityStats: poor });
     rerender({ qualityStats: poor });
 
-    // Only the first poor was counted → not enough to suspend.
     expect(actions.suspend).not.toHaveBeenCalled();
   });
 
@@ -85,22 +88,24 @@ describe('useAdaptiveDegradation', () => {
     const { rerender, result } = renderHook(
       ({ qualityStats }) =>
         useAdaptiveDegradation({ qualityStats, userWantsVideo: true, actions }),
-      { initialProps: { qualityStats: sample('good') as ConnectionQualityStats } }
+      { initialProps: { qualityStats: sample('good', 0) as ConnectionQualityStats } }
     );
 
-    for (let i = 0; i < SUSPEND_AFTER_POOR_SAMPLES; i++) {
-      rerender({ qualityStats: sample('poor') });
+    let t = TICK;
+    for (let i = 0; i < POOR_TICKS; i++, t += TICK) {
+      rerender({ qualityStats: sample('poor', t) });
     }
     await waitFor(() => expect(result.current.videoSuspended).toBe(true));
 
-    // Not enough good samples yet.
-    for (let i = 0; i < RESUME_AFTER_GOOD_SAMPLES - 1; i++) {
-      rerender({ qualityStats: sample('good') });
+    // Good but not long enough yet.
+    const goodStart = t;
+    for (let i = 0; i < GOOD_TICKS - 1; i++, t += TICK) {
+      rerender({ qualityStats: sample('good', t) });
     }
     expect(actions.resume).not.toHaveBeenCalled();
 
-    // One more crosses the threshold.
-    rerender({ qualityStats: sample('good') });
+    // Cross the recovery duration.
+    rerender({ qualityStats: sample('good', goodStart + RESUME_AFTER_GOOD_MS) });
     await waitFor(() => expect(actions.resume).toHaveBeenCalledTimes(1));
   });
 
@@ -111,14 +116,14 @@ describe('useAdaptiveDegradation', () => {
         useAdaptiveDegradation({ qualityStats, userWantsVideo, actions }),
       {
         initialProps: {
-          qualityStats: sample('poor') as ConnectionQualityStats,
+          qualityStats: sample('poor', 0) as ConnectionQualityStats,
           userWantsVideo: false,
         },
       }
     );
 
-    for (let i = 0; i < SUSPEND_AFTER_POOR_SAMPLES + 2; i++) {
-      rerender({ qualityStats: sample('poor'), userWantsVideo: false });
+    for (let i = 1; i <= POOR_TICKS + 2; i++) {
+      rerender({ qualityStats: sample('poor', i * TICK), userWantsVideo: false });
     }
 
     expect(actions.suspend).not.toHaveBeenCalled();
@@ -132,19 +137,20 @@ describe('useAdaptiveDegradation', () => {
         useAdaptiveDegradation({ qualityStats, userWantsVideo, actions }),
       {
         initialProps: {
-          qualityStats: sample('good') as ConnectionQualityStats,
+          qualityStats: sample('good', 0) as ConnectionQualityStats,
           userWantsVideo: true,
         },
       }
     );
 
-    for (let i = 0; i < SUSPEND_AFTER_POOR_SAMPLES; i++) {
-      rerender({ qualityStats: sample('poor'), userWantsVideo: true });
+    let t = TICK;
+    for (let i = 0; i < POOR_TICKS; i++, t += TICK) {
+      rerender({ qualityStats: sample('poor', t), userWantsVideo: true });
     }
     await waitFor(() => expect(result.current.videoSuspended).toBe(true));
 
     act(() => {
-      rerender({ qualityStats: sample('poor'), userWantsVideo: false });
+      rerender({ qualityStats: sample('poor', t), userWantsVideo: false });
     });
     expect(result.current.videoSuspended).toBe(false);
   });

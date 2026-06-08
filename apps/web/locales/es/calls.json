@@ -41,6 +41,7 @@
       "unmute": "Activar micrófono",
       "videoOff": "Desactivar vídeo",
       "videoOn": "Activar vídeo",
+      "videoPausedWeak": "Vídeo en pausa (conexión débil)",
       "switchCamera": "Cambiar cámara",
       "speakerOff": "Desactivar altavoz",
       "speakerOn": "Activar altavoz",
@@ -68,6 +69,8 @@
       "participant": "Participante",
       "micMuted": "Micrófono silenciado",
       "videoOff": "Cámara desactivada",
+      "videoSuspended": "Vídeo en pausa",
+      "videoSuspendedHint": "Conexión débil · reanudación auto",
       "fullscreen": "Pantalla completa",
       "dragToMove": "Arrastrar para mover"
     },
