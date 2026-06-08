@@ -1001,7 +1001,7 @@ struct PostDetailView: View {
                 let isActive = code == repostSecondaryLangCode
                 VStack(spacing: 1) {
                     Text(display?.flag ?? "?")
-                        .font(.caption2)
+                        .font(isActive ? .caption2 : .system(size: 9).minimumScaleFactor(0.7))
                         .scaleEffect(isActive ? 1.05 : 1.0)
                     if isActive {
                         RoundedRectangle(cornerRadius: 1)

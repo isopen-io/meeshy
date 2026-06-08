@@ -511,12 +511,12 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
                       {selectedGroup.isPrivate ? (
                         <Badge variant="secondary" className="text-xs">
                           <Lock className="h-3 w-3 mr-1" />
-                          Privée
+                          {tGroups('visibility.private')}
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="text-xs">
                           <Globe className="h-3 w-3 mr-1" />
-                          Publique
+                          {tGroups('visibility.public')}
                         </Badge>
                       )}
                     </div>
