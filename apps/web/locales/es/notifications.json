@@ -1,158 +1,167 @@
 {
-  "notifications": {
-    "pageTitle": "Notificaciones",
-    "title": "Notificaciones",
-    "empty": {
-      "title": "Sin notificaciones",
-      "description": "No tienes notificaciones en este momento",
-      "tryDifferentSearch": "Prueba con otra búsqueda"
+    "notifications": {
+        "pageTitle": "Notificaciones",
+        "title": "Notificaciones",
+        "empty": {
+            "title": "Sin notificaciones",
+            "description": "No tienes notificaciones en este momento",
+            "tryDifferentSearch": "Prueba con otra búsqueda"
+        },
+        "noResults": "No se encontraron notificaciones",
+        "search": "Buscar notificaciones...",
+        "emptyUnread": "¡Al día! Sin notificaciones sin leer.",
+        "emptyMentions": "Sin menciones aún",
+        "markAllAsRead": "Marcar todas como leídas",
+        "markAsRead": "Marcar como leída",
+        "delete": "Eliminar",
+        "viewAll": "Ver todas las notificaciones",
+        "loadMore": "Cargar más",
+        "loading": "Cargando notificaciones...",
+        "reachedEnd": "Has llegado al final",
+        "tabs": {
+            "all": "Todas",
+            "unread": "Sin leer",
+            "mentions": "Menciones"
+        },
+        "filters": {
+            "title": "Filtros",
+            "type": "Tipo",
+            "status": "Estado",
+            "clearAll": "Borrar todo",
+            "all": "Todas",
+            "read": "Leídas",
+            "unread": "Sin leer",
+            "messages": "Mensajes",
+            "messagesShort": "Msg",
+            "mentions": "Menciones",
+            "mentionsShort": "@",
+            "conversations": "Conversaciones",
+            "conversationsShort": "Conv",
+            "calls": "Llamadas perdidas",
+            "callsShort": "📞",
+            "friendRequests": "Solicitudes de amistad",
+            "friendRequestsShort": "Amigos",
+            "new_message": "Mensajes",
+            "friend_request": "Solicitudes de amistad",
+            "missed_call": "Llamadas perdidas",
+            "system": "Sistema",
+            "conversation": "Conversaciones"
+        },
+        "types": {
+            "new_message": "Nuevo mensaje",
+            "message": "Mensaje",
+            "message_reply": "Respuesta",
+            "user_mentioned": "Mención",
+            "message_reaction": "Reacción",
+            "contact_request": "Solicitud de contacto",
+            "contact_accepted": "Contacto aceptado",
+            "new_conversation_direct": "Nueva conversación",
+            "new_conversation_group": "Invitación de grupo",
+            "member_joined": "Miembro unido",
+            "missed_call": "Llamada perdida",
+            "system": "Notificación del sistema"
+        },
+        "priorities": {
+            "low": "Baja",
+            "normal": "Normal",
+            "high": "Importante",
+            "urgent": "Urgente"
+        },
+        "titles": {
+            "newMessage": "Mensaje de @{sender}",
+            "reply": "Respuesta de @{sender}",
+            "mentioned": "@{sender} te mencionó",
+            "reaction": "@{sender} reaccionó {emoji}",
+            "contactRequest": "@{sender} quiere conectarse",
+            "contactAccepted": "@{sender} aceptó tu invitación",
+            "newConversationDirect": "Nueva conversación con @{sender}",
+            "newConversationGroup": "Invitación a \"{title}\"",
+            "memberJoined": "Nuevo miembro en \"{title}\"",
+            "missedCall": "Llamada {type} perdida",
+            "system": "Notificación del sistema",
+            "default": "Nueva notificación"
+        },
+        "content": {
+            "memberJoinedMessage": "{sender} se unió al grupo",
+            "contactAcceptedMessage": "{sender} aceptó tu invitación. Ahora pueden chatear juntos.",
+            "contactRequestMessage": "{sender} te envió una invitación",
+            "notMemberHint": "No eres miembro de esta conversación. Haz clic para unirte."
+        },
+        "conversationTypes": {
+            "private": "Privado",
+            "direct": "Privado",
+            "group": "Grupo"
+        },
+        "timeAgo": {
+            "now": "ahora mismo",
+            "minute": "hace {count} min",
+            "hour": "hace {count}h",
+            "day": "hace {count}d"
+        },
+        "actions": {
+            "accept": "Aceptar",
+            "decline": "Rechazar",
+            "join": "Unirse",
+            "callBack": "Devolver llamada",
+            "view": "Ver",
+            "reply": "Responder",
+            "select": "Seleccionar",
+            "markAsRead": "Marcar como leída",
+            "delete": "Eliminar",
+            "clearSearch": "Borrar búsqueda",
+            "allMarkedRead": "Todas las notificaciones marcadas como leídas"
+        },
+        "unreadCount": {
+            "single": "{count} sin leer de {total}",
+            "plural": "{count} sin leer de {total}",
+            "active": "{count} no leídas de {total}",
+            "allRead": "Todas tus {total} notificación{plural} están leídas",
+            "empty": "No tienes notificaciones"
+        },
+        "timestamps": {
+            "justNow": "ahora mismo",
+            "secondsAgo": "hace {count} segundo",
+            "secondsAgo_plural": "hace {count} segundos",
+            "minutesAgo": "hace {count} minuto",
+            "minutesAgo_plural": "hace {count} minutos",
+            "hoursAgo": "hace {count} hora",
+            "hoursAgo_plural": "hace {count} horas",
+            "daysAgo": "hace {count} día",
+            "daysAgo_plural": "hace {count} días",
+            "in": "en"
+        },
+        "attachments": {
+            "photo": "Foto",
+            "video": "Video",
+            "audio": "Audio",
+            "pdf": "PDF",
+            "document": "Documento",
+            "file": "Archivo"
+        },
+        "groups": {
+            "today": "Hoy",
+            "yesterday": "Ayer",
+            "thisWeek": "Esta semana",
+            "thisMonth": "Este mes",
+            "older": "Más antiguo"
+        },
+        "markAllRead": "Marcar todo como leído",
+        "settings": "Configuración",
+        "push": {
+            "title": "Activar notificaciones push",
+            "description": "Recibe notificaciones incluso cuando la app está en segundo plano",
+            "enable": "Activar",
+            "enabled": "Notificaciones push activadas",
+            "denied": "Notificaciones push denegadas. Puedes cambiarlo en la configuración de tu navegador."
+        }
     },
-    "noResults": "No se encontraron notificaciones",
-    "search": "Buscar notificaciones...",
-    "emptyUnread": "¡Al día! Sin notificaciones sin leer.",
-    "emptyMentions": "Sin menciones aún",
-    "markAllAsRead": "Marcar todas como leídas",
-    "markAsRead": "Marcar como leída",
-    "delete": "Eliminar",
-    "viewAll": "Ver todas las notificaciones",
-    "loadMore": "Cargar más",
-    "loading": "Cargando notificaciones...",
-    "reachedEnd": "Has llegado al final",
-    "tabs": {
-      "all": "Todas",
-      "unread": "Sin leer",
-      "mentions": "Menciones"
-    },
-    "filters": {
-      "title": "Filtros",
-      "type": "Tipo",
-      "status": "Estado",
-      "clearAll": "Borrar todo",
-      "all": "Todas",
-      "read": "Leídas",
-      "unread": "Sin leer",
-      "messages": "Mensajes",
-      "messagesShort": "Msg",
-      "mentions": "Menciones",
-      "mentionsShort": "@",
-      "conversations": "Conversaciones",
-      "conversationsShort": "Conv",
-      "calls": "Llamadas perdidas",
-      "callsShort": "📞",
-      "friendRequests": "Solicitudes de amistad",
-      "friendRequestsShort": "Amigos",
-      "new_message": "Mensajes",
-      "friend_request": "Solicitudes de amistad",
-      "missed_call": "Llamadas perdidas",
-      "system": "Sistema",
-      "conversation": "Conversaciones"
-    },
-    "types": {
-      "new_message": "Nuevo mensaje",
-      "message": "Mensaje",
-      "message_reply": "Respuesta",
-      "user_mentioned": "Mención",
-      "message_reaction": "Reacción",
-      "contact_request": "Solicitud de contacto",
-      "contact_accepted": "Contacto aceptado",
-      "new_conversation_direct": "Nueva conversación",
-      "new_conversation_group": "Invitación de grupo",
-      "member_joined": "Miembro unido",
-      "missed_call": "Llamada perdida",
-      "system": "Notificación del sistema"
-    },
-    "priorities": {
-      "low": "Baja",
-      "normal": "Normal",
-      "high": "Importante",
-      "urgent": "Urgente"
-    },
-    "titles": {
-      "newMessage": "Mensaje de @{sender}",
-      "reply": "Respuesta de @{sender}",
-      "mentioned": "@{sender} te mencionó",
-      "reaction": "@{sender} reaccionó {emoji}",
-      "contactRequest": "@{sender} quiere conectarse",
-      "contactAccepted": "@{sender} aceptó tu invitación",
-      "newConversationDirect": "Nueva conversación con @{sender}",
-      "newConversationGroup": "Invitación a \"{title}\"",
-      "memberJoined": "Nuevo miembro en \"{title}\"",
-      "missedCall": "Llamada {type} perdida",
-      "system": "Notificación del sistema",
-      "default": "Nueva notificación"
-    },
-    "content": {
-      "memberJoinedMessage": "{sender} se unió al grupo",
-      "contactAcceptedMessage": "{sender} aceptó tu invitación. Ahora pueden chatear juntos.",
-      "contactRequestMessage": "{sender} te envió una invitación",
-      "notMemberHint": "No eres miembro de esta conversación. Haz clic para unirte."
-    },
-    "conversationTypes": {
-      "private": "Privado",
-      "direct": "Privado",
-      "group": "Grupo"
-    },
-    "timeAgo": {
-      "now": "ahora mismo",
-      "minute": "hace {count} min",
-      "hour": "hace {count}h",
-      "day": "hace {count}d"
-    },
-    "actions": {
-      "accept": "Aceptar",
-      "decline": "Rechazar",
-      "join": "Unirse",
-      "callBack": "Devolver llamada",
-      "view": "Ver",
-      "reply": "Responder",
-      "select": "Seleccionar",
-      "markAsRead": "Marcar como leída",
-      "delete": "Eliminar",
-      "clearSearch": "Borrar búsqueda",
-      "allMarkedRead": "Todas las notificaciones marcadas como leídas"
-    },
-    "unreadCount": {
-      "single": "{count} sin leer de {total}",
-      "plural": "{count} sin leer de {total}",
-      "active": "{count} no leídas de {total}",
-      "allRead": "Todas tus {total} notificación{plural} están leídas",
-      "empty": "No tienes notificaciones"
-    },
-    "timestamps": {
-      "justNow": "ahora mismo",
-      "secondsAgo": "hace {count} segundo",
-      "secondsAgo_plural": "hace {count} segundos",
-      "minutesAgo": "hace {count} minuto",
-      "minutesAgo_plural": "hace {count} minutos",
-      "hoursAgo": "hace {count} hora",
-      "hoursAgo_plural": "hace {count} horas",
-      "daysAgo": "hace {count} día",
-      "daysAgo_plural": "hace {count} días",
-      "in": "en"
-    },
-    "attachments": {
-      "photo": "Foto",
-      "video": "Video",
-      "audio": "Audio",
-      "pdf": "PDF",
-      "document": "Documento",
-      "file": "Archivo"
-    },
-    "groups": {
-      "today": "Hoy",
-      "yesterday": "Ayer",
-      "thisWeek": "Esta semana",
-      "thisMonth": "Este mes",
-      "older": "Más antiguo"
-    },
-    "markAllRead": "Marcar todo como leído",
-    "settings": "Configuración",
-    "push": {
-      "title": "Activar notificaciones push",
-      "description": "Recibe notificaciones incluso cuando la app está en segundo plano",
-      "enable": "Activar",
-      "enabled": "Notificaciones push activadas",
-      "denied": "Notificaciones push denegadas. Puedes cambiarlo en la configuración de tu navegador."
+    "settings": {
+        "saved": "Preferencias guardadas",
+        "dndTimeError": "La hora de inicio debe ser diferente de la hora de fin",
+        "resetConfirm": "¿Restablecer todas las preferencias de notificación?",
+        "reset": "Preferencias restablecidas",
+        "permissionGranted": "Notificaciones permitidas",
+        "permissionDenied": "Notificaciones denegadas",
+        "loading": "Cargando preferencias..."
     }
-  }
 }

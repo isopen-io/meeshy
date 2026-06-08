@@ -170,6 +170,9 @@ extension ConversationView {
         case .copy:
             UIPasteboard.general.string = message.content
             HapticFeedback.success()
+            FeedbackToastManager.shared.show(
+                String(localized: "action.copy.success", defaultValue: "Message copied", bundle: .main)
+            )
             dismissContextOverlay()
         case .delete:
             overlayState.deleteConfirmMessageId = message.id
