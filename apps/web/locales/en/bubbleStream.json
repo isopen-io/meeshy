@@ -141,6 +141,16 @@
       "retry": "Retry",
       "cancel": "Delete",
       "retrying": "Retrying..."
+    },
+    "mention": {
+      "badge": {
+        "present": "Present",
+        "invite": "Invite"
+      },
+      "title": "Mention a user",
+      "searchPlaceholder": "Type to search for a user...",
+      "noResults": "No user found for \"{query}\"",
+      "helpText": "↑↓ navigate • Enter select • Esc close"
     }
   }
 }

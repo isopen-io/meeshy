@@ -4,8 +4,10 @@ import { memo, useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Bell, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/useI18n';
 
 export const PushPermissionBanner = memo(function PushPermissionBanner() {
+  const { t } = useI18n('notifications');
   const [permission, setPermission] = useState<NotificationPermission | 'unsupported'>('unsupported');
   const [dismissed, setDismissed] = useState(false);
 
@@ -35,9 +37,9 @@ export const PushPermissionBanner = memo(function PushPermissionBanner() {
     setPermission(result);
 
     if (result === 'granted') {
-      toast.success('Push notifications enabled');
+      toast.success(t('push.enabled'));
     } else if (result === 'denied') {
-      toast.error('Push notifications denied. You can change this in your browser settings.');
+      toast.error(t('push.denied'));
     }
   }, []);
 
@@ -50,10 +52,10 @@ export const PushPermissionBanner = memo(function PushPermissionBanner() {
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
-          Enable push notifications
+          {t('push.title')}
         </p>
         <p className="text-xs text-blue-700 dark:text-blue-300">
-          Get notified even when the app is in the background
+          {t('push.description')}
         </p>
       </div>
       <div className="flex items-center gap-2 flex-shrink-0">
@@ -63,7 +65,7 @@ export const PushPermissionBanner = memo(function PushPermissionBanner() {
           className="bg-blue-600 hover:bg-blue-700 text-white"
           onClick={handleRequest}
         >
-          Enable
+          {t('push.enable')}
         </Button>
         <Button
           size="sm"

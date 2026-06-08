@@ -43,16 +43,16 @@ export function PermissionRequest({ onPermissionsGranted, onCancel }: Permission
 
       if (error instanceof DOMException) {
         if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-          setErrorMessage(t('calls.permissions.errors.notAllowed'));
+          setErrorMessage(t('permissions.error.denied'));
         } else if (error.name === 'NotFoundError') {
-          setErrorMessage(t('calls.permissions.errors.notFound'));
+          setErrorMessage(t('permissions.error.notFound'));
         } else if (error.name === 'NotReadableError') {
-          setErrorMessage(t('calls.permissions.errors.notReadable'));
+          setErrorMessage(t('permissions.error.notReadable'));
         } else {
-          setErrorMessage(t('calls.permissions.errors.generic'));
+          setErrorMessage(t('permissions.error.generic'));
         }
       } else {
-        setErrorMessage(t('calls.permissions.errors.unexpected'));
+        setErrorMessage(t('permissions.error.unexpected'));
       }
     }
   };
@@ -82,19 +82,19 @@ export function PermissionRequest({ onPermissionsGranted, onCancel }: Permission
         {/* Title */}
         <h2 className="text-white text-2xl font-bold mb-2">
           {status === 'granted'
-            ? t('calls.permissions.granted')
+            ? t('permissions.title.granted')
             : status === 'denied'
-            ? t('calls.permissions.denied')
-            : t('calls.permissions.title')}
+            ? t('permissions.title.denied')
+            : t('permissions.title.idle')}
         </h2>
 
         {/* Description */}
         <p className="text-gray-300 mb-6">
           {status === 'granted'
-            ? t('calls.permissions.grantedDescription')
+            ? t('permissions.description.granted')
             : status === 'denied'
             ? errorMessage
-            : t('calls.permissions.description')}
+            : t('permissions.description.idle')}
         </p>
 
         {/* Buttons */}
@@ -102,10 +102,10 @@ export function PermissionRequest({ onPermissionsGranted, onCancel }: Permission
           {status === 'idle' && (
             <>
               <Button onClick={requestPermissions} size="lg" className="w-full">
-                {t('calls.permissions.grantAccess')}
+                {t('permissions.buttons.grantAccess')}
               </Button>
               <Button onClick={onCancel} variant="outline" size="lg" className="w-full">
-                {t('calls.permissions.cancel')}
+                {t('permissions.buttons.cancel')}
               </Button>
             </>
           )}
@@ -113,24 +113,24 @@ export function PermissionRequest({ onPermissionsGranted, onCancel }: Permission
           {status === 'requesting' && (
             <div className="py-4">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
-              <p className="text-gray-400 mt-3 text-sm">{t('calls.permissions.browserPrompt')}</p>
+              <p className="text-gray-400 mt-3 text-sm">{t('permissions.requesting')}</p>
             </div>
           )}
 
           {status === 'denied' && (
             <>
               <Button onClick={requestPermissions} size="lg" className="w-full">
-                {t('calls.permissions.tryAgain')}
+                {t('permissions.buttons.tryAgain')}
               </Button>
               <Button onClick={onCancel} variant="outline" size="lg" className="w-full">
-                {t('calls.permissions.cancel')}
+                {t('permissions.buttons.cancel')}
               </Button>
             </>
           )}
 
           {status === 'granted' && (
             <div className="py-4">
-              <p className="text-green-500 font-medium">{t('calls.permissions.joining')}</p>
+              <p className="text-green-500 font-medium">{t('permissions.joining')}</p>
             </div>
           )}
         </div>
@@ -138,17 +138,11 @@ export function PermissionRequest({ onPermissionsGranted, onCancel }: Permission
         {/* Browser Instructions */}
         {status === 'denied' && (
           <div className="mt-6 text-left text-sm text-gray-400 bg-gray-800 rounded p-4">
-            <p className="font-semibold mb-2">{t('calls.permissions.browserInstructions.title')}</p>
+            <p className="font-semibold mb-2">{t('permissions.instructions.title')}</p>
             <ul className="list-disc list-inside space-y-1">
-              <li>
-                <strong>Chrome:</strong> {t('calls.permissions.browserInstructions.chrome')}
-              </li>
-              <li>
-                <strong>Firefox:</strong> {t('calls.permissions.browserInstructions.firefox')}
-              </li>
-              <li>
-                <strong>Safari:</strong> {t('calls.permissions.browserInstructions.safari')}
-              </li>
+              <li>{t('permissions.instructions.chrome')}</li>
+              <li>{t('permissions.instructions.firefox')}</li>
+              <li>{t('permissions.instructions.safari')}</li>
             </ul>
           </div>
         )}

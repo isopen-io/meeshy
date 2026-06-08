@@ -21,76 +21,36 @@
         "refresh": "Essayez de recharger la page"
       }
     },
-    "status": {
-      "connecting": "Connexion en cours...",
-      "starting": "Démarrage...",
-      "reconnecting": "Reconnexion...",
-      "failed": "Échec de connexion",
-      "disconnected": "Déconnecté",
-      "connected": "Connecté",
-      "quality": {
-        "excellent": "Excellent",
-        "good": "Bon",
-        "poor": "Faible",
-        "offline": "Hors ligne"
-      }
-    },
     "permissions": {
-      "title": "Accès caméra & micro",
-      "granted": "Permissions accordées",
-      "denied": "Permission refusée",
-      "description": "Pour rejoindre cet appel vidéo, nous avons besoin d'accéder à votre caméra et microphone.",
-      "grantedDescription": "Vous pouvez maintenant rejoindre l'appel vidéo.",
-      "grantAccess": "Autoriser l'accès",
-      "cancel": "Annuler",
-      "browserPrompt": "Veuillez autoriser l'accès dans les paramètres de votre navigateur.",
-      "tryAgain": "Réessayer",
-      "joining": "Connexion à l'appel...",
-      "errors": {
-        "notAllowed": "Accès caméra et microphone refusé. Vérifiez les paramètres de votre navigateur.",
+      "title": {
+        "idle": "Accès caméra & microphone",
+        "granted": "Permissions accordées",
+        "denied": "Permission refusée"
+      },
+      "description": {
+        "idle": "Pour rejoindre cet appel vidéo, nous avons besoin d'accéder à votre caméra et votre microphone.",
+        "granted": "Vous pouvez maintenant rejoindre l'appel vidéo."
+      },
+      "error": {
+        "denied": "Accès caméra et microphone refusé. Vérifiez les paramètres de votre navigateur.",
         "notFound": "Aucune caméra ou microphone trouvé. Connectez un appareil et réessayez.",
         "notReadable": "La caméra ou le microphone est déjà utilisé par une autre application.",
-        "generic": "Impossible d'accéder à la caméra et au microphone. Réessayez.",
-        "unexpected": "Une erreur inattendue s'est produite. Réessayez."
+        "generic": "Impossible d'accéder à la caméra et au microphone. Veuillez réessayer.",
+        "unexpected": "Une erreur inattendue s'est produite. Veuillez réessayer."
       },
-      "browserInstructions": {
+      "buttons": {
+        "grantAccess": "Autoriser l'accès",
+        "cancel": "Annuler",
+        "tryAgain": "Réessayer"
+      },
+      "requesting": "Veuillez autoriser l'accès dans votre navigateur...",
+      "joining": "Connexion à l'appel...",
+      "instructions": {
         "title": "Comment activer les permissions :",
-        "chrome": "Cliquez sur l'icône caméra dans la barre d'adresse",
-        "firefox": "Cliquez sur l'icône caméra dans la barre d'adresse",
-        "safari": "Allez dans Safari Préférences Confidentialité Caméra/Microphone"
+        "chrome": "Chrome : Cliquez sur l'icône caméra dans la barre d'adresse",
+        "firefox": "Firefox : Cliquez sur l'icône caméra dans la barre d'adresse",
+        "safari": "Safari : Allez dans Réglages Safari > Confidentialité > Caméra/Microphone"
       }
-    },
-    "controls": {
-      "mute": "Couper le micro",
-      "unmute": "Activer le micro",
-      "videoOff": "Désactiver la caméra",
-      "videoOn": "Activer la caméra",
-      "switchCamera": "Changer de caméra",
-      "speakerOff": "Désactiver le haut-parleur",
-      "speakerOn": "Activer le haut-parleur",
-      "speakerOnLabel": "Haut-parleur activé",
-      "speakerOffLabel": "Haut-parleur désactivé",
-      "audioEffects": "Effets audio",
-      "audioEffectsTitle": "Effets audio",
-      "connectionStats": "Statistiques de connexion",
-      "connectionStatsTitle": "Statistiques",
-      "endCall": "Raccrocher",
-      "controls": "Contrôles d'appel"
-    },
-    "stream": {
-      "disconnected": "Déconnecté",
-      "participantLeft": "{name} a quitté l'appel",
-      "participant": "Participant",
-      "micMuted": "Micro coupé",
-      "videoOff": "Caméra désactivée",
-      "fullscreen": "Plein écran",
-      "dragToMove": "Glisser pour déplacer"
-    },
-    "toasts": {
-      "cameraSwitched": "Caméra changée",
-      "cameraSwitchFailed": "Échec du changement de caméra",
-      "videoSwitchFailed": "Impossible de changer la vidéo",
-      "connectionError": "Erreur de connexion à l'appel"
     }
   }
 }
