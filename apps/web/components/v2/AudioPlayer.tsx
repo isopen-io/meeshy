@@ -75,6 +75,8 @@ function PauseIcon({ className }: { className?: string }) {
 const BAR_COUNT = 32;
 const _BAR_GAP = 2;
 const BAR_WIDTH = 3;
+const SPEED_CYCLE = [1, 1.25, 1.5, 2, 0.5] as const;
+type PlaybackRate = typeof SPEED_CYCLE[number];
 
 export function AudioPlayer({
   src,
@@ -102,6 +104,22 @@ export function AudioPlayer({
   const [duration, setDuration] = useState(propDuration || 0);
   const [isLoading, setIsLoading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState<PlaybackRate>(1);
+
+  const cycleSpeed = useCallback(() => {
+    const currentIndex = SPEED_CYCLE.indexOf(playbackRate);
+    const next = SPEED_CYCLE[(currentIndex + 1) % SPEED_CYCLE.length];
+    setPlaybackRate(next);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = next;
+    }
+  }, [playbackRate]);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.playbackRate = playbackRate;
+    }
+  }, [playbackRate]);
 
   // Generate consistent waveform based on src
   const waveformBars = useMemo(() => generateWaveform(src, BAR_COUNT), [src]);
@@ -347,11 +365,25 @@ export function AudioPlayer({
           <div className="absolute inset-0" />
         </div>
 
-        {/* Time display */}
+        {/* Time display + speed control */}
         <div className="flex items-center justify-between text-xs font-medium">
           <span className="text-[var(--gp-text-secondary)] transition-colors duration-300">
             {formatTime(currentTime)}
           </span>
+          <button
+            onClick={cycleSpeed}
+            className={cn(
+              'px-1.5 py-0.5 rounded text-[10px] font-bold tabular-nums',
+              'transition-colors duration-150',
+              playbackRate !== 1
+                ? 'bg-[var(--gp-terracotta)] text-white'
+                : 'text-[var(--gp-text-muted)] hover:text-[var(--gp-text-secondary)]'
+            )}
+            aria-label={`Vitesse de lecture: ${playbackRate}x. Appuyez pour changer.`}
+            title={`Vitesse: ${playbackRate}x`}
+          >
+            {playbackRate}x
+          </button>
           <span className="text-[var(--gp-text-muted)] transition-colors duration-300">
             {formatTime(duration)}
           </span>

@@ -117,6 +117,9 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
   
   // État pour afficher/masquer le bouton "Scroll to bottom"
   const [showScrollButton, setShowScrollButton] = useState(false);
+  // Compteur de nouveaux messages reçus pendant que l'utilisateur scrollait vers le haut
+  const [newMessagesWhileScrolled, setNewMessagesWhileScrolled] = useState(0);
+  const messagesLengthAtScrollRef = useRef(0);
 
   // Fonction pour vérifier si l'utilisateur est en bas de la conversation
   const _isUserAtBottom = useCallback(() => {
@@ -189,6 +192,19 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
     return firstUnread || null;
   }, [messages, currentUser]);
 
+  // Tracker les nouveaux messages arrivés pendant que l'utilisateur scrollait vers le haut
+  useEffect(() => {
+    if (!showScrollButton) return;
+    if (messagesLengthAtScrollRef.current === 0) {
+      messagesLengthAtScrollRef.current = messages.length;
+      return;
+    }
+    const newCount = messages.length - messagesLengthAtScrollRef.current;
+    if (newCount > 0) {
+      setNewMessagesWhileScrolled(newCount);
+    }
+  }, [messages.length, showScrollButton]);
+
   // Stable ref for handleScroll to prevent listener detach/reattach (#16)
   const handleScrollRef = useRef<((e: React.UIEvent<HTMLDivElement>) => void) | null>(null);
 
@@ -211,7 +227,11 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
       shouldShowButton = distanceFromBottom > 200; // Afficher si plus de 200px du bas
     }
     setShowScrollButton(shouldShowButton);
-    
+    if (!shouldShowButton) {
+      setNewMessagesWhileScrolled(0);
+      messagesLengthAtScrollRef.current = 0;
+    }
+
     // Vérifier si l'utilisateur est proche du bas (auto-scroll)
     const isNearBottom = distanceFromBottom < 100;
     isAutoScrollingRef.current = isNearBottom;
@@ -549,30 +569,50 @@ const ConversationMessagesComponent = memo(function ConversationMessages({
         const shouldRender = showScrollButton && !isLoadingMessages && messages.length > 0;
 
         return shouldRender ? (
-          <Button
-            onClick={handleScrollButtonClick}
+          <div
             className={cn(
               "fixed z-50",
-              "bottom-[116px]", // Position unifiée: ~82px composer + 10px + 24px (hauteur icône)
-              // Positionnement adapté: pour BubbleStream avec sidebar, ajuster la position
+              "bottom-[116px]",
               scrollDirection === 'down' ? "right-6 xl:right-[360px]" : "right-6",
-              "rounded-full w-6 h-6 p-0",
-              "backdrop-blur-xl bg-white/60 dark:bg-gray-900/60",
-              "shadow-xl shadow-black/5 dark:shadow-black/20",
-              "border border-white/30 dark:border-gray-700/40",
-              "hover:bg-white/80 dark:hover:bg-gray-900/80",
-              "transition-[color,background-color,opacity] duration-300 ease-in-out",
-              "animate-in slide-in-from-bottom-5"
             )}
-            aria-label={scrollButtonDirection === 'up' ? 'Scroll to top' : 'Scroll to bottom'}
-            title={scrollButtonDirection === 'up' ? 'Remonter vers les messages récents' : 'Aller au bas de la conversation'}
           >
-            {scrollButtonDirection === 'up' ? (
-              <ArrowUp className="h-3 w-3 text-gray-900 dark:text-gray-100" />
-            ) : (
-              <ArrowDown className="h-3 w-3 text-gray-900 dark:text-gray-100" />
+            <Button
+              onClick={handleScrollButtonClick}
+              className={cn(
+                "rounded-full w-6 h-6 p-0",
+                "backdrop-blur-xl bg-white/60 dark:bg-gray-900/60",
+                "shadow-xl shadow-black/5 dark:shadow-black/20",
+                "border border-white/30 dark:border-gray-700/40",
+                "hover:bg-white/80 dark:hover:bg-gray-900/80",
+                "transition-[color,background-color,opacity] duration-300 ease-in-out",
+                "animate-in slide-in-from-bottom-5"
+              )}
+              aria-label={scrollButtonDirection === 'up' ? 'Scroll to top' : 'Scroll to bottom'}
+              title={scrollButtonDirection === 'up' ? 'Remonter vers les messages récents' : 'Aller au bas de la conversation'}
+            >
+              {scrollButtonDirection === 'up' ? (
+                <ArrowUp className="h-3 w-3 text-gray-900 dark:text-gray-100" />
+              ) : (
+                <ArrowDown className="h-3 w-3 text-gray-900 dark:text-gray-100" />
+              )}
+            </Button>
+            {newMessagesWhileScrolled > 0 && (
+              <span
+                className={cn(
+                  "absolute -top-2 left-1/2 -translate-x-1/2",
+                  "min-w-[18px] h-[18px] px-1",
+                  "flex items-center justify-center",
+                  "rounded-full bg-red-500 text-white",
+                  "text-[10px] font-bold leading-none",
+                  "shadow-sm pointer-events-none",
+                  "animate-in zoom-in-75"
+                )}
+                aria-label={`${newMessagesWhileScrolled} nouveau${newMessagesWhileScrolled > 1 ? 'x' : ''} message${newMessagesWhileScrolled > 1 ? 's' : ''}`}
+              >
+                {newMessagesWhileScrolled > 99 ? '99+' : newMessagesWhileScrolled}
+              </span>
             )}
-          </Button>
+          </div>
         ) : null;
       })()}
     </div>

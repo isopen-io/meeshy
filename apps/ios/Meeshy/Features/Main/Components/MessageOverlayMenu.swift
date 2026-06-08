@@ -31,6 +31,7 @@ struct MessageOverlayMenu: View {
     var onDelete: (() -> Void)?
     var onDeleteAttachment: ((String) -> Void)?
     var onShowThread: (() -> Void)?
+    var onForward: (() -> Void)?
 
     // Full bubble-rendering context — when `messageBubbleFrame != .zero`, the
     // overlay renders a REAL `ThemedMessageBubble` at the source position
@@ -960,6 +961,12 @@ struct MessageOverlayMenu: View {
             id: "reply", icon: "arrowshape.turn.up.left.fill",
             label: "Repondre", color: "4ECDC4",
             handler: { dismissThen { onReply?() } }
+        ))
+
+        actions.append(MessageAction(
+            id: "forward", icon: "arrowshape.right.fill",
+            label: "Transferer", color: "34D399",
+            handler: { dismissThen { onForward?() } }
         ))
 
         actions.append(MessageAction(

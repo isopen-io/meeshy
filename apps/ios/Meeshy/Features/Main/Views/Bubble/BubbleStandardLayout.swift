@@ -424,6 +424,16 @@ struct BubbleStandardLayout: View {
         .padding(.bottom, bottomSpacing)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(messageAccessibilityLabel)
+        .accessibilityAction(named: Text(String(localized: "a11y.message.reply", defaultValue: "Repondre", bundle: .main))) {
+            onReplyTap?(message.id)
+        }
+        .accessibilityAction(named: Text(String(localized: "a11y.message.react", defaultValue: "Reagir", bundle: .main))) {
+            onOpenReactPicker?(message.id)
+        }
+        .accessibilityAction(named: Text(String(localized: "a11y.message.copy", defaultValue: "Copier le message", bundle: .main))) {
+            let text = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty { UIPasteboard.general.string = text }
+        }
         .onReceive(SharedAVPlayerManager.shared.$activeURL) { newURL in
             // Local mirror — toggles `hasPlayingInlineVideo` to drive the
             // footer overlay visibility. Doesn't re-render on time ticks.
