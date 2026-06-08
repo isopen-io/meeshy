@@ -280,7 +280,7 @@ export class MessageHandler {
 
         conversationMessageStatsService.onNewMessage(
           this.prisma, message.conversationId, userId || participantId, data.content ?? '', [], null
-        ).catch(err => console.error('[MessageHandler] Stats update error:', err));
+        ).catch(err => handlerLogger.warn('stats update error', { error: err }));
       }
 
       handlerLogger.info('perf:ws.message.send', {
@@ -292,7 +292,7 @@ export class MessageHandler {
 
       this.stats.messages_processed++;
     } catch (error: unknown) {
-      console.error('[MESSAGE_SEND] Erreur:', error);
+      handlerLogger.error('message:send failed', { error });
       this.stats.errors++;
       this._sendError(callback, 'Failed to send message', socket);
     }
@@ -456,7 +456,7 @@ export class MessageHandler {
         });
         conversationMessageStatsService.onNewMessage(
           this.prisma, message.conversationId, userId || participantId, data.content ?? '', attachmentTypes, null
-        ).catch(err => console.error('[MessageHandler] Stats update error:', err));
+        ).catch(err => handlerLogger.warn('stats update error', { error: err }));
       }
 
       handlerLogger.info('perf:ws.message.send-with-attachments', {
@@ -468,7 +468,7 @@ export class MessageHandler {
 
       this.stats.messages_processed++;
     } catch (error: unknown) {
-      console.error('[MESSAGE_SEND_ATTACHMENTS] Erreur:', error);
+      handlerLogger.error('message:send-with-attachments failed', { error });
       this.stats.errors++;
       this._sendError(callback, 'Failed to send message', socket);
     }
@@ -611,7 +611,7 @@ export class MessageHandler {
         }
         handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: participants.filter((p) => p.userId).length });
       } catch (err) {
-        console.warn('[BROADCAST] CONVERSATION_UPDATED emit failed:', err);
+        handlerLogger.warn('conversation:updated emit failed', { error: err });
       }
 
       // Mettre à jour unread counts
@@ -624,10 +624,10 @@ export class MessageHandler {
       // room, so an online recipient outside the conversation never triggers
       // mark-as-received and the sender stays stuck at a single checkmark.
       this._autoDeliverToOnlineRecipients(message, normalizedId).catch((err) => {
-        console.warn('[AUTO_DELIVERED] background failure:', err);
+        handlerLogger.warn('auto-deliver background failure', { error: err });
       });
     } catch (error) {
-      console.error('[BROADCAST] Erreur:', error);
+      handlerLogger.error('broadcastNewMessage failed', { error });
     }
   }
 
@@ -654,7 +654,7 @@ export class MessageHandler {
     const onlineRecipients = participants.filter(
       (p) => p.userId && this.connectedUsers.has(p.userId)
     );
-    console.log(`[RT-DIAG] autoDeliver conv=${conversationId} msg=${message.id} participants=${participants.length} onlineRecipients=${onlineRecipients.length}`);
+    handlerLogger.debug('auto-deliver', { conversationId, messageId: message.id, participants: participants.length, onlineRecipients: onlineRecipients.length });
     if (onlineRecipients.length === 0) return;
 
     const { PrivacyPreferencesService } = await import('../../services/PrivacyPreferencesService.js');
@@ -676,12 +676,12 @@ export class MessageHandler {
         didMarkAny = true;
         if (!firstAcker) firstAcker = { id: recipient.id, userId: recipient.userId };
       } catch (err) {
-        console.warn('[AUTO_DELIVERED] markAsReceived failed:', err);
+        handlerLogger.warn('auto-deliver markAsReceived failed', { error: err });
       }
     }
 
     if (!didMarkAny || !firstAcker) {
-      console.log(`[RT-DIAG] autoDeliver conv=${conversationId} SKIP read-status:updated emit (didMarkAny=${didMarkAny}) — recipients likely have read receipts disabled`);
+      handlerLogger.debug('auto-deliver skipped — no receipts marked', { conversationId, didMarkAny });
       return;
     }
 
@@ -712,7 +712,7 @@ export class MessageHandler {
       emitter = emitter.to(userRoom);
     }
     emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
-    console.log(`[RT-DIAG] autoDeliver conv=${conversationId} read-status:updated EMITTED rooms=[${[...seen].join(', ')}] deliveredCount=${summary.deliveredCount}`);
+    handlerLogger.debug('auto-deliver read-status:updated emitted', { conversationId, rooms: [...seen], deliveredCount: summary.deliveredCount });
   }
 
   /**
@@ -908,7 +908,7 @@ export class MessageHandler {
         });
       }));
     } catch (error) {
-      console.warn('⚠️ [UNREAD_COUNT] Erreur:', error);
+      handlerLogger.warn('unread count update failed', { error });
     }
   }
 

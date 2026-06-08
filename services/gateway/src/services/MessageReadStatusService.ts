@@ -52,6 +52,11 @@ export class MessageReadStatusService {
    */
   private static recentActionCache = new Map<string, number>();
   private static readonly DEDUP_TTL_MS = 2000;
+  private static readonly dedupCleanupInterval = (() => {
+    const handle = setInterval(() => MessageReadStatusService.cleanupDedupCache(), 30_000);
+    handle.unref?.();
+    return handle;
+  })();
 
   constructor(private readonly prisma: PrismaClient) {}
 

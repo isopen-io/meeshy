@@ -85,6 +85,7 @@ export class MessagingService {
 
   private markAsReceivedDebounced(conversationId: string): void {
     if (this.markReceivedTimers.has(conversationId)) return;
+    if (this.markReceivedTimers.size >= 100) return;
     const timer = setTimeout(async () => {
       this.markReceivedTimers.delete(conversationId);
       try {

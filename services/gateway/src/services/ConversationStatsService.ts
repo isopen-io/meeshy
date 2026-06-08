@@ -27,9 +27,21 @@ export class ConversationStatsService {
   private static instance: ConversationStatsService | null = null;
   private readonly cache = new Map<string, CacheEntry>();
   private readonly ttlMs: number;
+  private cleanupInterval: ReturnType<typeof setInterval> | null = null;
 
   private constructor(ttlMs: number = 60 * 60 * 1000) { // 1h par défaut
     this.ttlMs = ttlMs;
+    this.startPeriodicCleanup();
+  }
+
+  private startPeriodicCleanup(): void {
+    this.cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      for (const [key, entry] of this.cache) {
+        if (now >= entry.expiresAt) this.cache.delete(key);
+      }
+    }, 15 * 60 * 1000);
+    this.cleanupInterval.unref?.();
   }
 
   public static getInstance(): ConversationStatsService {
