@@ -25,6 +25,7 @@ struct TwoFactorSetupView: View {
     @State private var verifying = false
     @State private var codeError: String?
     @State private var copiedKey = false
+    @State private var copiedCodes = false
 
     private let tfaColor = MeeshyColors.indigo500
 
@@ -123,11 +124,18 @@ struct TwoFactorSetupView: View {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                             copiedKey = false
                         }
+                        // Clear sensitive OTP secret from clipboard after 30s
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
+                            if UIPasteboard.general.string == setup.otpauthUrl {
+                                UIPasteboard.general.string = ""
+                            }
+                        }
                     } label: {
                         Image(systemName: copiedKey ? "checkmark" : "doc.on.doc")
                             .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(copiedKey ? MeeshyColors.success : tfaColor)
                     }
+                    .accessibilityLabel(copiedKey ? String(localized: "a11y_copied", defaultValue: "Copié") : String(localized: "a11y_copy_key", defaultValue: "Copier la clé secrète"))
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
@@ -254,20 +262,32 @@ struct TwoFactorSetupView: View {
             Button {
                 UIPasteboard.general.string = codes.joined(separator: "\n")
                 HapticFeedback.success()
+                copiedCodes = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copiedCodes = false }
+                // Clear sensitive backup codes from clipboard after 30s
+                let codesSnapshot = codes.joined(separator: "\n")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
+                    if UIPasteboard.general.string == codesSnapshot {
+                        UIPasteboard.general.string = ""
+                    }
+                }
             } label: {
                 HStack(spacing: 8) {
-                    Image(systemName: "doc.on.doc.fill")
+                    Image(systemName: copiedCodes ? "checkmark" : "doc.on.doc.fill")
                         .font(.system(size: 13))
-                    Text(String(localized: "2fa_copy_all_codes", defaultValue: "Copier tous les codes"))
+                    Text(copiedCodes
+                        ? String(localized: "a11y_copied", defaultValue: "Copié")
+                        : String(localized: "2fa_copy_all_codes", defaultValue: "Copier tous les codes"))
                         .font(.system(size: 14, weight: .semibold))
                 }
-                .foregroundColor(tfaColor)
+                .foregroundColor(copiedCodes ? MeeshyColors.success : tfaColor)
                 .padding(.horizontal, 20)
                 .padding(.vertical, 10)
                 .background(
-                    Capsule().fill(tfaColor.opacity(0.12))
+                    Capsule().fill((copiedCodes ? MeeshyColors.success : tfaColor).opacity(0.12))
                 )
             }
+            .accessibilityLabel(copiedCodes ? String(localized: "a11y_copied", defaultValue: "Copié") : String(localized: "2fa_copy_all_codes", defaultValue: "Copier tous les codes"))
 
             Button {
                 HapticFeedback.medium()
@@ -585,20 +605,31 @@ struct TwoFactorBackupCodesView: View {
                             Button {
                                 UIPasteboard.general.string = viewModel.recoveryCodes.joined(separator: "\n")
                                 HapticFeedback.success()
+                                copiedCodes = true
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copiedCodes = false }
+                                let codesSnapshot = viewModel.recoveryCodes.joined(separator: "\n")
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
+                                    if UIPasteboard.general.string == codesSnapshot {
+                                        UIPasteboard.general.string = ""
+                                    }
+                                }
                             } label: {
                                 HStack(spacing: 8) {
-                                    Image(systemName: "doc.on.doc.fill")
+                                    Image(systemName: copiedCodes ? "checkmark" : "doc.on.doc.fill")
                                         .font(.system(size: 13))
-                                    Text(String(localized: "2fa_copy_all_codes", defaultValue: "Copier tous les codes"))
+                                    Text(copiedCodes
+                                        ? String(localized: "a11y_copied", defaultValue: "Copié")
+                                        : String(localized: "2fa_copy_all_codes", defaultValue: "Copier tous les codes"))
                                         .font(.system(size: 14, weight: .semibold))
                                 }
-                                .foregroundColor(tfaColor)
+                                .foregroundColor(copiedCodes ? MeeshyColors.success : tfaColor)
                                 .padding(.horizontal, 20)
                                 .padding(.vertical, 10)
                                 .background(
-                                    Capsule().fill(tfaColor.opacity(0.12))
+                                    Capsule().fill((copiedCodes ? MeeshyColors.success : tfaColor).opacity(0.12))
                                 )
                             }
+                            .accessibilityLabel(copiedCodes ? String(localized: "a11y_copied", defaultValue: "Copié") : String(localized: "2fa_copy_all_codes", defaultValue: "Copier tous les codes"))
                         }
                     }
                     .padding(.horizontal, 16)
