@@ -177,28 +177,28 @@ public extension MessageServiceProviding {
     func list(conversationId: String, offset: Int, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse {
         try await list(
             conversationId: conversationId, offset: offset, limit: limit,
-            includeReplies: includeReplies, includeTranslations: true
+            includeReplies: includeReplies, includeTranslations: true, languages: nil
         )
     }
 
     func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse {
         try await listBefore(
             conversationId: conversationId, before: before, limit: limit,
-            includeReplies: includeReplies, includeTranslations: true
+            includeReplies: includeReplies, includeTranslations: true, languages: nil
         )
     }
 
     func listAfter(conversationId: String, after: Date, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse {
         try await listAfter(
             conversationId: conversationId, after: after, limit: limit,
-            includeReplies: includeReplies, includeTranslations: true
+            includeReplies: includeReplies, includeTranslations: true, languages: nil
         )
     }
 
     func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse {
         try await listAround(
             conversationId: conversationId, around: around, limit: limit,
-            includeReplies: includeReplies, includeTranslations: true
+            includeReplies: includeReplies, includeTranslations: true, languages: nil
         )
     }
 }

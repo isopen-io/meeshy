@@ -1251,7 +1251,8 @@ class ConversationViewModel: ObservableObject {
                 offset: 0,
                 limit: 30,
                 includeReplies: true,
-                includeTranslations: !warmCache
+                includeTranslations: !warmCache,
+                languages: nil
             )
 
             // Upsert authoritative server data into GRDB; the MessageStore observation
@@ -2804,7 +2805,7 @@ class ConversationViewModel: ObservableObject {
             while collected.count < maxTotal {
                 let response = try await messageService.listAfter(
                     conversationId: conversationId, after: cursor, limit: pageSize,
-                    includeReplies: true, includeTranslations: true
+                    includeReplies: true, includeTranslations: true, languages: nil
                 )
                 let page = response.data  // ascending (oldest-after-watermark first), per gateway contract
                 guard !page.isEmpty else { break }
