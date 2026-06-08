@@ -54,6 +54,7 @@ export class MultiLevelCache<T = any> {
 
     const cleanupIntervalMs = options.cleanupIntervalMs || 5 * 60 * 1000;
     this.cleanupInterval = setInterval(() => this.cleanupExpiredMemoryEntries(), cleanupIntervalMs);
+    this.cleanupInterval.unref?.();
 
     logger.info(`🚀 [${this.name}] Cache multi-niveau initialisé`);
     logger.info(`   💾 Cache mémoire: ${this.memoryTtlMs / 1000}s TTL`);

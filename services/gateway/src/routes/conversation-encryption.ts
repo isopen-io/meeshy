@@ -17,6 +17,8 @@ import { getEncryptionService } from '../services/EncryptionService';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth';
 import { validateParams, validateBody } from '../validation/helpers.js';
 import { ConversationIdParamSchema, SetEncryptionModeBodySchema } from '../validation/conversation-encryption-schemas.js';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+const logger = enhancedLogger.child({ module: 'ConversationEncryptionRoutes' });
 
 // EncryptionMode type - defined locally to avoid build order issues
 type EncryptionMode = 'e2ee' | 'server' | 'hybrid';
@@ -125,7 +127,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         });
 
       } catch (error) {
-        console.error('[EncryptionRoutes] Error getting encryption status:', error);
+        logger.error('Error getting encryption status', error as Error);
         return reply.status(500).send({
           success: false,
           error: 'Internal server error'
@@ -291,7 +293,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
           });
         }
 
-        console.log(`[EncryptionRoutes] Encryption enabled for conversation ${conversationId} - Mode: ${mode}`);
+        logger.info('Encryption enabled for conversation', { conversationId, mode });
 
         return reply.send({
           success: true,
@@ -304,7 +306,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         });
 
       } catch (error) {
-        console.error('[EncryptionRoutes] Error enabling encryption:', error);
+        logger.error('Error enabling encryption', error as Error);
         return reply.status(500).send({
           success: false,
           error: 'Internal server error'

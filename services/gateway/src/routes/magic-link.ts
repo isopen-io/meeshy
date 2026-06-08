@@ -5,6 +5,8 @@ import { getCacheStore } from '../services/CacheStore';
 import { EmailService } from '../services/EmailService';
 import { GeoIPService, getRequestContext } from '../services/GeoIPService';
 import { initSessionService, markSessionTrusted } from '../services/SessionService';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+const logger = enhancedLogger.child({ module: 'MagicLinkRoutes' });
 
 // Validation schemas
 const requestMagicLinkSchema = z.object({
@@ -108,7 +110,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
       return reply.send(result);
 
     } catch (error) {
-      console.error('[MagicLink Route] Error:', error);
+      logger.error('MagicLink error', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'An error occurred. Please try again.'
@@ -209,7 +211,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
       });
 
     } catch (error) {
-      console.error('[MagicLink Route] Validation error:', error);
+      logger.error('MagicLink validation error', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'An error occurred. Please try again.'
@@ -309,7 +311,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
           source: 'magic_link'
         });
         if (!marked) {
-          console.warn('[MagicLink Route] ⚠️ Échec du marquage session trusted - voir logs SECURITY_AUDIT_ERROR');
+          logger.warn('Échec du marquage session trusted');
         }
       }
 
@@ -329,7 +331,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
       });
 
     } catch (error) {
-      console.error('[MagicLink Route] Validation error:', error);
+      logger.error('MagicLink validation error', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'An error occurred. Please try again.'

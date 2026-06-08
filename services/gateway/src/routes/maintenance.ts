@@ -9,6 +9,8 @@ import { AttachmentService } from '../services/attachments';
 import { StatusService } from '../services/StatusService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+const logger = enhancedLogger.child({ module: 'MaintenanceRoutes' });
 
 export async function maintenanceRoutes(fastify: FastifyInstance) {
   const prisma = fastify.prisma as PrismaClient;
@@ -60,7 +62,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
         data: stats
       });
     } catch (error) {
-      console.error('Error in /maintenance/stats:', error);
+      logger.error('Error in /maintenance/stats', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors de la récupération des statistiques de maintenance'
@@ -101,7 +103,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
         data: { message: 'Nettoyage des données expirées terminé' }
       });
     } catch (error) {
-      console.error('Error in /maintenance/cleanup:', error);
+      logger.error('Error in /maintenance/cleanup', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors du nettoyage des données expirées'
@@ -154,7 +156,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
         data: { message: `Statut utilisateur ${userId} mis à jour: ${isOnline ? 'en ligne' : 'hors ligne'}` }
       });
     } catch (error) {
-      console.error('Error in /maintenance/user-status:', error);
+      logger.error('Error in /maintenance/user-status', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors de la mise à jour du statut utilisateur'
@@ -206,7 +208,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
         }
       });
     } catch (error) {
-      console.error('Error in /maintenance/status-metrics:', error);
+      logger.error('Error in /maintenance/status-metrics', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors de la récupération des métriques de statut'
@@ -247,7 +249,7 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
         data: { message: 'Métriques de statut réinitialisées avec succès' }
       });
     } catch (error) {
-      console.error('Error in /maintenance/status-metrics/reset:', error);
+      logger.error('Error in /maintenance/status-metrics/reset', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors de la réinitialisation des métriques'
