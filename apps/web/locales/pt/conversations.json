@@ -460,6 +460,15 @@
             "notAuthenticated": "Não é possível criar o link: usuário não conectado",
             "noConversation": "Não é possível criar o link: conversa não identificada",
             "error": "Erro ao criar o link"
+        },
+        "messageSearch": {
+            "placeholder": "Pesquisar na conversa…",
+            "close": "Fechar pesquisa",
+            "error": "Ocorreu um erro durante a pesquisa.",
+            "noResults": "Sem resultados"
+        },
+        "pinnedMessage": {
+            "close": "Fechar mensagem fixada"
         }
     }
 }

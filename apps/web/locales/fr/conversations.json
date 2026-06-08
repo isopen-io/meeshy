@@ -468,6 +468,15 @@
             "notAuthenticated": "Impossible de créer le lien : utilisateur non connecté",
             "noConversation": "Impossible de créer le lien : conversation non identifiée",
             "error": "Erreur lors de la création du lien"
+        },
+        "messageSearch": {
+            "placeholder": "Rechercher dans la conversation…",
+            "close": "Fermer la recherche",
+            "error": "Une erreur est survenue lors de la recherche.",
+            "noResults": "Aucun résultat"
+        },
+        "pinnedMessage": {
+            "close": "Fermer le message épinglé"
         }
     }
 }

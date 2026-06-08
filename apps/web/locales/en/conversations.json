@@ -458,6 +458,15 @@
             "notAuthenticated": "Cannot create link: user not logged in",
             "noConversation": "Cannot create link: conversation not identified",
             "error": "Error creating link"
+        },
+        "messageSearch": {
+            "placeholder": "Search in conversation…",
+            "close": "Close search",
+            "error": "An error occurred while searching.",
+            "noResults": "No results"
+        },
+        "pinnedMessage": {
+            "close": "Close pinned message"
         }
     }
 }

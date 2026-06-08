@@ -394,7 +394,7 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
               {isLoading ? (
                 <div className="p-4 text-center">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                  <p className="mt-2 text-sm text-muted-foreground">Chargement...</p>
+                  <p className="mt-2 text-sm text-muted-foreground">{tGroups('groups.list.loading')}</p>
                 </div>
               ) : groups.length === 0 ? (
                 <div className="p-4 text-center text-muted-foreground">
@@ -540,7 +540,7 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="sm">
                     <UserPlus className="h-4 w-4 mr-1" />
-                    Inviter
+                    {tGroups('groups.actions.invite')}
                   </Button>
                   <Button 
                     variant="outline" 
@@ -559,18 +559,18 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <MessageSquare className="h-5 w-5" />
-                    À propos
+                    {tGroups('groups.details.about')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="text-muted-foreground">
-                    {selectedGroup.description || 'Aucune description disponible.'}
+                    {selectedGroup.description || tGroups('groups.details.noDescription')}
                   </p>
                   
                   <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
                     <div className="flex items-center gap-1">
                       <Users className="h-4 w-4" />
-                      {selectedGroup._count?.members || 0} membres
+                      {selectedGroup._count?.members || 0} {tGroups('groups.members')}
                     </div>
                     <div>
                       {tGroups('groups.details.createdOn') + ' '}{new Date(selectedGroup.createdAt).toLocaleDateString()}

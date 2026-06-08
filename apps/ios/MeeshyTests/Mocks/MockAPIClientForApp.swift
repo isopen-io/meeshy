@@ -54,6 +54,7 @@ final class MockAPIClientForApp: APIClientProviding, @unchecked Sendable {
         cursor: String?,
         limit: Int
     ) async throws -> PaginatedAPIResponse<[T]> {
+        await Task.yield()
         requestCount += 1
         requestEndpoints.append(endpoint)
         requestMethods.append("GET")
