@@ -862,16 +862,17 @@ export function registerMessagesRoutes(
       const readStatusMap = new Map<string, { deliveredCount: number; readCount: number }>();
       if (messages.length > 0 && authRequest.authContext?.userId) {
         try {
-          const activeParticipants = await prisma.participant.findMany({
-            where: { conversationId, isActive: true },
-            select: { id: true }
-          });
+          const [activeParticipants, cursors] = await Promise.all([
+            prisma.participant.findMany({
+              where: { conversationId, isActive: true },
+              select: { id: true }
+            }),
+            prisma.conversationReadCursor.findMany({
+              where: { conversationId },
+              select: { participantId: true, lastDeliveredAt: true, lastReadAt: true }
+            })
+          ]);
           const activeIds = new Set(activeParticipants.map((p: any) => p.id));
-
-          const cursors = await prisma.conversationReadCursor.findMany({
-            where: { conversationId },
-            select: { participantId: true, lastDeliveredAt: true, lastReadAt: true }
-          });
           const activeCursors = cursors.filter((c: any) => activeIds.has(c.participantId));
 
           for (const msg of (messages as any[])) {

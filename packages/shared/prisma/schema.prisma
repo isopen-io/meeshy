@@ -293,8 +293,9 @@ model User {
   // Unified participant model (replaces conversations + anonymousParticipants)
   participations Participant[]
 
-  @@index([lastActiveAt]) // Optimisation: utilisateurs actifs récemment
-  @@index([systemLanguage]) // Optimisation: utilisateurs par langue (broadcast ciblé)
+  @@index([systemLanguage]) // Prisme Linguistique: language extraction queries et Optimisation: utilisateurs par langue (broadcast ciblé)
+  @@index([deviceLocale])   // Prisme Linguistique: 4th-priority locale resolution
+  @@index([lastActiveAt]) // Optimisation: utilisateurs actifs récemment 
   @@index([isActive, lastActiveAt]) // Optimisation: utilisateurs actifs triés
 }
 
