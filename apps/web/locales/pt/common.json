@@ -195,6 +195,12 @@
       "addReaction": "Adicionar reação",
       "reportSuccess": "Denúncia enviada com sucesso",
       "reportError": "Erro ao enviar denúncia"
+    },
+    "errorBoundary": {
+      "title": "Ops! Algo deu errado",
+      "description": "Ocorreu um erro inesperado. Por favor, tente novamente.",
+      "details": "Detalhes do erro",
+      "reload": "Recarregar página"
     }
   }
 }

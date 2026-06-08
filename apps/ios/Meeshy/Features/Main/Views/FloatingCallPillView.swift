@@ -104,12 +104,12 @@ struct FloatingCallPillView: View {
     private var userInfoSection: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(callManager.remoteUsername ?? "Inconnu")
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .font(.subheadline.weight(.semibold))
                 .foregroundColor(.white)
                 .lineLimit(1)
 
             Text(formattedDuration)
-                .font(.system(size: 12, weight: .medium).monospacedDigit())
+                .font(.caption.weight(.medium).monospacedDigit())
                 .foregroundColor(MeeshyColors.success)
         }
     }
@@ -140,7 +140,9 @@ struct FloatingCallPillView: View {
                 )
         }
         .pressable()
-        .accessibilityLabel(callManager.isMuted ? "Reactiver le micro" : "Couper le micro")
+        .accessibilityLabel(callManager.isMuted
+            ? String(localized: "call.pill.unmute", defaultValue: "Réactiver le micro")
+            : String(localized: "call.pill.mute", defaultValue: "Couper le micro"))
     }
 
     private var speakerButton: some View {
@@ -158,7 +160,9 @@ struct FloatingCallPillView: View {
                 )
         }
         .pressable()
-        .accessibilityLabel(callManager.isSpeaker ? "Désactiver le haut-parleur" : "Activer le haut-parleur")
+        .accessibilityLabel(callManager.isSpeaker
+            ? String(localized: "call.pill.speaker.off", defaultValue: "Désactiver le haut-parleur")
+            : String(localized: "call.pill.speaker.on", defaultValue: "Activer le haut-parleur"))
     }
 
     private var expandButton: some View {

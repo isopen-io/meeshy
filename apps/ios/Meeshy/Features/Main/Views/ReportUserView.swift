@@ -17,7 +17,6 @@ struct ReportUserView: View {
     @State private var isSubmitting = false
     @State private var errorMessage: String?
 
-    private let accentColor = "EF4444"
 
     var body: some View {
         ZStack {
@@ -69,7 +68,7 @@ struct ReportUserView: View {
                 if let errorMessage {
                     Text(errorMessage)
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(Color(hex: "EF4444"))
+                        .foregroundColor(MeeshyColors.error)
                         .frame(maxWidth: .infinity, alignment: .center)
                 }
 
@@ -97,11 +96,11 @@ struct ReportUserView: View {
                         HStack(spacing: 12) {
                             Image(systemName: reason.icon)
                                 .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(Color(hex: selectedReason == reason ? accentColor : "6B7280"))
+                                .foregroundColor(selectedReason == reason ? MeeshyColors.error : MeeshyColors.neutral500)
                                 .frame(width: 28, height: 28)
                                 .background(
                                     RoundedRectangle(cornerRadius: 8)
-                                        .fill(Color(hex: selectedReason == reason ? accentColor : "6B7280").opacity(0.12))
+                                        .fill((selectedReason == reason ? MeeshyColors.error : MeeshyColors.neutral500).opacity(0.12))
                                 )
 
                             Text(reason.label)
@@ -113,7 +112,7 @@ struct ReportUserView: View {
                             if selectedReason == reason {
                                 Image(systemName: "checkmark.circle.fill")
                                     .font(.system(size: 18))
-                                    .foregroundColor(Color(hex: accentColor))
+                                    .foregroundColor(MeeshyColors.error)
                             }
                         }
                         .padding(.horizontal, 14)
@@ -158,7 +157,7 @@ struct ReportUserView: View {
 
                 Text("\(details.count)/500")
                     .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(details.count >= 450 ? Color(hex: "EF4444") : theme.textMuted)
+                    .foregroundColor(details.count >= 450 ? MeeshyColors.error : theme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
         }
@@ -185,7 +184,7 @@ struct ReportUserView: View {
             .padding(.vertical, 14)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(isSubmitting ? Color(hex: accentColor).opacity(0.5) : Color(hex: accentColor))
+                    .fill(isSubmitting ? MeeshyColors.error.opacity(0.5) : MeeshyColors.error)
             )
         }
         .disabled(isSubmitting)

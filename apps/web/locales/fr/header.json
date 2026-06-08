@@ -31,7 +31,8 @@
     "continueChat": "Continuer la discussion",
     "signUp": "S'inscrire",
     "language": "Langue",
-    "interfaceLanguage": "Langue d'interface"
+    "interfaceLanguage": "Langue d'interface",
+    "openMenu": "Ouvrir le menu",
+    "closeMenu": "Fermer le menu"
   }
 }
-

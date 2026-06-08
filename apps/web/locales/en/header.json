@@ -31,7 +31,8 @@
     "continueChat": "Continue Chat",
     "signUp": "Sign Up",
     "language": "Language",
-    "interfaceLanguage": "Interface Language"
+    "interfaceLanguage": "Interface Language",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
   }
 }
-
