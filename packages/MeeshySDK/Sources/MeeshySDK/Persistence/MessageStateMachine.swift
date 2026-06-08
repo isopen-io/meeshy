@@ -36,7 +36,13 @@ public struct MessageStateMachine: Sendable {
         case (.queued, .startSending):
             state = .sending
 
-        case (.sending, .serverAck(let id, _)):
+        case (.sending, .serverAck(let id, _)),
+             (.queued, .serverAck(let id, _)):
+            // `.queued` accepts the ack too: a send that failed once sits in `.queued`
+            // (retry budget intact) and is replayed by the OutboxFlusher. When that
+            // replay succeeds, reconciliation delivers `serverAck` while the record is
+            // still `.queued` — without this case the ack is rejected and the bubble
+            // stays stuck on the "sending" clock for a message the server received.
             serverId = id
             state = .sent
 

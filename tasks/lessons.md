@@ -47,3 +47,7 @@
 ## 2026-06-07 — iOS XcodeGen : nouveaux fichiers Swift
 
 19. **Un nouveau fichier `.swift` n'est PAS compilé tant que le `project.pbxproj` n'est pas régénéré.** Le projet iOS est piloté par **XcodeGen** (`apps/ios/project.yml`, `sources: [{path: Meeshy}]` globbé), mais `meeshy.sh` **ne lance pas** `xcodegen generate` — il build le `project.pbxproj` committé tel quel. Donc créer `Features/.../NewFile.swift` n'ajoute rien au build sans `xcodegen generate` (et éditer le pbxproj à la main est écrasé au prochain generate). **Règle : quand on ne peut pas régénérer/builder soi-même, mettre le nouveau code utilitaire dans un fichier DÉJÀ référencé** (ex. `ContactsShared.swift`) plutôt que créer un fichier — sinon le code ne compile pas et toutes ses références échouent.
+
+## 2026-06-08 — SwiftUI iOS 16 compat
+
+20. **Ne JAMAIS utiliser `.onChange` natif de SwiftUI dans le code app/feature (cible iOS 16).** La forme à 2 paramètres `.onChange(of:initial:){ old, new in }` est **iOS 17+** → erreur de compilation sur iOS 16 ; la forme à 1 paramètre `.onChange(of:){ new in }` compile mais est **dépréciée en iOS 17** (warning). **Règle : toujours `adaptiveOnChange(of:initial:_:)`** (wrapper `packages/MeeshySDK/Sources/MeeshyUI/Compatibility/AdaptiveOnChange.swift`, importer `MeeshyUI`). Le seul `.onChange` natif autorisé est celui confiné dans ce wrapper. Même prudence pour toute API SwiftUI iOS-17-only → `if #available` ou wrapper compat. Violation trouvée+corrigée : `MiniAudioPlayerBar.swift:93`.
