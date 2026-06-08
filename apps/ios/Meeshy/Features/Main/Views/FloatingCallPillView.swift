@@ -103,7 +103,7 @@ struct FloatingCallPillView: View {
 
     private var userInfoSection: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(callManager.remoteUsername ?? String(localized: "call.pill.unknown", defaultValue: "Inconnu"))
+            Text(callManager.remoteUsername ?? String(localized: "call.pill.unknown", defaultValue: "Unknown"))
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(.white)
                 .lineLimit(1)
