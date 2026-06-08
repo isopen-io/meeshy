@@ -115,10 +115,12 @@ Plan SOTA (grouper par jeu-de-langues pour éviter N sérialisations) :
 ## Phase E — SDK iOS
 | Item | Détail |
 |---|---|
-| **E1** Garantir `Accept-Encoding: br, gzip` | explicite dans `APIClient` + vérifier décompression. |
-| **E2** Décodage sélectif traductions | ne décoder/stocker que les langues du Prisme (1-4), pas toutes. |
-| **E3** Consommer `?languages=` / `?fields=` | aligner les services SDK sur A3/B2. |
-| **E4** Compression upload client | déjà partiel (`MediaCompressor`) ; étendre à l'audio (Opus encode avant upload). |
+| **E1** Garantir `Accept-Encoding: br, gzip` | ✅ **Vérifié + verrouillé**. Contre-intuitif : il NE FAUT PAS poser le header à la main — `URLSession` annonce gzip/br et décompresse automatiquement ; le poser bascule en décompression manuelle (Foundation ne décode pas brotli nativement) → la sortie `@fastify/compress` arriverait encore compressée. `APIClient` ne pose aucun `Accept-Encoding` (donc gzip/br déjà actifs) ; commentaire anti-régression ajouté (jamais l'ajouter ici/`ClientInfoProvider`/headers per-request). |
+| **E3** Consommer `?languages=` | 🟡 **Building block SDK livré, activation app à faire**. `MessageService.list/listBefore/listAfter/listAround` acceptent un param opaque `languages: [String]?` → sérialisé `?languages=fr,en` (miroir gateway A3, filtre texte + audio). Non-breaking : `nil`/vide = toutes langues ; overloads 4-arg/5-arg conservent tous les call sites existants ; 3 mocks conformes mis à jour ; 4 tests SDK (sérialisation, omission nil/vide, plumbing listAfter). **Reste (activation)** : `ConversationViewModel` passe `preferredLanguages` (set Prisme) aux call sites — diffère car implique un refetch on-language-switch et rend l'exploration d'une langue hors-Prisme on-demand (validation produit on-device requise). |
+| **E2** Décodage sélectif traductions | ↪ **Largement subsumé par E3** : avec `?languages=` actif, le serveur n'envoie que les langues du Prisme, donc le ViewModel ne décode/stocke que celles-ci. Reste optionnel : filtrer aussi quand `?languages=` absent (gain mémoire marginal). |
+| **E4** Compression upload client | déjà partiel (`MediaCompressor`) ; étendre à l'audio (Opus encode avant upload). À faire. |
+
+> ⚠️ **Non builé dans ce container** : pas de toolchain Swift/Xcode. Les changements suivent exactement le pattern `includeTranslations` existant (prouvé) ; `./apps/ios/meeshy.sh test` + build SDK tournent en CI/local.
 
 ---
 

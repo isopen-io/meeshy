@@ -341,6 +341,16 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         // Saves ~150-300ms on the user's first upload after app launch.
         urlRequest.assumesHTTP3Capable = true
 
+        // Compression (E1, bandwidth sprint): deliberately NO explicit
+        // `Accept-Encoding` header. URLSession advertises gzip/br on its own
+        // and transparently decompresses the response; setting the header by
+        // hand flips URLSession into manual-decompression mode (Foundation
+        // can't decode brotli natively), so the gateway's @fastify/compress
+        // output would arrive still-compressed and fail to decode. The gateway
+        // honours the automatic header, so JSON is already compressed on the
+        // wire. Never add `Accept-Encoding` here, in ClientInfoProvider, or in
+        // per-request `headers`.
+
         // Client identification headers (version, device, locale, geo)
         let clientHeaders = await ClientInfoProvider.shared.buildHeaders()
         for (key, value) in clientHeaders {
