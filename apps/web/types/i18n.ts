@@ -2,7 +2,7 @@
  * I18n Types - Type definitions for internationalization system
  */
 
-export type SupportedLanguage = 'fr' | 'en' | 'pt' | 'es' | 'zh';
+export type SupportedLanguage = 'fr' | 'en' | 'pt' | 'es';
 
 export interface Language {
   code: SupportedLanguage;
