@@ -68,17 +68,17 @@ struct ForwardPickerSheet: View {
                 }
             }
             .background(theme.backgroundPrimary)
-            .navigationTitle(String(localized: "forward.title", defaultValue: "Transf\u{00e9}rer", bundle: .main))
+            .navigationTitle(String(localized: "forward.title", defaultValue: "Forward", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) {
+                    Button(String(localized: "common.close", defaultValue: "Close", bundle: .main)) {
                         dismiss()
                         onDismiss()
                     }
                 }
             }
-            .searchable(text: $searchText, prompt: String(localized: "forward.search-placeholder", defaultValue: "Rechercher une conversation", bundle: .main))
+            .searchable(text: $searchText, prompt: String(localized: "forward.search-placeholder", defaultValue: "Search a conversation", bundle: .main))
         }
         .task {
             await loadConversations()

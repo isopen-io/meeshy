@@ -176,14 +176,14 @@ struct NotificationSettingsView: View {
     // MARK: - Display
 
     private var displaySection: some View {
-        settingsSection(title: String(localized: "settings.notifications.display", defaultValue: "Affichage", bundle: .main), icon: "eye.fill", color: "60A5FA") {
-            notifToggle(icon: "text.below.photo.fill", title: String(localized: "settings.notifications.preview", defaultValue: "Aperçu", bundle: .main), color: "60A5FA",
+        settingsSection(title: String(localized: "settings.notifications.display", defaultValue: "Display", bundle: .main), icon: "eye.fill", color: "60A5FA") {
+            notifToggle(icon: "text.below.photo.fill", title: String(localized: "settings.notifications.preview", defaultValue: "Preview", bundle: .main), color: "60A5FA",
                         keyPath: \.showPreview)
 
-            notifToggle(icon: "person.text.rectangle", title: String(localized: "settings.notifications.sender_name", defaultValue: "Nom expéditeur", bundle: .main), color: "9B59B6",
+            notifToggle(icon: "person.text.rectangle", title: String(localized: "settings.notifications.sender_name", defaultValue: "Sender name", bundle: .main), color: "9B59B6",
                         keyPath: \.showSenderName)
 
-            notifToggle(icon: "rectangle.stack.fill", title: String(localized: "settings.notifications.group_notifications", defaultValue: "Grouper notifications", bundle: .main), color: "6366F1",
+            notifToggle(icon: "rectangle.stack.fill", title: String(localized: "settings.notifications.group_notifications", defaultValue: "Group notifications", bundle: .main), color: "6366F1",
                         keyPath: \.groupNotifications)
         }
     }
