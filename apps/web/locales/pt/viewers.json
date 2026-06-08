@@ -1,4 +1,24 @@
 {
+  "common": {
+    "download": "Baixar",
+    "downloadFile": "Baixar arquivo",
+    "copyContent": "Copiar conteúdo",
+    "fullscreen": "Abrir em tela cheia",
+    "exitFullscreen": "Sair da tela cheia",
+    "wordWrapEnable": "Ativar quebra de linha",
+    "wordWrapDisable": "Desativar quebra de linha",
+    "close": "Fechar"
+  },
+  "audio": {
+    "download": "Baixar áudio"
+  },
+  "video": {
+    "download": "Baixar vídeo"
+  },
+  "image": {
+    "download": "Baixar imagem",
+    "downloadAnyway": "Baixar mesmo assim"
+  },
   "pdf": {
     "loadError": "Não foi possível carregar o PDF",
     "openInNewTab": "Abrir em nova aba",
@@ -13,6 +33,7 @@
     "loadError": "Não foi possível carregar a apresentação",
     "publicRequired": "O arquivo deve ser acessível publicamente para ser visualizado",
     "downloadFile": "Baixar arquivo",
+    "downloadPresentation": "Baixar apresentação",
     "delete": "Excluir esta apresentação",
     "fullscreen": "Abrir em tela cheia",
     "download": "Baixar"
@@ -23,7 +44,14 @@
     "formattedView": "Visualização formatada",
     "rawView": "Visualização bruta",
     "download": "Baixar arquivo Markdown",
+    "delete": "Excluir este arquivo Markdown",
     "close": "Fechar",
     "escToClose": "Pressione Esc para fechar"
+  },
+  "text": {
+    "copyContent": "Copiar conteúdo",
+    "downloadFile": "Baixar arquivo",
+    "wordWrapEnable": "Ativar quebra de linha",
+    "wordWrapDisable": "Desativar quebra de linha"
   }
 }

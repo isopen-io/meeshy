@@ -9,6 +9,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/useI18n';
 
 interface TextLightboxProps {
   attachment: UploadedAttachmentResponse | null;
@@ -25,6 +26,7 @@ export const TextLightbox: React.FC<TextLightboxProps> = ({
   isOpen,
   onClose
 }) => {
+  const { t } = useI18n('viewers');
   const [content, setContent] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
@@ -229,7 +231,7 @@ export const TextLightbox: React.FC<TextLightboxProps> = ({
                 toggleWordWrap();
               }}
               className={`text-white hover:bg-white/10 w-8 h-8 sm:w-10 sm:h-10 ${wordWrap ? 'bg-white/20' : ''}`}
-              aria-label={wordWrap ? 'Désactiver le retour à la ligne' : 'Activer le retour à la ligne'}
+              aria-label={wordWrap ? t('text.wordWrapDisable') : t('text.wordWrapEnable')}
               disabled={isLoading || hasError}
             >
               <WrapText className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -244,7 +246,7 @@ export const TextLightbox: React.FC<TextLightboxProps> = ({
                 handleCopy();
               }}
               className="text-white hover:bg-white/10 w-8 h-8 sm:w-10 sm:h-10"
-              aria-label="Copier le contenu"
+              aria-label={t('text.copyContent')}
               disabled={isLoading || hasError}
             >
               {isCopied ? (
@@ -268,7 +270,7 @@ export const TextLightbox: React.FC<TextLightboxProps> = ({
                 document.body.removeChild(link);
               }}
               className="text-white hover:bg-white/10 w-8 h-8 sm:w-10 sm:h-10"
-              aria-label="Télécharger le fichier"
+              aria-label={t('text.downloadFile')}
             >
               <Download className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
@@ -282,7 +284,7 @@ export const TextLightbox: React.FC<TextLightboxProps> = ({
                 onClose();
               }}
               className="text-white hover:bg-white/10 w-8 h-8 sm:w-10 sm:h-10"
-              aria-label="Fermer"
+              aria-label={t('common.close')}
             >
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>

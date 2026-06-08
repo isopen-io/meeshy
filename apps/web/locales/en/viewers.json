@@ -1,4 +1,24 @@
 {
+  "common": {
+    "download": "Download",
+    "downloadFile": "Download file",
+    "copyContent": "Copy content",
+    "fullscreen": "Open fullscreen",
+    "exitFullscreen": "Exit fullscreen",
+    "wordWrapEnable": "Enable word wrap",
+    "wordWrapDisable": "Disable word wrap",
+    "close": "Close"
+  },
+  "audio": {
+    "download": "Download audio"
+  },
+  "video": {
+    "download": "Download video"
+  },
+  "image": {
+    "download": "Download image",
+    "downloadAnyway": "Download anyway"
+  },
   "pdf": {
     "loadError": "Unable to load PDF",
     "openInNewTab": "Open in new tab",
@@ -13,6 +33,7 @@
     "loadError": "Unable to load presentation",
     "publicRequired": "The file must be publicly accessible to be viewed",
     "downloadFile": "Download file",
+    "downloadPresentation": "Download presentation",
     "delete": "Delete this presentation",
     "fullscreen": "Open fullscreen",
     "download": "Download"
@@ -23,7 +44,14 @@
     "formattedView": "Formatted view",
     "rawView": "Raw view",
     "download": "Download Markdown file",
+    "delete": "Delete this Markdown file",
     "close": "Close",
     "escToClose": "Press Escape to close"
+  },
+  "text": {
+    "copyContent": "Copy content",
+    "downloadFile": "Download file",
+    "wordWrapEnable": "Enable word wrap",
+    "wordWrapDisable": "Disable word wrap"
   }
 }

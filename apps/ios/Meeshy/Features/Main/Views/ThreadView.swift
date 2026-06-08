@@ -52,13 +52,13 @@ struct ThreadView: View {
             Spacer()
 
             Text(String(localized: "thread.title", defaultValue: "Discussion", bundle: .main))
-                .font(.system(size: 17, weight: .bold))
+                .font(.headline.weight(.bold))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
 
             Text(String(localized: "thread.repliesCount", defaultValue: "\(replies.count) reponses", bundle: .main))
-                .font(.system(size: 12, weight: .medium))
+                .font(.caption.weight(.medium))
                 .foregroundColor(theme.textMuted)
         }
         .padding(.horizontal, 16)
@@ -92,11 +92,11 @@ struct ThreadView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(parentMessage.senderName ?? "Inconnu")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.callout.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
 
                     Text(parentMessage.createdAt, style: .relative)
-                        .font(.system(size: 11))
+                        .font(.caption2)
                         .foregroundColor(theme.textMuted)
                 }
 
@@ -104,7 +104,7 @@ struct ThreadView: View {
             }
 
             Text(parentMessage.content)
-                .font(.system(size: 15))
+                .font(.callout)
                 .foregroundColor(theme.textPrimary)
         }
         .padding(14)
@@ -125,7 +125,7 @@ struct ThreadView: View {
                 .frame(height: 1)
 
             Text(String(localized: "thread.repliesCount", defaultValue: "\(replies.count) reponses", bundle: .main))
-                .font(.system(size: 11, weight: .bold))
+                .font(.caption2.weight(.bold))
                 .foregroundColor(Color(hex: accentColor))
                 .padding(.horizontal, 8)
 
@@ -156,16 +156,16 @@ struct ThreadView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack {
                     Text(message.senderName ?? "Inconnu")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.caption.weight(.semibold))
                         .foregroundColor(Color(hex: message.senderColor ?? "4ECDC4"))
 
                     Text(message.createdAt, style: .relative)
-                        .font(.system(size: 10))
+                        .font(.caption2)
                         .foregroundColor(theme.textMuted)
                 }
 
                 Text(message.content)
-                    .font(.system(size: 14))
+                    .font(.callout)
                     .foregroundColor(theme.textPrimary)
             }
 
@@ -180,7 +180,7 @@ struct ThreadView: View {
         VStack(spacing: 4) {
             if let sendError {
                 Text(sendError)
-                    .font(.system(size: 11))
+                    .font(.caption2)
                     .foregroundColor(MeeshyColors.error)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16)
@@ -191,7 +191,7 @@ struct ThreadView: View {
 
             HStack(spacing: 10) {
                 TextField(String(localized: "thread.reply.placeholder", defaultValue: "Repondre...", bundle: .main), text: $replyText)
-                    .font(.system(size: 14))
+                    .font(.callout)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                     .background(

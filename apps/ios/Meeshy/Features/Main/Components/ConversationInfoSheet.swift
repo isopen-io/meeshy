@@ -885,7 +885,7 @@ struct ConversationInfoSheet: View {
             actionButton(
                 icon: "link.badge.plus",
                 label: String(localized: "common.share", defaultValue: "Partager", bundle: .main),
-                color: "4ECDC4",
+                color: MeeshyColors.indigo300,
                 isLoading: isCreatingShareLink
             ) {
                 Task { await createShareLink() }
@@ -894,7 +894,7 @@ struct ConversationInfoSheet: View {
             actionButton(
                 icon: "rectangle.portrait.and.arrow.right",
                 label: String(localized: "conversation.info.leave.confirm", defaultValue: "Quitter", bundle: .main),
-                color: "FF6B6B"
+                color: MeeshyColors.error
             ) {
                 showLeaveConfirmation = true
             }
@@ -972,7 +972,7 @@ struct ConversationInfoSheet: View {
                 HStack(spacing: 12) {
                     Image(systemName: "lock.fill")
                         .font(.system(size: 16))
-                        .foregroundColor(Color(hex: "4ECDC4"))
+                        .foregroundColor(MeeshyColors.indigo300)
                         .frame(width: 24)
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -1013,7 +1013,7 @@ struct ConversationInfoSheet: View {
     private func actionButton(
         icon: String,
         label: String,
-        color: String,
+        color: Color,
         isLoading: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
@@ -1022,7 +1022,7 @@ struct ConversationInfoSheet: View {
                 if isLoading {
                     ProgressView()
                         .scaleEffect(0.8)
-                        .tint(Color(hex: color))
+                        .tint(color)
                 } else {
                     Image(systemName: icon)
                         .font(.system(size: 13, weight: .semibold))
@@ -1030,16 +1030,16 @@ struct ConversationInfoSheet: View {
                 Text(label)
                     .font(.system(size: 13, weight: .semibold))
             }
-            .foregroundColor(Color(hex: color))
+            .foregroundColor(color)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(hex: color).opacity(isDark ? 0.12 : 0.08))
+                    .fill(color.opacity(isDark ? 0.12 : 0.08))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(Color(hex: color).opacity(0.2), lineWidth: 1)
+                    .strokeBorder(color.opacity(0.2), lineWidth: 1)
             )
         }
         .disabled(isLoading)
@@ -1209,7 +1209,7 @@ struct ConversationInfoSheet: View {
             HStack(spacing: 8) {
                 if isBlocking {
                     ProgressView()
-                        .tint(Color(hex: "EF4444"))
+                        .tint(MeeshyColors.error)
                         .scaleEffect(0.8)
                 } else {
                     Image(systemName: "exclamationmark.shield")
@@ -1218,15 +1218,15 @@ struct ConversationInfoSheet: View {
                 Text(String(localized: "conversation.info.block.title", defaultValue: "Bloquer cet utilisateur", bundle: .main))
                     .font(.system(size: 13, weight: .semibold))
             }
-            .foregroundColor(Color(hex: "EF4444"))
+            .foregroundColor(MeeshyColors.error)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(hex: "EF4444").opacity(isDark ? 0.12 : 0.08))
+                    .fill(MeeshyColors.error.opacity(isDark ? 0.12 : 0.08))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color(hex: "EF4444").opacity(0.2), lineWidth: 1)
+                            .stroke(MeeshyColors.error.opacity(0.2), lineWidth: 1)
                     )
             )
         }

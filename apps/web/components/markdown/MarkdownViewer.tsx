@@ -19,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 import { MermaidDiagram } from '@/components/markdown/MermaidDiagram';
+import { useI18n } from '@/hooks/useI18n';
 
 // ======================
 // Dynamic Import for Syntax Highlighter (~150KB saved)
@@ -61,6 +62,7 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
   onDelete,
   canDelete = false
 }) => {
+  const { t } = useI18n('viewers');
   const [content, setContent] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
@@ -186,7 +188,7 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
             size="sm"
             variant="destructive"
             className="absolute top-2 right-2 w-8 h-8 p-0 opacity-0 hover:opacity-100 focus-visible:opacity-100 transition-opacity"
-            title="Supprimer ce fichier Markdown"
+            title={t('markdown.delete')}
           >
             <X className="w-4 h-4" />
           </Button>
@@ -213,7 +215,7 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
             size="sm"
             variant="ghost"
             className="w-8 h-8 p-0 flex-shrink-0"
-            title={showRaw ? 'Vue formatée' : 'Vue brute'}
+            title={showRaw ? t('markdown.rawView') : t('markdown.formattedView')}
             disabled={isLoading || hasError}
           >
             {showRaw ? (
@@ -230,7 +232,7 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
               size="sm"
               variant="ghost"
               className="w-8 h-8 p-0"
-              title="Ouvrir en plein écran"
+              title={t('common.fullscreen')}
             >
               <Maximize className="w-4 h-4" />
             </Button>
@@ -241,7 +243,7 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
             href={downloadUrl}
             download={attachment.originalName}
             className="flex-shrink-0 p-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-full transition-colors duration-200"
-            title="Télécharger"
+            title={t('common.download')}
             onClick={(e) => e.stopPropagation()}
           >
             <Download className="w-4 h-4 text-gray-600 dark:text-gray-300" />

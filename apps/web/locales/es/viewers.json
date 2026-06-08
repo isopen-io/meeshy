@@ -1,4 +1,24 @@
 {
+  "common": {
+    "download": "Descargar",
+    "downloadFile": "Descargar archivo",
+    "copyContent": "Copiar contenido",
+    "fullscreen": "Abrir en pantalla completa",
+    "exitFullscreen": "Salir de pantalla completa",
+    "wordWrapEnable": "Activar ajuste de línea",
+    "wordWrapDisable": "Desactivar ajuste de línea",
+    "close": "Cerrar"
+  },
+  "audio": {
+    "download": "Descargar audio"
+  },
+  "video": {
+    "download": "Descargar vídeo"
+  },
+  "image": {
+    "download": "Descargar imagen",
+    "downloadAnyway": "Descargar de todos modos"
+  },
   "pdf": {
     "loadError": "No se puede cargar el PDF",
     "openInNewTab": "Abrir en nueva pestaña",
@@ -13,6 +33,7 @@
     "loadError": "No se puede cargar la presentación",
     "publicRequired": "El archivo debe ser accesible públicamente para ser visualizado",
     "downloadFile": "Descargar archivo",
+    "downloadPresentation": "Descargar presentación",
     "delete": "Eliminar esta presentación",
     "fullscreen": "Abrir en pantalla completa",
     "download": "Descargar"
@@ -23,7 +44,14 @@
     "formattedView": "Vista formateada",
     "rawView": "Vista sin formato",
     "download": "Descargar archivo Markdown",
+    "delete": "Eliminar este archivo Markdown",
     "close": "Cerrar",
     "escToClose": "Presione Escape para cerrar"
+  },
+  "text": {
+    "copyContent": "Copiar contenido",
+    "downloadFile": "Descargar archivo",
+    "wordWrapEnable": "Activar ajuste de línea",
+    "wordWrapDisable": "Desactivar ajuste de línea"
   }
 }

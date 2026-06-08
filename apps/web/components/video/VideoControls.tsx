@@ -4,6 +4,7 @@ import React, { memo } from 'react';
 import { Play, Pause, AlertTriangle, Download, Maximize, Minimize } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { VolumeControl } from './VolumeControl';
+import { useI18n } from '@/hooks/useI18n';
 
 interface VideoControlsProps {
   isPlaying: boolean;
@@ -40,6 +41,7 @@ export const VideoControls = memo<VideoControlsProps>(function VideoControls({
   onToggleMute,
   onToggleFullscreen
 }) {
+  const { t } = useI18n('viewers');
   const formatTime = (seconds: number): string => {
     if (!isFinite(seconds) || isNaN(seconds) || seconds < 0) return '0:00';
     const mins = Math.floor(seconds / 60);
@@ -137,7 +139,7 @@ export const VideoControls = memo<VideoControlsProps>(function VideoControls({
         size="sm"
         variant="ghost"
         className="w-8 h-8 p-0"
-        title={isFullscreen ? 'Quitter le plein écran' : 'Plein écran'}
+        title={isFullscreen ? t('common.exitFullscreen') : t('common.fullscreen')}
       >
         {isFullscreen ? (
           <Minimize className="w-4 h-4" />
@@ -150,7 +152,7 @@ export const VideoControls = memo<VideoControlsProps>(function VideoControls({
         href={downloadUrl}
         download={downloadName}
         className="flex-shrink-0 p-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-full transition-colors duration-200"
-        title="Télécharger"
+        title={t('common.download')}
         onClick={(e) => e.stopPropagation()}
       >
         <Download className="w-4 h-4 text-gray-600 dark:text-gray-300" />

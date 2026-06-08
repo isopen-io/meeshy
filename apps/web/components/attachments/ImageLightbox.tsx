@@ -11,6 +11,7 @@ import { X, Download, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw } fro
 import { motion, AnimatePresence } from 'framer-motion';
 import { Attachment, formatFileSize } from '@meeshy/shared/types/attachment';
 import { Button } from '../ui/button';
+import { useI18n } from '@/hooks/useI18n';
 
 interface ImageLightboxProps {
   images: Attachment[];
@@ -20,6 +21,7 @@ interface ImageLightboxProps {
 }
 
 export function ImageLightbox({ images, initialIndex, isOpen, onClose }: ImageLightboxProps) {
+  const { t } = useI18n('viewers');
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
@@ -180,7 +182,7 @@ export function ImageLightbox({ images, initialIndex, isOpen, onClose }: ImageLi
                 handleDownload();
               }}
               className="text-white hover:bg-white/10"
-              aria-label="Télécharger l'image"
+              aria-label={t('image.download')}
             >
               <Download className="w-5 h-5" />
             </Button>
@@ -215,7 +217,7 @@ export function ImageLightbox({ images, initialIndex, isOpen, onClose }: ImageLi
                 className="mt-4"
               >
                 <Download className="w-4 h-4 mr-2" />
-                Télécharger quand même
+                {t('image.downloadAnyway')}
               </Button>
             </div>
           ) : (

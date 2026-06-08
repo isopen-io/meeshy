@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 
 // Hooks personnalisés
+import { useI18n } from '@/hooks/useI18n';
 import { useAudioPlayback } from '@/hooks/use-audio-playback';
 import { useAudioTranslation } from '@/hooks/use-audio-translation';
 import { useAudioEffectsAnalysis } from '@/hooks/use-audio-effects-analysis';
@@ -57,6 +58,7 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
   className = '',
   isOwnMessage,
 }) => {
+  const { t } = useI18n('viewers');
   // Utilisateur connecté (pour afficher son avatar)
   const { user } = useAuth();
 
@@ -257,8 +259,8 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
               href={objectUrl || '#'}
               download={attachment.originalName}
               className="relative z-10 flex-shrink-0 inline-flex items-center justify-center w-5 h-5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
-              title="Télécharger l'audio"
-              aria-label="Télécharger l'audio"
+              title={t('audio.download')}
+              aria-label={t('audio.download')}
               onClick={(e) => {
                 if (!objectUrl) {
                   e.preventDefault();

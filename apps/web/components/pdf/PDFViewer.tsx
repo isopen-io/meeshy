@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
+import { useI18n } from '@/hooks/useI18n';
 
 // Chargement dynamique pour éviter les erreurs SSR
 const Document = dynamic(
@@ -54,6 +55,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
   onDelete,
   canDelete = false
 }) => {
+  const { t } = useI18n('viewers');
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState<number>(1);
   const [scale, setScale] = useState<number>(1.0);
@@ -257,7 +259,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
             href={attachmentFileUrl}
             download={attachment.originalName}
             className="flex-shrink-0 p-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-full transition-colors duration-200"
-            title="Télécharger"
+            title={t('common.download')}
             onClick={(e) => e.stopPropagation()}
           >
             <Download className="w-4 h-4 text-gray-600 dark:text-gray-300" />

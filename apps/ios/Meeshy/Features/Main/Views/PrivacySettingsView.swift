@@ -10,7 +10,7 @@ struct PrivacySettingsView: View {
     private var theme: ThemeManager { ThemeManager.shared }
     @ObservedObject private var prefs = UserPreferencesManager.shared
 
-    private let accentColor = "08D9D6"
+    private var accentColor: Color { MeeshyColors.indigo300 }
 
     var body: some View {
         ZStack {
@@ -40,7 +40,7 @@ struct PrivacySettingsView: View {
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(.system(size: 15, weight: .medium))
                 }
-                .foregroundColor(Color(hex: accentColor))
+                .foregroundColor(accentColor)
             }
 
             Spacer()
@@ -142,7 +142,7 @@ struct PrivacySettingsView: View {
                     }
                 }
                 .pickerStyle(.menu)
-                .tint(Color(hex: accentColor))
+                .tint(accentColor)
             }
 
             privacyToggle(icon: "lock.rotation", title: String(localized: "settings.privacy.auto_encrypt", defaultValue: "Auto-chiffrer new conv.", bundle: .main), color: "4ADE80",
@@ -178,7 +178,7 @@ struct PrivacySettingsView: View {
                 set: { val in prefs.updatePrivacy { $0[keyPath: keyPath] = val } }
             ))
             .labelsHidden()
-            .tint(Color(hex: accentColor))
+            .tint(accentColor)
         }
     }
 

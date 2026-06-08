@@ -1,4 +1,24 @@
 {
+  "common": {
+    "download": "Télécharger",
+    "downloadFile": "Télécharger le fichier",
+    "copyContent": "Copier le contenu",
+    "fullscreen": "Ouvrir en plein écran",
+    "exitFullscreen": "Quitter le plein écran",
+    "wordWrapEnable": "Activer le retour à la ligne",
+    "wordWrapDisable": "Désactiver le retour à la ligne",
+    "close": "Fermer"
+  },
+  "audio": {
+    "download": "Télécharger l'audio"
+  },
+  "video": {
+    "download": "Télécharger la vidéo"
+  },
+  "image": {
+    "download": "Télécharger l'image",
+    "downloadAnyway": "Télécharger quand même"
+  },
   "pdf": {
     "loadError": "Impossible de charger le PDF",
     "openInNewTab": "Ouvrir dans un nouvel onglet",
@@ -13,6 +33,7 @@
     "loadError": "Impossible de charger la présentation",
     "publicRequired": "Le fichier doit être accessible publiquement pour être visualisé",
     "downloadFile": "Télécharger le fichier",
+    "downloadPresentation": "Télécharger la présentation",
     "delete": "Supprimer cette présentation",
     "fullscreen": "Ouvrir en plein écran",
     "download": "Télécharger"
@@ -23,7 +44,14 @@
     "formattedView": "Vue formatée",
     "rawView": "Vue brute",
     "download": "Télécharger le fichier Markdown",
+    "delete": "Supprimer ce fichier Markdown",
     "close": "Fermer",
     "escToClose": "Appuyez sur Échap pour fermer"
+  },
+  "text": {
+    "copyContent": "Copier le contenu",
+    "downloadFile": "Télécharger le fichier",
+    "wordWrapEnable": "Activer le retour à la ligne",
+    "wordWrapDisable": "Désactiver le retour à la ligne"
   }
 }
