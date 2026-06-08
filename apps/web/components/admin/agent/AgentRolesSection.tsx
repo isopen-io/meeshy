@@ -20,12 +20,14 @@ import {
 } from '@/services/agent-admin.service';
 import { UserDisplay } from './UserDisplay';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/useI18n';
 
 interface AgentRolesSectionProps {
   conversationId: string;
 }
 
 export function AgentRolesSection({ conversationId }: AgentRolesSectionProps) {
+  const { t } = useI18n('admin');
   const [roles, setRoles] = useState<AgentRoleData[]>([]);
   const [archetypes, setArchetypes] = useState<ArchetypeData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,7 +47,7 @@ export function AgentRolesSection({ conversationId }: AgentRolesSectionProps) {
           setArchetypes(Array.isArray(archetypesRes.data) ? archetypesRes.data : []);
         }
       } catch {
-        toast.error('Erreur lors du chargement des rôles');
+        toast.error(t('agent.toasts.rolesLoadError'));
       } finally {
         setLoading(false);
       }
@@ -59,10 +61,10 @@ export function AgentRolesSection({ conversationId }: AgentRolesSectionProps) {
       const response = await agentAdminService.assignArchetype(conversationId, userId, archetypeId);
       if (response.success && response.data) {
         setRoles(prev => prev.map(r => r.userId === userId ? response.data! : r));
-        toast.success('Archétype assigné');
+        toast.success(t('agent.toasts.archetypeAssigned'));
       }
     } catch {
-      toast.error('Erreur lors de l\'assignation');
+      toast.error(t('agent.toasts.archetypeAssignError'));
     } finally {
       setAssigningUser(null);
     }
@@ -73,10 +75,10 @@ export function AgentRolesSection({ conversationId }: AgentRolesSectionProps) {
       const response = await agentAdminService.unlockRole(conversationId, userId);
       if (response.success && response.data) {
         setRoles(prev => prev.map(r => r.userId === userId ? response.data! : r));
-        toast.success('Profil déverrouillé');
+        toast.success(t('agent.toasts.profileUnlocked'));
       }
     } catch {
-      toast.error('Erreur lors du déverrouillage');
+      toast.error(t('agent.toasts.profileUnlockError'));
     }
   };
 

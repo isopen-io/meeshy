@@ -9,6 +9,7 @@ import {
   type DeliveryQueueItem,
 } from '@/services/agent-admin.service';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/useI18n';
 import DeliveryQueueItemCard from './DeliveryQueueItemCard';
 
 type DeliveryQueuePanelProps = {
@@ -16,6 +17,7 @@ type DeliveryQueuePanelProps = {
 };
 
 export default memo(function DeliveryQueuePanel({ conversationId }: DeliveryQueuePanelProps) {
+  const { t } = useI18n('admin');
   const [items, setItems] = useState<DeliveryQueueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,13 +50,13 @@ export default memo(function DeliveryQueuePanel({ conversationId }: DeliveryQueu
       const res = await agentAdminService.deleteDeliveryItem(id);
       if (res.success) {
         setItems((prev) => prev.filter((item) => item.id !== id));
-        toast.success('Message supprimé de la file');
+        toast.success(t('agent.toasts.queueItemDeleted'));
       } else {
-        toast.error(res.error ?? 'Message déjà envoyé');
+        toast.error(res.error ?? t('agent.toasts.queueItemAlreadySent'));
         fetchQueue();
       }
     } catch {
-      toast.error('Erreur lors de la suppression');
+      toast.error(t('agent.toasts.queueItemDeleteError'));
       fetchQueue();
     }
   }, [fetchQueue]);
@@ -64,13 +66,13 @@ export default memo(function DeliveryQueuePanel({ conversationId }: DeliveryQueu
       const res = await agentAdminService.editDeliveryItem(id, content);
       if (res.success && res.data) {
         setItems((prev) => prev.map((item) => item.id === id ? res.data! : item));
-        toast.success('Message modifié');
+        toast.success(t('agent.toasts.queueItemEdited'));
       } else {
-        toast.error(res.error ?? 'Message déjà envoyé');
+        toast.error(res.error ?? t('agent.toasts.queueItemAlreadySent'));
         fetchQueue();
       }
     } catch {
-      toast.error('Erreur lors de la modification');
+      toast.error(t('agent.toasts.queueItemEditError'));
       fetchQueue();
     }
   }, [fetchQueue]);

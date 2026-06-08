@@ -20,6 +20,7 @@ import { Loader2, Save, Key } from 'lucide-react';
 import { InfoIcon } from './InfoIcon';
 import { agentAdminService, type LlmConfigData, type LlmConfigUpdate } from '@/services/agent-admin.service';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/useI18n';
 
 const PROVIDERS = [
   { value: 'openai', label: 'OpenAI' },
@@ -40,6 +41,7 @@ const MODELS: Record<string, { value: string; label: string }[]> = {
 };
 
 export function AgentLlmTab() {
+  const { t } = useI18n('admin');
   const [config, setConfig] = useState<LlmConfigData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -73,7 +75,7 @@ export function AgentLlmTab() {
           });
         }
       } catch {
-        toast.error('Erreur lors du chargement de la config LLM');
+        toast.error(t('agent.toasts.llmConfigLoadError'));
       } finally {
         setLoading(false);
       }
@@ -95,13 +97,13 @@ export function AgentLlmTab() {
         const invalidation = (response as unknown as { cacheInvalidation?: { anyChannelSucceeded?: boolean } })
           .cacheInvalidation;
         if (invalidation && invalidation.anyChannelSucceeded === false) {
-          toast.warning('Config LLM sauvegardée — le service agent n\'a pas confirmé le rechargement (peut nécessiter un redémarrage)');
+          toast.warning(t('agent.toasts.llmConfigSavedPending'));
         } else {
-          toast.success('Configuration LLM mise à jour');
+          toast.success(t('agent.toasts.llmConfigUpdated'));
         }
       }
     } catch {
-      toast.error('Erreur lors de la sauvegarde');
+      toast.error(t('agent.toasts.llmConfigSaveError'));
     } finally {
       setSaving(false);
     }

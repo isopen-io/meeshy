@@ -17,6 +17,7 @@ import {
   type AgentScheduleData,
 } from '@/services/agent-admin.service';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/useI18n';
 import dynamic from 'next/dynamic';
 
 const ScanHistoryChart = dynamic(() => import('./ScanHistoryChart'), {
@@ -61,6 +62,7 @@ function budgetGlow(ratio: number): string {
 export default memo(function TriggerSchedulingModal({
   conversationId, conversationTitle, open, onOpenChange,
 }: TriggerSchedulingModalProps) {
+  const { t } = useI18n('admin');
   const [schedule, setSchedule] = useState<AgentScheduleData | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [currentNode, setCurrentNode] = useState<string | null>(null);
@@ -137,20 +139,20 @@ export default memo(function TriggerSchedulingModal({
       if (isScanning) {
         const res = await agentAdminService.stopScan(conversationId);
         if (res.success) {
-          toast.success('Interruption demandée');
+          toast.success(t('agent.toasts.triggerInterrupted'));
           setTimeout(fetchSchedule, 1000);
         }
       } else {
         const res = await agentAdminService.triggerScan(conversationId);
         if (res.success) {
-          toast.success('Scan declenche');
+          toast.success(t('agent.toasts.scanTriggered'));
           setTimeout(fetchSchedule, 1000);
         } else {
-          toast.error('Erreur lors du declenchement');
+          toast.error(t('agent.toasts.scanTriggerError'));
         }
       }
     } catch {
-      toast.error('Erreur reseau');
+      toast.error(t('agent.toasts.networkError'));
     } finally {
       setTriggering(false);
     }
@@ -172,7 +174,7 @@ export default memo(function TriggerSchedulingModal({
     }, delayMs);
 
     setScheduledTimer({ target: target.getTime(), label: formatTime(target.getTime()) });
-    toast.success(`Trigger programme a ${formatTime(target.getTime())}`);
+    toast.success(t('agent.toasts.triggerScheduled').replace('{{time}}', formatTime(target.getTime())));
   }, [scheduleTime, handleTriggerNow]);
 
   const handleScheduleDelay = useCallback(() => {
@@ -186,7 +188,7 @@ export default memo(function TriggerSchedulingModal({
     }, ms);
 
     setScheduledTimer({ target, label: formatTime(target) });
-    toast.success(`Trigger programme dans ${delayValue}${delayUnit}`);
+    toast.success(t('agent.toasts.triggerScheduledIn').replace('{{delay}}', `${delayValue}${delayUnit}`));
   }, [delayValue, delayUnit, handleTriggerNow]);
 
   const handleCancelSchedule = useCallback(() => {
@@ -195,7 +197,7 @@ export default memo(function TriggerSchedulingModal({
       scheduledTimerRef.current = null;
     }
     setScheduledTimer(null);
-    toast.info('Trigger programme annule');
+    toast.info(t('agent.toasts.triggerCancelled'));
   }, []);
 
   const handleSaveFrequency = useCallback(async () => {
@@ -204,13 +206,13 @@ export default memo(function TriggerSchedulingModal({
     try {
       const res = await agentAdminService.upsertConfig(conversationId, { scanIntervalMinutes: totalMinutes });
       if (res.success) {
-        toast.success(`Frequence mise a jour : ${totalMinutes}min`);
+        toast.success(t('agent.toasts.frequencyUpdated').replace('{{minutes}}', String(totalMinutes)));
         fetchSchedule();
       } else {
-        toast.error('Erreur');
+        toast.error(t('agent.toasts.updateError'));
       }
     } catch {
-      toast.error('Erreur reseau');
+      toast.error(t('agent.toasts.networkError'));
     } finally {
       setSavingFreq(false);
     }
@@ -266,10 +268,10 @@ export default memo(function TriggerSchedulingModal({
     setDragPct(null);
     try {
       await agentAdminService.upsertConfig(conversationId, { scanIntervalMinutes: newIntervalMinutes });
-      toast.success(`Intervalle ajuste : ${newIntervalMinutes}min`);
+      toast.success(t('agent.toasts.intervalAdjusted').replace('{{minutes}}', String(newIntervalMinutes)));
       fetchSchedule();
     } catch {
-      toast.error('Erreur');
+      toast.error(t('agent.toasts.updateError'));
     }
   }, [dragging, dragPct, timelineData, now, conversationId, fetchSchedule]);
 
