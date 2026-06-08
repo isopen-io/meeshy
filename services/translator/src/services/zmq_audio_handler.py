@@ -9,7 +9,6 @@ import asyncio
 import base64
 import json
 import logging
-import os
 import time
 import uuid
 from typing import Dict, Optional, List
@@ -381,7 +380,8 @@ class AudioHandler:
                 # D2: lire les octets depuis le fichier (base64 = fallback legacy)
                 audio_bytes = None
                 try:
-                    audio_bytes = read_audio_bytes(
+                    audio_bytes = await asyncio.to_thread(
+                        read_audio_bytes,
                         audio_path=t.audio_path,
                         audio_data_base64=t.audio_data_base64,
                     )
@@ -673,7 +673,8 @@ class AudioHandler:
             # D2: lire les octets depuis le fichier (base64 = fallback legacy)
             audio_bytes = None
             try:
-                audio_bytes = read_audio_bytes(
+                audio_bytes = await asyncio.to_thread(
+                    read_audio_bytes,
                     audio_path=translation.audio_path,
                     audio_data_base64=translation.audio_data_base64,
                 )
