@@ -7,6 +7,9 @@ import {
   createPhoneTransferResendRateLimiter
 } from '../../utils/rate-limiter.js';
 import { AuthRouteContext } from './types';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'PhoneTransferRoutes' });
 
 /**
  * Register phone transfer routes (for registration with existing phone number)
@@ -89,7 +92,7 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
         }
       });
     } catch (error) {
-      console.error('[AUTH] ❌ Erreur check phone:', error);
+      logger.error('Erreur check phone', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la vérification du numéro'
@@ -189,7 +192,7 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
         }
       });
     } catch (error) {
-      console.error('[AUTH] ❌ Erreur initiate transfer:', error);
+      logger.error('Erreur initiate transfer', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de l\'initiation du transfert'
@@ -255,7 +258,7 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
         }
       });
     } catch (error) {
-      console.error('[AUTH] ❌ Erreur verify transfer:', error);
+      logger.error('Erreur verify transfer', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la vérification du transfert'
@@ -307,7 +310,7 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
         success: true
       });
     } catch (error) {
-      console.error('[AUTH] ❌ Erreur resend transfer code:', error);
+      logger.error('Erreur resend transfer code', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors du renvoi du code'
@@ -344,7 +347,7 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
       await phoneTransferService.cancelTransfer(transferId);
       return reply.send({ success: true });
     } catch (error) {
-      console.error('[AUTH] ❌ Erreur cancel transfer:', error);
+      logger.error('Erreur cancel transfer', error as Error);
       return reply.send({ success: true });
     }
   });
@@ -435,7 +438,7 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
         }
       });
     } catch (error) {
-      console.error('[AUTH] ❌ Erreur initiate registration transfer:', error);
+      logger.error('Erreur initiate registration transfer', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de l\'initiation du transfert'
@@ -503,7 +506,7 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
         }
       });
     } catch (error) {
-      console.error('[AUTH] ❌ Erreur verify registration transfer:', error);
+      logger.error('Erreur verify registration transfer', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la vérification'

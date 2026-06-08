@@ -19,6 +19,9 @@
 
 import * as crypto from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'AttachmentEncryptionService' });
 
 // Local type definitions (avoid Buffer type issues with shared package)
 type EncryptionMode = 'e2ee' | 'server' | 'hybrid';
@@ -237,7 +240,7 @@ class AttachmentKeyVault {
         },
       });
     } catch (error) {
-      console.error('[AttachmentKeyVault] Failed to persist key to MongoDB:', error);
+      logger.error('Failed to persist key to MongoDB', error as Error);
       // Still cache the key for this session even if DB fails
     }
 
@@ -275,7 +278,7 @@ class AttachmentKeyVault {
 
       // Check expiration
       if (record.expiresAt && record.expiresAt < new Date()) {
-        console.warn(`[AttachmentKeyVault] Key ${keyId} has expired`);
+        logger.warn('Key has expired', { keyId });
         return undefined;
       }
 
@@ -293,7 +296,7 @@ class AttachmentKeyVault {
 
       return key;
     } catch (error) {
-      console.error(`[AttachmentKeyVault] Failed to load key ${keyId} from MongoDB:`, error);
+      logger.error('Failed to load key from MongoDB', error as Error);
       return undefined;
     }
   }
@@ -325,7 +328,7 @@ class AttachmentKeyVault {
       });
       return true;
     } catch (error) {
-      console.error(`[AttachmentKeyVault] Failed to delete key ${keyId}:`, error);
+      logger.error('Failed to delete key', error as Error);
       return false;
     }
   }
@@ -402,7 +405,7 @@ class AttachmentKeyVault {
       });
       return result.count;
     } catch (error) {
-      console.error('[AttachmentKeyVault] Failed to cleanup expired keys:', error);
+      logger.error('Failed to cleanup expired keys', error as Error);
       return 0;
     }
   }
@@ -532,7 +535,7 @@ export class AttachmentEncryptionService {
           key = existingKey;
         } else {
           // Key was deleted or expired - generate new one and update conversation
-          console.warn(`[AttachmentEncryptionService] Conversation key ${conversation.serverEncryptionKeyId} not found, generating new key`);
+          logger.warn('Conversation key not found, generating new key', { keyId: conversation.serverEncryptionKeyId });
           const generated = await this.keyVault.generateKey({ conversationId });
           keyId = generated.keyId;
           key = generated.key;
@@ -714,7 +717,7 @@ export class AttachmentEncryptionService {
       return crypto.timingSafeEqual(computedHmac, expectedHmacBuffer);
     } catch (error) {
       // Log error but don't expose details
-      console.error('[AttachmentEncryptionService] HMAC verification error');
+      logger.error('HMAC verification error');
       return false;
     }
   }
