@@ -6,6 +6,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { useI18n } from '@/hooks/use-i18n';
 import { createPortal } from 'react-dom';
 import { X, Download, ChevronLeft, ChevronRight, ZoomIn, ZoomOut, RotateCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -20,6 +21,7 @@ interface ImageLightboxProps {
 }
 
 export function ImageLightbox({ images, initialIndex, isOpen, onClose }: ImageLightboxProps) {
+  const { t } = useI18n('common');
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
@@ -192,7 +194,7 @@ export function ImageLightbox({ images, initialIndex, isOpen, onClose }: ImageLi
                 onClose();
               }}
               className="text-white hover:bg-white/10"
-              aria-label="Fermer"
+              aria-label={t('common.close')}
             >
               <X className="w-5 h-5" />
             </Button>

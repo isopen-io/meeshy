@@ -958,20 +958,20 @@ struct MessageOverlayMenu: View {
 
         actions.append(MessageAction(
             id: "reply", icon: "arrowshape.turn.up.left.fill",
-            label: "Repondre", color: "4ECDC4",
+            label: "Repondre", color: MeeshyColors.indigo400,
             handler: { dismissThen { onReply?() } }
         ))
 
         actions.append(MessageAction(
             id: "thread", icon: "bubble.left.and.bubble.right.fill",
-            label: "Discussion", color: "F39C12",
+            label: "Discussion", color: MeeshyColors.warning,
             handler: { dismissThen { onShowThread?() } }
         ))
 
         if hasText {
             actions.append(MessageAction(
                 id: "copy", icon: "doc.on.doc.fill",
-                label: "Copier", color: "9B59B6",
+                label: "Copier", color: MeeshyColors.indigo500,
                 handler: { dismissThen { onCopy?() } }
             ))
         }
@@ -980,7 +980,7 @@ struct MessageOverlayMenu: View {
             id: "pin",
             icon: message.pinnedAt != nil ? "pin.slash.fill" : "pin.fill",
             label: message.pinnedAt != nil ? "Desepingler" : "Epingler",
-            color: "3498DB",
+            color: MeeshyColors.info,
             handler: { dismissThen { onPin?() } }
         ))
 
@@ -989,14 +989,14 @@ struct MessageOverlayMenu: View {
             id: "star",
             icon: isStarred ? "star.slash.fill" : "star.fill",
             label: isStarred ? "Retirer des favoris" : "Ajouter aux favoris",
-            color: "FBBF24",
+            color: MeeshyColors.warning,
             handler: { dismissThen { onToggleStar?() } }
         ))
 
         if canEdit && hasText {
             actions.append(MessageAction(
                 id: "edit", icon: "pencil",
-                label: "Modifier", color: "F8B500",
+                label: "Modifier", color: MeeshyColors.warning,
                 handler: { dismissThen { onEdit?() } }
             ))
         }
@@ -1006,7 +1006,7 @@ struct MessageOverlayMenu: View {
                 let attId = message.attachments[0].id
                 actions.append(MessageAction(
                     id: "deleteAttachment", icon: "paperclip.badge.ellipsis",
-                    label: "Supprimer le media", color: "F87171",
+                    label: "Supprimer le media", color: MeeshyColors.error,
                     handler: { dismissThen { onDeleteAttachment(attId) } }
                 ))
             }

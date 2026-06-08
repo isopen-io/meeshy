@@ -15,7 +15,7 @@ struct SecurityVerificationView: View {
                 VStack(spacing: 24) {
                     Image(systemName: "lock.shield.fill")
                         .font(.system(size: 64))
-                        .foregroundColor(Color(hex: "4ECDC4"))
+                        .foregroundColor(MeeshyColors.indigo400)
                         .padding(.top, 40)
 
                     Text(String(localized: "security.verify.title", defaultValue: "End-to-End Encryption", bundle: .main))
@@ -42,7 +42,7 @@ struct SecurityVerificationView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { dismiss() }) {
                         Text(String(localized: "common.done", defaultValue: "Done", bundle: .main)).bold()
-                            .foregroundColor(Color(hex: "4ECDC4"))
+                            .foregroundColor(MeeshyColors.indigo400)
                     }
                 }
             }

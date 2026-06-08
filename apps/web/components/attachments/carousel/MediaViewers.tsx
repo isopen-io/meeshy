@@ -8,6 +8,7 @@ import React from 'react';
 import NextImage from 'next/image';
 import { Image, Loader2, CheckCircle, Maximize } from 'lucide-react';
 import { CompactVideoPlayer } from '../../video/VideoPlayer';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface ImageViewerProps {
   file: File;
@@ -33,6 +34,7 @@ export const ImageViewer = React.memo(function ImageViewer({
   extension,
   onOpenLightbox,
 }: ImageViewerProps) {
+  const { t } = useI18n('attachments');
   return (
     <div
       className="absolute inset-0 rounded-lg overflow-hidden cursor-pointer hover:opacity-90 hover:scale-105 transition-[opacity,transform,box-shadow] group-hover:ring-2 group-hover:ring-blue-400"
@@ -40,7 +42,7 @@ export const ImageViewer = React.memo(function ImageViewer({
         e.stopPropagation();
         onOpenLightbox();
       }}
-      title="Cliquez pour voir en plein écran"
+      title={t('gallery.fullscreen')}
     >
       {thumbnailUrl || fileUrl ? (
         (() => {
@@ -123,6 +125,7 @@ export const VideoViewer = React.memo(function VideoViewer({
   progress,
   onOpenLightbox,
 }: VideoViewerProps) {
+  const { t } = useI18n('attachments');
   return (
     <>
       <div className="w-full h-full p-2 flex flex-col items-stretch justify-center gap-2">
@@ -147,7 +150,7 @@ export const VideoViewer = React.memo(function VideoViewer({
             onOpenLightbox();
           }}
           className="w-full py-1.5 px-3 rounded-md bg-purple-100 hover:bg-purple-200 dark:bg-purple-900/30 dark:hover:bg-purple-800/40 flex items-center justify-center gap-1.5 transition-colors text-xs font-medium text-purple-700 dark:text-purple-300"
-          title="Ouvrir en plein écran"
+          title={t('gallery.fullscreen')}
         >
           <Maximize className="w-3.5 h-3.5" />
           <span>Plein écran</span>
@@ -195,6 +198,7 @@ export const DocumentViewer = React.memo(function DocumentViewer({
   icon,
   onOpenLightbox,
 }: DocumentViewerProps) {
+  const { t } = useI18n('attachments');
   return (
     <>
       <div
@@ -203,7 +207,7 @@ export const DocumentViewer = React.memo(function DocumentViewer({
           e.stopPropagation();
           onOpenLightbox();
         }}
-        title="Cliquez pour voir en plein écran"
+        title={t('gallery.fullscreen')}
       >
         {icon}
         <div className="text-[10px] font-medium text-gray-600 dark:text-gray-300">

@@ -200,7 +200,7 @@ struct StepPseudoView: View {
     private var suggestionsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
-                Image(systemName: "lightbulb.max.fill").foregroundColor(.orange)
+                Image(systemName: "lightbulb.max.fill").foregroundColor(MeeshyColors.warning)
                 Text(String(localized: "onboarding.step.pseudo.suggestions", defaultValue: "Available suggestions", bundle: .main))
                     .font(.footnote.weight(.semibold)).foregroundColor(.secondary)
             }
@@ -226,14 +226,14 @@ struct StepPseudoView: View {
             }
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 14).fill(Color.orange.opacity(0.08)))
+        .background(RoundedRectangle(cornerRadius: 14).fill(MeeshyColors.warning.opacity(0.08)))
         .transition(.scale.combined(with: .opacity))
     }
 
     private var tipsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
-                Image(systemName: "lightbulb.fill").foregroundColor(.yellow)
+                Image(systemName: "lightbulb.fill").foregroundColor(MeeshyColors.warning)
                 Text(String(localized: "onboarding.step.pseudo.tips.title", defaultValue: "Meeshy Tips", bundle: .main)).font(.footnote.weight(.semibold)).foregroundColor(.secondary)
             }
             VStack(alignment: .leading, spacing: 6) {
@@ -821,7 +821,7 @@ struct StepLanguageView: View {
             HStack(spacing: 12) {
                 Image(systemName: "map")
                     .font(.callout.weight(.medium))
-                    .foregroundColor(.orange)
+                    .foregroundColor(MeeshyColors.warning)
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(String(localized: "onboarding.step.language.regional", defaultValue: "Langue regionale", bundle: .main)).font(.caption2.weight(.medium)).foregroundColor(.secondary)
@@ -830,18 +830,18 @@ struct StepLanguageView: View {
                 }
                 Spacer()
                 Text(String(localized: "onboarding.step.language.detected", defaultValue: "Detectee", bundle: .main)).font(.caption2.weight(.medium))
-                    .foregroundColor(.orange)
+                    .foregroundColor(MeeshyColors.warning)
                     .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(Capsule().fill(Color.orange.opacity(0.15)))
+                    .background(Capsule().fill(MeeshyColors.warning.opacity(0.15)))
             }
             .padding(12)
-            .background(RoundedRectangle(cornerRadius: 12).fill(Color.orange.opacity(0.08)))
+            .background(RoundedRectangle(cornerRadius: 12).fill(MeeshyColors.warning.opacity(0.08)))
         }
     }
 
     private func languageTargetTab(_ title: String, target: LanguageTarget, icon: String) -> some View {
         let isActive = editingTarget == target
-        let color: Color = target == .system ? viewModel.currentStep.accentColor : .orange
+        let color: Color = target == .system ? viewModel.currentStep.accentColor : MeeshyColors.warning
         return Button(action: {
             withAnimation(.spring(response: 0.3)) { editingTarget = target }
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
@@ -865,7 +865,7 @@ struct StepLanguageView: View {
     private func languageCard(_ lang: MeeshyUI.LanguageOption) -> some View {
         let currentId = editingTarget == .system ? viewModel.systemLanguage : viewModel.regionalLanguage
         let isSelected = currentId == lang.id
-        let color: Color = editingTarget == .system ? viewModel.currentStep.accentColor : .orange
+        let color: Color = editingTarget == .system ? viewModel.currentStep.accentColor : MeeshyColors.warning
         return Button(action: {
             withAnimation(.spring(response: 0.3)) {
                 if editingTarget == .system {
@@ -985,11 +985,11 @@ struct StepProfileView: View {
         ScrollView {
             VStack(spacing: 24) {
                 HStack {
-                    Image(systemName: "sparkles").foregroundColor(.orange)
+                    Image(systemName: "sparkles").foregroundColor(MeeshyColors.warning)
                     Text(String(localized: "onboarding.step.profile.optional", defaultValue: "Cette etape est optionnelle", bundle: .main)).font(.footnote.weight(.medium)).foregroundColor(.secondary)
                 }
                 .padding(10)
-                .background(RoundedRectangle(cornerRadius: 10).fill(Color.orange.opacity(0.1)))
+                .background(RoundedRectangle(cornerRadius: 10).fill(MeeshyColors.warning.opacity(0.1)))
 
                 profilePreviewCard
 
