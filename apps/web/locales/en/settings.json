@@ -193,7 +193,10 @@
         "customDestinationLanguage": "Custom destination language",
         "customDestinationLanguageDescription": "Specific language for automatic translation (optional)",
         "selectLanguage": "Select a language",
-        "none": "None"
+        "none": "None",
+        "systemLanguagePlaceholder": "Select your system language",
+        "regionalLanguagePlaceholder": "Select your regional language",
+        "customLanguagePlaceholder": "Select a custom language (optional)"
       },
       "autoTranslation": {
         "title": "Automatic Translation Options",

@@ -14,6 +14,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '../ui/tooltip';
+import { useI18n } from '@/hooks/useI18n';
 
 export interface ImageAttachmentProps {
   attachment: Attachment;
@@ -34,6 +35,7 @@ export const ImageAttachment = React.memo(function ImageAttachment({
   onImageClick,
   onDeleteClick,
 }: ImageAttachmentProps) {
+  const { t } = useI18n('attachments');
   const handleImageClick = useCallback((_event: React.MouseEvent) => {
     onImageClick(attachment);
   }, [attachment, onImageClick]);
@@ -90,7 +92,7 @@ export const ImageAttachment = React.memo(function ImageAttachment({
             }}
             role="button"
             tabIndex={0}
-            aria-label={`Ouvrir l'image ${attachment.originalName}`}
+            aria-label={t('actions.openImageNamed', { name: attachment.originalName })}
           >
             <div className={`relative bg-gray-100 dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg overflow-hidden hover:border-blue-400 dark:hover:border-blue-500 transition-[border-color,box-shadow] hover:shadow-lg dark:hover:shadow-blue-500/30 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${imageCount <= 2 ? 'inline-flex items-center justify-center max-h-[320px]' : sizeClasses} ${aspectRatioClass}`}>
               {imageCount <= 2 ? (
@@ -117,8 +119,8 @@ export const ImageAttachment = React.memo(function ImageAttachment({
                 <button
                   onClick={handleDeleteClick}
                   className="!absolute !top-1 !right-1 !w-[22px] !h-[22px] !min-w-[22px] !min-h-[22px] !max-w-[22px] !max-h-[22px] rounded-full bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white flex items-center justify-center transition-opacity shadow-md !z-[100] opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1 !p-0"
-                  title="Supprimer cette image"
-                  aria-label={`Supprimer l'image ${attachment.originalName}`}
+                  title={t('actions.deleteImage')}
+                  aria-label={t('actions.deleteImageNamed', { name: attachment.originalName })}
                 >
                   <X className="!w-[11px] !h-[11px]" />
                 </button>

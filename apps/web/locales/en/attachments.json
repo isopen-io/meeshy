@@ -40,6 +40,18 @@
     "invalidType": "Invalid file type",
     "uploadFailed": "Upload failed"
   },
+  "actions": {
+    "deleteImage": "Delete this image",
+    "deleteVideo": "Delete this video",
+    "deleteFile": "Delete this file",
+    "deleteTextFile": "Delete this text file",
+    "deletePdf": "Delete this PDF",
+    "deleteImageNamed": "Delete image {name}",
+    "deleteVideoNamed": "Delete video {name}",
+    "deleteFileNamed": "Delete file {name}",
+    "openImageNamed": "Open image {name}",
+    "openFileNamed": "Open file {name}"
+  },
   "contextMenu": {
     "close": "Close",
     "download": "Download",

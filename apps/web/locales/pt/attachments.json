@@ -40,6 +40,18 @@
     "invalidType": "Tipo de arquivo inválido",
     "uploadFailed": "Falha no envio"
   },
+  "actions": {
+    "deleteImage": "Excluir esta imagem",
+    "deleteVideo": "Excluir este vídeo",
+    "deleteFile": "Excluir este arquivo",
+    "deleteTextFile": "Excluir este arquivo de texto",
+    "deletePdf": "Excluir este PDF",
+    "deleteImageNamed": "Excluir imagem {name}",
+    "deleteVideoNamed": "Excluir vídeo {name}",
+    "deleteFileNamed": "Excluir arquivo {name}",
+    "openImageNamed": "Abrir imagem {name}",
+    "openFileNamed": "Abrir arquivo {name}"
+  },
   "contextMenu": {
     "close": "Fechar",
     "download": "Baixar",
