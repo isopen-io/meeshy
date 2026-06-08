@@ -181,6 +181,17 @@
   },
   "globalConfig": {
     "defaultProvider": "Proveedor predeterminado",
-    "globalScheduler": "Planificador global"
+    "globalScheduler": "Planificador global",
+    "active": "Activo",
+    "disabled": "Desactivado",
+    "none": "Ninguno"
+  },
+  "agentConfig": {
+    "titleNew": "Nueva configuración de agente",
+    "titleEdit": "Editar configuración",
+    "created": "Configuración creada",
+    "updated": "Configuración actualizada",
+    "saveError": "Error al guardar la configuración",
+    "pendingPropagation": "Config guardada — propagación al servicio de agente pendiente (caché puede tardar unos minutos)"
   }
 }

@@ -30,6 +30,7 @@ import { mergeDefinedFields } from './config-form-merge';
 import { conversationsCrudService } from '@/services/conversations/crud.service';
 import type { Conversation } from '@meeshy/shared/types';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/useI18n';
 
 interface AgentConfigDialogProps {
   open: boolean;
@@ -87,6 +88,7 @@ const DEFAULTS: AgentConfigUpsert = {
 
 export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentConfigDialogProps) {
   const isNew = !config;
+  const { t } = useI18n('admin');
   const [saving, setSaving] = useState(false);
   const [conversationId, setConversationId] = useState('');
 
@@ -153,13 +155,13 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
       const invalidation = (res as unknown as { cacheInvalidation?: { anyChannelSucceeded?: boolean } })
         .cacheInvalidation;
       if (invalidation && invalidation.anyChannelSucceeded === false) {
-        toast.warning('Config sauvegardée — propagation au service agent en attente (cache stale possible quelques minutes)');
+        toast.warning(t('agentConfig.pendingPropagation'));
       } else {
-        toast.success(isNew ? 'Configuration créée' : 'Configuration mise à jour');
+        toast.success(isNew ? t('agentConfig.created') : t('agentConfig.updated'));
       }
       onSave();
     } catch {
-      toast.error('Erreur lors de la sauvegarde');
+      toast.error(t('agentConfig.saveError'));
     } finally {
       setSaving(false);
     }
@@ -174,7 +176,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
       <DialogContent className="max-w-[95vw] sm:max-w-2xl lg:max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>
-            {isNew ? 'Nouvelle configuration agent' : 'Modifier la configuration'}
+            {isNew ? t('agentConfig.titleNew') : t('agentConfig.titleEdit')}
             {!isNew && config?.conversation?.title && (
               <span className="block text-sm font-normal text-gray-500 mt-1">
                 {config.conversation.title}

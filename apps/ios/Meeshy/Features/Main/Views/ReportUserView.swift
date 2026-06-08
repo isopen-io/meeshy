@@ -255,7 +255,7 @@ private enum ReportReason: String, CaseIterable {
         case .harassment: return String(localized: "report.user.reason.harassment", defaultValue: "Harassment", bundle: .main)
         case .inappropriate: return String(localized: "report.user.reason.inappropriate", defaultValue: "Inappropriate content", bundle: .main)
         case .impersonation: return String(localized: "report.user.reason.impersonation", defaultValue: "Impersonation", bundle: .main)
-        case .other: return String(localized: "report.user.reason.other", defaultValue: "Autre", bundle: .main)
+        case .other: return String(localized: "report.user.reason.other", defaultValue: "Other", bundle: .main)
         }
     }
 
