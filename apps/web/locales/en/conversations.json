@@ -309,7 +309,8 @@
       "directConversationBadge": "Direct conversation",
       "fallbackUser": "User",
       "reactionAdded": "Reaction {emoji} added",
-      "reactionRemoved": "Reaction removed"
+      "reactionRemoved": "Reaction removed",
+      "inviteSearchPlaceholder": "Search users..."
     },
     "conversationImage": {
       "title": "Change conversation image",

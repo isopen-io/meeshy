@@ -43,12 +43,12 @@ struct ProfileLanguagePickerSheet: View {
                     .padding(.top, 8)
                 }
             }
-            .searchable(text: $searchText, prompt: String(localized: "language-picker.search", defaultValue: "Rechercher une langue", bundle: .main))
+            .searchable(text: $searchText, prompt: String(localized: "language-picker.search", defaultValue: "Search a language", bundle: .main))
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { dismiss() }
+                    Button(String(localized: "common.close", defaultValue: "Close", bundle: .main)) { dismiss() }
                         .foregroundColor(MeeshyColors.indigo500)
                 }
             }
@@ -66,7 +66,7 @@ struct ProfileLanguagePickerSheet: View {
                     .font(.title3)
                     .foregroundColor(theme.textMuted)
                     .frame(width: 36)
-                Text(String(localized: "language-picker.none", defaultValue: "Aucune", bundle: .main))
+                Text(String(localized: "language-picker.none", defaultValue: "None", bundle: .main))
                     .font(.body.weight(.medium))
                     .foregroundColor(theme.textPrimary)
                 Spacer()
