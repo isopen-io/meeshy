@@ -182,7 +182,7 @@ export function ImageLightbox({ images, initialIndex, isOpen, onClose }: ImageLi
                 handleDownload();
               }}
               className="text-white hover:bg-white/10"
-              aria-label="Télécharger l'image"
+              aria-label={t('common.download')}
             >
               <Download className="w-5 h-5" />
             </Button>
@@ -257,7 +257,7 @@ export function ImageLightbox({ images, initialIndex, isOpen, onClose }: ImageLi
               goToPrevious();
             }}
             className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 text-white hover:bg-white/10 bg-black/30"
-            aria-label="Image précédente"
+            aria-label={t('common.previous')}
           >
             <ChevronLeft className="w-8 h-8" />
           </Button>
@@ -273,7 +273,7 @@ export function ImageLightbox({ images, initialIndex, isOpen, onClose }: ImageLi
               goToNext();
             }}
             className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 text-white hover:bg-white/10 bg-black/30"
-            aria-label="Image suivante"
+            aria-label={t('common.next')}
           >
             <ChevronRight className="w-8 h-8" />
           </Button>
@@ -291,7 +291,7 @@ export function ImageLightbox({ images, initialIndex, isOpen, onClose }: ImageLi
               }}
               disabled={zoom <= 0.5}
               className="text-white hover:bg-white/10 w-8 h-8"
-              aria-label="Dézoomer"
+              aria-label={t('common.zoomOut')}
             >
               <ZoomOut className="w-4 h-4" />
             </Button>
@@ -309,7 +309,7 @@ export function ImageLightbox({ images, initialIndex, isOpen, onClose }: ImageLi
               }}
               disabled={zoom >= 3}
               className="text-white hover:bg-white/10 w-8 h-8"
-              aria-label="Zoomer"
+              aria-label={t('common.zoomIn')}
             >
               <ZoomIn className="w-4 h-4" />
             </Button>
@@ -324,7 +324,7 @@ export function ImageLightbox({ images, initialIndex, isOpen, onClose }: ImageLi
                 handleRotate();
               }}
               className="text-white hover:bg-white/10 w-8 h-8"
-              aria-label="Pivoter l'image"
+              aria-label={t('common.rotate')}
             >
               <RotateCw className="w-4 h-4" />
             </Button>

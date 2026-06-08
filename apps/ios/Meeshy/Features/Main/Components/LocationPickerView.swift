@@ -92,6 +92,7 @@ struct LocationPickerView: View {
                         .font(.system(size: 14))
                         .foregroundColor(theme.textMuted)
                 }
+                .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Clear search", bundle: .main))
             }
         }
         .padding(.horizontal, 12)

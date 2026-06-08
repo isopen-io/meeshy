@@ -201,6 +201,16 @@
       "description": "Une erreur inattendue s'est produite. Veuillez réessayer.",
       "details": "Détails de l'erreur",
       "reload": "Recharger la page"
-    }
+    },
+    "download": "Télécharger",
+    "play": "Lire",
+    "pause": "Pause",
+    "mute": "Couper le son",
+    "unmute": "Activer le son",
+    "enterFullscreen": "Plein écran",
+    "exitFullscreen": "Quitter le plein écran",
+    "zoomIn": "Zoomer",
+    "zoomOut": "Dézoomer",
+    "rotate": "Pivoter"
   }
 }

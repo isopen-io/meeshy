@@ -201,6 +201,16 @@
       "description": "An unexpected error occurred. Please try again.",
       "details": "Error details",
       "reload": "Reload page"
-    }
+    },
+    "download": "Download",
+    "play": "Play",
+    "pause": "Pause",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "enterFullscreen": "Enter fullscreen",
+    "exitFullscreen": "Exit fullscreen",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "rotate": "Rotate"
   }
 }
