@@ -256,6 +256,16 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 60
         config.timeoutIntervalForResource = 120
+        // HTTP RFC 7234 cache: exploite les ETag/304 renvoyés par le gateway pour
+        // éviter les re-fetches inutiles. 10 MB mémoire + 50 MB disque.
+        // iter-4: active le cache HTTP — la politique par défaut laisse NSURLCache inactif
+        // pour les sessions authentifiées (Authorization header) sans ce paramétrage.
+        config.urlCache = URLCache(
+            memoryCapacity: 10 * 1_024 * 1_024,
+            diskCapacity: 50 * 1_024 * 1_024,
+            diskPath: "meeshy_http_cache"
+        )
+        config.requestCachePolicy = .useProtocolCachePolicy
         // SOTA P11: HTTP/3 is enabled by default on iOS 15+. The optimistic HTTP/3 flag lives on
         // URLRequest (assumesHTTP3Capable), not on URLSessionConfiguration. Apply per-request
         // via makeRequest() to skip the HTTP/2 → HTTP/3 upgrade negotiation on first upload.

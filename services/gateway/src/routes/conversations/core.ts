@@ -399,15 +399,7 @@ export function registerCoreRoutes(
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
       const readStatusService = new MessageReadStatusService(prisma);
 
-      // Resolve current user's participantIds for unread counts
-      const userParticipants = conversationIds.length > 0
-        ? prisma.participant.findMany({
-            where: { userId, conversationId: { in: conversationIds }, isActive: true },
-            select: { id: true }
-          })
-        : Promise.resolve([]);
-
-      const [memberUsers, userParticipantRecords, totalCount] = await Promise.all([
+      const [memberUsers, totalCount, unreadCountMap] = await Promise.all([
         // Fetch user data with firstName/lastName for DM name resolution
         // (participant.user select only has displayName, not firstName/lastName)
         allMemberUserIds.size > 0
@@ -426,20 +418,16 @@ export function registerCoreRoutes(
             })
           : Promise.resolve([]),
 
-        // Resolve participantIds for unread count query
-        userParticipants,
-
         // Count (if requested) - skip when using cursor pagination
         (!beforeCursor && (includeCount || offset === 0))
           ? prisma.conversation.count({ where: whereClause })
-          : Promise.resolve(0)
-      ]);
+          : Promise.resolve(0),
 
-      // Unread counts using resolved participantIds
-      const participantIds = userParticipantRecords.map(p => p.id);
-      const unreadCountMap = participantIds.length > 0
-        ? await readStatusService.getUnreadCountsForConversations(participantIds, conversationIds)
-        : new Map<string, number>();
+        // Unread counts — iter-4: appel direct par userId (2+N queries vs 4×N)
+        conversationIds.length > 0
+          ? readStatusService.getUnreadCountsForUser(userId, conversationIds)
+          : Promise.resolve(new Map<string, number>()),
+      ]);
 
       perfTimings.parallelQueries = performance.now() - t0;
 

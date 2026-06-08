@@ -143,8 +143,18 @@ class ConversationViewModel: ObservableObject {
     /// Set before prepend so the view can restore scroll position
     @Published var scrollAnchorId: String?
 
-    /// Users currently typing in this conversation
-    @Published var typingUsernames: [String] = []
+    /// Users currently typing in this conversation.
+    /// Backed by stateStore — changes fire stateStore.objectWillChange, NOT self.objectWillChange.
+    /// This prevents the full conversation view graph from re-evaluating on every keystroke.
+    var typingUsernames: [String] {
+        get { stateStore.typingUsernames }
+        set { stateStore.typingUsernames = newValue }
+    }
+
+    /// Combine publisher for typing usernames — used by UIKit consumers (MessageListViewController).
+    var typingUsernamesPublisher: AnyPublisher<[String], Never> {
+        stateStore.$typingUsernames.eraseToAnyPublisher()
+    }
 
     /// Real-time translation/transcription/audio data keyed by messageId
     @Published var messageTranslations: [String: [MessageTranslation]] = [:] {
@@ -621,7 +631,9 @@ class ConversationViewModel: ObservableObject {
     // state into `stateStore.messages` so that the delegated methods
     // (currently `searchMessages`, `prefetchRecentMedia`, …) work against
     // the same source of truth. See `[[project_conversation_vm_split_staged]]`.
-    private let stateStore: ConversationStateStore
+    /// Exposed so ConversationView and MessageListViewController can observe typing
+    /// state independently — avoids triggering the full VM objectWillChange on every keystroke.
+    let stateStore: ConversationStateStore
     private let commandHandler: ConversationCommandHandler
     private let mediaHandler: ConversationMediaHandler
     private let searchHandler: ConversationSearchHandler
