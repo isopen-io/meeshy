@@ -107,6 +107,9 @@ export class ConnectionService {
       autoConnect: false,
       reconnection: true,
       reconnectionAttempts: this.maxReconnectAttempts,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 30000,
+      randomizationFactor: 0.5,
       timeout: 20000
     }) as unknown as TypedSocket;
 
@@ -134,8 +137,14 @@ export class ConnectionService {
   }
 
   reconnect(): void {
+    if (this.reconnectTimeout) clearTimeout(this.reconnectTimeout);
     this.disconnect();
-    setTimeout(() => this.connect(), 500);
+    const attempt = this.state.reconnectAttempts;
+    const delay = Math.min(1000 * Math.pow(2, attempt), 30000) + Math.random() * 1000;
+    this.reconnectTimeout = setTimeout(() => {
+      this.state.reconnectAttempts = Math.min(attempt + 1, 10);
+      this.connect();
+    }, delay);
   }
 
   disconnectForUpdate(): void {

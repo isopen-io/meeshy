@@ -169,33 +169,45 @@ export class AuthMiddleware {
       type CachedUserRow = {
         id: string;
         username: string;
-        role: string;
-        isActive: boolean;
-        systemLanguage: string;
-        regionalLanguage: string;
-        deviceLocale: string | null;
-      };
-
-      type FullUserRow = CachedUserRow & {
         email: string;
         firstName: string | null;
         lastName: string | null;
         displayName: string | null;
         avatar: string | null;
+        role: string;
+        isActive: boolean;
+        systemLanguage: string;
+        regionalLanguage: string;
         customDestinationLanguage: string | null;
         isOnline: boolean;
+        lastActiveAt: string;
+        emailVerifiedAt: string | null;
+        createdAt: string;
+        updatedAt: string;
+        deviceLocale: string | null;
+      };
+
+      type FullUserRow = Omit<CachedUserRow, 'lastActiveAt' | 'emailVerifiedAt' | 'createdAt' | 'updatedAt'> & {
         lastActiveAt: Date;
         emailVerifiedAt: Date | null;
         createdAt: Date;
         updatedAt: Date;
       };
 
-      let cachedSlim: CachedUserRow | null = null;
+      const deserializeCachedUser = (cached: CachedUserRow): FullUserRow => ({
+        ...cached,
+        lastActiveAt: new Date(cached.lastActiveAt),
+        emailVerifiedAt: cached.emailVerifiedAt ? new Date(cached.emailVerifiedAt) : null,
+        createdAt: new Date(cached.createdAt),
+        updatedAt: new Date(cached.updatedAt),
+      });
+
+      let cachedRow: CachedUserRow | null = null;
 
       try {
         const raw = await cache.get(cacheKey);
         if (raw) {
-          cachedSlim = JSON.parse(raw) as CachedUserRow;
+          cachedRow = JSON.parse(raw) as CachedUserRow;
         }
       } catch {
         // Redis unavailable or parse error — fall through to Prisma
@@ -203,33 +215,15 @@ export class AuthMiddleware {
 
       let user: FullUserRow | null = null;
 
-      if (cachedSlim) {
-        if (!cachedSlim.isActive) {
+      if (cachedRow) {
+        if (!cachedRow.isActive) {
           throw new Error('User not found or inactive');
         }
-        const extra = await this.prisma.user.findUnique({
-          where: { id: cachedSlim.id },
-          select: {
-            email: true,
-            firstName: true,
-            lastName: true,
-            displayName: true,
-            avatar: true,
-            customDestinationLanguage: true,
-            isOnline: true,
-            lastActiveAt: true,
-            emailVerifiedAt: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-        });
-        if (extra) {
-          user = { ...cachedSlim, ...extra };
-        }
+        user = deserializeCachedUser(cachedRow);
       }
 
       if (!user) {
-        user = await this.prisma.user.findUnique({
+        const prismaUser = await this.prisma.user.findUnique({
           where: { id: jwtUserId },
           select: {
             id: true,
@@ -253,18 +247,31 @@ export class AuthMiddleware {
           },
         }) as FullUserRow | null;
 
+        user = prismaUser;
+
         if (user?.isActive) {
-          const slim: CachedUserRow = {
+          const toCache: CachedUserRow = {
             id: user.id,
             username: user.username,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            displayName: user.displayName,
+            avatar: user.avatar,
             role: user.role,
             isActive: user.isActive,
             systemLanguage: user.systemLanguage,
             regionalLanguage: user.regionalLanguage,
+            customDestinationLanguage: user.customDestinationLanguage,
+            isOnline: user.isOnline,
+            lastActiveAt: user.lastActiveAt.toISOString(),
+            emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
+            createdAt: user.createdAt.toISOString(),
+            updatedAt: user.updatedAt.toISOString(),
             deviceLocale: user.deviceLocale,
           };
           try {
-            await cache.set(cacheKey, JSON.stringify(slim), AUTH_USER_CACHE_TTL);
+            await cache.set(cacheKey, JSON.stringify(toCache), AUTH_USER_CACHE_TTL);
           } catch {
             // Redis write failure is non-fatal
           }
@@ -292,7 +299,7 @@ export class AuthMiddleware {
         });
       }
 
-      const userLanguage = resolveUserLanguage(user as any);
+      const userLanguage = resolveUserLanguage(user);
 
       return {
         type: 'user',

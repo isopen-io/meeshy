@@ -295,11 +295,15 @@ export class CallEventsHandler {
           },
           select: { id: true }
         });
+        const callIds = activeCalls.map((c: any) => c.id);
+        const myParticipants = callIds.length > 0
+          ? await this.prisma.callParticipant.findMany({
+              where: { callSessionId: { in: callIds }, participant: { userId } }
+            })
+          : [];
+        const myParticipantMap = new Map(myParticipants.map((p: any) => [p.callSessionId, p]));
         for (const c of activeCalls) {
-          // Skip if this user already joined AND left the call.
-          const myPart = await this.prisma.callParticipant.findFirst({
-            where: { callSessionId: c.id, participant: { userId } }
-          });
+          const myPart = myParticipantMap.get(c.id);
           if (myPart?.leftAt) continue;
 
           const full = await this.callService.getCallSession(c.id);
@@ -596,12 +600,8 @@ export class CallEventsHandler {
 
         // Send VoIP push to offline members for incoming call wake-up
         if (this.pushService) {
-          const initiatorUser = await this.prisma.user.findUnique({
-            where: { id: userId },
-            select: { displayName: true, username: true, avatar: true }
-          });
-          const callerName = initiatorUser?.displayName || initiatorUser?.username || 'Unknown';
-          const callerAvatar = initiatorUser?.avatar || undefined;
+          const callerName = callSession.initiator.displayName || callSession.initiator.username || 'Unknown';
+          const callerAvatar = callSession.initiator.avatar || undefined;
 
           // CALL-FIX 2026-06-06 — VoIP-push every callee that is NOT confirmed
           // FOREGROUND (the `foregroundUserIds` set built during the fanout). That
