@@ -135,6 +135,9 @@
         "initializing": "Initialisation..."
       }
     },
+    "languageSelect": {
+      "notFound": "Aucune langue trouvée"
+    },
     "bubbleStream": {
       "title": "Flux de messages",
       "loading": "Chargement des messages...",

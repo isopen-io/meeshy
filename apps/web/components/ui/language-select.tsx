@@ -4,6 +4,7 @@ import * as React from 'react';
 import { Check, ChevronsUpDown, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { useI18n } from '@/hooks/useI18n';
 import { Input } from '@/components/ui/input';
 import {
   Popover,
@@ -34,6 +35,7 @@ export function LanguageSelect({
   disabled = false,
   className,
 }: LanguageSelectProps) {
+  const { t } = useI18n('components');
   const [open, setOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
 
@@ -100,7 +102,7 @@ export function LanguageSelect({
           <div className="max-h-[200px] overflow-y-auto">
             {filteredLanguages.length === 0 ? (
               <div className="py-6 text-center text-sm text-muted-foreground">
-                Aucune langue trouvée
+                {t('components.languageSelect.notFound')}
               </div>
             ) : (
               <div className="p-1">

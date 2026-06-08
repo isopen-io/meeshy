@@ -18,6 +18,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/hooks/useI18n';
 
 interface TranslationMetrics {
   // Métriques de base
@@ -61,6 +62,7 @@ export function TranslationMonitor({
   showDetails = true,
   refreshInterval = 5000
 }: TranslationMonitorProps) {
+  const { t } = useI18n('admin');
   const [metrics, setMetrics] = useState<TranslationMetrics | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -153,7 +155,7 @@ export function TranslationMonitor({
         {isLoading && !metrics && (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-            <span className="ml-2 text-gray-600">Chargement des métriques...</span>
+            <span className="ml-2 text-gray-600">{t('admin.translationMonitor.loadingMetrics')}</span>
           </div>
         )}
 
