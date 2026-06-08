@@ -56,7 +56,7 @@ struct CallWaitingBannerView: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
-                            .background(.red, in: Capsule())
+                            .background(MeeshyColors.error, in: Capsule())
                     }
                     .accessibilityLabel(String(localized: "call.waiting.reject.a11y", defaultValue: "Refuser l'appel de \(callerName)", bundle: .main))
 
@@ -69,7 +69,7 @@ struct CallWaitingBannerView: View {
                             .foregroundStyle(.white)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
-                            .background(.green, in: Capsule())
+                            .background(MeeshyColors.success, in: Capsule())
                     }
                     .accessibilityLabel(String(localized: "call.waiting.answer.a11y", defaultValue: "Raccrocher et repondre a \(callerName)", bundle: .main))
                 }

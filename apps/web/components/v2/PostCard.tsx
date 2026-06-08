@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/hooks/use-i18n';
 import { Avatar } from './Avatar';
 import { LanguageOrb } from './LanguageOrb';
 import { TranslationToggle } from './TranslationToggle';
@@ -70,6 +71,7 @@ function PostCard({
   onClick,
   className,
 }: PostCardProps) {
+  const { t } = useI18n('components');
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [showContextMenu, setShowContextMenu] = useState(false);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
@@ -130,7 +132,7 @@ function PostCard({
             <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
               <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z" />
             </svg>
-            Pinned
+            {t('post.pinned')}
           </div>
         )}
 
@@ -157,7 +159,7 @@ function PostCard({
               <button
                 onClick={() => setShowContextMenu(!showContextMenu)}
                 className="p-1.5 rounded-lg text-[var(--gp-text-muted)] hover:bg-[var(--gp-parchment)] transition-colors"
-                aria-label="Post menu"
+                aria-label={t('post.menu')}
               >
                 <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
                   <circle cx="12" cy="5" r="1.5" />
@@ -173,7 +175,7 @@ function PostCard({
                       onClick={() => { onEdit(); setShowContextMenu(false); }}
                       className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[var(--gp-text-primary)] hover:bg-[var(--gp-parchment)] transition-colors"
                     >
-                      Edit
+                      {t('post.edit')}
                     </button>
                   )}
                   {onPin && (
@@ -181,15 +183,15 @@ function PostCard({
                       onClick={() => { onPin(); setShowContextMenu(false); }}
                       className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[var(--gp-text-primary)] hover:bg-[var(--gp-parchment)] transition-colors"
                     >
-                      {isPinned ? 'Unpin' : 'Pin'}
+                      {isPinned ? t('post.unpin') : t('post.pin')}
                     </button>
                   )}
                   {onDelete && (
                     <button
                       onClick={() => { onDelete(); setShowContextMenu(false); }}
-                      className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-500 hover:bg-[var(--gp-parchment)] transition-colors"
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm text-[var(--gp-error)] hover:bg-[var(--gp-parchment)] transition-colors"
                     >
-                      Delete
+                      {t('post.delete')}
                     </button>
                   )}
                 </div>
@@ -282,7 +284,7 @@ function PostCard({
               onPointerDown={handleLikePointerDown}
               onPointerUp={handleLikePointerUp}
               onPointerLeave={handleLikePointerUp}
-              aria-label={isLiked ? 'Unlike post' : 'Like post'}
+              aria-label={isLiked ? t('post.unlike') : t('post.like')}
               aria-pressed={isLiked}
             >
               {userReaction ? (
@@ -344,7 +346,7 @@ function PostCard({
             <button
               className="flex items-center gap-2 text-sm text-[var(--gp-text-secondary)] transition-colors duration-300"
               onClick={onRepost}
-              aria-label="Repost"
+              aria-label={t('post.repost')}
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -369,7 +371,7 @@ function PostCard({
                 isBookmarked ? 'text-[var(--gp-terracotta)]' : 'text-[var(--gp-text-secondary)]',
               )}
               onClick={onBookmark}
-              aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark'}
+              aria-label={isBookmarked ? t('post.removeBookmark') : t('post.bookmark')}
             >
               <svg className="w-5 h-5" fill={isBookmarked ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />

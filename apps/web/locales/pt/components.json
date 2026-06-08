@@ -195,6 +195,19 @@
           }
         }
       }
+    },
+    "post": {
+      "pinned": "Fixado",
+      "menu": "Menu da publicação",
+      "edit": "Editar",
+      "pin": "Fixar",
+      "unpin": "Desafixar",
+      "delete": "Excluir",
+      "like": "Curtir publicação",
+      "unlike": "Descurtir publicação",
+      "repost": "Repostar",
+      "bookmark": "Salvar",
+      "removeBookmark": "Remover dos salvos"
     }
   }
 }

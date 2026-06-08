@@ -1093,7 +1093,7 @@ struct ConversationView: View {
                         Color.clear.frame(height: composerState.showOptions ? 72 : 56)
                         HStack {
                             Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.yellow)
+                                .foregroundStyle(MeeshyColors.warning)
                             Text(error)
                                 .font(.caption)
                                 .lineLimit(2)
