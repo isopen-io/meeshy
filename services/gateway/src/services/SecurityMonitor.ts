@@ -10,6 +10,9 @@ import type {
   VSecuritySeverity,
   VSecurityStatus,
 } from '@meeshy/shared/utils/validation';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'SecurityMonitor' });
 
 // Types re-exported with standard naming convention
 export type SecurityEventType = VSecurityEventType;
@@ -40,6 +43,7 @@ export interface SecurityAlert {
 export class SecurityMonitor {
   private alertThresholds: Map<SecurityEventType, number> = new Map();
   private eventCounts: Map<string, { count: number; firstSeen: Date }> = new Map();
+  private readonly MAX_EVENT_COUNTS = 10_000;
   private admins: string[] = []; // Admin email addresses for alerts
 
   constructor(
@@ -74,7 +78,7 @@ export class SecurityMonitor {
       // Check for anomalies and send alerts if needed
       await this.checkThresholds(data);
     } catch (error) {
-      console.error('[SecurityMonitor] Failed to log security event:', error);
+      logger.error('failed to log security event', { error });
     }
   }
 
@@ -98,7 +102,7 @@ export class SecurityMonitor {
         }))
       });
     } catch (error) {
-      console.error('[SecurityMonitor] Failed to log batch security events:', error);
+      logger.error('failed to log batch security events', { error });
     }
   }
 
@@ -198,6 +202,14 @@ export class SecurityMonitor {
   /**
    * Check if event count exceeds thresholds
    */
+  private _setEventCount(key: string, value: { count: number; firstSeen: Date }): void {
+    if (!this.eventCounts.has(key) && this.eventCounts.size >= this.MAX_EVENT_COUNTS) {
+      const firstKey = this.eventCounts.keys().next().value!;
+      this.eventCounts.delete(firstKey);
+    }
+    this.eventCounts.set(key, value);
+  }
+
   private async checkThresholds(event: SecurityEventData): Promise<void> {
     const threshold = this.alertThresholds.get(event.eventType);
     if (!threshold) return;
@@ -227,10 +239,10 @@ export class SecurityMonitor {
         }
       } else {
         // Reset counter after 1 hour
-        this.eventCounts.set(key, { count: 1, firstSeen: new Date() });
+        this._setEventCount(key, { count: 1, firstSeen: new Date() });
       }
     } else {
-      this.eventCounts.set(key, { count: 1, firstSeen: new Date() });
+      this._setEventCount(key, { count: 1, firstSeen: new Date() });
     }
 
     // Always send immediate alerts for CRITICAL events
@@ -300,7 +312,7 @@ export class SecurityMonitor {
    * Start cleanup interval for event counts
    */
   private startEventCountCleanup(): void {
-    setInterval(() => {
+    const handle = setInterval(() => {
       const now = Date.now();
       let deletedCount = 0;
 
@@ -313,9 +325,10 @@ export class SecurityMonitor {
       }
 
       if (deletedCount > 0) {
-        console.log(`[SecurityMonitor] Cleaned ${deletedCount} expired event counters`);
+        logger.debug('security event counter cleanup', { removed: deletedCount, remaining: this.eventCounts.size });
       }
-    }, 600000); // Run every 10 minutes
+    }, 600_000); // Run every 10 minutes
+    handle.unref?.();
   }
 
   /**
