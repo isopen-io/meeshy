@@ -6,6 +6,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useI18n } from '@/hooks/use-i18n';
 import { createPortal } from 'react-dom';
 import {
   X,
@@ -36,6 +37,7 @@ export function VideoLightbox({
   isOpen,
   onClose,
 }: VideoLightboxProps) {
+  const { t } = useI18n('common');
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -467,7 +469,7 @@ export function VideoLightbox({
                 onClose();
               }}
               className="text-white hover:bg-white/10"
-              aria-label="Fermer"
+              aria-label={t('common.close')}
             >
               <X className="w-5 h-5" />
             </Button>

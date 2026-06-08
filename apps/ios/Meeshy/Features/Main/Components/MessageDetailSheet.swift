@@ -41,18 +41,18 @@ enum DetailTab: String, CaseIterable, Identifiable {
         }
     }
 
-    var color: String {
+    var color: Color {
         switch self {
-        case .language: return "3498DB"
-        case .views: return "2ECC71"
-        case .reactions: return "F39C12"
-        case .react: return "E91E63"
-        case .report: return "E74C3C"
-        case .delete: return "E74C3C"
-        case .forward: return "9B59B6"
-        case .sentiment: return "1ABC9C"
-        case .transcription: return "8E44AD"
-        case .edits: return "F8B500"
+        case .language: return MeeshyColors.info
+        case .views: return MeeshyColors.success
+        case .reactions: return MeeshyColors.warning
+        case .react: return MeeshyColors.error
+        case .report: return MeeshyColors.error
+        case .delete: return MeeshyColors.error
+        case .forward: return MeeshyColors.indigo500
+        case .sentiment: return MeeshyColors.info
+        case .transcription: return MeeshyColors.indigo600
+        case .edits: return MeeshyColors.warning
         }
     }
 }
@@ -93,7 +93,7 @@ struct MessageAction: Identifiable {
     let id: String
     let icon: String
     let label: String
-    let color: String
+    let color: Color
     let handler: () -> Void
 }
 
@@ -124,7 +124,7 @@ enum DetailGridItem: Identifiable {
         }
     }
 
-    var color: String {
+    var color: Color {
         switch self {
         case .action(let action): return action.color
         case .tab(let tab): return tab.color
@@ -315,7 +315,7 @@ struct MessageDetailSheet: View {
     }
 
     private func gridButton(_ item: DetailGridItem, index: Int) -> some View {
-        let accent = Color(hex: item.color)
+        let accent = item.color
         let isActive: Bool = {
             if case .tab(let tab) = item { return selectedTab == tab }
             return false
@@ -1423,7 +1423,7 @@ struct MessageDetailSheet: View {
                                 Text(String(localized: "message-detail.complete", defaultValue: "complet", bundle: .main))
                                     .font(.caption2.weight(.semibold))
                             }
-                            .foregroundColor(Color(hex: "2ECC71"))
+                            .foregroundColor(MeeshyColors.success)
                         } else if let pos = positionMs, pos > 0 {
                             Text(formatDuration(pos / 1000))
                                 .font(.system(.caption2, design: .monospaced).weight(.semibold))

@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useI18n } from '@/hooks/use-i18n';
 import { X, Download, Copy, Check, WrapText, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -25,6 +26,7 @@ export const TextLightbox: React.FC<TextLightboxProps> = ({
   isOpen,
   onClose
 }) => {
+  const { t } = useI18n('common');
   const [content, setContent] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
@@ -282,7 +284,7 @@ export const TextLightbox: React.FC<TextLightboxProps> = ({
                 onClose();
               }}
               className="text-white hover:bg-white/10 w-8 h-8 sm:w-10 sm:h-10"
-              aria-label="Fermer"
+              aria-label={t('common.close')}
             >
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>

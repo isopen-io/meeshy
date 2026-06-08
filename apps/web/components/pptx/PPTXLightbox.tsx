@@ -6,6 +6,7 @@ import { X, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface PPTXLightboxProps {
   attachment: UploadedAttachmentResponse | null;
@@ -21,6 +22,7 @@ export const PPTXLightbox: React.FC<PPTXLightboxProps> = ({
   isOpen,
   onClose
 }) => {
+  const { t } = useI18n('common');
   // Keyboard navigation
   useEffect(() => {
     if (!isOpen) return;
@@ -99,7 +101,7 @@ export const PPTXLightbox: React.FC<PPTXLightboxProps> = ({
                 onClose();
               }}
               className="text-white hover:bg-white/10 w-8 h-8 sm:w-10 sm:h-10"
-              aria-label="Fermer"
+              aria-label={t('common.close')}
             >
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>

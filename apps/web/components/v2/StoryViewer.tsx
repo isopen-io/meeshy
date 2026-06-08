@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useI18n } from '@/hooks/use-i18n';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { Avatar } from './Avatar';
@@ -326,6 +327,7 @@ function StoryViewer({
   onDelete,
   enableComments = true,
 }: StoryViewerProps) {
+  const { t } = useI18n('common');
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [replyText, setReplyText] = useState('');
   const [isPaused, setIsPaused] = useState(false);
@@ -743,7 +745,7 @@ function StoryViewer({
                 onClose();
               }}
               className="p-1 rounded-full text-white/90 hover:text-white hover:bg-white/10 transition-colors duration-300"
-              aria-label="Fermer"
+              aria-label={t('common.close')}
             >
               <CloseIcon />
             </button>

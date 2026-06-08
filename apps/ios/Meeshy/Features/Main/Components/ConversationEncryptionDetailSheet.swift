@@ -136,7 +136,7 @@ struct ConversationEncryptionDetailSheet: View {
             HStack(spacing: 12) {
                 Image(systemName: "lock.open")
                     .font(.title2)
-                    .foregroundColor(.orange)
+                    .foregroundColor(MeeshyColors.warning)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(String(localized: "conversation.encryption.detail.inactiveLabel",
                                 defaultValue: "Conversation non chiffrée",
