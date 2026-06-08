@@ -275,6 +275,9 @@ export const SERVER_EVENTS = {
   CATEGORY_UPDATED: 'category:updated',
   CATEGORY_DELETED: 'category:deleted',
   CATEGORIES_REORDERED: 'categories:reordered',
+
+  // --- Ephemeral messages ---
+  MESSAGE_EXPIRED: 'message:expired',
 } as const;
 
 // Événements du client vers le serveur
@@ -353,6 +356,16 @@ export type ClientEventNames = typeof CLIENT_EVENTS[keyof typeof CLIENT_EVENTS];
  * Données pour l'événement de suppression de message
  */
 export interface MessageDeletedEventData {
+  readonly messageId: string;
+  readonly conversationId: string;
+}
+
+/**
+ * Données pour l'événement d'expiration de message éphémère.
+ * Identique à MessageDeletedEventData — les clients peuvent traiter les deux
+ * de la même façon (retirer le message du store local).
+ */
+export interface MessageExpiredEventData {
   readonly messageId: string;
   readonly conversationId: string;
 }
@@ -934,6 +947,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.MESSAGE_ATTACHMENT_UPDATED]: (data: AttachmentUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_EDITED]: (message: SocketIOMessage) => void;
   [SERVER_EVENTS.MESSAGE_DELETED]: (data: MessageDeletedEventData) => void;
+  [SERVER_EVENTS.MESSAGE_EXPIRED]: (data: MessageExpiredEventData) => void;
   [SERVER_EVENTS.MESSAGE_TRANSLATION]: (data: TranslationEvent) => void;
   [SERVER_EVENTS.MESSAGE_TRANSLATED]: (data: TranslationEvent) => void;
   [SERVER_EVENTS.TYPING_START]: (data: TypingEvent) => void;

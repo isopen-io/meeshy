@@ -4,7 +4,9 @@
  */
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { Server as SocketIOServer } from 'socket.io';
 import { CleanupExpiredTokens } from './cleanup-expired-tokens';
+import { CleanupExpiredMessagesJob } from './cleanup-expired-messages';
 import { UnlockAccountsJob } from './unlock-accounts';
 import { NotificationDigestJob } from './notification-digest';
 import { DeliveryQueueCleanupJob } from './delivery-queue-cleanup';
@@ -17,14 +19,16 @@ import { GeoIPService } from '../services/GeoIPService';
 
 export class BackgroundJobsManager {
   private cleanupTokensJob: CleanupExpiredTokens;
+  private cleanupExpiredMessagesJob: CleanupExpiredMessagesJob;
   private unlockAccountsJob: UnlockAccountsJob;
   private notificationDigestJob: NotificationDigestJob;
   private deliveryQueueCleanupJob: DeliveryQueueCleanupJob;
   private mutationLogCleanupJob: MutationLogCleanupJob;
   private isRunning: boolean = false;
 
-  constructor(private prisma: PrismaClient, emailService: EmailService, deliveryQueue?: RedisDeliveryQueue) {
+  constructor(private prisma: PrismaClient, emailService: EmailService, deliveryQueue?: RedisDeliveryQueue, io?: SocketIOServer) {
     this.cleanupTokensJob = new CleanupExpiredTokens(prisma);
+    this.cleanupExpiredMessagesJob = new CleanupExpiredMessagesJob(prisma, io);
     this.unlockAccountsJob = new UnlockAccountsJob(prisma);
     // Reuse the existing passwordless-login mechanism for the digest CTA
     // (single source of truth — no duplicate token model/service).
@@ -46,6 +50,7 @@ export class BackgroundJobsManager {
     console.log('[BackgroundJobs] Starting all background jobs...');
 
     this.cleanupTokensJob.start();
+    this.cleanupExpiredMessagesJob.start();
     this.unlockAccountsJob.start();
     this.notificationDigestJob.start();
     this.deliveryQueueCleanupJob.start();
@@ -67,6 +72,7 @@ export class BackgroundJobsManager {
     console.log('[BackgroundJobs] Stopping all background jobs...');
 
     this.cleanupTokensJob.stop();
+    this.cleanupExpiredMessagesJob.stop();
     this.unlockAccountsJob.stop();
     this.notificationDigestJob.stop();
     this.deliveryQueueCleanupJob.stop();
@@ -83,6 +89,7 @@ export class BackgroundJobsManager {
     console.log('[BackgroundJobs] Running all jobs manually...');
 
     await this.cleanupTokensJob.runNow();
+    await this.cleanupExpiredMessagesJob.runNow();
     await this.unlockAccountsJob.runNow();
     await this.notificationDigestJob.runNow();
     await this.deliveryQueueCleanupJob.runNow();
@@ -97,11 +104,19 @@ export class BackgroundJobsManager {
   getJobs() {
     return {
       cleanupTokens: this.cleanupTokensJob,
+      cleanupExpiredMessages: this.cleanupExpiredMessagesJob,
       unlockAccounts: this.unlockAccountsJob,
       notificationDigest: this.notificationDigestJob,
       deliveryQueueCleanup: this.deliveryQueueCleanupJob,
       mutationLogCleanup: this.mutationLogCleanupJob,
     };
+  }
+
+  /**
+   * Inject the Socket.IO server after construction (called once socket setup completes).
+   */
+  setIO(io: SocketIOServer): void {
+    this.cleanupExpiredMessagesJob = new CleanupExpiredMessagesJob(this.prisma, io);
   }
 
   /**

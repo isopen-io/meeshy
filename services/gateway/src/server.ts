@@ -1296,6 +1296,10 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       logger.info('✓ Call cleanup service started');
 
       // Start background jobs (token cleanup, account unlock, notification digest)
+      // Pass the Socket.IO server so CleanupExpiredMessagesJob can emit message:expired events.
+      if (cleanupManager) {
+        this.backgroundJobs.setIO(cleanupManager.getIO());
+      }
       this.backgroundJobs.startAll();
 
       // Start tus cleanup cron (hourly, removes uploads older than 24h)
