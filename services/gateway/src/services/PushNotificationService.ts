@@ -117,7 +117,7 @@ export class PushNotificationService {
     if (this.initialized) return;
 
     if (!config.enabled) {
-      console.log('[PUSH] Push notifications disabled');
+      pushLogger.info('Push notifications disabled');
       this.initialized = true;
       return;
     }
@@ -141,13 +141,13 @@ export class PushNotificationService {
           }
 
           this.firebaseAdmin = admin;
-          console.log('[PUSH] Firebase Admin SDK initialized');
+          pushLogger.info('Firebase Admin SDK initialized');
         } else {
           const reason = fs.existsSync(credentialsPath) ? 'path is a directory, not a file' : 'file not found';
-          console.warn(`[PUSH] Firebase credentials invalid at ${credentialsPath}: ${reason}`);
+          pushLogger.warn('Firebase credentials invalid', { credentialsPath, reason });
         }
       } catch (error) {
-        console.error('[PUSH] Failed to initialize Firebase:', error);
+        pushLogger.error('Failed to initialize Firebase', { error });
       }
     }
 
@@ -174,12 +174,12 @@ export class PushNotificationService {
             production: false,
           });
 
-          console.log('[PUSH] APNS clients initialized (production + sandbox)');
+          pushLogger.info('APNS clients initialized');
         } else {
-          console.warn('[PUSH] @parse/node-apn not installed, APNS push disabled');
+          pushLogger.warn('@parse/node-apn not installed, APNS push disabled');
         }
       } catch (error) {
-        console.error('[PUSH] Failed to initialize APNS:', error);
+        pushLogger.error('Failed to initialize APNS', { error });
       }
     }
 
@@ -239,7 +239,7 @@ export class PushNotificationService {
     // Vérifier les préférences push utilisateur (UserPreferences.notification)
     const pushAllowed = await this.isPushAllowed(userId);
     if (!pushAllowed) {
-      console.log(`[PUSH] Push blocked by user preferences for user ${userId}`);
+      pushLogger.info('Push blocked by user preferences', { userId });
       return [];
     }
 
@@ -271,7 +271,7 @@ export class PushNotificationService {
     });
 
     if (tokens.length === 0) {
-      console.warn(`[PUSH] No active tokens found for user ${userId}`);
+      pushLogger.warn('No active tokens found for user', { userId });
       return [];
     }
 
@@ -645,14 +645,11 @@ export class PushNotificationService {
     });
 
     if (shouldDeactivate) {
-      pushLogger.warn('push.token.deactivated', {
+      pushLogger.warn('Token deactivated', {
         tokenId,
         failedAttempts: newFailedAttempts,
         reason: error
       });
-      // console.log preserved for backward compat with existing unit tests
-      // that capture console output around token deactivation.
-      console.log(`[PUSH] Deactivated token ${tokenId} after ${newFailedAttempts} failures: ${error}`);
     }
   }
 
@@ -684,7 +681,7 @@ export class PushNotificationService {
       },
     });
 
-    console.info(`[PUSH] Cleaned up ${result.count} inactive/stale tokens`);
+    pushLogger.info('Cleaned up inactive/stale tokens', { count: result.count });
     return result.count;
   }
 

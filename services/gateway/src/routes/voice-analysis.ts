@@ -20,6 +20,9 @@ import { createUnifiedAuthMiddleware, UnifiedAuthContext } from '../middleware/a
 import { ZMQSingleton } from '../services/ZmqSingleton';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { VoiceAnalysisType } from '@meeshy/shared/types/voice-api';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'VoiceAnalysis' });
 
 // Extend FastifyRequest to include auth
 declare module 'fastify' {
@@ -65,7 +68,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
   const prisma = (fastify as any).prisma;
 
   if (!prisma) {
-    console.error('[VoiceAnalysis] Missing required service: prisma');
+    logger.error('missing required service: prisma');
     return;
   }
 

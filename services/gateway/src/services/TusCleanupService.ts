@@ -1,15 +1,19 @@
 import { promises as fs } from 'fs';
 import path from 'path';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
 
 const TUS_TEMP_PATH = path.join(process.env.UPLOAD_PATH || '/app/uploads', '.tus-resumable');
 const MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+const logger = enhancedLogger.child({ module: 'TusCleanupService' });
 
 export class TusCleanupService {
   private interval: ReturnType<typeof setInterval> | null = null;
 
   start(intervalMs: number = 60 * 60 * 1000) {
     this.interval = setInterval(() => this.cleanup(), intervalMs);
-    console.log('[TusCleanup] Started cleanup cron (every 1h, max age 24h)');
+    this.interval.unref?.();
+    logger.info('TusCleanup started', { intervalHours: intervalMs / (60 * 60 * 1000), maxAgeHours: 24 });
   }
 
   stop() {
@@ -39,7 +43,7 @@ export class TusCleanupService {
       }
 
       if (removed > 0) {
-        console.log(`[TusCleanup] Removed ${removed} stale uploads`);
+        logger.info('TusCleanup removed stale uploads', { count: removed });
       }
     } catch {
       // Directory may not exist yet

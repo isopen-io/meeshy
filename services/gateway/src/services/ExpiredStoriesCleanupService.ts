@@ -42,6 +42,7 @@ export class ExpiredStoriesCleanupService {
     this.interval = setInterval(() => {
       this.cleanup().catch((err) => log.warn('scheduled cleanup failed', { err }));
     }, intervalMs);
+    this.interval.unref?.();
     log.info('expired-stories cleanup started', {
       intervalHours: intervalMs / (60 * 60 * 1000),
       softDeleteRetentionHours: this.softDeleteRetentionMs / (60 * 60 * 1000),
