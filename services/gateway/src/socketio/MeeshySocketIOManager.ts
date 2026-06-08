@@ -1470,13 +1470,11 @@ export class MeeshySocketIOManager {
       const room = ROOMS.conversation(normalizedId);
       // 1. Broadcast vers tous les clients de la conversation.
       //
-      // Bandwidth sprint Phase B1 (flag `SOCKET_LANG_FILTER`, OFF par défaut) :
-      // au lieu d'un emit room unique portant TOUTES les langues, on regroupe
-      // les sockets de la room par langue préférée (déjà connue via
-      // `SocketUser.language`, zéro requête DB) et on émet un payload filtré une
-      // seule fois par langue distincte. Le contenu original est toujours
-      // préservé. Désactivé tant que non validé en staging (mesure avant/après).
-      if (process.env.SOCKET_LANG_FILTER === 'true') {
+      // Bandwidth sprint Phase B1 — per-language filtered broadcast.
+      // Groups room sockets by preferred language (zero DB query, from connectedUsers map)
+      // and sends a trimmed payload once per distinct language. Original content preserved.
+      // Disable explicitly with SOCKET_LANG_FILTER=false if rollback needed.
+      if (process.env.SOCKET_LANG_FILTER !== 'false') {
         this._emitMessageNewByLanguage(room, messagePayload);
       } else {
         this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
