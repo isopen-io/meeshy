@@ -241,6 +241,7 @@ final class MockWebRTCClient: WebRTCClientProviding {
     func createDataChannel(label: String) -> Bool { false }
     func sendDataChannelMessage(_ data: Data) {}
     func disconnect() { disconnectCallCount += 1; isConnected = false }
+    func restartIce() {}
     func setAudioEffect(_ effect: AudioEffectConfig?) throws {}
     func updateAudioEffectParams(_ config: AudioEffectConfig) throws {}
 }
