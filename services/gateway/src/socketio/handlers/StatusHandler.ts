@@ -24,12 +24,17 @@ export interface StatusHandlerDependencies {
   socketToUser: Map<string, string>;
 }
 
+const IDENTITY_CACHE_TTL_MS = 60_000;
+
+type CachedIdentity = { username: string; displayName: string; expiresAt: number };
+
 export class StatusHandler {
   private prisma: PrismaClient;
   private statusService: StatusService;
   private privacyPreferencesService: PrivacyPreferencesService;
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
+  private identityCache = new Map<string, CachedIdentity>();
 
   constructor(deps: StatusHandlerDependencies) {
     this.prisma = deps.prisma;
@@ -37,6 +42,10 @@ export class StatusHandler {
     this.privacyPreferencesService = deps.privacyPreferencesService;
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
+  }
+
+  invalidateIdentityCache(userId: string): void {
+    this.identityCache.delete(userId);
   }
 
   /**
@@ -163,6 +172,12 @@ export class StatusHandler {
     userId: string,
     isAnonymous: boolean
   ): Promise<{ username: string; displayName: string } | null> {
+    const cacheKey = `${isAnonymous ? 'anon' : 'user'}:${userId}`;
+    const cached = this.identityCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return { username: cached.username, displayName: cached.displayName };
+    }
+
     if (isAnonymous) {
       // userId is actually a participantId for anonymous users
       const participant = await this.prisma.participant.findUnique({
@@ -180,8 +195,9 @@ export class StatusHandler {
       }
 
       const displayName = participant.nickname || participant.displayName;
-      // Pas de handle pour un anonyme : le username retombe sur le nom d'affichage.
-      return { username: displayName, displayName };
+      const identity = { username: displayName, displayName };
+      this.identityCache.set(cacheKey, { ...identity, expiresAt: Date.now() + IDENTITY_CACHE_TTL_MS });
+      return identity;
     } else {
       const dbUser = await this.prisma.user.findUnique({
         where: { id: userId },
@@ -203,7 +219,9 @@ export class StatusHandler {
         dbUser.displayName ||
         `${dbUser.firstName || ''} ${dbUser.lastName || ''}`.trim() ||
         dbUser.username;
-      return { username: dbUser.username, displayName };
+      const identity = { username: dbUser.username, displayName };
+      this.identityCache.set(cacheKey, { ...identity, expiresAt: Date.now() + IDENTITY_CACHE_TTL_MS });
+      return identity;
     }
   }
 }
