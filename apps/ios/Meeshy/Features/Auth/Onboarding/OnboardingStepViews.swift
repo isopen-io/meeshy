@@ -45,6 +45,8 @@ struct GlassTextField: View {
                             .font(.system(size: 16))
                             .foregroundColor(.secondary)
                     }
+                    .accessibilityLabel(String(localized: "onboarding.password.toggleVisibility",
+                                                defaultValue: "Toggle password visibility", bundle: .main))
                 }
 
                 if isValidating {
@@ -331,6 +333,8 @@ struct StepPhoneView: View {
                     }
                     .foregroundColor(.secondary)
                 }
+                .accessibilityLabel(String(localized: "onboarding.step.skip",
+                                            defaultValue: "Skip step", bundle: .main))
                 .bounceOnTap(scale: 0.94)
 
                 infoCard
@@ -771,6 +775,8 @@ struct StepLanguageView: View {
                         Button(action: { searchText = "" }) {
                             Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
                         }
+                        .accessibilityLabel(String(localized: "onboarding.search.clear",
+                                                    defaultValue: "Clear search", bundle: .main))
                     }
                 }
                 .padding(12)

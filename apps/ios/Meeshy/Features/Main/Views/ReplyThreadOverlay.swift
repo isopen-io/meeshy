@@ -152,12 +152,12 @@ struct ReplyThreadOverlay: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(String(localized: "reply.thread.title", defaultValue: "Discussion", bundle: .main))
-                    .font(.system(size: 17, weight: .bold))
+                    .font(.body.weight(.bold))
                     .foregroundColor(theme.textPrimary)
 
                 if !replies.isEmpty {
                     Text("\(replies.count) \(replies.count > 1 ? String(localized: "reply.thread.replies_plural", defaultValue: "reponses", bundle: .main) : String(localized: "reply.thread.replies_singular", defaultValue: "reponse", bundle: .main))")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.caption.weight(.medium))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -169,7 +169,7 @@ struct ReplyThreadOverlay: View {
                 dismiss()
             } label: {
                 Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 22))
+                    .font(.title3)
                     .foregroundColor(theme.textMuted)
             }
         }
@@ -189,7 +189,7 @@ struct ReplyThreadOverlay: View {
                     repliesList
                 } else {
                     Text(String(localized: "reply.thread.empty", defaultValue: "Aucune reponse pour le moment", bundle: .main))
-                        .font(.system(size: 13))
+                        .font(.footnote)
                         .foregroundColor(theme.textMuted)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.vertical, 20)
@@ -216,11 +216,11 @@ struct ReplyThreadOverlay: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(msg.senderName ?? String(localized: "reply.thread.unknown_sender", defaultValue: "Inconnu", bundle: .main))
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
 
                     Text(msg.createdAt, style: .relative)
-                        .font(.system(size: 11))
+                        .font(.caption2)
                         .foregroundColor(theme.textMuted)
                 }
 
@@ -228,7 +228,7 @@ struct ReplyThreadOverlay: View {
             }
 
             Text(displayContent(for: msg))
-                .font(.system(size: 15))
+                .font(.subheadline)
                 .foregroundColor(theme.textPrimary)
         }
         .padding(14)
@@ -245,7 +245,7 @@ struct ReplyThreadOverlay: View {
                 .frame(height: 1)
 
             Text("\(replies.count) \(replies.count > 1 ? String(localized: "reply.thread.replies_plural", defaultValue: "reponses", bundle: .main) : String(localized: "reply.thread.replies_singular", defaultValue: "reponse", bundle: .main))")
-                .font(.system(size: 11, weight: .bold))
+                .font(.caption2.weight(.bold))
                 .foregroundColor(Color(hex: accentColor))
                 .padding(.horizontal, 8)
 
@@ -279,16 +279,16 @@ struct ReplyThreadOverlay: View {
                 VStack(alignment: .leading, spacing: 3) {
                     HStack {
                         Text(message.senderName ?? String(localized: "reply.thread.unknown_sender", defaultValue: "Inconnu", bundle: .main))
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.caption.weight(.semibold))
                             .foregroundColor(Color(hex: message.senderColor ?? accentColor))
 
                         Text(message.createdAt, style: .relative)
-                            .font(.system(size: 10))
+                            .font(.caption2)
                             .foregroundColor(theme.textMuted)
                     }
 
                     Text(displayContent(for: message))
-                        .font(.system(size: 14))
+                        .font(.subheadline)
                         .foregroundColor(theme.textPrimary)
                 }
 
@@ -305,7 +305,7 @@ struct ReplyThreadOverlay: View {
                 .frame(width: 3)
 
             Text("\u{21A9} \(reply.isMe ? String(localized: "reply.thread.you", defaultValue: "Vous", bundle: .main) : reply.authorName): \(reply.previewText)")
-                .font(.system(size: 11))
+                .font(.caption2)
                 .foregroundColor(theme.textMuted)
                 .lineLimit(1)
         }
@@ -324,11 +324,11 @@ struct ReplyThreadOverlay: View {
     private func errorContent(_ message: String) -> some View {
         VStack(spacing: 12) {
             Image(systemName: "exclamationmark.triangle")
-                .font(.system(size: 28))
+                .font(.title2)
                 .foregroundColor(theme.textMuted)
 
             Text(message)
-                .font(.system(size: 13))
+                .font(.footnote)
                 .foregroundColor(theme.textMuted)
                 .multilineTextAlignment(.center)
 
@@ -336,7 +336,7 @@ struct ReplyThreadOverlay: View {
                 Task { await loadThreadFromAPI() }
             } label: {
                 Text(String(localized: "reply.thread.retry", defaultValue: "Reessayer", bundle: .main))
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.subheadline.weight(.medium))
                     .foregroundColor(Color(hex: accentColor))
             }
         }
