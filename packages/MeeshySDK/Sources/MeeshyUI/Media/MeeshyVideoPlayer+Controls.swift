@@ -194,9 +194,16 @@ internal struct _InlineOverlayControls: View {
                     .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
                     .offset(x: max(0, min(filledWidth - thumbSize / 2, geo.size.width - thumbSize)))
             }
-            .frame(height: max(trackHeight, thumbSize))
+            // Hit area remplit la hauteur (28pt) tout en gardant la barre fine
+            // centrée — une cible 3pt était quasi impossible à saisir au doigt.
+            .frame(maxHeight: .infinity)
             .contentShape(Rectangle())
-            .gesture(
+            // `highPriorityGesture` : le scrub gauche-droite doit GAGNER sur le
+            // pan du scroll/carousel parent. Avec un simple `.gesture`, la liste
+            // de messages captait le glissement horizontal et la barre ne bougeait
+            // pas (bug user "ne capture pas en priorité"). minimumDistance:0 =
+            // réagit dès le touch pour un positionnement libre immédiat.
+            .highPriorityGesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
                         isSeeking = true
@@ -210,7 +217,7 @@ internal struct _InlineOverlayControls: View {
                     }
             )
         }
-        .frame(height: 12)
+        .frame(height: 28)
     }
 }
 
@@ -512,9 +519,12 @@ internal struct _FullscreenOverlayControls: View {
                     .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
                     .offset(x: max(0, min(filledWidth - thumbSize / 2, geo.size.width - thumbSize)))
             }
-            .frame(height: max(trackHeight, thumbSize))
+            // Cf. inline seekBar : hit area agrandie (32pt) + highPriorityGesture
+            // pour que le scrub gagne sur le pinch/swipe-down de dismiss du
+            // fullscreen, et que le positionnement gauche-droite soit libre.
+            .frame(maxHeight: .infinity)
             .contentShape(Rectangle())
-            .gesture(
+            .highPriorityGesture(
                 DragGesture(minimumDistance: 0)
                     .onChanged { value in
                         isSeeking = true
@@ -528,7 +538,7 @@ internal struct _FullscreenOverlayControls: View {
                     }
             )
         }
-        .frame(height: 14)
+        .frame(height: 32)
     }
 
     private var speedRow: some View {
