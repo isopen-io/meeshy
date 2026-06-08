@@ -218,6 +218,7 @@ private final class TestableWebRTCClient: WebRTCClientProviding {
         applyVideoEncodingCallCount += 1
         lastVideoEncoding = (maxBitrateBps, maxFramerate, scaleResolutionDownBy)
     }
+    func restartIce() {}
     func switchCamera() async throws {}
     func availableCameras() -> [CameraDeviceOption] { [] }
     func switchToCamera(uniqueID: String) async throws {}
