@@ -1278,7 +1278,7 @@ export class CallService {
           originalLanguage: 'fr',
           messageType: 'system',
           messageSource: 'system',
-          metadata: callMetadata ? (callMetadata as Prisma.InputJsonValue) : undefined,
+          metadata: callMetadata ? (callMetadata as unknown as Prisma.InputJsonValue) : undefined,
           clientMessageId: callSummaryClientMessageId(call.id)
         },
         include: CALL_SUMMARY_MESSAGE_INCLUDE
