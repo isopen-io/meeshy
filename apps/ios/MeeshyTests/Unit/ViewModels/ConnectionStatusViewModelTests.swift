@@ -103,3 +103,36 @@ final class ConnectionStatusViewModelTests: XCTestCase {
         )
     }
 }
+
+// MARK: - "En ligne" confirmation only when genuinely (re)connected
+
+@MainActor
+final class ConnectionBannerOnlineConfirmationTests: XCTestCase {
+
+    func test_confirm_offlineToConnected_isTrue() {
+        XCTAssertTrue(ConnectionBanner.shouldConfirmReturnOnline(previous: .offline, new: .connected))
+    }
+
+    func test_confirm_offlineToSyncing_isTrue() {
+        XCTAssertTrue(ConnectionBanner.shouldConfirmReturnOnline(previous: .offline, new: .syncing))
+    }
+
+    func test_confirm_disconnectedToConnected_isTrue() {
+        XCTAssertTrue(ConnectionBanner.shouldConfirmReturnOnline(previous: .disconnected, new: .connected))
+    }
+
+    /// The bug: device network returns (`.offline → .disconnected`) but the socket
+    /// is still reconnecting. The green "En ligne" pill must NOT appear — the user
+    /// is not actually online yet.
+    func test_confirm_offlineToDisconnected_isFalse() {
+        XCTAssertFalse(ConnectionBanner.shouldConfirmReturnOnline(previous: .offline, new: .disconnected))
+    }
+
+    func test_confirm_alreadyOnline_connectedToSyncing_isFalse() {
+        XCTAssertFalse(ConnectionBanner.shouldConfirmReturnOnline(previous: .connected, new: .syncing))
+    }
+
+    func test_confirm_nilPrevious_isFalse() {
+        XCTAssertFalse(ConnectionBanner.shouldConfirmReturnOnline(previous: nil, new: .connected))
+    }
+}
