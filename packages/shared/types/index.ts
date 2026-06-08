@@ -190,6 +190,7 @@ export {
   type ServiceHealthStatus,
   type VisibilityStatus,
   type VerificationStatus,
+  type LanguageDetectionResult,
   PROCESS_STATUS_ALIASES,
   DELIVERY_STATUS_ORDER,
   normalizeProcessStatus,

@@ -13,7 +13,11 @@ import { ClientOnly } from "@/components/common/client-only";
 import { MessageViewProvider } from "@/hooks/use-message-view-state";
 import { getAllFontVariables } from "@/lib/fonts";
 import { CriticalPreloader } from "@/components/common/CriticalPreloader";
-import { CallManager } from "@/components/video-call";
+import dynamic from "next/dynamic";
+const CallManager = dynamic(
+  () => import("@/components/video-call").then(m => ({ default: m.CallManager })),
+  { ssr: false }
+);
 import { TabNotificationManager } from "@/components/common/TabNotificationManager";
 import { GoogleAnalytics } from "@/components/analytics";
 import { FirebaseInitializer } from "@/components/providers/FirebaseInitializer";

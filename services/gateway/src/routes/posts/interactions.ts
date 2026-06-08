@@ -93,7 +93,9 @@ export function registerInteractionRoutes(
             emoji,
             likeCount: post.likeCount,
             reactionSummary: (post.reactionSummary as Record<string, number>) ?? {},
-          }, post.authorId).catch(() => {});
+          }, post.authorId).catch((err: unknown) => {
+            fastify.log.error(`[POST /posts/:postId/like] like broadcast failed: ${err}`);
+          });
         }
       }
 
@@ -106,7 +108,9 @@ export function registerInteractionRoutes(
           postAuthorId: post.authorId,
           emoji,
           postType: post.type,
-        }).catch(() => {});
+        }).catch((err: unknown) => {
+          fastify.log.error(`[POST /posts/:postId/like] like notification failed: ${err}`);
+        });
       }
 
       return sendSuccess(reply, { liked: true, reactionSummary: post.reactionSummary });
@@ -175,7 +179,9 @@ export function registerInteractionRoutes(
             emoji: '❤️',
             likeCount: post.likeCount,
             reactionSummary: (post.reactionSummary as Record<string, number>) ?? {},
-          }, post.authorId).catch(() => {});
+          }, post.authorId).catch((err: unknown) => {
+            fastify.log.error(`[DELETE /posts/:postId/like] unlike broadcast failed: ${err}`);
+          });
         }
       }
 
@@ -247,7 +253,9 @@ export function registerInteractionRoutes(
       // Fire-and-forget : ne bloque pas la réponse, émet `notification:counts`.
       if (isNewView) {
         const notificationService = new NotificationService(prisma, (fastify as any).io);
-        notificationService.markPostNotificationsAsRead(viewerId, postId).catch(() => {});
+        notificationService.markPostNotificationsAsRead(viewerId, postId).catch((err: unknown) => {
+          fastify.log.error(`[POST /posts/:postId/view] markPostNotificationsAsRead failed: ${err}`);
+        });
       }
 
       // If this is a story, broadcast the view to the story author
@@ -579,7 +587,9 @@ export function registerInteractionRoutes(
         socialEvents.broadcastPostReposted({
           originalPostId: postId,
           repost: repost as unknown as Post,
-        }, authContext.registeredUser.id).catch(() => {});
+        }, authContext.registeredUser.id).catch((err: unknown) => {
+          fastify.log.error(`[POST /posts/:postId/repost] repost broadcast failed: ${err}`);
+        });
       }
 
       // Notify original post author
@@ -592,7 +602,9 @@ export function registerInteractionRoutes(
             originalPostId: postId,
             postAuthorId: original.authorId,
             repostId: repost.id,
-          }).catch(() => {});
+          }).catch((err: unknown) => {
+            fastify.log.error(`[POST /posts/:postId/repost] repost notification failed: ${err}`);
+          });
         }
       }
 

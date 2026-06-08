@@ -13,6 +13,7 @@ import { EventEmitter } from 'events';
 import { ZmqConnectionManager, type ConnectionManagerConfig } from './ZmqConnectionManager';
 import { ZmqMessageHandler } from './ZmqMessageHandler';
 import { ZmqRequestSender } from './ZmqRequestSender';
+import { CircuitBreaker, circuitBreakerManager } from '../../utils/circuitBreaker';
 
 // Re-export tous les types publics
 export * from './types';
@@ -62,6 +63,7 @@ export class ZmqTranslationClient extends EventEmitter {
   private connectionManager: ZmqConnectionManager;
   private messageHandler: ZmqMessageHandler;
   private requestSender: ZmqRequestSender;
+  private zmqBreaker: CircuitBreaker;
 
   private host: string;
   private pushPort: number;
@@ -107,6 +109,19 @@ export class ZmqTranslationClient extends EventEmitter {
     this.connectionManager = new ZmqConnectionManager(config);
     this.messageHandler = new ZmqMessageHandler();
     this.requestSender = new ZmqRequestSender(this.connectionManager);
+
+    this.zmqBreaker = new CircuitBreaker({
+      name: 'ZmqTranslator',
+      failureThreshold: 5,
+      failureWindowMs: 60_000,
+      resetTimeoutMs: 30_000,
+      successThreshold: 2,
+      timeout: 10_000,
+      fallback: () => {
+        throw new Error('ZMQ circuit breaker OPEN: translator unreachable, failing fast');
+      },
+    });
+    circuitBreakerManager.register('ZmqTranslator', this.zmqBreaker);
 
     // Setup event forwarding from messageHandler to this client
     this.setupEventForwarding();
@@ -387,7 +402,7 @@ export class ZmqTranslationClient extends EventEmitter {
    * Envoie une requête de traduction
    */
   async sendTranslationRequest(request: TranslationRequest): Promise<string> {
-    const taskId = await this.requestSender.sendTranslationRequest(request);
+    const taskId = await this.zmqBreaker.execute(() => this.requestSender.sendTranslationRequest(request));
     this.stats.requests_sent++;
     this._registerRequestTimeout(
       taskId,
@@ -406,7 +421,7 @@ export class ZmqTranslationClient extends EventEmitter {
    * Envoie une requête de processing audio
    */
   async sendAudioProcessRequest(request: Omit<AudioProcessRequest, 'type'>): Promise<string> {
-    const taskId = await this.requestSender.sendAudioProcessRequest(request);
+    const taskId = await this.zmqBreaker.execute(() => this.requestSender.sendAudioProcessRequest(request));
     this.stats.requests_sent++;
     this._registerRequestTimeout(
       taskId,
@@ -427,7 +442,7 @@ export class ZmqTranslationClient extends EventEmitter {
   async sendTranscriptionOnlyRequest(
     request: Omit<TranscriptionOnlyRequest, 'type' | 'taskId'>
   ): Promise<string> {
-    const taskId = await this.requestSender.sendTranscriptionOnlyRequest(request);
+    const taskId = await this.zmqBreaker.execute(() => this.requestSender.sendTranscriptionOnlyRequest(request));
     this.stats.requests_sent++;
     this._registerRequestTimeout(
       taskId,
@@ -455,7 +470,7 @@ export class ZmqTranslationClient extends EventEmitter {
    * le retry par défaut (30 s × 4) s'applique.
    */
   async sendVoiceAPIRequest(request: VoiceAPIRequest): Promise<string> {
-    const taskId = await this.requestSender.sendVoiceAPIRequest(request);
+    const taskId = await this.zmqBreaker.execute(() => this.requestSender.sendVoiceAPIRequest(request));
     this.stats.requests_sent++;
 
     const isLongRunning = ZmqTranslationClient.VOICE_LONG_RUNNING_TYPES.has(request.type);
@@ -480,7 +495,7 @@ export class ZmqTranslationClient extends EventEmitter {
    * Envoie une requête Voice Profile
    */
   async sendVoiceProfileRequest(request: VoiceProfileRequest): Promise<string> {
-    const taskId = await this.requestSender.sendVoiceProfileRequest(request);
+    const taskId = await this.zmqBreaker.execute(() => this.requestSender.sendVoiceProfileRequest(request));
     this.stats.requests_sent++;
     this._registerRequestTimeout(
       taskId,
@@ -569,13 +584,14 @@ export class ZmqTranslationClient extends EventEmitter {
   /**
    * Récupère les statistiques
    */
-  getStats(): ZMQClientStats {
+  getStats(): ZMQClientStats & { circuit_breaker: ReturnType<CircuitBreaker['getStats']> } {
     const uptime = (Date.now() - this.startTime) / 1000;
 
     return {
       ...this.stats,
       uptime_seconds: uptime,
-      memory_usage_mb: process.memoryUsage().heapUsed / 1024 / 1024
+      memory_usage_mb: process.memoryUsage().heapUsed / 1024 / 1024,
+      circuit_breaker: this.zmqBreaker.getStats(),
     };
   }
 

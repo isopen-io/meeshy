@@ -292,6 +292,10 @@ model User {
 
   // Unified participant model (replaces conversations + anonymousParticipants)
   participations Participant[]
+
+  @@index([systemLanguage])
+  @@index([isOnline, lastActiveAt])
+  @@index([isActive])
 }
 
 /// Conversation entre utilisateurs (direct, group, public, global)
@@ -514,6 +518,7 @@ model Participant {
 
   @@unique([conversationId, userId], name: "unique_conversation_user")
   @@index([conversationId])
+  @@index([conversationId, isActive])
   @@index([userId])
   @@index([userId, isActive])
   @@index([type])

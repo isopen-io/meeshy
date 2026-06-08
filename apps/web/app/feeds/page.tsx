@@ -26,6 +26,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { TusUploadService } from '@/services/tusUploadService';
 import type { MobileTranscription } from '@/services/posts.service';
 import type { Post } from '@meeshy/shared/types/post';
+import { FeatureErrorBoundary } from '@/components/ui/FeatureErrorBoundary';
 
 // ─── Helpers ────────────────────────────────────────────────────────────
 
@@ -443,6 +444,7 @@ export default function FeedsPage() {
   // ─── Render ──────────────────────────────────────────────────────────
 
   return (
+    <FeatureErrorBoundary featureName="Feeds">
     <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors duration-300">
       <PageHeader
         title="Découvrir Meeshy"
@@ -664,5 +666,6 @@ export default function FeedsPage() {
         />
       )}
     </div>
+    </FeatureErrorBoundary>
   );
 }

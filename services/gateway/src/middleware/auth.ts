@@ -9,6 +9,7 @@ import { PermissionDeniedError } from '../errors/custom-errors';
 import { getCacheStore } from '../services/CacheStore';
 
 const AUTH_USER_CACHE_TTL = 300; // 5 minutes
+const AUTH_ANON_CACHE_TTL = 120; // 2 minutes
 const expiredJwtLoggedTokens = new Map<string, number>(); // token prefix -> last log timestamp
 const EXPIRED_JWT_LOG_INTERVAL = 60_000; // Log same expired token at most once per minute
 
@@ -266,6 +267,46 @@ export class AuthMiddleware {
   private async createAnonymousUserContext(sessionToken: string): Promise<UnifiedAuthContext> {
     try {
       const tokenHash = hashSessionToken(sessionToken);
+      const anonCacheKey = `auth:anon:${tokenHash}`;
+      const cache = getCacheStore();
+
+      type CachedAnonCtx = {
+        participantId: string;
+        displayName: string;
+        userLanguage: string;
+        permissions: ParticipantPermissions;
+        anonymousUser: AnonymousUserCompat;
+        participant: { id: string; conversationId: string; isOnline: boolean };
+      };
+
+      let cachedCtx: CachedAnonCtx | null = null;
+      try {
+        const raw = await cache.get(anonCacheKey);
+        if (raw) cachedCtx = JSON.parse(raw) as CachedAnonCtx;
+      } catch {
+        // Redis unavailable — fall through to Prisma
+      }
+
+      if (cachedCtx) {
+        if (this.statusService) {
+          this.statusService.updateAnonymousLastSeen(cachedCtx.participantId);
+        }
+        return {
+          type: 'anonymous',
+          isAuthenticated: true,
+          isAnonymous: true,
+          sessionToken,
+          participantId: cachedCtx.participantId,
+          participant: cachedCtx.participant as any,
+          displayName: cachedCtx.displayName,
+          userLanguage: cachedCtx.userLanguage,
+          permissions: cachedCtx.permissions,
+          hasFullAccess: false,
+          canSendMessages: cachedCtx.permissions.canSendMessages,
+          userId: cachedCtx.participantId,
+          anonymousUser: { ...cachedCtx.anonymousUser, sessionToken },
+        };
+      }
 
       const participant = await this.prisma.participant.findFirst({
         where: {
@@ -326,6 +367,21 @@ export class AuthMiddleware {
         shareLinkId: participant.anonymousSession?.shareLinkId ?? '',
         permissions: resolvedPermissions,
       };
+
+      // Cache the resolved context (excluding sessionToken from stored anonymousUser to allow re-hydration)
+      try {
+        const toCache = {
+          participantId: participant.id,
+          displayName,
+          userLanguage: participant.language,
+          permissions: resolvedPermissions,
+          anonymousUser: { ...anonymousCompat, sessionToken: '' },
+          participant: { id: participant.id, conversationId: participant.conversationId, isOnline: participant.isOnline },
+        };
+        await cache.set(anonCacheKey, JSON.stringify(toCache), AUTH_ANON_CACHE_TTL);
+      } catch {
+        // Redis write failure is non-fatal
+      }
 
       return {
         type: 'anonymous',

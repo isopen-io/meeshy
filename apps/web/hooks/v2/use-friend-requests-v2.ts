@@ -67,7 +67,7 @@ export function useFriendRequestsV2(
       return extractRequests(response);
     },
     enabled,
-    refetchInterval: 30000,
+    staleTime: 5 * 60 * 1000,
   });
 
   const {
@@ -85,7 +85,7 @@ export function useFriendRequestsV2(
       return extractRequests(response);
     },
     enabled,
-    refetchInterval: 30000,
+    staleTime: 5 * 60 * 1000,
   });
 
   const received = useMemo(() => receivedData ?? [], [receivedData]);

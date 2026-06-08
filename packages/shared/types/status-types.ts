@@ -200,6 +200,17 @@ export type VerificationStatus =
 // Re-export pour maintenir la compatibilité avec les anciens imports
 export type ConversationStatus = EntityStatus;
 
+/**
+ * Résultat de la détection automatique de langue
+ * Retourné par le translator (Whisper ou liste de mots-clés)
+ */
+export interface LanguageDetectionResult {
+  readonly language: string;
+  readonly confidence: number;
+  readonly isAutoDetected: boolean;
+  readonly alternativeCandidates?: ReadonlyArray<{ language: string; confidence: number }>;
+}
+
 // Alias pour les types existants dans d'autres fichiers
 // Ces types seront progressivement migrés vers ce fichier
 export type TranslationProcessStatus = TranslationStatus;

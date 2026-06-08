@@ -51,6 +51,7 @@ import { enhancedLogger } from '../utils/logger-enhanced';
 import type { ZmqAgentClient } from '../services/zmq-agent/ZmqAgentClient';
 import { MentionService } from '../services/MentionService';
 import { RedisDeliveryQueue } from '../services/RedisDeliveryQueue';
+import { LruMap } from '../utils/lru-map';
 
 // Logger dédié pour SocketIOManager
 const logger = enhancedLogger.child({ module: 'SocketIOManager' });
@@ -115,8 +116,8 @@ export class MeeshySocketIOManager {
   private socketToUser: Map<string, string> = new Map();
   private userSockets: Map<string, Set<string>> = new Map();
 
-  // Cache immutable identifier → ObjectId (populated on first lookup)
-  private conversationIdCache = new Map<string, string>();
+  // Cache immutable identifier → ObjectId (LRU bounded at 5 000 entries)
+  private conversationIdCache = new LruMap<string, string>(5_000);
 
   // Statistiques
   private stats = {

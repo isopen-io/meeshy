@@ -95,6 +95,11 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
     }
 
     const handleNewNotification = (notification: Notification) => {
+      if (notification.type === 'friend_request' || notification.type === 'friend_accepted') {
+        queryClient.invalidateQueries({ queryKey: queryKeys.friendRequests.received() });
+        queryClient.invalidateQueries({ queryKey: queryKeys.friendRequests.sent() });
+      }
+
       const notificationConversationId = notification.context?.conversationId;
       const activeConversationId = useNotificationStore.getState().activeConversationId;
       const currentPath = typeof window !== 'undefined' ? window.location.pathname : '';

@@ -43,6 +43,28 @@ export function CallManager() {
 
   const [incomingCall, setIncomingCall] = useState<CallInitiatedEvent | null>(null);
   const callTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
+
+  // Acquire/release Screen Wake Lock during active calls
+  useEffect(() => {
+    if (!('wakeLock' in navigator)) return;
+
+    if (isInCall) {
+      navigator.wakeLock.request('screen').then((lock) => {
+        wakeLockRef.current = lock;
+      }).catch(() => {
+        // Wake lock not granted (e.g. document not visible) — non-fatal
+      });
+    } else if (wakeLockRef.current) {
+      wakeLockRef.current.release().catch(() => {});
+      wakeLockRef.current = null;
+    }
+
+    return () => {
+      wakeLockRef.current?.release().catch(() => {});
+      wakeLockRef.current = null;
+    };
+  }, [isInCall]);
 
   /**
    * Clear call timeout

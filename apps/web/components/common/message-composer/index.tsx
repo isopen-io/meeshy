@@ -17,8 +17,13 @@ import { type LanguageChoice } from '@/lib/bubble-stream-modules';
 import { AttachmentCarousel } from '@/components/attachments/AttachmentCarousel';
 import { AttachmentLimitModal } from '@/components/attachments/AttachmentLimitModal';
 import { AttachmentPreviewReply } from '@/components/attachments/AttachmentPreviewReply';
-import { AudioRecorderWithEffects } from '@/components/audio/AudioRecorderWithEffects';
+import dynamic from 'next/dynamic';
 import { MentionAutocomplete } from '../MentionAutocomplete';
+
+const AudioRecorderWithEffects = dynamic(
+  () => import('@/components/audio/AudioRecorderWithEffects').then(m => ({ default: m.AudioRecorderWithEffects })),
+  { ssr: false }
+);
 
 // Hooks intégrés (Phase 1-3)
 import { usePerformanceProfile } from '@/hooks/usePerformanceProfile';

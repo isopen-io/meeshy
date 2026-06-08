@@ -9,6 +9,10 @@ interface Props {
   children: ReactNode;
   fallback?: ReactNode;
   onError?: (error: Error, errorInfo: ErrorInfo) => void;
+  /** When true, renders a compact inline error rather than the full-page variant */
+  inline?: boolean;
+  /** Label shown in the compact fallback */
+  label?: string;
 }
 
 interface State {
@@ -35,6 +39,22 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       if (this.props.fallback) {
         return this.props.fallback;
+      }
+
+      if (this.props.inline) {
+        return (
+          <div className="flex items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-400">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>{this.props.label ?? 'Une erreur s\'est produite'}</span>
+            <button
+              onClick={() => this.setState({ hasError: false, error: undefined })}
+              className="ml-auto shrink-0 rounded p-0.5 hover:bg-red-100 dark:hover:bg-red-900/50"
+              aria-label="Réessayer"
+            >
+              <RefreshCw className="h-3 w-3" />
+            </button>
+          </div>
+        );
       }
 
       return (

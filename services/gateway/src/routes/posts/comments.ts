@@ -141,7 +141,9 @@ export function registerCommentRoutes(
           postId,
           comment,
           commentCount: post.commentCount,
-        }, post.authorId).catch(() => {});
+        }, post.authorId).catch((err: unknown) => {
+          fastify.log.error(`[POST /posts/:postId/comments] comment broadcast failed: ${err}`);
+        });
       }
 
       // Notify post author (or parent comment author for replies)
@@ -160,7 +162,9 @@ export function registerCommentRoutes(
               commentAuthorId: parentComment.authorId,
               commentId: comment.id,
               replyPreview: parsed.data.content,
-            }).catch(() => {});
+            }).catch((err: unknown) => {
+              fastify.log.error(`[POST /posts/:postId/comments] reply notification failed: ${err}`);
+            });
           }
         } else if (post?.authorId) {
           // Top-level comment — notify post author
@@ -170,7 +174,9 @@ export function registerCommentRoutes(
             postAuthorId: post.authorId,
             commentId: comment.id,
             commentPreview: parsed.data.content,
-          }).catch(() => {});
+          }).catch((err: unknown) => {
+            fastify.log.error(`[POST /posts/:postId/comments] comment notification failed: ${err}`);
+          });
         }
       }
 
@@ -222,7 +228,9 @@ export function registerCommentRoutes(
             postId,
             parsed.data.content,
             (comment as any).originalLanguage,
-          ).catch(() => {});
+          ).catch((err: unknown) => {
+            fastify.log.error(`[POST /posts/:postId/comments] translation failed: ${err}`);
+          });
         } catch {
           // PostTranslationService not initialized — skip silently
         }
@@ -282,7 +290,9 @@ export function registerCommentRoutes(
           commentId,
           commentAuthorId: result.authorId,
           emoji,
-        }).catch(() => {});
+        }).catch((err: unknown) => {
+          fastify.log.error(`[POST comments/:commentId/like] like notification failed: ${err}`);
+        });
       }
 
       return sendSuccess(reply, { liked: true, likeCount: result.likeCount, reactionSummary: result.reactionSummary });
@@ -364,7 +374,9 @@ export function registerCommentRoutes(
             postId,
             commentId,
             commentCount: post.commentCount,
-          }, post.authorId).catch(() => {});
+          }, post.authorId).catch((err: unknown) => {
+            fastify.log.error(`[DELETE comments/:commentId] delete broadcast failed: ${err}`);
+          });
         }
       }
 

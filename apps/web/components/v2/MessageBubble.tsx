@@ -1,6 +1,6 @@
 'use client';
 
-import { HTMLAttributes, useState, useCallback } from 'react';
+import { HTMLAttributes, useState, useCallback, memo } from 'react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { getLanguageColor } from './theme';
@@ -52,7 +52,7 @@ function ChevronIcon({ className = 'w-3 h-3', direction = 'down' }: { className?
   );
 }
 
-export function MessageBubble({
+export const MessageBubble = memo(function MessageBubble({
   isSent = false,
   languageCode,
   languageName,
@@ -327,4 +327,4 @@ export function MessageBubble({
       )}
     </div>
   );
-}
+});
