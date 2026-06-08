@@ -5,6 +5,7 @@ import { PostFeedService } from '../../services/PostFeedService';
 import { FeedQuerySchema, UserParams, CommunityParams } from './types';
 import { sendSuccess, sendUnauthorized, sendInternalError } from '../../utils/response';
 import { resolveMentionedUsers } from '../../services/MentionService';
+import { getCacheStore } from '../../services/CacheStore';
 
 function collectPostContents(posts: unknown[]): string[] {
   const contents: string[] = [];
@@ -26,7 +27,7 @@ export function registerFeedRoutes(
   requiredAuth: any,
   optionalAuth: any
 ) {
-  const feedService = new PostFeedService(prisma);
+  const feedService = new PostFeedService(prisma, getCacheStore());
 
   // GET /posts/feed — Main ranked feed
   fastify.get('/posts/feed', {
