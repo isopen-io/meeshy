@@ -1458,7 +1458,8 @@ class ConversationViewModel: ObservableObject {
                 conversationId: conversationId,
                 before: beforeValue,
                 limit: 50,
-                includeReplies: true
+                includeReplies: true,
+                includeTranslations: true
             )
 
             // GRDB write and legacy CacheCoordinator processing are
@@ -2890,7 +2891,7 @@ class ConversationViewModel: ObservableObject {
     func loadMessagesAround(messageId: String) async {
         do {
             let response = try await messageService.listAround(
-                conversationId: conversationId, around: messageId, limit: limit, includeReplies: true
+                conversationId: conversationId, around: messageId, limit: limit, includeReplies: true, includeTranslations: true
             )
 
             // Upsert the API batch into GRDB so the window has fresh content.
@@ -2950,7 +2951,7 @@ class ConversationViewModel: ObservableObject {
 
         do {
             let response = try await messageService.listAround(
-                conversationId: conversationId, around: messageId, limit: limit, includeReplies: true
+                conversationId: conversationId, around: messageId, limit: limit, includeReplies: true, includeTranslations: true
             )
 
             // Upsert the API batch into GRDB so the window has fresh content.
@@ -3000,7 +3001,7 @@ class ConversationViewModel: ObservableObject {
         for attempt in 1...Self.paginationRetryCount {
             do {
                 let response = try await messageService.listAround(
-                    conversationId: conversationId, around: lastMsg.id, limit: limit, includeReplies: true
+                    conversationId: conversationId, around: lastMsg.id, limit: limit, includeReplies: true, includeTranslations: true
                 )
 
                 // Upsert newer messages into GRDB; the GRDB DatabaseRegionObservation
@@ -3292,7 +3293,8 @@ class ConversationViewModel: ObservableObject {
                         conversationId: convId,
                         around: msgId,
                         limit: 5,
-                        includeReplies: false
+                        includeReplies: false,
+                        includeTranslations: true
                     )
                     await MainActor.run {
                         self.extractAttachmentTranscriptions(from: response.data)

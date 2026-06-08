@@ -1387,7 +1387,7 @@ class ConversationListViewModel: ObservableObject {
     private func refreshPreview(for conversationId: String) async {
         do {
             let response = try await messageService.list(
-                conversationId: conversationId, offset: 0, limit: 5, includeReplies: false
+                conversationId: conversationId, offset: 0, limit: 5, includeReplies: false, includeTranslations: true
             )
             let userId = currentUserId
             let username = AuthManager.shared.currentUser?.username
@@ -1427,7 +1427,8 @@ class ConversationListViewModel: ObservableObject {
                                 conversationId: conversationId,
                                 offset: 0,
                                 limit: 20,
-                                includeReplies: true
+                                includeReplies: true,
+                                includeTranslations: true
                             )
                             if response.success {
                                 let messages = response.data.reversed().map {
