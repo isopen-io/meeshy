@@ -17,6 +17,9 @@ import type { ReadStatusSummary } from '@meeshy/shared/types/socketio-events';
 
 const TYPING_INDICATOR_TIMEOUT_MS = 5000;
 
+// Stockage des timeouts hors du store Zustand (non-sérialisable, runtime uniquement)
+const typingTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+
 interface DraftMessage {
   content: string;
   attachments?: string[];
@@ -122,13 +125,24 @@ export const useConversationUIStore = create<ConversationUIStore>()(
             };
           });
 
-          // Auto-remove after 5 seconds
-          setTimeout(() => {
+          // Auto-remove after 5 seconds — clear any existing timeout to avoid orphans
+          const timeoutKey = `${conversationId}:${userId}`;
+          const existing = typingTimeouts.get(timeoutKey);
+          if (existing !== undefined) clearTimeout(existing);
+          const handle = setTimeout(() => {
+            typingTimeouts.delete(timeoutKey);
             get().removeTypingUser(conversationId, userId);
           }, TYPING_INDICATOR_TIMEOUT_MS);
+          typingTimeouts.set(timeoutKey, handle);
         },
 
         removeTypingUser: (conversationId, userId) => {
+          const timeoutKey = `${conversationId}:${userId}`;
+          const existing = typingTimeouts.get(timeoutKey);
+          if (existing !== undefined) {
+            clearTimeout(existing);
+            typingTimeouts.delete(timeoutKey);
+          }
           set((state) => {
             const current = state.typingUsers[conversationId];
             if (!current) return state;
@@ -142,6 +156,13 @@ export const useConversationUIStore = create<ConversationUIStore>()(
         },
 
         clearTypingUsers: (conversationId) => {
+          // Clear all pending timeouts for this conversation
+          for (const [key, handle] of typingTimeouts) {
+            if (key.startsWith(`${conversationId}:`)) {
+              clearTimeout(handle);
+              typingTimeouts.delete(key);
+            }
+          }
           set((state) => {
             if (!state.typingUsers[conversationId]) return state;
             const { [conversationId]: _, ...rest } = state.typingUsers;

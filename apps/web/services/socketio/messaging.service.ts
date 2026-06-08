@@ -78,7 +78,7 @@ export class MessagingService {
       if (this.recentMessageIds.get(id) === ts) {
         this.recentMessageIds.delete(id);
       }
-    }, 30_000);
+    }, 300_000);
 
     return false;
   }

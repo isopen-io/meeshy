@@ -594,8 +594,13 @@ export class MeeshySocketIOManager {
       });
 
       socket.on(CLIENT_EVENTS.REQUEST_TRANSLATION, async (data: { messageId: string; targetLanguage: string }) => {
-        // Rate limit: 10 requêtes/min par socket pour éviter la saturation ZMQ
-        const rateLimitKey = `translation_request:${socket.id}`;
+        // Rate limit: 10 requêtes/min par userId (multi-device inclus) pour éviter la saturation ZMQ
+        const translationUserId = this.socketToUser.get(socket.id);
+        if (!translationUserId) {
+          socket.emit(SERVER_EVENTS.ERROR, { message: 'Not authenticated' });
+          return;
+        }
+        const rateLimitKey = `translation_request:${translationUserId}`;
         const now = Date.now();
         const windowMs = 60_000;
         const maxRequests = 10;
@@ -723,17 +728,23 @@ export class MeeshySocketIOManager {
       });
 
       socket.on('disconnect', (reason: string) => {
-        logger.warn('🔬 [CALL-DIAG] socket disconnect', { socketId: socket.id, reason });
+        logger.debug('socket disconnect', { socketId: socket.id, reason });
         const disconnectedUserId = this.socketToUser.get(socket.id);
         if (disconnectedUserId) {
           this.statusHandler.invalidateIdentityCache(disconnectedUserId);
           this.statusHandler.clearTypingThrottle(disconnectedUserId);
+          // Invalider le snapshot de présence pour forcer un recalcul à la prochaine connexion
+          this.presenceSnapshotCache.delete(disconnectedUserId);
+          // Nettoyage du rate limiter in-memory (keyed by userId — purge si dernier socket)
+          // Note: socket.id est encore dans userSockets ici (authHandler.handleDisconnection
+          // n'a pas encore tourné), donc size === 1 signifie "dernier socket de cet user".
+          const remainingUserSockets = this.userSockets.get(disconnectedUserId);
+          if (!remainingUserSockets || remainingUserSockets.size <= 1) {
+            this.socketRateLimits.delete(`translation_request:${disconnectedUserId}`);
+          }
         }
-        logger.debug('socket disconnect', { socketId: socket.id, reason });
         this.authHandler.handleDisconnection(socket).catch((error) => logger.error('[DISCONNECT] Error:', error));
         this.stats.active_connections--;
-        // Nettoyage du rate limiter in-memory à la déconnexion
-        this.socketRateLimits.delete(`translation_request:${socket.id}`);
       });
     });
   }
