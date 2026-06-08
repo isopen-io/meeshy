@@ -4,6 +4,9 @@
  */
 
 import axios from 'axios';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'CaptchaService' });
 
 export interface CaptchaVerificationResult {
   success: boolean;
@@ -26,7 +29,7 @@ export class CaptchaService {
     this.siteKey = process.env.HCAPTCHA_SITE_KEY || '';
 
     if (!this.secretKey || !this.siteKey) {
-      console.warn('[CaptchaService] WARNING: hCaptcha credentials not configured');
+      logger.warn('hCaptcha credentials not configured');
     }
 
     // Start cleanup interval for expired tokens
@@ -64,7 +67,7 @@ export class CaptchaService {
       });
 
       if (response.status !== 200) {
-        console.error('[CaptchaService] hCaptcha API error:', response.status);
+        logger.error('hCaptcha API error', { status: response.status });
         return {
           success: false,
           errorCodes: ['http-error']
@@ -85,7 +88,7 @@ export class CaptchaService {
         errorCodes: data['error-codes'] || []
       };
     } catch (error) {
-      console.error('[CaptchaService] Verification error:', error);
+      logger.error('captcha verification error', { error });
       return {
         success: false,
         errorCodes: ['network-error']
@@ -106,7 +109,7 @@ export class CaptchaService {
    */
   async verifyWithDevBypass(token: string, remoteIp?: string): Promise<CaptchaVerificationResult> {
     if (this.shouldBypassInDev()) {
-      console.log('[CaptchaService] DEV MODE: Bypassing CAPTCHA verification');
+      logger.debug('DEV MODE: bypassing CAPTCHA verification');
       return {
         success: true,
         challengeTs: new Date().toISOString(),
@@ -151,7 +154,7 @@ export class CaptchaService {
    * Start cleanup interval for expired tokens
    */
   private startCleanup(): void {
-    setInterval(() => {
+    const cleanupInterval = setInterval(() => {
       const now = Date.now();
       let deletedCount = 0;
 
@@ -163,9 +166,10 @@ export class CaptchaService {
       }
 
       if (deletedCount > 0) {
-        console.log(`[CaptchaService] Cleaned ${deletedCount} expired tokens`);
+        logger.debug('captcha token cache cleanup', { removed: deletedCount, remaining: this.verifiedTokens.size });
       }
-    }, 60000); // Run every minute
+    }, 60_000); // Run every minute
+    cleanupInterval.unref?.();
   }
 
   /**
@@ -183,6 +187,6 @@ export class CaptchaService {
    */
   clearCache(): void {
     this.verifiedTokens.clear();
-    console.log('[CaptchaService] Cache cleared');
+    logger.debug('captcha token cache cleared');
   }
 }
