@@ -128,7 +128,7 @@ export function TranslationMonitor({
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
         <CardTitle className="text-lg font-semibold flex items-center gap-2">
           <Activity className="h-5 w-5 text-blue-600" />
-          Monitoring Traductions
+          {t('admin.translationMonitor.title')}
         </CardTitle>
         <Button
           variant="outline"
@@ -146,7 +146,7 @@ export function TranslationMonitor({
           <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
             <div className="flex items-center gap-2 text-red-700">
               <AlertCircle className="h-4 w-4" />
-              <span className="text-sm font-medium">Erreur de monitoring</span>
+              <span className="text-sm font-medium">{t('admin.translationMonitor.monitoringError')}</span>
             </div>
             <p className="text-red-600 text-sm mt-1">{error}</p>
           </div>
@@ -155,7 +155,7 @@ export function TranslationMonitor({
         {isLoading && !metrics && (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-            <span className="ml-2 text-gray-600">{t('admin.translationMonitor.loadingMetrics')}</span>
+            <span className="ml-2 text-gray-600">{t('translationMonitor.loadingMetrics')}</span>
           </div>
         )}
 
@@ -269,7 +269,7 @@ export function TranslationMonitor({
 
                 {/* Répartition par langue */}
                 <div>
-                  <h4 className="font-medium text-gray-900 mb-3">Répartition par langue</h4>
+                  <h4 className="font-medium text-gray-900 mb-3">{t('admin.translationMonitor.languageBreakdown')}</h4>
                   <div className="space-y-3">
                     {Object.entries(metrics.languageBreakdown)
                       .sort(([, a], [, b]) => b.count - a.count)

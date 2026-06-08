@@ -858,7 +858,7 @@ struct ConversationView: View {
                 // surface a toast so the user knows why.
                 Logger.messages.debug("[DIAG] accessRevoked.onChange revoked=\(revoked)")
                 guard revoked else { return }
-                FeedbackToastManager.shared.showError(viewModel.error ?? "Vous n'avez plus acces a cette conversation")
+                FeedbackToastManager.shared.showError(viewModel.error ?? String(localized: "conversation.accessRevoked", defaultValue: "You no longer have access to this conversation", bundle: .main))
                 dismiss()
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
@@ -944,7 +944,7 @@ struct ConversationView: View {
                             scrollState.scrollToMessageTrigger += 1
                         case .notFound:
                             HapticFeedback.error()
-                            FeedbackToastManager.shared.show("Message introuvable", type: .info)
+                            FeedbackToastManager.shared.show(String(localized: "conversation.messageNotFound", defaultValue: "Message not found", bundle: .main), type: .info)
                         }
                     }
                 },

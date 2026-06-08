@@ -687,7 +687,7 @@ struct PostDetailView: View {
                                 let isActive = code == secondaryLangCode
                                 VStack(spacing: 1) {
                                     Text(display?.flag ?? "?")
-                                        .font(.system(size: isActive ? 12 : 10))
+                                        .font(isActive ? .caption : .caption2)
                                         .scaleEffect(isActive ? 1.05 : 1.0)
                                     if isActive {
                                         RoundedRectangle(cornerRadius: 1)
@@ -767,7 +767,7 @@ struct PostDetailView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         if let display {
                             HStack(spacing: 4) {
-                                Text(display.flag).font(.system(size: 11))
+                                Text(display.flag).font(.caption2)
                                 Text(display.name)
                                     .font(.caption2.weight(.semibold))
                                     .foregroundColor(langColor)
@@ -1001,7 +1001,8 @@ struct PostDetailView: View {
                 let isActive = code == repostSecondaryLangCode
                 VStack(spacing: 1) {
                     Text(display?.flag ?? "?")
-                        .font(.system(size: isActive ? 11 : 9))
+                        .font(isActive ? .caption2 : .system(size: 9))
+                        .minimumScaleFactor(isActive ? 1.0 : 0.7)
                         .scaleEffect(isActive ? 1.05 : 1.0)
                     if isActive {
                         RoundedRectangle(cornerRadius: 1)

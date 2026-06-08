@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Search, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { apiService } from '@/services/api.service';
+import { useI18n } from '@/hooks/useI18n';
 
 interface SearchMessage {
   id: string;
@@ -32,6 +33,7 @@ interface MessageSearchProps {
 }
 
 export function MessageSearch({ conversationId, onNavigateToMessage, onClose, isOpen }: MessageSearchProps) {
+  const { t } = useI18n('conversations');
   const [inputValue, setInputValue] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
@@ -117,7 +119,7 @@ export function MessageSearch({ conversationId, onNavigateToMessage, onClose, is
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="Rechercher dans la conversation…"
+              placeholder={t('messageSearch.placeholder')}
               className={cn(
                 'flex-1 bg-transparent text-sm outline-none',
                 'text-gray-900 dark:text-gray-100',
@@ -130,7 +132,7 @@ export function MessageSearch({ conversationId, onNavigateToMessage, onClose, is
             <button
               type="button"
               onClick={onClose}
-              aria-label="Fermer la recherche"
+              aria-label={t('messageSearch.close')}
               className={cn(
                 'flex-shrink-0 p-1 rounded',
                 'text-gray-500 dark:text-gray-400',
@@ -147,13 +149,13 @@ export function MessageSearch({ conversationId, onNavigateToMessage, onClose, is
             <div className="max-h-80 overflow-y-auto border-t border-gray-100 dark:border-gray-800">
               {isError && (
                 <p className="px-4 py-3 text-sm text-red-500 dark:text-red-400">
-                  Une erreur est survenue lors de la recherche.
+                  {t('messageSearch.error')}
                 </p>
               )}
 
               {!isError && !isLoading && messages.length === 0 && (
                 <p className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
-                  Aucun résultat
+                  {t('messageSearch.noResults')}
                 </p>
               )}
 

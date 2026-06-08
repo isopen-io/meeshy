@@ -10,7 +10,25 @@
     "empty": "Aucun résultat trouvé",
     "selectEntity": "Sélectionnez le type d'entité",
     "selectCriterion": "Sélectionnez le critère",
-    "selectPeriod": "Sélectionnez la période"
+    "selectPeriod": "Sélectionnez la période",
+    "filterTitle": "Filtres de classement",
+    "entityTypeLabel": "Type d'entité",
+    "entityUsers": "Utilisateurs",
+    "entityConversations": "Conversations",
+    "entityMessages": "Messages",
+    "entityLinks": "Liens",
+    "criterionLabel": "Critère",
+    "filterCriteria": "Filtrer les critères...",
+    "noCriteriaFound": "Aucun critère trouvé",
+    "periodLabel": "Période",
+    "resultCountLabel": "Nombre de résultats",
+    "period1d": "Dernier jour (24h)",
+    "period7d": "Dernière semaine (7j)",
+    "period30d": "Dernier mois (30j)",
+    "period90d": "Dernier trimestre (90j)",
+    "period180d": "Dernier semestre (180j)",
+    "period365d": "Dernière année (365j)",
+    "periodAll": "Tous les temps"
   },
   "scanLog": {
     "title": "Scan Logs",
@@ -130,10 +148,14 @@
     "selectConversation": "Sélectionnez une conversation pour superviser son état en temps réel"
   },
   "userDetail": {
-    "languagePreferences": "Préférences de Langue"
+    "languagePreferences": "Préférences de Langue",
+    "languagePreferencesSaved": "Préférences de langue mises à jour",
+    "languagePreferencesError": "Erreur lors de la mise à jour"
   },
   "translationMonitor": {
     "loadingMetrics": "Chargement des métriques...",
-    "languageBreakdown": "Répartition par langue"
+    "languageBreakdown": "Répartition par langue",
+    "title": "Monitoring Traductions",
+    "monitoringError": "Erreur de monitoring"
   }
 }

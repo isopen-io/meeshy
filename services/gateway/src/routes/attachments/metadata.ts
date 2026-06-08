@@ -16,6 +16,9 @@ import type {
   ConversationAttachmentsQuery,
 } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'AttachmentMetadataRoutes' });
 
 export async function registerMetadataRoutes(
   fastify: FastifyInstance,
@@ -85,18 +88,26 @@ export async function registerMetadataRoutes(
           });
         }
 
+        const etag = `"${attachment.id}-${(attachment as { updatedAt?: Date }).updatedAt?.getTime() ?? 0}"`;
+        if (request.headers['if-none-match'] === etag) {
+          return reply.code(304).send();
+        }
+
+        reply.header('Cache-Control', 'private, max-age=3600, stale-while-revalidate=86400');
+        reply.header('ETag', etag);
+
         return reply.status(200).send({
           success: true,
           data: {
             attachment
           }
         });
-      } catch (error: any) {
-        console.error('[AttachmentRoutes] Error fetching attachment metadata:', error);
+      } catch (error: unknown) {
+        logger.error('error fetching attachment metadata', { error });
         return reply.status(500).send({
           success: false,
           error: 'METADATA_FETCH_FAILED',
-          message: error.message || 'Failed to fetch attachment metadata',
+          message: error instanceof Error ? error.message : 'Failed to fetch attachment metadata',
         });
       }
     }
@@ -204,11 +215,11 @@ export async function registerMetadataRoutes(
           success: true,
           data: { message: 'Attachment deleted successfully' },
         });
-      } catch (error: any) {
-        console.error('[AttachmentRoutes] Error deleting attachment:', error);
+      } catch (error: unknown) {
+        logger.error('error deleting attachment', { error });
         return reply.status(500).send({
           success: false,
-          error: error.message || 'Error deleting attachment',
+          error: error instanceof Error ? error.message : 'Error deleting attachment',
         });
       }
     }
@@ -296,7 +307,6 @@ export async function registerMetadataRoutes(
         const authContext = (request as UnifiedAuthRequest).authContext;
 
         if (!authContext || (!authContext.isAuthenticated && !authContext.isAnonymous)) {
-          console.error('[AttachmentRoutes] Authentification requise');
           return reply.status(401).send({
             success: false,
             error: 'Authentication required',
@@ -332,7 +342,6 @@ export async function registerMetadataRoutes(
           });
 
           if (!participant) {
-            console.error('[AttachmentRoutes] Participant non trouvé');
             return reply.status(403).send({
               success: false,
               error: 'Participant not found',
@@ -340,10 +349,6 @@ export async function registerMetadataRoutes(
           }
 
           if (participant.conversationId !== conversationId) {
-            console.error('[AttachmentRoutes] Mauvaise conversation:', {
-              participantConversationId: participant.conversationId,
-              requestedConversationId: conversationId
-            });
             return reply.status(403).send({
               success: false,
               error: 'Access denied to this conversation',
@@ -356,7 +361,6 @@ export async function registerMetadataRoutes(
               select: { allowViewHistory: true }
             });
             if (!shareLink?.allowViewHistory) {
-              console.error('[AttachmentRoutes] Historique non autorisé');
               return reply.status(403).send({
                 success: false,
                 error: 'History viewing not allowed on this link',
@@ -378,11 +382,11 @@ export async function registerMetadataRoutes(
           success: true,
           data: { attachments },
         });
-      } catch (error: any) {
-        console.error('[AttachmentRoutes] Error fetching conversation attachments:', error);
+      } catch (error: unknown) {
+        logger.error('error fetching conversation attachments', { conversationId: (request.params as ConversationParams)?.conversationId, error });
         return reply.status(500).send({
           success: false,
-          error: error.message || 'Error fetching attachments',
+          error: error instanceof Error ? error.message : 'Error fetching attachments',
         });
       }
     }

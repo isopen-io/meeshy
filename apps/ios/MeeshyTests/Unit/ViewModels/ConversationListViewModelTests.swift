@@ -2448,6 +2448,36 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertTrue(sut.userCategories.contains { $0.id == "c9" && $0.name == "Cross-device" },
                       "a cross-device category event (via the socket bridge) must reflect into the list")
     }
+
+    // MARK: - Typing indicator (own-typing filter)
+
+    func test_typingStarted_otherUser_showsOnRow() async {
+        let auth = MockAuthManager()
+        auth.simulateLoggedIn(user: MeeshyUser(id: "me", username: "me", displayName: "Me"))
+        let socket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket, authManager: auth)
+
+        socket.typingStarted.send(TypingEvent(userId: "other", username: "bob", displayName: "Bob", conversationId: "c1"))
+        await drainMainQueue()
+
+        XCTAssertEqual(sut.typingUsernames["c1"], "Bob",
+                       "another user's typing must surface on the conversation row")
+    }
+
+    func test_typingStarted_ownEcho_isIgnored() async {
+        let auth = MockAuthManager()
+        auth.simulateLoggedIn(user: MeeshyUser(id: "me", username: "me", displayName: "Me"))
+        let socket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket, authManager: auth)
+
+        // The gateway echoes typing to the author too — on multi-device this would
+        // otherwise surface "<You> écrit…" on your own row.
+        socket.typingStarted.send(TypingEvent(userId: "me", username: "me", displayName: "Me", conversationId: "c1"))
+        await drainMainQueue()
+
+        XCTAssertNil(sut.typingUsernames["c1"],
+                     "your own typing (multi-device echo) must not show on your conversation row")
+    }
 }
 
 // MARK: - ConversationUpdatedEvent factory
