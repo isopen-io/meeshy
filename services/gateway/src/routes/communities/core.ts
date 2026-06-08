@@ -16,6 +16,9 @@ import {
   generateIdentifier
 } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'CommunitiesCoreRoutes' });
 
 export async function registerCoreRoutes(fastify: FastifyInstance) {
   // Route pour verifier la disponibilite d'un identifiant de communaute
@@ -78,7 +81,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         }
       });
     } catch (error) {
-      console.error('[COMMUNITIES] Error checking identifier availability:', error);
+      logger.error('Error checking identifier availability', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Failed to check identifier availability'
@@ -232,7 +235,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         }
       });
     } catch (error) {
-      console.error('Error fetching communities:', error);
+      logger.error('Error fetching communities', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to fetch communities'
@@ -392,7 +395,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         data: community
       });
     } catch (error) {
-      console.error('Error fetching community:', error);
+      logger.error('Error fetching community', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to fetch community'
@@ -513,7 +516,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         data: community
       });
     } catch (error) {
-      console.error('Error creating community:', error);
+      logger.error('Error creating community', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to create community'
@@ -674,7 +677,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         data: conversations
       });
     } catch (error) {
-      console.error('Error fetching community conversations:', error);
+      logger.error('Error fetching community conversations', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to fetch community conversations'
@@ -797,7 +800,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
 
       reply.send({ success: true, data: updated });
     } catch (error) {
-      console.error('Error adding conversation to community:', error);
+      logger.error('Error adding conversation to community', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to add conversation to community'
