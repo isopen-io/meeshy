@@ -68,7 +68,7 @@ export function RankingFilters({
               </label>
               <Select value={entityType} onValueChange={onEntityTypeChange}>
                 <SelectTrigger className="border-yellow-300 focus:ring-yellow-500">
-                  <SelectValue placeholder={t('admin.ranking.selectEntity')} />
+                  <SelectValue placeholder={t('ranking.selectEntity')} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="users">
@@ -105,7 +105,7 @@ export function RankingFilters({
               </label>
               <Select value={criterion} onValueChange={onCriterionChange}>
                 <SelectTrigger className="border-yellow-300 focus:ring-yellow-500">
-                  <SelectValue placeholder={t('admin.ranking.selectCriterion')} />
+                  <SelectValue placeholder={t('ranking.selectCriterion')} />
                 </SelectTrigger>
                 <SelectContent className="max-h-[400px]">
                   <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 p-2 border-b border-gray-200 dark:border-gray-700">
@@ -150,7 +150,7 @@ export function RankingFilters({
               </label>
               <Select value={period} onValueChange={onPeriodChange}>
                 <SelectTrigger className="border-yellow-300 focus:ring-yellow-500">
-                  <SelectValue placeholder={t('admin.ranking.selectPeriod')} />
+                  <SelectValue placeholder={t('ranking.selectPeriod')} />
                 </SelectTrigger>
                 <SelectContent>
                   {PERIODS.map((p) => (

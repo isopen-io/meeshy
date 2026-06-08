@@ -454,7 +454,7 @@ class FeedViewModel: ObservableObject {
         } catch {
             // Rollback the optimistic cache insertion.
             try? await CacheCoordinator.shared.feed.save(snapshot, for: bookmarksKey)
-            FeedbackToastManager.shared.showError("Erreur lors de l'enregistrement")
+            FeedbackToastManager.shared.showError(String(localized: "post.bookmark.error", defaultValue: "Erreur lors de l'enregistrement", bundle: .main))
         }
     }
 
@@ -684,7 +684,7 @@ class FeedViewModel: ObservableObject {
                 posts[i].comments = snapshot
                 posts[i].commentCount = snapshotCount
             }
-            FeedbackToastManager.shared.showError("Erreur lors de l'envoi du commentaire")
+            FeedbackToastManager.shared.showError(String(localized: "post.comment.error", defaultValue: "Erreur lors de l'envoi du commentaire", bundle: .main))
         }
     }
 
@@ -702,7 +702,7 @@ class FeedViewModel: ObservableObject {
         do {
             try await offlineQueue.enqueue(.toggleLikeComment, payload: payload, conversationId: postId)
         } catch {
-            FeedbackToastManager.shared.showError("Erreur lors du like")
+            FeedbackToastManager.shared.showError(String(localized: "post.like.error", defaultValue: "Erreur lors du like", bundle: .main))
         }
     }
 
@@ -715,7 +715,7 @@ class FeedViewModel: ObservableObject {
                 isQuote: isQuote ? (content != nil) : false
             )
         } catch {
-            FeedbackToastManager.shared.showError("Erreur lors du repost")
+            FeedbackToastManager.shared.showError(String(localized: "post.repost.error", defaultValue: "Erreur lors du repost", bundle: .main))
         }
     }
 
@@ -750,7 +750,7 @@ class FeedViewModel: ObservableObject {
             )
             return response.data.shortUrl
         } catch {
-            FeedbackToastManager.shared.showError("Erreur lors du partage")
+            FeedbackToastManager.shared.showError(String(localized: "post.share.error", defaultValue: "Erreur lors du partage", bundle: .main))
             return nil
         }
     }
@@ -770,19 +770,19 @@ class FeedViewModel: ObservableObject {
                 }
             }
 
-            FeedbackToastManager.shared.showSuccess("Post supprime")
+            FeedbackToastManager.shared.showSuccess(String(localized: "post.delete.success", defaultValue: "Post supprimé", bundle: .main))
         } catch {
             posts = snapshot
-            FeedbackToastManager.shared.showError("Erreur lors de la suppression")
+            FeedbackToastManager.shared.showError(String(localized: "post.delete.error", defaultValue: "Erreur lors de la suppression", bundle: .main))
         }
     }
 
     func reportPost(_ postId: String) async {
         do {
             try await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
-            FeedbackToastManager.shared.showSuccess("Signalement envoye")
+            FeedbackToastManager.shared.showSuccess(String(localized: "post.report.success", defaultValue: "Signalement envoyé", bundle: .main))
         } catch {
-            FeedbackToastManager.shared.showError("Erreur lors du signalement")
+            FeedbackToastManager.shared.showError(String(localized: "post.report.error", defaultValue: "Erreur lors du signalement", bundle: .main))
         }
     }
 
@@ -826,9 +826,9 @@ class FeedViewModel: ObservableObject {
     func pinPost(_ postId: String) async {
         do {
             try await postService.pinPost(postId: postId)
-            FeedbackToastManager.shared.showSuccess("Post epingle")
+            FeedbackToastManager.shared.showSuccess(String(localized: "post.pin.success", defaultValue: "Post épinglé", bundle: .main))
         } catch {
-            FeedbackToastManager.shared.showError("Erreur lors de l'epinglage")
+            FeedbackToastManager.shared.showError(String(localized: "post.pin.error", defaultValue: "Erreur lors de l'épinglage", bundle: .main))
         }
     }
 

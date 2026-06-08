@@ -972,7 +972,7 @@ struct ConversationInfoSheet: View {
                 HStack(spacing: 12) {
                     Image(systemName: "lock.fill")
                         .font(.system(size: 16))
-                        .foregroundColor(Color(hex: "4ECDC4"))
+                        .foregroundColor(MeeshyColors.indigo300)
                         .frame(width: 24)
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -1209,7 +1209,7 @@ struct ConversationInfoSheet: View {
             HStack(spacing: 8) {
                 if isBlocking {
                     ProgressView()
-                        .tint(Color(hex: "EF4444"))
+                        .tint(MeeshyColors.error)
                         .scaleEffect(0.8)
                 } else {
                     Image(systemName: "exclamationmark.shield")
@@ -1218,15 +1218,15 @@ struct ConversationInfoSheet: View {
                 Text(String(localized: "conversation.info.block.title", defaultValue: "Bloquer cet utilisateur", bundle: .main))
                     .font(.system(size: 13, weight: .semibold))
             }
-            .foregroundColor(Color(hex: "EF4444"))
+            .foregroundColor(MeeshyColors.error)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(hex: "EF4444").opacity(isDark ? 0.12 : 0.08))
+                    .fill(MeeshyColors.error.opacity(isDark ? 0.12 : 0.08))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color(hex: "EF4444").opacity(0.2), lineWidth: 1)
+                            .stroke(MeeshyColors.error.opacity(0.2), lineWidth: 1)
                     )
             )
         }
