@@ -2270,7 +2270,21 @@ export function registerMessagesRoutes(
         createdAt: true,
         senderId: true,
         sender: {
-          select: { id: true, userId: true, username: true, displayName: true, avatar: true }
+          // `sender` is a `Participant`, which has no `username`/`isOnline` of
+          // its own — those live on the related `User`. Selecting `username`
+          // directly on Participant throws PrismaClientValidationError and
+          // 500s the whole search. Mirror the canonical message-sender select
+          // (cf. pinned-messages route) and pull username via the `user`
+          // relation; it is flattened back to the top level below so the
+          // userMinimalSchema response serializer keeps it.
+          select: {
+            id: true,
+            userId: true,
+            displayName: true,
+            avatar: true,
+            type: true,
+            user: { select: { id: true, username: true, displayName: true, avatar: true, isOnline: true } }
+          }
         }
       };
 
@@ -2321,13 +2335,26 @@ export function registerMessagesRoutes(
 
       const lastId = results.length > 0 ? results[results.length - 1].id : null;
 
-      // Transform translations JSON → array format for SDK compatibility
-      const mappedResults = results.map((msg: any) => ({
-        ...msg,
-        translations: msg.translations
-          ? transformTranslationsToArray(msg.id, msg.translations as Record<string, any>)
-          : undefined
-      }));
+      // Transform translations JSON → array format for SDK compatibility and
+      // flatten the participant `sender` (username/isOnline come from the nested
+      // `user` relation) so the userMinimalSchema serializer keeps them.
+      const mappedResults = results.map((msg: any) => {
+        const sender = msg.sender;
+        return {
+          ...msg,
+          sender: sender ? {
+            id: sender.id,
+            userId: sender.userId,
+            displayName: sender.displayName ?? sender.user?.displayName ?? null,
+            avatar: sender.avatar ?? sender.user?.avatar ?? null,
+            username: sender.user?.username ?? null,
+            isOnline: sender.user?.isOnline ?? false
+          } : null,
+          translations: msg.translations
+            ? transformTranslationsToArray(msg.id, msg.translations as Record<string, any>)
+            : undefined
+        };
+      });
 
       // NOTE: Cannot use sendSuccess() — response includes a top-level `cursorPagination`
       // field that iOS SDK (MessagesSearchResponse) and web (crud.service.ts) parse at
