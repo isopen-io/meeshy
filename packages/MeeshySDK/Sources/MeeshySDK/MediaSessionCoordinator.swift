@@ -41,11 +41,14 @@ public actor MediaSessionCoordinator {
     /// While `true`, the coordinator must NOT reconfigure or tear down the
     /// shared `AVAudioSession`: the call owns it as `.playAndRecord/.voiceChat`
     /// (via RTCAudioSession) and switching the category to `.playback` mid-call
-    /// mutes the microphone. Pushed (not pulled) because the call state lives on
-    /// `@MainActor` (`CallManager`) while this is an `actor` — reading it
-    /// synchronously across isolation would be a data race. Default `false`
-    /// ⇒ behavior identical to before this seam existed (no app wiring yet).
-    private var callActive = false
+    /// mutes the microphone. `nonisolated(unsafe)` (same pattern as
+    /// `CallManager.isCallActiveFlag`) so the `@MainActor` call layer can push
+    /// the flag SYNCHRONOUSLY from `callState.didSet` — avoiding a `Task`-hop
+    /// whose reordering across rapid call start/end could leave the flag stuck
+    /// `true` (→ session never reconfigured again → post-call audio broken). A
+    /// lone `Bool` write (MainActor) / read (actor executor) needs no further
+    /// synchronization. Default `false` ⇒ behavior identical to before this seam.
+    nonisolated(unsafe) private var callActive = false
     private var observersInstalled = false
     nonisolated(unsafe) private var observerTokens: [any NSObjectProtocol] = []
 
@@ -76,8 +79,10 @@ public actor MediaSessionCoordinator {
     /// Push the app's VoIP call state into the coordinator (call on call
     /// start/end). While active, `request`/`release` skip ALL shared-session
     /// (re)configuration so the call keeps ownership of `.playAndRecord`.
-    /// SDK stays call-layer-agnostic: the app wires this from `CallManager`.
-    public func setCallActive(_ active: Bool) {
+    /// `nonisolated` + synchronous so `CallManager.callState.didSet` can call it
+    /// without a `Task` hop (no reorder risk). SDK stays call-layer-agnostic:
+    /// the app wires this from `CallManager`.
+    public nonisolated func setCallActive(_ active: Bool) {
         callActive = active
     }
 

@@ -45,7 +45,16 @@ final class CallManager: ObservableObject {
     // MARK: - Published State
 
     @Published private(set) var callState: CallState = .idle {
-        didSet { CallManager.isCallActiveFlag = callState.isActive }
+        didSet {
+            let active = callState.isActive
+            CallManager.isCallActiveFlag = active
+            // Étape B unification audio — point de propagation unique de l'état
+            // d'appel : informe MediaSessionCoordinator pour qu'il ne reconfigure
+            // NI ne teardown la session audio partagée pendant un appel (sinon le
+            // micro est coupé — RTCAudioSession possède .playAndRecord/.voiceChat).
+            // Synchrone (setCallActive est nonisolated) → pas de reorder de Task.
+            MediaSessionCoordinator.shared.setCallActive(active)
+        }
     }
     @Published private(set) var transcriptionService = CallTranscriptionService()
     @Published private(set) var remoteUserId: String?
