@@ -1,0 +1,29 @@
+{
+  "pdf": {
+    "loadError": "Unable to load PDF",
+    "openInNewTab": "Open in new tab",
+    "download": "Download",
+    "downloadPdf": "Download PDF",
+    "delete": "Delete this PDF",
+    "fullscreen": "Open fullscreen",
+    "close": "Close",
+    "nativeControls": "Use native PDF controls to navigate • Press Escape to close"
+  },
+  "pptx": {
+    "loadError": "Unable to load presentation",
+    "publicRequired": "The file must be publicly accessible to be viewed",
+    "downloadFile": "Download file",
+    "delete": "Delete this presentation",
+    "fullscreen": "Open fullscreen",
+    "download": "Download"
+  },
+  "markdown": {
+    "loadError": "Unable to load file",
+    "document": "Markdown Document",
+    "formattedView": "Formatted view",
+    "rawView": "Raw view",
+    "download": "Download Markdown file",
+    "close": "Close",
+    "escToClose": "Press Escape to close"
+  }
+}

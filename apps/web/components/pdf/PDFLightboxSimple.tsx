@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 import { formatFileSize } from '@meeshy/shared/types/attachment';
+import { useI18n } from '@/hooks/useI18n';
 
 interface PDFLightboxSimpleProps {
   attachment: UploadedAttachmentResponse | null;
@@ -24,6 +25,7 @@ export const PDFLightboxSimple: React.FC<PDFLightboxSimpleProps> = ({
   isOpen,
   onClose
 }) => {
+  const { t } = useI18n('viewers');
   const [hasError, setHasError] = useState(false);
 
   // Reset error state when opening new PDF
@@ -113,7 +115,7 @@ export const PDFLightboxSimple: React.FC<PDFLightboxSimpleProps> = ({
                 handleOpenInNewTab();
               }}
               className="text-white hover:bg-white/10 w-8 h-8 sm:w-10 sm:h-10"
-              aria-label="Ouvrir dans un nouvel onglet"
+              aria-label={t('pdf.openInNewTab')}
             >
               <ExternalLink className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
@@ -125,7 +127,7 @@ export const PDFLightboxSimple: React.FC<PDFLightboxSimpleProps> = ({
                 handleDownload();
               }}
               className="text-white hover:bg-white/10 w-8 h-8 sm:w-10 sm:h-10"
-              aria-label="Télécharger le PDF"
+              aria-label={t('pdf.downloadPdf')}
             >
               <Download className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
@@ -137,7 +139,7 @@ export const PDFLightboxSimple: React.FC<PDFLightboxSimpleProps> = ({
                 onClose();
               }}
               className="text-white hover:bg-white/10 w-8 h-8 sm:w-10 sm:h-10"
-              aria-label="Fermer"
+              aria-label={t('pdf.close')}
             >
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
@@ -152,7 +154,7 @@ export const PDFLightboxSimple: React.FC<PDFLightboxSimpleProps> = ({
           {hasError ? (
             <div className="flex flex-col items-center justify-center h-full gap-4 text-white">
               <AlertTriangle className="w-16 h-16 text-red-400" />
-              <p className="text-lg">Impossible de charger le PDF</p>
+              <p className="text-lg">{t('pdf.loadError')}</p>
               <p className="text-sm text-gray-400">{attachment.originalName}</p>
               <div className="flex gap-2 mt-4">
                 <Button
@@ -163,7 +165,7 @@ export const PDFLightboxSimple: React.FC<PDFLightboxSimpleProps> = ({
                   }}
                 >
                   <Download className="w-4 h-4 mr-2" />
-                  Télécharger
+                  {t('pdf.download')}
                 </Button>
                 <Button
                   variant="outline"
@@ -173,7 +175,7 @@ export const PDFLightboxSimple: React.FC<PDFLightboxSimpleProps> = ({
                   }}
                 >
                   <ExternalLink className="w-4 h-4 mr-2" />
-                  Ouvrir dans un nouvel onglet
+                  {t('pdf.openInNewTab')}
                 </Button>
               </div>
             </div>
@@ -194,7 +196,7 @@ export const PDFLightboxSimple: React.FC<PDFLightboxSimpleProps> = ({
 
         {/* Instructions */}
         <div className="hidden md:block absolute bottom-4 left-1/2 -translate-x-1/2 text-white/60 text-xs text-center">
-          <p>Utilisez les contrôles natifs du PDF pour naviguer • Échap pour fermer</p>
+          <p>{t('pdf.nativeControls')}</p>
         </div>
       </motion.div>
     </AnimatePresence>,

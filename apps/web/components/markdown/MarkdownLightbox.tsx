@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 import { MermaidDiagram } from '@/components/markdown/MermaidDiagram';
+import { useI18n } from '@/hooks/useI18n';
 
 interface MarkdownLightboxProps {
   attachment: UploadedAttachmentResponse | null;
@@ -28,6 +29,7 @@ export const MarkdownLightbox: React.FC<MarkdownLightboxProps> = ({
   isOpen,
   onClose
 }) => {
+  const { t } = useI18n('viewers');
   const [content, setContent] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
@@ -109,7 +111,7 @@ export const MarkdownLightbox: React.FC<MarkdownLightboxProps> = ({
               {attachment.originalName}
             </span>
             <span className="text-[10px] sm:text-xs text-gray-300">
-              Markdown Document
+              {t('markdown.document')}
             </span>
           </div>
 
@@ -123,8 +125,8 @@ export const MarkdownLightbox: React.FC<MarkdownLightboxProps> = ({
                 toggleRawMode();
               }}
               className="text-white hover:bg-white/10 w-8 h-8 sm:w-10 sm:h-10"
-              title={showRaw ? 'Vue formatée' : 'Vue brute'}
-              aria-label={showRaw ? 'Vue formatée' : 'Vue brute'}
+              title={showRaw ? t('markdown.formattedView') : t('markdown.rawView')}
+              aria-label={showRaw ? t('markdown.formattedView') : t('markdown.rawView')}
               disabled={isLoading || hasError}
             >
               {showRaw ? (
@@ -147,7 +149,7 @@ export const MarkdownLightbox: React.FC<MarkdownLightboxProps> = ({
                 document.body.removeChild(link);
               }}
               className="text-white hover:bg-white/10 w-8 h-8 sm:w-10 sm:h-10"
-              aria-label="Télécharger le fichier Markdown"
+              aria-label={t('markdown.download')}
             >
               <Download className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
@@ -160,7 +162,7 @@ export const MarkdownLightbox: React.FC<MarkdownLightboxProps> = ({
                 onClose();
               }}
               className="text-white hover:bg-white/10 w-8 h-8 sm:w-10 sm:h-10"
-              aria-label="Fermer"
+              aria-label={t('markdown.close')}
             >
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
@@ -180,7 +182,7 @@ export const MarkdownLightbox: React.FC<MarkdownLightboxProps> = ({
                 </div>
               ) : hasError ? (
                 <div className="flex items-center justify-center h-full text-gray-600 dark:text-gray-400">
-                  <span>Impossible de charger le fichier</span>
+                  <span>{t('markdown.loadError')}</span>
                 </div>
               ) : showRaw ? (
                 <pre className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-mono">
@@ -235,7 +237,7 @@ export const MarkdownLightbox: React.FC<MarkdownLightboxProps> = ({
 
         {/* Instructions (desktop only) */}
         <div className="hidden md:block absolute bottom-4 left-1/2 -translate-x-1/2 text-white/60 text-xs text-center">
-          <p>Appuyez sur Échap pour fermer</p>
+          <p>{t('markdown.escToClose')}</p>
         </div>
       </motion.div>
     </AnimatePresence>,

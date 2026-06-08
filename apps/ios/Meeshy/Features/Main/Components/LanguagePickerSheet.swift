@@ -49,7 +49,7 @@ struct ProfileLanguagePickerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { dismiss() }
-                        .foregroundColor(Color(hex: "6366F1"))
+                        .foregroundColor(MeeshyColors.indigo500)
                 }
             }
         }
@@ -72,7 +72,7 @@ struct ProfileLanguagePickerSheet: View {
                 Spacer()
                 if selectedCode.isEmpty {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(Color(hex: "6366F1"))
+                        .foregroundColor(MeeshyColors.indigo500)
                 }
             }
             .padding(.horizontal, 14)
@@ -80,7 +80,7 @@ struct ProfileLanguagePickerSheet: View {
             .background(
                 RoundedRectangle(cornerRadius: 12)
                     .fill(selectedCode.isEmpty
-                        ? Color(hex: "6366F1").opacity(0.1)
+                        ? MeeshyColors.indigo500.opacity(0.1)
                         : Color.clear)
             )
         }
