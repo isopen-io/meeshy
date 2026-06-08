@@ -8,7 +8,10 @@ import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { spawn } from 'child_process';
 import os from 'os';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+
+const logger = enhancedLogger.child({ module: 'UploadProcessor' });
 import {
   getAttachmentType,
   getSizeLimit,
@@ -101,7 +104,7 @@ export class UploadProcessor {
     if (isProduction) {
       const domain = process.env.DOMAIN || 'meeshy.me';
       const url = `https://gate.${domain}`;
-      console.warn('[UploadProcessor] PUBLIC_URL non définie, utilisation du domaine par défaut:', url);
+      logger.warn('PUBLIC_URL non définie, utilisation du domaine par défaut', { url });
       return url;
     }
 
@@ -111,12 +114,12 @@ export class UploadProcessor {
 
       const port = process.env.PORT || '3000';
       const url = `http://localhost:${port}`;
-      console.warn('[UploadProcessor] BACKEND_URL non définie en développement, utilisation de localhost:', url);
+      logger.warn('BACKEND_URL non définie, utilisation de localhost', { url });
       return url;
     }
 
     const fallback = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000';
-    console.error('[UploadProcessor] Impossible de déterminer PUBLIC_URL, utilisation du fallback:', fallback);
+    logger.error('Impossible de déterminer PUBLIC_URL', { fallback });
     return fallback;
   }
 
@@ -205,7 +208,7 @@ export class UploadProcessor {
               await fs.unlink(tempInputPath).catch(() => {});
 
               if (code !== 0) {
-                console.error('[UploadProcessor] ⚠️ Amplification ffmpeg échouée:', stderr);
+                logger.error('Amplification ffmpeg échouée', { stderr });
                 // En cas d'erreur, retourner le buffer original
                 await fs.unlink(tempOutputPath).catch(() => {});
                 resolve(buffer);
@@ -218,24 +221,24 @@ export class UploadProcessor {
               // Nettoyer le fichier de sortie
               await fs.unlink(tempOutputPath).catch(() => {});
 
-              console.log(`[UploadProcessor] ✅ Audio amplifié de +9dB (${buffer.length} → ${amplifiedBuffer.length} bytes)`);
+              logger.debug('Audio amplifié de +9dB', { inputBytes: buffer.length, outputBytes: amplifiedBuffer.length });
               resolve(amplifiedBuffer);
             } catch (error) {
-              console.error('[UploadProcessor] ❌ Erreur lecture audio amplifié:', error);
+              logger.error('Erreur lecture audio amplifié', error as Error);
               await fs.unlink(tempOutputPath).catch(() => {});
               resolve(buffer);
             }
           });
 
           ffmpeg.on('error', async (error) => {
-            console.error('[UploadProcessor] ❌ Erreur spawn ffmpeg:', error);
+            logger.error('Erreur spawn ffmpeg', error as Error);
             await fs.unlink(tempInputPath).catch(() => {});
             await fs.unlink(tempOutputPath).catch(() => {});
             resolve(buffer);
           });
         })
         .catch((error) => {
-          console.error('[UploadProcessor] ❌ Erreur écriture fichier temp:', error);
+          logger.error('Erreur écriture fichier temp', error as Error);
           resolve(buffer);
         });
     });
@@ -254,7 +257,7 @@ export class UploadProcessor {
     // Amplifier automatiquement les fichiers audio
     let finalBuffer = buffer;
     if (mimeType && mimeType.startsWith('audio/')) {
-      console.log(`[UploadProcessor] 🔊 Amplification audio avant sauvegarde...`);
+      logger.debug('Amplification audio avant sauvegarde');
       finalBuffer = await this.amplifyAudio(buffer, mimeType);
     }
 
@@ -263,7 +266,7 @@ export class UploadProcessor {
     try {
       await fs.chmod(fullPath, 0o644);
     } catch (error) {
-      console.error('[UploadProcessor] Impossible de modifier les permissions du fichier:', error);
+      logger.error('Impossible de modifier les permissions du fichier', error as Error);
     }
   }
 
@@ -301,7 +304,7 @@ export class UploadProcessor {
     messageId?: string,
     providedMetadata?: any
   ): Promise<UploadResult> {
-    console.log('📥 [UploadProcessor] uploadFile called:', {
+    logger.debug('uploadFile called', {
       filename: file.filename,
       mimeType: file.mimeType,
       size: file.size,
@@ -309,7 +312,7 @@ export class UploadProcessor {
 
     const validation = this.validateFile(file);
     if (!validation.valid) {
-      console.error('[UploadProcessor] Validation échouée:', validation.error);
+      logger.error('Validation échouée', { error: validation.error });
       throw new Error(validation.error);
     }
 
@@ -435,7 +438,7 @@ export class UploadProcessor {
     messageId?: string,
     providedMetadata?: any
   ): Promise<EncryptedUploadResult> {
-    console.log('🔐 [UploadProcessor] uploadEncryptedFile called:', {
+    logger.debug('uploadEncryptedFile called', {
       filename: file.filename,
       encryptionMode,
     });
@@ -450,7 +453,7 @@ export class UploadProcessor {
     // Amplifier l'audio AVANT chiffrement pour améliorer la transcription/diarization
     let fileBuffer = file.buffer;
     if (attachmentType === 'audio') {
-      console.log(`[UploadProcessor] 🔊 Amplification audio avant chiffrement...`);
+      logger.debug('Amplification audio avant chiffrement');
       fileBuffer = await this.amplifyAudio(file.buffer, file.mimeType);
     }
 
@@ -599,16 +602,13 @@ export class UploadProcessor {
         const fileMetadata = metadataMap?.get(i);
         const result = await this.uploadFile(file, userId, isAnonymous, messageId, fileMetadata);
         results.push(result);
-        console.log(`[UploadProcessor] Fichier uploadé: ${file.filename} (${(file.size / (1024 * 1024)).toFixed(1)}MB)`);
+        logger.info('Fichier uploadé', { filename: file.filename, sizeMB: (file.size / (1024 * 1024)).toFixed(1) });
       } catch (error) {
-        console.error('[UploadProcessor] Erreur upload fichier:', {
-          filename: file.filename,
-          error: error instanceof Error ? error.message : error,
-        });
+        logger.error('Erreur upload fichier', error as Error);
       }
     }
 
-    console.log(`[UploadProcessor] Résultat upload: ${results.length}/${files.length} fichier(s) uploadé(s)`);
+    logger.info('Résultat upload', { uploaded: results.length, total: files.length });
     return results;
   }
 
