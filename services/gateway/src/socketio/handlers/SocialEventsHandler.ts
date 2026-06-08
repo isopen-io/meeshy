@@ -4,7 +4,7 @@
  * vers les rooms feed:{userId} des amis
  */
 
-import type { Server as SocketIOServer } from 'socket.io';
+import type { Server as SocketIOServer, Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -78,7 +78,7 @@ export class SocialEventsHandler {
       this.friendsCache.set(userId, { ids, expiresAt: Date.now() + this.FRIENDS_CACHE_TTL_MS });
       return ids;
     } catch (error) {
-      console.error('[SocialEventsHandler] Error fetching friend IDs:', error);
+      logger.error('social events — error fetching friend IDs', { userId, error });
       return [];
     }
   }
@@ -108,7 +108,7 @@ export class SocialEventsHandler {
   /**
    * Appelé quand un socket reçoit feed:subscribe
    */
-  handleFeedSubscribe(socket: any, userId: string): void {
+  handleFeedSubscribe(socket: Socket, userId: string): void {
     const room = ROOMS.feed(userId);
     socket.join(room);
   }
@@ -116,7 +116,7 @@ export class SocialEventsHandler {
   /**
    * Appelé quand un socket reçoit feed:unsubscribe
    */
-  handleFeedUnsubscribe(socket: any, userId: string): void {
+  handleFeedUnsubscribe(socket: Socket, userId: string): void {
     const room = ROOMS.feed(userId);
     socket.leave(room);
   }
