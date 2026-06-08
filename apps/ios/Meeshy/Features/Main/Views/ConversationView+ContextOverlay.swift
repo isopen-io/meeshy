@@ -168,8 +168,12 @@ extension ConversationView {
             overlayState.detailSheetInitialTab = .language
             dismissContextOverlay()
         case .copy:
-            UIPasteboard.general.string = message.content
+            let effectiveContent = viewModel.preferredTranslation(for: message.id)?.translatedContent ?? message.content
+            UIPasteboard.general.string = effectiveContent
             HapticFeedback.success()
+            FeedbackToastManager.shared.showSuccess(
+                String(localized: "bubble.copy.success", defaultValue: "Message copied", bundle: .main)
+            )
             dismissContextOverlay()
         case .delete:
             overlayState.deleteConfirmMessageId = message.id

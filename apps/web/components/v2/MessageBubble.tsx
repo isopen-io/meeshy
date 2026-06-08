@@ -1,6 +1,7 @@
 'use client';
 
 import { HTMLAttributes, useState, useCallback } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { getLanguageColor } from './theme';
@@ -36,6 +37,10 @@ export interface MessageBubbleProps extends HTMLAttributes<HTMLDivElement> {
   isAnonymous?: boolean;
   /** Callback when a translation is selected */
   onTranslationSelect?: (languageCode: string) => void;
+  /** Translated label for "Original" tag (for i18n callers) */
+  originalLabel?: string;
+  /** Translated label for copy button tooltip */
+  copyLabel?: string;
 }
 
 // Icône chevron
@@ -64,6 +69,8 @@ export function MessageBubble({
   senderAvatar,
   isAnonymous = false,
   onTranslationSelect,
+  originalLabel = 'Original',
+  copyLabel = 'Copy message',
   className,
   ...props
 }: MessageBubbleProps) {
@@ -103,6 +110,15 @@ export function MessageBubble({
       })),
   ];
 
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(displayedVersion.content).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [displayedVersion.content]);
+
   // Sélectionner une version
   const handleSelectVersion = useCallback((version: typeof displayedVersion) => {
     setDisplayedVersion(version);
@@ -124,12 +140,11 @@ export function MessageBubble({
         const avatarContent = (
           <div className="flex-shrink-0 relative">
             {senderAvatar ? (
-              <img
+              <Image
                 src={senderAvatar}
                 alt={sender}
                 width={32}
                 height={32}
-                loading="eager"
                 className="w-8 h-8 rounded-full object-cover"
               />
             ) : (
@@ -190,6 +205,9 @@ export function MessageBubble({
           <div className="relative">
             <button
               onClick={() => otherVersions.length > 0 && setShowLanguageMenu(!showLanguageMenu)}
+              aria-label={`${displayedVersion.languageName}${displayedVersion.isOriginal ? ` (${originalLabel})` : ''} — ${otherVersions.length > 0 ? 'select language' : 'no other versions'}`}
+              aria-expanded={showLanguageMenu}
+              aria-haspopup={otherVersions.length > 0 ? 'listbox' : undefined}
               className={cn(
                 'inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full transition-opacity duration-300',
                 otherVersions.length > 0 && 'hover:opacity-80 cursor-pointer',
@@ -206,7 +224,7 @@ export function MessageBubble({
               <span>{getFlag(displayedVersion.languageCode)}</span>
               <span>{displayedVersion.languageName}</span>
               {displayedVersion.isOriginal && (
-                <span className="text-[10px] opacity-70">(Original)</span>
+                <span className="text-[10px] opacity-70">({originalLabel})</span>
               )}
               {otherVersions.length > 0 && (
                 <ChevronIcon className="w-3 h-3 ml-0.5" direction={showLanguageMenu ? 'up' : 'down'} />
@@ -241,7 +259,7 @@ export function MessageBubble({
                         className="text-[10px] px-1.5 py-0.5 rounded-full transition-colors duration-300"
                         style={{ background: 'var(--gp-parchment)', color: 'var(--gp-text-muted)' }}
                       >
-                        Original
+                        {originalLabel}
                       </span>
                     )}
                   </button>
@@ -252,7 +270,27 @@ export function MessageBubble({
         </div>
 
         {/* Message content */}
-        <p className="text-[0.95rem] leading-relaxed">{displayedVersion.content}</p>
+        <div className="relative group">
+          <p className="text-[0.95rem] leading-relaxed pr-6">{displayedVersion.content}</p>
+          <button
+            onClick={handleCopy}
+            aria-label={copyLabel}
+            className={cn(
+              'absolute top-0 right-0 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity duration-200 p-1 rounded',
+              isSent ? 'hover:bg-white/10' : 'hover:bg-[var(--gp-hover)]'
+            )}
+          >
+            {copied ? (
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            ) : (
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            )}
+          </button>
+        </div>
 
         {/* Translations list (scrollable, max 3 visible) */}
         {otherVersions.length > 0 && (

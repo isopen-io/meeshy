@@ -131,7 +131,8 @@
       "settings": "Paramètres",
       "encryptionE2EE": "Chiffrement de bout en bout",
       "encryptionHybrid": "Chiffrement hybride",
-      "encryptionServer": "Chiffrement serveur"
+      "encryptionServer": "Chiffrement serveur",
+      "unreadInOtherConversations": "messages non lus dans les autres conversations"
     },
     "conversationUI": {
       "participants": "Participants",
@@ -426,4 +427,3 @@
     "pasteTooLongTxtCreated": "Texte trop long : un fichier .txt a été créé automatiquement"
   }
 }
-

@@ -53,25 +53,25 @@ extension ContextAction {
     /// menu. `delete` is the only destructive role; it always renders red
     /// regardless of the conversation's accent color (semantic global rule
     /// from CLAUDE.md).
-    static func reply(label: String = "Répondre") -> ContextAction {
+    static func reply(label: String = String(localized: "action.reply", defaultValue: "Reply", bundle: .main)) -> ContextAction {
         .init(kind: .reply, label: label, icon: "arrowshape.turn.up.left.fill", role: .standard)
     }
-    static func forward(label: String = "Transférer") -> ContextAction {
+    static func forward(label: String = String(localized: "action.forward", defaultValue: "Forward", bundle: .main)) -> ContextAction {
         .init(kind: .forward, label: label, icon: "arrowshape.turn.up.right.fill", role: .standard)
     }
-    static func react(label: String = "Réagir") -> ContextAction {
+    static func react(label: String = String(localized: "context.react", defaultValue: "React", bundle: .main)) -> ContextAction {
         .init(kind: .react, label: label, icon: "face.smiling.fill", role: .primary)
     }
-    static func translate(label: String = "Traduire") -> ContextAction {
+    static func translate(label: String = String(localized: "Traduire", defaultValue: "Translate", bundle: .main)) -> ContextAction {
         .init(kind: .translate, label: label, icon: "globe", role: .standard)
     }
-    static func copy(label: String = "Copier") -> ContextAction {
+    static func copy(label: String = String(localized: "action.copy", defaultValue: "Copy", bundle: .main)) -> ContextAction {
         .init(kind: .copy, label: label, icon: "doc.on.doc.fill", role: .standard)
     }
-    static func delete(label: String = "Supprimer") -> ContextAction {
+    static func delete(label: String = String(localized: "action.delete", defaultValue: "Delete", bundle: .main)) -> ContextAction {
         .init(kind: .delete, label: label, icon: "trash.fill", role: .destructive)
     }
-    static func edit(label: String = "Éditer") -> ContextAction {
+    static func edit(label: String = String(localized: "Éditer", defaultValue: "Edit", bundle: .main)) -> ContextAction {
         .init(kind: .edit, label: label, icon: "pencil", role: .standard)
     }
 }

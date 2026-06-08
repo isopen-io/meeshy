@@ -131,7 +131,8 @@
       "settings": "Configurações",
       "encryptionE2EE": "Criptografia de ponta a ponta",
       "encryptionHybrid": "Criptografia híbrida",
-      "encryptionServer": "Criptografia no servidor"
+      "encryptionServer": "Criptografia no servidor",
+      "unreadInOtherConversations": "mensagens não lidas em outras conversas"
     },
     "conversationUI": {
       "participants": "Participantes",

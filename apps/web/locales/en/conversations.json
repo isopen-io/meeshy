@@ -129,7 +129,8 @@
       "settings": "Settings",
       "encryptionE2EE": "End-to-end encryption",
       "encryptionHybrid": "Hybrid encryption",
-      "encryptionServer": "Server encryption"
+      "encryptionServer": "Server encryption",
+      "unreadInOtherConversations": "unread messages in other conversations"
     },
     "conversationUI": {
       "participants": "Participants",

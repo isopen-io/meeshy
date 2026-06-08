@@ -38,6 +38,8 @@ struct BubbleFooter: View, Equatable {
                 Text(timestamp)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(compactMetaColor)
+                    .accessibilityLabel(timestamp)
+                    .accessibilityAddTraits(.isStaticText)
             }
             if model.delivery != nil {
                 if model.isFailed, let onRetry = actions.onRetry {
@@ -51,7 +53,7 @@ struct BubbleFooter: View, Equatable {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Renvoyer le message")
+                    .accessibilityLabel(String(localized: "bubble.footer.retry", defaultValue: "Resend message", bundle: .main))
                 } else {
                     deliveryView(tint: compactMetaColor, readTint: readColor)
                 }
@@ -157,8 +159,8 @@ struct BubbleFooter: View, Equatable {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(model.showsTranslate
-                                ? "Traduction disponible"
-                                : "Demander une traduction")
+                                ? String(localized: "bubble.footer.translation.available", defaultValue: "Translation available", bundle: .main)
+                                : String(localized: "bubble.footer.translation.request", defaultValue: "Request translation", bundle: .main))
         }
         if !model.flags.isEmpty {
             HStack(spacing: 2) {
@@ -219,8 +221,8 @@ struct BubbleFooter: View, Equatable {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Voir le statut de lecture")
-                .accessibilityHint("Ouvre le detail du message a l'onglet Vues")
+                .accessibilityLabel(String(localized: "bubble.footer.readstatus.label", defaultValue: "View read status", bundle: .main))
+                .accessibilityHint(String(localized: "bubble.footer.readstatus.hint", defaultValue: "Opens message detail on the Seen tab", bundle: .main))
             } else {
                 check
             }
