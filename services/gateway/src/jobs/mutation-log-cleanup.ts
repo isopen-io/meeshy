@@ -15,6 +15,9 @@
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'MutationLogCleanup' });
 
 export const MUTATION_LOG_RETENTION_DAYS = 30;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
@@ -27,34 +30,33 @@ export class MutationLogCleanupJob {
 
   start(): void {
     if (this.intervalId) {
-      console.warn('[MutationLogCleanup] Job already running');
+      logger.warn('Job already running');
       return;
     }
 
-    console.log(
-      `[MutationLogCleanup] Starting cleanup job (retention: ${MUTATION_LOG_RETENTION_DAYS} days, interval: 24h)`
-    );
+    logger.info(`Starting cleanup job (retention: ${MUTATION_LOG_RETENTION_DAYS} days, interval: 24h)`);
 
     // Run shortly after startup so an out-of-band cron doesn't ride on
     // the request critical path. setImmediate keeps server boot snappy.
     setImmediate(() => {
       this.cleanup().catch(err =>
-        console.error('[MutationLogCleanup] Initial cleanup failed:', err)
+        logger.error('Initial cleanup failed', err)
       );
     });
 
     this.intervalId = setInterval(() => {
       this.cleanup().catch(err =>
-        console.error('[MutationLogCleanup] Scheduled cleanup failed:', err)
+        logger.error('Scheduled cleanup failed', err)
       );
     }, this.intervalMs);
+    this.intervalId.unref?.();
   }
 
   stop(): void {
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
-      console.log('[MutationLogCleanup] Cleanup job stopped');
+      logger.info('Cleanup job stopped');
     }
   }
 
@@ -74,13 +76,11 @@ export class MutationLogCleanupJob {
       });
 
       if (result.count > 0) {
-        console.log(
-          `[MutationLogCleanup] ✅ Deleted ${result.count} rows older than ${cutoff.toISOString()}`
-        );
+        logger.info('Deleted old mutation log rows', { count: result.count, cutoff: cutoff.toISOString() });
       }
       return result.count;
     } catch (error) {
-      console.error('[MutationLogCleanup] Error during cleanup:', error);
+      logger.error('Error during cleanup', error as Error);
       return 0;
     }
   }

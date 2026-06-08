@@ -13,6 +13,9 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import speakeasy from 'speakeasy';
 import QRCode from 'qrcode';
 import crypto from 'crypto';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'TwoFactorService' });
 import bcrypt from 'bcryptjs';
 
 // Constants
@@ -144,7 +147,7 @@ export class TwoFactorService {
         margin: 2
       });
 
-      console.log('[2FA] Setup initiated for user:', user.username);
+      logger.debug('2FA setup initiated', { username: user.username });
 
       return {
         success: true,
@@ -154,7 +157,7 @@ export class TwoFactorService {
       };
 
     } catch (error) {
-      console.error('[2FA] Setup error:', error);
+      logger.error('2FA setup error', error as Error);
       return { success: false, error: 'Erreur lors de la configuration du 2FA' };
     }
   }
@@ -217,7 +220,7 @@ export class TwoFactorService {
         }
       });
 
-      console.log('[2FA] Enabled for user:', user.username);
+      logger.debug('2FA enabled', { username: user.username });
 
       return {
         success: true,
@@ -225,7 +228,7 @@ export class TwoFactorService {
       };
 
     } catch (error) {
-      console.error('[2FA] Enable error:', error);
+      logger.error('2FA enable error', error as Error);
       return { success: false, error: 'Erreur lors de l\'activation du 2FA' };
     }
   }
@@ -287,12 +290,12 @@ export class TwoFactorService {
         }
       });
 
-      console.log('[2FA] Disabled for user:', user.username);
+      logger.debug('2FA disabled', { username: user.username });
 
       return { success: true };
 
     } catch (error) {
-      console.error('[2FA] Disable error:', error);
+      logger.error('2FA disable error', error as Error);
       return { success: false, error: 'Erreur lors de la désactivation du 2FA' };
     }
   }
@@ -353,7 +356,7 @@ export class TwoFactorService {
             data: { twoFactorBackupCodes: updatedCodes }
           });
 
-          console.log('[2FA] Backup code used for user:', userId, '- Remaining:', updatedCodes.length);
+          logger.debug('2FA backup code used', { userId, remaining: updatedCodes.length });
 
           return { success: true, usedBackupCode: true };
         }
@@ -362,7 +365,7 @@ export class TwoFactorService {
       return { success: false, error: 'Code invalide' };
 
     } catch (error) {
-      console.error('[2FA] Verify error:', error);
+      logger.error('2FA verify error', error as Error);
       return { success: false, error: 'Erreur lors de la vérification du code' };
     }
   }
@@ -425,7 +428,7 @@ export class TwoFactorService {
         data: { twoFactorBackupCodes: hashedBackupCodes }
       });
 
-      console.log('[2FA] Backup codes regenerated for user:', userId);
+      logger.debug('2FA backup codes regenerated', { userId });
 
       return {
         success: true,
@@ -433,7 +436,7 @@ export class TwoFactorService {
       };
 
     } catch (error) {
-      console.error('[2FA] Regenerate backup codes error:', error);
+      logger.error('2FA regenerate backup codes error', error as Error);
       return { success: false, error: 'Erreur lors de la régénération des codes de secours' };
     }
   }
@@ -448,11 +451,11 @@ export class TwoFactorService {
         data: { twoFactorPendingSecret: null }
       });
 
-      console.log('[2FA] Setup cancelled for user:', userId);
+      logger.debug('2FA setup cancelled', { userId });
       return { success: true };
 
     } catch (error) {
-      console.error('[2FA] Cancel setup error:', error);
+      logger.error('2FA cancel setup error', error as Error);
       return { success: false, error: 'Erreur lors de l\'annulation' };
     }
   }

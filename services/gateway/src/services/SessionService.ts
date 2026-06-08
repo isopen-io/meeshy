@@ -11,6 +11,9 @@
 import { createHash, randomBytes } from 'crypto';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { RequestContext } from './GeoIPService';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'SessionService' });
 
 // Session configuration (configurable via environment variables)
 const SESSION_EXPIRY_MOBILE_DAYS = parseInt(process.env.SESSION_EXPIRY_MOBILE_DAYS || '365'); // 1 year for mobile apps
@@ -100,13 +103,12 @@ function getSessionExpiryDays(deviceInfo: RequestContext['deviceInfo']): number 
 
   // Mobile apps get extended sessions
   if (isMobileApp) {
-    console.log(`[SessionService] 📱 Mobile app detected - session duration: ${SESSION_EXPIRY_MOBILE_DAYS} days`);
-    console.log(`[SessionService] 📱 User-Agent: ${userAgent.substring(0, 50)}...`);
+    logger.debug('Mobile app detected', { expiryDays: SESSION_EXPIRY_MOBILE_DAYS });
     return SESSION_EXPIRY_MOBILE_DAYS;
   }
 
   // Default for desktop/browser
-  console.log(`[SessionService] 💻 Desktop/browser - session duration: ${SESSION_EXPIRY_DESKTOP_DAYS} days`);
+  logger.debug('Desktop/browser session', { expiryDays: SESSION_EXPIRY_DESKTOP_DAYS });
   return SESSION_EXPIRY_DESKTOP_DAYS;
 }
 
@@ -374,7 +376,7 @@ async function logSecurityEvent(
     });
   } catch (error) {
     // Don't fail the main operation if audit logging fails
-    console.error('[SessionService] Failed to log security event:', error);
+    logger.error('Failed to log security event', error as Error);
   }
 }
 
@@ -393,7 +395,7 @@ export async function markSessionTrusted(
 
   // Validate sessionId
   if (!sessionId || typeof sessionId !== 'string') {
-    console.error('[SessionService] ❌ markSessionTrusted: Invalid sessionId provided');
+    logger.error('markSessionTrusted: Invalid sessionId provided');
     return false;
   }
 
@@ -405,17 +407,17 @@ export async function markSessionTrusted(
     });
 
     if (!existingSession) {
-      console.error(`[SessionService] ❌ markSessionTrusted: Session not found - sessionId: ${sessionId}`);
+      logger.error('markSessionTrusted: Session not found');
       return false;
     }
 
     if (!existingSession.isValid) {
-      console.warn(`[SessionService] ⚠️ markSessionTrusted: Session is invalid - sessionId: ${sessionId}`);
+      logger.warn('markSessionTrusted: Session is invalid');
       return false;
     }
 
     if (existingSession.isTrusted) {
-      console.log(`[SessionService] ℹ️ markSessionTrusted: Session already trusted - sessionId: ${sessionId}`);
+      logger.debug('markSessionTrusted: Session already trusted');
       return true; // Already trusted, consider this a success
     }
 
@@ -440,7 +442,7 @@ export async function markSessionTrusted(
       trustedDays: SESSION_EXPIRY_TRUSTED_DAYS
     });
 
-    console.log(`[SessionService] ✅ Session marked trusted - extended to ${SESSION_EXPIRY_TRUSTED_DAYS} days`);
+    logger.info(`Session marked trusted (${SESSION_EXPIRY_TRUSTED_DAYS} days)`);
     return true;
 
   } catch (error) {
@@ -452,7 +454,7 @@ export async function markSessionTrusted(
       error: error instanceof Error ? error.message : 'Unknown error'
     });
 
-    console.error(`[SessionService] ❌ markSessionTrusted failed:`, error instanceof Error ? error.message : error);
+    logger.error('markSessionTrusted failed', error instanceof Error ? error : new Error(String(error)));
     return false;
   }
 }
@@ -486,7 +488,7 @@ export async function extendSessionExpiry(token: string, days?: number): Promise
       },
     });
 
-    console.log(`[SessionService] 🔄 Session extended by ${extensionDays} days`);
+    logger.debug(`Session extended by ${extensionDays} days`);
     return true;
   } catch {
     return false;
@@ -529,13 +531,13 @@ export async function rotateRefreshToken(currentRefreshToken: string): Promise<{
       },
     });
 
-    console.log(`[SessionService] 🔑 Refresh token rotated - session extended by ${extensionDays} days`);
+    logger.debug(`Refresh token rotated (${extensionDays} days)`);
     return {
       newRefreshToken,
       expiresAt: newExpiresAt
     };
   } catch (error) {
-    console.error('[SessionService] ❌ Failed to rotate refresh token:', error);
+    logger.error('Failed to rotate refresh token', error as Error);
     return null;
   }
 }

@@ -4,6 +4,9 @@
  */
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'UnlockAccountsJob' });
 
 export class UnlockAccountsJob {
   private intervalId: NodeJS.Timeout | null = null;
@@ -16,11 +19,11 @@ export class UnlockAccountsJob {
    */
   start(): void {
     if (this.intervalId) {
-      console.warn('[UnlockAccountsJob] Job already running');
+      logger.warn('Job already running');
       return;
     }
 
-    console.log(`[UnlockAccountsJob] Starting unlock job (interval: ${this.intervalHours} hours)`);
+    logger.info(`Starting unlock job (interval: ${this.intervalHours} hours)`);
 
     // Run immediately on start
     this.unlock();
@@ -29,6 +32,7 @@ export class UnlockAccountsJob {
     this.intervalId = setInterval(() => {
       this.unlock();
     }, this.intervalHours * 60 * 60 * 1000);
+    this.intervalId.unref?.();
   }
 
   /**
@@ -38,7 +42,7 @@ export class UnlockAccountsJob {
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
-      console.log('[UnlockAccountsJob] Unlock job stopped');
+      logger.info('Unlock job stopped');
     }
   }
 
@@ -66,11 +70,11 @@ export class UnlockAccountsJob {
       });
 
       if (expiredLocks.length === 0) {
-        console.log('[UnlockAccountsJob] No expired account locks found');
+        logger.debug('No expired account locks found');
         return;
       }
 
-      console.log(`[UnlockAccountsJob] Found ${expiredLocks.length} accounts with expired locks`);
+      logger.info(`Found ${expiredLocks.length} accounts with expired locks`);
 
       // Unlock accounts
       const result = await this.prisma.user.updateMany({
@@ -85,31 +89,27 @@ export class UnlockAccountsJob {
         }
       });
 
-      console.log(`[UnlockAccountsJob] ✅ Unlocked ${result.count} accounts`);
+      logger.info(`Unlocked ${result.count} accounts`);
 
-      // Log security events for each unlock
-      for (const user of expiredLocks) {
-        await this.prisma.securityEvent.create({
-          data: {
-            userId: user.id,
-            eventType: 'ACCOUNT_UNLOCKED',
-            severity: 'MEDIUM',
-            status: 'SUCCESS',
-            description: 'Account automatically unlocked after lock expiration',
-            metadata: {
-              previousLockReason: user.lockedReason,
-              lockedUntil: user.lockedUntil?.toISOString()
-            }
+      await this.prisma.securityEvent.createMany({
+        data: expiredLocks.map(user => ({
+          userId: user.id,
+          eventType: 'ACCOUNT_UNLOCKED',
+          severity: 'MEDIUM',
+          status: 'SUCCESS',
+          description: 'Account automatically unlocked after lock expiration',
+          metadata: {
+            previousLockReason: user.lockedReason,
+            lockedUntil: user.lockedUntil?.toISOString()
           }
-        });
-      }
+        }))
+      });
 
-      // Get updated statistics
       const stats = await this.getStats();
-      console.log('[UnlockAccountsJob] Current stats:', stats);
+      logger.info('Current stats', { stats });
 
     } catch (error) {
-      console.error('[UnlockAccountsJob] Error during unlock:', error);
+      logger.error('Error during unlock', error as Error);
     }
   }
 
