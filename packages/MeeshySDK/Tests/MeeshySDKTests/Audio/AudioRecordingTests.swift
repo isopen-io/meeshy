@@ -1,4 +1,5 @@
 import XCTest
+import AVFoundation
 @testable import MeeshySDK
 
 @MainActor
@@ -111,5 +112,69 @@ final class AudioRecordingTests: XCTestCase {
 
         XCTAssertEqual(recorder.settings.maxDuration, 15.0)
         XCTAssertEqual(recorder.settings.minimumDuration, 2.0)
+    }
+
+    // MARK: - AudioCodec (E4 — Opus upload building block)
+
+    func test_audioCodec_avFormatID_mapsToCoreAudioConstants() {
+        XCTAssertEqual(AudioCodec.aac.avFormatID, kAudioFormatMPEG4AAC)
+        XCTAssertEqual(AudioCodec.opus.avFormatID, kAudioFormatOpus)
+    }
+
+    func test_audioCodec_fileExtension() {
+        XCTAssertEqual(AudioCodec.aac.fileExtension, "m4a")
+        XCTAssertEqual(AudioCodec.opus.fileExtension, "caf")
+    }
+
+    func test_audioCodec_mimeType() {
+        XCTAssertEqual(AudioCodec.aac.mimeType, "audio/mp4")
+        XCTAssertEqual(AudioCodec.opus.mimeType, "audio/opus")
+    }
+
+    // MARK: - AudioRecordingSettings codec + opus preset
+
+    func test_audioRecordingSettings_existingPresets_defaultToAAC() {
+        XCTAssertEqual(AudioRecordingSettings.standard.codec, .aac)
+        XCTAssertEqual(AudioRecordingSettings.story.codec, .aac)
+        XCTAssertEqual(AudioRecordingSettings.voiceSample.codec, .aac)
+    }
+
+    func test_audioRecordingSettings_customInit_defaultsCodecToAAC() {
+        let settings = AudioRecordingSettings(maxDuration: nil, minimumDuration: 1.0)
+        XCTAssertEqual(settings.codec, .aac)
+    }
+
+    func test_audioRecordingSettings_opusVoiceMessage_hasCorrectValues() {
+        let settings = AudioRecordingSettings.opusVoiceMessage
+        XCTAssertEqual(settings.codec, .opus)
+        // Opus does NOT support 44.1 kHz — the preset must use a valid Opus rate.
+        XCTAssertEqual(settings.sampleRate, 48000)
+        XCTAssertEqual(settings.numberOfChannels, 1)
+        XCTAssertEqual(settings.bitRate, 24000)
+    }
+
+    // MARK: - avRecorderSettings dictionary
+
+    /// `.aac` must reproduce the historical AVAudioRecorder dictionary exactly,
+    /// including the AAC-only quality key — otherwise existing recordings change.
+    func test_avRecorderSettings_aac_reproducesHistoricalDictionary() {
+        let dict = AudioRecordingSettings.standard.avRecorderSettings
+
+        XCTAssertEqual(dict[AVFormatIDKey] as? Int, Int(kAudioFormatMPEG4AAC))
+        XCTAssertEqual(dict[AVSampleRateKey] as? Double, 44100)
+        XCTAssertEqual(dict[AVNumberOfChannelsKey] as? Int, 1)
+        XCTAssertEqual(dict[AVEncoderBitRateKey] as? Int, 64000)
+        XCTAssertEqual(dict[AVEncoderAudioQualityKey] as? Int, AVAudioQuality.medium.rawValue)
+    }
+
+    /// `.opus` carries the Opus format id and drops the AAC-only quality key.
+    func test_avRecorderSettings_opus_usesOpusFormatAndDropsQualityKey() {
+        let dict = AudioRecordingSettings.opusVoiceMessage.avRecorderSettings
+
+        XCTAssertEqual(dict[AVFormatIDKey] as? Int, Int(kAudioFormatOpus))
+        XCTAssertEqual(dict[AVSampleRateKey] as? Double, 48000)
+        XCTAssertEqual(dict[AVNumberOfChannelsKey] as? Int, 1)
+        XCTAssertEqual(dict[AVEncoderBitRateKey] as? Int, 24000)
+        XCTAssertNil(dict[AVEncoderAudioQualityKey], "AVEncoderAudioQualityKey is AAC-only; must be absent for Opus")
     }
 }

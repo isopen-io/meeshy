@@ -68,19 +68,23 @@ final class MockMessageService: MessageServiceProviding {
     var lastListLimit: Int?
     var lastListIncludeReplies: Bool?
     var lastListIncludeTranslations: Bool?
+    var lastListLanguages: [String]?
 
     var listBeforeCallCount = 0
     var lastListBeforeConversationId: String?
     var lastListBeforeCursor: String?
+    var lastListBeforeLanguages: [String]?
 
     var listAfterCallCount = 0
     var lastListAfterConversationId: String?
     var lastListAfterAfter: Date?
     var lastListAfterLimit: Int?
+    var lastListAfterLanguages: [String]?
 
     var listAroundCallCount = 0
     var lastListAroundConversationId: String?
     var lastListAroundMessageId: String?
+    var lastListAroundLanguages: [String]?
 
     var sendCallCount = 0
     var lastSendConversationId: String?
@@ -118,7 +122,7 @@ final class MockMessageService: MessageServiceProviding {
 
     // MARK: - Protocol Conformance
 
-    nonisolated func list(conversationId: String, offset: Int, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse {
+    nonisolated func list(conversationId: String, offset: Int, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse {
         await MainActor.run {
             listCallCount += 1
             lastListConversationId = conversationId
@@ -126,35 +130,39 @@ final class MockMessageService: MessageServiceProviding {
             lastListLimit = limit
             lastListIncludeReplies = includeReplies
             lastListIncludeTranslations = includeTranslations
+            lastListLanguages = languages
         }
         return try await MainActor.run { try listResult.get() }
     }
 
-    nonisolated func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse {
+    nonisolated func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse {
         await MainActor.run {
             listBeforeCallCount += 1
             lastListBeforeConversationId = conversationId
             lastListBeforeCursor = before
+            lastListBeforeLanguages = languages
         }
         return try await MainActor.run { try listBeforeResult.get() }
     }
 
-    nonisolated func listAfter(conversationId: String, after: Date, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse {
+    nonisolated func listAfter(conversationId: String, after: Date, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse {
         try await MainActor.run {
             listAfterCallCount += 1
             lastListAfterConversationId = conversationId
             lastListAfterAfter = after
             lastListAfterLimit = limit
+            lastListAfterLanguages = languages
             if !listAfterResults.isEmpty { return listAfterResults.removeFirst() }
             return try listAfterResult.get()
         }
     }
 
-    nonisolated func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse {
+    nonisolated func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse {
         await MainActor.run {
             listAroundCallCount += 1
             lastListAroundConversationId = conversationId
             lastListAroundMessageId = around
+            lastListAroundLanguages = languages
         }
         return try await MainActor.run { try listAroundResult.get() }
     }
@@ -242,17 +250,21 @@ final class MockMessageService: MessageServiceProviding {
         lastListLimit = nil
         lastListIncludeReplies = nil
         lastListIncludeTranslations = nil
+        lastListLanguages = nil
         listBeforeCallCount = 0
         lastListBeforeConversationId = nil
         lastListBeforeCursor = nil
+        lastListBeforeLanguages = nil
         listAfterCallCount = 0
         lastListAfterConversationId = nil
         lastListAfterAfter = nil
         lastListAfterLimit = nil
+        lastListAfterLanguages = nil
         listAfterResults = []
         listAroundCallCount = 0
         lastListAroundConversationId = nil
         lastListAroundMessageId = nil
+        lastListAroundLanguages = nil
         sendCallCount = 0
         lastSendConversationId = nil
         lastSendRequest = nil

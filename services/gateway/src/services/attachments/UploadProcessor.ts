@@ -326,8 +326,20 @@ export class UploadProcessor {
     );
 
     let thumbnailPath: string | null = null;
+    let imageVariants: Array<{ width: number; height: number; url: string; size: number; format: 'webp' }> | undefined;
     if (attachmentType === 'image') {
       thumbnailPath = await this.metadataManager.generateThumbnail(filePath);
+      // D4: responsive WebP variants for srcset — plaintext images only.
+      const variants = await this.metadataManager.generateImageVariants(filePath);
+      if (variants.length > 0) {
+        imageVariants = variants.map((v) => ({
+          width: v.width,
+          height: v.height,
+          url: this.getAttachmentPath(v.path),
+          size: v.size,
+          format: 'webp' as const,
+        }));
+      }
     } else if (attachmentType === 'video') {
       thumbnailPath = await this.metadataManager.generateVideoThumbnail(filePath);
     }
@@ -367,6 +379,7 @@ export class UploadProcessor {
         thumbnailPath: thumbnailPath || undefined,
         thumbnailUrl: thumbnailUrl,
         thumbHash: thumbHash || undefined,
+        imageVariants: imageVariants as any,
         width: metadata.width,
         height: metadata.height,
         duration: metadata.duration,

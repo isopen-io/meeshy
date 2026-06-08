@@ -100,6 +100,70 @@ final class MessageServiceTests: XCTestCase {
         )
     }
 
+    // MARK: - languages (E3 — Prisme bandwidth filter, mirrors gateway A3)
+
+    /// When the caller passes a non-empty Prisme language set, the SDK must
+    /// forward it as `?languages=fr,en` so the gateway returns only those text
+    /// + audio translations instead of every available language.
+    func testListForwardsLanguagesQueryParam() async throws {
+        mock.stub("/conversations/\(convId)/messages", result: makeMessagesResponse())
+
+        _ = try await service.list(conversationId: convId, languages: ["fr", "en"])
+
+        let queryItems = try XCTUnwrap(mock.lastRequest?.queryItems)
+        XCTAssertTrue(
+            queryItems.contains(URLQueryItem(name: "languages", value: "fr,en")),
+            "list(languages:) must serialize the set as a comma list; got \(queryItems)"
+        )
+    }
+
+    /// Default (nil) keeps the historical all-languages behaviour: no
+    /// `languages` query item is emitted, so the gateway returns every
+    /// translation exactly as before.
+    func testListOmitsLanguagesWhenNil() async throws {
+        mock.stub("/conversations/\(convId)/messages", result: makeMessagesResponse())
+
+        _ = try await service.list(conversationId: convId)
+
+        let queryItems = try XCTUnwrap(mock.lastRequest?.queryItems)
+        XCTAssertFalse(
+            queryItems.contains { $0.name == "languages" },
+            "list() without languages must NOT emit a languages filter; got \(queryItems)"
+        )
+    }
+
+    /// An empty array is treated the same as nil (defensive — never emit an
+    /// empty `?languages=` that the gateway would read as "filter to nothing").
+    func testListOmitsLanguagesWhenEmpty() async throws {
+        mock.stub("/conversations/\(convId)/messages", result: makeMessagesResponse())
+
+        _ = try await service.list(conversationId: convId, languages: [])
+
+        let queryItems = try XCTUnwrap(mock.lastRequest?.queryItems)
+        XCTAssertFalse(
+            queryItems.contains { $0.name == "languages" },
+            "list(languages: []) must NOT emit a languages filter; got \(queryItems)"
+        )
+    }
+
+    /// The filter is plumbed through the cursor/watermark/around variants too,
+    /// not just offset pagination — pagination of a filtered list must stay
+    /// filtered.
+    func testListAfterForwardsLanguagesQueryParam() async throws {
+        mock.stub("/conversations/\(convId)/messages", result: makeMessagesResponse())
+
+        _ = try await service.listAfter(
+            conversationId: convId, after: Date(timeIntervalSince1970: 1_750_000_000.5),
+            languages: ["es"]
+        )
+
+        let queryItems = try XCTUnwrap(mock.lastRequest?.queryItems)
+        XCTAssertTrue(
+            queryItems.contains(URLQueryItem(name: "languages", value: "es")),
+            "listAfter(languages:) must forward the filter; got \(queryItems)"
+        )
+    }
+
     // MARK: - listBefore
 
     func testListBeforeCallsWithCorrectEndpoint() async throws {
