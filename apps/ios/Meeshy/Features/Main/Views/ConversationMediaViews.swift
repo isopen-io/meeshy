@@ -210,10 +210,39 @@ final class AttachmentDownloader: ObservableObject {
     @Published var isDownloading = false
     @Published var downloadedBytes: Int64 = 0
     @Published var totalBytes: Int64 = 0
+    /// The `urlString` of the in-flight download, or `nil` when idle. One
+    /// downloader is shared across all language URLs of an audio bubble, so the
+    /// UI must check the in-flight download is for the URL it is rendering — see
+    /// `resolvedAvailability`.
+    @Published var downloadingURL: String?
 
     var progress: Double {
         guard totalBytes > 0 else { return 0 }
         return min(Double(downloadedBytes) / Double(totalBytes), 1.0)
+    }
+
+    /// Pure resolution of the displayed `AudioAvailability` for a SPECIFIC
+    /// selected url, given the shared downloader's state. The `.downloading`
+    /// state is only surfaced when the in-flight download (`downloadingURL`) is
+    /// the `currentURL` being rendered — otherwise switching audio language
+    /// mid-download would show the OTHER language's progress on the newly
+    /// selected one. Idle/cached/other-url cases fall through to the per-url
+    /// resting resolution.
+    nonisolated static func resolvedAvailability(
+        isDownloading: Bool,
+        downloadingURL: String?,
+        currentURL: String,
+        isCached: Bool,
+        progress: Double,
+        downloadedBytes: Int64,
+        totalBytes: Int64,
+        resting: AudioAvailability
+    ) -> AudioAvailability {
+        if isDownloading, downloadingURL == currentURL {
+            return .downloading(progress: progress, downloadedBytes: downloadedBytes, totalBytes: totalBytes)
+        }
+        if isCached { return .ready }
+        return resting
     }
 
     private var downloadTask: Task<Void, Never>?
@@ -289,6 +318,7 @@ final class AttachmentDownloader: ObservableObject {
     ) {
         guard !isDownloading, !isCached else { return }
         isDownloading = true
+        downloadingURL = urlString
         downloadedBytes = 0
         totalBytes = expectedSize
         HapticFeedback.light()
@@ -356,6 +386,7 @@ final class AttachmentDownloader: ObservableObject {
                     self?.downloadedBytes = finalSize
                     self?.totalBytes = finalSize
                     self?.isDownloading = false
+                    self?.downloadingURL = nil
                     self?.isCached = true
                     HapticFeedback.success()
                 }
@@ -363,6 +394,7 @@ final class AttachmentDownloader: ObservableObject {
                 guard !Task.isCancelled else { return }
                 await MainActor.run { [weak self] in
                     self?.isDownloading = false
+                    self?.downloadingURL = nil
                     HapticFeedback.error()
                 }
             }
@@ -373,6 +405,7 @@ final class AttachmentDownloader: ObservableObject {
         downloadTask?.cancel()
         downloadTask = nil
         isDownloading = false
+        downloadingURL = nil
         downloadedBytes = 0
         HapticFeedback.light()
     }
@@ -504,17 +537,16 @@ struct AudioMediaView: View, Equatable {
     /// Propage `downloadedBytes` / `totalBytes` au case `.downloading` pour
     /// que `AudioPlayerView.playButtonLabel` puisse rendre « 410 KB / 850 KB ».
     private var availability: AudioAvailability {
-        if downloader.isDownloading {
-            return .downloading(
-                progress: downloader.progress,
-                downloadedBytes: downloader.downloadedBytes,
-                totalBytes: downloader.totalBytes
-            )
-        }
-        if downloader.isCached {
-            return .ready
-        }
-        return resolvedAvailability
+        AttachmentDownloader.resolvedAvailability(
+            isDownloading: downloader.isDownloading,
+            downloadingURL: downloader.downloadingURL,
+            currentURL: currentAudioUrl,
+            isCached: downloader.isCached,
+            progress: downloader.progress,
+            downloadedBytes: downloader.downloadedBytes,
+            totalBytes: downloader.totalBytes,
+            resting: resolvedAvailability
+        )
     }
 
     /// URL de la langue actuellement sélectionnée (orig ou traduite).

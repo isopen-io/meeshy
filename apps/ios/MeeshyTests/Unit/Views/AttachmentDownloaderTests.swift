@@ -198,4 +198,43 @@ final class MediaAutoDownloadDecisionTests: XCTestCase {
             "Audio resolver must read the audio policy (.always), independent of the video policy (.never)"
         )
     }
+
+    // MARK: - resolvedAvailability (multi-language audio: gate progress on the selected url)
+
+    func test_resolvedAvailability_downloadingCurrentURL_showsDownloading() {
+        let a = AttachmentDownloader.resolvedAvailability(
+            isDownloading: true, downloadingURL: "url-A", currentURL: "url-A",
+            isCached: false, progress: 0.5, downloadedBytes: 50, totalBytes: 100,
+            resting: .needsDownload)
+        XCTAssertEqual(a, .downloading(progress: 0.5, downloadedBytes: 50, totalBytes: 100))
+    }
+
+    /// The downloader is shared across all language URLs of the bubble. If it is
+    /// busy downloading language A but the user switched the selection to language
+    /// B, the in-flight progress MUST NOT be shown on B — it falls through to B's
+    /// own resting resolution.
+    func test_resolvedAvailability_downloadingOtherURL_doesNotLeakProgressToSelected() {
+        let a = AttachmentDownloader.resolvedAvailability(
+            isDownloading: true, downloadingURL: "url-A", currentURL: "url-B",
+            isCached: false, progress: 0.5, downloadedBytes: 50, totalBytes: 100,
+            resting: .needsDownload)
+        XCTAssertEqual(a, .needsDownload,
+                       "a download for another language must not show progress on the selected one")
+    }
+
+    func test_resolvedAvailability_cached_returnsReady() {
+        let a = AttachmentDownloader.resolvedAvailability(
+            isDownloading: false, downloadingURL: nil, currentURL: "url-A",
+            isCached: true, progress: 0, downloadedBytes: 0, totalBytes: 0,
+            resting: .needsDownload)
+        XCTAssertEqual(a, .ready)
+    }
+
+    func test_resolvedAvailability_idle_returnsResting() {
+        let a = AttachmentDownloader.resolvedAvailability(
+            isDownloading: false, downloadingURL: nil, currentURL: "url-A",
+            isCached: false, progress: 0, downloadedBytes: 0, totalBytes: 0,
+            resting: .ready)
+        XCTAssertEqual(a, .ready)
+    }
 }
