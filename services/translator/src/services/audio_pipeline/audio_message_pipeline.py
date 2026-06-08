@@ -809,8 +809,10 @@ class AudioMessagePipeline:
     ) -> Optional[NewVoiceProfileData]:
         """Serialize voice model for Gateway storage"""
         try:
-            # Encode embedding to base64
-            embedding_bytes = voice_model.embedding.tobytes()
+            # D3 — float32 → float16 before serialization: half the bytes, negligible quality loss
+            # for cosine-similarity voice matching (scores remain consistent at float16 precision)
+            embedding_f16 = voice_model.embedding.astype('float16')
+            embedding_bytes = embedding_f16.tobytes()
             embedding_base64 = base64.b64encode(embedding_bytes).decode('utf-8')
 
             # Serialize fingerprint

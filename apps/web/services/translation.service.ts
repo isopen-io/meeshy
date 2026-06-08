@@ -5,6 +5,7 @@
  */
 
 import axios from 'axios';
+import { LRUCache } from '@/lib/lru-cache';
 import type { TranslationModel } from '@meeshy/shared/types';
 
 // === TYPES ET INTERFACES ===
@@ -38,7 +39,8 @@ const TIMEOUT = 30000; // 30 secondes
 
 // === SERVICE DE TRADUCTION ===
 class TranslationService {
-  private cache = new Map<string, TranslationResult>();
+  // Bounded LRU — 500 entries prevent memory leak on long sessions
+  private cache = new LRUCache<string, TranslationResult>(500);
   
   /**
    * Génère une clé de cache pour une traduction

@@ -292,6 +292,10 @@ model User {
 
   // Unified participant model (replaces conversations + anonymousParticipants)
   participations Participant[]
+
+  @@index([lastActiveAt]) // Optimisation: utilisateurs actifs récemment
+  @@index([systemLanguage]) // Optimisation: utilisateurs par langue (broadcast ciblé)
+  @@index([isActive, lastActiveAt]) // Optimisation: utilisateurs actifs triés
 }
 
 /// Conversation entre utilisateurs (direct, group, public, global)
@@ -682,7 +686,10 @@ model Message {
   @@index([conversationId])
   @@index([conversationId, deletedAt, createdAt]) // Optimisation: requête lastMessage avec tri
   @@index([senderId])
+  @@index([senderId, conversationId]) // Optimisation: messages d'un user dans une conv
   @@index([messageSource])
+  @@index([conversationId, messageSource]) // Filtrage rapide messages système (call summaries)
+  @@index([replyToId]) // Expansion thread — évite full-scan sur replyToId nullable
   @@index([createdAt])
 }
 
@@ -938,6 +945,8 @@ model MessageStatusEntry {
   @@index([participantId])
   @@index([readAt])
   @@index([deliveredAt])
+  @@index([conversationId, participantId, readAt]) // Comptage non-lus par participant dans une conversation
+  @@index([participantId, conversationId]) // Historique lecture d'un participant toutes conversations
 }
 
 /// Per-attachment status entry for each user
