@@ -10,6 +10,7 @@ import * as path from 'path';
 import type { Socket } from 'socket.io';
 import type { Server as SocketIOServer } from 'socket.io';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { getCacheStore } from '../../services/CacheStore';
 import { MessagingService } from '../../services/MessagingService';
 import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/notifications/NotificationService';
@@ -123,7 +124,7 @@ export class MessageHandler {
       }
 
       const { participantId, userId, isAnonymous } = userContext;
-      console.log(`[RT-DIAG] message:send received conv=${validated.conversationId} from=${userId ?? participantId} anon=${isAnonymous}`);
+      handlerLogger.debug({ conversationId: validated.conversationId, userId: userId ?? participantId, isAnonymous }, 'message:send received');
 
       const rateLimitAllowed = await this.rateLimiter.checkLimit(userId || participantId, SOCKET_RATE_LIMITS.MESSAGE_SEND);
       if (!rateLimitAllowed) {
@@ -161,11 +162,21 @@ export class MessageHandler {
             .map(p => p.userId)
             .filter((id): id is string => id !== null && id !== userId);
           if (otherMemberIds.length > 0) {
-            const blockers = await this.prisma.user.findMany({
-              where: { id: { in: otherMemberIds }, blockedUserIds: { has: userId } },
-              select: { id: true }
-            });
-            if (blockers.length > 0) {
+            const cacheStore = getCacheStore();
+            const cacheKey = `blocks:${userId}:${otherMemberIds.sort().join(',')}`;
+            const cached = await cacheStore.get(cacheKey);
+            let isBlocked: boolean;
+            if (cached !== null) {
+              isBlocked = cached === '1';
+            } else {
+              const blockers = await this.prisma.user.findMany({
+                where: { id: { in: otherMemberIds }, blockedUserIds: { has: userId } },
+                select: { id: true }
+              });
+              isBlocked = blockers.length > 0;
+              await cacheStore.set(cacheKey, isBlocked ? '1' : '0', 300);
+            }
+            if (isBlocked) {
               this._sendError(callback, 'You are blocked by this user', socket);
               return;
             }
@@ -568,7 +579,7 @@ export class MessageHandler {
         // reconcile via the REST / socket ACK path which carries the cid.
         this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
       }
-      console.log(`[RT-DIAG] message:new emitted conv=${normalizedId} msg=${message.id} senderUserId=${senderUserId ?? 'anon'} room=${room}`);
+      handlerLogger.debug({ conversationId: normalizedId, messageId: message.id, senderUserId: senderUserId ?? 'anon' }, 'message:new emitted');
 
       // Notify each participant's user room that the conversation has
       // been updated (lastMessageAt advanced) so their conversation
@@ -598,7 +609,7 @@ export class MessageHandler {
             updatePayload
           );
         }
-        console.log(`[RT-DIAG] conversation:updated emitted conv=${normalizedId} to ${participants.filter((p) => p.userId).length} user room(s)`);
+        handlerLogger.debug({ conversationId: normalizedId, recipients: participants.filter((p) => p.userId).length }, 'conversation:updated emitted');
       } catch (err) {
         console.warn('[BROADCAST] CONVERSATION_UPDATED emit failed:', err);
       }
