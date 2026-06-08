@@ -14,7 +14,7 @@ struct ShareLinksView: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    private let accentColor = "08D9D6"
+    private let accentColor = "6366F1"
 
     var body: some View {
         ZStack {

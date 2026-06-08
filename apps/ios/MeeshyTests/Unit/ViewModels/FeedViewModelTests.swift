@@ -155,7 +155,7 @@ final class FeedViewModelTests: XCTestCase {
         let post2 = Self.makeAPIPost(id: "p2", content: "Second post")
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [post1, post2]))
 
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         XCTAssertEqual(sut.posts.count, 2)
         XCTAssertEqual(sut.posts[0].id, "p1")

@@ -8,6 +8,7 @@
 import React from 'react';
 import { Signal, SignalHigh, SignalLow, SignalMedium, WifiOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/hooks/useI18n';
 
 interface CallStatusIndicatorProps {
   connectionState: RTCPeerConnectionState;
@@ -22,6 +23,8 @@ export function CallStatusIndicator({
   participantName,
   connectionQuality,
 }: CallStatusIndicatorProps) {
+  const { t } = useI18n('calls');
+
   // Determine connection quality based on state if not provided
   const quality = connectionQuality || getQualityFromState(connectionState);
 
@@ -55,7 +58,7 @@ export function CallStatusIndicator({
             )}
           />
           <span className="text-white text-xs font-medium">
-            {getQualityLabel(quality, connectionState)}
+            {getQualityLabel(quality, connectionState, t)}
           </span>
         </div>
 
@@ -103,23 +106,23 @@ function getQualityIcon(quality: string) {
   }
 }
 
-function getQualityLabel(quality: string, state: RTCPeerConnectionState): string {
-  if (state === 'connecting') return 'Connecting...';
-  if (state === 'new') return 'Starting...';
-  if (state === 'disconnected') return 'Reconnecting...';
-  if (state === 'failed') return 'Connection failed';
-  if (state === 'closed') return 'Disconnected';
+function getQualityLabel(quality: string, state: RTCPeerConnectionState, t: (key: string) => string): string {
+  if (state === 'connecting') return t('calls.status.connecting');
+  if (state === 'new') return t('calls.status.starting');
+  if (state === 'disconnected') return t('calls.status.reconnecting');
+  if (state === 'failed') return t('calls.status.failed');
+  if (state === 'closed') return t('calls.status.disconnected');
 
   switch (quality) {
     case 'excellent':
-      return 'Excellent';
+      return t('calls.status.quality.excellent');
     case 'good':
-      return 'Good';
+      return t('calls.status.quality.good');
     case 'poor':
-      return 'Poor';
+      return t('calls.status.quality.poor');
     case 'offline':
-      return 'Offline';
+      return t('calls.status.quality.offline');
     default:
-      return 'Connected';
+      return t('calls.status.connected');
   }
 }

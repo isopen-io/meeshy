@@ -10,7 +10,7 @@ struct UserStatsView: View {
     private var isDark: Bool { colorScheme == .dark }
     @StateObject private var viewModel = UserStatsViewModel()
 
-    private let accentColor = "4ECDC4"
+    private let accentColor = "6366F1"
 
     var body: some View {
         ZStack {

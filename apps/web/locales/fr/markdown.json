@@ -1,0 +1,9 @@
+{
+  "markdown": {
+    "delete": "Supprimer ce fichier Markdown",
+    "viewFormatted": "Vue formatée",
+    "viewRaw": "Vue brute",
+    "fullscreen": "Ouvrir en plein écran",
+    "download": "Télécharger"
+  }
+}

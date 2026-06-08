@@ -55,7 +55,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   // Stable error handler
   const handleWebRTCError = useCallback((error: Error) => {
     logger.error('[VideoCallInterface]', 'WebRTC error: ' + error.message);
-    toast.error('Call connection error: ' + error.message);
+    toast.error(t('calls.toasts.connectionError') + ': ' + error.message);
   }, []);
 
   // Initialize WebRTC
@@ -318,7 +318,7 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       }
     } catch (error) {
       logger.error('[VideoCallInterface]', 'Video toggle failed: ' + (error instanceof Error ? error.message : 'unknown'));
-      toast.error('Unable to switch video');
+      toast.error(t('calls.toasts.videoSwitchFailed'));
       return;
     }
 
@@ -360,10 +360,10 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       localStream.removeTrack(videoTrack);
       localStream.addTrack(newVideoTrack);
 
-      toast.success('Camera switched');
+      toast.success(t('calls.toasts.cameraSwitched'));
     } catch (error) {
       logger.error('[VideoCallInterface]', 'Failed to switch camera', { error });
-      toast.error('Failed to switch camera');
+      toast.error(t('calls.toasts.cameraSwitchFailed'));
     }
   };
 

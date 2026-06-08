@@ -48,7 +48,7 @@ struct MentionSuggestionPanel: View {
                             .padding(.vertical, 12)
                             .frame(minHeight: 44)
                         }
-                        .accessibilityLabel("Mentionner \(candidate.displayName)")
+                        .accessibilityLabel("\(String(localized: "composer.mention.label", defaultValue: "Mention", bundle: .main)) \(candidate.displayName)")
 
                         if candidate.id != controller.suggestions.last?.id {
                             Divider()

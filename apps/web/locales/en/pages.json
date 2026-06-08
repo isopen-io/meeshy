@@ -125,7 +125,9 @@
         "backDashboard": "Return to dashboard",
         "viewCommunities": "View your communities"
       },
-      "backToDashboard": "Back to dashboard"
+      "backToDashboard": "Back to dashboard",
+      "previousPage": "Previous page",
+      "suggestions": "Suggestions:"
     }
   }
 }

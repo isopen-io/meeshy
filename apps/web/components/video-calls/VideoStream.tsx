@@ -8,6 +8,7 @@
 import React, { useEffect, useRef } from 'react';
 import { MicOff, VideoOff } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/hooks/useI18n';
 
 interface VideoStreamProps {
   stream: MediaStream | null;
@@ -32,6 +33,7 @@ export function VideoStream({
   isDisconnected = false,
   onRemove,
 }: VideoStreamProps) {
+  const { t } = useI18n('calls');
   const videoRef = useRef<HTMLVideoElement>(null);
   const [showDisconnected, setShowDisconnected] = React.useState(false);
   const removeTimeoutRef = useRef<NodeJS.Timeout>(undefined);
@@ -112,8 +114,8 @@ export function VideoStream({
                 <path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
               </svg>
             </div>
-            <p className="text-lg text-white font-semibold">Disconnected</p>
-            <p className="text-sm text-gray-400 mt-1">{participantName || 'Participant'} left the call</p>
+            <p className="text-lg text-white font-semibold">{t('calls.stream.disconnected')}</p>
+            <p className="text-sm text-gray-400 mt-1">{t('calls.stream.participantLeft').replace('{name}', participantName || t('calls.stream.participant'))}</p>
           </div>
         </div>
       )}
@@ -128,12 +130,12 @@ export function VideoStream({
           {/* Audio/Video Status Icons */}
           <div className="flex gap-1">
             {!isAudioEnabled && (
-              <div className="bg-red-600 p-1 rounded-full" title="Microphone muted">
+              <div className="bg-red-600 p-1 rounded-full" title={t('calls.stream.micMuted')}>
                 <MicOff className="w-3 h-3 text-white" />
               </div>
             )}
             {!isVideoEnabled && (
-              <div className="bg-red-600 p-1 rounded-full" title="Video off">
+              <div className="bg-red-600 p-1 rounded-full" title={t('calls.stream.videoOff')}>
                 <VideoOff className="w-3 h-3 text-white" />
               </div>
             )}

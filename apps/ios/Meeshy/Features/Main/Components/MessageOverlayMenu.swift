@@ -1134,7 +1134,7 @@ private struct PreviewAudioPlayer: View {
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Reculer de 5 secondes")
+                .accessibilityLabel(String(localized: "media.skipBack5s", defaultValue: "Skip back 5 seconds", bundle: .main))
 
                 Slider(
                     value: Binding(
@@ -1144,7 +1144,7 @@ private struct PreviewAudioPlayer: View {
                     in: 0...1
                 )
                 .tint(accent)
-                .accessibilityLabel("Position de lecture")
+                .accessibilityLabel(String(localized: "media.playbackPosition", defaultValue: "Playback position", bundle: .main))
                 .accessibilityValue("\(player.percentInt) %")
 
                 // Pourcentage d'avancement
@@ -1162,7 +1162,7 @@ private struct PreviewAudioPlayer: View {
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Avancer de 5 secondes")
+                .accessibilityLabel(String(localized: "media.skipForward5s", defaultValue: "Skip forward 5 seconds", bundle: .main))
             }
         }
         .padding(.horizontal, 12)
@@ -1221,7 +1221,7 @@ private struct PreviewVideoPlayer: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Lire la vidéo")
+                    .accessibilityLabel(String(localized: "media.playVideo", defaultValue: "Play video", bundle: .main))
                 }
             }
             .clipShape(UnevenRoundedRectangle(topLeadingRadius: 14, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 14))
@@ -1267,7 +1267,7 @@ private struct PreviewVideoPlayer: View {
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Reculer de 5 secondes")
+                .accessibilityLabel(String(localized: "media.skipBack5s", defaultValue: "Skip back 5 seconds", bundle: .main))
 
                 Text("\(player.percentInt)%")
                     .font(.system(size: 10, weight: .heavy, design: .monospaced))
@@ -1283,7 +1283,7 @@ private struct PreviewVideoPlayer: View {
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Avancer de 5 secondes")
+                .accessibilityLabel(String(localized: "media.skipForward5s", defaultValue: "Skip forward 5 seconds", bundle: .main))
 
                 Spacer()
 

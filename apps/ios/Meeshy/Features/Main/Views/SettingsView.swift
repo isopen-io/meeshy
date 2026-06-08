@@ -38,7 +38,7 @@ struct SettingsView: View {
     @State private var showMediaDownload = false
     @State private var scrollOffset: CGFloat = 0
 
-    private let accentColor = "08D9D6"
+    private let accentColor = "6366F1"
 
     var body: some View {
         ZStack {

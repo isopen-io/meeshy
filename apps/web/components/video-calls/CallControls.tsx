@@ -10,6 +10,7 @@ import { Mic, MicOff, Video, VideoOff, PhoneOff, SwitchCamera, Volume2, VolumeX,
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { logger } from '@/utils/logger';
+import { useI18n } from '@/hooks/useI18n';
 
 interface CallControlsProps {
   audioEnabled: boolean;
@@ -36,13 +37,12 @@ export function CallControls({
   audioEffectsActive = false,
   showStats = false,
 }: CallControlsProps) {
+  const { t } = useI18n('calls');
   const [speakerEnabled, setSpeakerEnabled] = useState(true);
-
-  // Check if device supports camera switching (mobile)
   const [supportsCameraSwitch, setSupportsCameraSwitch] = useState(false);
+  const { t } = useI18n('calls');
 
   React.useEffect(() => {
-    // Check for mobile device with multiple cameras
     if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
       navigator.mediaDevices.enumerateDevices().then(devices => {
         const videoDevices = devices.filter(device => device.kind === 'videoinput');
@@ -53,12 +53,8 @@ export function CallControls({
 
   const handleSpeakerToggle = async () => {
     try {
-      // Toggle speaker/earpiece mode (mainly for mobile)
       const newEnabled = !speakerEnabled;
       setSpeakerEnabled(newEnabled);
-
-      // Note: Actual speaker routing is browser-dependent
-      // On mobile browsers, audio routing is typically automatic
       logger.debug('[CallControls]', 'Speaker toggled', { enabled: newEnabled });
     } catch (error) {
       logger.error('[CallControls]', 'Failed to toggle speaker', { error });
@@ -76,7 +72,7 @@ export function CallControls({
         'border border-white/10'
       )}
       role="toolbar"
-      aria-label="Call controls"
+      aria-label={t('calls.controls.controls')}
     >
       {/* Mute/Unmute Audio */}
       <Button
@@ -89,8 +85,8 @@ export function CallControls({
             ? 'bg-gray-700 hover:bg-gray-600 text-white'
             : 'bg-red-600 hover:bg-red-700 text-white'
         )}
-        aria-label={audioEnabled ? 'Mute microphone' : 'Unmute microphone'}
-        title={audioEnabled ? 'Mute' : 'Unmute'}
+        aria-label={audioEnabled ? t('calls.controls.mute') : t('calls.controls.unmute')}
+        title={audioEnabled ? t('calls.controls.mute') : t('calls.controls.unmute')}
       >
         {audioEnabled ? (
           <Mic className="w-5 h-5 md:w-6 md:h-6" />
@@ -110,8 +106,8 @@ export function CallControls({
             ? 'bg-gray-700 hover:bg-gray-600 text-white'
             : 'bg-red-600 hover:bg-red-700 text-white'
         )}
-        aria-label={videoEnabled ? 'Turn off video' : 'Turn on video'}
-        title={videoEnabled ? 'Turn off video' : 'Turn on video'}
+        aria-label={videoEnabled ? t('calls.controls.videoOff') : t('calls.controls.videoOn')}
+        title={videoEnabled ? t('calls.controls.videoOff') : t('calls.controls.videoOn')}
       >
         {videoEnabled ? (
           <Video className="w-5 h-5 md:w-6 md:h-6" />
@@ -127,8 +123,8 @@ export function CallControls({
           variant="default"
           onClick={onSwitchCamera}
           className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-gray-700 hover:bg-gray-600 text-white transition-colors touch-manipulation"
-          aria-label="Switch camera"
-          title="Switch camera"
+          aria-label={t('calls.controls.switchCamera')}
+          title={t('calls.controls.switchCamera')}
         >
           <SwitchCamera className="w-5 h-5 md:w-6 md:h-6" />
         </Button>
@@ -145,8 +141,8 @@ export function CallControls({
             ? 'bg-gray-700 hover:bg-gray-600 text-white'
             : 'bg-gray-800 hover:bg-gray-700 text-white'
         )}
-        aria-label={speakerEnabled ? 'Turn off speaker' : 'Turn on speaker'}
-        title={speakerEnabled ? 'Speaker on' : 'Speaker off'}
+        aria-label={speakerEnabled ? t('calls.controls.speakerOff') : t('calls.controls.speakerOn')}
+        title={speakerEnabled ? t('calls.controls.speakerOnLabel') : t('calls.controls.speakerOffLabel')}
       >
         {speakerEnabled ? (
           <Volume2 className="w-5 h-5 md:w-6 md:h-6" />
@@ -167,8 +163,8 @@ export function CallControls({
               ? 'bg-purple-600 hover:bg-purple-700 text-white'
               : 'bg-gray-700 hover:bg-gray-600 text-white'
           )}
-          aria-label="Toggle audio effects"
-          title="Audio Effects"
+          aria-label={t('calls.controls.audioEffects')}
+          title={t('calls.controls.audioEffectsTitle')}
         >
           <Sparkles className="w-5 h-5 md:w-6 md:h-6" />
         </Button>
@@ -186,8 +182,8 @@ export function CallControls({
               ? 'bg-blue-600 hover:bg-blue-700 text-white'
               : 'bg-gray-700 hover:bg-gray-600 text-white'
           )}
-          aria-label="Toggle connection stats"
-          title="Connection Stats"
+          aria-label={t('calls.controls.connectionStats')}
+          title={t('calls.controls.connectionStatsTitle')}
         >
           <BarChart3 className="w-5 h-5 md:w-6 md:h-6" />
         </Button>
@@ -199,8 +195,8 @@ export function CallControls({
         variant="destructive"
         onClick={onHangUp}
         className="w-12 h-12 md:w-14 md:h-14 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors touch-manipulation"
-        aria-label="End call"
-        title="End call"
+        aria-label={t('calls.controls.endCall')}
+        title={t('calls.controls.endCall')}
       >
         <PhoneOff className="w-5 h-5 md:w-6 md:h-6" />
       </Button>

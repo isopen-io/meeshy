@@ -62,7 +62,7 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
   onDelete,
   canDelete = false
 }) => {
-  const { t } = useI18n('viewers');
+  const { t } = useI18n('markdown');
   const [content, setContent] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
@@ -213,7 +213,7 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
             size="sm"
             variant="ghost"
             className="w-8 h-8 p-0 flex-shrink-0"
-            title={showRaw ? t('markdown.formattedView') : t('markdown.rawView')}
+            title={showRaw ? t('markdown.viewFormatted') : t('markdown.viewRaw')}
             disabled={isLoading || hasError}
           >
             {showRaw ? (
