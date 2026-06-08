@@ -155,7 +155,7 @@ export function useSettingsV2(options: UseSettingsV2Options = {}): SettingsV2Ret
       return response.data;
     },
     enabled,
-    staleTime: 5 * 60 * 1000, // 5 minutes - avoid refetching too often
+    staleTime: Infinity,
     placeholderData: { messages: true, mentions: true, communities: true, calls: true, marketing: false },
   });
 
