@@ -37,6 +37,7 @@ export function CallControls({
   audioEffectsActive = false,
   showStats = false,
 }: CallControlsProps) {
+  const { t } = useI18n('calls');
   const [speakerEnabled, setSpeakerEnabled] = useState(true);
   const [supportsCameraSwitch, setSupportsCameraSwitch] = useState(false);
   const { t } = useI18n('calls');
@@ -71,7 +72,7 @@ export function CallControls({
         'border border-white/10'
       )}
       role="toolbar"
-      aria-label={t('calls.controls.toolbar')}
+      aria-label={t('calls.controls.controls')}
     >
       {/* Mute/Unmute Audio */}
       <Button
@@ -84,7 +85,7 @@ export function CallControls({
             ? 'bg-gray-700 hover:bg-gray-600 text-white'
             : 'bg-red-600 hover:bg-red-700 text-white'
         )}
-        aria-label={audioEnabled ? t('calls.controls.muteAudio') : t('calls.controls.unmuteAudio')}
+        aria-label={audioEnabled ? t('calls.controls.mute') : t('calls.controls.unmute')}
         title={audioEnabled ? t('calls.controls.mute') : t('calls.controls.unmute')}
       >
         {audioEnabled ? (
@@ -141,7 +142,7 @@ export function CallControls({
             : 'bg-gray-800 hover:bg-gray-700 text-white'
         )}
         aria-label={speakerEnabled ? t('calls.controls.speakerOff') : t('calls.controls.speakerOn')}
-        title={speakerEnabled ? t('calls.controls.speakerOnTitle') : t('calls.controls.speakerOffTitle')}
+        title={speakerEnabled ? t('calls.controls.speakerOnLabel') : t('calls.controls.speakerOffLabel')}
       >
         {speakerEnabled ? (
           <Volume2 className="w-5 h-5 md:w-6 md:h-6" />
@@ -162,8 +163,8 @@ export function CallControls({
               ? 'bg-purple-600 hover:bg-purple-700 text-white'
               : 'bg-gray-700 hover:bg-gray-600 text-white'
           )}
-          aria-label={t('calls.controls.toggleEffects')}
-          title={t('calls.controls.audioEffects')}
+          aria-label={t('calls.controls.audioEffects')}
+          title={t('calls.controls.audioEffectsTitle')}
         >
           <Sparkles className="w-5 h-5 md:w-6 md:h-6" />
         </Button>
@@ -181,8 +182,8 @@ export function CallControls({
               ? 'bg-blue-600 hover:bg-blue-700 text-white'
               : 'bg-gray-700 hover:bg-gray-600 text-white'
           )}
-          aria-label={t('calls.controls.toggleStats')}
-          title={t('calls.controls.connectionStats')}
+          aria-label={t('calls.controls.connectionStats')}
+          title={t('calls.controls.connectionStatsTitle')}
         >
           <BarChart3 className="w-5 h-5 md:w-6 md:h-6" />
         </Button>

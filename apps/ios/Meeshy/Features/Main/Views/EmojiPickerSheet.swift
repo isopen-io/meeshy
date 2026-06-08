@@ -190,7 +190,7 @@ struct EmojiPickerView: View {
                             .font(.system(size: 14))
                             .foregroundColor(.secondary)
                     }
-                    .accessibilityLabel("Effacer la recherche")
+                    .accessibilityLabel(String(localized: "common.clearSearch", defaultValue: "Clear search", bundle: .main))
                 }
             }
             .padding(.horizontal, 10)

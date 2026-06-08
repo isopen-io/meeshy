@@ -121,6 +121,8 @@
       "title": "Página não encontrada",
       "description": "A página que você está procurando não existe ou foi movida.",
       "backToDashboard": "Voltar ao painel",
+      "previousPage": "Página anterior",
+      "suggestions": "Sugestões:",
       "actions": {
         "backHome": "Voltar ao início",
         "backDashboard": "Painel",

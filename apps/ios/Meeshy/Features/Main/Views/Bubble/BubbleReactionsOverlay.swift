@@ -143,7 +143,7 @@ struct BubbleReactionsOverlay: View, Equatable {
             // recu. Le cercle de hit 40pt deborde toujours de +/-9pt et
             // reste entierement tappable (l'overlay de bulle n'est pas clippe).
             .frame(height: 22)
-            .accessibilityLabel("Ajouter une reaction")
+            .accessibilityLabel(String(localized: "bubble.reactions.add", defaultValue: "Add reaction", bundle: .main))
             .accessibilityHint("Appuyer pour reagir rapidement, maintenir pour choisir un emoji")
     }
 
@@ -168,7 +168,7 @@ struct BubbleReactionsOverlay: View, Equatable {
                         .stroke(accent.opacity(isDark ? 0.25 : 0.15), lineWidth: 0.5)
                 )
         )
-        .accessibilityLabel("\(count) reactions supplementaires")
+        .accessibilityLabel(String(format: String(localized: "bubble.reactions.moreCount", defaultValue: "%d more reactions", bundle: .main), count))
         .accessibilityHint("Voir toutes les reactions")
     }
 

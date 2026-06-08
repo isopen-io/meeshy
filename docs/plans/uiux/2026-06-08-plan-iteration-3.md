@@ -1,50 +1,78 @@
-# Plan UI/UX — Iteration 3
+# Plan UI/UX — Itération 3 (2026-06-08)
 
-**Date**: 2026-06-08  
-**Branche**: claude/dazzling-hawking-Gehte  
-**Analyse source**: docs/analyses/uiux/2026-06-08-iteration-3.md
-
-## Objectifs
-
-Corriger les 7 problèmes identifiés dans l'analyse iter-3 :
-- 4 problèmes Web (W1-W4) : i18n CallControls, i18n+dark PermissionRequest, dark+i18n NotFoundPage, i18n ConnectionQualityBadge
-- 3 problèmes iOS (I1-I3) : MeeshyColors UniversalComposerBar (rouge enreg + purple blur), Dynamic Type Text
+Deux passes parallèles, chacune fusionnée dans main séparément.
 
 ---
 
-## Tasks
+## Passe A — Viewers web + iOS MeeshyColors
 
-### Web
+✅ **COMPLÉTÉE — PR #350 mergée dans main**
 
-- [x] W1 — Ajouter clés `controls.*` dans `locales/{en,fr,es,pt}/calls.json` + `useI18n` dans `CallControls.tsx`
-- [x] W2 — Ajouter clés `permissions.*` dans `locales/{en,fr,es,pt}/calls.json` + `useI18n` dans `PermissionRequest.tsx`
-- [x] W3 — Dark mode classes + clés `notFound.*` dans les 4 locales + `useI18n` dans `not-found-page.tsx`
-- [x] W4 — Ajouter clés `quality.*` dans les 4 locales + `useI18n` dans `ConnectionQualityBadge.tsx`
+### Objectifs
+1. Migrer les strings des viewers (PDF/PPTX/Markdown) vers le namespace i18n `viewers`
+2. Continuer la migration iOS MeeshyColors pour les hex brand-identity restants
 
-### iOS
-
-- [x] I1 — `UniversalComposerBar.swift` : `Color(hex: "FF6B6B"/"FF2E63")` → `MeeshyColors.error`/`MeeshyColors.errorDark`
-- [x] I2 — `UniversalComposerBar.swift` : `Color(hex: "A855F7")` → `MeeshyColors.indigo600`
-- [x] I3 — `UniversalComposerBar.swift` : `Text()` 9pt → `.caption2`, 10-12pt → `.caption`
-
----
-
-## Cohérence cross-platform
-
-Après chaque modification Web : vérifier que le dark mode CSS et les classes Tailwind sont cohérentes avec le thème existant (`globals.css`).
-
-Après modifications iOS : s'assurer que `UniversalComposerBar` s'intègre cohéremment avec `MeeshyColors` dans ConversationView + composer area.
+### Changements effectués
+- Créé `apps/web/locales/{en,fr,es,pt}/viewers.json` avec clés `pdf.*`, `pptx.*`, `markdown.*`
+- Enregistré le namespace dans tous les `index.ts`
+- `PDFViewerWrapper.tsx`, `PDFLightboxSimple.tsx` : `useI18n('viewers')` + remplacement strings
+- `PPTXViewer.tsx` : idem
+- `MarkdownLightbox.tsx` : idem
+- iOS `LanguagePickerSheet.swift` : `Color(hex: "6366F1")` → `MeeshyColors.indigo500`
+- iOS `MiniAudioPlayerBar.swift` : gradient `[6366F1, 4338CA]` → `[indigo500, indigo700]`
+- iOS `ConversationView.swift` : `Color(hex: "4ECDC4")` → `MeeshyColors.indigo400`
 
 ---
 
-## CI Gate
+## Passe B — Video-calls i18n + Accessibilité iOS + Dark mode
 
-- `pnpm -C apps/web build` doit passer (TypeScript strict, pas de any)
-- `./apps/ios/meeshy.sh build` doit passer
-- Merger dans main une fois CI vert
+✅ **COMPLÉTÉE — PR #354 mergée dans main**
+
+### Objectifs
+1. i18n complet des composants video-calls web
+2. i18n MermaidDiagramImpl + MarkdownViewer
+3. Accessibilité iOS systémique (accessibilityLabel non localisés)
+4. Couleurs legacy iOS (accentColor teal/cyan → MeeshyColors.indigo)
+5. Dark mode AdminLayout + not-found-page
+
+### Changements effectués
+
+**Web locales :**
+- `{en,fr,es,pt}/calls.json` — 5 nouvelles sections (status, permissions, controls, stream, toasts)
+- `{en,fr,es,pt}/mermaid.json` — nouveau namespace erreurs Mermaid
+- `{en,fr,es,pt}/markdown.json` — nouveau namespace MarkdownViewer
+- `{en,fr,es,pt}/pages.json` — section `notFound`
+
+**Web composants :**
+- `CallStatusIndicator.tsx` : `useI18n('calls')` + `t('calls.status.*')`
+- `PermissionRequest.tsx` : `useI18n('calls')` + `t('calls.permissions.*')`
+- `CallControls.tsx` : `useI18n('calls')` + `t('calls.controls.*')` sur tous aria-labels/titles
+- `VideoStream.tsx` : `useI18n('calls')` + `t('calls.stream.*')`
+- `DraggableParticipantOverlay.tsx` : fullscreen + drag text → i18n
+- `VideoCallInterface.tsx` : 4 toasts → i18n
+- `MermaidDiagramImpl.tsx` : extraction `MermaidCriticalErrorFallback` + `useI18n('mermaid')`
+- `MarkdownViewer.tsx` : 4 title attrs → `useI18n('markdown')`
+- `AdminLayout.tsx` : header `dark:bg-gray-900 dark:border-gray-800 dark:text-gray-100/400`
+- `not-found-page.tsx` : `useI18n('pages')` + `bg-background` + `text-foreground`
+
+**iOS accessibilité (15 fichiers) :**
+- Tous `.accessibilityLabel("French literal")` → `String(localized:defaultValue:bundle:)`
+- `BubbleFooter`, `BubbleExpandableText`, `BubbleReactionsOverlay`, `BubbleStandardLayout`
+- `MessageContextOverlay`, `StoryViewerView+Canvas`, `SharePickerView`
+- `UniversalComposerBar+Recording`, `MessageOverlayMenu`, `EmojiPickerSheet`
+- `ConversationView+Header`, `ContactsHubView`, `MentionSuggestionPanel`
+- `StoryRepostEmbedCell`, `AchievementBadgeView`
+- `BubbleFooter` : `Color(hex: "4ECDC4")` → `MeeshyColors.indigo400`
+
+**iOS couleurs legacy (9 vues) :**
+- `PrivacySettingsView`, `NotificationSettingsView`, `SettingsView`, `ChangePasswordView`, `ShareLinksView`
+- `UserStatsView`, `LicensesView`, `PrivacyPolicyView`
+- `StatusBarView` : `indigo400` + `indigo500`
 
 ---
 
-## Review résultat
+## Déferré → Itération 4
 
-Après implémentation, documenter ici ce qui a été corrigé et les effets observés.
+- **W-A1** : Admin Agent panel i18n complet (6 composants, grand effort)
+- **iOS Dynamic Type** : `StatusBarView` fonts fixes (`.system(size:)` → sémantique)
+- **iOS `color: "45B7D1"`** restants dans `PrivacySettingsView` sections secondaires

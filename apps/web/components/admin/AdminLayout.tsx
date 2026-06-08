@@ -303,7 +303,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
         {/* Main Content */}
         <div className="flex-1 flex flex-col">
           {/* Top Bar */}
-          <header className="bg-white shadow-sm border-b px-4 sm:px-6 py-4">
+          <header className="bg-white dark:bg-gray-900 shadow-sm border-b dark:border-gray-800 px-4 sm:px-6 py-4">
             <div className="flex items-center justify-between">
               {/* Mobile Menu Button + Title */}
               <div className="flex items-center gap-3">
@@ -317,7 +317,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
                   <Menu className="w-5 h-5" />
                 </Button>
                 <div>
-                  <h2 className="text-lg sm:text-2xl font-bold text-gray-900">
+                  <h2 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
                     {currentPage === '/admin' && 'Tableau de bord'}
                     {currentPage === '/admin/users' && 'Gestion des utilisateurs'}
                     {currentPage === '/admin/moderation' && 'Modération'}
@@ -330,7 +330,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
                     {currentPage === '/admin/agent' && 'Agent IA'}
                     {currentPage === '/admin/monitoring' && 'Monitoring'}
                   </h2>
-                  <p className="text-xs sm:text-sm text-gray-500 mt-1 hidden sm:block">
+                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1 hidden sm:block">
                     Administration Meeshy - Niveau d&apos;accès: {PermissionsService.getRoleDisplayName(user.role)}
                   </p>
                 </div>

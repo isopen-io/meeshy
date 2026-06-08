@@ -2,6 +2,7 @@
 
 import React, { useEffect, useRef, useState, Component, ErrorInfo, ReactNode } from 'react';
 import mermaid from 'mermaid';
+import { useI18n } from '@/hooks/useI18n';
 
 export interface MermaidDiagramProps {
   chart: string;
@@ -73,6 +74,7 @@ const MermaidDiagramInner: React.FC<MermaidDiagramProps> = ({
   chart,
   className = '',
 }) => {
+  const { t } = useI18n('mermaid');
   const containerRef = useRef<HTMLDivElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [svg, setSvg] = useState<string>('');
@@ -86,7 +88,7 @@ const MermaidDiagramInner: React.FC<MermaidDiagramProps> = ({
 
         // Valider le chart avant de tenter le rendu
         if (!chart.trim()) {
-          setError('Le contenu du diagramme est vide');
+          setError(t('mermaid.error.emptyContent'));
           setSvg('');
           return;
         }
@@ -96,12 +98,12 @@ const MermaidDiagramInner: React.FC<MermaidDiagramProps> = ({
         try {
           await mermaid.parse(chart);
         } catch (parseErr: unknown) {
-          const msg = parseErr?.message || parseErr?.str || '';
+          const msg = (parseErr as { message?: string; str?: string })?.message || (parseErr as { message?: string; str?: string })?.str || '';
           const cleanMsg = msg
             .replace(/mermaid version [\d.]+/g, '')
             .replace(/Syntax error in text/gi, '')
             .trim();
-          setError(cleanMsg || 'Syntaxe Mermaid invalide');
+          setError(cleanMsg || t('mermaid.error.invalidSyntax'));
           setSvg('');
           return;
         }
@@ -115,26 +117,27 @@ const MermaidDiagramInner: React.FC<MermaidDiagramProps> = ({
         setError(null);
       } catch (err: unknown) {
         // Supprimer les éléments DOM créés par Mermaid en cas d'erreur
-        const errorElement = document.getElementById(`dmermaid-${err?.hash || ''}`);
+        const errWithHash = err as { hash?: string; message?: string };
+        const errorElement = document.getElementById(`dmermaid-${errWithHash?.hash || ''}`);
         if (errorElement) {
           errorElement.remove();
         }
 
-        const msg = err?.message || '';
+        const msg = errWithHash?.message || '';
         const cleanMsg = msg
           .replace(/mermaid version [\d.]+/g, '')
           .replace(/Syntax error in text/gi, '')
           .trim();
-        setError(cleanMsg || 'Erreur de syntaxe dans le diagramme Mermaid');
+        setError(cleanMsg || t('mermaid.error.syntaxError'));
         setSvg('');
       }
     };
 
     renderDiagram().catch(() => {
-      setError('Impossible de rendre le diagramme');
+      setError(t('mermaid.error.renderError'));
       setSvg('');
     });
-  }, [chart]);
+  }, [chart, t]);
 
   if (error) {
     return (
@@ -145,14 +148,14 @@ const MermaidDiagramInner: React.FC<MermaidDiagramProps> = ({
           <span className="text-amber-600 dark:text-amber-400 text-lg">⚠️</span>
           <div className="flex-1">
             <p className="text-sm text-amber-800 dark:text-amber-300 font-medium mb-1">
-              Diagramme Mermaid invalide
+              {t('mermaid.error.invalidDiagram')}
             </p>
             <p className="text-xs text-amber-700 dark:text-amber-400 font-mono">
               {error}
             </p>
             <details className="mt-2">
               <summary className="text-xs text-amber-600 dark:text-amber-500 cursor-pointer hover:underline">
-                Contenu du diagramme
+                {t('mermaid.error.diagramContent')}
               </summary>
               <pre className="mt-1 text-xs bg-amber-100 dark:bg-amber-900/30 p-2 rounded overflow-x-auto">
                 {chart}
@@ -175,24 +178,32 @@ const MermaidDiagramInner: React.FC<MermaidDiagramProps> = ({
 };
 
 /**
- * Composant public avec Error Boundary pour capturer toutes les erreurs
+ * Fallback interne avec i18n pour l'Error Boundary
  */
-export const MermaidDiagram: React.FC<MermaidDiagramProps> = (props) => {
-  const errorFallback = (
-    <div className={`p-3 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 dark:border-red-600 rounded ${props.className || ''}`}>
+const MermaidCriticalErrorFallback: React.FC<{ className?: string }> = ({ className }) => {
+  const { t } = useI18n('mermaid');
+  return (
+    <div className={`p-3 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-400 dark:border-red-600 rounded ${className || ''}`}>
       <div className="flex items-start gap-2">
         <span className="text-red-600 dark:text-red-400 text-lg">❌</span>
         <div className="flex-1">
           <p className="text-sm text-red-800 dark:text-red-300 font-medium">
-            Erreur critique du diagramme Mermaid
+            {t('mermaid.error.criticalError')}
           </p>
           <p className="text-xs text-red-700 dark:text-red-400 mt-1">
-            Le diagramme n&apos;a pas pu être rendu. Vérifiez la syntaxe.
+            {t('mermaid.error.criticalErrorSubtitle')}
           </p>
         </div>
       </div>
     </div>
   );
+};
+
+/**
+ * Composant public avec Error Boundary pour capturer toutes les erreurs
+ */
+export const MermaidDiagram: React.FC<MermaidDiagramProps> = (props) => {
+  const errorFallback = <MermaidCriticalErrorFallback className={props.className} />;
 
   return (
     <MermaidErrorBoundary fallback={errorFallback}>

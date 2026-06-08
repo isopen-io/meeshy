@@ -21,55 +21,36 @@
         "refresh": "Tente recarregar a página"
       }
     },
-    "controls": {
-      "toolbar": "Controles de chamada",
-      "muteAudio": "Silenciar microfone",
-      "unmuteAudio": "Ativar microfone",
-      "mute": "Silenciar",
-      "unmute": "Ativar",
-      "videoOff": "Desativar câmera",
-      "videoOn": "Ativar câmera",
-      "switchCamera": "Trocar câmera",
-      "speakerOff": "Desativar alto-falante",
-      "speakerOn": "Ativar alto-falante",
-      "speakerOnTitle": "Alto-falante ativo",
-      "speakerOffTitle": "Alto-falante inativo",
-      "toggleEffects": "Efeitos de áudio",
-      "audioEffects": "Efeitos de áudio",
-      "toggleStats": "Estatísticas de conexão",
-      "connectionStats": "Stats de conexão",
-      "endCall": "Encerrar chamada"
-    },
     "permissions": {
-      "title": "Acesso à câmera e microfone",
-      "titleGranted": "Permissões concedidas",
-      "titleDenied": "Permissão negada",
-      "description": "Para entrar nesta videochamada, precisamos de acesso à sua câmera e microfone.",
-      "descriptionGranted": "Agora você pode entrar na videochamada.",
-      "grantAccess": "Conceder acesso",
-      "cancel": "Cancelar",
-      "tryAgain": "Tentar novamente",
-      "requesting": "Permita o acesso no seu navegador...",
+      "title": {
+        "idle": "Acesso à câmera e microfone",
+        "granted": "Permissões concedidas",
+        "denied": "Permissão negada"
+      },
+      "description": {
+        "idle": "Para entrar nesta videochamada, precisamos de acesso à sua câmera e microfone.",
+        "granted": "Agora você pode entrar na videochamada."
+      },
+      "error": {
+        "denied": "Acesso à câmera e microfone negado. Verifique as configurações do seu navegador.",
+        "notFound": "Nenhuma câmera ou microfone encontrado. Conecte um dispositivo e tente novamente.",
+        "notReadable": "A câmera ou o microfone já está sendo usado por outro aplicativo.",
+        "generic": "Não foi possível acessar a câmera e o microfone. Tente novamente.",
+        "unexpected": "Ocorreu um erro inesperado. Tente novamente."
+      },
+      "buttons": {
+        "grantAccess": "Conceder acesso",
+        "cancel": "Cancelar",
+        "tryAgain": "Tentar novamente"
+      },
+      "requesting": "Por favor, permita o acesso no seu navegador...",
       "joining": "Entrando na chamada...",
-      "errorDenied": "Acesso à câmera e ao microfone negado. Verifique as configurações do seu navegador e permita o acesso.",
-      "errorNotFound": "Nenhuma câmera ou microfone encontrado. Conecte um dispositivo e tente novamente.",
-      "errorInUse": "A câmera ou o microfone já está em uso por outro aplicativo.",
-      "errorUnavailable": "Não foi possível acessar a câmera e o microfone. Tente novamente.",
-      "errorUnexpected": "Ocorreu um erro inesperado. Tente novamente.",
-      "howToEnable": "Como habilitar as permissões:",
-      "instructionChrome": "Clique no ícone de câmera na barra de endereços",
-      "instructionFirefox": "Clique no ícone de câmera na barra de endereços",
-      "instructionSafari": "Vá em Ajustes Safari → Privacidade → Câmera/Microfone"
-    },
-    "quality": {
-      "details": "Qualidade de conexão",
-      "quality": "Qualidade:",
-      "packetLoss": "Perda de pacotes:",
-      "latency": "Latência (RTT):",
-      "jitter": "Jitter:",
-      "audioBitrate": "Bitrate de áudio:",
-      "videoBitrate": "Bitrate de vídeo:",
-      "updated": "Atualizado:"
+      "instructions": {
+        "title": "Como ativar as permissões:",
+        "chrome": "Chrome: Clique no ícone de câmera na barra de endereços",
+        "firefox": "Firefox: Clique no ícone de câmera na barra de endereços",
+        "safari": "Safari: Vá em Configurações do Safari > Privacidade > Câmera/Microfone"
+      }
     }
   }
 }

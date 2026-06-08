@@ -141,6 +141,16 @@
       "retry": "Reintentar",
       "cancel": "Eliminar",
       "retrying": "Reintentando..."
+    },
+    "mention": {
+      "badge": {
+        "present": "Presente",
+        "invite": "Invitar"
+      },
+      "title": "Mencionar un usuario",
+      "searchPlaceholder": "Escribe para buscar un usuario...",
+      "noResults": "No se encontró ningún usuario para \"{query}\"",
+      "helpText": "↑↓ navegar • Enter seleccionar • Esc cerrar"
     }
   }
 }

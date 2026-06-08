@@ -85,7 +85,7 @@ struct StoryGestureOverlayView: View {
         Color.clear
             .contentShape(Rectangle())
             .accessibilityElement()
-            .accessibilityLabel("Lecteur de stories")
+            .accessibilityLabel(String(localized: "story.viewer.label", defaultValue: "Stories viewer", bundle: .main))
             .accessibilityHint("Toucher à gauche pour la story précédente, à droite pour la suivante, maintenir pour mettre en pause")
             // `DragGesture(minimumDistance: 0)` capture LE PREMIER touch-down
             // ainsi que le release. C'est le seul moyen fiable en SwiftUI de
@@ -1532,7 +1532,7 @@ struct StoryViewerContentView: View {
                                         .frame(width: 36, height: 36)
                                         .background(Circle().fill(Color.black.opacity(0.5)))
                                 }
-                                .accessibilityLabel("Fermer la story")
+                                .accessibilityLabel(String(localized: "story.viewer.close", defaultValue: "Close story", bundle: .main))
                                 .padding(.leading, 16)
                                 .padding(.top, max(geometry.safeAreaInsets.top, 59) + 4)
                                 Spacer()

@@ -15,7 +15,7 @@ interface NotFoundPageProps {
 export function NotFoundPage({
   title,
   description,
-  suggestions,
+  suggestions
 }: NotFoundPageProps) {
   const router = useRouter();
   const { t } = useI18n('pages');
@@ -28,18 +28,18 @@ export function NotFoundPage({
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md dark:bg-gray-800 dark:border-gray-700">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto w-12 h-12 bg-orange-100 dark:bg-orange-950 rounded-full flex items-center justify-center mb-4">
+          <div className="mx-auto w-12 h-12 bg-orange-100 dark:bg-orange-900/20 rounded-full flex items-center justify-center mb-4">
             <AlertTriangle className="w-6 h-6 text-orange-600 dark:text-orange-400" />
           </div>
-          <CardTitle className="text-xl font-bold text-gray-900 dark:text-gray-100">
+          <CardTitle className="text-xl font-bold text-foreground">
             {resolvedTitle}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-gray-600 dark:text-gray-400 text-center">
+          <p className="text-muted-foreground text-center">
             {resolvedDescription}
           </p>
 
@@ -49,7 +49,7 @@ export function NotFoundPage({
               className="w-full"
             >
               <Home className="w-4 h-4 mr-2" />
-              {t('pages.notFound.actions.backDashboard')}
+              {t('pages.notFound.backToDashboard')}
             </Button>
 
             <Button
@@ -58,17 +58,15 @@ export function NotFoundPage({
               className="w-full dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
-              {t('pages.notFound.backPrevious')}
+              {t('pages.notFound.previousPage')}
             </Button>
           </div>
 
-          <div className="pt-4 border-t dark:border-gray-700">
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
-              {t('pages.notFound.suggestions')}
-            </p>
+          <div className="pt-4 border-t">
+            <p className="text-sm text-muted-foreground mb-2">{t('pages.notFound.suggestions')}</p>
             <ul className="text-sm space-y-1">
               {resolvedSuggestions.map((suggestion, index) => (
-                <li key={index} className="text-gray-600 dark:text-gray-400">
+                <li key={index} className="text-muted-foreground">
                   • {suggestion}
                 </li>
               ))}

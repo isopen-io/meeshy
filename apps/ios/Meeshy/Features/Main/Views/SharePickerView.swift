@@ -194,7 +194,7 @@ struct SharePickerView: View {
                         .font(.system(size: 16))
                         .foregroundColor(theme.textMuted)
                 }
-                .accessibilityLabel("Effacer la recherche")
+                .accessibilityLabel(String(localized: "common.clearSearch", defaultValue: "Clear search", bundle: .main))
             }
         }
         .padding(.horizontal, 12)
@@ -301,7 +301,7 @@ struct SharePickerView: View {
                     .foregroundColor(MeeshyColors.indigo400)
             }
             .disabled(sendingToId != nil)
-            .accessibilityLabel("Envoyer a \(conv.name)")
+            .accessibilityLabel("\(String(localized: "share.sendTo", defaultValue: "Send to", bundle: .main)) \(conv.name)")
         }
     }
 

@@ -137,20 +137,20 @@ struct BubbleEphemeralBadge: View, Equatable {
         HStack(spacing: 4) {
             Image(systemName: "flame.fill")
                 .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(Color(hex: "FF6B6B"))
+                .foregroundColor(MeeshyColors.error)
 
             Text(timerText)
                 .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundColor(Color(hex: "FF6B6B"))
+                .foregroundColor(MeeshyColors.error)
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
         .background(
             Capsule()
-                .fill(Color(hex: "FF6B6B").opacity(isDark ? 0.15 : 0.1))
+                .fill(MeeshyColors.error.opacity(isDark ? 0.15 : 0.1))
                 .overlay(
                     Capsule()
-                        .stroke(Color(hex: "FF6B6B").opacity(0.3), lineWidth: 0.5)
+                        .stroke(MeeshyColors.error.opacity(0.3), lineWidth: 0.5)
                 )
         )
         .accessibilityLabel(String(localized: "bubble.meta.ephemeral.a11y", defaultValue: "Message ephemere, expire dans \(timerText)", bundle: .main))

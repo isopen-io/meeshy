@@ -1,0 +1,29 @@
+{
+  "pdf": {
+    "loadError": "Impossible de charger le PDF",
+    "openInNewTab": "Ouvrir dans un nouvel onglet",
+    "download": "Télécharger",
+    "downloadPdf": "Télécharger le PDF",
+    "delete": "Supprimer ce PDF",
+    "fullscreen": "Ouvrir en plein écran",
+    "close": "Fermer",
+    "nativeControls": "Utilisez les contrôles natifs du PDF pour naviguer • Échap pour fermer"
+  },
+  "pptx": {
+    "loadError": "Impossible de charger la présentation",
+    "publicRequired": "Le fichier doit être accessible publiquement pour être visualisé",
+    "downloadFile": "Télécharger le fichier",
+    "delete": "Supprimer cette présentation",
+    "fullscreen": "Ouvrir en plein écran",
+    "download": "Télécharger"
+  },
+  "markdown": {
+    "loadError": "Impossible de charger le fichier",
+    "document": "Document Markdown",
+    "formattedView": "Vue formatée",
+    "rawView": "Vue brute",
+    "download": "Télécharger le fichier Markdown",
+    "close": "Fermer",
+    "escToClose": "Appuyez sur Échap pour fermer"
+  }
+}

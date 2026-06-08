@@ -1,0 +1,14 @@
+{
+  "mermaid": {
+    "error": {
+      "emptyContent": "Le contenu du diagramme est vide",
+      "invalidSyntax": "Syntaxe Mermaid invalide",
+      "syntaxError": "Erreur de syntaxe dans le diagramme Mermaid",
+      "renderError": "Impossible de rendre le diagramme",
+      "invalidDiagram": "Diagramme Mermaid invalide",
+      "diagramContent": "Contenu du diagramme",
+      "criticalError": "Erreur critique du diagramme Mermaid",
+      "criticalErrorSubtitle": "Le diagramme n'a pas pu être rendu. Vérifiez la syntaxe."
+    }
+  }
+}

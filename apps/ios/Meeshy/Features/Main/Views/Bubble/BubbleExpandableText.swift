@@ -75,7 +75,7 @@ struct BubbleExpandableText: View, Equatable {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Afficher tout le message")
+                .accessibilityLabel(String(localized: "bubble.expand.show", defaultValue: "Show full message", bundle: .main))
             }
         } else {
             VStack(alignment: .leading, spacing: 4) {
@@ -98,7 +98,7 @@ struct BubbleExpandableText: View, Equatable {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Réduire le message")
+                    .accessibilityLabel(String(localized: "bubble.expand.hide", defaultValue: "Collapse message", bundle: .main))
                 }
             }
         }

@@ -27,6 +27,7 @@ import reactions from './reactions.json';
 import editMessage from './editMessage.json';
 import deleteMessage from './deleteMessage.json';
 import languages from './languages.json';
+import viewers from './viewers.json';
 
 export default {
   common,
@@ -58,6 +59,7 @@ export default {
   editMessage,
   deleteMessage,
   languages,
+  viewers,
 };
 
 export {
@@ -90,4 +92,5 @@ export {
   editMessage,
   deleteMessage,
   languages,
+  viewers,
 };

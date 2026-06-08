@@ -94,7 +94,7 @@ struct ContactsHubView: View {
             .frame(maxWidth: .infinity)
             .padding(.top, 10)
         }
-        .accessibilityLabel("Onglet \(tab.rawValue)\(badge > 0 ? ", \(badge) elements" : "")")
+        .accessibilityLabel("\(String(localized: "contacts.tab.prefix", defaultValue: "Tab", bundle: .main)) \(tab.rawValue)\(badge > 0 ? ", \(badge) \(String(localized: "contacts.tab.items", defaultValue: "items", bundle: .main))" : "")")
     }
 
     private func badgeCount(for tab: ContactsTab) -> Int {

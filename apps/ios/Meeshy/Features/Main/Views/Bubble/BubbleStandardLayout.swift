@@ -383,7 +383,7 @@ struct BubbleStandardLayout: View {
                         Color.clear
                             .contentShape(Rectangle())
                             .accessibilityElement(children: .combine)
-                            .accessibilityLabel("Contenu masque")
+                            .accessibilityLabel(String(localized: "bubble.content.hidden", defaultValue: "Hidden content", bundle: .main))
                             .accessibilityHint("Toucher pour reveler le contenu")
                             .onTapGesture { revealBlurredContent() }
                     }
