@@ -487,6 +487,29 @@ final class ConversationSyncEngineTests: XCTestCase {
         XCTAssertEqual(row?.lastMessageId, "m1")
     }
 
+    /// Deleting the conversation's ONLY message leaves no survivor — the stale
+    /// deleted text must be cleared from the row, not left showing the content
+    /// the user just deleted.
+    func test_messageDeleted_onlyMessage_clearsStaleDeletedPreview() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        let m1 = TestFactories.makeMessage(id: "m1", conversationId: "c-del-solo", content: "Only message")
+        try? await CacheCoordinator.shared.messages.save([m1], for: "c-del-solo")
+        let conv = MeeshyConversation(
+            id: "c-del-solo", identifier: "test-c-del-solo", type: .direct,
+            lastMessagePreview: "Only message", lastMessageId: "m1")
+        try? await CacheCoordinator.shared.conversations.save([conv], for: "list")
+        await engine.startSocketRelay()
+
+        mockMessageSocket.messageDeleted.send(MessageDeletedEvent(messageId: "m1", conversationId: "c-del-solo"))
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        let row = cached.first(where: { $0.id == "c-del-solo" })
+        XCTAssertEqual(row?.lastMessagePreview, "",
+                       "deleting the only message must clear the stale deleted text from the row")
+        XCTAssertNil(row?.lastMessageId)
+    }
+
     // Helper: seed the conversations cache with [id, unreadCount] tuples.
     // Uses `save()` (not `update()`): `update()` early-returns when the key
     // is absent from L1, which is exactly the state right after `invalidate`.
@@ -760,5 +783,40 @@ final class ReadReceiptFrontierTests: XCTestCase {
             to: messages, newStatus: .delivered, deliveredCount: 2, readCount: 0, frontier: frontier)
 
         XCTAssertEqual(result[0].deliveryStatus, .read, "a delivered update must not downgrade a read message")
+    }
+}
+
+// MARK: - Last-message survivor after deletion
+
+final class LastMessageSurvivorTests: XCTestCase {
+
+    private func msg(_ id: String, at seconds: TimeInterval, deleted: Bool = false) -> MeeshyMessage {
+        MeeshyMessage(id: id, conversationId: "c", content: id,
+                      deletedAt: deleted ? Date(timeIntervalSince1970: seconds) : nil,
+                      createdAt: Date(timeIntervalSince1970: seconds))
+    }
+
+    func test_survivor_picksMostRecentNonDeleted_excludingTarget() {
+        let messages = [msg("m1", at: 100), msg("m2", at: 200), msg("m3", at: 300)]
+        let survivor = ConversationSyncEngine.mostRecentSurvivor(in: messages, excluding: "m3")
+        XCTAssertEqual(survivor?.id, "m2", "the newest surviving message becomes the preview")
+    }
+
+    /// The bug case: the deleted message was the only one — no survivor, so the
+    /// caller must clear the stale preview rather than leave the deleted text.
+    func test_survivor_nilWhenOnlyMessageDeleted() {
+        let messages = [msg("m1", at: 100)]
+        XCTAssertNil(ConversationSyncEngine.mostRecentSurvivor(in: messages, excluding: "m1"))
+    }
+
+    func test_survivor_skipsAlreadyDeletedMessages() {
+        let messages = [msg("m1", at: 100), msg("m2", at: 200, deleted: true)]
+        let survivor = ConversationSyncEngine.mostRecentSurvivor(in: messages, excluding: "m3")
+        XCTAssertEqual(survivor?.id, "m1", "an already-deleted newer message is not a valid survivor")
+    }
+
+    func test_survivor_nilWhenEverythingDeletedOrExcluded() {
+        let messages = [msg("m1", at: 100, deleted: true), msg("m2", at: 200)]
+        XCTAssertNil(ConversationSyncEngine.mostRecentSurvivor(in: messages, excluding: "m2"))
     }
 }
