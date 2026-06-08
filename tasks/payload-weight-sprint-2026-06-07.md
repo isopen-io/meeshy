@@ -59,7 +59,7 @@ chaque frame WebSocket, chaque blob média.
 ## Phase B — Filtrage par destinataire + compaction (breaking, versionné)
 | Item | Statut | Détail |
 |---|---|---|
-| **B1** Filtre langue par socket | 🟡 **Cœur livré, flag OFF** | Fonction pure `filterMessagePayloadForLanguages` (texte + audio) + 7 tests. Câblée dans `_broadcastNewMessage` via `_emitMessageNewByLanguage` (emit groupé par langue, zéro requête DB — utilise `SocketUser.language` + `socketToUser`). **Gardée derrière `SOCKET_LANG_FILTER` (OFF par défaut)** : comportement prod inchangé jusqu'à validation staging (mesure avant/après + vérif multi-device). |
+| **B1** Filtre langue par socket | 🔴 **Cœur livré, flag ON par défaut — ÉCART** | Fonction pure `filterMessagePayloadForLanguages` (texte + audio) + 7 tests. Câblée dans `_broadcastNewMessage` via `_emitMessageNewByLanguage` (emit groupé par langue, zéro requête DB — utilise `SocketUser.language` + `socketToUser`). ⚠️ **ÉCART code/doc** : le garde réel est `if (process.env.SOCKET_LANG_FILTER !== 'false')` (`MeeshySocketIOManager.ts:1507`) → le filtre est **actif en prod par défaut**, désactivable seulement via `SOCKET_LANG_FILTER=false`. La décision d'origine (« comportement prod inchangé jusqu'à validation staging ») n'est **pas** respectée. Voir checklist B1 §Activation pour la résolution (corriger le défaut → opt-in, OU valider et assumer l'opt-out). |
 
 ### B1 — reste à faire pour activer en prod
 - Mesurer en staging avec `SOCKET_LANG_FILTER=true` (octets émis avant/après, latence emit groupé).
@@ -121,6 +121,98 @@ Plan SOTA (grouper par jeu-de-langues pour éviter N sérialisations) :
 | **E4** Compression upload client | 🟡 **Building block SDK livré, activation différée**. Voix enregistrée aujourd'hui en AAC/M4A (mono, 44.1 kHz, 64-96 kbps), uploadée brute (TUS, `audio/mp4`). Ajouté : enum `AudioCodec` (`.aac`/`.opus`) avec mappings purs (`avFormatID`, `fileExtension`, `mimeType`), champ `AudioRecordingSettings.codec` (défaut `.aac` → non-breaking), preset `opusVoiceMessage` (mono, 48 kHz — Opus ne supporte PAS 44.1 —, 24 kbps ≈ −60-75 % vs AAC), et builder pur `avRecorderSettings` (centralise le dict AVAudioRecorder ; `.aac` byte-identique à l'historique). `DefaultSDKAudioRecorder` câblé sur le builder (branche Opus dormante, atteinte seulement via `.opusVoiceMessage`). 9 tests SDK. **Reste (activation, breaking versionné + validation device)** : (1) `AudioRecorderManager` (app) + sites d'appel passent `.opusVoiceMessage` ; (2) `AttachmentPreparationService`/`AttachmentSendService` dérivent `mimeType`/extension du codec (au lieu de `audio/mp4` en dur) ; (3) valider on-device que `AVAudioRecorder` produit bien le conteneur au sample rate choisi ; (4) lecture cross-client — CAF-Opus n'est pas lisible en navigateur → la gateway devra remux Ogg/WebM pour le web. |
 
 > ⚠️ **Non builé dans ce container** : pas de toolchain Swift/Xcode. Les changements suivent exactement le pattern `includeTranslations` existant (prouvé) ; `./apps/ios/meeshy.sh test` + build SDK tournent en CI/local.
+
+---
+
+## Checklists d'activation
+
+Chaque item « 🟡 building block livré » ou « gated par flag » a sa procédure d'activation
+ci-dessous. **Toutes les bascules de défaut sont *breaking-si-mal-versionnées*** : web + iOS
+doivent supporter le nouveau format AVANT le flip serveur (cf. décision cadrante #2).
+
+> **Légende statut** — ☐ à faire · ☑ fait · ⚠️ point de décision/risque.
+
+### ⚠️ B1 — Filtre langue par socket (à RÉSOUDRE en priorité : flag actuellement ON)
+
+> **État réel** : `SOCKET_LANG_FILTER` est **actif par défaut en prod** (`!== 'false'`), alors
+> que la doc d'origine le présentait comme OFF. Deux résolutions possibles — **trancher avant
+> tout le reste** car ça touche le hot-path 100k msg/s en prod *aujourd'hui*.
+
+**Option 1 — Restaurer l'intention d'origine (opt-in, recommandé tant que non validé staging)**
+- ☐ `MeeshySocketIOManager.ts:1507` : passer le garde à `=== 'true'` (défaut OFF, opt-in explicite).
+- ☐ Mettre à jour le commentaire ligne 1506 (« Enable explicitly with `SOCKET_LANG_FILTER=true` »).
+- ☐ Confirmer aucun env de prod/staging ne pose déjà `SOCKET_LANG_FILTER` (sinon comportement inchangé).
+
+**Option 2 — Assumer l'opt-out (garder ON), après validation**
+- ☐ Mesure staging `SOCKET_LANG_FILTER` ON vs `=false` : octets émis/msg, latence `_emitMessageNewByLanguage`, CPU sérialisation groupée.
+- ☐ Vérif multi-device : un même user sur 2 appareils aux langues différentes reçoit chacun le bon sous-ensemble.
+- ☐ Vérif Prisme : un destinataire dont la traduction préférée est absente reçoit bien l'**original** (jamais `translations.first`).
+
+**Pré-requis communs à l'activation complète (les deux options)**
+- ☐ Enrichir `SocketUser` à l'auth : remplacer `language` (primaire seule) par le **set Prisme complet** résolu via `resolveUserLanguage()` (systemLanguage → regionalLanguage → customDestinationLanguage → deviceLocale), et filtrer sur ce set.
+- ☐ Étendre le filtrage à la **delivery queue offline** (`RedisDeliveryQueue`, ≈ ligne 1517) — aujourd'hui payload complet par destinataire.
+- ☐ Étendre au **re-emit `senderSocket`** (ligne 1515) — aujourd'hui payload complet (blast-radius volontairement minimal).
+- ☐ Négociation handshake `supportsLangFilter` : les vieux clients (sans support du payload filtré) continuent de recevoir TOUTES les langues.
+- ☐ Instrumentation : compteur bytes émis par type d'event (cf. §Métriques).
+
+**Rollback** : `SOCKET_LANG_FILTER=false` (instantané, sans redéploiement).
+
+### A3 + E3 — Filtre langue REST `?languages=` (serveur livré, adoption client à activer)
+
+> Serveur (A3) et building block SDK (E3) livrés et non-breaking. Reste l'**adoption** côté apps.
+
+**iOS**
+- ☐ `ConversationViewModel` : passer `preferredLanguages` (set Prisme via `resolveUserLanguage()`) aux call sites `MessageService.list/listBefore/listAfter/listAround`.
+- ☐ Gérer le **refetch on-language-switch** : changer de langue primaire → invalider/recharger la fenêtre courante avec le nouveau filtre.
+- ☐ Exploration hors-Prisme (long-press « voir autre langue ») → fetch on-demand de la langue demandée (validation produit on-device requise).
+- ☐ E2 (subsumé) : vérifier que le ViewModel ne décode/stocke plus que les langues reçues.
+
+**Web**
+- ☐ Plomber `?languages=` dans les hooks `use-messages-query` / `use-conversation-messages-rq` à partir des préférences utilisateur.
+
+**Validation** : diff octets `GET /messages` avec vs sans `?languages=` (devrait chuter ~×N langues).
+**Rollback** : omettre le param `languages` → comportement actuel (toutes langues).
+
+### D1 — Opus pour TTS/voix (encodage livré, défaut `mp3`)
+
+- ☐ **Pré-requis client** : web + iOS savent décoder Opus servi par la gateway (Phase E ci-dessous).
+- ☐ Flip `TTS_DEFAULT_FORMAT=opus` (translator) — `services/translator/.env.example:126`.
+- ☐ Régler `TTS_OPUS_BITRATE` si besoin (défaut `32k`, mono VoIP).
+- ☐ Vérifier la lecture cross-client de l'audio TTS Opus (web Audio API + iOS `AVPlayer`).
+- ☐ Mesurer la taille des blobs TTS avant/après par langue.
+
+**Rollback** : `TTS_DEFAULT_FORMAT=mp3`.
+
+### D4 — Variantes image WebP/AVIF (WebP responsive livré ; reste AVIF + E2EE)
+
+- ☑ Thumbnails WebP + variantes responsive WebP (`createResponsiveVariants`, `imageVariants` Json) — images **non chiffrées** uniquement.
+- ☐ **AVIF** : activer l'encodage (util format-paramétrable prêt) une fois `libheif`/`aom` disponibles dans l'image runtime gateway ; gater par capacité `Accept` client.
+- ☐ **Images E2EE** : générer les variantes **côté client** (le serveur ne voit que le chiffré — pas de variante serveur d'une image E2EE).
+- ☐ CI : `prisma generate` + type-check + jest gateway (non exécutables dans le container éphémère).
+- ☐ Client : construire le `srcset` à partir de `imageVariants` (web `<img srcset>`, iOS sélection par taille d'affichage × scale).
+
+### E4 — Upload voix Opus (building block SDK livré, défaut `.aac`)
+
+> Breaking versionné + validation device. Ne PAS flip sans le remux gateway (point 4).
+
+- ☐ `AudioRecorderManager` (app) + sites d'appel passent le preset `.opusVoiceMessage`.
+- ☐ `AttachmentPreparationService` / `AttachmentSendService` dérivent `mimeType`/extension **du codec** (au lieu de `audio/mp4` en dur).
+- ☐ Valider on-device qu'`AVAudioRecorder` produit bien le conteneur attendu au sample rate choisi (Opus = 48 kHz, pas 44.1).
+- ☐ **Gateway remux** : CAF-Opus iOS n'est pas lisible en navigateur → la gateway doit remux en Ogg/WebM pour la lecture web (bloquant pour le cross-client).
+- ☐ Négocier la version : vieux clients continuent d'uploader/lire AAC.
+
+**Rollback** : repasser les sites d'appel sur le preset AAC (défaut conservé).
+
+### E1 — `Accept-Encoding` iOS
+
+- ☑ **Verrouillé** : ne RIEN poser à la main (`URLSession` annonce gzip/br + décode auto). Commentaire anti-régression en place. Aucune action requise — ne pas réintroduire le header.
+
+### Ordre d'activation recommandé
+
+1. **B1** — trancher l'écart flag (option 1 ou 2) — *touche la prod aujourd'hui*.
+2. **A3+E3** — adoption client REST (non-breaking, gain immédiat, faible risque).
+3. **D4** — AVIF + variantes E2EE client.
+4. **Phase E client decode Opus** → **D1** (TTS Opus) → **E4** (upload Opus + remux) — chaîne audio, breaking, en dernier.
 
 ---
 
