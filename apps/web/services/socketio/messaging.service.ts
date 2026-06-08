@@ -42,6 +42,7 @@ export class MessagingService {
   private messageListeners: Set<MessageListener> = new Set();
   private editListeners: Set<MessageEditListener> = new Set();
   private deleteListeners: Set<MessageDeleteListener> = new Set();
+  private expireListeners: Set<MessageDeleteListener> = new Set();
   private mentionListeners: Set<(data: unknown) => void> = new Set();
   private consumedListeners: Set<(data: MessageConsumedEventData) => void> = new Set();
   private attachmentStatusListeners: Set<(data: AttachmentStatusUpdatedEventData) => void> = new Set();
@@ -148,6 +149,12 @@ export class MessagingService {
     socket.on(SERVER_EVENTS.MESSAGE_DELETED, (data) => {
       logger.debug('[MessagingService]', 'Message deleted', { messageId: data.messageId });
       this.deleteListeners.forEach(listener => listener(data.messageId));
+    });
+
+    // Expired ephemeral message (server-side purge)
+    socket.on(SERVER_EVENTS.MESSAGE_EXPIRED, (data) => {
+      logger.debug('[MessagingService]', 'Message expired', { messageId: data.messageId });
+      this.expireListeners.forEach(listener => listener(data.messageId));
     });
 
     socket.on(SERVER_EVENTS.MESSAGE_CONSUMED, (data: MessageConsumedEventData) => {
@@ -469,12 +476,14 @@ export class MessagingService {
     return () => this.editListeners.delete(listener);
   }
 
-  /**
-   * Event listener: Message deleted
-   */
   onMessageDeleted(listener: MessageDeleteListener): UnsubscribeFn {
     this.deleteListeners.add(listener);
     return () => this.deleteListeners.delete(listener);
+  }
+
+  onMessageExpired(listener: MessageDeleteListener): UnsubscribeFn {
+    this.expireListeners.add(listener);
+    return () => this.expireListeners.delete(listener);
   }
 
   /**
@@ -502,6 +511,7 @@ export class MessagingService {
     this.messageListeners.clear();
     this.editListeners.clear();
     this.deleteListeners.clear();
+    this.expireListeners.clear();
     this.mentionListeners.clear();
     this.consumedListeners.clear();
     this.attachmentStatusListeners.clear();

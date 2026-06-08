@@ -551,6 +551,8 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeMessage = meeshySocketIOService.onNewMessage(handleNewMessage);
     const unsubscribeEdit = meeshySocketIOService.onMessageEdited(handleMessageEdited);
     const unsubscribeDelete = meeshySocketIOService.onMessageDeleted(handleMessageDeleted);
+    // Expired ephemeral messages use the same cache-removal path as deleted messages.
+    const unsubscribeExpire = meeshySocketIOService.onMessageExpired(handleMessageDeleted);
     const unsubscribeTranslation = meeshySocketIOService.onTranslation(handleTranslation);
     const unsubscribeUnread = meeshySocketIOService.onUnreadUpdated(handleUnreadUpdated);
     const unsubscribeTranscription = meeshySocketIOService.onTranscription(handleTranscription);
@@ -575,6 +577,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       unsubscribeMessage?.();
       unsubscribeEdit?.();
       unsubscribeDelete?.();
+      unsubscribeExpire?.();
       unsubscribeTranslation?.();
       unsubscribeUnread?.();
       unsubscribeTranscription?.();

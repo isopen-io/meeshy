@@ -259,6 +259,10 @@ class MeeshySocketIOService {
     return this.orchestrator.onMessageDeleted(listener);
   }
 
+  public onMessageExpired(listener: (messageId: string) => void): () => void {
+    return this.orchestrator.onMessageExpired(listener);
+  }
+
   public onTranslation(listener: (data: TranslationEvent) => void): () => void {
     return this.orchestrator.onTranslation(listener);
   }

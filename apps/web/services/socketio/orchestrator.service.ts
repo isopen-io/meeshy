@@ -519,6 +519,10 @@ export class SocketIOOrchestrator {
     return this.messagingService.onMessageDeleted(listener);
   }
 
+  onMessageExpired(listener: (messageId: string) => void): UnsubscribeFn {
+    return this.messagingService.onMessageExpired(listener);
+  }
+
   onAttachmentStatusUpdated(listener: (data: any) => void): UnsubscribeFn {
     return this.messagingService.onAttachmentStatusUpdated(listener);
   }
