@@ -8,6 +8,9 @@ import { StatusService } from '../services/StatusService';
 import { hashSessionToken } from '../utils/session-token';
 import { PermissionDeniedError } from '../errors/custom-errors';
 import { getCacheStore } from '../services/CacheStore';
+import { enhancedLogger } from '../utils/logger-enhanced';
+
+const authLogger = enhancedLogger.child({ module: 'auth' });
 
 // Reduced from 300s: role/language changes propagate within 60s now.
 // Invalidated explicitly on profile updates via cache.del(`auth:user:{userId}`).
@@ -159,7 +162,7 @@ export class AuthMiddleware {
           where: { id: trustedSession.id },
           data: { lastActivityAt: new Date() }
         }).catch(err => {
-          console.warn('[UnifiedAuth] Failed to update trusted session lastActivityAt:', err);
+          authLogger.warn('Failed to update trusted session lastActivityAt', { err });
         });
       }
 
@@ -295,7 +298,7 @@ export class AuthMiddleware {
           where: { sessionToken: hashedSessionToken },
           data: { lastActivityAt: new Date() }
         }).catch(err => {
-          console.warn('[UnifiedAuth] Failed to update trusted session lastActivityAt:', err);
+          authLogger.warn('Failed to update trusted session lastActivityAt (anon)', { err });
         });
       }
 
@@ -325,9 +328,8 @@ export class AuthMiddleware {
         const now = Date.now();
         const lastLogged = expiredJwtLoggedTokens.get(tokenPrefix) ?? 0;
         if (now - lastLogged > EXPIRED_JWT_LOG_INTERVAL) {
-          console.warn('[UnifiedAuth] JWT expired:', new Date(error.expiredAt).toISOString(), `(token ...${tokenPrefix})`);
+          authLogger.warn('JWT expired', { expiredAt: new Date(error.expiredAt).toISOString() });
           expiredJwtLoggedTokens.set(tokenPrefix, now);
-          // Prevent memory leak: clean old entries
           if (expiredJwtLoggedTokens.size > 100) {
             for (const [key, ts] of expiredJwtLoggedTokens) {
               if (now - ts > EXPIRED_JWT_LOG_INTERVAL * 10) expiredJwtLoggedTokens.delete(key);
@@ -335,9 +337,9 @@ export class AuthMiddleware {
           }
         }
       } else if (error instanceof jwt.JsonWebTokenError) {
-        console.warn('[UnifiedAuth] JWT invalid:', error.message);
+        authLogger.warn('JWT invalid', { message: error.message });
       } else {
-        console.error('[UnifiedAuth] Unexpected JWT error:', error);
+        authLogger.error('Unexpected JWT error', { error });
       }
       throw new Error('Invalid JWT token');
     }
@@ -427,7 +429,7 @@ export class AuthMiddleware {
       };
 
     } catch (error) {
-      console.warn('[UnifiedAuth] Invalid session token or inactive participant');
+      authLogger.warn('Invalid session token or inactive participant');
       throw new Error('Invalid session token');
     }
   }
@@ -497,7 +499,7 @@ export function createUnifiedAuthMiddleware(
           reqUser.userId = reqUser.userId || null;
         }
       } catch (e) {
-        console.error('[UnifiedAuth] Failed to attach legacy request.user:', e);
+        authLogger.error('Failed to attach legacy request.user', { e });
       }
 
       try {
@@ -508,12 +510,12 @@ export function createUnifiedAuthMiddleware(
           isAnonymous: authContext.isAnonymous
         };
       } catch (e) {
-        console.error('[UnifiedAuth] Failed to attach request.auth:', e);
+        authLogger.error('Failed to attach request.auth', { e });
       }
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Authentication failed';
-      console.warn('[UnifiedAuth] Auth failure:', errorMessage);
+      authLogger.warn('Auth failure', { errorMessage });
 
       if (options.requireAuth) {
         return reply.status(401).send({
@@ -590,7 +592,7 @@ export function getUserPermissions(authContext: UnifiedAuthContext) {
 
 /** @deprecated Use createUnifiedAuthMiddleware */
 export async function authenticate(request: FastifyRequest, reply: FastifyReply) {
-  console.warn('[AUTH] authenticate() is deprecated, use createUnifiedAuthMiddleware instead');
+  authLogger.warn('authenticate() is deprecated, use createUnifiedAuthMiddleware instead');
 
   try {
     const authHeader = request.headers.authorization;
@@ -630,7 +632,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
     reqUser.id = userId;
 
   } catch (error) {
-    console.error('Authentication failed:', error);
+    authLogger.error('Authentication failed (legacy)', { error });
     reply.code(401).send({
       success: false,
       message: 'Token invalide ou manquant'

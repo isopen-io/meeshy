@@ -10,6 +10,9 @@
  */
 
 import axios from 'axios';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'SmsService' });
 
 // ============================================================================
 // Types & Interfaces
@@ -101,9 +104,9 @@ export class SmsService {
     this.providers.sort((a, b) => a.priority - b.priority);
 
     if (this.providers.length === 0) {
-      console.warn('[SmsService] No SMS providers configured. SMS sending will fail.');
+      logger.warn('no SMS providers configured — SMS sending will fail');
     } else {
-      console.log(`[SmsService] Initialized with ${this.providers.length} provider(s): ${this.providers.map(p => p.name).join(', ')}`);
+      logger.info('SMS service initialized', { providers: this.providers.map(p => p.name) });
     }
   }
 
@@ -238,9 +241,7 @@ export class SmsService {
 
     if (this.providers.length === 0) {
       // Development fallback - log to console
-      console.log('[SmsService] DEV MODE - No providers configured');
-      console.log(`[SmsService] Would send SMS to: ${data.to}`);
-      console.log(`[SmsService] Message: ${data.message}`);
+      logger.debug('DEV MODE — no providers configured, SMS suppressed', { to: data.to });
       return {
         success: true,
         provider: 'console',
@@ -256,28 +257,28 @@ export class SmsService {
       const provider = this.getProvider(providerConfig);
 
       try {
-        console.log(`[SmsService] Attempting to send SMS via ${provider.name}...`);
+        logger.debug('attempting SMS send', { provider: provider.name });
         const result = await provider.send(data);
 
-        console.log(`[SmsService] SMS sent successfully via ${provider.name}`);
+        logger.info('SMS sent successfully', { provider: provider.name });
         return {
           success: true,
           provider: provider.name,
           messageId: result.messageId,
           attemptedProviders,
         };
-      } catch (error: any) {
-        console.error(`[SmsService] ${provider.name} failed:`, error.message);
+      } catch (error: unknown) {
+        logger.error('SMS provider failed', { provider: provider.name, error: error instanceof Error ? error.message : error });
 
         // Continue to next provider
         if (this.providers.indexOf(providerConfig) < this.providers.length - 1) {
-          console.log(`[SmsService] Falling back to next provider...`);
+          logger.debug('falling back to next SMS provider');
         }
       }
     }
 
     // All providers failed
-    console.error('[SmsService] All SMS providers failed');
+    logger.error('all SMS providers failed');
     return {
       success: false,
       provider: 'none',
