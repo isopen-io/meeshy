@@ -421,7 +421,8 @@
         "transcription": "Erro de transcrição",
         "creation": "Erro ao criar o perfil",
         "consent": "Erro ao atualizar o consentimento",
-        "delete": "Erro ao excluir o perfil"
+        "delete": "Erro ao excluir o perfil",
+        "noRecording": "Nenhuma gravação disponível"
       },
       "consentUpdated": "Consentimento atualizado",
       "transcriptionComplete": "Transcrição completa",
@@ -452,6 +453,10 @@
         "tryAgain": "Tentar alterar email novamente",
         "backToHome": "Voltar ao início"
       }
+    },
+    "betaPlayground": {
+      "featureEnabled": "Recurso beta ativado",
+      "featureDisabled": "Recurso beta desativado"
     }
   }
 }

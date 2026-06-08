@@ -70,11 +70,11 @@ export function LinkSummaryModal({
     try {
       await copyToClipboard(linkData.url);
       setCopied(true);
-      toast.success('Lien copié dans le presse-papier !');
+      toast.success(t('linkConfiguration.successMessages.linkCopied'));
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
       console.error('Erreur lors de la copie:', error);
-      toast.error('Erreur lors de la copie du lien');
+      toast.error(t('linkConfiguration.errors.copyFailed'));
     }
   };
 

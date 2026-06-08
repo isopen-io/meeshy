@@ -495,7 +495,8 @@
         "transcription": "Transcription error",
         "creation": "Error creating profile",
         "consent": "Error updating consent",
-        "delete": "Error deleting profile"
+        "delete": "Error deleting profile",
+        "noRecording": "No recording available"
       },
       "consentUpdated": "Consent updated",
       "transcriptionComplete": "Transcription complete",
@@ -624,6 +625,10 @@
           "description": "Download, preview and storage settings"
         }
       }
+    },
+    "betaPlayground": {
+      "featureEnabled": "Beta feature enabled",
+      "featureDisabled": "Beta feature disabled"
     }
   },
   "emailChange": {

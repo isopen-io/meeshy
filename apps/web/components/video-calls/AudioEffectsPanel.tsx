@@ -195,13 +195,13 @@ export function AudioEffectsPanel({
                 </PopoverTrigger>
                 <PopoverContent className="w-64 bg-gray-800 border-gray-600 text-white text-xs p-2">
                   <div className="space-y-1">
-                    <p className="font-semibold">Perfect Voice - Auto-Tune</p>
-                    <p className="text-gray-300">Correction automatique de la justesse de votre voix pour chanter juste.</p>
+                    <p className="font-semibold">{t('voiceCoder.tooltip.title')}</p>
+                    <p className="text-gray-300">{t('voiceCoder.tooltip.description')}</p>
                     <div className="pt-1 space-y-0.5 text-[10px]">
-                      <p><strong>Rapidité:</strong> Vitesse de correction</p>
-                      <p><strong>Gamme:</strong> Notes autorisées</p>
-                      <p><strong>Force:</strong> Intensité de l&apos;effet</p>
-                      <p><strong>Expression:</strong> Garde le naturel</p>
+                      <p><strong>{t('voiceCoder.retuneSpeed.label')}:</strong> {t('voiceCoder.tooltip.retuneSpeedHint')}</p>
+                      <p><strong>{t('voiceCoder.scale.label')}:</strong> {t('voiceCoder.tooltip.scaleHint')}</p>
+                      <p><strong>{t('voiceCoder.strength.label')}:</strong> {t('voiceCoder.tooltip.strengthHint')}</p>
+                      <p><strong>{t('voiceCoder.naturalVibrato.label')}:</strong> {t('voiceCoder.tooltip.naturalVibratoHint')}</p>
                     </div>
                   </div>
                 </PopoverContent>

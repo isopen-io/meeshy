@@ -153,15 +153,20 @@
             "enable": "Activar",
             "enabled": "Notificaciones push activadas",
             "denied": "Notificaciones push denegadas. Puedes cambiarlo en la configuración de tu navegador."
+        },
+        "notifPrefs": {
+            "saved": "Preferencias guardadas",
+            "dndTimeError": "La hora de inicio debe ser diferente a la hora de fin",
+            "resetConfirm": "¿Restablecer todas las preferencias de notificación?",
+            "reset": "Preferencias restablecidas",
+            "permissionGranted": "Notificaciones permitidas",
+            "permissionDenied": "Notificaciones denegadas",
+            "loading": "Cargando preferencias..."
+        },
+        "connectionStatus": {
+            "connected": "Conectado",
+            "reconnecting": "Reconectando...",
+            "disconnected": "Desconectado"
         }
-    },
-    "settings": {
-        "saved": "Preferencias guardadas",
-        "dndTimeError": "La hora de inicio debe ser diferente de la hora de fin",
-        "resetConfirm": "¿Restablecer todas las preferencias de notificación?",
-        "reset": "Preferencias restablecidas",
-        "permissionGranted": "Notificaciones permitidas",
-        "permissionDenied": "Notificaciones denegadas",
-        "loading": "Cargando preferencias..."
     }
 }

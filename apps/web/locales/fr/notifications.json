@@ -186,15 +186,20 @@
             "enable": "Activer",
             "enabled": "Notifications push activées",
             "denied": "Notifications push refusées. Vous pouvez modifier cela dans les paramètres de votre navigateur."
+        },
+        "notifPrefs": {
+            "saved": "Préférences enregistrées",
+            "dndTimeError": "L'heure de début doit être différente de l'heure de fin",
+            "resetConfirm": "Voulez-vous vraiment réinitialiser toutes les préférences de notification ?",
+            "reset": "Préférences réinitialisées",
+            "permissionGranted": "Notifications autorisées",
+            "permissionDenied": "Notifications refusées",
+            "loading": "Chargement des préférences..."
+        },
+        "connectionStatus": {
+            "connected": "Connecté",
+            "reconnecting": "Reconnexion...",
+            "disconnected": "Déconnecté"
         }
-    },
-    "settings": {
-        "saved": "Préférences enregistrées",
-        "dndTimeError": "L'heure de début doit être différente de l'heure de fin",
-        "resetConfirm": "Voulez-vous vraiment réinitialiser toutes les préférences de notification ?",
-        "reset": "Préférences réinitialisées",
-        "permissionGranted": "Notifications autorisées",
-        "permissionDenied": "Notifications refusées",
-        "loading": "Chargement des préférences..."
     }
 }

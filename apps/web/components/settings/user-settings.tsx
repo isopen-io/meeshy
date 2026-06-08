@@ -343,7 +343,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
       setAvatarTimestamp(Date.now());
 
       onUserUpdate(updatedUser);
-      toast.success('Photo de profil mise à jour avec succès');
+      toast.success(t('profile.photo.photoUpdated'));
 
       // Fermer le dialogue et nettoyer
       setShowAvatarDialog(false);

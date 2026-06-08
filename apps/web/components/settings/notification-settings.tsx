@@ -101,7 +101,7 @@ export function NotificationSettings() {
     debounceTimerRef.current = setTimeout(async () => {
       try {
         await updatePreferences(updates);
-        toast.success(t('settings.saved'));
+        toast.success(t('notifPrefs.saved'));
       } catch (_err) {
         // Error handled by onError callback
       }
@@ -128,7 +128,7 @@ export function NotificationSettings() {
     const endTime = field === 'dndEndTime' ? value : preferences.dndEndTime;
 
     if (!validateDndTimes(startTime, endTime)) {
-      toast.error(t('settings.dndTimeError'));
+      toast.error(t('notifPrefs.dndTimeError'));
       return;
     }
 
@@ -139,13 +139,13 @@ export function NotificationSettings() {
    * Reset to defaults
    */
   const handleReset = useCallback(async () => {
-    if (!window.confirm(t('settings.resetConfirm'))) {
+    if (!window.confirm(t('notifPrefs.resetConfirm'))) {
       return;
     }
 
     try {
       await updatePreferences(NOTIFICATION_PREFERENCE_DEFAULTS);
-      toast.success(t('settings.reset'));
+      toast.success(t('notifPrefs.reset'));
     } catch (_err) {
       // Error handled by onError callback
     }
@@ -173,9 +173,9 @@ export function NotificationSettings() {
       const permission = await Notification.requestPermission();
       setBrowserPermission(permission);
       if (permission === 'granted') {
-        toast.success(t('settings.permissionGranted'));
+        toast.success(t('notifPrefs.permissionGranted'));
       } else {
-        toast.error(t('settings.permissionDenied'));
+        toast.error(t('notifPrefs.permissionDenied'));
       }
     }
   };
@@ -183,9 +183,9 @@ export function NotificationSettings() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[200px]" role="status" aria-label={t('settings.loading')}>
+      <div className="flex items-center justify-center min-h-[200px]" role="status" aria-label={t('notifPrefs.loading')}>
         <Loader2 className={`h-8 w-8 ${reducedMotion ? '' : 'animate-spin'} text-primary`} />
-        <span className="sr-only">{t('settings.loading')}</span>
+        <span className="sr-only">{t('notifPrefs.loading')}</span>
       </div>
     );
   }

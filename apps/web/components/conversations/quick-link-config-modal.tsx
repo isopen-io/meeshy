@@ -113,10 +113,10 @@ export function QuickLinkConfigModal({
 
     if (result.success) {
       setCopied(true);
-      toast.success('Lien copié dans le presse-papier !');
+      toast.success(t('linkConfiguration.successMessages.linkCopied'));
       setTimeout(() => setCopied(false), 2000);
     } else {
-      toast.error(result.message || 'Erreur lors de la copie du lien');
+      toast.error(result.message || t('linkConfiguration.errors.copyFailed'));
     }
   };
 

@@ -156,15 +156,20 @@
             "enable": "Enable",
             "enabled": "Push notifications enabled",
             "denied": "Push notifications denied. You can change this in your browser settings."
+        },
+        "notifPrefs": {
+            "saved": "Preferences saved",
+            "dndTimeError": "Start time must differ from end time",
+            "resetConfirm": "Reset all notification preferences?",
+            "reset": "Preferences reset",
+            "permissionGranted": "Notifications allowed",
+            "permissionDenied": "Notifications denied",
+            "loading": "Loading preferences..."
+        },
+        "connectionStatus": {
+            "connected": "Connected",
+            "reconnecting": "Reconnecting...",
+            "disconnected": "Disconnected"
         }
-    },
-    "settings": {
-        "saved": "Preferences saved",
-        "dndTimeError": "Start time must differ from end time",
-        "resetConfirm": "Reset all notification preferences?",
-        "reset": "Preferences reset",
-        "permissionGranted": "Notifications allowed",
-        "permissionDenied": "Notifications denied",
-        "loading": "Loading preferences..."
     }
 }
