@@ -20,6 +20,77 @@
         "https": "Ensure you are using HTTPS connection",
         "refresh": "Try refreshing the page"
       }
+    },
+    "status": {
+      "connecting": "Connecting...",
+      "starting": "Starting...",
+      "reconnecting": "Reconnecting...",
+      "failed": "Connection failed",
+      "disconnected": "Disconnected",
+      "connected": "Connected",
+      "quality": {
+        "excellent": "Excellent",
+        "good": "Good",
+        "poor": "Poor",
+        "offline": "Offline"
+      }
+    },
+    "permissions": {
+      "title": "Camera & Microphone Access",
+      "granted": "Permissions Granted",
+      "denied": "Permission Denied",
+      "description": "To join this video call, we need access to your camera and microphone.",
+      "grantedDescription": "You can now join the video call.",
+      "grantAccess": "Grant Access",
+      "cancel": "Cancel",
+      "browserPrompt": "Please allow access in your browser settings.",
+      "tryAgain": "Try Again",
+      "joining": "Joining call...",
+      "errors": {
+        "notAllowed": "Camera and microphone access denied. Please check your browser settings and allow access.",
+        "notFound": "No camera or microphone found. Please connect a device and try again.",
+        "notReadable": "Camera or microphone is already in use by another application.",
+        "generic": "Unable to access camera and microphone. Please try again.",
+        "unexpected": "An unexpected error occurred. Please try again."
+      },
+      "browserInstructions": {
+        "title": "How to enable permissions:",
+        "chrome": "Click the camera icon in the address bar",
+        "firefox": "Click the camera icon in the address bar",
+        "safari": "Go to Safari Settings Privacy Camera/Microphone"
+      }
+    },
+    "controls": {
+      "mute": "Mute microphone",
+      "unmute": "Unmute microphone",
+      "videoOff": "Turn off video",
+      "videoOn": "Turn on video",
+      "switchCamera": "Switch camera",
+      "speakerOff": "Turn off speaker",
+      "speakerOn": "Turn on speaker",
+      "speakerOnLabel": "Speaker on",
+      "speakerOffLabel": "Speaker off",
+      "audioEffects": "Toggle audio effects",
+      "audioEffectsTitle": "Audio Effects",
+      "connectionStats": "Toggle connection stats",
+      "connectionStatsTitle": "Connection Stats",
+      "endCall": "End call",
+      "controls": "Call controls"
+    },
+    "stream": {
+      "disconnected": "Disconnected",
+      "participantLeft": "{name} left the call",
+      "participant": "Participant",
+      "micMuted": "Microphone muted",
+      "videoOff": "Video off",
+      "fullscreen": "Make fullscreen",
+      "dragToMove": "Drag to move"
+    },
+    "toasts": {
+      "cameraSwitched": "Camera switched",
+      "cameraSwitchFailed": "Failed to switch camera",
+      "videoSwitchFailed": "Unable to switch video",
+      "connectionError": "Call connection error"
     }
   }
 }

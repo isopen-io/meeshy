@@ -20,6 +20,77 @@
         "https": "Certifique-se de estar usando uma conexão HTTPS",
         "refresh": "Tente recarregar a página"
       }
+    },
+    "status": {
+      "connecting": "Conectando...",
+      "starting": "Iniciando...",
+      "reconnecting": "Reconectando...",
+      "failed": "Falha na conexão",
+      "disconnected": "Desconectado",
+      "connected": "Conectado",
+      "quality": {
+        "excellent": "Excelente",
+        "good": "Bom",
+        "poor": "Fraco",
+        "offline": "Offline"
+      }
+    },
+    "permissions": {
+      "title": "Acesso à câmera e microfone",
+      "granted": "Permissões concedidas",
+      "denied": "Permissão negada",
+      "description": "Para entrar nesta videochamada, precisamos de acesso à sua câmera e microfone.",
+      "grantedDescription": "Agora você pode entrar na videochamada.",
+      "grantAccess": "Conceder acesso",
+      "cancel": "Cancelar",
+      "browserPrompt": "Permita o acesso nas configurações do seu navegador.",
+      "tryAgain": "Tentar novamente",
+      "joining": "Entrando na chamada...",
+      "errors": {
+        "notAllowed": "Acesso à câmera e microfone negado.",
+        "notFound": "Nenhuma câmera ou microfone encontrado.",
+        "notReadable": "A câmera ou o microfone já está em uso.",
+        "generic": "Não é possível acessar a câmera e o microfone.",
+        "unexpected": "Ocorreu um erro inesperado."
+      },
+      "browserInstructions": {
+        "title": "Como ativar as permissões:",
+        "chrome": "Clique no ícone da câmera na barra de endereços",
+        "firefox": "Clique no ícone da câmera na barra de endereços",
+        "safari": "Vá para Configurações do Safari Privacidade Câmera/Microfone"
+      }
+    },
+    "controls": {
+      "mute": "Silenciar microfone",
+      "unmute": "Ativar microfone",
+      "videoOff": "Desligar vídeo",
+      "videoOn": "Ligar vídeo",
+      "switchCamera": "Trocar câmera",
+      "speakerOff": "Desligar alto-falante",
+      "speakerOn": "Ligar alto-falante",
+      "speakerOnLabel": "Alto-falante ligado",
+      "speakerOffLabel": "Alto-falante desligado",
+      "audioEffects": "Efeitos de áudio",
+      "audioEffectsTitle": "Efeitos de áudio",
+      "connectionStats": "Estatísticas",
+      "connectionStatsTitle": "Estatísticas de conexão",
+      "endCall": "Encerrar chamada",
+      "controls": "Controles da chamada"
+    },
+    "stream": {
+      "disconnected": "Desconectado",
+      "participantLeft": "{name} saiu da chamada",
+      "participant": "Participante",
+      "micMuted": "Microfone silenciado",
+      "videoOff": "Vídeo desativado",
+      "fullscreen": "Tela cheia",
+      "dragToMove": "Arrastar para mover"
+    },
+    "toasts": {
+      "cameraSwitched": "Câmera trocada",
+      "cameraSwitchFailed": "Falha ao trocar câmera",
+      "videoSwitchFailed": "Não foi possível trocar o vídeo",
+      "connectionError": "Erro de conexão na chamada"
     }
   }
 }

@@ -9,6 +9,7 @@ import React, { useState } from 'react';
 import { Camera, Mic, AlertCircle, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/hooks/useI18n';
 
 interface PermissionRequestProps {
   onPermissionsGranted: () => void;
@@ -16,6 +17,7 @@ interface PermissionRequestProps {
 }
 
 export function PermissionRequest({ onPermissionsGranted, onCancel }: PermissionRequestProps) {
+  const { t } = useI18n('calls');
   const [status, setStatus] = useState<'idle' | 'requesting' | 'granted' | 'denied'>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
 
@@ -41,16 +43,16 @@ export function PermissionRequest({ onPermissionsGranted, onCancel }: Permission
 
       if (error instanceof DOMException) {
         if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-          setErrorMessage('Camera and microphone access denied. Please check your browser settings and allow access.');
+          setErrorMessage(t('calls.permissions.errors.notAllowed'));
         } else if (error.name === 'NotFoundError') {
-          setErrorMessage('No camera or microphone found. Please connect a device and try again.');
+          setErrorMessage(t('calls.permissions.errors.notFound'));
         } else if (error.name === 'NotReadableError') {
-          setErrorMessage('Camera or microphone is already in use by another application.');
+          setErrorMessage(t('calls.permissions.errors.notReadable'));
         } else {
-          setErrorMessage('Unable to access camera and microphone. Please try again.');
+          setErrorMessage(t('calls.permissions.errors.generic'));
         }
       } else {
-        setErrorMessage('An unexpected error occurred. Please try again.');
+        setErrorMessage(t('calls.permissions.errors.unexpected'));
       }
     }
   };
@@ -80,19 +82,19 @@ export function PermissionRequest({ onPermissionsGranted, onCancel }: Permission
         {/* Title */}
         <h2 className="text-white text-2xl font-bold mb-2">
           {status === 'granted'
-            ? 'Permissions Granted'
+            ? t('calls.permissions.granted')
             : status === 'denied'
-            ? 'Permission Denied'
-            : 'Camera & Microphone Access'}
+            ? t('calls.permissions.denied')
+            : t('calls.permissions.title')}
         </h2>
 
         {/* Description */}
         <p className="text-gray-300 mb-6">
           {status === 'granted'
-            ? 'You can now join the video call.'
+            ? t('calls.permissions.grantedDescription')
             : status === 'denied'
             ? errorMessage
-            : 'To join this video call, we need access to your camera and microphone.'}
+            : t('calls.permissions.description')}
         </p>
 
         {/* Buttons */}
@@ -100,10 +102,10 @@ export function PermissionRequest({ onPermissionsGranted, onCancel }: Permission
           {status === 'idle' && (
             <>
               <Button onClick={requestPermissions} size="lg" className="w-full">
-                Grant Access
+                {t('calls.permissions.grantAccess')}
               </Button>
               <Button onClick={onCancel} variant="outline" size="lg" className="w-full">
-                Cancel
+                {t('calls.permissions.cancel')}
               </Button>
             </>
           )}
@@ -111,24 +113,24 @@ export function PermissionRequest({ onPermissionsGranted, onCancel }: Permission
           {status === 'requesting' && (
             <div className="py-4">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto"></div>
-              <p className="text-gray-400 mt-3 text-sm">Please allow access in your browser...</p>
+              <p className="text-gray-400 mt-3 text-sm">{t('calls.permissions.browserPrompt')}</p>
             </div>
           )}
 
           {status === 'denied' && (
             <>
               <Button onClick={requestPermissions} size="lg" className="w-full">
-                Try Again
+                {t('calls.permissions.tryAgain')}
               </Button>
               <Button onClick={onCancel} variant="outline" size="lg" className="w-full">
-                Cancel
+                {t('calls.permissions.cancel')}
               </Button>
             </>
           )}
 
           {status === 'granted' && (
             <div className="py-4">
-              <p className="text-green-500 font-medium">Joining call...</p>
+              <p className="text-green-500 font-medium">{t('calls.permissions.joining')}</p>
             </div>
           )}
         </div>
@@ -136,16 +138,16 @@ export function PermissionRequest({ onPermissionsGranted, onCancel }: Permission
         {/* Browser Instructions */}
         {status === 'denied' && (
           <div className="mt-6 text-left text-sm text-gray-400 bg-gray-800 rounded p-4">
-            <p className="font-semibold mb-2">How to enable permissions:</p>
+            <p className="font-semibold mb-2">{t('calls.permissions.browserInstructions.title')}</p>
             <ul className="list-disc list-inside space-y-1">
               <li>
-                <strong>Chrome:</strong> Click the camera icon in the address bar
+                <strong>Chrome:</strong> {t('calls.permissions.browserInstructions.chrome')}
               </li>
               <li>
-                <strong>Firefox:</strong> Click the camera icon in the address bar
+                <strong>Firefox:</strong> {t('calls.permissions.browserInstructions.firefox')}
               </li>
               <li>
-                <strong>Safari:</strong> Go to Safari Settings Privacy Camera/Microphone
+                <strong>Safari:</strong> {t('calls.permissions.browserInstructions.safari')}
               </li>
             </ul>
           </div>
