@@ -184,7 +184,7 @@ class PostDetailViewModel: ObservableObject {
             }
         } catch {
             if comments.isEmpty {
-                FeedbackToastManager.shared.showError("Erreur lors du chargement des commentaires")
+                FeedbackToastManager.shared.showError(String(localized: "feed.comment.loadError", defaultValue: "Error loading comments", bundle: .main))
             }
         }
     }
@@ -261,11 +261,11 @@ class PostDetailViewModel: ObservableObject {
             // stays stuck "liked" forever even though the server never accepted it.
             observeOutcome(cmid: cmid, rollback: { [weak self] in
                 self?.restoreLike(isLiked: wasLiked, likes: priorLikes)
-            }, toast: "Erreur lors du like")
+            }, toast: String(localized: "feed.like.error", defaultValue: "Error liking post", bundle: .main))
         } catch {
             // Roll back optimistic state if the outbox refuses the row.
             restoreLike(isLiked: wasLiked, likes: priorLikes)
-            FeedbackToastManager.shared.showError("Erreur lors du like")
+            FeedbackToastManager.shared.showError(String(localized: "feed.like.error", defaultValue: "Error liking post", bundle: .main))
         }
     }
 
@@ -374,11 +374,11 @@ class PostDetailViewModel: ObservableObject {
                 guard let self else { return }
                 self.comments = snapshot
                 self.post?.commentCount = snapshotCount
-            }, toast: "Erreur lors de l'envoi du commentaire")
+            }, toast: String(localized: "feed.comment.sendError", defaultValue: "Error sending comment", bundle: .main))
         } catch {
             comments = snapshot
             self.post?.commentCount = snapshotCount
-            FeedbackToastManager.shared.showError("Erreur lors de l'envoi du commentaire")
+            FeedbackToastManager.shared.showError(String(localized: "feed.comment.sendError", defaultValue: "Error sending comment", bundle: .main))
         }
     }
 
@@ -416,7 +416,7 @@ class PostDetailViewModel: ObservableObject {
                 }
             }
         } catch {
-            FeedbackToastManager.shared.showError("Erreur lors de l'envoi de la r\u{00E9}ponse")
+            FeedbackToastManager.shared.showError(String(localized: "feed.comment.replyError", defaultValue: "Error sending reply", bundle: .main))
         }
     }
 
