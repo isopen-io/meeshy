@@ -77,8 +77,8 @@ export class SocketIOOrchestrator {
   // Message queue for messages sent before socket is ready
   private pendingMessages: PendingMessage[] = [];
   private isProcessingQueue: boolean = false;
-  private readonly MAX_QUEUE_SIZE = 10;
-  private readonly MESSAGE_QUEUE_TIMEOUT = 30000; // 30 seconds max wait
+  private readonly MAX_QUEUE_SIZE = 50;
+  private readonly MESSAGE_QUEUE_TIMEOUT = 120000; // 2 minutes — handles brief offline gaps
 
   private constructor() {
     this.connectionService = new ConnectionService();

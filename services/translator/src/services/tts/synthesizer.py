@@ -50,9 +50,11 @@ class UnifiedTTSResult:
     text_length: int
     model_used: 'TTSModel'
     model_info: 'TTSModelInfo'
-    # Audio en base64 pour transmission directe au Gateway (pas de fichier partagé)
-    audio_data_base64: Optional[str] = None
+    # D2 — raw bytes preferred over base64 for internal ZMQ pipeline (no encode/decode round-trip)
+    audio_bytes: Optional[bytes] = None
     audio_mime_type: Optional[str] = None
+    # Legacy base64 field kept for backward compat with HTTP endpoints
+    audio_data_base64: Optional[str] = None
 
 
 class Synthesizer:
@@ -468,11 +470,16 @@ class Synthesizer:
             duration_ms = await self._get_duration_ms(output_path)
             processing_time = int((time.time() - start_time) * 1000)
 
-            # Encoder l'audio en base64 pour transmission au Gateway
-            audio_data_base64, audio_mime_type = await self._encode_audio_base64(
-                output_path,
-                output_format
-            )
+            # D2 — read raw bytes directly; zmq_audio_handler uses them without base64 round-trip
+            audio_raw_bytes: Optional[bytes] = None
+            try:
+                loop = asyncio.get_event_loop()
+                def _read_bytes() -> bytes:
+                    with open(output_path, 'rb') as f:
+                        return f.read()
+                audio_raw_bytes = await loop.run_in_executor(None, _read_bytes)
+            except Exception as _e:
+                logger.warning(f"[Synthesizer] Erreur lecture bytes audio: {_e}")
 
             logger.info(
                 f"[Synthesizer] ✅ Synthèse terminée: {output_filename} "
@@ -491,8 +498,8 @@ class Synthesizer:
                 text_length=len(text),
                 model_used=model,
                 model_info=model_info,
-                audio_data_base64=audio_data_base64,
-                audio_mime_type=audio_mime_type
+                audio_bytes=audio_raw_bytes,
+                audio_mime_type=f"audio/{output_format}"
             )
 
         except Exception as e:

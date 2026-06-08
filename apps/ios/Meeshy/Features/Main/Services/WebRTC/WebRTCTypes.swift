@@ -267,6 +267,10 @@ protocol WebRTCClientProviding: AnyObject {
     /// in the glare-collision guard.
     func setNegotiationRole(isPolite: Bool)
     func createOffer() async throws -> SessionDescription
+    /// P0-4 — schedule an ICE restart on the next `createOffer()`. Must be
+    /// called before `createOffer()` to set the `IceRestart: true` constraint
+    /// so the SDP carries new ICE credentials and the peer reconnects.
+    func restartIce()
     func createAnswer(for offer: SessionDescription) async throws -> SessionDescription
     func setRemoteAnswer(_ answer: SessionDescription) async throws
     func addIceCandidate(_ candidate: IceCandidate) async throws

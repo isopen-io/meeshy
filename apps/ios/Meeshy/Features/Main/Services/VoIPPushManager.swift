@@ -74,6 +74,13 @@ final class VoIPPushManager: NSObject, ObservableObject {
     }
 
     func register() {
+        // P0-1 — VoIP push is iOS-only: Apple does not deliver PushKit pushes to
+        // iOS-app-on-Mac ("Designed for iPad"), and PKPushRegistry on Mac causes
+        // silent failures + unexpected CallKit errors. Gate the full registration.
+        guard !ProcessInfo.processInfo.isiOSAppOnMac else {
+            logger.info("VoIP push registration skipped (iOS-app-on-Mac)")
+            return
+        }
         guard voipRegistry == nil else { return }
         let registry = PKPushRegistry(queue: .main)
         registry.delegate = self

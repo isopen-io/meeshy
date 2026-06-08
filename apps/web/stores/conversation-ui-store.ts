@@ -5,9 +5,10 @@
  * React Query handles all server state (conversations, messages, etc.)
  * This store handles only ephemeral UI state.
  *
- * Usage:
- * - Server state (conversations, messages): useConversationsQuery(), useInfiniteMessagesQuery()
- * - UI state (selection, typing, drafts, reply, read status): this store
+ * Records instead of Maps: Maps are not JSON-serializable, break localStorage
+ * persistence and cause React to miss updates (referential equality on Map
+ * objects even when contents change). Record<string, T> is plain-object,
+ * serializable, and correctly triggers re-renders via spread updates.
  */
 
 import { create } from 'zustand';
@@ -26,14 +27,14 @@ interface ConversationUIState {
   // Current selected conversation
   currentConversationId: string | null;
 
-  // Typing indicators (real-time ephemeral)
-  typingUsers: Map<string, Set<string>>; // conversationId -> Set<userId>
+  // Typing indicators (real-time ephemeral) — Record for JSON-serialisability
+  typingUsers: Record<string, string[]>; // conversationId -> userId[]
 
   // Draft messages (local UI state)
-  draftMessages: Map<string, DraftMessage>; // conversationId -> DraftMessage
+  draftMessages: Record<string, DraftMessage>; // conversationId -> DraftMessage
 
   // Reply state (local UI)
-  replyingTo: Map<string, string | null>; // conversationId -> messageId
+  replyingTo: Record<string, string | null>; // conversationId -> messageId | null
 
   // Read status summaries (real-time from socket) — per conversation for latest message
   readStatusSummaries: Record<string, ReadStatusSummary>;
@@ -87,9 +88,9 @@ type ConversationUIStore = ConversationUIState & ConversationUIActions;
 
 const initialState: ConversationUIState = {
   currentConversationId: null,
-  typingUsers: new Map(),
-  draftMessages: new Map(),
-  replyingTo: new Map(),
+  typingUsers: {},
+  draftMessages: {},
+  replyingTo: {},
   readStatusSummaries: {},
   messageReadStatuses: {},
   latestOwnMessageIds: {},
@@ -108,15 +109,17 @@ export const useConversationUIStore = create<ConversationUIStore>()(
           set({ currentConversationId: conversationId });
         },
 
-        // Typing indicators
+        // Typing indicators — plain Record mutations, React-friendly
         addTypingUser: (conversationId, userId) => {
           set((state) => {
-            const newTypingUsers = new Map(state.typingUsers);
-            const existing = newTypingUsers.get(conversationId);
-            const users = new Set(existing);
-            users.add(userId);
-            newTypingUsers.set(conversationId, users);
-            return { typingUsers: newTypingUsers };
+            const current = state.typingUsers[conversationId] ?? [];
+            if (current.includes(userId)) return state;
+            return {
+              typingUsers: {
+                ...state.typingUsers,
+                [conversationId]: [...current, userId],
+              },
+            };
           });
 
           // Auto-remove after 5 seconds
@@ -127,74 +130,62 @@ export const useConversationUIStore = create<ConversationUIStore>()(
 
         removeTypingUser: (conversationId, userId) => {
           set((state) => {
-            const newTypingUsers = new Map(state.typingUsers);
-            const users = newTypingUsers.get(conversationId);
-            if (users) {
-              users.delete(userId);
-              if (users.size === 0) {
-                newTypingUsers.delete(conversationId);
-              }
-            }
-            return { typingUsers: newTypingUsers };
+            const current = state.typingUsers[conversationId];
+            if (!current) return state;
+            const next = current.filter((id) => id !== userId);
+            if (next.length === current.length) return state; // no change
+            const { [conversationId]: _, ...rest } = state.typingUsers;
+            return {
+              typingUsers: next.length > 0 ? { ...rest, [conversationId]: next } : rest,
+            };
           });
         },
 
         clearTypingUsers: (conversationId) => {
           set((state) => {
-            const newTypingUsers = new Map(state.typingUsers);
-            newTypingUsers.delete(conversationId);
-            return { typingUsers: newTypingUsers };
+            if (!state.typingUsers[conversationId]) return state;
+            const { [conversationId]: _, ...rest } = state.typingUsers;
+            return { typingUsers: rest };
           });
         },
 
         getTypingUsers: (conversationId) => {
-          const users = get().typingUsers.get(conversationId);
-          return users ? Array.from(users) : [];
+          return get().typingUsers[conversationId] ?? [];
         },
 
         // Draft messages
         setDraftMessage: (conversationId, draft) => {
-          set((state) => {
-            const newDrafts = new Map(state.draftMessages);
-            newDrafts.set(conversationId, draft);
-            return { draftMessages: newDrafts };
-          });
+          set((state) => ({
+            draftMessages: { ...state.draftMessages, [conversationId]: draft },
+          }));
         },
 
         clearDraftMessage: (conversationId) => {
           set((state) => {
-            const newDrafts = new Map(state.draftMessages);
-            newDrafts.delete(conversationId);
-            return { draftMessages: newDrafts };
+            const { [conversationId]: _, ...rest } = state.draftMessages;
+            return { draftMessages: rest };
           });
         },
 
         getDraftMessage: (conversationId) => {
-          return get().draftMessages.get(conversationId);
+          return get().draftMessages[conversationId];
         },
 
         // Reply state
         setReplyingTo: (conversationId, messageId) => {
-          set((state) => {
-            const newReplyingTo = new Map(state.replyingTo);
-            if (messageId) {
-              newReplyingTo.set(conversationId, messageId);
-            } else {
-              newReplyingTo.delete(conversationId);
-            }
-            return { replyingTo: newReplyingTo };
-          });
+          set((state) => ({
+            replyingTo: { ...state.replyingTo, [conversationId]: messageId },
+          }));
         },
 
         getReplyingTo: (conversationId) => {
-          return get().replyingTo.get(conversationId) || null;
+          return get().replyingTo[conversationId] ?? null;
         },
 
         clearReplyingTo: (conversationId) => {
           set((state) => {
-            const newReplyingTo = new Map(state.replyingTo);
-            newReplyingTo.delete(conversationId);
-            return { replyingTo: newReplyingTo };
+            const { [conversationId]: _, ...rest } = state.replyingTo;
+            return { replyingTo: rest };
           });
         },
 
@@ -268,16 +259,13 @@ export const useCurrentConversationId = () =>
   useConversationUIStore((state) => state.currentConversationId);
 
 export const useTypingUsersForConversation = (conversationId: string) =>
-  useConversationUIStore((state) => {
-    const users = state.typingUsers.get(conversationId);
-    return users ? Array.from(users) : [];
-  });
+  useConversationUIStore((state) => state.typingUsers[conversationId] ?? []);
 
 export const useDraftMessage = (conversationId: string) =>
-  useConversationUIStore((state) => state.draftMessages.get(conversationId));
+  useConversationUIStore((state) => state.draftMessages[conversationId]);
 
 export const useReplyingTo = (conversationId: string) =>
-  useConversationUIStore((state) => state.replyingTo.get(conversationId) || null);
+  useConversationUIStore((state) => state.replyingTo[conversationId] ?? null);
 
 export const useReadStatusSummary = (conversationId: string) =>
   useConversationUIStore((state) => state.readStatusSummaries[conversationId]);

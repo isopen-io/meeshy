@@ -922,34 +922,30 @@ export class MessageHandler {
       const senderId = message.senderId;
       if (!senderId) return;
 
-      // Get all active participants except the sender
+      // Get all active participants except the sender (include joinedAt for batch count floor)
       const participants = await this.prisma.participant.findMany({
         where: {
           conversationId,
           isActive: true,
           id: { not: senderId }
         },
-        select: { id: true, userId: true }
+        select: { id: true, userId: true, joinedAt: true }
       });
 
-      const readStatusService = this.readStatusService;
+      // Batch: 1 cursor query + N parallel counts instead of 3N sequential queries
+      const unreadCounts = await this.readStatusService.getUnreadCountsForParticipants(
+        participants,
+        conversationId,
+        senderId
+      );
 
       await Promise.all(participants.map(async (participant) => {
-        // Use userId for registered users (for their personal room), participantId for anonymous
-        const roomTarget = participant.userId || participant.id;
-        // CRITICAL: pass `participant.id` (not `roomTarget`) to
-        // `getUnreadCount`. `ConversationReadCursor.participantId` is the
-        // Participant.id per the schema — passing the userId here used to
-        // silently miss the cursor lookup and fall back to a "count all
-        // historical messages" path, returning wildly inflated unread
-        // counts (e.g. 75 for users who had read everything). The room
-        // target stays based on userId for socket delivery.
-        const unreadCount = await readStatusService.getUnreadCount(participant.id, conversationId);
+        const roomTarget = participant.userId ?? participant.id;
+        const unreadCount = unreadCounts.get(participant.id) ?? 0;
         this.io.to(ROOMS.user(roomTarget)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
           conversationId,
           unreadCount
         });
-        console.log(`[RT-DIAG] conversation:unread-updated emitted conv=${conversationId} user=${roomTarget} unread=${unreadCount}`);
       }));
     } catch (error) {
       console.warn('⚠️ [UNREAD_COUNT] Erreur:', error);

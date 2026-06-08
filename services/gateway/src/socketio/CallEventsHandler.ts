@@ -505,9 +505,7 @@ export class CallEventsHandler {
           for (const memberSocket of memberSockets) {
             memberSocket.emit(CALL_EVENTS.INITIATED, { ...initiatedEvent, iceServers: memberIceServers });
             notifiedSocketsCount++;
-            // CALL-DIAG (temp instrumentation — remove on rollback): debug→info to
-            // confirm per-socket delivery of call:initiated to the callee.
-            logger.info('🔬 [CALL-DIAG] 📤 Sent call:initiated to member socket', {
+            logger.debug('📤 Sent call:initiated to member socket', {
               socketId: memberSocket.id,
               userId: memberId,
               callId: callSession.id
@@ -1245,35 +1243,6 @@ export class CallEventsHandler {
           to: data.signal.to
         });
 
-        // CALL-DIAG (temp instrumentation — remove on rollback): SDP/codec/ICE inspection
-        try {
-          const sig: any = data.signal;
-          if (sig.type === 'offer' || sig.type === 'answer' || sig.type === 'ice-restart') {
-            const sdp: string = typeof sig.sdp === 'string' ? sig.sdp : '';
-            const mLines = (sdp.match(/^m=.*$/gm) || []).map((l: string) => l.slice(2).split(' ').slice(0, 3).join(' '));
-            const rtpmaps = sdp.match(/^a=rtpmap:\d+ [A-Za-z0-9._/-]+/gm) || [];
-            const audioCodecs = rtpmaps.filter((l: string) => /opus|red|G722|PCMU|PCMA|telephone-event|CN/i.test(l));
-            const videoCodecs = rtpmaps.filter((l: string) => /VP8|VP9|H264|AV1|H265/i.test(l)).slice(0, 10);
-            const redRtpmap = (sdp.match(/a=rtpmap:\d+ red\/\d+/i) || [])[0] || null;
-            const fmtp63 = (sdp.match(/a=fmtp:63 [^\r\n]*/) || [])[0] || null;
-            const opusPt = (sdp.match(/a=rtpmap:(\d+) opus\//i) || [])[1] || null;
-            logger.info('🔬 [CALL-DIAG] SDP', {
-              callId: data.callId, type: sig.type, from: sig.from, to: sig.to,
-              sdpLen: sdp.length, mLines, audioCodecs, videoCodecs, redRtpmap, fmtp63, opusPt
-            });
-          } else if (sig.type === 'ice-candidate') {
-            const cand: string = typeof sig.candidate === 'string' ? sig.candidate : '';
-            const typ = (cand.match(/ typ (host|srflx|prflx|relay)/) || [])[1] || 'unknown';
-            const proto = (cand.match(/ (udp|tcp|UDP|TCP) /) || [])[1] || '?';
-            logger.info('🔬 [CALL-DIAG] ICE', {
-              callId: data.callId, from: sig.from, to: sig.to, typ, proto: proto.toLowerCase(),
-              sdpMid: sig.sdpMid, sdpMLineIndex: sig.sdpMLineIndex
-            });
-          }
-        } catch (diagErr: any) {
-          logger.warn('🔬 [CALL-DIAG] sdp/ice parse failed', { err: String(diagErr) });
-        }
-
         // CVE-001: Verify sender is actually a participant in the call
         const callSession = await this.callService.getCallSession(data.callId);
         const senderParticipant = callSession.participants.find(
@@ -1892,10 +1861,8 @@ export class CallEventsHandler {
           }
         });
 
-        // CALL-DIAG (temp instrumentation — remove on rollback): correlate double-cleanup race (RC-4)
         if (activeParticipations.length > 0) {
-          logger.warn('🔬 [CALL-DIAG] disconnect-cleanup-path', {
-            path: 'CallEventsHandler.disconnect',
+          logger.debug('disconnect-cleanup-path', {
             socketId: socket.id,
             userId,
             count: activeParticipations.length,
