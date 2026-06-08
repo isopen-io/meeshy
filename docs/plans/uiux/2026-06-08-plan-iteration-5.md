@@ -1,125 +1,97 @@
 # UI/UX Plan — Iteration 5 (2026-06-08)
 
-## Goals
-
-1. iOS : MeeshyColors migration pour 12 fichiers (ChangePasswordView, SettingsView, ConversationView+MessageRow, ProfileView, BubbleQuotedReply, BubbleStandardLayout, BubbleStandardLayout+Media, FeedView, FeedView+Attachments, ConversationListHelpers, AffiliateView, RequestsTab)
-2. iOS : Dynamic Type dans le dossier Contacts (5 fichiers)
-3. Web : `rel="noopener noreferrer"` sur liens `target="_blank"` (3 fichiers)
-4. Web : i18n AudioControls aria-labels (audioEffects.json + AudioControls.tsx + AudioTranscriptionPanel.tsx)
+Three parallel sessions contributed. Plans are combined below.
 
 ---
 
-## A · iOS — MeeshyColors Migration
+## Session A — iOS MeeshyColors + Dynamic Type Contacts + Web Security + AudioControls i18n
 
-### ChangePasswordView.swift
-- L191, L195: `Color(hex: "4ADE80")` → `MeeshyColors.success`
-- L208: `Color(hex: "EF4444")` → `MeeshyColors.error`
-- L248: `Color(hex: "4ADE80")` → `MeeshyColors.success`
-- L260: `Color(hex: "4ADE80").opacity(0.3)` → `MeeshyColors.success.opacity(0.3)`
+### Goals
 
-### SettingsView.swift
-- L622: `.foregroundColor(Color(hex: "EF4444"))` → `.foregroundColor(MeeshyColors.error)`
-- L627: `Color(hex: "EF4444").opacity(0.1)` → `MeeshyColors.error.opacity(0.1)`
-- L630: `Color(hex: "EF4444").opacity(0.3)` → `MeeshyColors.error.opacity(0.3)`
+1. iOS: MeeshyColors migration — 12 files (ChangePasswordView, SettingsView, ConversationView+MessageRow, ProfileView, BubbleQuotedReply, BubbleStandardLayout, BubbleStandardLayout+Media, FeedView, FeedView+Attachments, ConversationListHelpers, AffiliateView, RequestsTab)
+2. iOS: Dynamic Type in Contacts folder (5 files)
+3. Web: `rel="noopener noreferrer"` on `target="_blank"` links (3 files)
+4. Web: i18n AudioControls aria-labels (audioEffects.json + AudioControls.tsx + AudioTranscriptionPanel.tsx)
 
-### ConversationView+MessageRow.swift
-- L504, L509: `Color(hex: "FF6B6B")` → `MeeshyColors.error`
+### A · iOS — MeeshyColors Migration
 
-### ProfileView.swift
-- L716 badge vérifié: `Color(hex: "4ADE80")` → `MeeshyColors.success`
-- L716 badge non vérifié: `Color(hex: "F59E0B")` → `MeeshyColors.warning`
+**ChangePasswordView.swift**: L191/195/248 `4ADE80` → `MeeshyColors.success` · L208 `EF4444` → `MeeshyColors.error` · L260 `4ADE80` stroke → `MeeshyColors.success`
 
-### BubbleQuotedReply.swift
-- L80: `Color(hex: "818CF8")` → `MeeshyColors.indigo400`
+**SettingsView.swift**: L622/627/630 `EF4444` → `MeeshyColors.error` (destructive logout)
 
-### BubbleStandardLayout.swift
-- L934: `Color(hex: "818CF8")` → `MeeshyColors.indigo400`
+**ConversationView+MessageRow.swift**: L504/509 `FF6B6B` → `MeeshyColors.error`
 
-### BubbleStandardLayout+Media.swift
-- L373: `Color(hex: "FF6B6B").opacity(0.85)` → `MeeshyColors.error.opacity(0.85)`
+**ProfileView.swift**: L716 verified badge `4ADE80` → `MeeshyColors.success` · unverified `F59E0B` → `MeeshyColors.warning`
 
-### FeedView.swift
-- L1076: `Color(hex: "FF6B6B")` → `MeeshyColors.error`
-- L1094: `Color(hex: "2ECC71")` → `MeeshyColors.success`
+**BubbleQuotedReply.swift / BubbleStandardLayout.swift**: `818CF8` → `MeeshyColors.indigo400`
 
-### FeedView+Attachments.swift
-- L365: gradient `[Color(hex: "2ECC71"), Color(hex: "27AE60")]` → `[MeeshyColors.success, MeeshyColors.success.opacity(0.7)]`
-- L668: `Color(hex: "FF6B6B")` → `MeeshyColors.error`
-- L683: `Color(hex: "2ECC71")` → `MeeshyColors.success`
+**BubbleStandardLayout+Media.swift**: L373 `FF6B6B` → `MeeshyColors.error`
 
-### ConversationListHelpers.swift
-- L152 dark: `Color(hex: "818CF8").opacity(0.5)` → `MeeshyColors.indigo400.opacity(0.5)`
-- L152 light: `Color(hex: "6366F1").opacity(0.4)` → `MeeshyColors.indigo500.opacity(0.4)`
-- L167: `.fill(Color(hex: "2ECC71"))` → `.fill(MeeshyColors.success)`
-- L171: `.foregroundColor(Color(hex: "2ECC71"))` → `.foregroundColor(MeeshyColors.success)`
+**FeedView.swift**: L1076 `FF6B6B` → `MeeshyColors.error` · L1094 `2ECC71` → `MeeshyColors.success`
 
-### AffiliateView.swift
-- L212, L241: `Color(hex: "2ECC71")` → `MeeshyColors.success`
-- L249: `Color(hex: "EF4444")` → `MeeshyColors.error`
+**FeedView+Attachments.swift**: L365 gradient `[2ECC71, 27AE60]` → `[MeeshyColors.success, MeeshyColors.success.opacity(0.7)]` · L668/683 → error/success
 
-### RequestsTab.swift
-- L164: gradient `[MeeshyColors.success, Color(hex: "2ECC71")]` → `[MeeshyColors.success, MeeshyColors.success.opacity(0.7)]`
+**ConversationListHelpers.swift**: L152 dark `818CF8` → `MeeshyColors.indigo400` · light `6366F1` → `MeeshyColors.indigo500` · L167/171 `2ECC71` → `MeeshyColors.success`
 
----
+**AffiliateView.swift**: L212/241 `2ECC71` → `MeeshyColors.success` · L249 `EF4444` → `MeeshyColors.error`
 
-## B · iOS — Dynamic Type : Dossier Contacts
+**RequestsTab.swift**: L164 gradient → `[MeeshyColors.success, MeeshyColors.success.opacity(0.7)]`
 
-Remplacer `.font(.system(size: X, weight: Y))` par des fonts sémantiques SwiftUI :
+### B · iOS — Dynamic Type : Dossier Contacts
 
-| Taille | Font sémantique |
-|--------|----------------|
-| 10–11pt | `.caption2` |
-| 12pt | `.caption` |
-| 13–14pt | `.subheadline` |
-| 15–16pt | `.callout` |
-| 17pt | `.body` |
-| 18pt+ | `.headline` |
-| 32–48pt (icône état vide) | `.system(size: X, weight: Y).scaledToFit()` avec `.minimumScaleFactor(0.5)` |
+Mapping: 10–11pt → `.caption2` · 12pt → `.caption` · 13–14pt → `.subheadline` · 15–16pt → `.callout` · 17pt → `.body` · 18pt+ → `.headline` · 32–48pt décoratifs → conservés avec `.minimumScaleFactor(0.5)`
 
-Fichiers : `ContactsListTab.swift`, `DiscoverTab.swift`, `BlockedTab.swift`, `RequestsTab.swift`, `ContactsHubView.swift`
+Files: `ContactsListTab.swift`, `DiscoverTab.swift`, `BlockedTab.swift`, `RequestsTab.swift`, `ContactsHubView.swift`
 
-Approche : remplacer `.font(.system(size: X))` → `.font(.sémantique)` tout en préservant les `.fontWeight()` quand nécessaire via `.font(.sémantique.weight(.medium))`.
+### C · Web — Sécurité : rel="noopener noreferrer"
 
----
-
-## C · Web — Sécurité : rel="noopener noreferrer"
-
-Pour chaque lien `target="_blank"` sans `rel` :
-- Ajouter `rel="noopener noreferrer"`
-
-Fichiers :
+Add `rel="noopener noreferrer"` to all `target="_blank"` links in:
 1. `components/landing/LandingContent.tsx`
 2. `components/layout/Footer.tsx`
 3. `components/chat/message-with-links.tsx`
 
+### D · Web — i18n : AudioControls
+
+Add `audioEffects.controls.*` keys (fr/en/es/pt) for speed slider + transcription labels.
+Update `AudioControls.tsx` + `AudioTranscriptionPanel.tsx` with `useI18n('audioEffects')`.
+
 ---
 
-## D · Web — i18n : AudioControls
+## Session B — Admin Agent i18n + AdminLayout dark mode + iOS a11y/colors/DT
 
-### Step 1 — Ajouter clés à audioEffects.json (×4 langues : fr, en, es, pt)
+### Goals
 
-Namespace `audioEffects.controls` :
-- `speedSlider.ariaLabel`: "Ajuster la vitesse de lecture" / "Adjust playback speed" / "Ajustar velocidad de reproducción" / "Ajustar velocidade de reprodução"
-- `transcription.inProgress.title`: "Transcription en cours..." / "Transcription in progress..." / "Transcripción en curso..." / "Transcrição em andamento..."
-- `transcription.inProgress.ariaLabel`: "Transcription en cours" / "Transcription in progress" / "Transcripción en curso" / "Transcrição em andamento"
-- `transcription.view.title`: "Voir la transcription" / "View transcription" / "Ver transcripción" / "Ver transcrição"
-- `transcription.toggle.ariaLabel`: "Afficher/masquer la transcription" / "Show/hide transcription" / "Mostrar/ocultar transcripción" / "Mostrar/ocultar transcrição"
-- `transcription.request.ariaLabel`: "Demander la transcription" / "Request transcription" / "Solicitar transcripción" / "Solicitar transcrição"
-- `transcription.request.title`: "Transcrire l'audio (texte)" / "Transcribe audio (text)" / "Transcribir audio (texto)" / "Transcrever áudio (texto)"
-- `transcription.expandMore`: "Voir plus de transcription" / "Show more transcription" / "Ver más transcripción" / "Ver mais transcrição"
-- `transcription.expandLess`: "Voir moins de transcription" / "Show less transcription" / "Ver menos transcripción" / "Ver menos transcrição"
+1. **W-A1** Admin Agent panel i18n — créer namespace `admin`, migrer 6 composants agent
+2. **Web** AdminLayout dark mode — 2 `text-gray-900` → `dark:text-gray-100`
+3. **iOS** FeedPostCard+Media.swift — accessibilityLabel sur toutes les cellules de grille
+4. **iOS** PrivacySettingsView + NotificationSettingsView — couleurs `45B7D1` / `4ECDC4` migrées
+5. **iOS** StatusBarView Dynamic Type — fontes fixes → `.caption`/`.caption2`/`.subheadline`
 
-### Step 2 — Mettre à jour AudioControls.tsx
+### Step 1 — Créer admin.json + migrer 6 composants
 
-Ajouter `const t = useTranslations('audioEffects')` et remplacer les 6 strings hardcodées.
+Namespace `admin` avec `agent.overview.*`, `agent.toasts.*`.
+Components: AgentOverviewTab, AgentGlobalConfigTab, AgentLlmTab, AgentRolesSection, TriggerSchedulingModal, DeliveryQueuePanel.
 
-### Step 3 — Mettre à jour AudioTranscriptionPanel.tsx
+### Step 2 — AdminLayout dark mode
 
-Ajouter `const t = useTranslations('audioEffects')` et remplacer l'aria-label conditionnel.
+`text-gray-900` → `text-gray-900 dark:text-gray-100` on Administration header and user display name.
+
+### Step 3 — iOS FeedPostCard+Media a11y
+
+`.accessibilityLabel` (positional "Media N of M") + `.accessibilityHint` + `.accessibilityAddTraits(.isButton)` on all media grid cells (2/3/4/5+ layouts).
+
+### Step 4 — iOS PrivacySettings + NotificationSettings colors
+
+`"45B7D1"` → `"60A5FA"` (×11) · `"4ECDC4"` → `"6366F1"` (×7 in NotificationSettingsView)
+
+### Step 5 — iOS StatusBarView Dynamic Type
+
+Error indicator: `.caption2.weight(.medium)` · Popover: `.subheadline`, `.footnote`, `.caption2`
 
 ---
 
 ## Commit & CI
 
-Commit unique : `uiux(iter-5): MeeshyColors contacts+feed+bubble + Dynamic Type contacts + web security + audio i18n`
-Push → CI → merge to main → démarrer itération 6.
+Session A: `uiux(iter-5): MeeshyColors contacts+feed+bubble + Dynamic Type contacts + web security + audio i18n`
+Session B: `uiux(iter-5): admin i18n + iOS media a11y + Dynamic Type + legacy colors`
+Push → CI → merge to main → start iteration 6.

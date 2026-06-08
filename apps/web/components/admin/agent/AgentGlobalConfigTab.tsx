@@ -13,6 +13,7 @@ import { Loader2, Save, Shield, LayoutGrid } from 'lucide-react';
 import { InfoIcon } from './InfoIcon';
 import { agentAdminService, type AgentGlobalConfigUpsert } from '@/services/agent-admin.service';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/useI18n';
 
 const CONVERSATION_TYPES = ['group', 'channel', 'public', 'global', 'broadcast'] as const;
 const TYPE_LABELS: Record<string, string> = {
@@ -25,6 +26,7 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export function AgentGlobalConfigTab() {
+  const { t } = useI18n('admin');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<AgentGlobalConfigUpsert>({
@@ -69,7 +71,7 @@ export function AgentGlobalConfigTab() {
         });
       }
     }).catch(() => {
-      toast.error('Erreur de chargement de la configuration globale');
+      toast.error(t('agent.toasts.globalConfigLoadError'));
     }).finally(() => {
       setLoading(false);
     });
@@ -83,15 +85,15 @@ export function AgentGlobalConfigTab() {
         const invalidation = (res as unknown as { cacheInvalidation?: { anyChannelSucceeded?: boolean } })
           .cacheInvalidation;
         if (invalidation && invalidation.anyChannelSucceeded === false) {
-          toast.warning('Config globale sauvegardée — propagation au service agent en attente (cache stale possible quelques minutes)');
+          toast.warning(t('agent.toasts.globalConfigSavedPending'));
         } else {
-          toast.success('Configuration globale mise à jour');
+          toast.success(t('agent.toasts.globalConfigUpdated'));
         }
       } else {
-        toast.error('Erreur lors de la mise à jour');
+        toast.error(t('agent.toasts.globalConfigUpdateError'));
       }
     } catch {
-      toast.error('Erreur de connexion au serveur');
+      toast.error(t('agent.toasts.globalConfigConnectionError'));
     } finally {
       setSaving(false);
     }

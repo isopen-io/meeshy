@@ -30,7 +30,7 @@ struct StatusBarView: View {
                             .foregroundStyle(MeeshyColors.warning)
                             .accessibilityHidden(true)
                         Text(String(localized: "status.bar.load_error", defaultValue: "Erreur de chargement", bundle: .main))
-                            .font(.system(size: 10, weight: .medium))
+                            .font(.caption2.weight(.medium))
                             .foregroundColor(theme.textMuted)
                     }
                     .padding(.horizontal, 12)
@@ -138,24 +138,24 @@ struct StatusBarView: View {
                 .font(.system(size: 36))
 
             Text(entry.username)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
 
             if let content = entry.content {
                 Text(content)
-                    .font(.system(size: 13))
+                    .font(.footnote)
                     .foregroundColor(theme.textSecondary)
                     .multilineTextAlignment(.center)
             }
 
             if let via = entry.viaUsername {
                 Text("\(String(localized: "status.bar.via", defaultValue: "via", bundle: .main)) @\(via)")
-                    .font(.system(size: 11))
+                    .font(.caption2)
                     .foregroundColor(theme.textMuted)
             }
 
             Text(entry.timeRemaining)
-                .font(.system(size: 11, weight: .medium))
+                .font(.caption2.weight(.medium))
                 .foregroundColor(theme.textMuted)
         }
         .padding(16)
