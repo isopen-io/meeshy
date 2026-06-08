@@ -20,6 +20,7 @@ export function PermissionRequest({ onPermissionsGranted, onCancel }: Permission
   const { t } = useI18n('calls');
   const [status, setStatus] = useState<'idle' | 'requesting' | 'granted' | 'denied'>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const { t } = useI18n('calls');
 
   const requestPermissions = async () => {
     setStatus('requesting');
@@ -31,7 +32,6 @@ export function PermissionRequest({ onPermissionsGranted, onCancel }: Permission
         audio: true,
       });
 
-      // Stop the stream immediately - we just needed to get permissions
       stream.getTracks().forEach(track => track.stop());
 
       setStatus('granted');

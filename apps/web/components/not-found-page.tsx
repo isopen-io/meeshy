@@ -55,7 +55,7 @@ export function NotFoundPage({
             <Button
               onClick={() => router.back()}
               variant="outline"
-              className="w-full"
+              className="w-full dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               {t('pages.notFound.previousPage')}

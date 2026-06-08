@@ -39,12 +39,10 @@ export function CallControls({
 }: CallControlsProps) {
   const { t } = useI18n('calls');
   const [speakerEnabled, setSpeakerEnabled] = useState(true);
-
-  // Check if device supports camera switching (mobile)
   const [supportsCameraSwitch, setSupportsCameraSwitch] = useState(false);
+  const { t } = useI18n('calls');
 
   React.useEffect(() => {
-    // Check for mobile device with multiple cameras
     if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
       navigator.mediaDevices.enumerateDevices().then(devices => {
         const videoDevices = devices.filter(device => device.kind === 'videoinput');
@@ -55,12 +53,8 @@ export function CallControls({
 
   const handleSpeakerToggle = async () => {
     try {
-      // Toggle speaker/earpiece mode (mainly for mobile)
       const newEnabled = !speakerEnabled;
       setSpeakerEnabled(newEnabled);
-
-      // Note: Actual speaker routing is browser-dependent
-      // On mobile browsers, audio routing is typically automatic
       logger.debug('[CallControls]', 'Speaker toggled', { enabled: newEnabled });
     } catch (error) {
       logger.error('[CallControls]', 'Failed to toggle speaker', { error });

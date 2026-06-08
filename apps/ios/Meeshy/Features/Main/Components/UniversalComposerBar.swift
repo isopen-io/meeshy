@@ -344,24 +344,24 @@ struct UniversalComposerBar: View {
                                 .overlay(
                                     Circle().stroke(
                                         LinearGradient(
-                                            colors: [Color(hex: "FF6B6B").opacity(0.5), Color(hex: "FF2E63").opacity(0.3)],
+                                            colors: [MeeshyColors.error.opacity(0.5), MeeshyColors.errorDark.opacity(0.3)],
                                             startPoint: .topLeading, endPoint: .bottomTrailing
                                         ), lineWidth: 1
                                     )
                                 )
-                                .shadow(color: Color(hex: "FF6B6B").opacity(0.2), radius: 6, y: 2)
+                                .shadow(color: MeeshyColors.error.opacity(0.2), radius: 6, y: 2)
 
                             Image(systemName: "mic.fill")
                                 .font(.system(size: 18, weight: .medium))
                                 .foregroundStyle(
                                     LinearGradient(
-                                        colors: [Color(hex: "FF6B6B"), Color(hex: "FF2E63")],
+                                        colors: [MeeshyColors.error, MeeshyColors.errorDark],
                                         startPoint: .topLeading, endPoint: .bottomTrailing
                                     )
                                 )
                         }
                         Text(String(localized: "composer.minimized.voice", defaultValue: "Vocal", bundle: .main))
-                            .font(.system(size: 9, weight: .semibold))
+                            .font(.caption2).fontWeight(.semibold)
                             .foregroundColor(style == .dark ? .white.opacity(0.5) : theme.textMuted)
                     }
                 }
@@ -389,7 +389,7 @@ struct UniversalComposerBar: View {
                             .foregroundColor(.white)
                     }
                     Text(String(localized: "composer.minimized.write", defaultValue: "\u{00C9}crire", bundle: .main))
-                        .font(.system(size: 9, weight: .semibold))
+                        .font(.caption2).fontWeight(.semibold)
                         .foregroundColor(style == .dark ? .white.opacity(0.5) : theme.textMuted)
                 }
             }
@@ -687,7 +687,7 @@ struct UniversalComposerBar: View {
                 let count = text.count
                 if count > Int(Double(maxLen) * 0.8) {
                     Text("\(count)/\(maxLen)")
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .font(.system(.caption2, design: .monospaced)).fontWeight(.semibold)
                         .foregroundColor(count >= maxLen ? MeeshyColors.error : mutedColor)
                         .transition(.opacity)
                 }
@@ -720,9 +720,9 @@ struct UniversalComposerBar: View {
         } label: {
             HStack(spacing: 3) {
                 Text(currentLangOption.flag)
-                    .font(.system(size: 12))
+                    .font(.caption)
                 Text(currentLangOption.code.uppercased())
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.caption2).fontWeight(.semibold)
                 Image(systemName: "chevron.down")
                     .font(.system(size: 8, weight: .bold))
             }
@@ -979,12 +979,12 @@ struct UniversalComposerBar: View {
             HStack(spacing: 4) {
                 Image(systemName: isActive ? "flame.fill" : "timer.circle")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(isActive ? Color(hex: "FF6B6B") : mutedColor)
+                    .foregroundColor(isActive ? MeeshyColors.error : mutedColor)
 
                 if let duration = ephemeralDuration.wrappedValue {
                     Text(duration.label)
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(Color(hex: "FF6B6B"))
+                        .font(.caption2).fontWeight(.bold)
+                        .foregroundColor(MeeshyColors.error)
                 }
             }
             .padding(.horizontal, 8)
@@ -992,12 +992,12 @@ struct UniversalComposerBar: View {
             .background(
                 Capsule()
                     .fill(isActive
-                          ? Color(hex: "FF6B6B").opacity(0.15)
+                          ? MeeshyColors.error.opacity(0.15)
                           : Color.clear)
                     .overlay(
                         Capsule()
                             .stroke(isActive
-                                    ? Color(hex: "FF6B6B").opacity(0.3)
+                                    ? MeeshyColors.error.opacity(0.3)
                                     : Color.clear,
                                     lineWidth: 0.5)
                     )
@@ -1024,7 +1024,7 @@ struct UniversalComposerBar: View {
                     }
                 } label: {
                     Text(String(localized: "composer.ephemeral.off", defaultValue: "Off", bundle: .main))
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.caption).fontWeight(.semibold)
                         .foregroundColor(ephemeralDuration.wrappedValue == nil ? .white : mutedColor)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)
@@ -1048,19 +1048,19 @@ struct UniversalComposerBar: View {
                             Image(systemName: "flame.fill")
                                 .font(.system(size: 10))
                             Text(duration.label)
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.caption).fontWeight(.semibold)
                         }
-                        .foregroundColor(ephemeralDuration.wrappedValue == duration ? .white : Color(hex: "FF6B6B"))
+                        .foregroundColor(ephemeralDuration.wrappedValue == duration ? .white : MeeshyColors.error)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)
                         .background(
                             Capsule()
                                 .fill(ephemeralDuration.wrappedValue == duration
-                                      ? Color(hex: "FF6B6B")
-                                      : Color(hex: "FF6B6B").opacity(0.1))
+                                      ? MeeshyColors.error
+                                      : MeeshyColors.error.opacity(0.1))
                                 .overlay(
                                     Capsule()
-                                        .stroke(Color(hex: "FF6B6B").opacity(0.3), lineWidth: 0.5)
+                                        .stroke(MeeshyColors.error.opacity(0.3), lineWidth: 0.5)
                                 )
                         )
                     }
@@ -1074,7 +1074,7 @@ struct UniversalComposerBar: View {
                 .fill(style == .dark ? Color.black.opacity(0.3) : isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.9))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color(hex: "FF6B6B").opacity(0.2), lineWidth: 0.5)
+                        .stroke(MeeshyColors.error.opacity(0.2), lineWidth: 0.5)
                 )
         )
         .padding(.horizontal, 8)
@@ -1098,12 +1098,12 @@ struct UniversalComposerBar: View {
             HStack(spacing: 4) {
                 Image(systemName: isActive ? "eye.slash.fill" : "eye.slash")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(isActive ? Color(hex: "A855F7") : mutedColor)
+                    .foregroundColor(isActive ? MeeshyColors.indigo600 : mutedColor)
 
                 if isActive {
                     Text(String(localized: "composer.blur.label", defaultValue: "Flou", bundle: .main))
-                        .font(.system(size: 10, weight: .bold))
-                        .foregroundColor(Color(hex: "A855F7"))
+                        .font(.caption2).fontWeight(.bold)
+                        .foregroundColor(MeeshyColors.indigo600)
                 }
             }
             .padding(.horizontal, 8)
@@ -1111,12 +1111,12 @@ struct UniversalComposerBar: View {
             .background(
                 Capsule()
                     .fill(isActive
-                          ? Color(hex: "A855F7").opacity(0.15)
+                          ? MeeshyColors.indigo600.opacity(0.15)
                           : Color.clear)
                     .overlay(
                         Capsule()
                             .stroke(isActive
-                                    ? Color(hex: "A855F7").opacity(0.3)
+                                    ? MeeshyColors.indigo600.opacity(0.3)
                                     : Color.clear,
                                     lineWidth: 0.5)
                     )
@@ -1148,7 +1148,7 @@ extension UniversalComposerBar {
 
                 if isActive {
                     Text("\(effectCount)")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.caption2).fontWeight(.bold)
                         .foregroundColor(Color(hex: accentColor))
                 }
             }
@@ -1197,7 +1197,7 @@ extension UniversalComposerBar {
 
                 if isActive {
                     Text("\(activeCount)")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.caption2).fontWeight(.bold)
                         .foregroundColor(Color(hex: accentColor))
                 }
             }
@@ -1251,7 +1251,7 @@ extension UniversalComposerBar {
                             Image(systemName: item.icon)
                                 .font(.system(size: 11))
                             Text(item.label)
-                                .font(.system(size: 12, weight: .semibold))
+                                .font(.caption).fontWeight(.semibold)
                         }
                         .foregroundColor(isSelected ? .white : Color(hex: accentColor))
                         .padding(.horizontal, 14)

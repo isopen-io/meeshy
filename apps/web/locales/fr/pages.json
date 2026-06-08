@@ -127,7 +127,9 @@
         "backHome": "Retour à l'accueil",
         "backDashboard": "Tableau de bord",
         "viewCommunities": "Voir les communautés"
-      }
+      },
+      "backPrevious": "Page précédente",
+      "suggestions": "Suggestions :"
     }
   }
 }
