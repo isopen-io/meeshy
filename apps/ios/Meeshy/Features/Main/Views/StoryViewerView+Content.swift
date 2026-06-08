@@ -1253,7 +1253,8 @@ struct StoryCommentsOverlayView: View {
                         // 2026-05-28 : « alignés et séparés par des ---- »).
                         if idx > 0 {
                             Divider()
-                                .overlay(Color.white.opacity(0.18))
+                                .overlay(Color.white.opacity(0.28))
+                                .shadow(color: .black.opacity(0.3), radius: 1)
                                 .padding(.vertical, 4)
                         }
 
@@ -1284,9 +1285,10 @@ struct StoryCommentsOverlayView: View {
                                          : "Voir \(remaining) autre\(remaining > 1 ? "s" : "") r\u{00E9}ponse\(remaining > 1 ? "s" : "")")
                                         .font(.system(size: 11, weight: .semibold))
                                 }
-                                .foregroundColor(Color(hex: comment.authorColor))
+                                .foregroundColor(StoryCommentRowView.legibleAuthorColor(hex: comment.authorColor))
                                 .padding(.leading, 40)
                                 .padding(.vertical, 4)
+                                .storyOverlayLegible()
                             }
                         }
 
@@ -1358,16 +1360,17 @@ struct StoryCommentsOverlayView: View {
         VStack(spacing: 8) {
             Image(systemName: "bubble.left.and.bubble.right")
                 .font(.system(size: 28))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(.white.opacity(0.7))
             Text(String(localized: "story.viewer.comments.empty", defaultValue: "Pas encore de commentaires", bundle: .main))
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(.white.opacity(0.85))
             Text(String(localized: "story.viewer.comments.beFirst", defaultValue: "Soyez le premier \u{00E0} commenter !", bundle: .main))
                 .font(.system(size: 11))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(.white.opacity(0.65))
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 32)
+        .storyOverlayLegible()
     }
 
 }
@@ -1714,6 +1717,7 @@ struct StoryCommentRowView: View, Equatable {
             Capsule(style: .continuous)
                 .fill(bubbleColor)
                 .frame(width: 3)
+                .shadow(color: .black.opacity(0.35), radius: 3)
                 .padding(.vertical, 6)
 
             avatar
@@ -1751,25 +1755,30 @@ struct StoryCommentRowView: View, Equatable {
         .frame(width: 32, height: 32)
         .clipShape(Circle())
         .overlay(Circle().strokeBorder(bubbleColor.opacity(0.55), lineWidth: 1))
+        // Halo de séparation : l'avatar reste détaché même sur une story claire.
+        .shadow(color: .black.opacity(0.4), radius: 4, y: 1)
     }
 
     private var headerRow: some View {
         HStack(spacing: 6) {
             Text(comment.author)
                 .font(.system(size: 12.5, weight: .semibold))
-                .foregroundColor(bubbleColor)
+                .foregroundColor(Self.legibleAuthorColor(hex: comment.authorColor))
 
             if hasTranslation {
-                Text("\u{00B7}").font(.system(size: 10)).foregroundColor(.white.opacity(0.35))
+                Text("\u{00B7}").font(.system(size: 10)).foregroundColor(.white.opacity(0.55))
                 languageSwitcher
             }
 
-            Text("\u{00B7}").font(.system(size: 10)).foregroundColor(.white.opacity(0.35))
+            Text("\u{00B7}").font(.system(size: 10)).foregroundColor(.white.opacity(0.55))
 
             Text(comment.timestamp, style: .relative)
                 .font(.system(size: 10))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(.white.opacity(0.75))
         }
+        // Halo lisibilité (cf. StoryActionButton sidebar) — le header reste net
+        // sur n'importe quel fond de story, clair comme foncé. Pas de box.
+        .storyOverlayLegible()
     }
 
     private var languageSwitcher: some View {
@@ -1825,11 +1834,15 @@ struct StoryCommentRowView: View, Equatable {
     private var contentText: some View {
         Text(displayContent)
             .font(.system(size: 13.5))
-            .foregroundColor(.white.opacity(0.95))
+            .foregroundColor(.white)
             .lineLimit(6)
             .multilineTextAlignment(.leading)
             .animation(.easeInOut(duration: 0.2), value: showOriginal)
             .messageEffects(comment.effects, hasPlayedAppearance: true)
+            // Halo renforcé sur le corps du commentaire — c'est le texte le plus
+            // long, donc le plus exposé à un fond clair/chargé. Blanc plein +
+            // double ombre = lisible partout sans cartouche.
+            .storyOverlayLegible(strong: true)
     }
 
     private var actionRow: some View {
@@ -1841,13 +1854,13 @@ struct StoryCommentRowView: View, Equatable {
             } label: {
                 HStack(spacing: 3) {
                     Image(systemName: isLiked ? "heart.fill" : "heart")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(isLiked ? MeeshyColors.error : .white.opacity(0.55))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(isLiked ? MeeshyColors.error : .white.opacity(0.92))
                         .scaleEffect(isLiked ? 1.15 : 1.0)
                     if likeCount > 0 {
                         Text("\(likeCount)")
-                            .font(.system(size: 10.5, weight: .semibold))
-                            .foregroundColor(isLiked ? MeeshyColors.error : .white.opacity(0.6))
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(isLiked ? MeeshyColors.error : .white.opacity(0.85))
                     }
                 }
                 .contentShape(Rectangle())
@@ -1863,7 +1876,7 @@ struct StoryCommentRowView: View, Equatable {
                     Text(String(localized: "story.viewer.reply", defaultValue: "R\u{00E9}pondre", bundle: .main))
                         .font(.system(size: 10.5, weight: .semibold))
                 }
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(.white.opacity(0.88))
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -1872,6 +1885,43 @@ struct StoryCommentRowView: View, Equatable {
             Spacer()
         }
         .padding(.top, 2)
+        // Halo lisibilité sur la rangée d'actions (cœur + Répondre).
+        .storyOverlayLegible()
+    }
+}
+
+// MARK: - Story Overlay Legibility
+
+extension View {
+    /// Halo sombre pour le texte/les icônes qui flottent directement au-dessus
+    /// d'une story (aucune box, aucun scrim — spec user 2026-05-28). Réplique le
+    /// traitement approuvé de la sidebar (`StoryActionButton`, 2026-06-03) : une
+    /// ombre serrée pour des glyphes nets + une ombre plus diffuse pour détacher
+    /// le contenu d'un fond clair ou chargé. `strong` pour les longs paragraphes.
+    func storyOverlayLegible(strong: Bool = false) -> some View {
+        self
+            .shadow(color: .black.opacity(strong ? 0.7 : 0.55), radius: strong ? 3 : 2, y: 1)
+            .shadow(color: .black.opacity(strong ? 0.45 : 0.3), radius: strong ? 8 : 6)
+    }
+}
+
+extension StoryCommentRowView {
+    /// Couleur du nom d'auteur garantie lisible sur une story arbitraire.
+    /// Les couleurs d'auteur très sombres (`luminance < 0.4` WCAG) sont mélangées
+    /// vers le blanc pour ne jamais disparaître sur un fond foncé ; le halo gère
+    /// les fonds clairs. Pure + testable (cf. StoryViewerCommentReactionTests).
+    static func legibleAuthorColor(hex: String) -> Color {
+        let base = Color(hex: hex)
+        guard base.luminance < 0.4 else { return base }
+        let ui = UIColor(base)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        ui.getRed(&r, green: &g, blue: &b, alpha: &a)
+        let f: CGFloat = 0.55
+        return Color(
+            red: Double(r + (1 - r) * f),
+            green: Double(g + (1 - g) * f),
+            blue: Double(b + (1 - b) * f)
+        )
     }
 }
 

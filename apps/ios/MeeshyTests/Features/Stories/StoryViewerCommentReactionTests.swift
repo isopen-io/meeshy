@@ -1,6 +1,8 @@
 import XCTest
+import SwiftUI
 @testable import Meeshy
 import MeeshySDK
+import MeeshyUI
 
 @MainActor
 final class StoryViewerCommentReactionTests: XCTestCase {
@@ -166,5 +168,31 @@ final class StoryViewerCommentReactionTests: XCTestCase {
         ]
         let result = StoryViewerView.computeLikedIds(fromCachedComments: comments)
         XCTAssertTrue(result.isEmpty)
+    }
+
+    // MARK: - StoryCommentRowView.legibleAuthorColor tests
+    //
+    // Lisibilité des noms d'auteur en overlay sur une story : une couleur
+    // d'auteur très sombre doit être éclaircie pour ne pas disparaître sur un
+    // fond foncé ; une couleur déjà claire reste intacte.
+
+    func test_legibleAuthorColor_darkAuthorColor_isLightenedForContrast() {
+        let darkHex = "#1A1B4B" // proche indigo950 — luminance WCAG < 0.4
+        let input = Color(hex: darkHex)
+        let result = StoryCommentRowView.legibleAuthorColor(hex: darkHex)
+        XCTAssertGreaterThan(
+            result.luminance, input.luminance,
+            "Une couleur d'auteur sombre doit être éclaircie pour rester lisible sur fond foncé"
+        )
+    }
+
+    func test_legibleAuthorColor_brightAuthorColor_isUnchanged() {
+        let brightHex = "#A5B4FC" // indigo300 — luminance WCAG >= 0.4
+        let input = Color(hex: brightHex)
+        let result = StoryCommentRowView.legibleAuthorColor(hex: brightHex)
+        XCTAssertEqual(
+            result.luminance, input.luminance, accuracy: 0.001,
+            "Une couleur d'auteur déjà claire ne doit pas être modifiée"
+        )
     }
 }
