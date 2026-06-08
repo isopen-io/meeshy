@@ -41,21 +41,12 @@ export class Ringtone {
       this.htmlAudio.volume = 0.5;
       this.htmlAudio.preload = 'auto';
 
-      // Use Opus (12KB) with WAV (188KB) fallback — browser picks the first supported
-      const opusSource = document.createElement('source');
-      opusSource.src = '/sounds/ringtone.opus';
-      opusSource.type = 'audio/ogg; codecs=opus';
-      const wavSource = document.createElement('source');
-      wavSource.src = '/sounds/ringtone.wav';
-      wavSource.type = 'audio/wav';
-
       const audio = document.createElement('audio') as HTMLAudioElement;
       audio.loop = true;
       audio.volume = 0.5;
       audio.preload = 'auto';
       audio.setAttribute('playsinline', 'true');
-      audio.appendChild(opusSource);
-      audio.appendChild(wavSource);
+      audio.src = '/sounds/ringtone.opus';
       this.htmlAudio = audio;
 
       // iOS requires playsinline

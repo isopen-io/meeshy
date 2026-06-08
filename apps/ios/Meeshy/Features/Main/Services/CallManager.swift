@@ -1066,7 +1066,7 @@ final class CallManager: ObservableObject {
         // Task détaché : ne bloque pas le cleanup local mais garantit que
         // le gateway sait que l'appel est fini.
         if let callId, let userId {
-            Task.detached {
+            Task {
                 let acked = await MessageSocketManager.shared.emitCallEndWithAck(callId: callId)
                 if !acked {
                     // Fallback : si le socket ack failed (timeout / déco),
@@ -1074,9 +1074,7 @@ final class CallManager: ObservableObject {
                     // safeguards (CallCleanupService cron) qui finiront par
                     // ramasser le zombie après 60s.
                     MessageSocketManager.shared.emitCallEnd(callId: callId)
-                    await MainActor.run {
-                        Logger.calls.warning("call:end ACK failed pour \(callId) — fallback fire-and-forget émis, gateway cron cleanup dans 60s")
-                    }
+                    Logger.calls.warning("call:end ACK failed pour \(callId) — fallback fire-and-forget émis, gateway cron cleanup dans 60s")
                 }
             }
             _ = userId  // Référencé pour cohérence avec l'API legacy emitCallEnd(callId:toUserId:)

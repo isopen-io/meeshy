@@ -573,11 +573,11 @@ export class MeeshySocketIOManager {
       });
 
       socket.on(CLIENT_EVENTS.MESSAGE_SEND, async (data, callback) => {
-        try { await this.messageHandler.handleMessageSend(socket, data, callback); } catch (error) { logger.error('[MESSAGE_SEND] Error:', error); }
+        try { await this.messageHandler.handleMessageSend(socket, data, callback); } catch (error) { logger.error('[MESSAGE_SEND] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.MESSAGE_SEND_WITH_ATTACHMENTS, async (data, callback) => {
-        try { await this.messageHandler.handleMessageSendWithAttachments(socket, data, callback); } catch (error) { logger.error('[MESSAGE_SEND_WITH_ATTACHMENTS] Error:', error); }
+        try { await this.messageHandler.handleMessageSendWithAttachments(socket, data, callback); } catch (error) { logger.error('[MESSAGE_SEND_WITH_ATTACHMENTS] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.REQUEST_TRANSLATION, async (data: { messageId: string; targetLanguage: string }) => {
@@ -650,55 +650,55 @@ export class MeeshySocketIOManager {
       });
 
       socket.on(CLIENT_EVENTS.REACTION_ADD, async (data, callback) => {
-        try { await this.reactionHandler.handleReactionAdd(socket, data, callback); } catch (error) { logger.error('[REACTION_ADD] Error:', error); }
+        try { await this.reactionHandler.handleReactionAdd(socket, data, callback); } catch (error) { logger.error('[REACTION_ADD] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.REACTION_REMOVE, async (data, callback) => {
-        try { await this.reactionHandler.handleReactionRemove(socket, data, callback); } catch (error) { logger.error('[REACTION_REMOVE] Error:', error); }
+        try { await this.reactionHandler.handleReactionRemove(socket, data, callback); } catch (error) { logger.error('[REACTION_REMOVE] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.REACTION_REQUEST_SYNC, async (messageId, callback) => {
-        try { await this.reactionHandler.handleReactionSync(socket, messageId, callback); } catch (error) { logger.error('[REACTION_SYNC] Error:', error); }
+        try { await this.reactionHandler.handleReactionSync(socket, messageId, callback); } catch (error) { logger.error('[REACTION_SYNC] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.COMMENT_REACTION_ADD, async (data, callback) => {
-        try { await this.commentReactionHandler.handleAddReaction(socket, data, callback); } catch (error) { logger.error('[COMMENT_REACTION_ADD] Error:', error); }
+        try { await this.commentReactionHandler.handleAddReaction(socket, data, callback); } catch (error) { logger.error('[COMMENT_REACTION_ADD] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.COMMENT_REACTION_REMOVE, async (data, callback) => {
-        try { await this.commentReactionHandler.handleRemoveReaction(socket, data, callback); } catch (error) { logger.error('[COMMENT_REACTION_REMOVE] Error:', error); }
+        try { await this.commentReactionHandler.handleRemoveReaction(socket, data, callback); } catch (error) { logger.error('[COMMENT_REACTION_REMOVE] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.COMMENT_REACTION_REQUEST_SYNC, async (data, callback) => {
-        try { await this.commentReactionHandler.handleRequestSync(socket, data, callback); } catch (error) { logger.error('[COMMENT_REACTION_SYNC] Error:', error); }
+        try { await this.commentReactionHandler.handleRequestSync(socket, data, callback); } catch (error) { logger.error('[COMMENT_REACTION_SYNC] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.JOIN_POST, async (data, callback) => {
-        try { await this.postReactionHandler.handleJoinPost(socket, data, callback); } catch (error) { logger.error('[JOIN_POST] Error:', error); }
+        try { await this.postReactionHandler.handleJoinPost(socket, data, callback); } catch (error) { logger.error('[JOIN_POST] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.LEAVE_POST, async (data, callback) => {
-        try { await this.postReactionHandler.handleLeavePost(socket, data, callback); } catch (error) { logger.error('[LEAVE_POST] Error:', error); }
+        try { await this.postReactionHandler.handleLeavePost(socket, data, callback); } catch (error) { logger.error('[LEAVE_POST] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.POST_REACTION_ADD, async (data, callback) => {
-        try { await this.postReactionHandler.handleAddReaction(socket, data, callback); } catch (error) { logger.error('[POST_REACTION_ADD] Error:', error); }
+        try { await this.postReactionHandler.handleAddReaction(socket, data, callback); } catch (error) { logger.error('[POST_REACTION_ADD] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.POST_REACTION_REMOVE, async (data, callback) => {
-        try { await this.postReactionHandler.handleRemoveReaction(socket, data, callback); } catch (error) { logger.error('[POST_REACTION_REMOVE] Error:', error); }
+        try { await this.postReactionHandler.handleRemoveReaction(socket, data, callback); } catch (error) { logger.error('[POST_REACTION_REMOVE] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.POST_REACTION_REQUEST_SYNC, async (data, callback) => {
-        try { await this.postReactionHandler.handleRequestSync(socket, data, callback); } catch (error) { logger.error('[POST_REACTION_SYNC] Error:', error); }
+        try { await this.postReactionHandler.handleRequestSync(socket, data, callback); } catch (error) { logger.error('[POST_REACTION_SYNC] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.LOCATION_SHARE, async (data, callback) => {
-        try { await this.locationHandler.handleLocationShare(socket, data, callback); } catch (error) { logger.error('[LOCATION_SHARE] Error:', error); }
+        try { await this.locationHandler.handleLocationShare(socket, data, callback); } catch (error) { logger.error('[LOCATION_SHARE] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.LOCATION_LIVE_START, async (data, callback) => {
-        try { await this.locationHandler.handleLiveLocationStart(socket, data, callback); } catch (error) { logger.error('[LOCATION_LIVE_START] Error:', error); }
+        try { await this.locationHandler.handleLiveLocationStart(socket, data, callback); } catch (error) { logger.error('[LOCATION_LIVE_START] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.LOCATION_LIVE_UPDATE, async (data) => {
@@ -1554,31 +1554,24 @@ export class MeeshySocketIOManager {
             select: { id: true, userId: true }
           });
 
-          // Calculer le unreadCount pour tous les participants en batch (3 requêtes au lieu de N×3)
+          // Calculer le unreadCount pour tous les participants en batch (1 query au lieu de N)
           const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
           const readStatusService = new MessageReadStatusService(this.prisma);
 
+          const participantIds = participants.map(p => p.id);
+          const unreadCountMap = await readStatusService.getUnreadCountsForParticipants(participantIds, normalizedId);
+
           const connectedUserIds = new Set(this.getConnectedUsers());
 
-          // Batch all unread-count queries in parallel instead of sequential N+1
-          const unreadResults = await Promise.all(
-            participants.map(async (participant) => {
-              const roomTarget = participant.userId || participant.id;
-              // Pass `participant.id` (not `roomTarget`) — the cursor's
-              // participantId column is the Participant.id.
-              const unreadCount = await readStatusService.getUnreadCount(participant.id, normalizedId);
-              return { participant, roomTarget, unreadCount };
-            })
-          );
+          for (const participant of participants) {
+            const roomTarget = participant.userId || participant.id;
+            const unreadCount = unreadCountMap.get(participant.id) ?? 0;
 
-          for (const { participant, roomTarget, unreadCount } of unreadResults) {
-            // Émettre vers le socket personnel de l'utilisateur
             this.io.to(ROOMS.user(roomTarget)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
               conversationId: normalizedId,
               unreadCount
             });
 
-            // Queue message for offline participants
             if (this.deliveryQueue && !connectedUserIds.has(roomTarget)) {
               this.deliveryQueue.enqueue(roomTarget, {
                 messageId: message.id,
