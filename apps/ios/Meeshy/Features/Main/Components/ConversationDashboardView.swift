@@ -775,7 +775,7 @@ struct ConversationDashboardView: View {
                     HStack(spacing: 10) {
                         Image(systemName: stat.icon)
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(Color(hex: stat.color))
+                            .foregroundColor(stat.color)
                             .frame(width: 20)
 
                         Text(stat.type)
@@ -787,7 +787,7 @@ struct ConversationDashboardView: View {
                             Capsule()
                                 .fill(
                                     LinearGradient(
-                                        colors: [Color(hex: stat.color).opacity(0.7), Color(hex: stat.color).opacity(0.3)],
+                                        colors: [stat.color.opacity(0.7), stat.color.opacity(0.3)],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     )
@@ -1082,7 +1082,7 @@ struct ConversationDashboardView: View {
     private struct ContentTypeStat {
         let type: String
         let icon: String
-        let color: String
+        let color: Color
         let count: Int
     }
 
@@ -1109,11 +1109,11 @@ struct ConversationDashboardView: View {
         }
 
         return [
-            ContentTypeStat(type: String(localized: "dashboard.content.text", defaultValue: "Texte", bundle: .main), icon: "text.bubble.fill", color: accentColor, count: textOnly),
-            ContentTypeStat(type: String(localized: "dashboard.stat.photos", defaultValue: "Photos", bundle: .main), icon: "photo.fill", color: "34D399", count: images),
-            ContentTypeStat(type: String(localized: "dashboard.stat.audio", defaultValue: "Audio", bundle: .main), icon: "waveform", color: "818CF8", count: audio),
-            ContentTypeStat(type: String(localized: "dashboard.stat.videos", defaultValue: "Videos", bundle: .main), icon: "video.fill", color: "F87171", count: videos),
-            ContentTypeStat(type: String(localized: "dashboard.content.files", defaultValue: "Fichiers", bundle: .main), icon: "doc.fill", color: "FBBF24", count: files),
+            ContentTypeStat(type: String(localized: "dashboard.content.text", defaultValue: "Texte", bundle: .main), icon: "text.bubble.fill", color: accent, count: textOnly),
+            ContentTypeStat(type: String(localized: "dashboard.stat.photos", defaultValue: "Photos", bundle: .main), icon: "photo.fill", color: MeeshyColors.success, count: images),
+            ContentTypeStat(type: String(localized: "dashboard.stat.audio", defaultValue: "Audio", bundle: .main), icon: "waveform", color: MeeshyColors.indigo400, count: audio),
+            ContentTypeStat(type: String(localized: "dashboard.stat.videos", defaultValue: "Videos", bundle: .main), icon: "video.fill", color: MeeshyColors.error, count: videos),
+            ContentTypeStat(type: String(localized: "dashboard.content.files", defaultValue: "Fichiers", bundle: .main), icon: "doc.fill", color: MeeshyColors.warning, count: files),
         ].filter { $0.count > 0 }
     }
 

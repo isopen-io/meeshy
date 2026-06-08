@@ -189,8 +189,8 @@ struct ForwardPickerSheet: View {
     private func sendButton(for conv: Conversation) -> some View {
         if sentToIds.contains(conv.id) {
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 24))
-                .foregroundColor(.green)
+                .font(.title2)
+                .foregroundColor(MeeshyColors.success)
                 .accessibilityLabel(String(localized: "forward.sent", defaultValue: "Transféré", bundle: .main))
         } else if sendingToId == conv.id {
             ProgressView()
