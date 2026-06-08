@@ -59,7 +59,7 @@ chaque frame WebSocket, chaque blob média.
 ## Phase B — Filtrage par destinataire + compaction (breaking, versionné)
 | Item | Statut | Détail |
 |---|---|---|
-| **B1** Filtre langue par socket | 🔴 **Cœur livré, flag ON par défaut — ÉCART** | Fonction pure `filterMessagePayloadForLanguages` (texte + audio) + 7 tests. Câblée dans `_broadcastNewMessage` via `_emitMessageNewByLanguage` (emit groupé par langue, zéro requête DB — utilise `SocketUser.language` + `socketToUser`). ⚠️ **ÉCART code/doc** : le garde réel est `if (process.env.SOCKET_LANG_FILTER !== 'false')` (`MeeshySocketIOManager.ts:1507`) → le filtre est **actif en prod par défaut**, désactivable seulement via `SOCKET_LANG_FILTER=false`. La décision d'origine (« comportement prod inchangé jusqu'à validation staging ») n'est **pas** respectée. Voir checklist B1 §Activation pour la résolution (corriger le défaut → opt-in, OU valider et assumer l'opt-out). |
+| **B1** Filtre langue par socket | 🟡 **Cœur livré, flag OFF (opt-in)** | Fonction pure `filterMessagePayloadForLanguages` (texte + audio) + 7 tests. Câblée dans `_broadcastNewMessage` via `_emitMessageNewByLanguage` (emit groupé par langue, zéro requête DB — utilise `SocketUser.language` + `socketToUser`). Garde : `if (process.env.SOCKET_LANG_FILTER === 'true')` (`MeeshySocketIOManager.ts:1507`) → **OFF par défaut**, comportement prod inchangé ; activation opt-in explicite via `SOCKET_LANG_FILTER=true` après validation staging. *(Écart corrigé 2026-06-08 : le garde était `!== 'false'` = ON par défaut, contraire à la décision d'origine.)* Voir checklist B1 §Activation. |
 
 ### B1 — reste à faire pour activer en prod
 - Mesurer en staging avec `SOCKET_LANG_FILTER=true` (octets émis avant/après, latence emit groupé).
@@ -132,23 +132,18 @@ doivent supporter le nouveau format AVANT le flip serveur (cf. décision cadrant
 
 > **Légende statut** — ☐ à faire · ☑ fait · ⚠️ point de décision/risque.
 
-### ⚠️ B1 — Filtre langue par socket (à RÉSOUDRE en priorité : flag actuellement ON)
+### B1 — Filtre langue par socket (OFF par défaut, opt-in)
 
-> **État réel** : `SOCKET_LANG_FILTER` est **actif par défaut en prod** (`!== 'false'`), alors
-> que la doc d'origine le présentait comme OFF. Deux résolutions possibles — **trancher avant
-> tout le reste** car ça touche le hot-path 100k msg/s en prod *aujourd'hui*.
+> **État** : ☑ Écart résolu (2026-06-08, Option 1) — garde repassé à
+> `SOCKET_LANG_FILTER === 'true'` (`MeeshySocketIOManager.ts:1507`), défaut **OFF**,
+> comportement prod inchangé. L'activation est désormais opt-in explicite après validation.
 
-**Option 1 — Restaurer l'intention d'origine (opt-in, recommandé tant que non validé staging)**
-- ☐ `MeeshySocketIOManager.ts:1507` : passer le garde à `=== 'true'` (défaut OFF, opt-in explicite).
-- ☐ Mettre à jour le commentaire ligne 1506 (« Enable explicitly with `SOCKET_LANG_FILTER=true` »).
-- ☐ Confirmer aucun env de prod/staging ne pose déjà `SOCKET_LANG_FILTER` (sinon comportement inchangé).
-
-**Option 2 — Assumer l'opt-out (garder ON), après validation**
-- ☐ Mesure staging `SOCKET_LANG_FILTER` ON vs `=false` : octets émis/msg, latence `_emitMessageNewByLanguage`, CPU sérialisation groupée.
+**Activation (poser `SOCKET_LANG_FILTER=true` en staging d'abord)**
+- ☐ Mesure staging ON vs OFF : octets émis/msg, latence `_emitMessageNewByLanguage`, CPU sérialisation groupée.
 - ☐ Vérif multi-device : un même user sur 2 appareils aux langues différentes reçoit chacun le bon sous-ensemble.
 - ☐ Vérif Prisme : un destinataire dont la traduction préférée est absente reçoit bien l'**original** (jamais `translations.first`).
 
-**Pré-requis communs à l'activation complète (les deux options)**
+**Pré-requis à l'activation complète**
 - ☐ Enrichir `SocketUser` à l'auth : remplacer `language` (primaire seule) par le **set Prisme complet** résolu via `resolveUserLanguage()` (systemLanguage → regionalLanguage → customDestinationLanguage → deviceLocale), et filtrer sur ce set.
 - ☐ Étendre le filtrage à la **delivery queue offline** (`RedisDeliveryQueue`, ≈ ligne 1517) — aujourd'hui payload complet par destinataire.
 - ☐ Étendre au **re-emit `senderSocket`** (ligne 1515) — aujourd'hui payload complet (blast-radius volontairement minimal).
@@ -209,7 +204,7 @@ doivent supporter le nouveau format AVANT le flip serveur (cf. décision cadrant
 
 ### Ordre d'activation recommandé
 
-1. **B1** — trancher l'écart flag (option 1 ou 2) — *touche la prod aujourd'hui*.
+1. **B1** — ☑ défaut remis OFF ; valider en staging (`SOCKET_LANG_FILTER=true`) avant tout flip prod.
 2. **A3+E3** — adoption client REST (non-breaking, gain immédiat, faible risque).
 3. **D4** — AVIF + variantes E2EE client.
 4. **Phase E client decode Opus** → **D1** (TTS Opus) → **E4** (upload Opus + remux) — chaîne audio, breaking, en dernier.
