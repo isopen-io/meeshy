@@ -78,6 +78,15 @@ export class MessageTranslationService extends EventEmitter {
   private readonly processedMessages = new Set<string>();
   private readonly processedTasks = new Set<string>();
 
+  // Pool-full retry queue: messageId → { request, retryCount }
+  private readonly _poolFullRetryQueue = new Map<string, {
+    request: TranslationRequest;
+    retryCount: number;
+    timeoutId: ReturnType<typeof setTimeout>;
+  }>();
+  private static readonly POOL_FULL_MAX_RETRIES = 3;
+  private static readonly POOL_FULL_BACKOFF_MS = [10_000, 30_000, 60_000];
+
   constructor(prisma: PrismaClient, jobMappingCache?: MultiLevelJobMappingCache) {
     super();
     this.prisma = prisma;
@@ -483,6 +492,8 @@ export class MessageTranslationService extends EventEmitter {
 
       const taskId = await this.zmqClient.sendTranslationRequest(request);
       this.stats.incrementRequestsSent();
+      // Register for pool-full retry (cleared on success or final failure)
+      this._registerPoolFullCandidate(message.id, request);
 
       const processingTime = Date.now() - startTime;
       logger.info(`⏱️ [TIMING] Message ${message.id}: ${processingTime}ms (${cacheResults.length} cached + ${cacheMisses.length} queued)`);
@@ -752,7 +763,9 @@ export class MessageTranslationService extends EventEmitter {
       
       
       this.stats.incrementTranslationsReceived();
-      
+      // Clear pool-full retry candidate on successful translation
+      this._clearPoolFullCandidate(data.result.messageId);
+
       // SAUVEGARDE EN BASE DE DONNÉES (traduction validée par le Translator)
       let translationId: string | null = null;
       try {
@@ -792,9 +805,72 @@ export class MessageTranslationService extends EventEmitter {
 
     if (data.error === 'translation pool full') {
       this.stats.incrementPoolFullRejections();
+      this._schedulePoolFullRetry(data.messageId);
+      return;
     }
 
+    this._clearPoolFullCandidate(data.messageId);
     this.stats.incrementErrors();
+  }
+
+  private _registerPoolFullCandidate(messageId: string, request: TranslationRequest): void {
+    const existing = this._poolFullRetryQueue.get(messageId);
+    if (existing) {
+      clearTimeout(existing.timeoutId);
+      this._poolFullRetryQueue.delete(messageId);
+    }
+    // Placeholder timeout that will be replaced on pool-full error
+    this._poolFullRetryQueue.set(messageId, {
+      request,
+      retryCount: 0,
+      timeoutId: setTimeout(() => {
+        // Auto-cleanup: if translation completes (success path), remove candidate
+        this._poolFullRetryQueue.delete(messageId);
+      }, 35_000 * (MessageTranslationService.POOL_FULL_MAX_RETRIES + 1)),
+    });
+  }
+
+  private _clearPoolFullCandidate(messageId: string): void {
+    const entry = this._poolFullRetryQueue.get(messageId);
+    if (entry) {
+      clearTimeout(entry.timeoutId);
+      this._poolFullRetryQueue.delete(messageId);
+    }
+  }
+
+  private _schedulePoolFullRetry(messageId: string): void {
+    if (!this.zmqClient) return;
+
+    const entry = this._poolFullRetryQueue.get(messageId);
+    if (!entry) return;
+
+    if (entry.retryCount >= MessageTranslationService.POOL_FULL_MAX_RETRIES) {
+      logger.error(`❌ Pool-full retries exhausted for message ${messageId} after ${entry.retryCount} attempts`);
+      this._clearPoolFullCandidate(messageId);
+      this.stats.incrementErrors();
+      return;
+    }
+
+    const delayMs = MessageTranslationService.POOL_FULL_BACKOFF_MS[entry.retryCount] ?? 60_000;
+    logger.warn(`⏳ Pool full — scheduling retry #${entry.retryCount + 1} for message ${messageId} in ${delayMs / 1000}s`);
+
+    clearTimeout(entry.timeoutId);
+    const timeoutId = setTimeout(async () => {
+      if (!this.zmqClient) return;
+      try {
+        await this.zmqClient.sendTranslationRequest(entry.request);
+        this.stats.incrementRequestsSent();
+        logger.info(`📤 Pool-full retry #${entry.retryCount + 1} sent for message ${messageId}`);
+        // Update retry count
+        this._poolFullRetryQueue.set(messageId, { ...entry, retryCount: entry.retryCount + 1, timeoutId });
+      } catch (err) {
+        logger.error(`❌ Pool-full retry #${entry.retryCount + 1} failed for message ${messageId}: ${err}`);
+        this._clearPoolFullCandidate(messageId);
+        this.stats.incrementErrors();
+      }
+    }, delayMs);
+
+    this._poolFullRetryQueue.set(messageId, { ...entry, retryCount: entry.retryCount + 1, timeoutId });
   }
 
   // ============================================================================

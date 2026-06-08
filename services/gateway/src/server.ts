@@ -892,6 +892,51 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       }
     });
 
+    // Prometheus-compatible metrics endpoint (text/plain; version=0.0.4)
+    this.server.get('/metrics', async (request, reply) => {
+      const mem = process.memoryUsage();
+      const zmqStats = this.translationService ? (this.translationService as any).zmqClient?.getStats?.() : undefined;
+      const socketManager = (this.server as any).socketIOHandler?.getManager?.();
+      const socketStats = socketManager?.getStats?.() ?? {};
+
+      const lines: string[] = [
+        '# HELP process_uptime_seconds Node.js process uptime',
+        '# TYPE process_uptime_seconds gauge',
+        `process_uptime_seconds ${process.uptime().toFixed(2)}`,
+        '# HELP process_heap_used_bytes Heap memory used',
+        '# TYPE process_heap_used_bytes gauge',
+        `process_heap_used_bytes ${mem.heapUsed}`,
+        '# HELP process_heap_total_bytes Heap memory total',
+        '# TYPE process_heap_total_bytes gauge',
+        `process_heap_total_bytes ${mem.heapTotal}`,
+        '# HELP process_rss_bytes Resident set size',
+        '# TYPE process_rss_bytes gauge',
+        `process_rss_bytes ${mem.rss}`,
+        '# HELP gateway_connected_users Active WebSocket users',
+        '# TYPE gateway_connected_users gauge',
+        `gateway_connected_users ${socketStats.connected_users ?? 0}`,
+        '# HELP gateway_active_connections Active socket connections',
+        '# TYPE gateway_active_connections gauge',
+        `gateway_active_connections ${socketStats.active_connections ?? 0}`,
+        '# HELP zmq_requests_sent_total ZMQ translation requests sent',
+        '# TYPE zmq_requests_sent_total counter',
+        `zmq_requests_sent_total ${zmqStats?.requests_sent ?? 0}`,
+        '# HELP zmq_results_received_total ZMQ translation results received',
+        '# TYPE zmq_results_received_total counter',
+        `zmq_results_received_total ${zmqStats?.results_received ?? 0}`,
+        '# HELP zmq_errors_total ZMQ translation errors',
+        '# TYPE zmq_errors_total counter',
+        `zmq_errors_total ${zmqStats?.errors_received ?? 0}`,
+        '# HELP zmq_circuit_breaker_state Circuit breaker state (0=CLOSED, 1=HALF_OPEN, 2=OPEN)',
+        '# TYPE zmq_circuit_breaker_state gauge',
+        `zmq_circuit_breaker_state ${zmqStats?.circuit_breaker?.state === 'CLOSED' ? 0 : zmqStats?.circuit_breaker?.state === 'HALF_OPEN' ? 1 : 2}`,
+        '',
+      ];
+
+      reply.header('content-type', 'text/plain; version=0.0.4; charset=utf-8');
+      reply.code(200).send(lines.join('\n'));
+    });
+
     // Service information endpoint
     this.server.get('/info', async (request, reply) => {
       return {
