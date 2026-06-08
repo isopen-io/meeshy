@@ -254,8 +254,11 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
 
     private init() {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 60
+        config.timeoutIntervalForRequest = 15
         config.timeoutIntervalForResource = 120
+        config.waitsForConnectivity = true
+        config.multipathServiceType = .handover
+        config.httpShouldUsePipelining = true
         // SOTA P11: HTTP/3 is enabled by default on iOS 15+. The optimistic HTTP/3 flag lives on
         // URLRequest (assumesHTTP3Capable), not on URLSessionConfiguration. Apply per-request
         // via makeRequest() to skip the HTTP/2 → HTTP/3 upgrade negotiation on first upload.

@@ -396,25 +396,33 @@ export class AuthHandler {
   }
 
   private async _joinUserConversations(socket: Socket, userId: string, isAnonymous: boolean): Promise<void> {
+    const BATCH_SIZE = 100;
+    const MAX_CONVERSATIONS = 500;
     try {
-      let conversations: { conversationId: string }[] = [];
+      let offset = 0;
+      let total = 0;
+      const where = isAnonymous
+        ? { id: userId, isActive: true }
+        : { userId: userId, isActive: true };
 
-      if (isAnonymous) {
-        conversations = await this.prisma.participant.findMany({
-          where: { id: userId, isActive: true },
-          select: { conversationId: true }
+      while (total < MAX_CONVERSATIONS) {
+        const batch = await this.prisma.participant.findMany({
+          where,
+          select: { conversationId: true },
+          take: BATCH_SIZE,
+          skip: offset
         });
-      } else {
-        conversations = await this.prisma.participant.findMany({
-          where: { userId: userId, isActive: true },
-          select: { conversationId: true }
-        });
-      }
 
-      for (const conv of conversations) {
-        socket.join(ROOMS.conversation(conv.conversationId));
+        for (const conv of batch) {
+          socket.join(ROOMS.conversation(conv.conversationId));
+        }
+
+        total += batch.length;
+        offset += BATCH_SIZE;
+
+        if (batch.length < BATCH_SIZE) break;
       }
-      console.log(`[RT-DIAG] auth: user=${userId} joined ${conversations.length} conversation room(s) — NO delivery marking happens on connect (bug A)`);
+      console.log(`[RT-DIAG] auth: user=${userId} joined ${total} conversation room(s) — NO delivery marking happens on connect (bug A)`);
     } catch (error) {
       console.error(`[AUTH] Error joining conversations for ${userId}:`, error);
     }

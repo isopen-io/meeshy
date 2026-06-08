@@ -28,7 +28,7 @@ const nextConfig: NextConfig = {
   
   // Optimisations de performance
   experimental: {
-    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
+    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons', 'recharts', 'framer-motion'],
   },
   
   // Configuration Turbopack (stable depuis Next.js 15)

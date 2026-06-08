@@ -131,7 +131,7 @@ services:
     image: redis:8-alpine
     container_name: meeshy-local-redis
     restart: unless-stopped
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     environment:
       <<: *common-env
     ports:
@@ -321,6 +321,7 @@ services:
       ATABETH_LAST_NAME: ${ATABETH_LAST_NAME:-User}
       ATABETH_ROLE: ${ATABETH_ROLE:-user}
       # TURN server credentials (WebRTC calls)
+      SOCKET_LANG_FILTER: ${SOCKET_LANG_FILTER:-true}
       TURN_SECRET: ${TURN_SECRET:-meeshy-turn-secret-CHANGE-IN-PRODUCTION}
       TURN_SERVERS: ${TURN_SERVERS:-}
       TURN_CREDENTIAL_TTL: ${TURN_CREDENTIAL_TTL:-3600}

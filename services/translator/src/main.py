@@ -396,23 +396,49 @@ class MeeshyTranslationServer:
         try:
             logger.info("[TRANSLATOR] 🔄 Démarrage du chargement des modèles ML en arrière-plan...")
             logger.info("[TRANSLATOR] ⏱️ Cette opération prendra environ 2-5 minutes...")
-            
+
             # Charger les modèles ML
             ml_initialized = await self.translation_service.initialize()
-            
+
             if ml_initialized:
                 stats = await self.translation_service.get_stats()
                 available_models = list(stats.get('models_loaded', {}).keys())
                 logger.info(f"[TRANSLATOR] ✅ Modèles ML chargés avec succès: {available_models}")
                 logger.info(f"[TRANSLATOR] 🎯 Service de traduction maintenant pleinement opérationnel")
+                # Pré-chauffer les paires de langues les plus fréquentes pour éliminer
+                # le cold start de 2-4s sur la première requête de chaque paire.
+                await self._prewarm_common_language_pairs()
             else:
                 logger.error("[TRANSLATOR] ❌ Échec du chargement des modèles ML")
                 logger.warning("[TRANSLATOR] ⚠️ Le serveur continue de fonctionner mais les traductions ML ne seront pas disponibles")
-                
+
         except Exception as e:
             logger.error(f"[TRANSLATOR] ❌ Erreur lors du chargement des modèles ML: {e}")
             import traceback
             traceback.print_exc()
+
+    async def _prewarm_common_language_pairs(self):
+        """Pré-chauffe les pipelines NLLB pour les paires de langues les plus fréquentes."""
+        common_pairs = [
+            ('fr', 'en'), ('en', 'fr'),
+            ('fr', 'es'), ('es', 'fr'),
+            ('fr', 'pt'), ('pt', 'fr'),
+            ('en', 'es'), ('es', 'en'),
+        ]
+        try:
+            logger.info(f"[TRANSLATOR] 🔥 Pré-chauffe de {len(common_pairs)} paires de langues...")
+            for src, tgt in common_pairs:
+                try:
+                    await self.translation_service.translate(
+                        text="Bonjour",
+                        source_language=src,
+                        target_language=tgt
+                    )
+                except Exception:
+                    pass
+            logger.info("[TRANSLATOR] ✅ Pré-chauffe terminée — cold start éliminé")
+        except Exception as e:
+            logger.warning(f"[TRANSLATOR] ⚠️ Erreur pré-chauffe: {e}")
     
     async def start_zmq_server(self):
         """Démarre le serveur ZMQ haute performance"""

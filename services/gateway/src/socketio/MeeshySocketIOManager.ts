@@ -506,6 +506,14 @@ export class MeeshySocketIOManager {
       this.callEventsHandler.setNotificationService(this.notificationService);
       this.callEventsHandler.setPushNotificationService(pushService);
 
+      // Remove any stale listeners from a previous initialization before rebinding
+      this.translationService.removeAllListeners('transcriptionReady');
+      this.translationService.removeAllListeners('audioTranslationReady');
+      this.translationService.removeAllListeners('audioTranslationsProgressive');
+      this.translationService.removeAllListeners('audioTranslationsCompleted');
+      this.translationService.removeAllListeners('translationReady');
+      this.translationService.removeAllListeners('storyTextObjectTranslationCompleted');
+
       // Écouter les événements de transcription seule prêtes
       this.translationService.on('transcriptionReady', this._handleTranscriptionReady.bind(this));
 

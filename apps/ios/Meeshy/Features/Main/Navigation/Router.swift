@@ -139,6 +139,8 @@ final class Router: ObservableObject {
     var onPopRequested: (() -> Void)?
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "router")
+    private var lastPushTime: Date = .distantPast
+    private static let pushDebounceInterval: TimeInterval = 0.3
 
     var currentRoute: Route? { path.last }
 
@@ -171,6 +173,10 @@ final class Router: ObservableObject {
 
     func push(_ route: Route) {
         if currentRoute == route { return }
+
+        let now = Date()
+        guard now.timeIntervalSince(lastPushTime) >= Self.pushDebounceInterval else { return }
+        lastPushTime = now
 
         // iPad intercept: if the callback handles the route, skip NavigationStack push
         if let onRouteRequested, onRouteRequested(route) {

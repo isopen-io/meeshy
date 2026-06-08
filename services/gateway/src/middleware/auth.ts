@@ -136,7 +136,7 @@ export class AuthMiddleware {
         this.prisma.userSession.update({
           where: { id: trustedSession.id },
           data: { lastActivityAt: new Date() }
-        }).catch(err => {
+        }).catch((err: unknown) => {
           console.warn('[UnifiedAuth] Failed to update trusted session lastActivityAt:', err);
         });
       }
@@ -214,7 +214,7 @@ export class AuthMiddleware {
         this.prisma.userSession.update({
           where: { sessionToken: hashedSessionToken },
           data: { lastActivityAt: new Date() }
-        }).catch(err => {
+        }).catch((err: unknown) => {
           console.warn('[UnifiedAuth] Failed to update trusted session lastActivityAt:', err);
         });
       }

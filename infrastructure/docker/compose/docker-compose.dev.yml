@@ -77,7 +77,7 @@ services:
     image: redis:8-alpine
     container_name: meeshy-dev-redis
     restart: unless-stopped
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     ports:
       - "6379:6379"
     volumes:
@@ -235,6 +235,8 @@ services:
       ATABETH_FIRST_NAME: ${ATABETH_FIRST_NAME:-Atabeth}
       ATABETH_LAST_NAME: ${ATABETH_LAST_NAME:-Meeshy}
       ATABETH_ROLE: ${ATABETH_ROLE:-user}
+      # Per-language Socket.IO payload filtering (reduces ~90% payload for monolingual users)
+      SOCKET_LANG_FILTER: ${SOCKET_LANG_FILTER:-true}
       # TURN server credentials (WebRTC calls)
       TURN_SECRET: ${TURN_SECRET:-meeshy-turn-secret-CHANGE-IN-PRODUCTION}
       TURN_SERVERS: ${TURN_SERVERS:-}

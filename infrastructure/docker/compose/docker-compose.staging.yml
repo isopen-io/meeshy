@@ -97,7 +97,7 @@ services:
     image: redis:8-alpine
     container_name: meeshy-redis-staging
     restart: unless-stopped
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
     ports:
       - "6380:6379"  # Port alternatif pour debug
     volumes:
@@ -222,6 +222,7 @@ services:
       - UPLOAD_PATH=/app/uploads
       - PUBLIC_URL=https://gate.staging.${DOMAIN:-meeshy.me}
       - MAX_TRANSLATION_LENGTH=10000
+      - SOCKET_LANG_FILTER=${SOCKET_LANG_FILTER:-true}
       # Variables d'initialisation
       - FORCE_DB_RESET=${FORCE_DB_RESET:-false}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}

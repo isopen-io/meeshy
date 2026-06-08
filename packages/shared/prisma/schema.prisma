@@ -514,6 +514,7 @@ model Participant {
 
   @@unique([conversationId, userId], name: "unique_conversation_user")
   @@index([conversationId])
+  @@index([conversationId, isActive])
   @@index([userId])
   @@index([userId, isActive])
   @@index([type])
@@ -936,6 +937,7 @@ model MessageStatusEntry {
   @@unique([messageId, participantId], name: "message_participant_status")
   @@index([conversationId])
   @@index([participantId])
+  @@index([participantId, readAt])
   @@index([readAt])
   @@index([deliveredAt])
 }

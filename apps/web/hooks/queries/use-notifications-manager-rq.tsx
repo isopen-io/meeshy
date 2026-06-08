@@ -30,7 +30,7 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
   const { t } = useI18n('notifications');
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { isAuthenticated } = useAuthStore();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isMobileRef = useRef(typeof window !== 'undefined' && window.innerWidth < 768);
 
   const {
