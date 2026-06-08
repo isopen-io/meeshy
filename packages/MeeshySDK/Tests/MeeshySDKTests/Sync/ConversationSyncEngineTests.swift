@@ -424,6 +424,69 @@ final class ConversationSyncEngineTests: XCTestCase {
         XCTAssertEqual(cached.first?.userState.unreadCount, 4)
     }
 
+    // MARK: - Realtime last-message preview (edit / delete)
+
+    /// Editing the conversation's LAST message must refresh the list-row preview
+    /// in real time — otherwise the row keeps showing the pre-edit text.
+    func test_messageEdited_refreshesListPreview_whenEditedIsLastMessage() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        let conv = MeeshyConversation(
+            id: "c-edit", identifier: "test-c-edit", type: .direct,
+            lastMessagePreview: "before edit", lastMessageId: "m-last")
+        try? await CacheCoordinator.shared.conversations.save([conv], for: "list")
+        await engine.startSocketRelay()
+
+        mockMessageSocket.messageEdited.send(
+            TestFactories.makeAPIMessage(id: "m-last", conversationId: "c-edit", content: "after edit"))
+        try? await Task.sleep(nanoseconds: 250_000_000)
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        XCTAssertEqual(cached.first(where: { $0.id == "c-edit" })?.lastMessagePreview, "after edit",
+                       "editing the last message must update the list preview")
+    }
+
+    /// Editing an OLDER (non-last) message must NOT touch the list-row preview.
+    func test_messageEdited_leavesListPreview_whenEditedIsNotLastMessage() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        let conv = MeeshyConversation(
+            id: "c-edit2", identifier: "test-c-edit2", type: .direct,
+            lastMessagePreview: "the last message", lastMessageId: "m-last")
+        try? await CacheCoordinator.shared.conversations.save([conv], for: "list")
+        await engine.startSocketRelay()
+
+        mockMessageSocket.messageEdited.send(
+            TestFactories.makeAPIMessage(id: "m-older", conversationId: "c-edit2", content: "edited an older one"))
+        try? await Task.sleep(nanoseconds: 250_000_000)
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        XCTAssertEqual(cached.first(where: { $0.id == "c-edit2" })?.lastMessagePreview, "the last message",
+                       "editing a non-last message must leave the preview unchanged")
+    }
+
+    /// Deleting the conversation's LAST message must recompute the list-row preview
+    /// from the most recent surviving message (mirrors the gateway's `deletedAt: null`
+    /// REST list) instead of leaving the deleted text on the row.
+    func test_messageDeleted_recomputesListPreview_fromSurvivingMessage_whenDeletedWasLast() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        let m1 = TestFactories.makeMessage(id: "m1", conversationId: "c-del", content: "Keep me")
+        let m2 = TestFactories.makeMessage(id: "m2", conversationId: "c-del", content: "Delete me")
+        try? await CacheCoordinator.shared.messages.save([m1, m2], for: "c-del")
+        let conv = MeeshyConversation(
+            id: "c-del", identifier: "test-c-del", type: .direct,
+            lastMessagePreview: "Delete me", lastMessageId: "m2")
+        try? await CacheCoordinator.shared.conversations.save([conv], for: "list")
+        await engine.startSocketRelay()
+
+        mockMessageSocket.messageDeleted.send(MessageDeletedEvent(messageId: "m2", conversationId: "c-del"))
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        let row = cached.first(where: { $0.id == "c-del" })
+        XCTAssertEqual(row?.lastMessagePreview, "Keep me",
+                       "deleting the last message must surface the surviving message as the preview")
+        XCTAssertEqual(row?.lastMessageId, "m1")
+    }
+
     // Helper: seed the conversations cache with [id, unreadCount] tuples.
     // Uses `save()` (not `update()`): `update()` early-returns when the key
     // is absent from L1, which is exactly the state right after `invalidate`.
