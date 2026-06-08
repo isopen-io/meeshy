@@ -25,7 +25,7 @@ export function useStoriesFeedQuery(options: UseStoriesFeedOptions = {}) {
     queryFn: () => storyService.getStories(),
     staleTime: Infinity,
     gcTime: 30 * 60 * 1000,
-    refetchOnWindowFocus: 'always' as const,
+    refetchOnWindowFocus: false,
     enabled: enabled && !!token,
   });
 }
