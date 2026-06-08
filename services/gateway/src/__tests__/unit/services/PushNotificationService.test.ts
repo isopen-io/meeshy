@@ -100,6 +100,11 @@ jest.mock('path', () => ({
   resolve: jest.fn((p: string) => p),
 }));
 
+// Logger mocks (jest.doMock is NOT hoisted, so these are accessible inside getServiceWithEnv)
+const mockPushLoggerInfo = jest.fn();
+const mockPushLoggerWarn = jest.fn();
+const mockPushLoggerError = jest.fn();
+
 // Prisma mock
 const mockPrisma = {
   pushToken: {
@@ -114,7 +119,7 @@ jest.mock('@meeshy/shared/prisma/client', () => ({
   PrismaClient: jest.fn(() => mockPrisma),
 }));
 
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 
 // Store original environment variables
 const originalEnv = { ...process.env };
@@ -222,6 +227,25 @@ describe('PushNotificationService', () => {
       PrismaClient: jest.fn(() => mockPrisma),
     }));
 
+    jest.doMock('../../../utils/logger-enhanced', () => ({
+      enhancedLogger: {
+        child: jest.fn(() => ({
+          info: mockPushLoggerInfo,
+          warn: mockPushLoggerWarn,
+          error: mockPushLoggerError,
+          debug: jest.fn(),
+        })),
+      },
+      performanceLogger: {
+        child: jest.fn(() => ({
+          info: jest.fn(),
+          warn: jest.fn(),
+          error: jest.fn(),
+          debug: jest.fn(),
+        })),
+      },
+    }));
+
     // Reset prisma mocks
     Object.values(mockPrisma.pushToken).forEach(fn => (fn as jest.Mock).mockReset());
 
@@ -253,7 +277,7 @@ describe('PushNotificationService', () => {
 
       await service.initialize();
 
-      expect(mockConsoleLog).toHaveBeenCalledWith('[PUSH] Push notifications disabled');
+      expect(mockPushLoggerInfo).toHaveBeenCalledWith('Push notifications disabled');
     });
 
     it('should warn when Firebase credentials file not found', async () => {
@@ -268,8 +292,9 @@ describe('PushNotificationService', () => {
 
       await service.initialize();
 
-      expect(mockConsoleWarn).toHaveBeenCalledWith(
-        expect.stringContaining('[PUSH] Firebase credentials invalid')
+      expect(mockPushLoggerWarn).toHaveBeenCalledWith(
+        'Firebase credentials invalid',
+        expect.objectContaining({ credentialsPath: expect.any(String), reason: expect.any(String) })
       );
     });
 
@@ -285,7 +310,7 @@ describe('PushNotificationService', () => {
 
       await service.initialize();
 
-      expect(mockConsoleLog).toHaveBeenCalledWith('[PUSH] APNS clients initialized (production + sandbox)');
+      expect(mockPushLoggerInfo).toHaveBeenCalledWith('APNS clients initialized');
     });
 
     it('should only initialize once (idempotent) for APNS', async () => {
@@ -303,8 +328,8 @@ describe('PushNotificationService', () => {
       await service.initialize();
 
       // APNS initialization log should appear only once
-      const apnsLogs = mockConsoleLog.mock.calls.filter(
-        (call: any[]) => call[0] === '[PUSH] APNS clients initialized (production + sandbox)'
+      const apnsLogs = mockPushLoggerInfo.mock.calls.filter(
+        (call: any[]) => call[0] === 'APNS clients initialized'
       );
       expect(apnsLogs.length).toBe(1);
     });
@@ -349,7 +374,7 @@ describe('PushNotificationService', () => {
       });
 
       expect(result).toEqual([]);
-      expect(mockConsoleWarn).toHaveBeenCalledWith('[PUSH] No active tokens found for user user-123');
+      expect(mockPushLoggerWarn).toHaveBeenCalledWith('No active tokens found for user', { userId: 'user-123' });
     });
 
     it('should return error for FCM token when Firebase not initialized', async () => {
@@ -689,9 +714,9 @@ describe('PushNotificationService', () => {
       });
 
       // Service should have logged the error
-      expect(mockConsoleError).toHaveBeenCalledWith(
-        '[PUSH] Failed to initialize Firebase:',
-        expect.any(Error)
+      expect(mockPushLoggerError).toHaveBeenCalledWith(
+        'Failed to initialize Firebase',
+        expect.objectContaining({ error: expect.any(Error) })
       );
 
       // And return Firebase not initialized error for the token
@@ -1014,8 +1039,9 @@ describe('PushNotificationService', () => {
           isActive: false,
         },
       });
-      expect(mockConsoleLog).toHaveBeenCalledWith(
-        expect.stringContaining('[PUSH] Deactivated token token-1')
+      expect(mockPushLoggerWarn).toHaveBeenCalledWith(
+        'Token deactivated',
+        expect.objectContaining({ tokenId: 'token-1' })
       );
     });
 
@@ -1105,7 +1131,7 @@ describe('PushNotificationService', () => {
           ],
         },
       });
-      expect(mockConsoleInfo).toHaveBeenCalledWith('[PUSH] Cleaned up 15 inactive/stale tokens');
+      expect(mockPushLoggerInfo).toHaveBeenCalledWith('Cleaned up inactive/stale tokens', { count: 15 });
     });
 
     it('should use default 90 days when not specified', async () => {
@@ -1311,9 +1337,9 @@ describe('PushNotificationService', () => {
 
       await service.initialize();
 
-      expect(mockConsoleError).toHaveBeenCalledWith(
-        '[PUSH] Failed to initialize Firebase:',
-        expect.any(Error)
+      expect(mockPushLoggerError).toHaveBeenCalledWith(
+        'Failed to initialize Firebase',
+        expect.objectContaining({ error: expect.any(Error) })
       );
     });
 
@@ -1333,9 +1359,9 @@ describe('PushNotificationService', () => {
 
       await service.initialize();
 
-      expect(mockConsoleError).toHaveBeenCalledWith(
-        '[PUSH] Failed to initialize APNS:',
-        expect.any(Error)
+      expect(mockPushLoggerError).toHaveBeenCalledWith(
+        'Failed to initialize APNS',
+        expect.objectContaining({ error: expect.any(Error) })
       );
     });
   });

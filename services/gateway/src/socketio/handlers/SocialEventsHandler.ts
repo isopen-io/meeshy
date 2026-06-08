@@ -41,13 +41,21 @@ export class SocialEventsHandler {
   private io: SocketIOServer;
   private prisma: PrismaClient;
 
-  // Cache des amis (TTL court pour éviter des queries trop fréquentes)
   private friendsCache: Map<string, { ids: string[]; expiresAt: number }> = new Map();
-  private readonly FRIENDS_CACHE_TTL_MS = 30_000; // 30s
+  private readonly FRIENDS_CACHE_TTL_MS = 30_000;
+  private friendsCleanupInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(deps: SocialEventsHandlerDependencies) {
     this.io = deps.io;
     this.prisma = deps.prisma;
+
+    this.friendsCleanupInterval = setInterval(() => {
+      const now = Date.now();
+      for (const [k, v] of this.friendsCache) {
+        if (v.expiresAt <= now) this.friendsCache.delete(k);
+      }
+    }, 30_000);
+    this.friendsCleanupInterval.unref?.();
   }
 
   // ==============================================
@@ -78,20 +86,19 @@ export class SocialEventsHandler {
       this.friendsCache.set(userId, { ids, expiresAt: Date.now() + this.FRIENDS_CACHE_TTL_MS });
       return ids;
     } catch (error) {
-      console.error('[SocialEventsHandler] Error fetching friend IDs:', error);
+      logger.error('Erreur getFriendIds', { userId, error });
       return [];
     }
   }
 
-  /**
-   * Broadcast vers les feed rooms des amis + l'auteur lui-même
-   */
   private emitToFriends(friendIds: string[], authorId: string, event: string, data: unknown): void {
-    // Inclure l'auteur pour feedback immédiat
     const targetIds = [...friendIds, authorId];
-    for (const id of targetIds) {
-      this.io.to(ROOMS.feed(id)).emit(event, data);
+    if (targetIds.length === 0) return;
+    let emitter = this.io.to(ROOMS.feed(targetIds[0]));
+    for (let i = 1; i < targetIds.length; i++) {
+      emitter = emitter.to(ROOMS.feed(targetIds[i]));
     }
+    emitter.emit(event, data);
   }
 
   /**

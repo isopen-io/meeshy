@@ -15,6 +15,9 @@ import type { TypingEvent } from '@meeshy/shared/types/socketio-events';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketTypingSchema } from '../../validation/socket-event-schemas.js';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'StatusHandler' });
 
 export interface StatusHandlerDependencies {
   prisma: PrismaClient;
@@ -36,6 +39,7 @@ export class StatusHandler {
   private socketToUser: Map<string, string>;
   private identityCache = new Map<string, CachedIdentity>();
   private typingThrottleMap = new Map<string, number>();
+  private cleanupInterval: ReturnType<typeof setInterval> | null = null;
   private static readonly TYPING_THROTTLE_MS = 2_000;
 
   constructor(deps: StatusHandlerDependencies) {
@@ -44,6 +48,18 @@ export class StatusHandler {
     this.privacyPreferencesService = deps.privacyPreferencesService;
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
+
+    this.cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      for (const [k, v] of this.identityCache) {
+        if (v.expiresAt <= now) this.identityCache.delete(k);
+      }
+      const stale = now - StatusHandler.TYPING_THROTTLE_MS * 10;
+      for (const [k, ts] of this.typingThrottleMap) {
+        if (ts < stale) this.typingThrottleMap.delete(k);
+      }
+    }, 5 * 60 * 1000);
+    this.cleanupInterval.unref?.();
   }
 
   invalidateIdentityCache(userId: string): void {
@@ -66,7 +82,7 @@ export class StatusHandler {
 
     const userIdOrToken = this.socketToUser.get(socket.id);
     if (!userIdOrToken) {
-      console.warn('⚠️ [TYPING] Typing start sans userId pour socket', socket.id);
+      logger.warn('Typing start sans userId pour socket', { socketId: socket.id });
       return;
     }
 
@@ -78,7 +94,7 @@ export class StatusHandler {
 
       const result = getConnectedUser(userIdOrToken, this.connectedUsers);
       if (!result) {
-        console.warn('⚠️ [TYPING] Utilisateur non connecté:', userIdOrToken);
+        logger.warn('Typing start : utilisateur non connecté', { userIdOrToken });
         return;
       }
       const { user: connectedUser, realUserId: userId } = result;
@@ -111,17 +127,11 @@ export class StatusHandler {
       const lastEmitAt = this.typingThrottleMap.get(throttleKey) ?? 0;
       if (now - lastEmitAt < StatusHandler.TYPING_THROTTLE_MS) return;
       this.typingThrottleMap.set(throttleKey, now);
-      if (this.typingThrottleMap.size > 10_000) {
-        const stale = now - StatusHandler.TYPING_THROTTLE_MS * 10;
-        for (const [k, ts] of this.typingThrottleMap) {
-          if (ts < stale) this.typingThrottleMap.delete(k);
-        }
-      }
 
       const room = ROOMS.conversation(normalizedId);
       socket.to(room).emit(SERVER_EVENTS.TYPING_START, typingEvent);
     } catch (error) {
-      console.error('❌ [TYPING] Erreur handleTypingStart:', error);
+      logger.error('Erreur handleTypingStart', { error });
     }
   }
 
@@ -135,7 +145,7 @@ export class StatusHandler {
 
     const userIdOrToken = this.socketToUser.get(socket.id);
     if (!userIdOrToken) {
-      console.warn('⚠️ [TYPING] Typing stop sans userId pour socket', socket.id);
+      logger.warn('Typing stop sans userId pour socket', { socketId: socket.id });
       return;
     }
 
@@ -147,7 +157,7 @@ export class StatusHandler {
 
       const result = getConnectedUser(userIdOrToken, this.connectedUsers);
       if (!result) {
-        console.warn('⚠️ [TYPING] Utilisateur non connecté:', userIdOrToken);
+        logger.warn('Typing stop : utilisateur non connecté', { userIdOrToken });
         return;
       }
       const { user: connectedUser, realUserId: userId } = result;
@@ -174,20 +184,10 @@ export class StatusHandler {
       const room = ROOMS.conversation(normalizedId);
       socket.to(room).emit(SERVER_EVENTS.TYPING_STOP, typingEvent);
     } catch (error) {
-      console.error('❌ [TYPING] Erreur handleTypingStop:', error);
+      logger.error('Erreur handleTypingStop', { error });
     }
   }
 
-  /**
-   * Résout l'identité de frappe d'un utilisateur : son `username` (handle) et son
-   * `displayName` (nom à afficher).
-   *
-   * `displayName` suit l'ordre : displayName explicite > « Prénom Nom » > username.
-   *
-   * For anonymous users, resolve from Participant table — un participant anonyme n'a
-   * pas de handle, donc `username` retombe sur le nom d'affichage.
-   * For registered users, resolve from User table.
-   */
   private async _resolveTypingIdentity(
     userId: string,
     isAnonymous: boolean
@@ -199,7 +199,6 @@ export class StatusHandler {
     }
 
     if (isAnonymous) {
-      // userId is actually a participantId for anonymous users
       const participant = await this.prisma.participant.findUnique({
         where: { id: userId },
         select: {
@@ -210,7 +209,7 @@ export class StatusHandler {
       });
 
       if (!participant) {
-        console.warn('⚠️ [TYPING] Participant anonyme non trouvé:', userId);
+        logger.warn('Typing : participant anonyme non trouvé', { userId });
         return null;
       }
 
@@ -231,7 +230,7 @@ export class StatusHandler {
       });
 
       if (!dbUser) {
-        console.warn('⚠️ [TYPING] Utilisateur non trouvé:', userId);
+        logger.warn('Typing : utilisateur non trouvé', { userId });
         return null;
       }
 

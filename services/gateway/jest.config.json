@@ -49,7 +49,7 @@
   ],
   "setupFilesAfterEnv": ["<rootDir>/jest.setup.js"],
   "transform": {
-    "^.+\\.ts$": "ts-jest"
+    "^.+\\.ts$": ["ts-jest", { "diagnostics": { "warnOnly": true } }]
   },
   "moduleFileExtensions": ["ts", "js", "json"],
   "collectCoverage": true

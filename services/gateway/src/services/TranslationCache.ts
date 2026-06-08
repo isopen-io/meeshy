@@ -1,5 +1,8 @@
 import { getCacheStore, type CacheStore } from './CacheStore';
 import crypto from 'crypto';
+import { enhancedLogger } from '../utils/logger-enhanced';
+
+const logger = enhancedLogger.child({ module: 'TranslationCache' });
 
 export interface TranslationCacheEntry {
   translatedText: string;
@@ -17,7 +20,7 @@ export class TranslationCache {
   constructor() {
     this.cache = getCacheStore();
 
-    console.log(`[TranslationCache] Cache initialized (available: ${this.cache.isAvailable()})`);
+    logger.info('Cache initialized', { available: this.cache.isAvailable() });
   }
 
   /**
@@ -90,7 +93,7 @@ export class TranslationCache {
       
       return null;
     } catch (error) {
-      console.error(`❌ [Cache] Erreur récupération cache: ${error}`);
+      logger.error('Erreur récupération cache', { error });
       return null;
     }
   }
@@ -114,7 +117,7 @@ export class TranslationCache {
       
       await this.cache.set(cacheKey, JSON.stringify(entry), this.TTL);
     } catch (error) {
-      console.error(`❌ [Cache] Erreur mise en cache: ${error}`);
+      logger.error('Erreur mise en cache', { error });
     }
   }
 
@@ -156,7 +159,7 @@ export class TranslationCache {
       
       return similarEntries;
     } catch (error) {
-      console.error(`❌ [Cache] Erreur recherche similaire: ${error}`);
+      logger.error('Erreur recherche similaire', { error });
       return [];
     }
   }
@@ -196,7 +199,7 @@ export class TranslationCache {
         hitRate: 0 // À implémenter avec des métriques
       };
     } catch (error) {
-      console.error(`❌ [Cache] Erreur stats cache: ${error}`);
+      logger.error('Erreur stats cache', { error });
       return {
         totalEntries: 0,
         memoryUsage: 'N/A',
@@ -228,7 +231,7 @@ export class TranslationCache {
       
       return deletedCount;
     } catch (error) {
-      console.error(`❌ [Cache] Erreur nettoyage cache: ${error}`);
+      logger.error('Erreur nettoyage cache', { error });
       return 0;
     }
   }
