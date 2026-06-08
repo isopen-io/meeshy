@@ -72,7 +72,8 @@ async function fetchMessagesFromService(
   conversationId: string,
   pageParam: number | string,
   limit: number,
-  linkId?: string
+  linkId?: string,
+  signal?: AbortSignal
 ): Promise<{ messages: Message[]; hasMore: boolean; total: number; nextCursor?: string | null }> {
   if (linkId) {
     // Utilisateur anonyme via lien partagé - utiliser AnonymousChatService
@@ -90,7 +91,7 @@ async function fetchMessagesFromService(
     // Utilisateur authentifié - utiliser conversationsService
     const cursor = typeof pageParam === 'string' ? pageParam : null;
     const page = typeof pageParam === 'number' ? pageParam : 1;
-    const result = await conversationsService.getMessages(conversationId, page, limit, cursor);
+    const result = await conversationsService.getMessages(conversationId, page, limit, cursor, signal);
 
     return {
       messages: result.messages || [],
@@ -140,8 +141,8 @@ export function useConversationMessagesRQ(
     refetch,
   } = useInfiniteQuery({
     queryKey,
-    queryFn: ({ pageParam = 1 }) =>
-      fetchMessagesFromService(conversationId!, pageParam, limit, linkId),
+    queryFn: ({ pageParam = 1, signal }) =>
+      fetchMessagesFromService(conversationId!, pageParam, limit, linkId, signal),
     initialPageParam: 1 as number | string,
     getNextPageParam: (lastPage) => {
       if (!lastPage.hasMore) return undefined;
