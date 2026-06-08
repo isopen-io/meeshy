@@ -87,7 +87,8 @@
       "edit": "Modifier",
       "delete": "Supprimer",
       "more": "Plus d'options",
-      "messageInfo": "Infos du message"
+      "messageInfo": "Infos du message",
+      "needHelp": "Besoin d'aide"
     },
     "replyToMessage": "Répondre au message",
     "replyingTo": "Réponse à",

@@ -156,6 +156,15 @@
       "enable": "Enable",
       "enabled": "Push notifications enabled",
       "denied": "Push notifications denied. You can change this in your browser settings."
+    },
+    "settings": {
+      "saveError": "Error saving preferences",
+      "saveSuccess": "Preferences saved",
+      "quietHoursError": "Start time must be different from end time",
+      "resetConfirm": "Are you sure you want to reset all notification preferences?",
+      "resetSuccess": "Preferences reset",
+      "permissionGranted": "Notifications enabled",
+      "permissionDenied": "Notifications denied"
     }
   }
 }

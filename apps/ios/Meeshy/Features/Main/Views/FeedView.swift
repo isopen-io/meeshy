@@ -478,7 +478,7 @@ struct FeedView: View {
             }) {
                 HStack {
                     Text(String(localized: "Partager quelque chose avec le monde...", defaultValue: "Partager quelque chose avec le monde..."))
-                        .font(.system(size: 14))
+                        .font(.body)
                         .foregroundColor(theme.textMuted)
                     Spacer()
                 }
@@ -790,7 +790,7 @@ struct FeedView: View {
                                 .font(.system(size: 12, weight: .bold))
 
                             Text(newPostsBannerText)
-                                .font(.system(size: 14, weight: .semibold))
+                                .font(.subheadline.weight(.semibold))
                         }
                         .foregroundColor(.white)
                         .padding(.horizontal, 20)
@@ -948,14 +948,14 @@ struct FeedView: View {
                         }
                     } label: {
                         Text(String(localized: "Annuler", defaultValue: "Annuler"))
-                            .font(.system(size: 15, weight: .medium))
+                            .font(.subheadline.weight(.medium))
                             .foregroundColor(theme.textSecondary)
                     }
 
                     Spacer()
 
                     Text(String(localized: "Nouveau post", defaultValue: "Nouveau post"))
-                        .font(.system(size: 16, weight: .bold))
+                        .font(.headline)
                         .foregroundColor(theme.textPrimary)
 
                     Spacer()
@@ -969,7 +969,7 @@ struct FeedView: View {
                                 .scaleEffect(0.8)
                         } else {
                             Text(String(localized: "Publier", defaultValue: "Publier"))
-                                .font(.system(size: 15, weight: .bold))
+                                .font(.subheadline.weight(.bold))
                                 .foregroundColor(composerHasContent ? MeeshyColors.indigo300 : theme.textMuted)
                         }
                     }
@@ -992,7 +992,7 @@ struct FeedView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(getUserDisplayName(AuthManager.shared.currentUser, fallback: "Moi"))
-                            .font(.system(size: 14, weight: .semibold))
+                            .font(.subheadline.weight(.semibold))
                             .foregroundColor(theme.textPrimary)
 
                         Menu {
@@ -1025,7 +1025,7 @@ struct FeedView: View {
                 ZStack(alignment: .topLeading) {
                     if composerText.isEmpty {
                         Text(String(localized: "Qu'avez-vous en tete ?", defaultValue: "Qu'avez-vous en t\u{00EA}te ?"))
-                            .font(.system(size: 17))
+                            .font(.body)
                             .foregroundColor(theme.textMuted)
                             .padding(.horizontal, 16)
                             .padding(.top, 12)
@@ -1035,7 +1035,7 @@ struct FeedView: View {
                         .focused($isComposerFocused)
                         .scrollContentBackground(.hidden)
                         .foregroundColor(theme.textPrimary)
-                        .font(.system(size: 17))
+                        .font(.body)
                         .frame(minHeight: 120)
                         .padding(.horizontal, 12)
                         .padding(.top, 4)
@@ -1067,37 +1067,37 @@ struct FeedView: View {
                     Button { showPhotoPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "photo.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "4ECDC4"))
+                            .foregroundColor(MeeshyColors.indigo300)
                     }
                     .accessibilityLabel(String(localized: "Ajouter une photo", defaultValue: "Ajouter une photo"))
                     Button { showCamera = true; HapticFeedback.light() } label: {
                         Image(systemName: "camera.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "FF6B6B"))
+                            .foregroundColor(MeeshyColors.error)
                     }
                     .accessibilityLabel(String(localized: "Prendre une photo", defaultValue: "Prendre une photo"))
                     Button { showEmojiPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "face.smiling.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "F8B500"))
+                            .foregroundColor(MeeshyColors.warning)
                     }
                     .accessibilityLabel(String(localized: "Ajouter un emoji", defaultValue: "Ajouter un emoji"))
                     Button { showFilePicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "doc.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "9B59B6"))
+                            .foregroundColor(MeeshyColors.indigo500)
                     }
                     .accessibilityLabel(String(localized: "Joindre un fichier", defaultValue: "Joindre un fichier"))
                     Button { showLocationPicker = true; HapticFeedback.light() } label: {
                         Image(systemName: "location.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "2ECC71"))
+                            .foregroundColor(MeeshyColors.success)
                     }
                     .accessibilityLabel(String(localized: "Partager la position", defaultValue: "Partager la position"))
                     Button { showAudioComposer = true; HapticFeedback.light() } label: {
                         Image(systemName: "mic.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "FF2E63"))
+                            .foregroundColor(MeeshyColors.error)
                     }
                     .accessibilityLabel(String(localized: "Enregistrer un audio", defaultValue: "Enregistrer un audio"))
 

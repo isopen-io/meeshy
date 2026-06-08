@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useReducedMotion } from '@/hooks/use-accessibility';
+import { useI18n } from '@/hooks/useI18n';
 import { usePreferences } from '@/hooks/use-preferences';
 import type { NotificationPreference } from '@meeshy/shared/types/preferences';
 import { NOTIFICATION_PREFERENCE_DEFAULTS } from '@meeshy/shared/types/preferences';
@@ -56,6 +57,7 @@ function validateDndTimes(startTime: string, endTime: string): boolean {
 
 export function NotificationSettings() {
   const reducedMotion = useReducedMotion();
+  const { t } = useI18n('notifications');
 
   // Debounce timer ref
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -71,7 +73,7 @@ export function NotificationSettings() {
   } = usePreferences<'notification'>('notification', {
     onError: (error) => {
       console.error('[NotificationSettings] Error:', error);
-      toast.error('message' in error ? error.message : 'Erreur lors de la sauvegarde');
+      toast.error('message' in error ? error.message : t('settings.saveError'));
     },
     onSuccess: () => {
       // Toast uniquement si sauvegarde manuelle (pas debounced)
@@ -99,7 +101,7 @@ export function NotificationSettings() {
     debounceTimerRef.current = setTimeout(async () => {
       try {
         await updatePreferences(updates);
-        toast.success('Préférences enregistrées');
+        toast.success(t('settings.saveSuccess'));
       } catch (_err) {
         // Error handled by onError callback
       }
@@ -126,7 +128,7 @@ export function NotificationSettings() {
     const endTime = field === 'dndEndTime' ? value : preferences.dndEndTime;
 
     if (!validateDndTimes(startTime, endTime)) {
-      toast.error('L\'heure de début doit être différente de l\'heure de fin');
+      toast.error(t('settings.quietHoursError'));
       return;
     }
 
@@ -137,13 +139,13 @@ export function NotificationSettings() {
    * Reset to defaults
    */
   const handleReset = useCallback(async () => {
-    if (!window.confirm('Voulez-vous vraiment réinitialiser toutes les préférences de notification ?')) {
+    if (!window.confirm(t('settings.resetConfirm'))) {
       return;
     }
 
     try {
       await updatePreferences(NOTIFICATION_PREFERENCE_DEFAULTS);
-      toast.success('Préférences réinitialisées');
+      toast.success(t('settings.resetSuccess'));
     } catch (_err) {
       // Error handled by onError callback
     }
@@ -171,9 +173,9 @@ export function NotificationSettings() {
       const permission = await Notification.requestPermission();
       setBrowserPermission(permission);
       if (permission === 'granted') {
-        toast.success('Notifications autorisées');
+        toast.success(t('settings.permissionGranted'));
       } else {
-        toast.error('Notifications refusées');
+        toast.error(t('settings.permissionDenied'));
       }
     }
   };

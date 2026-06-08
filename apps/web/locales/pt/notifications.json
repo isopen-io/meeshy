@@ -153,6 +153,15 @@
       "enable": "Ativar",
       "enabled": "Notificações push ativadas",
       "denied": "Notificações push negadas. Você pode alterar isso nas configurações do seu navegador."
+    },
+    "settings": {
+      "saveError": "Erro ao salvar preferências",
+      "saveSuccess": "Preferências salvas",
+      "quietHoursError": "O horário de início deve ser diferente do horário de fim",
+      "resetConfirm": "Tem certeza de que deseja redefinir todas as preferências de notificação?",
+      "resetSuccess": "Preferências redefinidas",
+      "permissionGranted": "Notificações ativadas",
+      "permissionDenied": "Notificações negadas"
     }
   }
 }

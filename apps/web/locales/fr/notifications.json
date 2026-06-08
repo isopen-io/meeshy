@@ -186,6 +186,15 @@
       "enable": "Activer",
       "enabled": "Notifications push activées",
       "denied": "Notifications push refusées. Vous pouvez modifier cela dans les paramètres de votre navigateur."
+    },
+    "settings": {
+      "saveError": "Erreur lors de la sauvegarde",
+      "saveSuccess": "Préférences enregistrées",
+      "quietHoursError": "L'heure de début doit être différente de l'heure de fin",
+      "resetConfirm": "Voulez-vous vraiment réinitialiser toutes les préférences de notification ?",
+      "resetSuccess": "Préférences réinitialisées",
+      "permissionGranted": "Notifications autorisées",
+      "permissionDenied": "Notifications refusées"
     }
   }
 }

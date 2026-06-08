@@ -514,7 +514,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
               className="flex items-center gap-2 cursor-pointer"
             >
               <HelpCircle className="h-4 w-4" />
-              <span>Besoin d&apos;aide</span>
+              <span>{t('messageActions.needHelp')}</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
