@@ -16,11 +16,11 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | 14 |
-| Last merged PR | #416 (feat(uiux): recover viewers i18n + iOS tokens) |
-| Last Merged Base (commit) | 87d4e676 |
-| Next iteration | **15** |
-| Next branch to create from | `main` (HEAD = 87d4e676) |
+| Last completed iteration | 15 |
+| Last merged PR | #419 (feat(uiux/iter15): color tokens, i18n defaults, Dynamic Type, PostCard i18n) |
+| Last Merged Base (commit) | a525a898 |
+| Next iteration | **16** |
+| Next branch to create from | `main` (HEAD = a525a898) |
 
 ---
 
@@ -33,3 +33,4 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 13 | feat/uiux-iter13 | #407 | ✅ |
 | 14 | feat/uiux-iter14 | #410 | ✅ |
 | 14b | claude/dazzling-hawking-* | #412, #416 | ✅ |
+| 15 | feat/uiux-iter15 | #419 | ✅ |
