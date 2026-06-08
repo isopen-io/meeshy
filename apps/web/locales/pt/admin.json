@@ -130,7 +130,9 @@
     "selectConversation": "Selecione uma conversa para monitorar seu estado em tempo real"
   },
   "userDetail": {
-    "languagePreferences": "Preferências de Idioma"
+    "languagePreferences": "Preferências de Idioma",
+    "languagePreferencesSaved": "Preferências de idioma atualizadas",
+    "languagePreferencesError": "Erro ao atualizar preferências"
   },
   "translationMonitor": {
     "loadingMetrics": "Carregando métricas...",

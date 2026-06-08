@@ -1106,6 +1106,7 @@ model Reaction {
   @@index([messageId])
   @@index([participantId])
   @@index([emoji])
+  @@index([participantId, createdAt(sort: Desc)]) // User's reaction timeline
 }
 
 /// Réaction emoji sur un commentaire de post par un utilisateur
@@ -1160,6 +1161,7 @@ model Mention {
   @@index([messageId])
   @@index([mentionedParticipantId])
   @@index([mentionedAt])
+  @@index([mentionedParticipantId, mentionedAt(sort: Desc)]) // User's mention inbox sorted by time
 }
 
 /// Demande d'amitié entre utilisateurs

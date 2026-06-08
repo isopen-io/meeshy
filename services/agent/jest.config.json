@@ -10,7 +10,7 @@
   },
   "transform": {
     "^.+\\.tsx?$": ["ts-jest", {
-      "tsconfig": "tsconfig.json",
+      "tsconfig": "tsconfig.test.json",
       "diagnostics": {
         "ignoreDiagnostics": ["TS2307", "TS7006", "TS2339"]
       }

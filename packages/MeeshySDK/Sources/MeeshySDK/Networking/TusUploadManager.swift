@@ -72,7 +72,7 @@ public actor TusUploadManager {
     private let chunkSize: Int = 10 * 1024 * 1024 // 10 MB
     private let maxConcurrent: Int = 3
     private var activeCount = 0
-    private var queue: [(URL, String, String, String?, String?, CheckedContinuation<TusUploadResult, Error>)] = []
+    nonisolated(unsafe) private var queue: [(URL, String, String, String?, String?, CheckedContinuation<TusUploadResult, Error>)] = []
     private var progressMap: [String: FileUploadProgress] = [:]
     nonisolated(unsafe) private let progressSubject = PassthroughSubject<UploadQueueProgress, Never>()
 
@@ -82,6 +82,12 @@ public actor TusUploadManager {
 
     public init(baseURL: URL) {
         self.baseURL = baseURL
+    }
+
+    deinit {
+        for (_, _, _, _, _, continuation) in queue {
+            continuation.resume(throwing: CancellationError())
+        }
     }
 
     public func uploadFile(fileURL: URL, mimeType: String, token: String, uploadContext: String? = nil, thumbHash: String? = nil) async throws -> TusUploadResult {
