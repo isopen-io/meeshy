@@ -1,6 +1,31 @@
 {
   "calls": {
     "loading": "Chargement de l'appel...",
+    "permission": {
+      "title": "Accès caméra & microphone",
+      "titleGranted": "Permissions accordées",
+      "titleDenied": "Permission refusée",
+      "description": "Pour rejoindre cet appel vidéo, nous avons besoin d'accéder à votre caméra et à votre microphone.",
+      "descriptionGranted": "Vous pouvez maintenant rejoindre l'appel vidéo.",
+      "requesting": "Veuillez autoriser l'accès dans votre navigateur...",
+      "joiningCall": "Connexion à l'appel...",
+      "grantAccess": "Autoriser l'accès",
+      "tryAgain": "Réessayer",
+      "cancel": "Annuler",
+      "instructions": {
+        "title": "Comment activer les permissions :",
+        "chrome": "Cliquez sur l'icône caméra dans la barre d'adresse",
+        "firefox": "Cliquez sur l'icône caméra dans la barre d'adresse",
+        "safari": "Aller dans Réglages Safari › Confidentialité › Caméra/Microphone"
+      },
+      "errors": {
+        "denied": "Accès caméra et microphone refusé. Vérifiez les paramètres de votre navigateur et autorisez l'accès.",
+        "notFound": "Aucune caméra ou microphone trouvé. Veuillez connecter un appareil et réessayer.",
+        "inUse": "La caméra ou le microphone est déjà utilisé par une autre application.",
+        "generic": "Impossible d'accéder à la caméra et au microphone. Veuillez réessayer.",
+        "unexpected": "Une erreur inattendue s'est produite. Veuillez réessayer."
+      }
+    },
     "banner": {
       "inProgress": "Appel en cours",
       "participant": "{count} participant",

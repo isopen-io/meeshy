@@ -14,6 +14,17 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { useI18n } from '@/hooks/useI18n';
+import {
   Bell,
   MessageSquare,
   UserPlus,
@@ -55,7 +66,9 @@ function validateDndTimes(startTime: string, endTime: string): boolean {
 }
 
 export function NotificationSettings() {
+  const { t } = useI18n('settings');
   const reducedMotion = useReducedMotion();
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
 
   // Debounce timer ref
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -71,7 +84,7 @@ export function NotificationSettings() {
   } = usePreferences<'notification'>('notification', {
     onError: (error) => {
       console.error('[NotificationSettings] Error:', error);
-      toast.error('message' in error ? error.message : 'Erreur lors de la sauvegarde');
+      toast.error('message' in error ? error.message : t('settings.notifications.saveError'));
     },
     onSuccess: () => {
       // Toast uniquement si sauvegarde manuelle (pas debounced)
@@ -99,7 +112,7 @@ export function NotificationSettings() {
     debounceTimerRef.current = setTimeout(async () => {
       try {
         await updatePreferences(updates);
-        toast.success('Préférences enregistrées');
+        toast.success(t('settings.notifications.savedSuccess'));
       } catch (_err) {
         // Error handled by onError callback
       }
@@ -126,7 +139,7 @@ export function NotificationSettings() {
     const endTime = field === 'dndEndTime' ? value : preferences.dndEndTime;
 
     if (!validateDndTimes(startTime, endTime)) {
-      toast.error('L\'heure de début doit être différente de l\'heure de fin');
+      toast.error(t('settings.notifications.dndError'));
       return;
     }
 
@@ -136,18 +149,14 @@ export function NotificationSettings() {
   /**
    * Reset to defaults
    */
-  const handleReset = useCallback(async () => {
-    if (!window.confirm('Voulez-vous vraiment réinitialiser toutes les préférences de notification ?')) {
-      return;
-    }
-
+  const handleResetConfirm = useCallback(async () => {
     try {
       await updatePreferences(NOTIFICATION_PREFERENCE_DEFAULTS);
-      toast.success('Préférences réinitialisées');
+      toast.success(t('settings.notifications.resetSuccess'));
     } catch (_err) {
       // Error handled by onError callback
     }
-  }, [updatePreferences]);
+  }, [updatePreferences, t]);
 
   const [browserPermission, setBrowserPermission] = useState<NotificationPermission | 'unsupported'>(() => {
     if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';
@@ -171,9 +180,9 @@ export function NotificationSettings() {
       const permission = await Notification.requestPermission();
       setBrowserPermission(permission);
       if (permission === 'granted') {
-        toast.success('Notifications autorisées');
+        toast.success(t('settings.notifications.pushEnabled'));
       } else {
-        toast.error('Notifications refusées');
+        toast.error(t('settings.notifications.pushDenied'));
       }
     }
   };
@@ -755,12 +764,29 @@ export function NotificationSettings() {
       <div className="flex justify-start">
         <Button
           variant="outline"
-          onClick={handleReset}
+          onClick={() => setResetDialogOpen(true)}
           disabled={isUpdating}
         >
-          Réinitialiser aux valeurs par défaut
+          {t('settings.notifications.resetButton')}
         </Button>
       </div>
+
+      <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('settings.notifications.resetConfirmTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('settings.notifications.resetConfirmDescription')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t('settings.notifications.resetConfirmCancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleResetConfirm}>
+              {t('settings.notifications.resetConfirmOk')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

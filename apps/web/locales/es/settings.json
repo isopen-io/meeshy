@@ -260,7 +260,18 @@
     },
     "notifications": {
       "title": "Configuración de notificaciones",
-      "description": "Administre sus preferencias de notificación"
+      "description": "Administre sus preferencias de notificación",
+      "savedSuccess": "Preferencias guardadas",
+      "saveError": "Error al guardar las preferencias",
+      "dndError": "La hora de inicio debe ser diferente de la hora de fin",
+      "resetConfirmTitle": "Restablecer preferencias",
+      "resetConfirmDescription": "¿Está seguro de que desea restablecer todas las preferencias de notificación a sus valores predeterminados?",
+      "resetConfirmCancel": "Cancelar",
+      "resetButton": "Restablecer a valores predeterminados",
+      "resetConfirmOk": "Restablecer",
+      "resetSuccess": "Preferencias restablecidas",
+      "pushEnabled": "Notificaciones push activadas",
+      "pushDenied": "Notificaciones push denegadas. Puede cambiar esto en la configuración de su navegador."
     },
     "privacy": {
       "title": "Configuración de privacidad",

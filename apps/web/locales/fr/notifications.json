@@ -179,6 +179,14 @@
       "thisMonth": "Ce mois",
       "older": "Plus ancien"
     },
-    "settings": "Paramètres"
+    "settings": "Paramètres",
+    "pushPermission": {
+      "title": "Activer les notifications push",
+      "description": "Soyez notifié même lorsque l'application est en arrière-plan",
+      "enable": "Activer",
+      "dismiss": "Ignorer",
+      "enabledToast": "Notifications push activées",
+      "deniedToast": "Notifications push refusées. Vous pouvez modifier ce paramètre dans les réglages de votre navigateur."
+    }
   }
 }

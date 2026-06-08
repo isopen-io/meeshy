@@ -51,7 +51,7 @@ struct BubbleFooter: View, Equatable {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Renvoyer le message")
+                    .accessibilityLabel(String(localized: "bubble.action.resend", defaultValue: "Resend message", bundle: .main))
                 } else {
                     deliveryView(tint: compactMetaColor, readTint: readColor)
                 }
@@ -157,8 +157,8 @@ struct BubbleFooter: View, Equatable {
             }
             .buttonStyle(.plain)
             .accessibilityLabel(model.showsTranslate
-                                ? "Traduction disponible"
-                                : "Demander une traduction")
+                                ? String(localized: "bubble.a11y.translation.available", defaultValue: "Translation available", bundle: .main)
+                                : String(localized: "bubble.a11y.translation.request", defaultValue: "Request translation", bundle: .main))
         }
         if !model.flags.isEmpty {
             HStack(spacing: 2) {
@@ -219,8 +219,8 @@ struct BubbleFooter: View, Equatable {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Voir le statut de lecture")
-                .accessibilityHint("Ouvre le detail du message a l'onglet Vues")
+                .accessibilityLabel(String(localized: "bubble.a11y.read.status", defaultValue: "View read status", bundle: .main))
+                .accessibilityHint(String(localized: "bubble.a11y.read.status.hint", defaultValue: "Opens message detail at the Seen tab", bundle: .main))
             } else {
                 check
             }
@@ -270,10 +270,10 @@ struct BubbleFooter: View, Equatable {
     private func avatarMenu(sender: SenderIdentity) -> [AvatarContextMenuItem]? {
         var items: [AvatarContextMenuItem] = []
         if let onViewStory = actions.onViewStory, sender.storyRing != .none {
-            items.append(AvatarContextMenuItem(label: "Voir la story", icon: "play.circle.fill", action: onViewStory))
+            items.append(AvatarContextMenuItem(label: String(localized: "bubble.avatar.view.story", defaultValue: "View story", bundle: .main), icon: "play.circle.fill", action: onViewStory))
         }
         if let onSenderTap = actions.onSenderTap {
-            items.append(AvatarContextMenuItem(label: "Voir le profil", icon: "person.circle", action: onSenderTap))
+            items.append(AvatarContextMenuItem(label: String(localized: "bubble.avatar.view.profile", defaultValue: "View profile", bundle: .main), icon: "person.circle", action: onSenderTap))
         }
         return items.isEmpty ? nil : items
     }

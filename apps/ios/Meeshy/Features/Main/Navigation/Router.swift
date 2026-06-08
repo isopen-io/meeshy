@@ -56,51 +56,51 @@ extension Route {
         case .conversation(let conv):
             return conv.name
         case .settings:
-            return "Parametres"
+            return String(localized: "nav.settings", defaultValue: "Settings", bundle: .main)
         case .profile:
-            return "Profil"
+            return String(localized: "nav.profile", defaultValue: "Profile", bundle: .main)
         case .contacts:
-            return "Contacts"
+            return String(localized: "nav.contacts", defaultValue: "Contacts", bundle: .main)
         case .communityList:
-            return "Communautes"
+            return String(localized: "nav.communities", defaultValue: "Communities", bundle: .main)
         case .communityDetail:
-            return "Communaute"
+            return String(localized: "nav.community", defaultValue: "Community", bundle: .main)
         case .communityCreate:
-            return "Nouvelle communaute"
+            return String(localized: "nav.community.create", defaultValue: "New Community", bundle: .main)
         case .communitySettings:
-            return "Parametres communaute"
+            return String(localized: "nav.community.settings", defaultValue: "Community Settings", bundle: .main)
         case .communityMembers:
-            return "Membres"
+            return String(localized: "nav.community.members", defaultValue: "Members", bundle: .main)
         case .communityInvite:
-            return "Inviter"
+            return String(localized: "nav.community.invite", defaultValue: "Invite", bundle: .main)
         case .notifications:
-            return "Notifications"
+            return String(localized: "nav.notifications", defaultValue: "Notifications", bundle: .main)
         case .userStats:
-            return "Statistiques"
+            return String(localized: "nav.stats", defaultValue: "Statistics", bundle: .main)
         case .links:
-            return "Liens"
+            return String(localized: "nav.links", defaultValue: "Links", bundle: .main)
         case .affiliate:
-            return "Affiliation"
+            return String(localized: "nav.affiliate", defaultValue: "Affiliate", bundle: .main)
         case .trackingLinks:
-            return "Liens de suivi"
+            return String(localized: "nav.links.tracking", defaultValue: "Tracking Links", bundle: .main)
         case .shareLinks:
-            return "Liens de partage"
+            return String(localized: "nav.links.share", defaultValue: "Share Links", bundle: .main)
         case .communityLinks:
-            return "Liens communaute"
+            return String(localized: "nav.links.community", defaultValue: "Community Links", bundle: .main)
         case .dataExport:
-            return "Export de donnees"
+            return String(localized: "nav.data.export", defaultValue: "Export Data", bundle: .main)
         case .postDetail(_, let post, _):
-            return post?.author ?? "Publication"
+            return post?.author ?? String(localized: "nav.post", defaultValue: "Post", bundle: .main)
         case .bookmarks:
-            return "Signets"
+            return String(localized: "nav.bookmarks", defaultValue: "Bookmarks", bundle: .main)
         case .starredMessages:
-            return "Messages favoris"
+            return String(localized: "nav.starred", defaultValue: "Starred Messages", bundle: .main)
         case .friendRequests:
-            return "Demandes d'amis"
+            return String(localized: "nav.friend.requests", defaultValue: "Friend Requests", bundle: .main)
         case .editProfile:
-            return "Modifier le profil"
+            return String(localized: "nav.profile.edit", defaultValue: "Edit Profile", bundle: .main)
         case .storyNotificationTarget:
-            return "Story"
+            return String(localized: "nav.story", defaultValue: "Story", bundle: .main)
         }
     }
 }

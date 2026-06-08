@@ -260,7 +260,18 @@
     },
     "notifications": {
       "title": "Configurações de notificações",
-      "description": "Gerencie suas preferências de notificação"
+      "description": "Gerencie suas preferências de notificação",
+      "savedSuccess": "Preferências salvas",
+      "saveError": "Falha ao salvar as preferências",
+      "dndError": "O horário de início deve ser diferente do horário de fim",
+      "resetConfirmTitle": "Redefinir preferências",
+      "resetConfirmDescription": "Tem certeza de que deseja redefinir todas as preferências de notificação para os padrões?",
+      "resetConfirmCancel": "Cancelar",
+      "resetButton": "Redefinir para padrões",
+      "resetConfirmOk": "Redefinir",
+      "resetSuccess": "Preferências redefinidas",
+      "pushEnabled": "Notificações push ativadas",
+      "pushDenied": "Notificações push negadas. Você pode alterar isso nas configurações do navegador."
     },
     "privacy": {
       "title": "Configurações de privacidade",

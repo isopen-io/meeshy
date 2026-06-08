@@ -1,6 +1,31 @@
 {
   "calls": {
     "loading": "Carregando chamada...",
+    "permission": {
+      "title": "Acesso à câmera e microfone",
+      "titleGranted": "Permissões concedidas",
+      "titleDenied": "Permissão negada",
+      "description": "Para entrar nesta videochamada, precisamos de acesso à sua câmera e microfone.",
+      "descriptionGranted": "Agora você pode entrar na videochamada.",
+      "requesting": "Por favor, permita o acesso no seu navegador...",
+      "joiningCall": "Entrando na chamada...",
+      "grantAccess": "Conceder acesso",
+      "tryAgain": "Tentar novamente",
+      "cancel": "Cancelar",
+      "instructions": {
+        "title": "Como ativar as permissões:",
+        "chrome": "Clique no ícone de câmera na barra de endereço",
+        "firefox": "Clique no ícone de câmera na barra de endereço",
+        "safari": "Vá em Ajustes do Safari › Privacidade › Câmera/Microfone"
+      },
+      "errors": {
+        "denied": "Acesso à câmera e microfone negado. Verifique as configurações do navegador e permita o acesso.",
+        "notFound": "Nenhuma câmera ou microfone encontrado. Conecte um dispositivo e tente novamente.",
+        "inUse": "A câmera ou o microfone já está sendo usado por outro aplicativo.",
+        "generic": "Não foi possível acessar a câmera e o microfone. Tente novamente.",
+        "unexpected": "Ocorreu um erro inesperado. Tente novamente."
+      }
+    },
     "banner": {
       "inProgress": "Chamada em andamento",
       "participant": "{count} participante",

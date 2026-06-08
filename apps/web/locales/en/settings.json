@@ -334,7 +334,18 @@
     },
     "notifications": {
       "title": "Notification Settings",
-      "description": "Manage your notification preferences"
+      "description": "Manage your notification preferences",
+      "savedSuccess": "Preferences saved",
+      "saveError": "Failed to save preferences",
+      "dndError": "Start time must be different from end time",
+      "resetConfirmTitle": "Reset Preferences",
+      "resetConfirmDescription": "Are you sure you want to reset all notification preferences to their defaults?",
+      "resetConfirmCancel": "Cancel",
+      "resetButton": "Reset to Defaults",
+      "resetConfirmOk": "Reset",
+      "resetSuccess": "Preferences reset",
+      "pushEnabled": "Push notifications enabled",
+      "pushDenied": "Push notifications denied. You can change this in your browser settings."
     },
     "privacy": {
       "title": "Privacy Settings",

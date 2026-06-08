@@ -1,6 +1,31 @@
 {
   "calls": {
     "loading": "Loading call...",
+    "permission": {
+      "title": "Camera & Microphone Access",
+      "titleGranted": "Permissions Granted",
+      "titleDenied": "Permission Denied",
+      "description": "To join this video call, we need access to your camera and microphone.",
+      "descriptionGranted": "You can now join the video call.",
+      "requesting": "Please allow access in your browser...",
+      "joiningCall": "Joining call...",
+      "grantAccess": "Grant Access",
+      "tryAgain": "Try Again",
+      "cancel": "Cancel",
+      "instructions": {
+        "title": "How to enable permissions:",
+        "chrome": "Click the camera icon in the address bar",
+        "firefox": "Click the camera icon in the address bar",
+        "safari": "Go to Safari Settings › Privacy › Camera/Microphone"
+      },
+      "errors": {
+        "denied": "Camera and microphone access denied. Please check your browser settings and allow access.",
+        "notFound": "No camera or microphone found. Please connect a device and try again.",
+        "inUse": "Camera or microphone is already in use by another application.",
+        "generic": "Unable to access camera and microphone. Please try again.",
+        "unexpected": "An unexpected error occurred. Please try again."
+      }
+    },
     "banner": {
       "inProgress": "Call in progress",
       "participant": "{count} participant",

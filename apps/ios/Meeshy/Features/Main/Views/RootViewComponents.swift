@@ -931,7 +931,7 @@ struct ThemedFeedCard: View {
                         UIPasteboard.general.string = item.content
                         HapticFeedback.success()
                     } label: {
-                        Label("Copier le texte", systemImage: "doc.on.doc")
+                        Label(String(localized: "feed.action.copy", defaultValue: "Copy text", bundle: .main), systemImage: "doc.on.doc")
                     }
                     Button {
                         let activityVC = UIActivityViewController(activityItems: [item.content], applicationActivities: nil)
@@ -941,7 +941,7 @@ struct ThemedFeedCard: View {
                         }
                         HapticFeedback.light()
                     } label: {
-                        Label("Partager", systemImage: "square.and.arrow.up")
+                        Label(String(localized: "feed.action.share", defaultValue: "Share", bundle: .main), systemImage: "square.and.arrow.up")
                     }
                 } label: {
                     Image(systemName: "ellipsis")
@@ -972,7 +972,9 @@ struct ThemedFeedCard: View {
                     Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                         .foregroundColor(Color(hex: "F8B500"))
                 }
-                .accessibilityLabel(isBookmarked ? "Retirer des favoris" : "Ajouter aux favoris")
+                .accessibilityLabel(isBookmarked
+                    ? String(localized: "feed.bookmark.remove", defaultValue: "Remove from bookmarks", bundle: .main)
+                    : String(localized: "feed.bookmark.add", defaultValue: "Add to bookmarks", bundle: .main))
             }
             .padding(.top, 4)
         }

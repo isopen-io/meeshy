@@ -358,7 +358,18 @@
     },
     "notifications": {
       "title": "Paramètres de notification",
-      "description": "Gérez vos préférences de notification"
+      "description": "Gérez vos préférences de notification",
+      "savedSuccess": "Préférences enregistrées",
+      "saveError": "Erreur lors de la sauvegarde",
+      "dndError": "L'heure de début doit être différente de l'heure de fin",
+      "resetConfirmTitle": "Réinitialiser les préférences",
+      "resetConfirmDescription": "Voulez-vous vraiment réinitialiser toutes les préférences de notification ?",
+      "resetConfirmCancel": "Annuler",
+      "resetButton": "Réinitialiser aux valeurs par défaut",
+      "resetConfirmOk": "Réinitialiser",
+      "resetSuccess": "Préférences réinitialisées",
+      "pushEnabled": "Notifications push activées",
+      "pushDenied": "Notifications push refusées. Vous pouvez modifier ce paramètre dans les réglages de votre navigateur."
     },
     "privacy": {
       "title": "Paramètres de confidentialité",

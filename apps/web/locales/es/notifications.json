@@ -146,6 +146,14 @@
       "older": "Más antiguo"
     },
     "markAllRead": "Marcar todo como leído",
-    "settings": "Configuración"
+    "settings": "Configuración",
+    "pushPermission": {
+      "title": "Activar notificaciones push",
+      "description": "Reciba notificaciones incluso cuando la aplicación está en segundo plano",
+      "enable": "Activar",
+      "dismiss": "Ignorar",
+      "enabledToast": "Notificaciones push activadas",
+      "deniedToast": "Notificaciones push denegadas. Puede cambiar esto en la configuración de su navegador."
+    }
   }
 }
