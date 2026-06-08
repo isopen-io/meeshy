@@ -790,3 +790,51 @@ final class CallPillStatusTests: XCTestCase {
         XCTAssertFalse(CallPillStatus.from(.reconnecting(attempt: 2)).isConnected)
     }
 }
+
+// MARK: - Full-screen cover gate keeps the end-of-call panel reachable
+
+/// `CallManager.endCallInternal` holds `.ended(reason:)` for ~1.5 s so the user
+/// can read why the call ended (and the final duration) before the state resets
+/// to `.idle`. The cover gate must therefore stay presented across `.ended`,
+/// otherwise `CallView.endedView` is dead code that flashes away instantly.
+final class CallCoverPresentationTests: XCTestCase {
+
+    func test_isEnded_trueOnlyForEnded() {
+        XCTAssertTrue(CallState.ended(reason: .local).isEnded)
+        XCTAssertFalse(CallState.idle.isEnded)
+        XCTAssertFalse(CallState.connected.isEnded)
+        XCTAssertFalse(CallState.ringing(isOutgoing: true).isEnded)
+    }
+
+    func test_cover_activeCall_fullScreen_isPresented() {
+        XCTAssertTrue(CallState.shouldPresentFullScreenCover(
+            callState: .connected, displayMode: .fullScreen))
+    }
+
+    /// The bug: the call ends, state becomes `.ended`, and the cover used to
+    /// dismiss instantly because `isActive` is `false` for `.ended`. The panel
+    /// must remain reachable during the settle window.
+    func test_cover_endedCall_fullScreen_staysPresented() {
+        XCTAssertTrue(CallState.shouldPresentFullScreenCover(
+            callState: .ended(reason: .local), displayMode: .fullScreen),
+            "the end-of-call panel must stay up during the 1.5s settle window")
+    }
+
+    func test_cover_idle_isNotPresented() {
+        XCTAssertFalse(CallState.shouldPresentFullScreenCover(
+            callState: .idle, displayMode: .fullScreen),
+            "no call → no cover, even though the user never minimised")
+    }
+
+    func test_cover_activeCall_pip_isNotPresented() {
+        XCTAssertFalse(CallState.shouldPresentFullScreenCover(
+            callState: .connected, displayMode: .pip),
+            "in PiP the floating pill carries the call, not the full-screen cover")
+    }
+
+    func test_cover_endedCall_pip_isNotPresented() {
+        XCTAssertFalse(CallState.shouldPresentFullScreenCover(
+            callState: .ended(reason: .local), displayMode: .pip),
+            "an ended call that was in PiP must not pop a full-screen cover")
+    }
+}

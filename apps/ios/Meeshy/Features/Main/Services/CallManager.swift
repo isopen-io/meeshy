@@ -34,6 +34,28 @@ enum CallState: Equatable {
         if case .ringing = self { return true }
         return false
     }
+
+    /// `true` only for the terminal `.ended(reason:)` state. Distinct from
+    /// `isActive` (which is `false` for both `.idle` AND `.ended`) because the
+    /// UI must keep showing the end-of-call panel during the 1.5 s settle window
+    /// that `CallManager.endCallInternal` holds before resetting to `.idle`.
+    var isEnded: Bool {
+        if case .ended = self { return true }
+        return false
+    }
+
+    /// Whether the full-screen call cover should remain presented for a given
+    /// state + display mode. Includes `.ended` so the end-of-call panel
+    /// (`CallView.endedView` — reason + final duration) is actually reachable:
+    /// gating purely on `isActive` dismissed the cover the instant the call
+    /// ended, making that panel dead code. The cover only ever shows in
+    /// `.fullScreen`; in `.pip` the floating pill carries the ended state.
+    static func shouldPresentFullScreenCover(
+        callState: CallState,
+        displayMode: CallDisplayMode
+    ) -> Bool {
+        (callState.isActive || callState.isEnded) && displayMode == .fullScreen
+    }
 }
 
 // MARK: - Call Manager
