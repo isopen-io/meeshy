@@ -148,7 +148,9 @@
     "selectConversation": "Select a conversation to monitor its real-time state"
   },
   "userDetail": {
-    "languagePreferences": "Language Preferences"
+    "languagePreferences": "Language Preferences",
+    "languagePreferencesSaved": "Language preferences updated",
+    "languagePreferencesError": "Error updating preferences"
   },
   "translationMonitor": {
     "loadingMetrics": "Loading metrics...",

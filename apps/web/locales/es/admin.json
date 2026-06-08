@@ -148,7 +148,9 @@
     "selectConversation": "Selecciona una conversación para supervisar su estado en tiempo real"
   },
   "userDetail": {
-    "languagePreferences": "Preferencias de Idioma"
+    "languagePreferences": "Preferencias de Idioma",
+    "languagePreferencesSaved": "Preferencias de idioma actualizadas",
+    "languagePreferencesError": "Error al actualizar preferencias"
   },
   "translationMonitor": {
     "loadingMetrics": "Cargando métricas...",

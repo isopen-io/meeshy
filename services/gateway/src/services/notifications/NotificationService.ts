@@ -361,11 +361,13 @@ export class NotificationService {
   private recentMentions: Map<string, number[]> = new Map();
   private readonly MAX_MENTIONS_PER_MINUTE = 5;
   private readonly MENTION_WINDOW_MS = 60000; // 1 minute
+  private readonly MAX_MENTION_MAP_ENTRIES = 10_000;
 
   // Anti-spam: tracking des réactions récentes par paire (sender:recipient)
   private recentReactions: Map<string, number[]> = new Map();
   private readonly MAX_REACTIONS_PER_MINUTE = 5;
   private readonly REACTION_WINDOW_MS = 60000; // 1 minute
+  private readonly MAX_REACTION_MAP_ENTRIES = 10_000;
 
   private pushService?: PushNotificationService;
   private emailService?: EmailService;
@@ -375,8 +377,10 @@ export class NotificationService {
     private io?: SocketIOServer
   ) {
     // Nettoyer les entrées de rate limit périmées toutes les 2 minutes
-    setInterval(() => this.cleanupOldMentions(), 120000);
-    setInterval(() => this.cleanupOldReactions(), 120000);
+    const mentionsCleanup = setInterval(() => this.cleanupOldMentions(), 120_000);
+    mentionsCleanup.unref?.();
+    const reactionsCleanup = setInterval(() => this.cleanupOldReactions(), 120_000);
+    reactionsCleanup.unref?.();
   }
 
   // ==============================================
@@ -628,7 +632,7 @@ export class NotificationService {
       // Émettre via Socket.IO
       if (this.io) {
         this.io.to(params.userId).emit(SERVER_EVENTS.NOTIFICATION_NEW, socketPayload);
-        console.log(`[RT-DIAG] notification:new emitted (socket) user=${params.userId} type=${params.type} conv=${params.context.conversationId ?? 'none'}`);
+        notificationLogger.debug('notification:new emitted via socket', { userId: params.userId, type: params.type, conversationId: params.context.conversationId ?? 'none' });
         // Update badge counters on client (fire-and-forget, non-blocking)
         this.emitCountsUpdate(params.userId).catch(() => {});
       }
@@ -643,7 +647,7 @@ export class NotificationService {
             undefined;
           const pushBody = params.content.substring(0, 200);
 
-          console.log(`[RT-DIAG] push (APNs/FCM) sending user=${params.userId} type=${params.type} conv=${params.context.conversationId ?? 'none'}`);
+          notificationLogger.debug('push (APNs/FCM) sending', { userId: params.userId, type: params.type, conversationId: params.context.conversationId ?? 'none' });
           this.pushService.sendToUser({
             userId: params.userId,
             // CRITICAL: exclude 'voip' tokens — regular notifications must NEVER be
@@ -1060,31 +1064,32 @@ export class NotificationService {
     },
     memberIds: string[]
   ): Promise<number> {
-    let count = 0;
-    for (const userId of mentionedUserIds) {
-      if (userId === commonData.senderId) continue;
-      if (!memberIds.includes(userId)) continue;
-
-      // Anti-spam: rate limit per sender:recipient pair
+    const eligibleUserIds = mentionedUserIds.filter(userId => {
+      if (userId === commonData.senderId) return false;
+      if (!memberIds.includes(userId)) return false;
       if (!this.shouldCreateMentionNotification(commonData.senderId, userId)) {
         notificationLogger.info('Batch mention blocked (rate limit)', {
           senderId: commonData.senderId,
           recipientId: userId,
         });
-        continue;
+        return false;
       }
+      return true;
+    });
 
-      const notification = await this.createMentionNotification({
-        mentionedUserId: userId,
-        mentionerUserId: commonData.senderId,
-        messageId: commonData.messageId,
-        conversationId: commonData.conversationId,
-        messagePreview: commonData.messageContent,
-      });
+    const results = await Promise.all(
+      eligibleUserIds.map(userId =>
+        this.createMentionNotification({
+          mentionedUserId: userId,
+          mentionerUserId: commonData.senderId,
+          messageId: commonData.messageId,
+          conversationId: commonData.conversationId,
+          messagePreview: commonData.messageContent,
+        })
+      )
+    );
 
-      if (notification) count++;
-    }
-    return count;
+    return results.filter(Boolean).length;
   }
 
   // ==============================================
@@ -2717,6 +2722,10 @@ export class NotificationService {
 
     recentTimestamps.push(now);
     this.recentMentions.set(key, recentTimestamps);
+    if (this.recentMentions.size > this.MAX_MENTION_MAP_ENTRIES) {
+      const firstKey = this.recentMentions.keys().next().value!;
+      this.recentMentions.delete(firstKey);
+    }
     return true;
   }
 
@@ -2757,6 +2766,10 @@ export class NotificationService {
 
     recentTimestamps.push(now);
     this.recentReactions.set(key, recentTimestamps);
+    if (this.recentReactions.size > this.MAX_REACTION_MAP_ENTRIES) {
+      const firstKey = this.recentReactions.keys().next().value!;
+      this.recentReactions.delete(firstKey);
+    }
     return true;
   }
 

@@ -21,11 +21,14 @@ describe('conversationListParticipantSelect (T17 over-fetch trim)', () => {
     }
   });
 
-  it('keeps the nested user fallback fields (display name / avatar / online status)', () => {
+  it('keeps the nested user fallback fields (display name / avatar / online status / name)', () => {
     expect(conversationListParticipantSelect.user.select.id).toBe(true);
     expect(conversationListParticipantSelect.user.select.username).toBe(true);
     expect(conversationListParticipantSelect.user.select.displayName).toBe(true);
     expect(conversationListParticipantSelect.user.select.avatar).toBe(true);
     expect(conversationListParticipantSelect.user.select.isOnline).toBe(true);
+    // iter-8: firstName/lastName added to eliminate the separate memberUsers query
+    expect(conversationListParticipantSelect.user.select.firstName).toBe(true);
+    expect(conversationListParticipantSelect.user.select.lastName).toBe(true);
   });
 });

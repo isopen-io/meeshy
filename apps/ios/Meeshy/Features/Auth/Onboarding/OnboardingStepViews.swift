@@ -54,11 +54,11 @@ struct GlassTextField: View {
                 } else if let available = isAvailable {
                     Image(systemName: available ? "checkmark.circle.fill" : "xmark.circle.fill")
                         .font(.title3)
-                        .foregroundColor(available ? .green : .red)
+                        .foregroundColor(available ? MeeshyColors.success : MeeshyColors.error)
                 } else if !text.isEmpty && errorMessage == nil {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title3)
-                        .foregroundColor(.green)
+                        .foregroundColor(MeeshyColors.success)
                 }
             }
             .padding(.horizontal, 16)
@@ -70,7 +70,7 @@ struct GlassTextField: View {
                         RoundedRectangle(cornerRadius: 14)
                             .stroke(
                                 isFocused ? accentColor.opacity(0.6) :
-                                    (errorMessage != nil ? Color.red.opacity(0.5) : Color(.systemGray4).opacity(0.4)),
+                                    (errorMessage != nil ? MeeshyColors.error.opacity(0.5) : Color(.systemGray4).opacity(0.4)),
                                 lineWidth: isFocused ? 2 : 1
                             )
                     )
@@ -83,7 +83,7 @@ struct GlassTextField: View {
                     Image(systemName: "exclamationmark.triangle.fill").font(.caption2)
                     Text(error).font(.caption)
                 }
-                .foregroundColor(.red)
+                .foregroundColor(MeeshyColors.error)
                 .padding(.leading, 16)
             }
         }
@@ -111,6 +111,7 @@ struct StepIllustration: View {
                     )
                 )
         }
+        .accessibilityHidden(true)
     }
 }
 
@@ -247,7 +248,7 @@ struct StepPseudoView: View {
 
     private func tipRow(icon: String, text: String) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: icon).font(.caption).foregroundColor(.green).frame(width: 16)
+            Image(systemName: icon).font(.caption).foregroundColor(MeeshyColors.success).frame(width: 16)
             Text(text).font(.caption).foregroundColor(.secondary)
         }
     }
@@ -296,7 +297,7 @@ struct StepPhoneView: View {
                         } else if let available = viewModel.phoneAvailable {
                             Image(systemName: available ? "checkmark.circle.fill" : "xmark.circle.fill")
                                 .font(.title3)
-                                .foregroundColor(available ? .green : .red)
+                                .foregroundColor(available ? MeeshyColors.success : MeeshyColors.error)
                         }
                     }
                     .padding(14)
@@ -307,7 +308,7 @@ struct StepPhoneView: View {
                                 RoundedRectangle(cornerRadius: 12)
                                     .stroke(
                                         isFocused ? viewModel.currentStep.accentColor :
-                                            (viewModel.phoneError != nil ? Color.red.opacity(0.5) : Color(.systemGray4).opacity(0.4)),
+                                            (viewModel.phoneError != nil ? MeeshyColors.error.opacity(0.5) : Color(.systemGray4).opacity(0.4)),
                                         lineWidth: isFocused ? 2 : 1
                                     )
                             )
@@ -320,7 +321,7 @@ struct StepPhoneView: View {
                         Image(systemName: "exclamationmark.triangle.fill").font(.caption2)
                         Text(error).font(.caption)
                     }
-                    .foregroundColor(.red)
+                    .foregroundColor(MeeshyColors.error)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.leading, 16)
                 }
@@ -388,7 +389,7 @@ struct StepPhoneView: View {
                         Spacer()
                         Text(country.dialCode).font(.subheadline).foregroundColor(.secondary)
                         if viewModel.selectedCountry.id == country.id {
-                            Image(systemName: "checkmark").foregroundColor(.green)
+                            Image(systemName: "checkmark").foregroundColor(MeeshyColors.success)
                         }
                     }
                 }
@@ -445,7 +446,7 @@ struct StepEmailView: View {
     private var tipsCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
-                Image(systemName: "lock.shield.fill").foregroundColor(.green)
+                Image(systemName: "lock.shield.fill").foregroundColor(MeeshyColors.success)
                 Text(String(localized: "onboarding.step.email.protected.title", defaultValue: "Ton email est protege", bundle: .main)).font(.footnote.weight(.semibold)).foregroundColor(.secondary)
             }
             VStack(alignment: .leading, spacing: 6) {
@@ -460,7 +461,7 @@ struct StepEmailView: View {
 
     private func tipRow(icon: String, text: String) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: icon).font(.caption).foregroundColor(.green).frame(width: 16)
+            Image(systemName: icon).font(.caption).foregroundColor(MeeshyColors.success).frame(width: 16)
             Text(text).font(.caption).foregroundColor(.secondary)
         }
     }
@@ -591,14 +592,14 @@ struct StepPasswordView: View {
                             HStack(spacing: 10) {
                                 Image(systemName: passwordsMatch ? "checkmark.circle.fill" : "xmark.circle.fill")
                                     .font(.system(size: 20))
-                                    .foregroundColor(passwordsMatch ? .green : .red)
+                                    .foregroundColor(passwordsMatch ? MeeshyColors.success : MeeshyColors.error)
                                 Text(passwordsMatch ? String(localized: "onboarding.step.password.match", defaultValue: "Les mots de passe correspondent!", bundle: .main) : String(localized: "onboarding.step.password.mismatch", defaultValue: "Les mots de passe ne correspondent pas", bundle: .main))
                                     .font(.subheadline.weight(.medium))
-                                    .foregroundColor(passwordsMatch ? .green : .red)
+                                    .foregroundColor(passwordsMatch ? MeeshyColors.success : MeeshyColors.error)
                                 Spacer()
                             }
                             .padding(14)
-                            .background(RoundedRectangle(cornerRadius: 12).fill((passwordsMatch ? Color.green : Color.red).opacity(0.1)))
+                            .background(RoundedRectangle(cornerRadius: 12).fill((passwordsMatch ? MeeshyColors.success : MeeshyColors.error).opacity(0.1)))
                             .transition(.scale.combined(with: .opacity))
                         }
                     }
@@ -641,7 +642,7 @@ struct StepPasswordView: View {
     private func reqRow(met: Bool, text: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: met ? "checkmark.circle.fill" : "circle")
-                .font(.subheadline).foregroundColor(met ? .green : .secondary).frame(width: 16)
+                .font(.subheadline).foregroundColor(met ? MeeshyColors.success : .secondary).frame(width: 16)
             Text(text).font(.caption).foregroundColor(met ? .primary : .secondary)
         }
     }
@@ -663,10 +664,10 @@ enum PasswordStrength {
 
     var color: Color {
         switch self {
-        case .weak: return .red
+        case .weak: return MeeshyColors.error
         case .fair: return .orange
         case .good: return .yellow
-        case .strong: return .green
+        case .strong: return MeeshyColors.success
         }
     }
 
@@ -1006,7 +1007,7 @@ struct StepProfileView: View {
                         )
                     Text(String(format: String(localized: "onboarding.step.profile.bio.counter", defaultValue: "%d/150 caracteres", bundle: .main), viewModel.bio.count))
                         .font(.caption2)
-                        .foregroundColor(viewModel.bio.count > 150 ? .red : .secondary)
+                        .foregroundColor(viewModel.bio.count > 150 ? MeeshyColors.error : .secondary)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                 }
 
@@ -1166,10 +1167,10 @@ struct StepRecapView: View {
         VStack(spacing: 16) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 50))
-                .foregroundColor(.red)
+                .foregroundColor(MeeshyColors.error)
             Text(viewModel.errorMessage ?? String(localized: "common.error.unknown", defaultValue: "Erreur inconnue", bundle: .main))
                 .font(.subheadline)
-                .foregroundColor(.red)
+                .foregroundColor(MeeshyColors.error)
                 .multilineTextAlignment(.center)
         }
         .padding(.top, 40)
@@ -1220,10 +1221,10 @@ struct StepRecapView: View {
             HStack(alignment: .top, spacing: 12) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 6)
-                        .stroke(viewModel.acceptTerms ? Color.green : Color(.systemGray3), lineWidth: 2)
+                        .stroke(viewModel.acceptTerms ? MeeshyColors.success : Color(.systemGray3), lineWidth: 2)
                         .frame(width: 24, height: 24)
                     if viewModel.acceptTerms {
-                        RoundedRectangle(cornerRadius: 6).fill(Color.green).frame(width: 24, height: 24)
+                        RoundedRectangle(cornerRadius: 6).fill(MeeshyColors.success).frame(width: 24, height: 24)
                         Image(systemName: "checkmark").font(.subheadline.weight(.bold)).foregroundColor(.white)
                     }
                 }

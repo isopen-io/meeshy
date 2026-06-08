@@ -155,7 +155,7 @@ export function TranslationMonitor({
         {isLoading && !metrics && (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-            <span className="ml-2 text-gray-600">{t('admin.translationMonitor.loadingMetrics')}</span>
+            <span className="ml-2 text-gray-600">{t('translationMonitor.loadingMetrics')}</span>
           </div>
         )}
 

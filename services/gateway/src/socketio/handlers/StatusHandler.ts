@@ -15,6 +15,9 @@ import type { TypingEvent } from '@meeshy/shared/types/socketio-events';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketTypingSchema } from '../../validation/socket-event-schemas.js';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'StatusHandler' });
 
 export interface StatusHandlerDependencies {
   prisma: PrismaClient;
@@ -66,7 +69,7 @@ export class StatusHandler {
 
     const userIdOrToken = this.socketToUser.get(socket.id);
     if (!userIdOrToken) {
-      console.warn('⚠️ [TYPING] Typing start sans userId pour socket', socket.id);
+      logger.warn('typing:start — unauthenticated socket', { socketId: socket.id });
       return;
     }
 
@@ -78,7 +81,7 @@ export class StatusHandler {
 
       const result = getConnectedUser(userIdOrToken, this.connectedUsers);
       if (!result) {
-        console.warn('⚠️ [TYPING] Utilisateur non connecté:', userIdOrToken);
+        logger.warn('typing:start — user not connected', { userId: userIdOrToken });
         return;
       }
       const { user: connectedUser, realUserId: userId } = result;
@@ -121,7 +124,7 @@ export class StatusHandler {
       const room = ROOMS.conversation(normalizedId);
       socket.to(room).emit(SERVER_EVENTS.TYPING_START, typingEvent);
     } catch (error) {
-      console.error('❌ [TYPING] Erreur handleTypingStart:', error);
+      logger.error('typing:start failed', { error });
     }
   }
 
@@ -135,7 +138,7 @@ export class StatusHandler {
 
     const userIdOrToken = this.socketToUser.get(socket.id);
     if (!userIdOrToken) {
-      console.warn('⚠️ [TYPING] Typing stop sans userId pour socket', socket.id);
+      logger.warn('typing:stop — unauthenticated socket', { socketId: socket.id });
       return;
     }
 
@@ -147,7 +150,7 @@ export class StatusHandler {
 
       const result = getConnectedUser(userIdOrToken, this.connectedUsers);
       if (!result) {
-        console.warn('⚠️ [TYPING] Utilisateur non connecté:', userIdOrToken);
+        logger.warn('typing:stop — user not connected', { userId: userIdOrToken });
         return;
       }
       const { user: connectedUser, realUserId: userId } = result;
@@ -174,7 +177,7 @@ export class StatusHandler {
       const room = ROOMS.conversation(normalizedId);
       socket.to(room).emit(SERVER_EVENTS.TYPING_STOP, typingEvent);
     } catch (error) {
-      console.error('❌ [TYPING] Erreur handleTypingStop:', error);
+      logger.error('typing:stop failed', { error });
     }
   }
 
@@ -210,7 +213,7 @@ export class StatusHandler {
       });
 
       if (!participant) {
-        console.warn('⚠️ [TYPING] Participant anonyme non trouvé:', userId);
+        logger.warn('typing — anonymous participant not found', { participantId: userId });
         return null;
       }
 
@@ -231,7 +234,7 @@ export class StatusHandler {
       });
 
       if (!dbUser) {
-        console.warn('⚠️ [TYPING] Utilisateur non trouvé:', userId);
+        logger.warn('typing — registered user not found', { userId });
         return null;
       }
 
