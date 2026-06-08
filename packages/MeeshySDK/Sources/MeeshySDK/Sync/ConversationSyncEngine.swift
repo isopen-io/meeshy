@@ -898,23 +898,40 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         let list = await cache.conversations.load(for: "list").snapshot() ?? []
         guard list.first(where: { $0.id == conversationId })?.lastMessageId == deletedMessageId else { return }
         let messages = await cache.messages.load(for: conversationId).snapshot() ?? []
-        guard let newLast = messages
-            .filter({ $0.deletedAt == nil && $0.id != deletedMessageId })
-            .max(by: { $0.createdAt < $1.createdAt })
-        else { return }
+        let newLast = Self.mostRecentSurvivor(in: messages, excluding: deletedMessageId)
         await cache.conversations.update(for: "list") { conversations in
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
-                updated[idx].lastMessagePreview = newLast.content
-                updated[idx].lastMessageId = newLast.id
-                if let name = newLast.senderName ?? newLast.senderUsername, !name.isEmpty {
-                    updated[idx].lastMessageSenderName = name
+                if let newLast {
+                    updated[idx].lastMessagePreview = newLast.content
+                    updated[idx].lastMessageId = newLast.id
+                    if let name = newLast.senderName ?? newLast.senderUsername, !name.isEmpty {
+                        updated[idx].lastMessageSenderName = name
+                    }
+                    updated[idx].lastMessageAt = newLast.createdAt
+                } else {
+                    // The deleted message was the conversation's ONLY message — there
+                    // is no survivor to surface. Clear the stale preview so the list
+                    // row stops showing the deleted message's text (displayed ≠ real).
+                    updated[idx].lastMessagePreview = ""
+                    updated[idx].lastMessageId = nil
                 }
-                updated[idx].lastMessageAt = newLast.createdAt
             }
             return updated
         }
         _conversationsDidChange.send()
+    }
+
+    /// The most recent non-deleted message in a conversation, excluding the one
+    /// just deleted — i.e. the message that should become the list-row preview
+    /// after a deletion. `nil` when every message is gone. Pure + testable.
+    nonisolated static func mostRecentSurvivor(
+        in messages: [MeeshyMessage],
+        excluding deletedMessageId: String
+    ) -> MeeshyMessage? {
+        messages
+            .filter { $0.deletedAt == nil && $0.id != deletedMessageId }
+            .max(by: { $0.createdAt < $1.createdAt })
     }
 
     private func handleReactionAdded(_ event: ReactionUpdateEvent) async {
