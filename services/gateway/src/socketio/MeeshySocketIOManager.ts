@@ -117,6 +117,10 @@ export class MeeshySocketIOManager {
   // Cache immutable identifier → ObjectId (populated on first lookup)
   private conversationIdCache = new Map<string, string>();
 
+  // Short-lived participant cache to avoid repeated Prisma queries during message bursts.
+  // Entries expire after 10 seconds and are evicted lazily on next access.
+  private participantCache = new Map<string, { participants: { id: string; userId: string | null }[]; expiresAt: number }>();
+
   // Statistiques
   private stats = {
     total_connections: 0,
@@ -197,10 +201,10 @@ export class MeeshySocketIOManager {
       // Autoriser reconnexion rapide
       allowEIO3: true,
       perMessageDeflate: {
-        threshold: 1024,
+        threshold: 256,
         zlibDeflateOptions: { level: 6, memLevel: 7 },
         clientNoContextTakeover: true,
-        serverNoContextTakeover: true,
+        serverNoContextTakeover: false,
       },
       httpCompression: {
         threshold: 1024,
@@ -1389,8 +1393,32 @@ export class MeeshySocketIOManager {
             lastName: u?.lastName || '',
           };
         })() : undefined,
-        // CORRECTION: Inclure les attachments dans le payload avec metadata brut
-        attachments: (message as any).attachments || [],
+        // Strip server-only and bulk-metadata fields not needed for message display
+        attachments: ((message as any).attachments || []).map((a: any) => ({
+          id: a.id,
+          messageId: a.messageId,
+          fileName: a.fileName,
+          originalName: a.originalName,
+          mimeType: a.mimeType,
+          fileSize: a.fileSize,
+          fileUrl: a.fileUrl,
+          thumbnailUrl: a.thumbnailUrl,
+          thumbHash: a.thumbHash,
+          duration: a.duration,
+          width: a.width,
+          height: a.height,
+          isBlurred: a.isBlurred,
+          isViewOnce: a.isViewOnce,
+          effectFlags: a.effectFlags,
+          title: a.title,
+          alt: a.alt,
+          caption: a.caption,
+          uploadedBy: a.uploadedBy,
+          isAnonymous: a.isAnonymous,
+          createdAt: a.createdAt,
+          transcription: a.transcription,
+          translations: a.translations,
+        })),
         // CORRECTION: Inclure l'objet replyTo complet ET replyToId
         replyToId: message.replyToId || undefined,
         replyTo: (message as any).replyTo ? {
@@ -1414,27 +1442,6 @@ export class MeeshySocketIOManager {
         } : undefined,
       };
 
-      // DEBUG: Log pour vérifier les attachments et metadata
-      if ((message as any).attachments && (message as any).attachments.length > 0) {
-        logger.info('🔍 [WEBSOCKET] Broadcasting message avec attachments:', {
-          messageId: message.id,
-          attachmentCount: (message as any).attachments.length,
-          firstAttachment: {
-            id: (message as any).attachments[0].id,
-            hasMetadata: !!(message as any).attachments[0].metadata,
-            metadata: (message as any).attachments[0].metadata,
-            metadataType: typeof (message as any).attachments[0].metadata,
-            metadataKeys: (message as any).attachments[0].metadata ? Object.keys((message as any).attachments[0].metadata) : []
-          },
-          payloadAttachments: messagePayload.attachments,
-          payloadFirstAttachment: messagePayload.attachments && messagePayload.attachments[0] ? {
-            id: messagePayload.attachments[0].id,
-            hasMetadata: !!(messagePayload.attachments[0] as any).metadata,
-            metadataKeys: (messagePayload.attachments[0] as any).metadata ? Object.keys((messagePayload.attachments[0] as any).metadata) : []
-          } : null
-        });
-      }
-
       // COMPORTEMENT SIMPLE ET FIABLE DE L'ANCIENNE MÉTHODE
       const room = ROOMS.conversation(normalizedId);
       // 1. Broadcast vers tous les clients de la conversation
@@ -1443,7 +1450,6 @@ export class MeeshySocketIOManager {
       // 2. S'assurer que l'auteur reçoit aussi (au cas où il ne serait pas dans la room encore)
       if (senderSocket) {
         senderSocket.emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
-      } else {
       }
 
       // 2b. Emit mention:created to each mentioned user's personal room
@@ -1472,18 +1478,21 @@ export class MeeshySocketIOManager {
       try {
         const senderId = message.senderId;
         if (senderId) {
-          // Récupérer tous les participants de la conversation (Participant model)
-          const participants = await this.prisma.participant.findMany({
-            where: {
-              conversationId: normalizedId,
-              isActive: true,
-              id: { not: senderId }
-            },
-            select: { id: true, userId: true }
-          });
+          // Retrieve participants with short-lived cache (10s) to avoid burst re-queries
+          const cached = this.participantCache.get(normalizedId);
+          const allParticipants = (cached && cached.expiresAt > Date.now())
+            ? cached.participants
+            : await (async () => {
+                const rows = await this.prisma.participant.findMany({
+                  where: { conversationId: normalizedId, isActive: true },
+                  select: { id: true, userId: true }
+                });
+                this.participantCache.set(normalizedId, { participants: rows, expiresAt: Date.now() + 10_000 });
+                return rows;
+              })();
+          const participants = allParticipants.filter(p => p.id !== senderId);
 
           // Calculer le unreadCount pour chaque participant et émettre l'événement
-          const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
           const readStatusService = new MessageReadStatusService(this.prisma);
 
           const connectedUserIds = new Set(this.getConnectedUsers());

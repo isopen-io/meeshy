@@ -930,6 +930,7 @@ model MessageStatusEntry {
 
   @@unique([messageId, participantId], name: "message_participant_status")
   @@index([conversationId])
+  @@index([conversationId, messageId]) // Bulk status queries per conversation
   @@index([participantId])
   @@index([readAt])
   @@index([deliveredAt])

@@ -29,6 +29,7 @@ export class RedisCacheStore implements CacheStore {
   private cleanupInterval: NodeJS.Timeout | null = null;
   private redisConnected = false;
   private circuitBreaker = CircuitBreakerFactory.createRedisBreaker();
+  private redisFallbackCount = 0;
 
   constructor(redisUrl?: string) {
     const url = redisUrl ?? process.env.REDIS_URL;
@@ -122,13 +123,20 @@ export class RedisCacheStore implements CacheStore {
     });
   }
 
+  private recordFallback(op: string): void {
+    this.redisFallbackCount++;
+    if (this.redisFallbackCount % 100 === 1) {
+      logger.warn('cache.redis_fallback', { op, total: this.redisFallbackCount });
+    }
+  }
+
   async get(key: string): Promise<string | null> {
     if (this.redis) {
       try {
         const value = await this.circuitBreaker.execute(() => this.redis!.get(key));
         return value;
       } catch {
-        // fall through to memory
+        this.recordFallback('get');
       }
     }
     return this.getMemory(key);
@@ -145,7 +153,7 @@ export class RedisCacheStore implements CacheStore {
         });
         return;
       } catch {
-        // fall through to memory
+        this.recordFallback('set');
       }
     }
     this.setMemory(key, value, ttlSeconds);
