@@ -436,8 +436,32 @@ public actor TusUploadManager {
         emitProgress()
     }
 
+    /// Caller-declared size of the WHOLE send, set once via `setExpectedBatch`
+    /// before a sequential multi-file upload loop. Used as a floor so the
+    /// progress bar reflects the full batch up front instead of growing one file
+    /// at a time. `0` (the default) means "infer from progressMap" — single-file
+    /// and legacy callers are unaffected. The manager is created fresh per send,
+    /// so these never need resetting across batches.
+    private var expectedTotalFiles = 0
+    private var expectedTotalBytes: Int64 = 0
+
+    /// Declare the full planned batch BEFORE starting the per-file `uploadFile`
+    /// loop. Without this, `progressMap` only gains an entry as each sequential
+    /// upload begins, so `totalFiles`/`totalBytes` undercount and the bar
+    /// oscillates to 100% each time a file completes before the next is
+    /// registered. Idempotent; re-emits the corrected progress immediately.
+    public func setExpectedBatch(totalFiles: Int, totalBytes: Int64) {
+        expectedTotalFiles = totalFiles
+        expectedTotalBytes = totalBytes
+        emitProgress()
+    }
+
     private func emitProgress() {
-        progressSubject.send(Self.computeQueueProgress(from: Array(progressMap.values)))
+        progressSubject.send(Self.computeQueueProgress(
+            from: Array(progressMap.values),
+            expectedTotalFiles: expectedTotalFiles,
+            expectedTotalBytes: expectedTotalBytes
+        ))
     }
 
     /// Pure aggregation of per-file progress into the batch-level
@@ -446,15 +470,26 @@ public actor TusUploadManager {
     /// uploadedBytes / globalPercentage) so a single failure doesn't freeze the
     /// progress bar's count and percentage below 100% forever. The failed file
     /// stays in `files` (status `.error`) so the UI can still surface it; the
-    /// message-level failure UI owns showing the actual error. With no `.error`
-    /// files the result is identical to the previous behaviour.
-    nonisolated static func computeQueueProgress(from files: [FileUploadProgress]) -> UploadQueueProgress {
+    /// message-level failure UI owns showing the actual error.
+    ///
+    /// `expectedTotalFiles` / `expectedTotalBytes` act as FLOORS: a sequential
+    /// multi-file send adds entries to `progressMap` one at a time, so without a
+    /// caller-declared batch size the totals would grow file-by-file and the bar
+    /// would oscillate to 100% as each file completes. With both at `0` (default)
+    /// the result is identical to inferring everything from `files`.
+    nonisolated static func computeQueueProgress(
+        from files: [FileUploadProgress],
+        expectedTotalFiles: Int = 0,
+        expectedTotalBytes: Int64 = 0
+    ) -> UploadQueueProgress {
         let active = files.filter { $0.status != .error }
-        let totalBytes = active.reduce(Int64(0)) { $0 + $1.fileSize }
+        let knownBytes = active.reduce(Int64(0)) { $0 + $1.fileSize }
         let uploadedBytes = active.reduce(Int64(0)) { $0 + $1.bytesUploaded }
         let completedFiles = active.filter { $0.status == .complete }.count
+        let totalFiles = max(active.count, expectedTotalFiles)
+        let totalBytes = max(knownBytes, expectedTotalBytes)
         return UploadQueueProgress(
-            files: files, totalFiles: active.count, completedFiles: completedFiles,
+            files: files, totalFiles: totalFiles, completedFiles: completedFiles,
             totalBytes: totalBytes, uploadedBytes: uploadedBytes,
             globalPercentage: totalBytes > 0 ? Double(uploadedBytes) / Double(totalBytes) * 100 : 0
         )

@@ -267,6 +267,17 @@ extension ConversationView {
                 do {
                     var uploadedIds: [String] = []
                     var localAttachments: [MeeshyMessageAttachment] = []
+                    // Declare the full planned batch up front so the upload progress
+                    // bar reflects the real total files/bytes immediately, instead of
+                    // oscillating to 100% as each sequential file completes (the
+                    // per-file `uploadFile` loop registers them one at a time).
+                    let uploadableAttachments = send.group.attachments.filter { mediaFiles[$0.id] != nil }
+                    let plannedBytes = uploadableAttachments.reduce(Int64(0)) { acc, att in
+                        let size = mediaFiles[att.id]
+                            .flatMap { (try? FileManager.default.attributesOfItem(atPath: $0.path))?[.size] as? Int64 }
+                        return acc + (size ?? 0)
+                    }
+                    await uploader.setExpectedBatch(totalFiles: uploadableAttachments.count, totalBytes: plannedBytes)
                     for att in send.group.attachments {
                         guard let fileURL = mediaFiles[att.id] else { continue }
                         let fileData = try? Data(contentsOf: fileURL)

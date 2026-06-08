@@ -85,7 +85,7 @@ struct ConnectionBanner: View {
                 dotStyle: .warning,
                 source: nil
             ))
-        } else if showJustReturnedOnline {
+        } else if showJustReturnedOnline && !isDisconnected {
             result.append(SyncPillEntry(
                 id: "status.online",
                 label: String(localized: "connection.online", defaultValue: "En ligne"),
@@ -145,17 +145,31 @@ struct ConnectionBanner: View {
         }
     }
 
-    /// Detects the `.offline → non-.offline` transition. Schedules a
-    /// task that clears the "En ligne" acknowledgement after
-    /// `onlineAckDuration`. Cancels any pending task so successive
-    /// flap-up / flap-down cycles don't pile up handlers.
+    /// `true` only when the connection becomes genuinely usable again — the
+    /// SOCKET (re)connects (`.connected`/`.syncing`) after having been `.offline`
+    /// or `.disconnected`. Confirming "En ligne" on a mere `.offline → .disconnected`
+    /// (device network back but the socket still reconnecting) would falsely tell
+    /// the user they are online while no socket exists yet.
+    static func shouldConfirmReturnOnline(
+        previous: ConnectionStatusViewModel.Status?,
+        new: ConnectionStatusViewModel.Status
+    ) -> Bool {
+        let wasDown = previous == .offline || previous == .disconnected
+        let isUp = new == .connected || new == .syncing
+        return wasDown && isUp
+    }
+
+    /// Detects the transition back to a genuinely-connected state and schedules a
+    /// task that clears the "En ligne" acknowledgement after `onlineAckDuration`.
+    /// Cancels any pending task so successive flap-up / flap-down cycles don't
+    /// pile up handlers.
     private func handleStatusTransition(
         from oldValue: ConnectionStatusViewModel.Status?,
         to newValue: ConnectionStatusViewModel.Status
     ) {
         let previous = oldValue ?? lastObservedStatus
         lastObservedStatus = newValue
-        guard previous == .offline, newValue != .offline else { return }
+        guard Self.shouldConfirmReturnOnline(previous: previous, new: newValue) else { return }
 
         justReturnedOnlineTimer?.cancel()
         showJustReturnedOnline = true
