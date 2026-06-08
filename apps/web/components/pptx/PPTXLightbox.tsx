@@ -89,7 +89,7 @@ export const PPTXLightbox: React.FC<PPTXLightboxProps> = ({
                 document.body.removeChild(link);
               }}
               className="text-white hover:bg-white/10 w-8 h-8 sm:w-10 sm:h-10"
-              aria-label="Télécharger la présentation"
+              aria-label={t('common.download')}
             >
               <Download className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>

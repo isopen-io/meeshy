@@ -701,9 +701,9 @@ struct MeeshyApp: App {
             await authManager.validateMagicLink(token: token)
 
             if authManager.isAuthenticated {
-                toastManager.showSuccess(String(localized: "Connexion reussie !", defaultValue: "Connexion r\u{00E9}ussie !"))
+                toastManager.showSuccess(String(localized: "magicLink.success", defaultValue: "Login successful!", bundle: .main))
             } else {
-                toastManager.showError(authManager.errorMessage ?? String(localized: "Lien invalide ou expire", defaultValue: "Lien invalide ou expir\u{00E9}"))
+                toastManager.showError(authManager.errorMessage ?? String(localized: "magicLink.error.invalidLink", defaultValue: "Invalid or expired link", bundle: .main))
             }
         }
     }

@@ -317,10 +317,10 @@ final class Router: ObservableObject {
         await AuthManager.shared.validateMagicLink(token: token)
 
         if AuthManager.shared.isAuthenticated {
-            FeedbackToastManager.shared.showSuccess("Connexion reussie !")
+            FeedbackToastManager.shared.showSuccess(String(localized: "magicLink.success", defaultValue: "Login successful!", bundle: .main))
             Self.logger.info("Magic link validated successfully")
         } else {
-            FeedbackToastManager.shared.showError(AuthManager.shared.errorMessage ?? "Lien invalide ou expire")
+            FeedbackToastManager.shared.showError(AuthManager.shared.errorMessage ?? String(localized: "magicLink.error.invalidLink", defaultValue: "Invalid or expired link", bundle: .main))
             Self.logger.error("Magic link validation failed")
         }
     }

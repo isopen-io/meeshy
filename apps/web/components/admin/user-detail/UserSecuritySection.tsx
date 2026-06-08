@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Shield, Lock, Key, CheckCircle, XCircle, Unlock } from 'lucide-react';
 import { apiService } from '@/services/api.service';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface UserSecuritySectionProps {
   user: unknown;
@@ -21,6 +22,8 @@ export function UserSecuritySection({
   onUpdate,
   onResetPassword
 }: UserSecuritySectionProps) {
+  const { t } = useI18n('admin');
+
   const formatDate = (date: Date | string | null) => {
     if (!date) return 'Jamais';
     try {
@@ -167,7 +170,7 @@ export function UserSecuritySection({
             className="w-full dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600 dark:text-gray-200"
           >
             <Key className="h-4 w-4 mr-2" />
-            {has2FA ? 'Désactiver 2FA' : 'Activer 2FA'}
+            {has2FA ? t('security.disable2FA') : t('security.enable2FA')}
           </Button>
         </div>
 

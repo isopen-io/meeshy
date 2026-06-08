@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useMemo } from 'react';
-
+import { useI18n } from '@/hooks/use-i18n';
 
 import { Play, Pause, AlertTriangle, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -57,6 +57,8 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
   className = '',
   isOwnMessage,
 }) => {
+  const { t } = useI18n('common');
+
   // Utilisateur connecté (pour afficher son avatar)
   const { user } = useAuth();
 
@@ -257,8 +259,7 @@ export const SimpleAudioPlayer: React.FC<SimpleAudioPlayerProps> = ({
               href={objectUrl || '#'}
               download={attachment.originalName}
               className="relative z-10 flex-shrink-0 inline-flex items-center justify-center w-5 h-5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
-              title="Télécharger l'audio"
-              aria-label="Télécharger l'audio"
+              aria-label={t('common.download')}
               onClick={(e) => {
                 if (!objectUrl) {
                   e.preventDefault();
