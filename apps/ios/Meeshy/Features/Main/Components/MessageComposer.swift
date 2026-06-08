@@ -89,7 +89,7 @@ struct MessageComposer: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
                 .lineLimit(1...5)
-                .font(.system(size: 16))
+                .font(.body)
         }
         .frame(minHeight: 44)
         .background(

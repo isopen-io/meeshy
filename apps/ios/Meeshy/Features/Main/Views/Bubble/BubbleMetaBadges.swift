@@ -25,17 +25,17 @@ struct BubbleEditedIndicator: View, Equatable {
                 // Saving feedback: arrow-spin glyph instead of pencil so the
                 // user sees their edit is still propagating to the server.
                 Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 8, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                     .rotationEffect(.degrees(isSaving ? 360 : 0))
                     .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: isSaving)
                 Text(String(localized: "bubble.meta.saving", defaultValue: "Enregistrement…", bundle: .main))
-                    .font(.system(size: 9, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .italic()
             } else {
                 Image(systemName: "pencil")
-                    .font(.system(size: 8, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                 Text(String(localized: "bubble.meta.edited", defaultValue: "modifie", bundle: .main))
-                    .font(.system(size: 9, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .italic()
                 if hasEditHistory {
                     // Dot affordance hinting the detail sheet shows history.
@@ -61,12 +61,12 @@ struct BubblePinnedIndicator: View, Equatable {
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: "pin.fill")
-                .font(.system(size: 9, weight: .bold))
+                .font(.caption2.weight(.bold))
                 .foregroundColor(MeeshyColors.pinnedBlue)
                 .rotationEffect(.degrees(45))
 
             Text(String(localized: "bubble.meta.pinned", defaultValue: "Epingle", bundle: .main))
-                .font(.system(size: 11, weight: .medium))
+                .font(.caption.weight(.medium))
                 .foregroundColor(MeeshyColors.pinnedBlue)
         }
         .padding(.horizontal, 4)
@@ -91,26 +91,26 @@ struct BubbleForwardedIndicator: View, Equatable {
         let theme = ThemeManager.shared
         return HStack(spacing: 4) {
             Image(systemName: "arrowshape.turn.up.right.fill")
-                .font(.system(size: 10, weight: .medium))
+                .font(.caption.weight(.medium))
                 .foregroundColor(theme.textMuted)
 
             if let senderName {
                 if let conversationName {
                     Text(String(localized: "bubble.meta.forwarded.fromConversation", defaultValue: "Transf. de \(senderName) \u{2022} \(conversationName)", bundle: .main))
-                        .font(.system(size: 10))
+                        .font(.caption)
                         .italic()
                         .foregroundColor(theme.textMuted)
                         .lineLimit(1)
                 } else {
                     Text(String(localized: "bubble.meta.forwarded.from", defaultValue: "Transf. de \(senderName)", bundle: .main))
-                        .font(.system(size: 10))
+                        .font(.caption)
                         .italic()
                         .foregroundColor(theme.textMuted)
                         .lineLimit(1)
                 }
             } else {
                 Text(String(localized: "bubble.meta.forwarded", defaultValue: "Transfere", bundle: .main))
-                    .font(.system(size: 10))
+                    .font(.caption)
                     .italic()
                     .foregroundColor(theme.textMuted)
             }
@@ -136,11 +136,11 @@ struct BubbleEphemeralBadge: View, Equatable {
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: "flame.fill")
-                .font(.system(size: 10, weight: .semibold))
+                .font(.caption.weight(.semibold))
                 .foregroundColor(Color(hex: "FF6B6B"))
 
             Text(timerText)
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .font(Font.system(.caption, design: .monospaced).weight(.bold))
                 .foregroundColor(Color(hex: "FF6B6B"))
         }
         .padding(.horizontal, 8)

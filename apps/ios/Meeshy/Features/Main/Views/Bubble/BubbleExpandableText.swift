@@ -68,14 +68,14 @@ struct BubbleExpandableText: View, Equatable {
                     }
                 } label: {
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.caption.weight(.semibold))
                         .foregroundColor(textColor.opacity(0.6))
                         .frame(maxWidth: .infinity, minHeight: 28, alignment: .center)
                         .padding(.top, 2)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Afficher tout le message")
+                .accessibilityLabel(String(localized: "bubble.expand.show-more", defaultValue: "Afficher tout le message", bundle: .main))
             }
         } else {
             VStack(alignment: .leading, spacing: 4) {
@@ -91,14 +91,14 @@ struct BubbleExpandableText: View, Equatable {
                         }
                     } label: {
                         Image(systemName: "chevron.up")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.caption.weight(.semibold))
                             .foregroundColor(textColor.opacity(0.6))
                             .frame(maxWidth: .infinity, minHeight: 28, alignment: .center)
                             .padding(.top, 2)
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Réduire le message")
+                    .accessibilityLabel(String(localized: "bubble.expand.show-less", defaultValue: "Réduire le message", bundle: .main))
                 }
             }
         }

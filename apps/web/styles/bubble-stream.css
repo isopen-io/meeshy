@@ -172,6 +172,18 @@
   );
 }
 
+.dark .feed-gradient {
+  background: linear-gradient(
+    to bottom,
+    rgba(17, 24, 39, 0.8) 0%,
+    rgba(17, 24, 39, 0.95) 10%,
+    rgba(17, 24, 39, 1) 20%,
+    rgba(17, 24, 39, 1) 80%,
+    rgba(17, 24, 39, 0.95) 90%,
+    rgba(17, 24, 39, 0.8) 100%
+  );
+}
+
 /* Animation pour le bouton d'envoi */
 .send-button {
   transition: all 0.2s ease;
@@ -214,6 +226,11 @@
   animation: skeleton-loading 1.5s ease-in-out infinite;
 }
 
+.dark .message-skeleton {
+  background: linear-gradient(90deg, #374151 25%, transparent 37%, #374151 63%);
+  background-size: 400px 100%;
+}
+
 /* Effet glassmorphism pour certains éléments */
 .glass-effect {
   background: rgba(255, 255, 255, 0.25);
@@ -222,9 +239,19 @@
   box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
 }
 
+.dark .glass-effect {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+}
+
 /* Styles pour les notifications toast personnalisées */
 .bubble-toast {
   border-left: 4px solid rgb(99, 102, 241);
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
+}
+
+.dark .bubble-toast {
+  background: rgba(17, 24, 39, 0.95);
 }

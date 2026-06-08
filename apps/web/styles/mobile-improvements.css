@@ -137,44 +137,21 @@
   }
 }
 
-/* Masquer les toasts sur mobile */
+/* Toasts compacts sur mobile — positionnés en bas */
 @media (max-width: 768px) {
-  /* Masquer complètement le système de toasts sur mobile */
-  .sonner-toaster {
-    display: none !important;
-  }
-  
-  /* Masquer les toasts de notifications */
+  .sonner-toaster,
   [data-sonner-toaster] {
-    display: none !important;
+    bottom: 5rem !important;
+    top: auto !important;
+    left: 1rem !important;
+    right: 1rem !important;
+    width: auto !important;
   }
-  
-  /* Masquer le système de notifications toast */
-  .toast-container {
-    display: none !important;
-  }
-  
-  /* Masquer les toasts React Hot Toast si utilisés */
-  [data-hot-toast] {
-    display: none !important;
-  }
-  
-  /* Classes spécifiques aux toasts de Meeshy */
-  .notification-toast,
-  .message-toast,
-  .connection-toast {
-    display: none !important;
-  }
-  
-  /* Masquer les toasts de traduction */
-  .translation-toast {
-    display: none !important;
-  }
-  
-  /* S'assurer que les overlays de toasts sont masqués */
-  .toast-overlay,
-  .notification-overlay {
-    display: none !important;
+
+  [data-sonner-toaster] [data-sonner-toast] {
+    width: 100% !important;
+    font-size: 0.8125rem !important;
+    padding: 0.625rem 0.875rem !important;
   }
 }
 
@@ -190,9 +167,9 @@
     white-space: nowrap !important;
   }
   
-  /* Troncature des titres de conversation selon la règle 14 caractères en mobile */
+  /* Troncature des titres de conversation sur mobile */
   .conversation-title-truncated {
-    max-width: 14ch !important;
+    max-width: 20ch !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
     white-space: nowrap !important;
@@ -262,7 +239,7 @@
   .conversation-header-mobile {
     padding: 0.75rem 1rem !important;
     border-bottom: 1px solid hsl(var(--border)) !important;
-    background: white !important;
+    background: hsl(var(--background)) !important;
     /* Pas de position fixed, laisse le flux normal pour éviter les conflits */
   }
   
@@ -284,15 +261,15 @@
     .messages-container {
       padding: 0.5rem !important; /* Réduction de 3/4 de l'espace */
       padding-bottom: 5rem !important; /* Espace pour la zone de saisie fixe */
-      background: white !important;
+      background: hsl(var(--background)) !important;
       min-height: calc(100vh - 4rem) !important;
     }
-    
+
     /* Zone de saisie mobile optimisée */
     .fixed.bottom-0 {
       padding: 0.75rem !important;
-      background: white !important;
-      border-top: 2px solid #e5e7eb !important;
+      background: hsl(var(--background)) !important;
+      border-top: 2px solid hsl(var(--border)) !important;
       box-shadow: 0 -4px 6px -1px rgba(0, 0, 0, 0.1) !important;
       z-index: 50 !important;
     }

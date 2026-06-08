@@ -67,12 +67,12 @@ const StatusEntry = memo(function StatusEntry({
         )}
         {type === 'delivered' && (
           <span className="inline-flex -space-x-1">
-            <Check className="h-4 w-4 text-gray-400" />
-            <Check className="h-4 w-4 text-gray-400" />
+            <Check className="h-4 w-4 text-muted-foreground" />
+            <Check className="h-4 w-4 text-muted-foreground" />
           </span>
         )}
         {type === 'not-seen' && (
-          <Check className="h-4 w-4 text-gray-300" />
+          <Check className="h-4 w-4 text-muted-foreground/50" />
         )}
       </div>
     </div>
