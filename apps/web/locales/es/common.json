@@ -119,7 +119,9 @@
       "deleteFailed": "Error al eliminar",
       "deleteSuccess": "Eliminado con éxito",
       "updateFailed": "Error al actualizar",
-      "updateSuccess": "Actualizado con éxito"
+      "updateSuccess": "Actualizado con éxito",
+      "copySuccess": "Copiado al portapapeles",
+      "copyError": "No se pudo copiar"
     },
     "layout": {
       "header": {

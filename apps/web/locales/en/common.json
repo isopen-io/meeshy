@@ -119,7 +119,9 @@
       "deleteFailed": "Delete failed",
       "deleteSuccess": "Deleted successfully",
       "updateFailed": "Update failed",
-      "updateSuccess": "Updated successfully"
+      "updateSuccess": "Updated successfully",
+      "copySuccess": "Copied to clipboard",
+      "copyError": "Unable to copy"
     },
     "layout": {
       "header": {

@@ -260,7 +260,16 @@
     },
     "notifications": {
       "title": "Configuración de notificaciones",
-      "description": "Administre sus preferencias de notificación"
+      "description": "Administre sus preferencias de notificación",
+      "errors": {
+        "saveError": "Error al guardar la configuración",
+        "timeRangeOverlap": "La hora de inicio debe ser diferente de la hora de fin"
+      },
+      "success": {
+        "saved": "Preferencias guardadas",
+        "reset": "Preferencias restablecidas"
+      },
+      "resetConfirm": "¿Realmente desea restablecer todas las preferencias de notificación?"
     },
     "privacy": {
       "title": "Configuración de privacidad",

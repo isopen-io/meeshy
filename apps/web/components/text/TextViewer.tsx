@@ -16,6 +16,7 @@ import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { useTheme } from 'next-themes';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/useI18n';
 
 interface TextViewerProps {
   attachment: UploadedAttachmentResponse;
@@ -37,6 +38,7 @@ export const TextViewer: React.FC<TextViewerProps> = ({
   className = '',
   onOpenLightbox
 }) => {
+  const { t } = useI18n('common');
   const [content, setContent] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
@@ -77,11 +79,11 @@ export const TextViewer: React.FC<TextViewerProps> = ({
     try {
       await navigator.clipboard.writeText(content);
       setIsCopied(true);
-      toast.success('Copié dans le presse-papiers');
+      toast.success(t('toasts.copySuccess'));
       setTimeout(() => setIsCopied(false), 2000);
     } catch (error) {
       console.error('Erreur copie:', error);
-      toast.error('Impossible de copier');
+      toast.error(t('toasts.copyError'));
     }
   };
 

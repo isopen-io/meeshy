@@ -358,7 +358,16 @@
     },
     "notifications": {
       "title": "Paramètres de notification",
-      "description": "Gérez vos préférences de notification"
+      "description": "Gérez vos préférences de notification",
+      "errors": {
+        "saveError": "Erreur lors de la sauvegarde",
+        "timeRangeOverlap": "L'heure de début doit être différente de l'heure de fin"
+      },
+      "success": {
+        "saved": "Préférences enregistrées",
+        "reset": "Préférences réinitialisées"
+      },
+      "resetConfirm": "Voulez-vous vraiment réinitialiser toutes les préférences de notification ?"
     },
     "privacy": {
       "title": "Paramètres de confidentialité",

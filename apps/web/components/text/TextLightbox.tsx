@@ -9,6 +9,7 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/useI18n';
 
 interface TextLightboxProps {
   attachment: UploadedAttachmentResponse | null;
@@ -25,6 +26,7 @@ export const TextLightbox: React.FC<TextLightboxProps> = ({
   isOpen,
   onClose
 }) => {
+  const { t } = useI18n('common');
   const [content, setContent] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
@@ -187,11 +189,11 @@ export const TextLightbox: React.FC<TextLightboxProps> = ({
     try {
       await navigator.clipboard.writeText(content);
       setIsCopied(true);
-      toast.success('Copié dans le presse-papiers');
+      toast.success(t('toasts.copySuccess'));
       setTimeout(() => setIsCopied(false), 2000);
     } catch (error) {
       console.error('Error copying:', error);
-      toast.error('Impossible de copier');
+      toast.error(t('toasts.copyError'));
     }
   };
 

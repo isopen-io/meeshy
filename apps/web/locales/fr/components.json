@@ -190,6 +190,26 @@
           }
         }
       }
+    },
+    "audioRecorder": {
+      "initializing": "Initialisation...",
+      "recording": "REC",
+      "stop": "STOP",
+      "playing": "Lecture...",
+      "ready": "Prêt",
+      "remove": "Supprimer l'enregistrement",
+      "pause": "Pause",
+      "play": "Lire",
+      "errors": {
+        "httpsRequired": "L'enregistrement audio nécessite HTTPS.",
+        "notSupported": "Votre navigateur ne prend pas en charge l'enregistrement audio.",
+        "permissionDenied": "Accès au microphone refusé.",
+        "notFound": "Aucun microphone détecté.",
+        "micError": "Erreur microphone.",
+        "accessDenied": "Impossible d'accéder au microphone.",
+        "playbackError": "Erreur lors de la lecture.",
+        "audioPlaybackError": "Erreur de lecture audio."
+      }
     }
   }
 }

@@ -140,7 +140,7 @@ struct ThemedConversationRow: View {
                     // Name with type indicator
                     HStack(spacing: 6) {
                         Text(conversation.displayName)
-                            .font(.system(size: 15, weight: conversation.userState.unreadCount > 0 ? .bold : .semibold))
+                            .font(.body.weight(conversation.userState.unreadCount > 0 ? .bold : .semibold))
                             .foregroundColor(textPrimary)
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
@@ -148,8 +148,8 @@ struct ThemedConversationRow: View {
                         // Reaction emoji (favorites classification)
                         if let r = conversation.userState.reaction, !r.isEmpty {
                             Text(r)
-                                .font(.system(size: 12))
-                                .accessibilityLabel(Text("réaction \(r)"))
+                                .font(.caption)
+                                .accessibilityLabel(Text(verbatim: "\(String(localized: "conversation.row.reaction", defaultValue: "Reaction", bundle: .main)) \(r)"))
                         }
 
                         // Type badge
@@ -401,12 +401,20 @@ struct ThemedConversationRow: View {
     @ViewBuilder
     private var typingIndicatorView: some View {
         HStack(spacing: 5) {
-            Text(typingUsername.map { "\($0) écrit" } ?? "est en train d'écrire")
-                .font(.system(size: 13).italic())
+            Text(typingIndicatorText)
+                .font(.footnote.italic())
                 .foregroundColor(accent)
                 .lineLimit(1)
             TypingDotsView(accentColor: accentColor)
         }
+    }
+
+    private var typingIndicatorText: String {
+        if let username = typingUsername {
+            let isTyping = String(localized: "conversation.row.typing", defaultValue: "is typing", bundle: .main)
+            return "\(username) \(isTyping)"
+        }
+        return String(localized: "conversation.row.typing.generic", defaultValue: "Typing…", bundle: .main)
     }
 
     // MARK: - Draft Preview

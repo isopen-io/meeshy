@@ -334,7 +334,16 @@
     },
     "notifications": {
       "title": "Notification Settings",
-      "description": "Manage your notification preferences"
+      "description": "Manage your notification preferences",
+      "errors": {
+        "saveError": "Error saving settings",
+        "timeRangeOverlap": "Start time must be different from end time"
+      },
+      "success": {
+        "saved": "Preferences saved",
+        "reset": "Preferences reset"
+      },
+      "resetConfirm": "Do you really want to reset all notification preferences?"
     },
     "privacy": {
       "title": "Privacy Settings",

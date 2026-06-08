@@ -119,7 +119,9 @@
       "deleteFailed": "Falha ao excluir",
       "deleteSuccess": "Excluído com sucesso",
       "updateFailed": "Falha ao atualizar",
-      "updateSuccess": "Atualizado com sucesso"
+      "updateSuccess": "Atualizado com sucesso",
+      "copySuccess": "Copiado para a área de transferência",
+      "copyError": "Não foi possível copiar"
     },
     "layout": {
       "header": {

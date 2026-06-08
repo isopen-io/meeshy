@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { Square, Play, Pause, X, Mic, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/useI18n';
 
 // Types pour les métadonnées audio extraites
 interface AudioMetadata {
@@ -64,6 +65,8 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
   onRecordingStateChange,
   onStop
 }, ref) => {
+  const { t } = useI18n('components');
+
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0); // En millisecondes
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -190,14 +193,14 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
     try {
       // Vérifier le contexte sécurisé
       if (!window.isSecureContext) {
-        toast.error('Audio recording requires HTTPS.');
+        toast.error(t('audioRecorder.errors.httpsRequired'));
         setPermissionError('HTTPS required');
         setIsInitializing(false);
         return;
       }
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        toast.error('Your browser does not support audio recording.');
+        toast.error(t('audioRecorder.errors.notSupported'));
         setPermissionError('Browser not supported');
         setIsInitializing(false);
         return;
@@ -297,16 +300,16 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
       if (error instanceof DOMException) {
         if (error.name === 'NotAllowedError') {
           setPermissionError('Microphone access denied');
-          toast.error('Accès au microphone refusé.');
+          toast.error(t('audioRecorder.errors.permissionDenied'));
         } else if (error.name === 'NotFoundError') {
           setPermissionError('No microphone found');
-          toast.error('Aucun microphone détecté.');
+          toast.error(t('audioRecorder.errors.notFound'));
         } else {
           setPermissionError('Microphone error');
-          toast.error('Erreur microphone.');
+          toast.error(t('audioRecorder.errors.micError'));
         }
       } else {
-        toast.error('Impossible d\'accéder au microphone.');
+        toast.error(t('audioRecorder.errors.accessDenied'));
         setPermissionError('Recording error');
       }
     }
@@ -330,7 +333,7 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
           audioRef.current.currentTime = 0;
         }
         audioRef.current.play().catch(_error => {
-          toast.error('Erreur lors de la lecture');
+          toast.error(t('audioRecorder.errors.playbackError'));
           setIsPlaying(false);
         });
         setIsPlaying(true);
@@ -398,12 +401,13 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
         <div className="relative flex flex-col items-center justify-center !w-36 !h-11 !min-w-[144px] !min-h-[44px] !max-w-[144px] !max-h-[44px] bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/30 border-2 border-blue-400 dark:border-blue-500 rounded-lg">
           <Loader2 className="w-4 h-4 text-blue-600 dark:text-blue-400 animate-spin" />
           <div className="text-[11px] text-blue-600 dark:text-blue-400 mt-0.5">
-            Initializing...
+            {t('audioRecorder.initializing')}
           </div>
         </div>
         {/* Bouton supprimer */}
         <button
           onClick={onRemove}
+          aria-label={t('audioRecorder.remove')}
           className="absolute -top-0.5 -right-0.5 !w-5 !h-5 !min-w-[20px] !min-h-[20px] !max-w-[20px] !max-h-[20px] bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-md z-10 !p-0"
         >
           <X className="w-3 h-3" />
@@ -425,6 +429,7 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
         {/* Bouton supprimer */}
         <button
           onClick={onRemove}
+          aria-label={t('audioRecorder.remove')}
           className="absolute -top-0.5 -right-0.5 !w-5 !h-5 !min-w-[20px] !min-h-[20px] !max-w-[20px] !max-h-[20px] bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center shadow-md z-10 !p-0"
         >
           <X className="w-3 h-3" />
@@ -445,17 +450,18 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
             </div>
             <div className="flex items-center gap-1 mt-0.5">
               <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-              <span className="text-[11px] text-red-600 dark:text-red-400 font-medium leading-none">REC</span>
+              <span className="text-[11px] text-red-600 dark:text-red-400 font-medium leading-none">{t('audioRecorder.recording')}</span>
             </div>
           </div>
 
           {/* Bouton stop */}
           <button
             onClick={stopRecording}
+            aria-label={t('audioRecorder.stop')}
             className="group flex flex-col items-center justify-center gap-0.5 transition-colors cursor-pointer !p-1"
           >
             <Square className="!w-4 !h-4 fill-white dark:fill-white stroke-gray-700 dark:stroke-gray-300 group-hover:stroke-red-600 dark:group-hover:stroke-red-500 stroke-[1.5]" />
-            <span className="text-[11px] leading-none font-semibold text-gray-700 dark:text-gray-300 group-hover:text-red-600 dark:group-hover:text-red-500">STOP</span>
+            <span className="text-[11px] leading-none font-semibold text-gray-700 dark:text-gray-300 group-hover:text-red-600 dark:group-hover:text-red-500" aria-hidden="true">{t('audioRecorder.stop')}</span>
           </button>
         </div>
 
@@ -480,7 +486,7 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
             onEnded={() => setIsPlaying(false)}
             onError={(_e) => {
               setIsPlaying(false);
-              toast.error('Erreur de lecture audio');
+              toast.error(t('audioRecorder.errors.audioPlaybackError'));
             }}
             onPause={() => setIsPlaying(false)}
             onPlay={() => setIsPlaying(true)}
@@ -496,13 +502,14 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
               {audioFormat} · {(audioBlob.size / 1024).toFixed(0)} KB
             </div>
             <div className="text-[11px] text-gray-500 dark:text-gray-400 leading-none mt-0.5">
-              {isPlaying ? 'Playing...' : 'Ready'}
+              {isPlaying ? t('audioRecorder.playing') : t('audioRecorder.ready')}
             </div>
           </div>
 
           {/* Bouton Play/Pause */}
           <button
             onClick={togglePlayPause}
+            aria-label={isPlaying ? t('audioRecorder.pause') : t('audioRecorder.play')}
             className="bg-green-600 hover:bg-green-700 rounded-full flex-shrink-0 flex items-center justify-center transition-colors cursor-pointer !w-5 !h-5 !min-w-[20px] !min-h-[20px] !max-w-[20px] !max-h-[20px] sm:!w-6 sm:!h-6 sm:!min-w-[24px] sm:!min-h-[24px] sm:!max-w-[24px] sm:!max-h-[24px] !p-0"
           >
             {isPlaying ? (
@@ -516,6 +523,7 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
         {/* Bouton supprimer */}
         <button
           onClick={onRemove}
+          aria-label={t('audioRecorder.remove')}
           className="absolute -top-0.5 -right-0.5 !w-5 !h-5 !min-w-[20px] !min-h-[20px] !max-w-[20px] !max-h-[20px] bg-red-500 hover:bg-red-600 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md z-10 !p-0"
         >
           <X className="w-3 h-3" />

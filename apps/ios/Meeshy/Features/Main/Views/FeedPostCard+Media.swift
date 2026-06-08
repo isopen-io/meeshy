@@ -21,9 +21,13 @@ extension FeedPostCard {
             HStack(spacing: spacing) {
                 galleryImageView(mediaList[0])
                     .contentShape(Rectangle())
+                    .accessibilityLabel(galleryLabel(mediaList[0], index: 0, total: count))
+                    .accessibilityAddTraits(.isButton)
                     .onTapGesture { openFullscreen(mediaList[0]) }
                 galleryImageView(mediaList[1])
                     .contentShape(Rectangle())
+                    .accessibilityLabel(galleryLabel(mediaList[1], index: 1, total: count))
+                    .accessibilityAddTraits(.isButton)
                     .onTapGesture { openFullscreen(mediaList[1]) }
             }
             .frame(height: 180)
@@ -34,14 +38,20 @@ extension FeedPostCard {
                 galleryImageView(mediaList[0])
                     .aspectRatio(0.75, contentMode: .fill)
                     .contentShape(Rectangle())
+                    .accessibilityLabel(galleryLabel(mediaList[0], index: 0, total: count))
+                    .accessibilityAddTraits(.isButton)
                     .onTapGesture { openFullscreen(mediaList[0]) }
 
                 VStack(spacing: spacing) {
                     galleryImageView(mediaList[1])
                         .contentShape(Rectangle())
+                        .accessibilityLabel(galleryLabel(mediaList[1], index: 1, total: count))
+                        .accessibilityAddTraits(.isButton)
                         .onTapGesture { openFullscreen(mediaList[1]) }
                     galleryImageView(mediaList[2])
                         .contentShape(Rectangle())
+                        .accessibilityLabel(galleryLabel(mediaList[2], index: 2, total: count))
+                        .accessibilityAddTraits(.isButton)
                         .onTapGesture { openFullscreen(mediaList[2]) }
                 }
             }
@@ -53,17 +63,25 @@ extension FeedPostCard {
                 HStack(spacing: spacing) {
                     galleryImageView(mediaList[0])
                         .contentShape(Rectangle())
+                        .accessibilityLabel(galleryLabel(mediaList[0], index: 0, total: count))
+                        .accessibilityAddTraits(.isButton)
                         .onTapGesture { openFullscreen(mediaList[0]) }
                     galleryImageView(mediaList[1])
                         .contentShape(Rectangle())
+                        .accessibilityLabel(galleryLabel(mediaList[1], index: 1, total: count))
+                        .accessibilityAddTraits(.isButton)
                         .onTapGesture { openFullscreen(mediaList[1]) }
                 }
                 HStack(spacing: spacing) {
                     galleryImageView(mediaList[2])
                         .contentShape(Rectangle())
+                        .accessibilityLabel(galleryLabel(mediaList[2], index: 2, total: count))
+                        .accessibilityAddTraits(.isButton)
                         .onTapGesture { openFullscreen(mediaList[2]) }
                     galleryImageView(mediaList[3])
                         .contentShape(Rectangle())
+                        .accessibilityLabel(galleryLabel(mediaList[3], index: 3, total: count))
+                        .accessibilityAddTraits(.isButton)
                         .onTapGesture { openFullscreen(mediaList[3]) }
                 }
             }
@@ -75,28 +93,41 @@ extension FeedPostCard {
                 HStack(spacing: spacing) {
                     galleryImageView(mediaList[0])
                         .contentShape(Rectangle())
+                        .accessibilityLabel(galleryLabel(mediaList[0], index: 0, total: count))
+                        .accessibilityAddTraits(.isButton)
                         .onTapGesture { openFullscreen(mediaList[0]) }
                     galleryImageView(mediaList[1])
                         .contentShape(Rectangle())
+                        .accessibilityLabel(galleryLabel(mediaList[1], index: 1, total: count))
+                        .accessibilityAddTraits(.isButton)
                         .onTapGesture { openFullscreen(mediaList[1]) }
                 }
                 HStack(spacing: spacing) {
                     galleryImageView(mediaList[2])
                         .contentShape(Rectangle())
+                        .accessibilityLabel(galleryLabel(mediaList[2], index: 2, total: count))
+                        .accessibilityAddTraits(.isButton)
                         .onTapGesture { openFullscreen(mediaList[2]) }
                     galleryImageView(mediaList[3])
                         .contentShape(Rectangle())
+                        .accessibilityLabel(galleryLabel(mediaList[3], index: 3, total: count))
+                        .accessibilityAddTraits(.isButton)
                         .onTapGesture { openFullscreen(mediaList[3]) }
                     ZStack {
                         galleryImageView(mediaList[4])
                         if count > 5 {
                             Color.black.opacity(0.6)
                             Text("+\(count - 5)")
-                                .font(.system(size: 22, weight: .bold))
+                                .font(.title2.weight(.bold))
                                 .foregroundColor(.white)
+                                .accessibilityHidden(true)
                         }
                     }
                     .contentShape(Rectangle())
+                    .accessibilityLabel(count > 5
+                        ? morePhotosLabel(remaining: count - 5)
+                        : galleryLabel(mediaList[4], index: 4, total: count))
+                    .accessibilityAddTraits(.isButton)
                     .onTapGesture { openFullscreen(mediaList[4]) }
                 }
             }
@@ -140,33 +171,35 @@ extension FeedPostCard {
                             .fill(Color.white.opacity(0.85))
                             .frame(width: 30, height: 30)
                         Image(systemName: "play.fill")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.caption.weight(.bold))
                             .foregroundColor(.black.opacity(0.7))
                             .offset(x: 1)
                     }
                     if let duration = media.durationFormatted {
                         Text(duration)
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .font(.caption2.weight(.semibold).monospacedDigit())
                             .foregroundColor(.white)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Capsule().fill(Color.black.opacity(0.6)))
                     }
                 }
+                .accessibilityHidden(true)
             } else if media.type == .audio {
                 VStack(spacing: 4) {
                     Image(systemName: "waveform")
-                        .font(.system(size: 20))
+                        .font(.title3)
                         .foregroundColor(.white)
                     if let duration = media.durationFormatted {
                         Text(duration)
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                            .font(.caption2.weight(.semibold).monospacedDigit())
                             .foregroundColor(.white)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
                             .background(Capsule().fill(Color.black.opacity(0.6)))
                     }
                 }
+                .accessibilityHidden(true)
             }
         }
         .clipped()
@@ -177,6 +210,17 @@ extension FeedPostCard {
         fullscreenMediaId = media.id
         showFullscreenGallery = true
         HapticFeedback.light()
+    }
+
+    private func galleryLabel(_ media: FeedMedia, index: Int, total: Int) -> String {
+        let type = media.type == .video
+            ? String(localized: "feed.media.type.video", defaultValue: "Video", bundle: .main)
+            : String(localized: "feed.media.type.photo", defaultValue: "Photo", bundle: .main)
+        return "\(type) \(index + 1)/\(total)"
+    }
+
+    private func morePhotosLabel(remaining: Int) -> String {
+        "\(remaining) " + String(localized: "feed.media.more.photos", defaultValue: "more photos", bundle: .main)
     }
 
     // Check if media should be compact (audio, document, location)
@@ -222,6 +266,8 @@ extension FeedPostCard {
         .frame(maxWidth: .infinity, minHeight: 160, maxHeight: 280)
         .clipped()
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        .accessibilityLabel(String(localized: "feed.media.type.photo", defaultValue: "Photo", bundle: .main))
+        .accessibilityAddTraits(.isButton)
         .onTapGesture { openFullscreen(media) }
     }
 
@@ -269,21 +315,22 @@ extension FeedPostCard {
                     .frame(width: 48, height: 56)
 
                 Image(systemName: "doc.fill")
-                    .font(.system(size: 24))
+                    .font(.title2)
                     .foregroundColor(Color(hex: media.thumbnailColor))
             }
+            .accessibilityHidden(true)
 
             // Document info
             VStack(alignment: .leading, spacing: 4) {
                 Text(media.fileName ?? "Document")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 HStack(spacing: 8) {
                     if let size = media.fileSize {
                         Text(size)
-                            .font(.system(size: 12))
+                            .font(.caption)
                             .foregroundColor(theme.textMuted)
                     }
 
@@ -291,7 +338,7 @@ extension FeedPostCard {
                         Text("\u{2022}")
                             .foregroundColor(theme.textMuted)
                         Text("\(pages) pages")
-                            .font(.system(size: 12))
+                            .font(.caption)
                             .foregroundColor(theme.textMuted)
                     }
                 }
@@ -326,20 +373,21 @@ extension FeedPostCard {
                     .frame(width: 64, height: 64)
 
                 Image(systemName: "mappin.circle.fill")
-                    .font(.system(size: 28))
+                    .font(.title)
                     .foregroundColor(Color(hex: media.thumbnailColor))
             }
+            .accessibilityHidden(true)
 
             // Location info
             VStack(alignment: .leading, spacing: 4) {
                 Text(media.locationName ?? "Location")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(2)
 
                 if let lat = media.latitude, let lon = media.longitude {
                     Text(String(format: "%.4f, %.4f", lat, lon))
-                        .font(.system(size: 11))
+                        .font(.caption2)
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -348,8 +396,9 @@ extension FeedPostCard {
 
             // Open in maps
             Image(systemName: "arrow.up.right.circle.fill")
-                .font(.system(size: 28))
+                .font(.title)
                 .foregroundColor(Color(hex: media.thumbnailColor))
+                .accessibilityHidden(true)
         }
         .padding(14)
         .background(

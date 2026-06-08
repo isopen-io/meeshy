@@ -119,7 +119,9 @@
       "deleteFailed": "Échec de la suppression",
       "deleteSuccess": "Supprimé avec succès",
       "updateFailed": "Échec de la mise à jour",
-      "updateSuccess": "Mis à jour avec succès"
+      "updateSuccess": "Mis à jour avec succès",
+      "copySuccess": "Copié dans le presse-papiers",
+      "copyError": "Impossible de copier"
     },
     "layout": {
       "header": {
