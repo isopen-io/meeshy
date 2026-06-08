@@ -36,6 +36,13 @@ struct ConversationMediaGalleryView: View {
             if showControls {
                 controlsOverlay
                     .transition(.opacity)
+                // Contrôles de transport vidéo (play/pause/scrub/skip/speed/mute/pip)
+                // pour la vidéo en cours de lecture. Avant : la galerie rendait une
+                // couche AVPlayerLayer brute SANS aucun contrôle ("AUCUN CONTROLEUR").
+                // Composant SDK partagé `VideoTransportControls` piloté par le même
+                // `SharedAVPlayerManager`. Posé au-dessus des métadonnées (z-order).
+                videoTransportLayer
+                    .transition(.opacity)
             }
         }
         .statusBar(hidden: true)
@@ -298,6 +305,27 @@ struct ConversationMediaGalleryView: View {
                         captionOverlay(caption)
                     }
                 }
+            }
+        }
+    }
+
+    // MARK: - Video Transport Controls (for the currently playing video)
+
+    @ViewBuilder
+    private var videoTransportLayer: some View {
+        if currentIndex < allAttachments.count {
+            let att = allAttachments[currentIndex]
+            if att.type == .video,
+               videoManager.activeURL == att.fileUrl,
+               videoManager.player != nil {
+                VideoTransportControls(
+                    manager: videoManager,
+                    accentColor: accentColor,
+                    controls: [.playPause, .scrubber, .duration, .speed, .mute, .pip]
+                )
+                // Ancré entre la top bar (close/save) et les métadonnées bas.
+                .padding(.top, 64)
+                .padding(.bottom, 132)
             }
         }
     }
