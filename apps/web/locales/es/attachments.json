@@ -39,5 +39,20 @@
     "fileTooBig": "Archivo demasiado grande (máx {size})",
     "invalidType": "Tipo de archivo no válido",
     "uploadFailed": "Fallo en la subida"
+  },
+  "contextMenu": {
+    "close": "Cerrar",
+    "download": "Descargar",
+    "copyLink": "Copiar enlace",
+    "delete": "Eliminar",
+    "downloadStarted": "Descarga iniciada",
+    "linkCopied": "Enlace copiado al portapapeles",
+    "linkCopyError": "No se pudo copiar el enlace",
+    "deleteSuccess": "Archivo eliminado correctamente",
+    "deleteError": "No se pudo eliminar el archivo",
+    "confirmDeleteTitle": "Confirmar eliminación",
+    "confirmDeleteDescription": "¿Está seguro de que desea eliminar este archivo?",
+    "confirmDeleteIrreversible": "Esta acción es irreversible. El archivo se eliminará permanentemente.",
+    "deleting": "Eliminando..."
   }
 }

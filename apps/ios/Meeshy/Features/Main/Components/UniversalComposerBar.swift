@@ -688,7 +688,7 @@ struct UniversalComposerBar: View {
                 if count > Int(Double(maxLen) * 0.8) {
                     Text("\(count)/\(maxLen)")
                         .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundColor(count >= maxLen ? Color(hex: "EF4444") : mutedColor)
+                        .foregroundColor(count >= maxLen ? MeeshyColors.error : mutedColor)
                         .transition(.opacity)
                 }
             }
@@ -787,8 +787,8 @@ struct UniversalComposerBar: View {
     // ========================================================================
 
     var sendButton: some View {
-        let editColors = [Color(hex: "F8B500"), Color(hex: "E67E22")]
-        let sendColors = [Color(hex: "FF2E63"), Color(hex: "FF6B6B")]
+        let editColors = [MeeshyColors.warning, MeeshyColors.warning.opacity(0.75)]
+        let sendColors = [MeeshyColors.indigo500, MeeshyColors.indigo400]
         let colors = isEditMode ? editColors : sendColors
         let icon = isEditMode ? "checkmark" : "paperplane.fill"
 
