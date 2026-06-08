@@ -52,7 +52,7 @@ export function ConversationEmptyState({
         </Button>
         <CreateLinkButton
           variant="outline"
-          className="rounded-2xl px-6 py-3 border-2 border-primary/20 dark:border-primary/30 hover:border-primary/40 dark:hover:border-primary/50 font-semibold shadow-md hover:shadow-lg dark:shadow-primary/10 transition-[color,background-color,border-color,box-shadow] text-primary hover:text-primary-foreground hover:bg-primary dark:hover:bg-primary/90"
+          className="rounded-2xl px-6 py-3 border-2 border-primary/30 dark:border-primary/50 hover:border-primary/50 dark:hover:border-primary/70 font-semibold shadow-md hover:shadow-lg dark:shadow-primary/10 transition-[color,background-color,border-color,box-shadow] text-primary hover:text-primary-foreground hover:bg-primary dark:hover:bg-primary/90"
           onLinkCreated={onLinkCreated}
         >
           <Link2 className="h-5 w-5 mr-2" />

@@ -51,10 +51,10 @@ struct FloatingCallPillView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(
-            String(localized: "call.pill.ongoing", defaultValue: "Appel en cours")
+            String(localized: "call.pill.ongoing", defaultValue: "Ongoing call")
             + (callManager.remoteUsername.map { " — \($0)" } ?? "")
         )
-        .accessibilityHint(String(localized: "call.pill.tapToReturn", defaultValue: "Touchez pour revenir à l'appel en plein écran"))
+        .accessibilityHint(String(localized: "call.pill.tapToReturn", defaultValue: "Tap to return to full-screen call"))
     }
 
     // MARK: - Leading Visual (remote video thumbnail or avatar)
@@ -103,7 +103,7 @@ struct FloatingCallPillView: View {
 
     private var userInfoSection: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(callManager.remoteUsername ?? String(localized: "call.pill.unknown", defaultValue: "Inconnu"))
+            Text(callManager.remoteUsername ?? String(localized: "call.pill.unknown", defaultValue: "Unknown"))
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(.white)
                 .lineLimit(1)
@@ -141,8 +141,8 @@ struct FloatingCallPillView: View {
         }
         .pressable()
         .accessibilityLabel(callManager.isMuted
-            ? String(localized: "call.pill.unmute", defaultValue: "Réactiver le micro")
-            : String(localized: "call.pill.mute", defaultValue: "Couper le micro"))
+            ? String(localized: "call.pill.unmute", defaultValue: "Unmute microphone")
+            : String(localized: "call.pill.mute", defaultValue: "Mute microphone"))
     }
 
     private var speakerButton: some View {
@@ -161,8 +161,8 @@ struct FloatingCallPillView: View {
         }
         .pressable()
         .accessibilityLabel(callManager.isSpeaker
-            ? String(localized: "call.pill.speaker.off", defaultValue: "Désactiver le haut-parleur")
-            : String(localized: "call.pill.speaker.on", defaultValue: "Activer le haut-parleur"))
+            ? String(localized: "call.pill.speaker.off", defaultValue: "Disable speaker")
+            : String(localized: "call.pill.speaker.on", defaultValue: "Enable speaker"))
     }
 
     private var expandButton: some View {
@@ -179,7 +179,7 @@ struct FloatingCallPillView: View {
                 )
         }
         .pressable()
-        .accessibilityLabel(String(localized: "call.pill.expand", defaultValue: "Agrandir l'appel"))
+        .accessibilityLabel(String(localized: "call.pill.expand", defaultValue: "Expand call"))
     }
 
     private var hangupButton: some View {
@@ -203,7 +203,7 @@ struct FloatingCallPillView: View {
                 )
         }
         .pressable()
-        .accessibilityLabel(String(localized: "call.pill.hangup", defaultValue: "Raccrocher"))
+        .accessibilityLabel(String(localized: "call.pill.hangup", defaultValue: "Hang up"))
     }
 
     // MARK: - Actions

@@ -35,7 +35,7 @@ struct ReportUserView: View {
         HStack {
             Spacer()
 
-            Text("\(String(localized: "report.user.title", defaultValue: "Signaler", bundle: .main)) @\(username)")
+            Text("\(String(localized: "report.user.title", defaultValue: "Report", bundle: .main)) @\(username)")
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
@@ -50,7 +50,7 @@ struct ReportUserView: View {
                     .font(.system(size: 24))
                     .foregroundColor(theme.textMuted)
             }
-            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
+            .accessibilityLabel(String(localized: "common.close", defaultValue: "Close", bundle: .main))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -83,7 +83,7 @@ struct ReportUserView: View {
 
     private var reasonSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "report.user.reason", defaultValue: "Raison du signalement", bundle: .main), icon: "exclamationmark.triangle.fill", color: "F59E0B")
+            sectionHeader(title: String(localized: "report.user.reason", defaultValue: "Report reason", bundle: .main), icon: "exclamationmark.triangle.fill", color: "F59E0B")
 
             VStack(spacing: 0) {
                 ForEach(ReportReason.allCases, id: \.self) { reason in
@@ -119,7 +119,7 @@ struct ReportUserView: View {
                         .padding(.vertical, 10)
                     }
                     .accessibilityLabel(reason.label)
-                    .accessibilityValue(selectedReason == reason ? String(localized: "common.selected", defaultValue: "selectionne", bundle: .main) : "")
+                    .accessibilityValue(selectedReason == reason ? String(localized: "common.selected", defaultValue: "Selected", bundle: .main) : "")
                     .accessibilityAddTraits(selectedReason == reason ? .isSelected : [])
                 }
             }
@@ -131,7 +131,7 @@ struct ReportUserView: View {
 
     private var detailsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "report.user.details", defaultValue: "Details (optionnel)", bundle: .main), icon: "text.alignleft", color: "3498DB")
+            sectionHeader(title: String(localized: "report.user.details", defaultValue: "Details (optional)", bundle: .main), icon: "text.alignleft", color: "3498DB")
 
             VStack(spacing: 8) {
                 TextEditor(text: $details)
@@ -153,7 +153,7 @@ struct ReportUserView: View {
                             details = String(newValue.prefix(500))
                         }
                     }
-                    .accessibilityLabel(String(localized: "report.user.details.a11y", defaultValue: "Details du signalement", bundle: .main))
+                    .accessibilityLabel(String(localized: "report.user.details.a11y", defaultValue: "Report details", bundle: .main))
 
                 Text("\(details.count)/500")
                     .font(.system(size: 11, weight: .medium))
@@ -176,7 +176,7 @@ struct ReportUserView: View {
                         .scaleEffect(0.8)
                         .tint(.white)
                 }
-                Text(String(localized: "report.user.submit", defaultValue: "Envoyer le signalement", bundle: .main))
+                Text(String(localized: "report.user.submit", defaultValue: "Send report", bundle: .main))
                     .font(.system(size: 15, weight: .bold))
             }
             .foregroundColor(.white)
@@ -188,8 +188,8 @@ struct ReportUserView: View {
             )
         }
         .disabled(isSubmitting)
-        .accessibilityLabel(String(localized: "report.user.submit", defaultValue: "Envoyer le signalement", bundle: .main))
-        .accessibilityHint("\(String(localized: "report.user.submit.hint", defaultValue: "Envoie le signalement pour", bundle: .main)) \(username)")
+        .accessibilityLabel(String(localized: "report.user.submit", defaultValue: "Send report", bundle: .main))
+        .accessibilityHint("\(String(localized: "report.user.submit.hint", defaultValue: "Send report for", bundle: .main)) \(username)")
     }
 
     // MARK: - Actions
@@ -205,11 +205,11 @@ struct ReportUserView: View {
                     reason: details.isEmpty ? nil : details
                 )
                 HapticFeedback.success()
-                FeedbackToastManager.shared.showSuccess(String(localized: "report.user.success", defaultValue: "Signalement envoye", bundle: .main))
+                FeedbackToastManager.shared.showSuccess(String(localized: "report.user.success", defaultValue: "Report sent", bundle: .main))
                 dismiss()
             } catch {
                 HapticFeedback.error()
-                errorMessage = String(localized: "report.user.error", defaultValue: "Erreur lors de l'envoi du signalement", bundle: .main)
+                errorMessage = String(localized: "report.user.error", defaultValue: "Error sending report", bundle: .main)
             }
             isSubmitting = false
         }
@@ -252,9 +252,9 @@ private enum ReportReason: String, CaseIterable {
     var label: String {
         switch self {
         case .spam: return String(localized: "report.user.reason.spam", defaultValue: "Spam", bundle: .main)
-        case .harassment: return String(localized: "report.user.reason.harassment", defaultValue: "Harcelement", bundle: .main)
-        case .inappropriate: return String(localized: "report.user.reason.inappropriate", defaultValue: "Contenu inapproprie", bundle: .main)
-        case .impersonation: return String(localized: "report.user.reason.impersonation", defaultValue: "Usurpation d'identite", bundle: .main)
+        case .harassment: return String(localized: "report.user.reason.harassment", defaultValue: "Harassment", bundle: .main)
+        case .inappropriate: return String(localized: "report.user.reason.inappropriate", defaultValue: "Inappropriate content", bundle: .main)
+        case .impersonation: return String(localized: "report.user.reason.impersonation", defaultValue: "Impersonation", bundle: .main)
         case .other: return String(localized: "report.user.reason.other", defaultValue: "Autre", bundle: .main)
         }
     }
