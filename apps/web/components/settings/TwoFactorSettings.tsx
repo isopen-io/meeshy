@@ -244,7 +244,7 @@ export function TwoFactorSettings() {
           <CardContent className="space-y-6">
             {/* QR Code */}
             <div className="flex justify-center">
-              <div className="p-4 bg-white rounded-xl shadow-sm border">
+              <div className="p-4 bg-white dark:bg-gray-900 rounded-xl shadow-sm border dark:border-gray-700">
                 <img
                   src={flow.qrCodeDataUrl || `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(flow.otpauthUrl)}&size=200x200`}
                   alt="2FA QR Code"

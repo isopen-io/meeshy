@@ -687,21 +687,21 @@ struct ConversationDashboardView: View {
                         label: String(localized: "dashboard.sentiment.positive", defaultValue: "Positif", bundle: .main),
                         count: analysis.positive,
                         total: analysis.total,
-                        color: Color(hex: "34D399")
+                        color: MeeshyColors.success
                     )
                     sentimentSegment(
                         emoji: "\u{1F610}",
                         label: String(localized: "dashboard.sentiment.neutral", defaultValue: "Neutre", bundle: .main),
                         count: analysis.neutral,
                         total: analysis.total,
-                        color: Color(hex: "FBBF24")
+                        color: MeeshyColors.warning
                     )
                     sentimentSegment(
                         emoji: "\u{1F614}",
                         label: String(localized: "dashboard.sentiment.negative", defaultValue: "Negatif", bundle: .main),
                         count: analysis.negative,
                         total: analysis.total,
-                        color: Color(hex: "F87171")
+                        color: MeeshyColors.error
                     )
                 }
 
@@ -732,26 +732,26 @@ struct ConversationDashboardView: View {
         let negFrac = CGFloat(analysis.negative) / CGFloat(total)
 
         let dominantColor: Color = {
-            if posFrac >= neuFrac && posFrac >= negFrac { return Color(hex: "34D399") }
-            if neuFrac >= posFrac && neuFrac >= negFrac { return Color(hex: "FBBF24") }
-            return Color(hex: "F87171")
+            if posFrac >= neuFrac && posFrac >= negFrac { return MeeshyColors.success }
+            if neuFrac >= posFrac && neuFrac >= negFrac { return MeeshyColors.warning }
+            return MeeshyColors.error
         }()
 
         return GeometryReader { geo in
             HStack(spacing: 2) {
                 if posFrac > 0 {
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(Color(hex: "34D399"))
+                        .fill(MeeshyColors.success)
                         .frame(width: max(geo.size.width * posFrac - 1, 2))
                 }
                 if neuFrac > 0 {
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(Color(hex: "FBBF24"))
+                        .fill(MeeshyColors.warning)
                         .frame(width: max(geo.size.width * neuFrac - 1, 2))
                 }
                 if negFrac > 0 {
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(Color(hex: "F87171"))
+                        .fill(MeeshyColors.error)
                         .frame(width: max(geo.size.width * negFrac - 1, 2))
                 }
             }
@@ -775,7 +775,7 @@ struct ConversationDashboardView: View {
                     HStack(spacing: 10) {
                         Image(systemName: stat.icon)
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(Color(hex: stat.color))
+                            .foregroundColor(stat.color)
                             .frame(width: 20)
 
                         Text(stat.type)
@@ -787,7 +787,7 @@ struct ConversationDashboardView: View {
                             Capsule()
                                 .fill(
                                     LinearGradient(
-                                        colors: [Color(hex: stat.color).opacity(0.7), Color(hex: stat.color).opacity(0.3)],
+                                        colors: [stat.color.opacity(0.7), stat.color.opacity(0.3)],
                                         startPoint: .leading,
                                         endPoint: .trailing
                                     )
@@ -849,24 +849,24 @@ struct ConversationDashboardView: View {
     // MARK: - Color Helpers
 
     private func healthScoreColor(_ score: Int) -> Color {
-        if score > 70 { return Color(hex: "34D399") }
-        if score > 40 { return Color(hex: "FBBF24") }
-        return Color(hex: "F87171")
+        if score > 70 { return MeeshyColors.success }
+        if score > 40 { return MeeshyColors.warning }
+        return MeeshyColors.error
     }
 
     private func conflictLevelColor(_ level: String) -> Color {
         let lower = level.lowercased()
         if lower.contains("high") || lower.contains("eleve") || lower.contains("fort") {
-            return Color(hex: "F87171")
+            return MeeshyColors.error
         }
         if lower.contains("medium") || lower.contains("moyen") || lower.contains("modere") {
-            return Color(hex: "FBBF24")
+            return MeeshyColors.warning
         }
-        return Color(hex: "34D399")
+        return MeeshyColors.success
     }
 
     private func traitScoreColor(_ score: Int) -> Color {
-        if score >= 70 { return Color(hex: "34D399") }
+        if score >= 70 { return MeeshyColors.success }
         if score >= 40 { return accent }
         return theme.textMuted
     }
@@ -1082,7 +1082,7 @@ struct ConversationDashboardView: View {
     private struct ContentTypeStat {
         let type: String
         let icon: String
-        let color: String
+        let color: Color
         let count: Int
     }
 
@@ -1109,11 +1109,11 @@ struct ConversationDashboardView: View {
         }
 
         return [
-            ContentTypeStat(type: String(localized: "dashboard.content.text", defaultValue: "Texte", bundle: .main), icon: "text.bubble.fill", color: accentColor, count: textOnly),
-            ContentTypeStat(type: String(localized: "dashboard.stat.photos", defaultValue: "Photos", bundle: .main), icon: "photo.fill", color: "34D399", count: images),
-            ContentTypeStat(type: String(localized: "dashboard.stat.audio", defaultValue: "Audio", bundle: .main), icon: "waveform", color: "818CF8", count: audio),
-            ContentTypeStat(type: String(localized: "dashboard.stat.videos", defaultValue: "Videos", bundle: .main), icon: "video.fill", color: "F87171", count: videos),
-            ContentTypeStat(type: String(localized: "dashboard.content.files", defaultValue: "Fichiers", bundle: .main), icon: "doc.fill", color: "FBBF24", count: files),
+            ContentTypeStat(type: String(localized: "dashboard.content.text", defaultValue: "Texte", bundle: .main), icon: "text.bubble.fill", color: accent, count: textOnly),
+            ContentTypeStat(type: String(localized: "dashboard.stat.photos", defaultValue: "Photos", bundle: .main), icon: "photo.fill", color: MeeshyColors.success, count: images),
+            ContentTypeStat(type: String(localized: "dashboard.stat.audio", defaultValue: "Audio", bundle: .main), icon: "waveform", color: MeeshyColors.indigo400, count: audio),
+            ContentTypeStat(type: String(localized: "dashboard.stat.videos", defaultValue: "Videos", bundle: .main), icon: "video.fill", color: MeeshyColors.error, count: videos),
+            ContentTypeStat(type: String(localized: "dashboard.content.files", defaultValue: "Fichiers", bundle: .main), icon: "doc.fill", color: MeeshyColors.warning, count: files),
         ].filter { $0.count > 0 }
     }
 

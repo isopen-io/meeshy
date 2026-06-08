@@ -38,7 +38,7 @@ struct ConversationEncryptionDetailSheet: View {
                 if let errorMessage {
                     Section {
                         Text(errorMessage)
-                            .foregroundColor(.red)
+                            .foregroundColor(MeeshyColors.error)
                             .font(.caption)
                     }
                 }
@@ -66,7 +66,7 @@ struct ConversationEncryptionDetailSheet: View {
             HStack(spacing: 12) {
                 Image(systemName: "lock.shield.fill")
                     .font(.title2)
-                    .foregroundColor(.green)
+                    .foregroundColor(MeeshyColors.success)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(String(localized: "conversation.encryption.detail.activeLabel",
                                 defaultValue: "Chiffrement actif",

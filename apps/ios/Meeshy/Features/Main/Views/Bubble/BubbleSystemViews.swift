@@ -21,7 +21,7 @@ struct BubbleDeletedView: View, Equatable {
                 Image(systemName: "nosign")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(ThemeManager.shared.textMuted)
-                Text(String(localized: "bubble.system.deleted", defaultValue: "Message supprime", bundle: .main))
+                Text(String(localized: "bubble.system.deleted", defaultValue: "Message deleted", bundle: .main))
                     .font(.system(size: 13, weight: .regular))
                     .italic()
                     .foregroundColor(ThemeManager.shared.textMuted)
@@ -37,7 +37,7 @@ struct BubbleDeletedView: View, Equatable {
                     )
             )
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(String(localized: "bubble.system.deleted", defaultValue: "Message supprime", bundle: .main))
+            .accessibilityLabel(String(localized: "bubble.system.deleted", defaultValue: "Message deleted", bundle: .main))
 
             if !isMe { Spacer(minLength: 50) }
         }
@@ -57,8 +57,8 @@ struct BubbleBurnedView: View, Equatable {
             HStack(spacing: 6) {
                 Image(systemName: "flame.fill")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.orange)
-                Text(String(localized: "bubble.system.burned", defaultValue: "Vu et effacé", bundle: .main))
+                    .foregroundColor(MeeshyColors.warning)
+                Text(String(localized: "bubble.system.burned", defaultValue: "Seen and deleted", bundle: .main))
                     .font(.system(size: 13, weight: .regular))
                     .italic()
                     .foregroundColor(ThemeManager.shared.textMuted)
@@ -67,14 +67,14 @@ struct BubbleBurnedView: View, Equatable {
             .padding(.vertical, 8)
             .background(
                 Capsule()
-                    .fill(Color.orange.opacity(0.08))
+                    .fill(MeeshyColors.warning.opacity(0.08))
                     .overlay(
                         Capsule()
-                            .stroke(Color.orange.opacity(0.15), lineWidth: 0.5)
+                            .stroke(MeeshyColors.warning.opacity(0.15), lineWidth: 0.5)
                     )
             )
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(String(localized: "bubble.system.burned.a11y", defaultValue: "Message vu et effacé", bundle: .main))
+            .accessibilityLabel(String(localized: "bubble.system.burned.a11y", defaultValue: "Message seen and deleted", bundle: .main))
 
             if !isMe { Spacer(minLength: 50) }
         }

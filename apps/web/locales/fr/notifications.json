@@ -194,7 +194,123 @@
             "reset": "Préférences réinitialisées",
             "permissionGranted": "Notifications autorisées",
             "permissionDenied": "Notifications refusées",
-            "loading": "Chargement des préférences..."
+            "loading": "Chargement des préférences...",
+            "noPreferences": "Aucune préférence disponible",
+            "saving": "Sauvegarde en cours...",
+            "missingConsents": "Consentements requis manquants :",
+            "allowButton": "Autoriser",
+            "channels": {
+                "title": "Canaux de notification",
+                "description": "Choisissez comment vous souhaitez recevoir les notifications",
+                "push": {
+                    "label": "Notifications push",
+                    "description": "Recevoir des notifications dans le navigateur"
+                },
+                "email": {
+                    "label": "Notifications email",
+                    "description": "Recevoir un récapitulatif par email"
+                },
+                "sound": {
+                    "label": "Sons de notification",
+                    "description": "Jouer un son pour les nouvelles notifications"
+                },
+                "vibration": {
+                    "label": "Vibration",
+                    "description": "Faire vibrer pour les nouvelles notifications (mobile)"
+                }
+            },
+            "types": {
+                "title": "Types de notifications",
+                "description": "Choisissez les événements pour lesquels vous souhaitez être notifié",
+                "newMessage": {
+                    "label": "Nouveaux messages",
+                    "description": "Notifications pour les nouveaux messages reçus"
+                },
+                "reply": {
+                    "label": "Réponses",
+                    "description": "Quand quelqu'un répond à vos messages"
+                },
+                "mention": {
+                    "label": "Mentions",
+                    "description": "Quand vous êtes mentionné (@) dans un message"
+                },
+                "reaction": {
+                    "label": "Réactions",
+                    "description": "Notifications pour les réactions à vos messages"
+                },
+                "contactRequest": {
+                    "label": "Demandes de contact",
+                    "description": "Notifications pour les nouvelles demandes de contact"
+                },
+                "groupInvite": {
+                    "label": "Invitations de groupe",
+                    "description": "Quand vous êtes invité à rejoindre un groupe"
+                },
+                "memberJoined": {
+                    "label": "Nouveaux membres",
+                    "description": "Quand un membre rejoint un groupe"
+                },
+                "memberLeft": {
+                    "label": "Membres partis",
+                    "description": "Quand un membre quitte un groupe"
+                },
+                "conversation": {
+                    "label": "Activité de conversation",
+                    "description": "Mises à jour et changements dans les conversations"
+                },
+                "missedCall": {
+                    "label": "Appels manqués",
+                    "description": "Notifications pour les appels manqués"
+                },
+                "voicemail": {
+                    "label": "Messages vocaux",
+                    "description": "Notifications pour les nouveaux messages vocaux"
+                },
+                "system": {
+                    "label": "Notifications système",
+                    "description": "Mises à jour importantes et annonces"
+                }
+            },
+            "dnd": {
+                "title": "Ne pas déranger",
+                "description": "Définissez une plage horaire sans notifications",
+                "enableLabel": "Activer \"Ne pas déranger\"",
+                "enableDescription": "Suspendre les notifications pendant une période définie",
+                "startTime": "Heure de début",
+                "endTime": "Heure de fin",
+                "activePeriodNote": "Pendant cette période, vous ne recevrez aucune notification push ou sonore."
+            },
+            "display": {
+                "title": "Affichage des notifications",
+                "description": "Contrôlez ce qui est affiché dans les notifications",
+                "preview": {
+                    "label": "Aperçu du message",
+                    "description": "Afficher le contenu du message dans la notification"
+                },
+                "senderName": {
+                    "label": "Nom de l'expéditeur",
+                    "description": "Afficher le nom de l'expéditeur dans la notification"
+                },
+                "group": {
+                    "label": "Grouper les notifications",
+                    "description": "Regrouper plusieurs notifications en une seule"
+                },
+                "badge": {
+                    "label": "Badge de notification",
+                    "description": "Afficher le nombre de notifications non lues"
+                }
+            },
+            "permissionsTitle": "État des permissions",
+            "permissionStatusTitle": "Statut actuel des autorisations de notification",
+            "browserNotifications": "Notifications navigateur",
+            "permissionStatus": {
+                "granted": "Autorisées",
+                "denied": "Refusées",
+                "pending": "En attente"
+            },
+            "permissionDeniedInstructions": "Les notifications ont été refusées. Vous pouvez les réactiver dans les paramètres de votre navigateur.",
+            "unsupported": "Les notifications ne sont pas supportées par votre navigateur.",
+            "resetButton": "Réinitialiser aux valeurs par défaut"
         },
         "connectionStatus": {
             "connected": "Connecté",

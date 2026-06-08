@@ -91,7 +91,7 @@ struct ThreadView: View {
                 )
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(parentMessage.senderName ?? "Inconnu")
+                    Text(parentMessage.senderName ?? String(localized: "common.unknown", defaultValue: "Unknown", bundle: .main))
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
 
@@ -155,7 +155,7 @@ struct ThreadView: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 HStack {
-                    Text(message.senderName ?? "Inconnu")
+                    Text(message.senderName ?? String(localized: "common.unknown", defaultValue: "Unknown", bundle: .main))
                         .font(.caption.weight(.semibold))
                         .foregroundColor(Color(hex: message.senderColor ?? "4ECDC4"))
 

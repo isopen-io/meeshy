@@ -65,6 +65,15 @@ public struct MessageDraft: Codable, Equatable, Sendable {
             && !isBlurEnabled
             && ephemeralDurationRawValue == nil
     }
+
+    /// `true` when the draft carries actual unsent TEXT (after trimming). The
+    /// conversation-list "Brouillon" badge keys on this: a draft that only holds
+    /// a reply reference or composer effects (no typed text) must NOT raise the
+    /// badge — there is no unsent message content to flag, so showing "Brouillon"
+    /// would point the user at a draft message that doesn't exist.
+    public var hasDraftText: Bool {
+        !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 }
 
 /// Projection légère et prête au rendu d'un brouillon persisté, pour la liste
@@ -192,7 +201,7 @@ final class DraftStore: @unchecked Sendable {
                 guard !rest.contains("_") else { continue }
                 guard !rest.isEmpty,
                       let draft = load(for: rest),
-                      !draft.isEffectivelyEmpty else { continue }
+                      draft.hasDraftText else { continue }
                 result[rest] = draft
             }
             return result
@@ -202,7 +211,7 @@ final class DraftStore: @unchecked Sendable {
             let conversationId = String(k.dropFirst(userPrefix.count))
             guard !conversationId.isEmpty,
                   let draft = load(for: conversationId),
-                  !draft.isEffectivelyEmpty else { continue }
+                  draft.hasDraftText else { continue }
             result[conversationId] = draft
         }
         return result

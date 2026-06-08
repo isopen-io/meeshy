@@ -325,10 +325,10 @@ struct CreateShareLinkView: View {
             if let error = errorMessage {
                 HStack(spacing: 8) {
                     Image(systemName: "exclamationmark.circle.fill")
-                        .foregroundColor(.red)
+                        .foregroundColor(MeeshyColors.error)
                     Text(error)
                         .font(.system(size: 13))
-                        .foregroundColor(.red)
+                        .foregroundColor(MeeshyColors.error)
                 }
                 .padding(.horizontal, 20)
             }

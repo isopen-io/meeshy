@@ -176,14 +176,14 @@ struct NotificationSettingsView: View {
     // MARK: - Display
 
     private var displaySection: some View {
-        settingsSection(title: String(localized: "settings.notifications.display", defaultValue: "Affichage", bundle: .main), icon: "eye.fill", color: "60A5FA") {
-            notifToggle(icon: "text.below.photo.fill", title: String(localized: "settings.notifications.preview", defaultValue: "Aperçu", bundle: .main), color: "60A5FA",
+        settingsSection(title: String(localized: "settings.notifications.display", defaultValue: "Display", bundle: .main), icon: "eye.fill", color: "60A5FA") {
+            notifToggle(icon: "text.below.photo.fill", title: String(localized: "settings.notifications.preview", defaultValue: "Preview", bundle: .main), color: "60A5FA",
                         keyPath: \.showPreview)
 
-            notifToggle(icon: "person.text.rectangle", title: String(localized: "settings.notifications.sender_name", defaultValue: "Nom expéditeur", bundle: .main), color: "9B59B6",
+            notifToggle(icon: "person.text.rectangle", title: String(localized: "settings.notifications.sender_name", defaultValue: "Sender name", bundle: .main), color: "9B59B6",
                         keyPath: \.showSenderName)
 
-            notifToggle(icon: "rectangle.stack.fill", title: String(localized: "settings.notifications.group_notifications", defaultValue: "Grouper notifications", bundle: .main), color: "6366F1",
+            notifToggle(icon: "rectangle.stack.fill", title: String(localized: "settings.notifications.group_notifications", defaultValue: "Group notifications", bundle: .main), color: "6366F1",
                         keyPath: \.groupNotifications)
         }
     }
@@ -248,6 +248,8 @@ struct NotificationSettingsView: View {
                                 .fill(isSelected ? Color(hex: accentColor) : Color(hex: accentColor).opacity(0.15))
                         )
                 }
+                .accessibilityLabel(dayAccessibilityLabel(day))
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
     }
@@ -256,13 +258,25 @@ struct NotificationSettingsView: View {
 
     private func dayLabel(_ day: DndDay) -> String {
         switch day {
-        case .mon: return "L"
-        case .tue: return "M"
-        case .wed: return "M"
-        case .thu: return "J"
-        case .fri: return "V"
-        case .sat: return "S"
-        case .sun: return "D"
+        case .mon: return String(localized: "common.day.mon.short", defaultValue: "M", bundle: .main)
+        case .tue: return String(localized: "common.day.tue.short", defaultValue: "T", bundle: .main)
+        case .wed: return String(localized: "common.day.wed.short", defaultValue: "W", bundle: .main)
+        case .thu: return String(localized: "common.day.thu.short", defaultValue: "T", bundle: .main)
+        case .fri: return String(localized: "common.day.fri.short", defaultValue: "F", bundle: .main)
+        case .sat: return String(localized: "common.day.sat.short", defaultValue: "S", bundle: .main)
+        case .sun: return String(localized: "common.day.sun.short", defaultValue: "S", bundle: .main)
+        }
+    }
+
+    private func dayAccessibilityLabel(_ day: DndDay) -> String {
+        switch day {
+        case .mon: return String(localized: "common.day.mon", defaultValue: "Monday", bundle: .main)
+        case .tue: return String(localized: "common.day.tue", defaultValue: "Tuesday", bundle: .main)
+        case .wed: return String(localized: "common.day.wed", defaultValue: "Wednesday", bundle: .main)
+        case .thu: return String(localized: "common.day.thu", defaultValue: "Thursday", bundle: .main)
+        case .fri: return String(localized: "common.day.fri", defaultValue: "Friday", bundle: .main)
+        case .sat: return String(localized: "common.day.sat", defaultValue: "Saturday", bundle: .main)
+        case .sun: return String(localized: "common.day.sun", defaultValue: "Sunday", bundle: .main)
         }
     }
 

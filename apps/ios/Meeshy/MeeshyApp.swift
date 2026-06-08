@@ -87,7 +87,7 @@ struct MeeshyApp: App {
                             session: guestSession,
                             onSessionCreated: { ctx in
                                 if !AnonymousSessionStore.save(ctx) {
-                                    toastManager.showError(String(localized: "Impossible de sauvegarder la session", defaultValue: "Impossible de sauvegarder la session"))
+                                    toastManager.showError(String(localized: "guest.session.save.error", defaultValue: "Unable to save session", bundle: .main))
                                 }
                                 activeGuestSession = GuestSession(identifier: guestSession.identifier, context: ctx)
                             },

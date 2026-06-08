@@ -149,7 +149,7 @@ struct ThemedConversationRow: View {
                         if let r = conversation.userState.reaction, !r.isEmpty {
                             Text(r)
                                 .font(.system(size: 12))
-                                .accessibilityLabel(Text("réaction \(r)"))
+                                .accessibilityLabel(Text(String(localized: "conversation.row.reaction.a11y", defaultValue: "Reaction \(r)", bundle: .main)))
                         }
 
                         // Type badge

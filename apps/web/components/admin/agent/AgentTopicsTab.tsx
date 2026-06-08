@@ -139,6 +139,7 @@ export function AgentTopicsTab() {
                       <button
                         onClick={() => handleDelete(t.id, false)}
                         title="Désactiver (soft delete)"
+                        aria-label="Disable topic"
                         className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-orange-600 dark:text-orange-400"
                       >
                         <EyeOff className="h-4 w-4" />
@@ -146,6 +147,7 @@ export function AgentTopicsTab() {
                       <button
                         onClick={() => handleDelete(t.id, true)}
                         title="Supprimer définitivement"
+                        aria-label="Delete topic"
                         className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-red-600 dark:text-red-400"
                       >
                         <Trash2 className="h-4 w-4" />

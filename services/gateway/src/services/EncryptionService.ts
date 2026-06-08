@@ -409,6 +409,7 @@ export class EncryptionService {
       this.cacheCleanupInterval = setInterval(() => {
         this.keyVault.cleanupCache();
       }, 5 * 60 * 1000);
+      this.cacheCleanupInterval.unref?.();
 
       this.initialized = true;
       logger.info('EncryptionService initialized successfully');

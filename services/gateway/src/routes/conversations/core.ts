@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { enhancedLogger } from '../../utils/logger-enhanced';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { conversationStatsService } from '../../services/ConversationStatsService';
 import { UserRoleEnum, ErrorCode } from '@meeshy/shared/types';
@@ -30,6 +31,8 @@ import type {
 import { buildCursorPaginationMeta } from '../../utils/pagination';
 import { sendWithETag } from '../../utils/etag';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+
+const logger = enhancedLogger.child({ module: 'conversations/core' });
 
 /**
  * Participant fields fetched + serialized per participant in the GET
@@ -62,6 +65,8 @@ export const conversationListParticipantSelect = {
       id: true,
       username: true,
       displayName: true,
+      firstName: true,
+      lastName: true,
       avatar: true,
       isOnline: true,
       lastActiveAt: true
@@ -129,7 +134,7 @@ export function registerCoreRoutes(
         identifier
       });
     } catch (error) {
-      console.error('[CONVERSATIONS] Error checking identifier availability:', error);
+      logger.error('error checking identifier availability', { error });
       return sendInternalError(reply, 'Failed to check identifier availability');
     }
   });
@@ -392,42 +397,15 @@ export function registerCoreRoutes(
         }
       }
 
-      // Collect all unique member userIds (optimized: only from returned conversations)
-      // Filter out null userIds (anonymous participants have userId: null)
-      const allMemberUserIds = new Set<string>();
-      for (const conv of conversations) {
-        for (const member of (conv as any).participants) {
-          if (member.userId) {
-            allMemberUserIds.add(member.userId);
-          }
-        }
-      }
-
       // === OPTIMIZED: Parallelize independent queries ===
+      // firstName/lastName now fetched via conversationListParticipantSelect.user.select —
+      // memberUsers query eliminated (iter-8).
       t0 = performance.now();
 
       const { MessageReadStatusService } = await import('../../services/MessageReadStatusService.js');
       const readStatusService = new MessageReadStatusService(prisma);
 
-      const [memberUsers, totalCount, unreadCountMap] = await Promise.all([
-        // Fetch user data with firstName/lastName for DM name resolution
-        // (participant.user select only has displayName, not firstName/lastName)
-        allMemberUserIds.size > 0
-          ? prisma.user.findMany({
-              where: { id: { in: Array.from(allMemberUserIds) } },
-              select: {
-                id: true,
-                username: true,
-                displayName: true,
-                firstName: true,
-                lastName: true,
-                avatar: true,
-                isOnline: true,
-                lastActiveAt: true
-              }
-            })
-          : Promise.resolve([]),
-
+      const [totalCount, unreadCountMap] = await Promise.all([
         // Count (if requested) - skip when using cursor pagination
         (!beforeCursor && (includeCount || offset === 0))
           ? prisma.conversation.count({ where: whereClause })
@@ -447,10 +425,6 @@ export function registerCoreRoutes(
       const presenceChecker = (fastify as any).presenceChecker as
         | { isOnline: (id: string) => boolean; bulk: (ids: readonly string[]) => Map<string, boolean> }
         | undefined;
-      const userMap = new Map(memberUsers.map(u => {
-        const liveOnline = presenceChecker?.isOnline(u.id);
-        return [u.id, liveOnline === undefined ? u : { ...u, isOnline: liveOnline }];
-      }));
 
       // Calculate hasMore. Two strategies:
       //   1. When we have a real `totalCount` (includeCount=true OR
@@ -473,20 +447,18 @@ export function registerCoreRoutes(
       const conversationsWithUnreadCount = conversations.map((conversation) => {
         const unreadCount = unreadCountMap.get(conversation.id) || 0;
 
-        // Merge user data for all participants (never filter out — SDK needs them for DM name resolution)
+        // Merge presence override. firstName/lastName now come directly from m.user
+        // (participant select was extended in iter-8 — no separate memberUsers query needed).
         const membersWithUser = conversation.participants
           .slice(0, 5)
           .map((m: any) => {
-            const mergedUser = m.userId
-              ? (userMap.get(m.userId) ? userMap.get(m.userId) : m.user ?? null)
-              : null;
-            // Override participant.isOnline aussi (pour les anonymes, on regarde l'id participant)
             const liveOnline = presenceChecker?.isOnline(m.userId ?? m.id);
             return {
               ...m,
-              avatar: m.avatar,
               isOnline: liveOnline === undefined ? m.isOnline : liveOnline,
-              user: mergedUser
+              user: m.userId
+                ? { ...m.user, isOnline: liveOnline === undefined ? m.user?.isOnline : liveOnline }
+                : null
             };
           });
 
@@ -535,14 +507,12 @@ export function registerCoreRoutes(
         };
       });
 
-      // === PERFORMANCE LOGGING (OPTIMIZED) ===
       const totalTime = performance.now() - perfStart;
-      console.log('===============================================');
-      console.log('[CONVERSATIONS_PERF] Query performance breakdown (OPTIMIZED v2)');
-      console.log(`  - conversationsQuery: ${perfTimings.conversationsQuery?.toFixed(2)}ms`);
-      console.log(`  - parallelQueries (users+unread+count): ${perfTimings.parallelQueries?.toFixed(2)}ms`);
-      console.log(`  TOTAL: ${totalTime.toFixed(2)}ms`);
-      console.log('===============================================');
+      logger.debug('CONVERSATIONS_PERF', {
+        conversationsQuery: perfTimings.conversationsQuery?.toFixed(2),
+        parallelQueries: perfTimings.parallelQueries?.toFixed(2),
+        total: totalTime.toFixed(2)
+      });
 
       // Build cursor pagination meta
       const lastConversation = conversationsWithUnreadCount.length > 0
@@ -576,7 +546,7 @@ export function registerCoreRoutes(
       reply.send(responseBody);
 
     } catch (error) {
-      console.error('Error fetching conversations:', error);
+      logger.error('error fetching conversations', { error });
       sendInternalError(reply, 'Error retrieving conversations');
     }
   });
@@ -704,7 +674,7 @@ export function registerCoreRoutes(
           unreadCount = await readStatusService.getUnreadCount(participant.id, conversationId);
         }
       } catch (unreadError) {
-        console.warn('⚠️ Failed to compute unreadCount for conversation', conversationId, unreadError);
+        logger.warn('failed to compute unreadCount for conversation', { conversationId, error: unreadError });
       }
 
       // Marquer automatiquement toutes les notifications de cette conversation comme lues.
@@ -732,7 +702,7 @@ export function registerCoreRoutes(
         }
       } catch (notifError) {
         // Ne pas bloquer la réponse si le marquage des notifications échoue
-        console.error(`❌ Erreur lors du marquage auto des notifications pour conversation ${conversationId}:`, notifError);
+        logger.error('error marking auto notifications for conversation', { conversationId, error: notifError });
       }
 
       return sendSuccess(reply, {
@@ -745,7 +715,7 @@ export function registerCoreRoutes(
       });
 
     } catch (error) {
-      console.error('Error fetching conversation:', error);
+      logger.error('error fetching conversation', { error });
       sendInternalError(reply, 'Error retrieving conversation');
     }
   });
@@ -982,7 +952,7 @@ export function registerCoreRoutes(
           }
         }
       } catch (broadcastError) {
-        console.error('Erreur lors de la diffusion CONVERSATION_NEW:', broadcastError);
+        logger.error('error broadcasting CONVERSATION_NEW', { error: broadcastError });
         // Non bloquant : la conversation est créée, les clients la verront
         // au prochain delta sync ou via la notification legacy ci-dessous.
       }
@@ -1013,11 +983,11 @@ export function registerCoreRoutes(
                 conversationTitle: displayTitle,
                 conversationType: type
               });
-              console.log(`📩 Notification d'invitation envoyée à ${participantId} pour la conversation ${conversation.id}`);
+              logger.debug('invitation notification sent', { participantId, conversationId: conversation.id });
             }
           }
         } catch (notifError) {
-          console.error('Erreur lors de l\'envoi des notifications d\'invitation:', notifError);
+          logger.error('error sending invitation notifications', { error: notifError });
           // Ne pas bloquer la création de la conversation
         }
       }
@@ -1154,7 +1124,7 @@ export function registerCoreRoutes(
       return sendSuccess(reply, updatedConversation);
 
     } catch (error) {
-      console.error('Error updating conversation:', error);
+      logger.error('error updating conversation', { error });
       sendInternalError(reply, 'Error updating conversation');
     }
   });
@@ -1243,7 +1213,7 @@ export function registerCoreRoutes(
       return sendSuccess(reply, { message: 'Conversation supprimée avec succès' });
 
     } catch (error) {
-      console.error('Error deleting conversation:', error);
+      logger.error('error deleting conversation', { error });
       sendInternalError(reply, 'Erreur lors de la suppression de la conversation');
     }
   });
@@ -1394,7 +1364,7 @@ export function registerCoreRoutes(
       });
 
     } catch (error) {
-      console.error('Error fetching conversation analysis:', error);
+      logger.error('error fetching conversation analysis', { error });
       sendInternalError(reply, 'Error fetching conversation analysis');
     }
   });

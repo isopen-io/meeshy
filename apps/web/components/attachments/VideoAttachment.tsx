@@ -8,6 +8,7 @@ import React, { useCallback } from 'react';
 import { X } from 'lucide-react';
 import { Attachment } from '@meeshy/shared/types/attachment';
 import { VideoPlayer } from '@/components/video/VideoPlayer';
+import { useI18n } from '@/hooks/useI18n';
 
 export interface VideoAttachmentProps {
   attachment: Attachment;
@@ -24,6 +25,7 @@ export const VideoAttachment = React.memo(function VideoAttachment({
   onDeleteClick,
   isOwnMessage,
 }: VideoAttachmentProps) {
+  const { t } = useI18n('attachments');
   const handleOpenLightbox = useCallback(() => {
     onOpenLightbox(attachment);
   }, [attachment, onOpenLightbox]);
@@ -62,8 +64,8 @@ export const VideoAttachment = React.memo(function VideoAttachment({
         <button
           onClick={handleDeleteClick}
           className="absolute top-2 right-2 w-[43px] h-[43px] rounded-full bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white flex items-center justify-center transition-[background-color,opacity,box-shadow] shadow-md z-10 opacity-0 hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-red-500"
-          title="Supprimer cette vidéo"
-          aria-label={`Supprimer la vidéo ${attachment.originalName}`}
+          title={t('actions.deleteVideo')}
+          aria-label={t('actions.deleteVideoNamed', { name: attachment.originalName })}
         >
           <X className="w-[22px] h-[22px]" />
         </button>

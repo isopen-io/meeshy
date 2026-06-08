@@ -137,7 +137,7 @@
     },
     "languageSelect": {
       "notFound": "Aucune langue trouvée",
-      "placeholder": "Sélectionner une langue",
+      "selectPlaceholder": "Sélectionner une langue",
       "searchPlaceholder": "Rechercher une langue..."
     },
     "bubbleStream": {

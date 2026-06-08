@@ -37,6 +37,15 @@ public actor MediaSessionCoordinator {
     }
 
     private var activationCount = 0
+    /// Mirror of the app's VoIP call state, pushed via `setCallActive(_:)`.
+    /// While `true`, the coordinator must NOT reconfigure or tear down the
+    /// shared `AVAudioSession`: the call owns it as `.playAndRecord/.voiceChat`
+    /// (via RTCAudioSession) and switching the category to `.playback` mid-call
+    /// mutes the microphone. Pushed (not pulled) because the call state lives on
+    /// `@MainActor` (`CallManager`) while this is an `actor` — reading it
+    /// synchronously across isolation would be a data race. Default `false`
+    /// ⇒ behavior identical to before this seam existed (no app wiring yet).
+    private var callActive = false
     private var observersInstalled = false
     nonisolated(unsafe) private var observerTokens: [any NSObjectProtocol] = []
 
@@ -64,24 +73,46 @@ public actor MediaSessionCoordinator {
         }
     }
 
+    /// Push the app's VoIP call state into the coordinator (call on call
+    /// start/end). While active, `request`/`release` skip ALL shared-session
+    /// (re)configuration so the call keeps ownership of `.playAndRecord`.
+    /// SDK stays call-layer-agnostic: the app wires this from `CallManager`.
+    public func setCallActive(_ active: Bool) {
+        callActive = active
+    }
+
+    /// Pure, testable decision: may the coordinator (re)configure or tear down
+    /// the shared `AVAudioSession` right now? `false` while a VoIP call owns it
+    /// — switching the category to `.playback` mid-call mutes the microphone.
+    /// `nonisolated static` so the call-aware contract is unit-testable without
+    /// touching the real `AVAudioSession`.
+    nonisolated static func shouldManageSession(callActive: Bool) -> Bool {
+        !callActive
+    }
+
     /// Active AVAudioSession pour le rôle demandé.
     public func request(role: AudioRole) async throws {
         installSystemObserversIfNeeded()
-        let session = AVAudioSession.sharedInstance()
-        switch role {
-        case .playback:
-            try session.setCategory(.playback, mode: .default, options: [.duckOthers])
-        case .record:
-            try session.setCategory(.record, mode: .default)
-        case .playAndRecord:
-            // Audit P2-iOS-3 — `.allowBluetooth` is the deprecated alias for
-            // HFP. Use `.allowBluetoothHFP` explicitly to align with the
-            // call-path policy (CallManager L1081 / PERF-010) and remove
-            // the deprecation warning.
-            try session.setCategory(.playAndRecord, mode: .default,
-                                    options: [.defaultToSpeaker, .allowBluetoothHFP])
+        // Never reconfigure the shared session while a VoIP call owns it (would
+        // mute the mic). The refcount still tracks holders so balancing across
+        // the call boundary stays coherent.
+        if Self.shouldManageSession(callActive: callActive) {
+            let session = AVAudioSession.sharedInstance()
+            switch role {
+            case .playback:
+                try session.setCategory(.playback, mode: .default, options: [.duckOthers])
+            case .record:
+                try session.setCategory(.record, mode: .default)
+            case .playAndRecord:
+                // Audit P2-iOS-3 — `.allowBluetooth` is the deprecated alias for
+                // HFP. Use `.allowBluetoothHFP` explicitly to align with the
+                // call-path policy (CallManager L1081 / PERF-010) and remove
+                // the deprecation warning.
+                try session.setCategory(.playAndRecord, mode: .default,
+                                        options: [.defaultToSpeaker, .allowBluetoothHFP])
+            }
+            try session.setActive(true)
         }
-        try session.setActive(true)
         activationCount += 1
     }
 
@@ -89,7 +120,7 @@ public actor MediaSessionCoordinator {
     public func release() async {
         guard activationCount > 0 else { return }
         activationCount -= 1
-        if activationCount == 0 {
+        if activationCount == 0, Self.shouldManageSession(callActive: callActive) {
             try? AVAudioSession.sharedInstance().setActive(false,
                 options: .notifyOthersOnDeactivation)
         }

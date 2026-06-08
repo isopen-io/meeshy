@@ -28,16 +28,16 @@ enum DetailTab: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .language: return String(localized: "message-detail.tab.language", defaultValue: "Langue", bundle: .main)
-        case .views: return String(localized: "message-detail.tab.views", defaultValue: "Vues", bundle: .main)
+        case .language: return String(localized: "message-detail.tab.language", defaultValue: "Language", bundle: .main)
+        case .views: return String(localized: "message-detail.tab.views", defaultValue: "Views", bundle: .main)
         case .reactions: return String(localized: "message-detail.tab.reactions", defaultValue: "Reactions", bundle: .main)
-        case .react: return String(localized: "message-detail.tab.react", defaultValue: "Reagir", bundle: .main)
-        case .report: return String(localized: "message-detail.tab.report", defaultValue: "Signaler", bundle: .main)
-        case .delete: return String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main)
-        case .forward: return String(localized: "message-detail.tab.forward", defaultValue: "Transferer", bundle: .main)
+        case .react: return String(localized: "message-detail.tab.react", defaultValue: "React", bundle: .main)
+        case .report: return String(localized: "message-detail.tab.report", defaultValue: "Report", bundle: .main)
+        case .delete: return String(localized: "common.delete", defaultValue: "Delete", bundle: .main)
+        case .forward: return String(localized: "message-detail.tab.forward", defaultValue: "Forward", bundle: .main)
         case .sentiment: return String(localized: "message-detail.tab.sentiment", defaultValue: "Sentiment", bundle: .main)
         case .transcription: return String(localized: "message-detail.tab.transcription", defaultValue: "Transcription", bundle: .main)
-        case .edits: return String(localized: "message-detail.tab.history", defaultValue: "Historique", bundle: .main)
+        case .edits: return String(localized: "message-detail.tab.history", defaultValue: "History", bundle: .main)
         }
     }
 
@@ -66,12 +66,12 @@ private enum ViewsFilter: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .sent: return String(localized: "message-detail.views.sent", defaultValue: "Envoye", bundle: .main)
-        case .delivered: return String(localized: "message-detail.views.delivered", defaultValue: "Distribue", bundle: .main)
-        case .read: return String(localized: "message-detail.views.read", defaultValue: "Lu", bundle: .main)
-        case .notSeen: return String(localized: "message-detail.views.not-seen", defaultValue: "Pas vu", bundle: .main)
-        case .listened: return String(localized: "message-detail.views.listened", defaultValue: "Ecoute", bundle: .main)
-        case .watched: return String(localized: "message-detail.views.watched", defaultValue: "Vu", bundle: .main)
+        case .sent: return String(localized: "message-detail.views.sent", defaultValue: "Sent", bundle: .main)
+        case .delivered: return String(localized: "message-detail.views.delivered", defaultValue: "Delivered", bundle: .main)
+        case .read: return String(localized: "message-detail.views.read", defaultValue: "Read", bundle: .main)
+        case .notSeen: return String(localized: "message-detail.views.not-seen", defaultValue: "Not seen", bundle: .main)
+        case .listened: return String(localized: "message-detail.views.listened", defaultValue: "Listened", bundle: .main)
+        case .watched: return String(localized: "message-detail.views.watched", defaultValue: "Seen", bundle: .main)
         }
     }
 
@@ -359,12 +359,12 @@ struct MessageDetailSheet: View {
                         .frame(width: 42, height: 42)
 
                     Image(systemName: item.icon)
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.callout.weight(.semibold))
                         .foregroundColor(accent)
                 }
 
                 Text(item.label)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundColor(isActive ? accent : theme.textSecondary)
                     .lineLimit(1)
             }
@@ -450,14 +450,14 @@ struct MessageDetailSheet: View {
                     .fill(originalColor)
                     .frame(width: 8, height: 8)
                 Image(systemName: "text.bubble.fill")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundColor(originalColor)
                 Text(String(format: String(localized: "message-detail.original", defaultValue: "Original \u{2022} %@", bundle: .main), Self.languageName(for: originalLang)))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                 Spacer()
                 Text(originalLang.uppercased())
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .font(.system(.caption2, design: .monospaced).weight(.bold))
                     .foregroundColor(originalColor)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
@@ -476,17 +476,17 @@ struct MessageDetailSheet: View {
             // Original content preview (text or transcription for audio messages)
             if !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 Text(message.content)
-                    .font(.system(size: 13))
+                    .font(.footnote)
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(3)
                     .padding(.horizontal, 4)
             } else if let transcription {
                 HStack(spacing: 6) {
                     Image(systemName: "waveform")
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.caption2.weight(.medium))
                         .foregroundColor(originalColor.opacity(0.7))
                     Text(transcription.text)
-                        .font(.system(size: 13))
+                        .font(.footnote)
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(3)
                 }
@@ -503,20 +503,20 @@ struct MessageDetailSheet: View {
                             .fill(langColor)
                             .frame(width: 6, height: 6)
                         Text(Self.languageName(for: selectedCode))
-                            .font(.system(size: 12, weight: .semibold))
+                            .font(.caption.weight(.semibold))
                             .foregroundColor(langColor)
                         Spacer()
                         Button {
                             withAnimation(.easeInOut(duration: 0.2)) { selectedLanguageCode = nil }
                         } label: {
                             Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 14))
+                                .font(.subheadline)
                                 .foregroundColor(theme.textMuted)
                         }
                     }
 
                     Text(translated)
-                        .font(.system(size: 14))
+                        .font(.subheadline)
                         .foregroundColor(theme.textPrimary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -544,7 +544,7 @@ struct MessageDetailSheet: View {
 
             if let translationError {
                 Text(translationError)
-                    .font(.system(size: 11))
+                    .font(.caption2)
                     .foregroundColor(MeeshyColors.error)
                     .padding(.horizontal, 8)
                     .padding(.top, 4)
@@ -615,9 +615,9 @@ struct MessageDetailSheet: View {
 
                 // Flag + name
                 Text(lang.flag)
-                    .font(.system(size: 16))
+                    .font(.callout)
                 Text(lang.name)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.footnote.weight(.medium))
                     .foregroundColor(isSelected ? langColor : theme.textPrimary)
 
                 Spacer()
@@ -629,7 +629,7 @@ struct MessageDetailSheet: View {
                         .tint(langColor)
                 } else if hasTranslation {
                     Text(String((translations[lang.code] ?? "").prefix(60)) + (translations[lang.code]?.count ?? 0 > 60 ? "..." : ""))
-                        .font(.system(size: 11))
+                        .font(.caption2)
                         .foregroundColor(theme.textMuted)
                         .lineLimit(1)
                         .frame(maxWidth: 180, alignment: .trailing)
@@ -638,31 +638,32 @@ struct MessageDetailSheet: View {
                         Task { await translateTo(lang.code, from: originalLang) }
                     } label: {
                         Image(systemName: "arrow.clockwise")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.caption2.weight(.medium))
                             .foregroundColor(langColor.opacity(0.6))
                     }
 
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.caption.weight(.medium))
                         .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(0.5))
                 } else if let audioForLang = mergedTranslatedAudios.first(where: { $0.targetLanguage.lowercased() == lang.code.lowercased() }) {
                     HStack(spacing: 3) {
                         Image(systemName: "waveform")
-                            .font(.system(size: 9, weight: .medium))
+                            .font(.caption2.weight(.medium))
+                            .minimumScaleFactor(0.8)
                             .foregroundColor(langColor.opacity(0.6))
                         Text(String(audioForLang.transcription.prefix(50)) + (audioForLang.transcription.count > 50 ? "..." : ""))
-                            .font(.system(size: 11))
+                            .font(.caption2)
                             .foregroundColor(theme.textMuted)
                             .lineLimit(1)
                     }
                     .frame(maxWidth: 180, alignment: .trailing)
 
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.caption.weight(.medium))
                         .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(0.5))
                 } else {
                     Text(String(localized: "message-detail.translate", defaultValue: "Traduire", bundle: .main))
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.caption2.weight(.medium))
                         .foregroundColor(langColor)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 3)
@@ -894,12 +895,12 @@ struct MessageDetailSheet: View {
         } label: {
             HStack(spacing: 4) {
                 Image(systemName: filter.icon)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption2.weight(.medium))
                 Text(filter.label)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.caption.weight(.medium))
                 if let count {
                     Text("\(count)")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .font(.system(.caption2, design: .monospaced).weight(.bold))
                         .foregroundColor(isSelected ? accent : theme.textMuted)
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
@@ -938,11 +939,11 @@ struct MessageDetailSheet: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(message.senderName ?? "Inconnu")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.callout.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
 
                     Text(formatDateFR(message.createdAt))
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.caption.weight(.medium))
                         .foregroundColor(theme.textMuted)
                 }
 
@@ -1052,9 +1053,9 @@ struct MessageDetailSheet: View {
 
         return HStack(spacing: 4) {
             Image(systemName: icon)
-                .font(.system(size: 10, weight: .semibold))
+                .font(.caption2.weight(.semibold))
             Text(label)
-                .font(.system(size: 10, weight: .semibold))
+                .font(.caption2.weight(.semibold))
         }
         .foregroundColor(color)
         .padding(.horizontal, 8)
@@ -1068,17 +1069,17 @@ struct MessageDetailSheet: View {
     private func metaInfoRow(icon: String, label: String, value: String, accent: Color, valueColor: Color? = nil) -> some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 11, weight: .medium))
+                .font(.caption2.weight(.medium))
                 .foregroundColor(accent.opacity(0.6))
                 .frame(width: 16)
 
             Text(label)
-                .font(.system(size: 12, weight: .medium))
+                .font(.caption.weight(.medium))
                 .foregroundColor(theme.textMuted)
                 .frame(width: 85, alignment: .leading)
 
             Text(value)
-                .font(.system(size: 12, weight: .medium))
+                .font(.caption.weight(.medium))
                 .foregroundColor(valueColor ?? theme.textPrimary)
                 .lineLimit(1)
 
@@ -1257,15 +1258,15 @@ struct MessageDetailSheet: View {
     private func timelineBanner(icon: String, text: String, detail: String, count: String? = nil, accent: Color) -> some View {
         HStack(spacing: 10) {
             Image(systemName: icon)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundColor(accent)
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(text)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                 Text(detail)
-                    .font(.system(size: 11))
+                    .font(.caption2)
                     .foregroundColor(theme.textMuted)
             }
 
@@ -1273,7 +1274,7 @@ struct MessageDetailSheet: View {
 
             if let count {
                 Text(count)
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .font(.system(.caption, design: .monospaced).weight(.bold))
                     .foregroundColor(accent)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 3)
@@ -1304,7 +1305,7 @@ struct MessageDetailSheet: View {
             )
 
             Text(username)
-                .font(.system(size: 13, weight: .medium))
+                .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -1315,11 +1316,11 @@ struct MessageDetailSheet: View {
 
             if let date {
                 Text(relativeDate(date))
-                    .font(.system(size: 11))
+                    .font(.caption2)
                     .foregroundColor(theme.textMuted)
             } else {
                 Image(systemName: "clock")
-                    .font(.system(size: 11))
+                    .font(.caption2)
                     .foregroundColor(theme.textMuted)
             }
         }
@@ -1340,19 +1341,19 @@ struct MessageDetailSheet: View {
                         .fill(accent.opacity(isDark ? 0.15 : 0.1))
                         .frame(width: 32, height: 32)
                     Image(systemName: icon)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.footnote.weight(.semibold))
                         .foregroundColor(accent)
                 }
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(name)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.caption.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
 
                     if let duration = attachment.duration {
                         Text(formatDuration(duration / 1000))
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .font(.system(.caption2, design: .monospaced).weight(.medium))
                             .foregroundColor(theme.textMuted)
                     }
                 }
@@ -1360,7 +1361,7 @@ struct MessageDetailSheet: View {
                 Spacer()
 
                 Text("\(users.count)")
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .font(.system(.caption2, design: .monospaced).weight(.bold))
                     .foregroundColor(accent)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -1369,7 +1370,7 @@ struct MessageDetailSheet: View {
 
             if users.isEmpty {
                 Text(isAudio ? "Pas encore ecoute" : "Pas encore visionne")
-                    .font(.system(size: 12))
+                    .font(.caption)
                     .foregroundColor(theme.textMuted)
                     .padding(.vertical, 4)
             } else {
@@ -1390,12 +1391,12 @@ struct MessageDetailSheet: View {
 
                         VStack(alignment: .leading, spacing: 1) {
                             Text(user.username)
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.caption.weight(.medium))
                                 .foregroundColor(theme.textPrimary)
 
                             if let date = listenDate {
                                 Text(relativeDate(date))
-                                    .font(.system(size: 10))
+                                    .font(.caption2)
                                     .foregroundColor(theme.textMuted)
                             }
                         }
@@ -1405,7 +1406,7 @@ struct MessageDetailSheet: View {
                         // Play count badge
                         if let c = count, c > 1 {
                             Text("\(c)x")
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .font(.system(.caption2, design: .monospaced).weight(.bold))
                                 .foregroundColor(accent.opacity(0.8))
                                 .padding(.horizontal, 5)
                                 .padding(.vertical, 2)
@@ -1418,14 +1419,14 @@ struct MessageDetailSheet: View {
                         if isComplete {
                             HStack(spacing: 3) {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .font(.system(size: 11))
+                                    .font(.caption2)
                                 Text(String(localized: "message-detail.complete", defaultValue: "complet", bundle: .main))
-                                    .font(.system(size: 10, weight: .semibold))
+                                    .font(.caption2.weight(.semibold))
                             }
                             .foregroundColor(Color(hex: "2ECC71"))
                         } else if let pos = positionMs, pos > 0 {
                             Text(formatDuration(pos / 1000))
-                                .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                                .font(.system(.caption2, design: .monospaced).weight(.semibold))
                                 .foregroundColor(theme.textMuted)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
@@ -1466,7 +1467,7 @@ struct MessageDetailSheet: View {
                 .font(.system(size: 28, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
             Text(text)
-                .font(.system(size: 13, weight: .medium))
+                .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
@@ -1479,14 +1480,14 @@ struct MessageDetailSheet: View {
                 .font(.system(size: 28, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
             Text(readStatusError ?? String(localized: "message-detail.load-error", defaultValue: "Impossible de charger les donnees", bundle: .main))
-                .font(.system(size: 13, weight: .medium))
+                .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textMuted)
             Button {
                 readStatusData = nil
                 Task { await loadReadStatus() }
             } label: {
                 Text(String(localized: "common.retry", defaultValue: "Reessayer", bundle: .main))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 6)
@@ -1564,9 +1565,9 @@ struct MessageDetailSheet: View {
         } label: {
             HStack(spacing: 4) {
                 Text(label)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.subheadline.weight(.medium))
                 Text("\(count)")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundColor(isSelected ? Color(hex: contactColor) : theme.textMuted)
             }
             .padding(.horizontal, 12)
@@ -1591,18 +1592,18 @@ struct MessageDetailSheet: View {
             )
 
             Text(item.username)
-                .font(.system(size: 14, weight: .medium))
+                .font(.subheadline.weight(.medium))
                 .foregroundColor(theme.textPrimary)
 
             if reactionFilter == "all" {
                 Text(item.emoji)
-                    .font(.system(size: 18))
+                    .font(.title3)
             }
 
             Spacer()
 
             Text(relativeDate(item.createdAt))
-                .font(.system(size: 11))
+                .font(.caption2)
                 .foregroundColor(theme.textMuted)
         }
         .padding(.vertical, 8)
@@ -1634,7 +1635,7 @@ struct MessageDetailSheet: View {
 
             Image(systemName: "trash.fill")
                 .font(.system(size: 48))
-                .foregroundColor(.red)
+                .foregroundColor(MeeshyColors.error)
                 .scaleEffect(deleteIconScale)
                 .onAppear {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
@@ -1643,11 +1644,11 @@ struct MessageDetailSheet: View {
                 }
 
             Text(String(localized: "message-detail.delete.title", defaultValue: "Supprimer ce message ?", bundle: .main))
-                .font(.system(size: 18, weight: .semibold))
+                .font(.title3.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
 
             Text(String(localized: "message-detail.delete.message", defaultValue: "Cette action est irreversible", bundle: .main))
-                .font(.system(size: 14))
+                .font(.subheadline)
                 .foregroundColor(theme.textMuted)
 
             VStack(spacing: 10) {
@@ -1657,12 +1658,12 @@ struct MessageDetailSheet: View {
                     performDismiss()
                 } label: {
                     Text(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main))
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.callout.weight(.semibold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.red)
+                                .fill(MeeshyColors.error)
                         )
                 }
 
@@ -1670,7 +1671,7 @@ struct MessageDetailSheet: View {
                     performDismiss()
                 } label: {
                     Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.callout.weight(.medium))
                         .foregroundColor(theme.textSecondary)
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .background(
@@ -1691,7 +1692,7 @@ struct MessageDetailSheet: View {
     private var reportTabContent: some View {
         VStack(spacing: 16) {
             Text(String(localized: "message-detail.report.title", defaultValue: "Pourquoi signalez-vous ce message ?", bundle: .main))
-                .font(.system(size: 15, weight: .semibold))
+                .font(.callout.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -1702,11 +1703,11 @@ struct MessageDetailSheet: View {
             if selectedReportType != nil {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(String(localized: "message-detail.report.details", defaultValue: "Details (optionnel)", bundle: .main))
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.footnote.weight(.medium))
                         .foregroundColor(theme.textSecondary)
 
                     TextField(String(localized: "message-detail.report.placeholder", defaultValue: "Decrivez le probleme...", bundle: .main), text: $reportReason, axis: .vertical)
-                        .font(.system(size: 14))
+                        .font(.subheadline)
                         .lineLimit(3...6)
                         .padding(12)
                         .background(
@@ -1733,7 +1734,7 @@ struct MessageDetailSheet: View {
                             .tint(.white)
                     } else {
                         Text(String(localized: "message-detail.report.send", defaultValue: "Envoyer le signalement", bundle: .main))
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.callout.weight(.semibold))
                     }
                 }
                 .foregroundColor(.white)
@@ -1759,16 +1760,16 @@ struct MessageDetailSheet: View {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: type.icon)
-                    .font(.system(size: 16))
+                    .font(.callout)
                     .foregroundColor(isSelected ? accent : theme.textSecondary)
                     .frame(width: 24)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(type.label)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.subheadline.weight(.medium))
                         .foregroundColor(theme.textPrimary)
                     Text(type.description)
-                        .font(.system(size: 12))
+                        .font(.caption)
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(1)
                 }
@@ -1777,7 +1778,7 @@ struct MessageDetailSheet: View {
 
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 20))
+                        .font(.title3)
                         .foregroundColor(accent)
                         .transition(.scale.combined(with: .opacity))
                 }
@@ -1801,11 +1802,11 @@ struct MessageDetailSheet: View {
         VStack(spacing: 12) {
             HStack(spacing: 8) {
                 Image(systemName: "magnifyingglass")
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                     .foregroundColor(theme.textMuted)
 
                 TextField(String(localized: "forward.search-placeholder", defaultValue: "Rechercher une conversation", bundle: .main), text: $forwardSearchText)
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                     .autocorrectionDisabled()
 
                 if !forwardSearchText.isEmpty {
@@ -1813,7 +1814,7 @@ struct MessageDetailSheet: View {
                         forwardSearchText = ""
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
+                            .font(.subheadline)
                             .foregroundColor(theme.textMuted)
                     }
                 }
@@ -1859,18 +1860,18 @@ struct MessageDetailSheet: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(conv.name)
-                    .font(.system(size: 15, weight: .medium))
+                    .font(.callout.weight(.medium))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 HStack(spacing: 4) {
                     Text(conv.type.rawValue)
-                        .font(.system(size: 12))
+                        .font(.caption)
                         .foregroundColor(theme.textMuted)
 
                     if conv.memberCount > 0 {
                         Text(String(format: String(localized: "forward.members-count", defaultValue: "\u{2022} %d membres", bundle: .main), conv.memberCount))
-                            .font(.system(size: 12))
+                            .font(.caption)
                             .foregroundColor(theme.textMuted)
                     }
                 }
@@ -1887,8 +1888,8 @@ struct MessageDetailSheet: View {
     private func forwardSendButton(for conv: Conversation) -> some View {
         if sentToIds.contains(conv.id) {
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 24))
-                .foregroundColor(.green)
+                .font(.title2)
+                .foregroundColor(MeeshyColors.success)
         } else if sendingToId == conv.id {
             ProgressView()
                 .scaleEffect(0.8)
@@ -1898,7 +1899,7 @@ struct MessageDetailSheet: View {
                 forwardTo(conv)
             } label: {
                 Image(systemName: "paperplane.circle.fill")
-                    .font(.system(size: 24))
+                    .font(.title2)
                     .foregroundColor(Color(hex: contactColor))
             }
             .disabled(sendingToId != nil)
@@ -1963,17 +1964,17 @@ struct MessageDetailSheet: View {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
                     Text(header)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.caption2.weight(.semibold))
                         .foregroundStyle(isCurrent ? accent : theme.textSecondary)
                         .textCase(.uppercase)
                         .tracking(0.4)
                     Spacer(minLength: 4)
                     Text(formatTimeFR(timestamp))
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.caption2.weight(.medium))
                         .foregroundStyle(theme.textMuted)
                 }
                 Text(content)
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                     .foregroundStyle(theme.textPrimary)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -2015,18 +2016,18 @@ struct MessageDetailSheet: View {
             // Language + confidence banner
             HStack(spacing: 8) {
                 Image(systemName: "waveform.and.mic")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundColor(langColor)
 
                 Text(Self.languageName(for: transcription.language))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
 
                 Spacer()
 
                 if let conf = transcription.confidence {
                     Text(String(format: "%.0f%%", conf * 100))
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .font(.system(.caption2, design: .monospaced).weight(.bold))
                         .foregroundColor(langColor)
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
@@ -2035,7 +2036,7 @@ struct MessageDetailSheet: View {
 
                 if let durationMs = transcription.durationMs {
                     Text(formatDuration(durationMs / 1000))
-                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .font(.system(.caption2, design: .monospaced).weight(.medium))
                         .foregroundColor(theme.textMuted)
                 }
             }
@@ -2051,7 +2052,7 @@ struct MessageDetailSheet: View {
 
             // Full text
             Text(transcription.text)
-                .font(.system(size: 14))
+                .font(.subheadline)
                 .foregroundColor(theme.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 4)
@@ -2065,7 +2066,7 @@ struct MessageDetailSheet: View {
                 FlowLayout(spacing: 0) {
                     ForEach(segments) { segment in
                         Text(segment.text + " ")
-                            .font(.system(size: 13, weight: .regular))
+                            .font(.footnote.weight(.regular))
                             .foregroundColor(theme.textSecondary)
                             .padding(.horizontal, 2)
                             .padding(.vertical, 1)
@@ -2086,10 +2087,10 @@ struct MessageDetailSheet: View {
                 if let speakerCount = transcription.speakerCount, speakerCount > 1 {
                     HStack(spacing: 6) {
                         Image(systemName: "person.2.fill")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.caption2.weight(.medium))
                             .foregroundColor(accent.opacity(0.6))
                         Text(String(format: String(localized: "message-detail.transcription.speakers", defaultValue: "%d locuteurs detectes", bundle: .main), speakerCount))
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.caption.weight(.medium))
                             .foregroundColor(theme.textMuted)
                     }
                     .padding(.horizontal, 4)
@@ -2104,19 +2105,19 @@ struct MessageDetailSheet: View {
             ForEach(mediaAttachments) { attachment in
                 HStack(spacing: 10) {
                     Image(systemName: AttachmentKind(mimeType: attachment.mimeType).sfSymbolName)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.subheadline.weight(.medium))
                         .foregroundColor(accent)
                         .frame(width: 20)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(attachment.originalName.isEmpty ? attachment.fileName : attachment.originalName)
-                            .font(.system(size: 13, weight: .medium))
+                            .font(.footnote.weight(.medium))
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(1)
 
                         if let duration = attachment.duration {
                             Text(formatDuration(duration / 1000))
-                                .font(.system(size: 11))
+                                .font(.caption2)
                                 .foregroundColor(theme.textMuted)
                         }
                     }
@@ -2137,7 +2138,7 @@ struct MessageDetailSheet: View {
                     .foregroundColor(theme.textMuted.opacity(0.4))
 
                 Text(String(localized: "message-detail.transcription.empty", defaultValue: "Aucune transcription", bundle: .main))
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.subheadline.weight(.medium))
                     .foregroundColor(theme.textMuted)
 
                 if let firstMedia = mediaAttachments.first {
@@ -2151,10 +2152,10 @@ struct MessageDetailSheet: View {
                                     .scaleEffect(0.7)
                             } else {
                                 Image(systemName: "waveform.and.mic")
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.footnote.weight(.semibold))
                             }
                             Text(String(localized: "message-detail.transcription.transcribe", defaultValue: "Transcrire", bundle: .main))
-                                .font(.system(size: 13, weight: .bold))
+                                .font(.footnote.weight(.bold))
                         }
                         .foregroundColor(accent)
                         .padding(.horizontal, 18)
@@ -2178,10 +2179,10 @@ struct MessageDetailSheet: View {
 
             HStack(spacing: 6) {
                 Image(systemName: "translate")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundColor(accent.opacity(0.6))
                 Text(String(localized: "message-detail.audio-translations", defaultValue: "Traductions audio", bundle: .main))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundColor(theme.textMuted)
             }
             .padding(.horizontal, 4)
@@ -2193,9 +2194,9 @@ struct MessageDetailSheet: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
                         Text(display?.flag ?? "\u{1F310}")
-                            .font(.system(size: 14))
+                            .font(.subheadline)
                         Text(display?.name ?? audio.targetLanguage)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.footnote.weight(.semibold))
                             .foregroundColor(theme.textPrimary)
 
                         Spacer()
@@ -2203,9 +2204,10 @@ struct MessageDetailSheet: View {
                         if audio.cloned {
                             HStack(spacing: 3) {
                                 Image(systemName: "person.wave.2")
-                                    .font(.system(size: 9, weight: .medium))
+                                    .font(.caption2.weight(.medium))
                                 Text(String(localized: "message-detail.audio.cloned", defaultValue: "Clone", bundle: .main))
-                                    .font(.system(size: 10, weight: .bold))
+                                    .font(.caption2.weight(.bold))
+                                    .minimumScaleFactor(0.8)
                             }
                             .foregroundColor(langColor)
                             .padding(.horizontal, 6)
@@ -2214,13 +2216,13 @@ struct MessageDetailSheet: View {
                         }
 
                         Text(formatDuration(audio.durationMs / 1000))
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .font(.system(.caption2, design: .monospaced).weight(.medium))
                             .foregroundColor(theme.textMuted)
                     }
 
                     if !audio.transcription.isEmpty {
                         Text(audio.transcription)
-                            .font(.system(size: 13))
+                            .font(.footnote)
                             .foregroundColor(theme.textSecondary)
                             .lineLimit(4)
                     }

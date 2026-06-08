@@ -416,6 +416,7 @@ export class ZmqTranslationClient extends EventEmitter {
     // Démarrer le polling avec setInterval
     logger.info('🔄 Démarrage polling avec setInterval...');
     this.pollingIntervalId = setInterval(checkForMessages, 100); // 100ms entre chaque vérification
+    this.pollingIntervalId.unref?.();
   }
 
   /**

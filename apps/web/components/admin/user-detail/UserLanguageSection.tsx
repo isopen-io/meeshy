@@ -74,12 +74,12 @@ export function UserLanguageSection({
       });
 
       if (response.data?.success) {
-        toast.success(t('userDetail.updateSuccess'));
+        toast.success(t('userDetail.languagePreferencesSaved'));
         setEditing(false);
         onUpdate();
       }
     } catch (error: unknown) {
-      toast.error(error.message || t('userDetail.updateSuccess'));
+      toast.error((error as Error).message || t('userDetail.languagePreferencesError'));
     } finally {
       setSaving(false);
     }

@@ -19,6 +19,9 @@ import {
   PRIVACY_KEY_MAPPING,
   PrivacyPreferencesDefaults
 } from '../config/user-preferences-defaults';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'PrivacyPreferencesService' });
 
 export interface PrivacyPreferences {
   showOnlineStatus: boolean;
@@ -58,6 +61,7 @@ export class PrivacyPreferencesService {
     this.cleanupInterval = setInterval(() => {
       this.cleanupCache();
     }, this.CACHE_CLEANUP_INTERVAL_MS);
+    this.cleanupInterval.unref?.();
   }
 
   /**
@@ -75,7 +79,7 @@ export class PrivacyPreferencesService {
     }
 
     if (cleaned > 0) {
-      console.log(`[PrivacyPreferences] Cache cleanup: ${cleaned} entries removed, ${this.cache.size} remaining`);
+      logger.debug('privacy preferences cache cleanup', { removed: cleaned, remaining: this.cache.size });
     }
   }
 
@@ -150,7 +154,7 @@ export class PrivacyPreferencesService {
 
       return preferences;
     } catch (error) {
-      console.error('[PrivacyPreferences] Error fetching from database:', error);
+      logger.error('privacy preferences fetch from database failed', { userId, error });
       // En cas d'erreur, retourner les valeurs par défaut
       return this.getDefaultPreferences();
     }

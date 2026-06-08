@@ -40,6 +40,18 @@
     "invalidType": "Type de fichier invalide",
     "uploadFailed": "Échec de l'upload"
   },
+  "actions": {
+    "deleteImage": "Supprimer cette image",
+    "deleteVideo": "Supprimer cette vidéo",
+    "deleteFile": "Supprimer ce fichier",
+    "deleteTextFile": "Supprimer ce fichier texte",
+    "deletePdf": "Supprimer ce PDF",
+    "deleteImageNamed": "Supprimer l'image {name}",
+    "deleteVideoNamed": "Supprimer la vidéo {name}",
+    "deleteFileNamed": "Supprimer le fichier {name}",
+    "openImageNamed": "Ouvrir l'image {name}",
+    "openFileNamed": "Ouvrir le fichier {name}"
+  },
   "contextMenu": {
     "close": "Fermer",
     "download": "Télécharger",
@@ -53,6 +65,7 @@
     "confirmDeleteTitle": "Confirmer la suppression",
     "confirmDeleteDescription": "Êtes-vous sûr de vouloir supprimer ce fichier ?",
     "confirmDeleteIrreversible": "Cette action est irréversible. Le fichier sera définitivement supprimé.",
+    "cancel": "Annuler",
     "deleting": "Suppression..."
   }
 }

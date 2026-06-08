@@ -156,7 +156,7 @@ export function AgentGlobalConfigTab() {
 
         {/* Provider & Model */}
         <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
-          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Provider par défaut</h3>
+          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">{t('globalConfig.defaultProvider')}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <div className="flex items-center">
@@ -258,7 +258,7 @@ export function AgentGlobalConfigTab() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <LayoutGrid className="h-4 w-4 text-indigo-500" />
-              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Planificateur Global</h3>
+              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">{t('globalConfig.globalScheduler')}</h3>
               <InfoIcon content="Mode séquentiel : l'agent traite les conversations une par une avec un délai aléatoire, au lieu de tout scanner en même temps. Réduit la charge et simule une activité humaine plus naturelle." />
             </div>
             <Switch

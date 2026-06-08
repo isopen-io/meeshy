@@ -632,6 +632,11 @@ class ConversationListViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
+                // Don't surface YOUR OWN typing — the gateway echoes typing to every
+                // participant including the author, so on multi-device this would show
+                // "<You> écrit…" on your own conversation row. Mirror the per-conversation
+                // guard in ConversationSocketHandler.
+                guard event.userId != currentUserId else { return }
                 typingUsernames[event.conversationId] = event.preferredDisplayName
                 scheduleTypingCleanup(for: event.conversationId)
             }
