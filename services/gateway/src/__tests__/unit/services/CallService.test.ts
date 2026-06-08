@@ -102,6 +102,7 @@ const createMockPrisma = () => {
     callParticipant: {
       create: jest.fn() as MockFn,
       findFirst: jest.fn() as MockFn,
+      findMany: jest.fn() as MockFn,
       update: jest.fn() as MockFn,
       updateMany: jest.fn() as MockFn
     },
@@ -240,6 +241,7 @@ describe('CallService', () => {
         userId: 'user-123',
         isActive: true
       });
+      mockPrisma.callParticipant.findMany.mockResolvedValue([]); // No stale participations
       mockPrisma.callSession.findFirst.mockResolvedValue(null); // No active call
       mockPrisma.$transaction.mockResolvedValue(mockCallSession);
       mockPrisma.callSession.findUnique.mockResolvedValue(mockCallSession);
@@ -277,6 +279,7 @@ describe('CallService', () => {
         userId: 'user-123',
         isActive: true
       });
+      mockPrisma.callParticipant.findMany.mockResolvedValue([]); // No stale participations
       mockPrisma.callSession.findFirst.mockResolvedValue(null);
       mockPrisma.$transaction.mockResolvedValue(mockCallSession);
       mockPrisma.callSession.findUnique.mockResolvedValue(mockCallSession);
@@ -330,6 +333,7 @@ describe('CallService', () => {
         userId: 'user-123',
         isActive: true
       });
+      mockPrisma.callParticipant.findMany.mockResolvedValue([]); // No stale participations
       mockPrisma.callSession.findFirst.mockResolvedValue(null);
       mockPrisma.$transaction.mockResolvedValue(mockCallSession);
       mockPrisma.callSession.findUnique.mockResolvedValue(mockCallSession);
@@ -361,6 +365,7 @@ describe('CallService', () => {
         userId: 'user-123',
         isActive: true
       });
+      mockPrisma.callParticipant.findMany.mockResolvedValue([]); // No stale participations
       mockPrisma.callSession.findFirst.mockResolvedValue(activeCall);
 
       await expect(callService.initiateCall(validInitiateData)).rejects.toThrow(
@@ -387,6 +392,7 @@ describe('CallService', () => {
         userId: 'user-123',
         isActive: true
       });
+      mockPrisma.callParticipant.findMany.mockResolvedValue([]); // No stale participations
       mockPrisma.callSession.findFirst.mockResolvedValue(zombieCall);
       mockPrisma.callSession.update.mockResolvedValue({ ...zombieCall, status: CallStatus.ended });
       mockPrisma.$transaction.mockResolvedValue(newCall);
@@ -639,11 +645,15 @@ describe('CallService', () => {
       expect(result).toBeDefined();
     });
 
-    it('should throw error when participant not found', async () => {
+    it('should throw error when participant not found and call session missing', async () => {
+      // CALL-FIX 2026-06-06 — leaveCall is now idempotent: a missing active
+      // CallParticipant row no longer throws on its own. It only throws when the
+      // call session itself cannot be found (terminal CALL_NOT_FOUND).
       mockPrisma.callParticipant.findFirst.mockResolvedValue(null);
+      mockPrisma.callSession.findUnique.mockResolvedValue(null);
 
       await expect(callService.leaveCall(validLeaveData)).rejects.toThrow(
-        'CALL_NOT_FOUND: You are not in this call'
+        'CALL_NOT_FOUND: Call session not found'
       );
     });
 
@@ -1014,12 +1024,17 @@ describe('CallService', () => {
       });
     });
 
-    it('should throw error when participant not found', async () => {
+    it('should throw error when participant not found and call session missing', async () => {
+      // CALL-FIX 2026-06-06 — updateParticipantMedia is now tolerant: a missing
+      // active CallParticipant row no longer throws (the toggle still broadcasts).
+      // It falls through to getCallSession, which is the path that raises
+      // CALL_NOT_FOUND when the call session itself cannot be resolved.
       mockPrisma.callParticipant.findFirst.mockResolvedValue(null);
+      mockPrisma.callSession.findUnique.mockResolvedValue(null);
 
       await expect(
         callService.updateParticipantMedia('call-123', 'user-123', 'audio', false)
-      ).rejects.toThrow('CALL_NOT_FOUND: You are not in this call');
+      ).rejects.toThrow('CALL_NOT_FOUND: Call session not found');
     });
   });
 
@@ -1333,6 +1348,7 @@ describe('CallService - Error Code Verification', () => {
       userId: 'user-123',
       isActive: true
     });
+    mockPrisma.callParticipant.findMany.mockResolvedValue([]); // No stale participations
     mockPrisma.callSession.findFirst.mockResolvedValue(
       createMockCallSession({
         status: CallStatus.active,

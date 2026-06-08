@@ -28,7 +28,9 @@ import { Prisma } from '@meeshy/shared/prisma/client';
 type MockFn = jest.Mock<any>;
 
 const createMockPrisma = () => ({
-  callSession: { findUnique: jest.fn() as MockFn, update: jest.fn() as MockFn },
+  // `update` resolves by default so persistCallStats' `.update(...).catch(...)`
+  // chains on a real Promise (the impl writes best-effort and swallows errors).
+  callSession: { findUnique: jest.fn() as MockFn, update: (jest.fn() as MockFn).mockResolvedValue(undefined) },
   participant: { findFirst: jest.fn() as MockFn },
   message: { create: jest.fn() as MockFn }
 });

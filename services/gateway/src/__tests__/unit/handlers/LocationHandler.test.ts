@@ -55,6 +55,7 @@ function createMockUser(overrides: Partial<SocketUser> = {}): SocketUser {
     socketId: 'socket-1',
     isAnonymous: false,
     language: 'fr',
+    resolvedLanguages: [],
     userId: 'user-1',
     displayName: 'TestUser',
     ...overrides,

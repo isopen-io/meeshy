@@ -40,7 +40,7 @@ function createMockSocket() {
   return {
     join: jest.fn(),
     leave: jest.fn(),
-  };
+  } as unknown as Parameters<SocialEventsHandler['handleFeedSubscribe']>[0];
 }
 
 function createMockPost(overrides: Partial<Post> = {}): Post {

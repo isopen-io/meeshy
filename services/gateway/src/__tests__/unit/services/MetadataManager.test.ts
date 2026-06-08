@@ -23,20 +23,23 @@ const mockFfprobe = jest.fn() as jest.MockedFunction<any>;
 const mockFsReadFile = jest.fn() as jest.MockedFunction<any>;
 const mockFsStat = jest.fn() as jest.MockedFunction<any>;
 const mockFsOpen = jest.fn() as jest.MockedFunction<any>;
+const mockFsWriteFile = jest.fn() as jest.MockedFunction<any>;
 
 // Mock Sharp chain
+// Thumbnails are now encoded as WebP (bandwidth sprint D4): generateThumbnail
+// delegates to thumbnail.ts's createImageThumbnail, which pipes
+// sharp(input).resize().webp().toBuffer() and writes the buffer via fs.writeFile.
 const createMockSharpChain = () => {
   const chain = {
     metadata: jest.fn() as any,
     resize: jest.fn() as any,
-    jpeg: jest.fn() as any,
-    toFile: jest.fn() as any,
+    webp: jest.fn() as any,
     toBuffer: jest.fn() as any,
   };
 
   // Chain methods return the chain object for fluent API
   chain.resize.mockReturnValue(chain);
-  chain.jpeg.mockReturnValue(chain);
+  chain.webp.mockReturnValue(chain);
 
   return chain;
 };
@@ -74,6 +77,7 @@ jest.mock('fs', () => ({
     readFile: mockFsReadFile,
     stat: mockFsStat,
     open: mockFsOpen,
+    writeFile: mockFsWriteFile,
   },
 }));
 jest.mock('pdf-parse', () => ({
@@ -111,6 +115,9 @@ describe('MetadataManager', () => {
     // Setup default sharp chain
     const defaultChain = createMockSharpChain();
     mockSharp.mockReturnValue(defaultChain);
+
+    // generateThumbnail writes the encoded WebP buffer to disk via fs.writeFile.
+    mockFsWriteFile.mockResolvedValue(undefined);
   });
 
   describe('Constructor', () => {
@@ -229,9 +236,10 @@ describe('MetadataManager', () => {
   });
 
   describe('generateThumbnail', () => {
-    it('should generate thumbnail from image file', async () => {
+    it('should generate a WebP thumbnail from an image file', async () => {
+      const thumbBuffer = Buffer.from('webp thumbnail bytes');
       const chain = createMockSharpChain();
-      chain.toFile.mockResolvedValue({ size: 12345 });
+      chain.toBuffer.mockResolvedValue(thumbBuffer);
       mockSharp.mockReturnValue(chain);
 
       const result = await metadataManager.generateThumbnail('test/image.jpg');
@@ -241,26 +249,46 @@ describe('MetadataManager', () => {
         fit: 'inside',
         withoutEnlargement: true,
       });
-      expect(chain.jpeg).toHaveBeenCalledWith({ quality: 80 });
-      expect(chain.toFile).toHaveBeenCalledWith('/test/uploads/test/image_thumb.jpg');
-      expect(result).toBe('test/image_thumb.jpg');
+      expect(chain.webp).toHaveBeenCalledWith({ quality: 80 });
+      expect(chain.toBuffer).toHaveBeenCalled();
+      // Encoded WebP buffer is written to the .webp thumbnail path.
+      expect(mockFsWriteFile).toHaveBeenCalledWith(
+        '/test/uploads/test/image_thumb.webp',
+        thumbBuffer
+      );
+      expect(result).toBe('test/image_thumb.webp');
     });
 
-    it('should handle different image extensions', async () => {
+    it('should store the thumbnail as .webp regardless of source extension', async () => {
+      const thumbBuffer = Buffer.from('webp thumbnail bytes');
       const chain = createMockSharpChain();
-      chain.toFile.mockResolvedValue({ size: 12345 });
+      chain.toBuffer.mockResolvedValue(thumbBuffer);
       mockSharp.mockReturnValue(chain);
 
       const result = await metadataManager.generateThumbnail('test/photo.png');
 
-      expect(chain.toFile).toHaveBeenCalledWith('/test/uploads/test/photo_thumb.png');
-      expect(result).toBe('test/photo_thumb.png');
+      expect(mockFsWriteFile).toHaveBeenCalledWith(
+        '/test/uploads/test/photo_thumb.webp',
+        thumbBuffer
+      );
+      expect(result).toBe('test/photo_thumb.webp');
     });
 
     it('should return null on thumbnail generation error', async () => {
       const chain = createMockSharpChain();
-      chain.toFile.mockRejectedValue(new Error('Write error'));
+      chain.toBuffer.mockRejectedValue(new Error('Encode error'));
       mockSharp.mockReturnValue(chain);
+
+      const result = await metadataManager.generateThumbnail('test/image.jpg');
+
+      expect(result).toBeNull();
+    });
+
+    it('should return null when writing the thumbnail to disk fails', async () => {
+      const chain = createMockSharpChain();
+      chain.toBuffer.mockResolvedValue(Buffer.from('webp thumbnail bytes'));
+      mockSharp.mockReturnValue(chain);
+      mockFsWriteFile.mockRejectedValueOnce(new Error('Write error'));
 
       const result = await metadataManager.generateThumbnail('test/image.jpg');
 
@@ -284,7 +312,7 @@ describe('MetadataManager', () => {
         fit: 'inside',
         withoutEnlargement: true,
       });
-      expect(chain.jpeg).toHaveBeenCalledWith({ quality: 80 });
+      expect(chain.webp).toHaveBeenCalledWith({ quality: 80 });
       expect(result).toBe(outputBuffer);
     });
 
