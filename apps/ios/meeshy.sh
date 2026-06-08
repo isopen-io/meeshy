@@ -71,8 +71,10 @@ PLATFORM="iphone"  # iphone | ipad | mac
 # ─── Physical Device Detection ──────────────────────────────────────────────
 detect_physical_device() {
     # devicectl output columns: FriendlyName  NetworkName  UUID  Status  Model
+    # Exclure les devices "unavailable" (déjà appairés mais non connectés) : on ne
+    # peut pas y déployer, et les lister fausse la sélection.
     local devices
-    devices=$(xcrun devicectl list devices 2>/dev/null | grep -E "iPhone" | grep -v "Simulator" || true)
+    devices=$(xcrun devicectl list devices 2>/dev/null | grep -E "iPhone" | grep -v "Simulator" | grep -v "unavailable" || true)
     if [ -z "$devices" ]; then
         err "No physical iPhone found. Connect via USB or WiFi."
         exit 1
@@ -114,7 +116,7 @@ pick_device() {
         dev_ids+=("$did")
         dev_names+=("$dname")
         dev_labels+=("📲 $dname ${DIM}(Physical)${NC}")
-    done < <(xcrun devicectl list devices 2>/dev/null | grep -E "iPhone" | grep -v "Simulator" || true)
+    done < <(xcrun devicectl list devices 2>/dev/null | grep -E "iPhone" | grep -v "Simulator" | grep -v "unavailable" || true)
 
     local physical_count=${#dev_ids[@]}
 
@@ -291,7 +293,7 @@ do_device_deploy_only() {
     # Surface warnings even on success so we know what the compiler is unhappy about.
     grep -E "warning:" "$build_log" | grep -v "IDEFoundation\|Xcode3Core\|DVTFoundation" | head -10 | while IFS= read -r line; do
         warn "$line"
-    done
+    done || true
 
     rm -f "$build_log"
     ok "Build succeeded"
@@ -596,7 +598,7 @@ do_build() {
     # Surface warnings even on success so we know what the compiler is unhappy about.
     grep -E "warning:" "$build_log" | grep -v "IDEFoundation\|Xcode3Core\|DVTFoundation" | head -10 | while IFS= read -r line; do
         warn "$line"
-    done
+    done || true
 
     rm -f "$build_log"
     ok "Build succeeded in ${BOLD}${duration}s${NC}"
