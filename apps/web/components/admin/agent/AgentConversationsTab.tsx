@@ -325,7 +325,7 @@ export function AgentConversationsTab() {
 
                       {/* Actions */}
                       <div className="flex gap-0.5 shrink-0">
-                        <Button variant="ghost" size="sm" onClick={() => handleEdit(config)} className="h-7 w-7 p-0">
+                        <Button variant="ghost" size="sm" onClick={() => handleEdit(config)} className="h-7 w-7 p-0" aria-label="Edit agent configuration">
                           <Settings className="h-3.5 w-3.5" />
                         </Button>
                         <Button
@@ -333,6 +333,7 @@ export function AgentConversationsTab() {
                           size="sm"
                           onClick={() => handleDelete(config.conversationId)}
                           className="text-red-500 hover:text-red-700 h-7 w-7 p-0"
+                          aria-label="Delete configuration"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>

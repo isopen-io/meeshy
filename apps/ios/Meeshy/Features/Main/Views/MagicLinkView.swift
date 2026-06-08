@@ -242,6 +242,8 @@ struct MagicLinkView: View {
                 .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
                 .foregroundColor(countdownRemaining > 0 ? theme.textMuted : MeeshyColors.indigo400)
             }
+            .accessibilityLabel(String(localized: "auth.magiclink.resendLabel",
+                                        defaultValue: "Resend magic link", bundle: .main))
             .disabled(countdownRemaining > 0 || isLoading)
             .padding(.top, MeeshySpacing.md)
 

@@ -7,7 +7,10 @@
     "default": "Classificação",
     "resultsUnit": "resultados",
     "retry": "Tentar novamente",
-    "empty": "Nenhum resultado encontrado"
+    "empty": "Nenhum resultado encontrado",
+    "selectEntity": "Selecionar tipo de entidade",
+    "selectCriterion": "Selecionar critério",
+    "selectPeriod": "Selecionar período"
   },
   "scanLog": {
     "title": "Logs de varredura",
@@ -122,5 +125,15 @@
       "queueItemEdited": "Mensagem editada",
       "queueItemEditError": "Erro ao editar a mensagem"
     }
+  },
+  "agentLive": {
+    "selectConversation": "Selecione uma conversa para monitorar seu estado em tempo real"
+  },
+  "userDetail": {
+    "languagePreferences": "Preferências de Idioma"
+  },
+  "translationMonitor": {
+    "loadingMetrics": "Carregando métricas...",
+    "languageBreakdown": "Distribuição por idioma"
   }
 }

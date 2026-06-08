@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Star, Users, MessageSquare, FileText, LinkIcon, Calendar } from 'lucide-react';
 import { RANKING_CRITERIA } from './constants';
+import { useI18n } from '@/hooks/useI18n';
 
 interface RankingFiltersProps {
   entityType: 'users' | 'conversations' | 'messages' | 'links';
@@ -39,6 +40,7 @@ export function RankingFilters({
   onLimitChange,
   onCriteriaSearchChange
 }: RankingFiltersProps) {
+  const { t } = useI18n('admin');
   const criteriaList = React.useMemo(() => {
     const criteria = RANKING_CRITERIA[entityType];
     if (criteriaSearch) {
@@ -66,7 +68,7 @@ export function RankingFilters({
               </label>
               <Select value={entityType} onValueChange={onEntityTypeChange}>
                 <SelectTrigger className="border-yellow-300 focus:ring-yellow-500">
-                  <SelectValue placeholder="Sélectionnez le type" />
+                  <SelectValue placeholder={t('admin.ranking.selectEntity')} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="users">
@@ -103,7 +105,7 @@ export function RankingFilters({
               </label>
               <Select value={criterion} onValueChange={onCriterionChange}>
                 <SelectTrigger className="border-yellow-300 focus:ring-yellow-500">
-                  <SelectValue placeholder="Sélectionnez le critère" />
+                  <SelectValue placeholder={t('admin.ranking.selectCriterion')} />
                 </SelectTrigger>
                 <SelectContent className="max-h-[400px]">
                   <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 p-2 border-b border-gray-200 dark:border-gray-700">
@@ -148,7 +150,7 @@ export function RankingFilters({
               </label>
               <Select value={period} onValueChange={onPeriodChange}>
                 <SelectTrigger className="border-yellow-300 focus:ring-yellow-500">
-                  <SelectValue placeholder="Sélectionnez la période" />
+                  <SelectValue placeholder={t('admin.ranking.selectPeriod')} />
                 </SelectTrigger>
                 <SelectContent>
                   {PERIODS.map((p) => (

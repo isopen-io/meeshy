@@ -399,8 +399,8 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
               ) : groups.length === 0 ? (
                 <div className="p-4 text-center text-muted-foreground">
                   <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>Aucune communauté</p>
-                  <p className="text-xs">Créez-en une pour commencer</p>
+                  <p>{tGroups('groups.noGroups')}</p>
+                  <p className="text-xs">{tGroups('groups.noGroupsDescription')}</p>
                 </div>
               ) : (
                 <div className="p-2">
@@ -573,7 +573,7 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
                       {selectedGroup._count?.members || 0} membres
                     </div>
                     <div>
-                      Créée le {new Date(selectedGroup.createdAt).toLocaleDateString()}
+                      {tGroups('groups.details.createdOn') + ' '}{new Date(selectedGroup.createdAt).toLocaleDateString()}
                     </div>
                   </div>
                 </CardContent>
@@ -587,9 +587,9 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
               <Users className="h-16 w-16 mx-auto mb-4 text-muted-foreground/50" />
-              <h3 className="text-lg font-medium mb-2">Sélectionnez une communauté</h3>
+              <h3 className="text-lg font-medium mb-2">{tGroups('groups.list.selectCommunity')}</h3>
               <p className="text-muted-foreground">
-                Choisissez une communauté dans la liste pour voir ses détails
+                {tGroups('groups.list.selectCommunityDescription')}
               </p>
             </div>
           </div>

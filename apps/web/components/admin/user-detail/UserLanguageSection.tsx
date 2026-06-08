@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Languages, Edit2, Save, X } from 'lucide-react';
 import { apiService } from '@/services/api.service';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/useI18n';
 
 interface UserLanguageSectionProps {
   user: unknown;
@@ -41,6 +42,7 @@ export function UserLanguageSection({
   userId,
   onUpdate
 }: UserLanguageSectionProps) {
+  const { t } = useI18n('admin');
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
@@ -93,7 +95,7 @@ export function UserLanguageSection({
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center space-x-2 dark:text-gray-100">
             <Languages className="h-5 w-5" />
-            <span>Préférences de Langue</span>
+            <span>{t('admin.userDetail.languagePreferences')}</span>
           </CardTitle>
           {!editing ? (
             <Button

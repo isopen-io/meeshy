@@ -7,7 +7,10 @@
     "default": "Classement",
     "resultsUnit": "résultats",
     "retry": "Réessayer",
-    "empty": "Aucun résultat trouvé"
+    "empty": "Aucun résultat trouvé",
+    "selectEntity": "Sélectionnez le type d'entité",
+    "selectCriterion": "Sélectionnez le critère",
+    "selectPeriod": "Sélectionnez la période"
   },
   "scanLog": {
     "title": "Scan Logs",
@@ -122,5 +125,15 @@
       "queueItemEdited": "Message modifié",
       "queueItemEditError": "Erreur lors de la modification"
     }
+  },
+  "agentLive": {
+    "selectConversation": "Sélectionnez une conversation pour superviser son état en temps réel"
+  },
+  "userDetail": {
+    "languagePreferences": "Préférences de Langue"
+  },
+  "translationMonitor": {
+    "loadingMetrics": "Chargement des métriques...",
+    "languageBreakdown": "Répartition par langue"
   }
 }

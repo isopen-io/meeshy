@@ -63,6 +63,7 @@
     "redirecting": "Redirigiendo a su conversación",
     "joinError": "Error al unirse a la conversación",
     "usernameAlreadyTaken": "Este nombre de usuario ya está en uso",
+    "usernameAvailable": "Nombre de usuario disponible",
     "suggestedUsername": "Nombre de usuario sugerido: {username}",
     "firstNameRequired": "El nombre y el apellido son requeridos",
     "connectionError": "Error de conexión"

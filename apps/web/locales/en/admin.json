@@ -7,7 +7,10 @@
     "default": "Rankings",
     "resultsUnit": "results",
     "retry": "Retry",
-    "empty": "No results found"
+    "empty": "No results found",
+    "selectEntity": "Select entity type",
+    "selectCriterion": "Select criterion",
+    "selectPeriod": "Select period"
   },
   "scanLog": {
     "title": "Scan Logs",
@@ -122,5 +125,15 @@
       "queueItemEdited": "Message edited",
       "queueItemEditError": "Error editing message"
     }
+  },
+  "agentLive": {
+    "selectConversation": "Select a conversation to monitor its real-time state"
+  },
+  "userDetail": {
+    "languagePreferences": "Language Preferences"
+  },
+  "translationMonitor": {
+    "loadingMetrics": "Loading metrics...",
+    "languageBreakdown": "Language breakdown"
   }
 }

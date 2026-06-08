@@ -48,7 +48,7 @@ export function UserPicker({ userIds, onAdd, onRemove, label, placeholder = "Rec
 
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full border border-dashed border-indigo-300 text-indigo-500 hover:bg-indigo-50">
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 rounded-full border border-dashed border-indigo-300 text-indigo-500 hover:bg-indigo-50" aria-label="Add user">
               <Plus className="h-4 w-4" />
             </Button>
           </PopoverTrigger>
