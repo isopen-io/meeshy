@@ -327,31 +327,23 @@ export function registerMessagesAdvancedRoutes(
                 const notificationService = (fastify as any).notificationService;
                 if (notificationService) {
                   try {
-                    // Récupérer les informations de l'expéditeur
-                    const sender = await prisma.user.findUnique({
-                      where: { id: userId },
-                      select: {
-                        username: true,
-                        avatar: true
-                      }
-                    });
-
-                    if (sender) {
-                      // Récupérer les informations de la conversation
-                      const conversationInfo = await prisma.conversation.findUnique({
+                    const [sender, conversationInfo] = await Promise.all([
+                      prisma.user.findUnique({
+                        where: { id: userId },
+                        select: { username: true, avatar: true }
+                      }),
+                      prisma.conversation.findUnique({
                         where: { id: conversationId },
                         select: {
                           title: true,
                           type: true,
-                          participants: {
-                            where: { isActive: true },
-                            select: { userId: true }
-                          }
+                          participants: { where: { isActive: true }, select: { userId: true } }
                         }
-                      });
+                      })
+                    ]);
 
-                      if (conversationInfo) {
-                        const memberIds = conversationInfo.participants.map((m: { userId: string | null }) => m.userId).filter(Boolean);
+                    if (sender && conversationInfo) {
+                      const memberIds = conversationInfo.participants.map((m: { userId: string | null }) => m.userId).filter(Boolean);
 
                         // PERFORMANCE: Créer toutes les notifications de mention en batch
                         const count = await notificationService.createMentionNotificationsBatch(
@@ -368,7 +360,6 @@ export function registerMessagesAdvancedRoutes(
                           memberIds
                         );
                         logger.info(`📩 ${count} notifications de mention créées en batch`);
-                      }
                     }
                   } catch (notifError) {
                     logger.error('Erreur notifications mentions', notifError);

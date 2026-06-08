@@ -489,7 +489,7 @@ export class MessageHandler {
       // sont diffusées via l'event dédié `conversation:stats`. L'appel
       // updateOnNewMessage reste pour son side-effect (cache stats).
       const [translations] = await Promise.allSettled([
-        this._getMessageTranslations(message.id),
+        this._getMessageTranslations(message),
         conversationStatsService.updateOnNewMessage(
           this.prisma,
           conversationId,
@@ -767,74 +767,23 @@ export class MessageHandler {
   }
 
   /**
-   * Récupère un message complet pour le broadcast
-   * Unified Participant: sender is a Participant, no anonymousSender
-   * Still needed for attachment and forward paths where relations are added post-create
+   * Récupère les traductions d'un message.
+   * Court-circuite la DB si le champ translations est déjà présent sur l'objet
+   * (messages tout juste créés → null, messages re-broadcastés après traduction → objet).
    */
-  private async _fetchMessageForBroadcast(messageId: string): Promise<Message | null> {
+  private async _getMessageTranslations(message: Message): Promise<unknown[]> {
+    const inMemory = (message as unknown as Record<string, unknown>).translations;
+    if (inMemory !== undefined) {
+      return this._parseTranslations(inMemory);
+    }
     const msg = await this.prisma.message.findUnique({
-      where: { id: messageId },
-      include: {
-        sender: {
-          select: {
-            id: true,
-            displayName: true,
-            avatar: true,
-            type: true,
-            nickname: true,
-            userId: true,
-            user: {
-              select: {
-                id: true,
-                username: true,
-                displayName: true,
-                firstName: true,
-                lastName: true,
-                avatar: true
-              }
-            }
-          }
-        },
-        attachments: true,
-        replyTo: {
-          include: {
-            sender: {
-              select: {
-                id: true,
-                displayName: true,
-                avatar: true,
-                type: true,
-                nickname: true,
-                userId: true,
-                user: {
-                  select: {
-                    id: true,
-                    username: true,
-                    displayName: true,
-                    firstName: true,
-                    lastName: true,
-                    avatar: true
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    });
-    if (!msg) return null;
-    return { ...msg, timestamp: msg.createdAt, translations: [] } as unknown as Message;
-  }
-
-  /**
-   * Récupère les traductions d'un message
-   */
-  private async _getMessageTranslations(messageId: string): Promise<unknown[]> {
-    const msg = await this.prisma.message.findUnique({
-      where: { id: messageId },
+      where: { id: message.id },
       select: { translations: true }
     });
-    const translations = msg?.translations;
+    return this._parseTranslations(msg?.translations);
+  }
+
+  private _parseTranslations(translations: unknown): unknown[] {
     if (!translations || typeof translations !== 'object') return [];
     if (Array.isArray(translations)) return translations;
     return Object.entries(translations as Record<string, unknown>).map(([lang, data]) => ({

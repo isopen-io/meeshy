@@ -693,6 +693,7 @@ model Message {
   @@index([messageSource])
   @@index([conversationId, messageSource]) // Filtrage rapide messages système (call summaries)
   @@index([replyToId]) // Expansion thread — évite full-scan sur replyToId nullable
+  @@index([forwardedFromId]) // Forwarded messages lookup in broadcastNewMessage
   @@index([createdAt])
 }
 
