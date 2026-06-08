@@ -90,7 +90,7 @@ struct MiniAudioPlayerBar: View {
         // the coordinator itself swaps the active audio.
         .animation(.spring(response: 0.4, dampingFraction: 0.8),
                    value: displayedContext)
-        .onChange(of: coordinator.activeContext) { newValue in
+        .adaptiveOnChange(of: coordinator.activeContext) { _, newValue in
             handleContextChange(newValue)
         }
         .onAppear {
