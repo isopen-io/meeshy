@@ -60,6 +60,13 @@ export interface SocketUser {
   socketId: string;
   isAnonymous: boolean;
   language: string;
+  /**
+   * Ordered list of languages this socket can consume, derived from
+   * resolveUserLanguagesOrdered() at connection time.
+   * Priority: systemLanguage → regionalLanguage → customDestinationLanguage → deviceLocale.
+   * Empty for anonymous users (they use `language` only).
+   */
+  resolvedLanguages: string[];
   /** For anonymous participants: the participant.id */
   participantId?: string;
   /** For registered users: the user.id */
@@ -1207,10 +1214,14 @@ export class MeeshySocketIOManager {
   }
 
   private _findUsersForLanguage(targetLanguage: string): SocketUser[] {
+    const lang = targetLanguage.toLowerCase();
     const targetUsers: SocketUser[] = [];
 
-    for (const [userId, user] of this.connectedUsers) {
-      if (user.language === targetLanguage) {
+    for (const [, user] of this.connectedUsers) {
+      const matches =
+        user.resolvedLanguages.includes(lang) ||
+        user.language.toLowerCase() === lang;
+      if (matches) {
         targetUsers.push(user);
       }
     }
@@ -1230,19 +1241,24 @@ export class MeeshySocketIOManager {
     if (!socketIds || socketIds.size === 0) return;
 
     const originalLanguage = String(payload.originalLanguage || 'fr').toLowerCase();
-    const socketsByLanguage = new Map<string, string[]>();
+    const socketsByLanguageKey = new Map<string, { socketIds: string[]; langs: string[] }>();
     for (const socketId of socketIds) {
       const userId = this.socketToUser.get(socketId);
-      const lang = String((userId && this.connectedUsers.get(userId)?.language) || originalLanguage).toLowerCase();
-      const bucket = socketsByLanguage.get(lang);
-      if (bucket) bucket.push(socketId);
-      else socketsByLanguage.set(lang, [socketId]);
+      const socketUser = userId ? this.connectedUsers.get(userId) : undefined;
+      const langs: string[] =
+        socketUser && socketUser.resolvedLanguages.length > 0
+          ? socketUser.resolvedLanguages
+          : [String(socketUser?.language || originalLanguage).toLowerCase()];
+      const key = langs.join(',');
+      const bucket = socketsByLanguageKey.get(key);
+      if (bucket) bucket.socketIds.push(socketId);
+      else socketsByLanguageKey.set(key, { socketIds: [socketId], langs });
     }
 
-    for (const [lang, socketsForLang] of socketsByLanguage) {
-      const filtered = filterMessagePayloadForLanguages(payload, [lang, originalLanguage]);
+    for (const { socketIds: socketsForLangs, langs } of socketsByLanguageKey.values()) {
+      const filtered = filterMessagePayloadForLanguages(payload, [...langs, originalLanguage]);
       let emitter: any = this.io;
-      for (const socketId of socketsForLang) emitter = emitter.to(socketId);
+      for (const socketId of socketsForLangs) emitter = emitter.to(socketId);
       emitter.emit(SERVER_EVENTS.MESSAGE_NEW, filtered);
     }
   }
