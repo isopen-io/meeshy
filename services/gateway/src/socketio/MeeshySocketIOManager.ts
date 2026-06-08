@@ -1226,7 +1226,8 @@ export class MeeshySocketIOManager {
    * Phase B1 — emit `message:new` to a conversation room grouped by each
    * recipient's preferred language, sending a translation-trimmed payload once
    * per distinct language. Recipients whose language is unknown fall back to the
-   * message's original language. Gated by `SOCKET_LANG_FILTER`. Pure trimming is
+   * message's original language. Opt-in via `SOCKET_LANG_FILTER=true` (OFF by
+   * default). Pure trimming is
    * delegated to `filterMessagePayloadForLanguages` (unit-tested).
    */
   private _emitMessageNewByLanguage(room: string, payload: Record<string, any>): void {
@@ -1503,8 +1504,9 @@ export class MeeshySocketIOManager {
       // Bandwidth sprint Phase B1 — per-language filtered broadcast.
       // Groups room sockets by preferred language (zero DB query, from connectedUsers map)
       // and sends a trimmed payload once per distinct language. Original content preserved.
-      // Disable explicitly with SOCKET_LANG_FILTER=false if rollback needed.
-      if (process.env.SOCKET_LANG_FILTER !== 'false') {
+      // Opt-in (OFF by default): enable explicitly with SOCKET_LANG_FILTER=true once
+      // validated in staging (measured savings + multi-device + Prisme fallback check).
+      if (process.env.SOCKET_LANG_FILTER === 'true') {
         this._emitMessageNewByLanguage(room, messagePayload);
       } else {
         this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
