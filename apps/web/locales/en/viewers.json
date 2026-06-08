@@ -6,6 +6,10 @@
     "downloadPdf": "Download PDF",
     "delete": "Delete this PDF",
     "fullscreen": "Open fullscreen",
+    "previousPage": "Previous page",
+    "nextPage": "Next page",
+    "zoomOut": "Zoom out",
+    "zoomIn": "Zoom in",
     "close": "Close",
     "nativeControls": "Use native PDF controls to navigate • Press Escape to close"
   },
@@ -27,5 +31,17 @@
     "fullscreen": "Open fullscreen",
     "close": "Close",
     "escToClose": "Press Escape to close"
+  },
+  "video": {
+    "enterFullscreen": "Enter fullscreen",
+    "exitFullscreen": "Exit fullscreen",
+    "download": "Download"
+  },
+  "text": {
+    "enableWordWrap": "Enable word wrap",
+    "disableWordWrap": "Disable word wrap",
+    "copy": "Copy content",
+    "fullscreen": "Open fullscreen",
+    "download": "Download"
   }
 }

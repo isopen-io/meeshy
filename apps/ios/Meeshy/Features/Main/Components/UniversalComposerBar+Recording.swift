@@ -140,7 +140,7 @@ extension UniversalComposerBar {
             // Recording indicator + timer — grouped for VoiceOver.
             HStack(spacing: 5) {
                 Circle()
-                    .fill(Color(hex: "EF4444"))
+                    .fill(MeeshyColors.error)
                     .frame(width: 6, height: 6)
                     .opacity(dotOpacity)
                     .animation(

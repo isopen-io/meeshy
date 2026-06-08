@@ -6,6 +6,10 @@
     "downloadPdf": "Baixar PDF",
     "delete": "Excluir este PDF",
     "fullscreen": "Abrir em tela cheia",
+    "previousPage": "Página anterior",
+    "nextPage": "Próxima página",
+    "zoomOut": "Diminuir zoom",
+    "zoomIn": "Aumentar zoom",
     "close": "Fechar",
     "nativeControls": "Use os controles nativos do PDF para navegar • Esc para fechar"
   },
@@ -27,5 +31,17 @@
     "fullscreen": "Abrir em tela cheia",
     "close": "Fechar",
     "escToClose": "Pressione Esc para fechar"
+  },
+  "video": {
+    "enterFullscreen": "Tela cheia",
+    "exitFullscreen": "Sair da tela cheia",
+    "download": "Baixar"
+  },
+  "text": {
+    "enableWordWrap": "Ativar quebra de linha",
+    "disableWordWrap": "Desativar quebra de linha",
+    "copy": "Copiar conteúdo",
+    "fullscreen": "Abrir em tela cheia",
+    "download": "Baixar"
   }
 }
