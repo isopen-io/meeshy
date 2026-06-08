@@ -87,6 +87,11 @@ final class CallManager: ObservableObject {
     @Published private(set) var activeAudioEffect: AudioEffectConfig?
     @Published private(set) var hasLocalVideoTrack = false
     @Published private(set) var hasRemoteVideoTrack = false
+    /// Outbound video auto-suspended by the graceful-degradation survival layer
+    /// (sustained poor link). Distinct from `isVideoEnabled` (the user's camera
+    /// intent, which stays true): the user still WANTS video, the network can't
+    /// carry it. Mirrors `videoSurvivalController.isVideoSuspended` for the UI.
+    @Published private(set) var isVideoSuspended = false
     /// §7.7 — whether the local capture is the front camera. Drives mirroring
     /// in the UI: only the front camera is mirrored (a mirrored back camera
     /// shows reversed text/scene — bug k). Tracked optimistically (toggled on
@@ -134,6 +139,8 @@ final class CallManager: ObservableObject {
     // MARK: - Internal
 
     private let webRTCService: WebRTCService
+    /// Drives the graceful audio-only survival layer from quality samples.
+    private let videoSurvivalController: VideoSurvivalController
     private let ringbackPlayer = RingbackTonePlayer()
     // PERF-011: replace Timer.scheduledTimer with cancellable @MainActor Tasks.
     // Timers run on RunLoop.main and have no native cancellation hand-off; Tasks
@@ -213,6 +220,9 @@ final class CallManager: ObservableObject {
 
     private init(webRTCService: WebRTCService? = nil) {
         self.webRTCService = webRTCService ?? WebRTCService()
+        // Survival controller is created with no actuator yet; `attach(self)` wires
+        // it below once `self` is fully initialized (avoids a self-before-init use).
+        self.videoSurvivalController = VideoSurvivalController()
 
         let config = CXProviderConfiguration()
         config.supportsVideo = true
@@ -250,6 +260,15 @@ final class CallManager: ObservableObject {
         self.callKitDelegate = delegateProxy
 
         self.webRTCService.delegate = self
+
+        // Wire the survival controller now that `self` exists. The controller holds
+        // the actuator weakly, so no retain cycle (CallManager owns the controller).
+        self.videoSurvivalController.attach(actuator: self)
+        self.videoSurvivalController.$isVideoSuspended
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] suspended in self?.isVideoSuspended = suspended }
+            .store(in: &cancellables)
 
         setupSocketListeners()
         startNetworkMonitoring()
@@ -381,6 +400,8 @@ final class CallManager: ObservableObject {
             isRemoteVideoEnabled = true
             isMuted = false
             isSpeaker = false
+            videoSurvivalController.reset()
+            isVideoSuspended = false
             Logger.calls.info("Force-reset .ended → .idle to accept new call")
         }
     }
@@ -1162,6 +1183,10 @@ final class CallManager: ObservableObject {
                 }
                 self.isVideoEnabled = target
                 self.hasLocalVideoTrack = self.webRTCService.hasLocalVideoTrack
+
+                // User intent is authoritative: forget any survival state so the
+                // controller never fights a manual toggle (and re-evaluates fresh).
+                self.videoSurvivalController.reset()
 
                 // P0-3 — tell the peer so it shows our avatar placeholder instead
                 // of a frozen last frame. Gateway broadcasts to the other peer only.
@@ -2494,6 +2519,11 @@ extension CallManager: WebRTCServiceDelegate {
                 bytesSent: stats.bandwidth,
                 bytesReceived: stats.bytesReceived
             )
+
+            // Feed the graceful-degradation survival layer. One sample per quality
+            // tick; the controller's time-based hysteresis decides if a sustained
+            // poor link warrants dropping to audio-only (and later recovering).
+            self.videoSurvivalController.handle(level: level, userWantsVideo: self.isVideoEnabled)
         }
     }
 
@@ -2672,6 +2702,52 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
             rtc.unlockForConfiguration()
         }
         Logger.calls.info("CallKit audio session deactivated; RTCAudioSession disabled")
+    }
+}
+
+// MARK: - VideoSurvivalActuating
+
+extension CallManager: VideoSurvivalActuating {
+    /// Drop outbound video to audio-only (sustained poor link). Mirrors the
+    /// manual `toggleVideo` media path — downgrade + notify peer + renegotiate —
+    /// but deliberately DOES NOT touch `isVideoEnabled`: the user's camera intent
+    /// is preserved so video resumes automatically on recovery.
+    func suspendOutboundVideo() async -> Bool {
+        await applySurvivalVideoSend(enabled: false)
+    }
+
+    /// Re-acquire the camera and resume sending video once the link has recovered.
+    func resumeOutboundVideo() async -> Bool {
+        await applySurvivalVideoSend(enabled: true)
+    }
+
+    private func applySurvivalVideoSend(enabled: Bool) async -> Bool {
+        // Only act while the user still wants video and we're in an active call.
+        guard isVideoEnabled, let callId = currentCallId else { return false }
+        do {
+            let needsRenegotiation: Bool
+            if enabled {
+                needsRenegotiation = try await webRTCService.upgradeToVideo()
+            } else {
+                needsRenegotiation = await webRTCService.downgradeFromVideo()
+            }
+            hasLocalVideoTrack = webRTCService.hasLocalVideoTrack
+
+            // Tell the peer so it shows our avatar placeholder (suspend) or
+            // restores our video (resume) — a track flip alone never reaches it.
+            MessageSocketManager.shared.emitCallToggleVideo(callId: callId, enabled: enabled)
+
+            if needsRenegotiation,
+               let userId = remoteUserId,
+               let offer = await webRTCService.createOffer() {
+                emitCallOffer(callId: callId, toUserId: userId, isVideo: enabled, sdp: offer)
+                Logger.calls.info("[CALL] survival A/V switch offer sent (video=\(enabled))")
+            }
+            return true
+        } catch {
+            Logger.calls.error("survival video \(enabled ? "resume" : "suspend") failed: \(error.localizedDescription)")
+            return false
+        }
     }
 }
 
