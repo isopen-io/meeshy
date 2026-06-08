@@ -672,7 +672,7 @@ struct CallView: View {
             ForEach(transcriptionService.displayedSegments) { segment in
                 HStack(alignment: .top, spacing: 8) {
                     Circle()
-                        .fill(segment.speakerId == localUserId ? Color.blue : Color.green)
+                        .fill(segment.speakerId == localUserId ? MeeshyColors.indigo400 : MeeshyColors.success)
                         .frame(width: 8, height: 8)
                         .padding(.top, 6)
                     Text(segment.text)

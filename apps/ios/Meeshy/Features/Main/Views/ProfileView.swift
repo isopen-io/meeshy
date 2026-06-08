@@ -66,7 +66,7 @@ struct ProfileView: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
-                        .background(Capsule().fill(Color.red.opacity(0.9)))
+                        .background(Capsule().fill(MeeshyColors.error.opacity(0.9)))
                         .padding(.bottom, 24)
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))

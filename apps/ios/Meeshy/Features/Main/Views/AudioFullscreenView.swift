@@ -785,7 +785,7 @@ private struct AudioFullscreenPage: View {
                             if hasAudio {
                                 Image(systemName: "checkmark.circle.fill")
                                     .font(.system(size: 16))
-                                    .foregroundColor(.green)
+                                    .foregroundColor(MeeshyColors.success)
                             }
 
                             if isSelected {
