@@ -687,3 +687,78 @@ private final class GapMockConversationService: ConversationServiceProviding, @u
     func banParticipant(conversationId: String, userId: String) async throws {}
     func unbanParticipant(conversationId: String, userId: String) async throws {}
 }
+
+// MARK: - Read-receipt frontier (don't mark a message read after the read moment)
+
+final class ReadReceiptFrontierTests: XCTestCase {
+
+    private func ownMessage(_ content: String, at seconds: TimeInterval,
+                            status: MeeshyMessage.DeliveryStatus = .sent, isMe: Bool = true) -> MeeshyMessage {
+        MeeshyMessage(conversationId: "c", content: content,
+                      createdAt: Date(timeIntervalSince1970: seconds),
+                      deliveryStatus: status, isMe: isMe)
+    }
+
+    /// The bug: a message I send AFTER the peer's read moment must NOT be marked
+    /// `.read`. The read event's `updatedAt` is the frontier; only messages
+    /// created at or before it were actually seen.
+    func test_applyReadReceipt_messageSentAfterFrontier_staysUnread() {
+        let frontier = Date(timeIntervalSince1970: 1000)
+        let messages = [ownMessage("before", at: 900), ownMessage("after", at: 1100)]
+
+        let result = ConversationSyncEngine.applyReadReceipt(
+            to: messages, newStatus: .read, deliveredCount: 1, readCount: 1, frontier: frontier)
+
+        XCTAssertEqual(result[0].deliveryStatus, .read, "the message sent before the read moment is read")
+        XCTAssertEqual(result[1].deliveryStatus, .sent,
+                       "a message sent AFTER the read moment must NOT falsely show as read")
+    }
+
+    func test_applyReadReceipt_allWithinFrontier_allAdvance() {
+        let frontier = Date(timeIntervalSince1970: 1000)
+        let messages = [ownMessage("m1", at: 800), ownMessage("m2", at: 900)]
+
+        let result = ConversationSyncEngine.applyReadReceipt(
+            to: messages, newStatus: .read, deliveredCount: 1, readCount: 1, frontier: frontier)
+
+        XCTAssertEqual(result.map(\.deliveryStatus), [.read, .read])
+        XCTAssertEqual(result[1].readCount, 1)
+    }
+
+    /// The frontier `continue` must not break the "older than the first read are
+    /// all read" short-circuit: a newest message past the frontier is skipped,
+    /// the middle (in-frontier) advances, and the oldest already-read stops it.
+    func test_applyReadReceipt_skipPastFrontier_thenStopAtAlreadyRead() {
+        let frontier = Date(timeIntervalSince1970: 1000)
+        let messages = [
+            ownMessage("old", at: 700, status: .read),
+            ownMessage("mid", at: 900, status: .sent),
+            ownMessage("new", at: 1100, status: .sent)
+        ]
+
+        let result = ConversationSyncEngine.applyReadReceipt(
+            to: messages, newStatus: .read, deliveredCount: 1, readCount: 1, frontier: frontier)
+
+        XCTAssertEqual(result.map(\.deliveryStatus), [.read, .read, .sent])
+    }
+
+    func test_applyReadReceipt_ignoresOtherUsersMessages() {
+        let frontier = Date(timeIntervalSince1970: 1000)
+        let messages = [ownMessage("theirs", at: 900, status: .sent, isMe: false)]
+
+        let result = ConversationSyncEngine.applyReadReceipt(
+            to: messages, newStatus: .read, deliveredCount: 1, readCount: 1, frontier: frontier)
+
+        XCTAssertEqual(result[0].deliveryStatus, .sent, "a peer's message is never my delivery status")
+    }
+
+    func test_applyReadReceipt_deliveredDoesNotRegressRead() {
+        let frontier = Date(timeIntervalSince1970: 1000)
+        let messages = [ownMessage("m", at: 900, status: .read)]
+
+        let result = ConversationSyncEngine.applyReadReceipt(
+            to: messages, newStatus: .delivered, deliveredCount: 2, readCount: 0, frontier: frontier)
+
+        XCTAssertEqual(result[0].deliveryStatus, .read, "a delivered update must not downgrade a read message")
+    }
+}
