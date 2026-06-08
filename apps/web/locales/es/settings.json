@@ -122,7 +122,9 @@
         "none": "Ninguno",
         "systemLanguagePlaceholder": "Seleccione su idioma del sistema",
         "regionalLanguagePlaceholder": "Seleccione su idioma regional",
-        "customLanguagePlaceholder": "Seleccione un idioma personalizado (opcional)"
+        "customLanguagePlaceholder": "Seleccione un idioma personalizado (opcional)",
+        "configurationTitle": "Configuración de idiomas",
+        "configurationDescription": "Define tus idiomas del sistema y regional"
       },
       "autoTranslation": {
         "title": "Opciones de traducción automática",
@@ -138,7 +140,8 @@
         "translateToCustomDescription": "Traduce los mensajes a {flag} {language} únicamente",
         "noCustomLanguage": "Ningún idioma personalizado definido - defina uno arriba",
         "tip": "Consejo:",
-        "tipDescription": "Si no se selecciona ninguna opción, los mensajes se traducirán a todos sus idiomas configurados (sistema + regional + personalizado)."
+        "tipDescription": "Si no se selecciona ninguna opción, los mensajes se traducirán a todos sus idiomas configurados (sistema + regional + personalizado).",
+        "settingsTitle": "Configuración de traducción"
       },
       "preview": {
         "title": "Vista previa de la configuración",

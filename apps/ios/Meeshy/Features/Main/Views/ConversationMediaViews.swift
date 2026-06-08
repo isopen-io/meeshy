@@ -581,8 +581,8 @@ struct AudioMediaView: View, Equatable {
                 MessageTextRenderer.render(
                     message.content,
                     fontSize: 13,
-                    color: isDark ? Color(hex: "818CF8").opacity(0.5) : Color(hex: "6366F1").opacity(0.4),
-                    mentionColor: Color(hex: "818CF8"),
+                    color: isDark ? MeeshyColors.indigo400.opacity(0.5) : MeeshyColors.indigo500.opacity(0.4),
+                    mentionColor: MeeshyColors.indigo400,
                     accentColor: Color(hex: contactColor),
                     mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
                 )
@@ -837,8 +837,8 @@ struct AudioMediaView: View, Equatable {
             MessageTextRenderer.render(
                 message.content,
                 fontSize: 14,
-                color: isDark ? Color.white.opacity(0.92) : Color(hex: "1E1B4B").opacity(0.92),
-                mentionColor: Color(hex: "818CF8"),
+                color: isDark ? Color.white.opacity(0.92) : MeeshyColors.indigo950.opacity(0.92),
+                mentionColor: MeeshyColors.indigo400,
                 accentColor: Color(hex: contactColor),
                 mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
             )

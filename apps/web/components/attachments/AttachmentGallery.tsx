@@ -297,7 +297,7 @@ export function AttachmentGallery({
                     size="sm"
                     onClick={handleOpenDeleteConfirm}
                     className="text-red-400 hover:bg-red-500/10 hover:text-red-300"
-                    title="Supprimer"
+                    title={t('contextMenu.delete')}
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -427,7 +427,7 @@ export function AttachmentGallery({
               onClick={handleDeleteConfirm}
               disabled={isDeleting}
             >
-              {isDeleting ? 'Suppression...' : 'Supprimer'}
+              {isDeleting ? t('contextMenu.deleting') : t('contextMenu.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>

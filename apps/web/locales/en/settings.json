@@ -196,7 +196,9 @@
         "none": "None",
         "systemLanguagePlaceholder": "Select your system language",
         "regionalLanguagePlaceholder": "Select your regional language",
-        "customLanguagePlaceholder": "Select a custom language (optional)"
+        "customLanguagePlaceholder": "Select a custom language (optional)",
+        "configurationTitle": "Language configuration",
+        "configurationDescription": "Define your system and regional languages"
       },
       "autoTranslation": {
         "title": "Automatic Translation Options",
@@ -212,7 +214,8 @@
         "translateToCustomDescription": "Translates messages to {flag} {language} only",
         "noCustomLanguage": "No custom language defined - set one above",
         "tip": "Tip:",
-        "tipDescription": "If no option is selected, messages will be translated to all your configured languages (system + regional + custom)."
+        "tipDescription": "If no option is selected, messages will be translated to all your configured languages (system + regional + custom).",
+        "settingsTitle": "Translation settings"
       },
       "preview": {
         "title": "Configuration Preview",

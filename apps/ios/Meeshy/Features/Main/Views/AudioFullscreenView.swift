@@ -223,7 +223,7 @@ private struct AudioFullscreenPage: View {
                     captionText,
                     fontSize: 13,
                     color: .white.opacity(0.8),
-                    mentionColor: Color(hex: "818CF8"),
+                    mentionColor: MeeshyColors.indigo400,
                     accentColor: accent,
                     mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
                 )

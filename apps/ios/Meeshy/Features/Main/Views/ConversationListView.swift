@@ -442,7 +442,7 @@ struct ConversationListView: View {
                 label: isBlocked
                     ? String(localized: "swipe.unblock", defaultValue: "D\u{00e9}bloquer")
                     : String(localized: "swipe.block", defaultValue: "Bloquer"),
-                color: Color(hex: "EF4444")
+                color: MeeshyColors.error
             ) {
                 if isBlocked {
                     Task {
@@ -459,7 +459,7 @@ struct ConversationListView: View {
         actions.append(SwipeAction(
             icon: "eye.slash.fill",
             label: String(localized: "swipe.hide", defaultValue: "Masquer"),
-            color: Color(hex: "EF4444")
+            color: MeeshyColors.error
         ) {
             Task { await conversationViewModel.deleteConversation(conversationId: conversation.id) }
         })
