@@ -243,6 +243,7 @@ final class MockWebRTCClient: WebRTCClientProviding {
     func disconnect() { disconnectCallCount += 1; isConnected = false }
     func setAudioEffect(_ effect: AudioEffectConfig?) throws {}
     func updateAudioEffectParams(_ config: AudioEffectConfig) throws {}
+    func restartIce() {}
 }
 
 final class MockWebRTCClientTests: XCTestCase {
