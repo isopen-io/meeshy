@@ -10,11 +10,15 @@
     "empty": "Nenhum resultado encontrado",
     "selectEntity": "Selecionar tipo de entidade",
     "selectCriterion": "Selecionar critério",
-    "selectPeriod": "Selecionar período"
+    "selectPeriod": "Selecionar período",
+    "filterCriteria": "Filtrar critérios...",
+    "resultsCount": "Número de resultados"
   },
   "scanLog": {
     "title": "Logs de varredura",
-    "empty": "Nenhum log de varredura"
+    "empty": "Nenhum log de varredura",
+    "previousPage": "Página anterior",
+    "nextPage": "Página seguinte"
   },
   "filter": {
     "all": "Todos",
@@ -134,6 +138,28 @@
   },
   "translationMonitor": {
     "loadingMetrics": "Carregando métricas...",
-    "languageBreakdown": "Distribuição por idioma"
+    "languageBreakdown": "Distribuição por idioma",
+    "queue": "Fila",
+    "errorsUnit": "erros",
+    "lastUpdated": "Última atualização:"
+  },
+  "agentGlobal": {
+    "systemPromptPlaceholder": "Prompt de sistema global para todos os agentes..."
+  },
+  "agentConfig": {
+    "searchGroup": "Pesquisar um grupo, canal ou discussão...",
+    "searchTriggers": "Pesquisar para restringir os gatilhos...",
+    "addControlledUser": "Adicionar um utilizador sob controlo...",
+    "excludeUser": "Excluir um utilizador do controlo...",
+    "agentInstructions": "Instruções personalizadas para o agente nesta conversa..."
+  },
+  "agentTopic": {
+    "newTopicPrompt": "Iniciar um NOVO tópico sobre {{label}} (descoberta, missão, debate científico recente)…",
+    "searchQuery": "notícias de {{label}} esta semana"
+  },
+  "deliveryQueue": {
+    "retry": "Tentar novamente",
+    "refresh": "Atualizar",
+    "pending": "pendente"
   }
 }

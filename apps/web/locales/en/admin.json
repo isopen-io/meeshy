@@ -10,11 +10,15 @@
     "empty": "No results found",
     "selectEntity": "Select entity type",
     "selectCriterion": "Select criterion",
-    "selectPeriod": "Select period"
+    "selectPeriod": "Select period",
+    "filterCriteria": "Filter criteria...",
+    "resultsCount": "Number of results"
   },
   "scanLog": {
     "title": "Scan Logs",
-    "empty": "No scan logs"
+    "empty": "No scan logs",
+    "previousPage": "Previous page",
+    "nextPage": "Next page"
   },
   "filter": {
     "all": "All",
@@ -134,6 +138,28 @@
   },
   "translationMonitor": {
     "loadingMetrics": "Loading metrics...",
-    "languageBreakdown": "Language breakdown"
+    "languageBreakdown": "Language breakdown",
+    "queue": "Queue",
+    "errorsUnit": "errors",
+    "lastUpdated": "Last updated:"
+  },
+  "agentGlobal": {
+    "systemPromptPlaceholder": "Global system prompt for all agents..."
+  },
+  "agentConfig": {
+    "searchGroup": "Search a group, channel, or discussion...",
+    "searchTriggers": "Search to restrict triggers...",
+    "addControlledUser": "Add a user under control...",
+    "excludeUser": "Exclude a user from control...",
+    "agentInstructions": "Custom instructions for this agent..."
+  },
+  "agentTopic": {
+    "newTopicPrompt": "Start a NEW topic on {{label}} (discovery, mission, recent scientific debate)…",
+    "searchQuery": "{{label}} news this week"
+  },
+  "deliveryQueue": {
+    "retry": "Retry",
+    "refresh": "Refresh",
+    "pending": "pending"
   }
 }

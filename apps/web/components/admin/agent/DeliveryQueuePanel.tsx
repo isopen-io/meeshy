@@ -92,7 +92,7 @@ export default memo(function DeliveryQueuePanel({ conversationId }: DeliveryQueu
         <p className="text-xs text-gray-500">{error}</p>
         <Button variant="outline" size="sm" onClick={fetchQueue} className="h-7 text-xs gap-1">
           <RefreshCw className="h-3 w-3" />
-          Réessayer
+          {t('deliveryQueue.retry')}
         </Button>
       </div>
     );
@@ -107,7 +107,7 @@ export default memo(function DeliveryQueuePanel({ conversationId }: DeliveryQueu
             {items.length}
           </Badge>
           <span className="text-[10px] text-gray-400 uppercase tracking-wider">
-            en attente
+            {t('deliveryQueue.pending')}
           </span>
         </div>
         <Button
@@ -115,6 +115,7 @@ export default memo(function DeliveryQueuePanel({ conversationId }: DeliveryQueu
           size="sm"
           onClick={fetchQueue}
           className="h-6 text-[10px] text-gray-400 hover:text-gray-600"
+          aria-label={t('deliveryQueue.refresh')}
         >
           <RefreshCw className="h-2.5 w-2.5" />
         </Button>

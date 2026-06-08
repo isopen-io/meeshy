@@ -10,11 +10,15 @@
     "empty": "No se encontraron resultados",
     "selectEntity": "Seleccionar tipo de entidad",
     "selectCriterion": "Seleccionar criterio",
-    "selectPeriod": "Seleccionar período"
+    "selectPeriod": "Seleccionar período",
+    "filterCriteria": "Filtrar criterios...",
+    "resultsCount": "Número de resultados"
   },
   "scanLog": {
     "title": "Registros de análisis",
-    "empty": "Sin registros de análisis"
+    "empty": "Sin registros de análisis",
+    "previousPage": "Página anterior",
+    "nextPage": "Página siguiente"
   },
   "filter": {
     "all": "Todos",
@@ -134,6 +138,28 @@
   },
   "translationMonitor": {
     "loadingMetrics": "Cargando métricas...",
-    "languageBreakdown": "Distribución por idioma"
+    "languageBreakdown": "Distribución por idioma",
+    "queue": "Cola",
+    "errorsUnit": "errores",
+    "lastUpdated": "Última actualización:"
+  },
+  "agentGlobal": {
+    "systemPromptPlaceholder": "Prompt de sistema global para todos los agentes..."
+  },
+  "agentConfig": {
+    "searchGroup": "Buscar un grupo, canal o discusión...",
+    "searchTriggers": "Buscar para restringir los disparadores...",
+    "addControlledUser": "Agregar un usuario bajo control...",
+    "excludeUser": "Excluir un usuario del control...",
+    "agentInstructions": "Instrucciones personalizadas para el agente en esta conversación..."
+  },
+  "agentTopic": {
+    "newTopicPrompt": "Iniciar un NUEVO tema sobre {{label}} (descubrimiento, misión, debate científico reciente)…",
+    "searchQuery": "noticias de {{label}} esta semana"
+  },
+  "deliveryQueue": {
+    "retry": "Reintentar",
+    "refresh": "Actualizar",
+    "pending": "pendiente"
   }
 }

@@ -160,7 +160,7 @@ struct FireworksOverlay: View {
     }
 
     private func spawnFireworks(center: CGPoint) {
-        let colors: [Color] = [Color(hex: "#6366F1"), Color(hex: "#818CF8"), .yellow, .orange, .white]
+        let colors: [Color] = [MeeshyColors.indigo500, MeeshyColors.indigo400, .yellow, .orange, .white]
         sparks = (0..<20).map { i in
             let angle = Double(i) * (360.0 / 20.0)
             return Spark(x: center.x, y: center.y, color: colors.randomElement() ?? .white, angle: angle, distance: CGFloat.random(in: 40...80))
@@ -183,7 +183,7 @@ struct ExplodeOverlay: View {
     var body: some View {
         Circle()
             .fill(
-                RadialGradient(colors: [Color(hex: "#6366F1").opacity(0.4), .clear], center: .center, startRadius: 0, endRadius: 60)
+                RadialGradient(colors: [MeeshyColors.indigo500.opacity(0.4), .clear], center: .center, startRadius: 0, endRadius: 60)
             )
             .scaleEffect(scale)
             .opacity(opacity)
@@ -228,7 +228,7 @@ struct GlowEffect: ViewModifier {
     func body(content: Content) -> some View {
         content
             .shadow(
-                color: Color(hex: "#6366F1").opacity(active ? (glowing ? intensity : intensity * 0.3) : 0),
+                color: MeeshyColors.indigo500.opacity(active ? (glowing ? intensity : intensity * 0.3) : 0),
                 radius: active ? (glowing ? 12 : 4) : 0
             )
             .onAppear {

@@ -16,6 +16,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2 } from 'lucide-react';
 import { InfoIcon } from './InfoIcon';
+import { useI18n } from '@/hooks/useI18n';
 import { agentAdminService, type AgentConfigData, type AgentConfigUpsert, type TopicCatalogItem } from '@/services/agent-admin.service';
 import { AgentRolesSection } from './AgentRolesSection';
 import dynamic from 'next/dynamic';
@@ -86,6 +87,7 @@ const DEFAULTS: AgentConfigUpsert = {
 };
 
 export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentConfigDialogProps) {
+  const { t } = useI18n('admin');
   const isNew = !config;
   const [saving, setSaving] = useState(false);
   const [conversationId, setConversationId] = useState('');
@@ -192,7 +194,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 selectedId={conversationId || null}
                 onSelect={setConversationId}
                 onClear={() => setConversationId('')}
-                placeholder="Rechercher un groupe, un canal ou une discussion..."
+                placeholder={t('agentConfig.searchGroup')}
               />
             </div>
           )}
@@ -365,7 +367,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               userIds={form.triggerFromUserIds || []}
               onAdd={id => updateField('triggerFromUserIds', [...(form.triggerFromUserIds || []), id])}
               onRemove={id => updateField('triggerFromUserIds', (form.triggerFromUserIds || []).filter(u => u !== id))}
-              placeholder="Chercher pour restreindre les triggers..."
+              placeholder={t('agentConfig.searchTriggers')}
             />
           </div>
 
@@ -419,7 +421,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 userIds={form.manualUserIds || []}
                 onAdd={id => updateField('manualUserIds', [...(form.manualUserIds || []), id])}
                 onRemove={id => updateField('manualUserIds', (form.manualUserIds || []).filter(u => u !== id))}
-                placeholder="Ajouter un utilisateur sous contrôle..."
+                placeholder={t('agentConfig.addControlledUser')}
               />
 
               {config && (() => {
@@ -445,7 +447,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 userIds={form.excludedUserIds || []}
                 onAdd={id => updateField('excludedUserIds', [...(form.excludedUserIds || []), id])}
                 onRemove={id => updateField('excludedUserIds', (form.excludedUserIds || []).filter(u => u !== id))}
-                placeholder="Exclure un utilisateur du contrôle..."
+                placeholder={t('agentConfig.excludeUser')}
               />
 
               <div className="space-y-2">
@@ -580,7 +582,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 maxLength={5000}
                 value={form.agentInstructions ?? ''}
                 onChange={e => updateField('agentInstructions', e.target.value || null)}
-                placeholder="Instructions personnalisées pour l'agent dans cette conversation..."
+                placeholder={t('agentConfig.agentInstructions')}
                 className="bg-white dark:bg-gray-800"
               />
               <p className="text-xs text-gray-500">{(form.agentInstructions ?? '').length}/5000</p>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useI18n } from '@/hooks/useI18n';
 import { Input } from './Input';
 import { TagInput, TagItem } from './TagInput';
 import { Label } from './Label';
@@ -73,6 +74,7 @@ export function ConversationDrawer({
   showProfile = true,
   className = '',
 }: ConversationDrawerProps) {
+  const { t } = useI18n('conversations');
   const [localName, setLocalName] = useState(conversationName);
   const [mounted, setMounted] = useState(false);
 
@@ -270,7 +272,7 @@ export function ConversationDrawer({
             onDeselect={() => onCategorySelect(undefined)}
             onCreate={onCategoryCreate}
             onDelete={onCategoryDelete}
-            placeholder="Rechercher ou créer..."
+            placeholder={t('conversationDetails.searchOrAddTag')}
           />
 
           {/* Tags */}
@@ -282,7 +284,7 @@ export function ConversationDrawer({
             onDeselect={onTagDeselect}
             onCreate={onTagCreate}
             onDelete={onTagDelete}
-            placeholder="Rechercher ou créer..."
+            placeholder={t('conversationDetails.searchOrAddTag')}
           />
         </div>
 

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
+import { useI18n } from '@/hooks/useI18n';
 import { agentAdminService, type TopicCatalogItem, type TopicInput } from '@/services/agent-admin.service';
 import { AgentTopicRegexTester } from './AgentTopicRegexTester';
 
@@ -23,6 +24,7 @@ interface Props {
  * Validation finale côté backend via Zod (cf. agent-topics.ts).
  */
 export function AgentTopicEditModal({ topic, onClose, onSaved }: Props) {
+  const { t } = useI18n('admin');
   const isEdit = topic !== null;
   const [form, setForm] = useState<TopicInput>(
     topic
@@ -168,7 +170,7 @@ export function AgentTopicEditModal({ topic, onClose, onSaved }: Props) {
               value={form.instructionTemplate}
               onChange={(e) => setForm({ ...form, instructionTemplate: e.target.value })}
               className="mt-1 w-full border border-slate-300 dark:border-slate-700 dark:bg-slate-900 rounded-md p-2 text-sm h-24"
-              placeholder="Lance un NOUVEAU sujet sur {{label}} (découverte, mission, débat scientifique récent)…"
+              placeholder={t('agentTopic.newTopicPrompt')}
             />
           </label>
 
@@ -179,7 +181,7 @@ export function AgentTopicEditModal({ topic, onClose, onSaved }: Props) {
               value={form.searchHintTemplate}
               onChange={(e) => setForm({ ...form, searchHintTemplate: e.target.value })}
               className="mt-1 w-full border border-slate-300 dark:border-slate-700 dark:bg-slate-900 rounded-md p-2 text-sm"
-              placeholder="actualité {{label}} cette semaine"
+              placeholder={t('agentTopic.searchQuery')}
             />
           </label>
 

@@ -148,7 +148,7 @@ export function AgentGlobalConfigTab() {
             maxLength={10000}
             value={form.systemPrompt ?? ''}
             onChange={e => updateField('systemPrompt', e.target.value)}
-            placeholder="Prompt système global pour tous les agents..."
+            placeholder={t('agentGlobal.systemPromptPlaceholder')}
             className="bg-white dark:bg-gray-800"
           />
           <p className="text-xs text-gray-500">{(form.systemPrompt ?? '').length}/10000</p>

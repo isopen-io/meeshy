@@ -261,7 +261,7 @@ export function TranslationMonitor({
                       </div>
                     </div>
                     <div>
-                      <p className="text-blue-700 text-sm">File d&apos;attente</p>
+                      <p className="text-blue-700 text-sm">{t('translationMonitor.queue')}</p>
                       <p className="text-2xl font-bold text-blue-900">{metrics.queueSize}</p>
                     </div>
                   </div>
@@ -269,29 +269,29 @@ export function TranslationMonitor({
 
                 {/* Répartition par langue */}
                 <div>
-                  <h4 className="font-medium text-gray-900 mb-3">Répartition par langue</h4>
+                  <h4 className="font-medium text-gray-900 dark:text-gray-50 mb-3">{t('translationMonitor.languageBreakdown')}</h4>
                   <div className="space-y-3">
                     {Object.entries(metrics.languageBreakdown)
                       .sort(([, a], [, b]) => b.count - a.count)
                       .map(([lang, data]) => (
-                        <div key={lang} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div key={lang} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                           <div className="flex items-center gap-3">
                             <Badge variant="outline" className="font-mono">
                               {lang.toUpperCase()}
                             </Badge>
                             <div>
                               <p className="font-medium">{data.count} messages</p>
-                              <p className="text-sm text-gray-600">
-                                {data.avgTime}ms • {data.errorRate}% erreurs
+                              <p className="text-sm text-gray-600 dark:text-gray-400">
+                                {data.avgTime}ms • {data.errorRate}% {t('translationMonitor.errorsUnit')}
                               </p>
                             </div>
                           </div>
                           <div className="text-right">
-                            <div className="w-20 bg-gray-200 rounded-full h-2">
-                              <div 
+                            <div className="w-20 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                              <div
                                 className="bg-blue-600 h-2 rounded-full"
-                                style={{ 
-                                  width: `${(data.count / Math.max(...Object.values(metrics.languageBreakdown).map(d => d.count))) * 100}%` 
+                                style={{
+                                  width: `${(data.count / Math.max(...Object.values(metrics.languageBreakdown).map(d => d.count))) * 100}%`
                                 }}
                               />
                             </div>
@@ -303,8 +303,8 @@ export function TranslationMonitor({
                 </div>
 
                 {/* Dernière mise à jour */}
-                <div className="text-center text-sm text-gray-500">
-                  Dernière mise à jour: {metrics.lastUpdated.toLocaleTimeString()}
+                <div className="text-center text-sm text-gray-500 dark:text-gray-400">
+                  {t('translationMonitor.lastUpdated')} {metrics.lastUpdated.toLocaleTimeString()}
                 </div>
               </>
             )}

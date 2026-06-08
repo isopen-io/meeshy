@@ -10,11 +10,15 @@
     "empty": "Aucun résultat trouvé",
     "selectEntity": "Sélectionnez le type d'entité",
     "selectCriterion": "Sélectionnez le critère",
-    "selectPeriod": "Sélectionnez la période"
+    "selectPeriod": "Sélectionnez la période",
+    "filterCriteria": "Filtrer les critères...",
+    "resultsCount": "Nombre de résultats"
   },
   "scanLog": {
     "title": "Scan Logs",
-    "empty": "Aucun scan log"
+    "empty": "Aucun scan log",
+    "previousPage": "Page précédente",
+    "nextPage": "Page suivante"
   },
   "filter": {
     "all": "Tous",
@@ -134,6 +138,28 @@
   },
   "translationMonitor": {
     "loadingMetrics": "Chargement des métriques...",
-    "languageBreakdown": "Répartition par langue"
+    "languageBreakdown": "Répartition par langue",
+    "queue": "File d'attente",
+    "errorsUnit": "erreurs",
+    "lastUpdated": "Dernière mise à jour:"
+  },
+  "agentGlobal": {
+    "systemPromptPlaceholder": "Prompt système global pour tous les agents..."
+  },
+  "agentConfig": {
+    "searchGroup": "Rechercher un groupe, un canal ou une discussion...",
+    "searchTriggers": "Chercher pour restreindre les triggers...",
+    "addControlledUser": "Ajouter un utilisateur sous contrôle...",
+    "excludeUser": "Exclure un utilisateur du contrôle...",
+    "agentInstructions": "Instructions personnalisées pour l'agent dans cette conversation..."
+  },
+  "agentTopic": {
+    "newTopicPrompt": "Lance un NOUVEAU sujet sur {{label}} (découverte, mission, débat scientifique récent)…",
+    "searchQuery": "actualité {{label}} cette semaine"
+  },
+  "deliveryQueue": {
+    "retry": "Réessayer",
+    "refresh": "Actualiser",
+    "pending": "en attente"
   }
 }

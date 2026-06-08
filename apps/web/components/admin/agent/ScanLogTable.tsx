@@ -155,10 +155,10 @@ export default memo(function ScanLogTable({ conversationId }: ScanLogTableProps 
                 {(page - 1) * limit + 1}-{Math.min(page * limit, total)} / {total}
               </span>
               <div className="flex items-center gap-1">
-                <Button variant="outline" size="sm" className="h-6 w-6 p-0" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+                <Button variant="outline" size="sm" className="h-6 w-6 p-0" disabled={page <= 1} onClick={() => setPage(p => p - 1)} aria-label={t('scanLog.previousPage')}>
                   <ChevronLeft className="h-3 w-3" />
                 </Button>
-                <Button variant="outline" size="sm" className="h-6 w-6 p-0" disabled={!hasMore} onClick={() => setPage(p => p + 1)}>
+                <Button variant="outline" size="sm" className="h-6 w-6 p-0" disabled={!hasMore} onClick={() => setPage(p => p + 1)} aria-label={t('scanLog.nextPage')}>
                   <ChevronRight className="h-3 w-3" />
                 </Button>
               </div>
