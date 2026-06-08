@@ -40,7 +40,6 @@ export function CallControls({
   const { t } = useI18n('calls');
   const [speakerEnabled, setSpeakerEnabled] = useState(true);
   const [supportsCameraSwitch, setSupportsCameraSwitch] = useState(false);
-  const { t } = useI18n('calls');
 
   React.useEffect(() => {
     if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
