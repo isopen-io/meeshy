@@ -104,7 +104,12 @@ extension iPadRootView {
             // mode → cover; `.pip` mode → overlay pill. Swiping the cover
             // down minimizes instead of ending the call.
             .fullScreenCover(isPresented: Binding(
-                get: { callManager.callState.isActive && callManager.displayMode == .fullScreen },
+                get: {
+                    CallState.shouldPresentFullScreenCover(
+                        callState: callManager.callState,
+                        displayMode: callManager.displayMode
+                    )
+                },
                 set: { if !$0 { callManager.displayMode = .pip } }
             )) {
                 CallView()

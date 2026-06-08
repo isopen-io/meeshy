@@ -79,10 +79,6 @@ struct RootView: View {
         return ButtonPosition(x: CGFloat(x), y: CGFloat(y))
     }
 
-    private var isCallActive: Bool {
-        callManager.callState.isActive
-    }
-
     var body: some View {
         ZStack {
             // 1. Dynamic Background
@@ -423,7 +419,12 @@ struct RootView: View {
         // the call. The hangup button on either UI still routes through
         // `callManager.endCall()` explicitly.
         .fullScreenCover(isPresented: Binding(
-            get: { isCallActive && callManager.displayMode == .fullScreen },
+            get: {
+                CallState.shouldPresentFullScreenCover(
+                    callState: callManager.callState,
+                    displayMode: callManager.displayMode
+                )
+            },
             set: { if !$0 { callManager.displayMode = .pip } }
         )) {
             CallView()
