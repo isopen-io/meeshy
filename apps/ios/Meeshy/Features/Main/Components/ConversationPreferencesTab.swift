@@ -110,7 +110,7 @@ struct ConversationPreferencesTab: View {
             if let error = viewModel.errorMessage {
                 Text(error)
                     .font(.system(size: 13))
-                    .foregroundColor(Color(hex: "F87171"))
+                    .foregroundColor(MeeshyColors.error)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 20)
             }
@@ -246,7 +246,7 @@ struct ConversationPreferencesTab: View {
                     set: { val in viewModel.setPinned(val) }
                 ))
                 .labelsHidden()
-                .tint(Color(hex: "3B82F6"))
+                .tint(MeeshyColors.info)
             }
 
             Divider().padding(.leading, 54).opacity(0.3)
@@ -256,9 +256,9 @@ struct ConversationPreferencesTab: View {
                 HStack(spacing: 8) {
                     Image(systemName: "square.grid.2x2.fill")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(Color(hex: "3B82F6"))
+                        .foregroundColor(MeeshyColors.info)
                         .frame(width: 28, height: 28)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: "3B82F6").opacity(0.12)))
+                        .background(RoundedRectangle(cornerRadius: 8).fill(MeeshyColors.info.opacity(0.12)))
                     Text(String(localized: "conversation.prefs.category", defaultValue: "Catégorie", bundle: .main))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(theme.textSecondary)
@@ -270,7 +270,7 @@ struct ConversationPreferencesTab: View {
                         get: { viewModel.prefs.categoryId },
                         set: { newId in viewModel.setCategory(newId) }
                     ),
-                    accentColor: Color(hex: "3B82F6"),
+                    accentColor: MeeshyColors.info,
                     onCreateCategory: { name in
                         await viewModel.createCategoryAndSelect(name: name)
                     }
@@ -286,9 +286,9 @@ struct ConversationPreferencesTab: View {
                 HStack(spacing: 8) {
                     Image(systemName: "tag.fill")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(Color(hex: "3B82F6"))
+                        .foregroundColor(MeeshyColors.info)
                         .frame(width: 28, height: 28)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: "3B82F6").opacity(0.12)))
+                        .background(RoundedRectangle(cornerRadius: 8).fill(MeeshyColors.info.opacity(0.12)))
                     Text(String(localized: "conversation.prefs.tags", defaultValue: "Tags", bundle: .main))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(theme.textSecondary)
@@ -300,7 +300,7 @@ struct ConversationPreferencesTab: View {
                         set: { newTags in viewModel.setTags(newTags) }
                     ),
                     knownTags: viewModel.allTags,
-                    accentColor: Color(hex: "3B82F6")
+                    accentColor: MeeshyColors.info
                 )
             }
             .padding(.horizontal, 14)
@@ -316,7 +316,7 @@ struct ConversationPreferencesTab: View {
                     set: { val in viewModel.setMuted(val) }
                 ))
                 .labelsHidden()
-                .tint(Color(hex: "FF6B6B"))
+                .tint(MeeshyColors.error)
             }
             Divider().padding(.leading, 54).opacity(0.3)
             settingsRow(icon: "at", iconColor: "FF6B6B", title: String(localized: "conversation.prefs.mentions-only", defaultValue: "Mentions seulement", bundle: .main)) {
@@ -325,7 +325,7 @@ struct ConversationPreferencesTab: View {
                     set: { val in viewModel.setMentionsOnly(val) }
                 ))
                 .labelsHidden()
-                .tint(Color(hex: "FF6B6B"))
+                .tint(MeeshyColors.error)
                 .disabled(viewModel.prefs.isMuted ?? false)
             }
             .opacity((viewModel.prefs.isMuted ?? false) ? 0.4 : 1)
@@ -342,7 +342,7 @@ struct ConversationPreferencesTab: View {
                     iconColor: "F59E0B",
                     title: (viewModel.prefs.isArchived ?? false) ? String(localized: "conversation.prefs.unarchive", defaultValue: "Désarchiver", bundle: .main) : String(localized: "conversation.prefs.archive", defaultValue: "Archiver", bundle: .main)
                 ) { EmptyView() }
-                .foregroundColor(Color(hex: "F59E0B"))
+                .foregroundColor(MeeshyColors.warning)
             }
             .buttonStyle(.plain)
 
@@ -354,7 +354,7 @@ struct ConversationPreferencesTab: View {
                     settingsRow(icon: "rectangle.portrait.and.arrow.right", iconColor: "F97316", title: String(localized: "conversation.prefs.leave-group", defaultValue: "Quitter le groupe", bundle: .main)) {
                         EmptyView()
                     }
-                    .foregroundColor(Color(hex: "F97316"))
+                    .foregroundColor(MeeshyColors.warning)
                 }
                 .buttonStyle(.plain)
             }
@@ -366,7 +366,7 @@ struct ConversationPreferencesTab: View {
                 settingsRow(icon: "trash.fill", iconColor: "F87171", title: String(localized: "conversation.prefs.delete-for-me", defaultValue: "Supprimer pour moi", bundle: .main)) {
                     EmptyView()
                 }
-                .foregroundColor(Color(hex: "F87171"))
+                .foregroundColor(MeeshyColors.error)
             }
             .buttonStyle(.plain)
         }

@@ -972,7 +972,7 @@ struct ConversationInfoSheet: View {
                 HStack(spacing: 12) {
                     Image(systemName: "lock.fill")
                         .font(.system(size: 16))
-                        .foregroundColor(MeeshyColors.indigo300)
+                        .foregroundColor(MeeshyColors.indigo400)
                         .frame(width: 24)
 
                     VStack(alignment: .leading, spacing: 2) {
