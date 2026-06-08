@@ -53,12 +53,19 @@ PRÉCISÉMENT parce que `MediaSessionCoordinator` **n'est pas call-aware** et é
 
 ## 5. Plan staged sûr (1 étape par itération, build + device-test entre chaque)
 
-- **Étape A — `MediaSessionCoordinator` call-aware (fondation).** Lui donner connaissance de
-  l'état appel (injection d'un predicate `callOwnsSession: () -> Bool`, app-wired vers
-  `CallManager`, SDK reste agnostique). `request(role:)` no-op (ou file d'attente) si l'appel
-  possède la session. Tests unitaires purs sur la logique de gating. **Aucun call-site changé.**
-- **Étape B — unifier la garde appel.** Une fois A en place, remplacer les 3+ implémentations
-  inline par le predicate unique. Pur refactor comportement-préservé.
+- **Étape A — `MediaSessionCoordinator` call-aware (fondation). ✅ FAIT (commit `c6252edbb`).**
+  Mirror `callActive` poussé par l'app via `setCallActive(_:)` (push, pas pull : `CallManager`
+  est `@MainActor`, le coordinator un `actor`) + helper pur `shouldManageSession(callActive:)`.
+  `request`/`release` gardent toute (re)config/teardown de session derrière le helper. Behavior-
+  preserving : `callActive` défaut `false` ⇒ identique à avant. **Non câblé app encore.** TDD vert.
+  ⚠️ **Caveat refcount découvert (iter-5)** : l'I/O session est gardée mais le refcount reste
+  inchangé. Séquence *request-pendant-appel / release-après-appel* = dérive possible (le player
+  éditeur story utilise AUSSI un `AVPlayer` interne hors coordinator). À résoudre dans B/C avec
+  device-test du refcount à travers la frontière d'appel — NE PAS câbler A sans ce device-test.
+- **Étape B — câbler + unifier la garde appel (DEVICE-TEST REQUIS).** Câbler `CallManager`
+  → `setCallActive(true/false)` (idéalement via un observer app-root de `$callState`, additif,
+  reset-correct, sans toucher la logique d'appel fragile). Puis remplacer les 3+ gardes inline
+  `if !CallManager.callState.isActive` par le seam unique. Valider le refcount cross-appel sur device.
 - **Étape C — router les players de lecture via `MediaSessionCoordinator`.** Un par un
   (AudioPlaybackManager, puis app AudioPlayerManager, puis Story*, puis SharedAVPlayerManager),
   supprimer le `setCategory` direct au profit de `request(role: .playback)`. Vérifier que la
@@ -74,6 +81,12 @@ PRÉCISÉMENT parce que `MediaSessionCoordinator` **n'est pas call-aware** et é
   unifié (étape C) — `deactivate()`/owned-disappear appellent `release()`.
 
 ## 6. Hors-périmètre / vérifié non-problématique
+- **Teardown audio STORY VIEWER vérifié robuste (iter-5)** : `StoryViewerView.onDisappear` →
+  `StoryMediaCoordinator.deactivate()` (stopHandler volontairement no-op) + `PlaybackCoordinator.
+  stopAll()` qui atteint le `ReaderAudioMixer` (registered external → foreground+background audio
+  stoppés) ; `StoryCanvasUIView.willMove(toWindow:nil)` met en pause les `AVPlayer` vidéo, `deinit`
+  → `mixer.shutdown()` ; `scenePhase==.background` → `stopAll()` + dismiss. Aucune source audio
+  story ne survit à la fermeture. (`ReaderState` n'existe plus qu'en commentaires obsolètes.)
 - `StoryAudioPlayerView` internal player : composer-only, pas de gap viewer.
 - `StoryMediaCoordinator` : façade légitime, garder.
 - Aucune branche audio iOS-version-spécifique (seuls conditionnels = `isiOSAppOnMac` CallKit +
