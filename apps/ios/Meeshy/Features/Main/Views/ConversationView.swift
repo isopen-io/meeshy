@@ -216,6 +216,8 @@ struct ConversationView: View {
     @EnvironmentObject var router: Router
     @EnvironmentObject var conversationListViewModel: ConversationListViewModel
     @StateObject var viewModel: ConversationViewModel
+    /// Observes ONLY typing state — avoids full-view re-render on every keystroke.
+    @ObservedObject private var typingObserver: ConversationStateStore
     @State var messageText = ""
     @StateObject var audioRecorder = AudioRecorderManager()
     @StateObject var scrollButtonAudioPlayer = AudioPlayerManager()
@@ -346,7 +348,7 @@ struct ConversationView: View {
         self.conversation = conversation
         self.replyContext = replyContext
         self.anonymousSession = anonymousSession
-        _viewModel = StateObject(wrappedValue: ConversationViewModel(
+        let vm = ConversationViewModel(
             conversationId: conversation?.id ?? "",
             unreadCount: conversation?.userState.unreadCount ?? 0,
             isDirect: conversation?.type == .direct,
@@ -354,7 +356,11 @@ struct ConversationView: View {
             memberJoinedAt: conversation?.currentUserJoinedAt,
             closedAt: conversation?.closedAt,
             anonymousSession: anonymousSession
-        ))
+        )
+        _viewModel = StateObject(wrappedValue: vm)
+        // Wire the typing observer separately so typing changes don't re-evaluate
+        // the full conversation body — only typing-specific sub-views update.
+        _typingObserver = ObservedObject(wrappedValue: vm.stateStore)
     }
 
     // MARK: - Date Sections
@@ -1134,7 +1140,7 @@ struct ConversationView: View {
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: scrollState.isNearBottom)
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isSearchingQuotedMessage)
                     .onReceive(typingDotPublisher) { _ in
-                        guard !viewModel.typingUsernames.isEmpty else { return }
+                        guard !typingObserver.typingUsernames.isEmpty else { return }
                         headerState.typingDotPhase = (headerState.typingDotPhase + 1) % 3
                     }
             }

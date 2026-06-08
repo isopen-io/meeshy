@@ -747,7 +747,8 @@ final class MessageListViewController: UIViewController {
 
         // Typing roster — re-snapshot (animated) so the in-flow typing cell
         // inserts / updates / removes fluidly. Low-frequency signal, no debounce.
-        vm.$typingUsernames
+        // Uses stateStore publisher so typing doesn't trigger full ConversationViewModel re-render.
+        vm.typingUsernamesPublisher
             .receive(on: DispatchQueue.main)
             .dropFirst()
             .sink { [weak self] _ in

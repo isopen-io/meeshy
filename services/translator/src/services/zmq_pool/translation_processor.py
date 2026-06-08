@@ -129,24 +129,39 @@ async def process_batch_translation(
         for target_lang in target_langs:
             try:
                 # Utiliser le batch translation du service ML
+                batch_timeout = 45.0 * len(texts)  # 45s par texte en batch
                 if translation_service and hasattr(translation_service, '_ml_translate_batch'):
-                    translated_texts = await translation_service._ml_translate_batch(
-                        texts=texts,
-                        source_lang=source_lang,
-                        target_lang=target_lang,
-                        model_type=model_type
-                    )
+                    try:
+                        translated_texts = await asyncio.wait_for(
+                            translation_service._ml_translate_batch(
+                                texts=texts,
+                                source_lang=source_lang,
+                                target_lang=target_lang,
+                                model_type=model_type
+                            ),
+                            timeout=batch_timeout
+                        )
+                    except asyncio.TimeoutError:
+                        logger.error(f"⏱️ [BATCH] Timeout ({batch_timeout:.0f}s) for {source_lang}→{target_lang} batch={len(texts)}")
+                        raise
                 else:
                     # Fallback: traduire un par un
                     translated_texts = []
                     for text in texts:
-                        result = await translation_service.translate_with_structure(
-                            text=text,
-                            source_language=source_lang,
-                            target_language=target_lang,
-                            model_type=model_type,
-                            source_channel='zmq_batch'
-                        )
+                        try:
+                            result = await asyncio.wait_for(
+                                translation_service.translate_with_structure(
+                                    text=text,
+                                    source_language=source_lang,
+                                    target_language=target_lang,
+                                    model_type=model_type,
+                                    source_channel='zmq_batch'
+                                ),
+                                timeout=45.0
+                            )
+                        except asyncio.TimeoutError:
+                            logger.error(f"⏱️ [BATCH] Single inference timeout (45s) {source_lang}→{target_lang}")
+                            raise
                         translated_texts.append(result.get('translated_text', text))
 
                 # Distribuer les résultats
@@ -250,13 +265,23 @@ async def _translate_single_language(
         # ÉTAPE 2: Traduire si pas en cache
         # ═══════════════════════════════════════════════════════════════════
         if translation_service:
-            result = await translation_service.translate_with_structure(
-                text=task.text,
-                source_language=task.source_language,
-                target_language=target_language,
-                model_type=task.model_type,
-                source_channel='zmq'
-            )
+            try:
+                result = await asyncio.wait_for(
+                    translation_service.translate_with_structure(
+                        text=task.text,
+                        source_language=task.source_language,
+                        target_language=target_language,
+                        model_type=task.model_type,
+                        source_channel='zmq'
+                    ),
+                    timeout=45.0  # iter-4: évite qu'un input pathologique bloque le worker
+                )
+            except asyncio.TimeoutError:
+                logger.error(
+                    f"⏱️ [PROCESSOR] Inference timeout (45s) for {task.source_language}→{target_language} "
+                    f"msg={task.message_id} task={task.task_id}"
+                )
+                raise RuntimeError(f"inference_timeout: {task.source_language}→{target_language}")
 
             processing_time = time.time() - start_time
 

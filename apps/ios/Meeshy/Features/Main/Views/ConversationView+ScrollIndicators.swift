@@ -8,7 +8,7 @@ extension ConversationView {
     // MARK: - Scroll to Bottom Button
 
     var hasTypingIndicator: Bool {
-        !viewModel.typingUsernames.isEmpty
+        !typingObserver.typingUsernames.isEmpty
     }
 
     /// Unread message attachment (for rich preview in button)
@@ -29,7 +29,7 @@ extension ConversationView {
     var scrollToBottomButton: some View {
         ConversationScrollControlsView(
             unreadCount: scrollState.unreadBadgeCount,
-            typingUsernames: viewModel.typingUsernames,
+            typingUsernames: typingObserver.typingUsernames,
             lastUnreadMessageContent: viewModel.lastUnreadMessage?.content,
             unreadAttachmentTypeLabel: unreadAttachmentTypeLabel,
             unreadAttachmentThumbHash: unreadAttachment?.thumbHash,
@@ -121,7 +121,7 @@ extension ConversationView {
     }
 
     var typingLabel: String {
-        let names = viewModel.typingUsernames
+        let names = typingObserver.typingUsernames
         switch names.count {
         case 1: return "\(names[0]) écrit"
         case 2: return "\(names[0]) et \(names[1]) écrivent"
