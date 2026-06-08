@@ -487,10 +487,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                                      storyEffects: effects, createdAt: post.createdAt, isViewed: true)
             insertOrAppendStoryItem(newItem, forAuthor: post.author)
             showStoryComposer = false
-            FeedbackToastManager.shared.showSuccess("Story publiee")
+            FeedbackToastManager.shared.showSuccess(String(localized: "story.published", defaultValue: "Story publiée", bundle: .main))
         } catch {
             publishError = "Failed to publish story"
-            FeedbackToastManager.shared.showError("Echec de la publication de la story")
+            FeedbackToastManager.shared.showError(String(localized: "story.publishError", defaultValue: "Échec de la publication de la story", bundle: .main))
         }
 
         isPublishing = false
@@ -770,11 +770,11 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 self.activeUpload = nil
                 self.uploadTask = nil
                 HapticFeedback.success()
-                FeedbackToastManager.shared.showSuccess("Story publiee")
+                FeedbackToastManager.shared.showSuccess(String(localized: "story.published", defaultValue: "Story publiée", bundle: .main))
             } catch {
                 if !Task.isCancelled {
                     self.activeUpload?.phase = .failed(error.localizedDescription)
-                    FeedbackToastManager.shared.showError("Echec de la publication de la story")
+                    FeedbackToastManager.shared.showError(String(localized: "story.publishError", defaultValue: "Échec de la publication de la story", bundle: .main))
                     // Don't cleanup temp files on failure — retry may need them
                 }
             }

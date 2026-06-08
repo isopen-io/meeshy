@@ -131,8 +131,8 @@ export default function NewUserPage() {
               <span>Retour</span>
             </Button>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Nouvel utilisateur</h1>
-              <p className="text-sm text-gray-600">Créer un nouveau compte utilisateur</p>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">Nouvel utilisateur</h1>
+              <p className="text-sm text-gray-600 dark:text-gray-400">Créer un nouveau compte utilisateur</p>
             </div>
           </div>
           <Badge className="bg-blue-600 text-white">
@@ -328,7 +328,7 @@ export default function NewUserPage() {
                     Rôle <span className="text-red-500">*</span>
                   </label>
                   <select
-                    className="w-full p-2 border rounded-md text-sm bg-white"
+                    className="w-full p-2 border rounded-md text-sm bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
                     value={formData.role}
                     onChange={(e) => handleChange('role', e.target.value)}
                   >
@@ -344,7 +344,7 @@ export default function NewUserPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Langue système</label>
                   <select
-                    className="w-full p-2 border rounded-md text-sm bg-white"
+                    className="w-full p-2 border rounded-md text-sm bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
                     value={formData.systemLanguage}
                     onChange={(e) => handleChange('systemLanguage', e.target.value)}
                   >
@@ -367,7 +367,7 @@ export default function NewUserPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Langue régionale</label>
                   <select
-                    className="w-full p-2 border rounded-md text-sm bg-white"
+                    className="w-full p-2 border rounded-md text-sm bg-white dark:bg-gray-800 dark:border-gray-600 dark:text-gray-100"
                     value={formData.regionalLanguage}
                     onChange={(e) => handleChange('regionalLanguage', e.target.value)}
                   >
