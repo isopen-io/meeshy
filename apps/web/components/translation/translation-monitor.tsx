@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useI18n } from '@/hooks/useI18n';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -61,6 +62,7 @@ export function TranslationMonitor({
   showDetails = true,
   refreshInterval = 5000
 }: TranslationMonitorProps) {
+  const { t } = useI18n('admin');
   const [metrics, setMetrics] = useState<TranslationMetrics | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -126,7 +128,7 @@ export function TranslationMonitor({
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
         <CardTitle className="text-lg font-semibold flex items-center gap-2">
           <Activity className="h-5 w-5 text-blue-600" />
-          Monitoring Traductions
+          {t('admin.translationMonitor.title')}
         </CardTitle>
         <Button
           variant="outline"
@@ -153,7 +155,7 @@ export function TranslationMonitor({
         {isLoading && !metrics && (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-6 w-6 animate-spin text-blue-600" />
-            <span className="ml-2 text-gray-600">Chargement des métriques...</span>
+            <span className="ml-2 text-gray-600">{t('admin.translationMonitor.loadingMetrics')}</span>
           </div>
         )}
 
@@ -267,7 +269,7 @@ export function TranslationMonitor({
 
                 {/* Répartition par langue */}
                 <div>
-                  <h4 className="font-medium text-gray-900 mb-3">Répartition par langue</h4>
+                  <h4 className="font-medium text-gray-900 mb-3">{t('admin.translationMonitor.languageDistribution')}</h4>
                   <div className="space-y-3">
                     {Object.entries(metrics.languageBreakdown)
                       .sort(([, a], [, b]) => b.count - a.count)

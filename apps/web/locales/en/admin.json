@@ -7,7 +7,23 @@
     "default": "Rankings",
     "resultsUnit": "results",
     "retry": "Retry",
-    "empty": "No results found"
+    "empty": "No results found",
+    "filters": {
+      "title": "Ranking Filters",
+      "entityType": "Entity Type",
+      "selectType": "Select type",
+      "criteria": "Criteria",
+      "selectCriteria": "Select criteria",
+      "filterCriteria": "Filter criteria...",
+      "noCriteriaFound": "No criteria found",
+      "period": "Period",
+      "selectPeriod": "Select period",
+      "resultCount": "Number of results",
+      "entityUsers": "Users",
+      "entityConversations": "Conversations",
+      "entityMessages": "Messages",
+      "entityLinks": "Links"
+    }
   },
   "scanLog": {
     "title": "Scan Logs",
@@ -40,5 +56,18 @@
     "match": "match",
     "matches": "matches",
     "invalidRegex": "invalid regex"
+  },
+  "agent": {
+    "noRecentActivity": "No recent activity",
+    "selectConversation": "Select a conversation to monitor its status in real time",
+    "languagePreferences": "Language Preferences",
+    "editConfig": "Edit configuration",
+    "deleteConfig": "Delete configuration",
+    "cancelSchedule": "Cancel schedule"
+  },
+  "translationMonitor": {
+    "title": "Translation Monitoring",
+    "loadingMetrics": "Loading metrics...",
+    "languageDistribution": "Language Distribution"
   }
 }

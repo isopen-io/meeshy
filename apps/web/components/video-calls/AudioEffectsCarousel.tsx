@@ -102,6 +102,7 @@ export function AudioEffectsCarousel({
             size="sm"
             onClick={onClose}
             className="h-8 w-8 p-0 rounded-full hover:bg-white/10 text-gray-400 hover:text-white"
+            aria-label="Close audio effects"
           >
             <X className="h-4 w-4" />
           </Button>

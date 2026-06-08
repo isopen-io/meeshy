@@ -7,7 +7,23 @@
     "default": "Classificação",
     "resultsUnit": "resultados",
     "retry": "Tentar novamente",
-    "empty": "Nenhum resultado encontrado"
+    "empty": "Nenhum resultado encontrado",
+    "filters": {
+      "title": "Filtros de classificação",
+      "entityType": "Tipo de entidade",
+      "selectType": "Selecione o tipo",
+      "criteria": "Critério",
+      "selectCriteria": "Selecione o critério",
+      "filterCriteria": "Filtrar critérios...",
+      "noCriteriaFound": "Nenhum critério encontrado",
+      "period": "Período",
+      "selectPeriod": "Selecione o período",
+      "resultCount": "Número de resultados",
+      "entityUsers": "Usuários",
+      "entityConversations": "Conversas",
+      "entityMessages": "Mensagens",
+      "entityLinks": "Links"
+    }
   },
   "scanLog": {
     "title": "Logs de varredura",
@@ -40,5 +56,18 @@
     "match": "correspondência",
     "matches": "correspondências",
     "invalidRegex": "regex inválido"
+  },
+  "agent": {
+    "noRecentActivity": "Nenhuma atividade recente",
+    "selectConversation": "Selecione uma conversa para monitorar seu estado em tempo real",
+    "languagePreferences": "Preferências de idioma",
+    "editConfig": "Editar configuração",
+    "deleteConfig": "Excluir configuração",
+    "cancelSchedule": "Cancelar agendamento"
+  },
+  "translationMonitor": {
+    "title": "Monitor de traduções",
+    "loadingMetrics": "Carregando métricas...",
+    "languageDistribution": "Distribuição por idioma"
   }
 }

@@ -134,6 +134,7 @@ export function CustomizationManager({ conversationId, currentUser, onPreference
               variant="ghost"
               className="h-8 w-8 p-0"
               onClick={handleSaveCustomName}
+              aria-label="Save"
             >
               <Check className="h-4 w-4 text-green-600" />
             </Button>
@@ -142,6 +143,7 @@ export function CustomizationManager({ conversationId, currentUser, onPreference
               variant="ghost"
               className="h-8 w-8 p-0"
               onClick={() => setIsEditingName(false)}
+              aria-label="Cancel"
             >
               <X className="h-4 w-4 text-red-600" />
             </Button>
@@ -202,6 +204,7 @@ export function CustomizationManager({ conversationId, currentUser, onPreference
               variant="ghost"
               className="h-8 w-8 p-0"
               onClick={handleSaveReaction}
+              aria-label="Save"
             >
               <Check className="h-4 w-4 text-green-600" />
             </Button>
@@ -210,6 +213,7 @@ export function CustomizationManager({ conversationId, currentUser, onPreference
               variant="ghost"
               className="h-8 w-8 p-0"
               onClick={() => setIsEditingReaction(false)}
+              aria-label="Cancel"
             >
               <X className="h-4 w-4 text-red-600" />
             </Button>

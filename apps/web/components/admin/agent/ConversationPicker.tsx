@@ -117,7 +117,7 @@ export function ConversationPicker({ selectedId, onSelect, onClear, label, place
                   </div>
                 </div>
                 {onClear && (
-                  <Button variant="ghost" size="sm" onClick={onClear} className="h-8 w-8 p-0 text-indigo-500 hover:bg-indigo-100 shrink-0">
+                  <Button variant="ghost" size="sm" onClick={onClear} className="h-8 w-8 p-0 text-indigo-500 hover:bg-indigo-100 shrink-0" aria-label="Clear selection">
                     <X className="h-4 w-4" />
                   </Button>
                 )}

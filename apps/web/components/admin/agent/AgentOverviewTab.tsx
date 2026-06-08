@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { useI18n } from '@/hooks/useI18n';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
@@ -47,6 +48,7 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export function AgentOverviewTab() {
+  const { t } = useI18n('admin');
   const [stats, setStats] = useState<AgentStatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -309,7 +311,7 @@ export function AgentOverviewTab() {
           </CardHeader>
           <CardContent>
             {recentActivity.length === 0 ? (
-              <p className="text-sm text-gray-400 italic py-4 text-center">Aucune activité récente</p>
+              <p className="text-sm text-gray-400 italic py-4 text-center">{t('admin.agent.noRecentActivity')}</p>
             ) : (
               <div className="space-y-1.5 max-h-[240px] overflow-y-auto">
                 {recentActivity.map((entry) => (
