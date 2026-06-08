@@ -39,6 +39,21 @@
     "fileTooBig": "Fichier trop volumineux (max {size})",
     "invalidType": "Type de fichier invalide",
     "uploadFailed": "Échec de l'upload"
+  },
+  "contextMenu": {
+    "close": "Fermer",
+    "download": "Télécharger",
+    "copyLink": "Copier le lien",
+    "delete": "Supprimer",
+    "downloadStarted": "Téléchargement démarré",
+    "linkCopied": "Lien copié dans le presse-papiers",
+    "linkCopyError": "Impossible de copier le lien",
+    "deleteSuccess": "Fichier supprimé avec succès",
+    "deleteError": "Impossible de supprimer le fichier",
+    "confirmDeleteTitle": "Confirmer la suppression",
+    "confirmDeleteDescription": "Êtes-vous sûr de vouloir supprimer ce fichier ?",
+    "confirmDeleteIrreversible": "Cette action est irréversible. Le fichier sera définitivement supprimé.",
+    "deleting": "Suppression..."
   }
 }
 

@@ -255,7 +255,7 @@ struct SettingsView: View {
                 settingsRow(icon: "person.crop.circle.badge.minus", title: String(localized: "settings.delete_account", defaultValue: "Supprimer le compte", bundle: .main), color: "EF4444") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(Color(hex: "EF4444").opacity(0.6))
+                        .foregroundColor(MeeshyColors.error.opacity(0.6))
                 }
             }
             .accessibilityLabel(String(localized: "settings.delete_account", defaultValue: "Supprimer le compte", bundle: .main))
@@ -313,7 +313,7 @@ struct SettingsView: View {
                     }
                 }
                 .pickerStyle(.menu)
-                .tint(Color(hex: "4ECDC4"))
+                .tint(MeeshyColors.indigo400)
             }
         }
     }

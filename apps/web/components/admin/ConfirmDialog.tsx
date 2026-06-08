@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/hooks/useI18n";
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -27,10 +28,14 @@ export function ConfirmDialog({
   onConfirm,
   title,
   description,
-  confirmText = "Confirmer",
-  cancelText = "Annuler",
+  confirmText,
+  cancelText,
   variant = 'destructive'
 }: ConfirmDialogProps) {
+  const { t } = useI18n('common');
+  const resolvedConfirmText = confirmText ?? t('confirm');
+  const resolvedCancelText = cancelText ?? t('cancel');
+
   const handleConfirm = () => {
     onConfirm();
     onOpenChange(false);
@@ -49,14 +54,14 @@ export function ConfirmDialog({
             onClick={() => onOpenChange(false)}
             className="focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
           >
-            {cancelText}
+            {resolvedCancelText}
           </Button>
           <Button
             onClick={handleConfirm}
             variant={variant === 'destructive' ? 'destructive' : 'default'}
             className={`focus-visible:ring-2 focus-visible:ring-offset-2 ${variant === 'destructive' ? 'bg-red-600 hover:bg-red-700 focus-visible:ring-red-500' : 'focus-visible:ring-primary'}`}
           >
-            {confirmText}
+            {resolvedConfirmText}
           </Button>
         </DialogFooter>
       </DialogContent>
