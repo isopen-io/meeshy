@@ -480,6 +480,22 @@ class AudioMessagePipeline:
 
         logger.info(f"[PIPELINE] Filtered target languages: {target_languages}")
 
+        # Bandwidth lever #5 — eager vs on-demand TTS. Default mode "all" keeps
+        # current behaviour (synthesize every language). Opt-in modes
+        # ("active"/"bounded", via TTS_GENERATION_MODE / TTS_MAX_EAGER_LANGUAGES)
+        # bound the eagerly-synthesized set; the deferred languages get audio on
+        # first request (on-demand fetch path is the validated follow-up — do not
+        # enable opt-in modes before it ships, or deferred languages have no audio).
+        from .tts_language_policy import select_eager_tts_languages
+        _tts_selection = select_eager_tts_languages(
+            target_languages,
+            mode=os.getenv("TTS_GENERATION_MODE", "all"),
+            max_eager=int(os.getenv("TTS_MAX_EAGER_LANGUAGES", "0")) or None,
+        )
+        if _tts_selection.deferred:
+            logger.info(f"[PIPELINE] TTS deferred (on-demand) for: {_tts_selection.deferred}")
+            target_languages = _tts_selection.eager
+
         # Early return if no translations needed
         if not target_languages:
             logger.info("[PIPELINE] No translations needed, returning transcription only")
