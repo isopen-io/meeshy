@@ -1468,25 +1468,27 @@ final class CallManager: ObservableObject {
         //     device module silently ("no sound on 1st call"). Log only.
         //   - Mac (`callUsesCallKit == false`, iOS-app-on-Mac): `didActivate`
         //     never fires, so this `[AUDIO_FALLBACK]` IS the activation path.
-        let rtc = RTCAudioSession.sharedInstance()
         if !callUsesCallKit {
             Logger.calls.warning("[AUDIO_FALLBACK] Mac (no CallKit didActivate) — activation manuelle de RTCAudioSession")
-            rtc.lockForConfiguration()
-            do {
-                let configuration = RTCAudioSessionConfiguration.webRTC()
-                configuration.category = AVAudioSession.Category.playAndRecord.rawValue
-                // CALL-FIX 2026-06-06 (macOS) — `.default` avoids the voice-processing
-                // I/O unit that faults on the mic uplink on iOS-app-on-Mac.
-                configuration.mode = AVAudioSession.Mode.default.rawValue
-                configuration.categoryOptions = [.allowBluetoothHFP, .duckOthers]
-                try rtc.setConfiguration(configuration, active: true)
-                rtc.isAudioEnabled = true
-                Logger.calls.info("[AUDIO_FALLBACK] RTCAudioSession activée manuellement (mode=\(configuration.mode), category=\(configuration.category))")
-            } catch {
-                Logger.calls.error("[AUDIO_FALLBACK] échec activation manuelle: \(error.localizedDescription)")
+            audioSessionQueue.sync {
+                let rtc = RTCAudioSession.sharedInstance()
+                rtc.lockForConfiguration()
+                do {
+                    let configuration = RTCAudioSessionConfiguration.webRTC()
+                    configuration.category = AVAudioSession.Category.playAndRecord.rawValue
+                    // CALL-FIX 2026-06-06 (macOS) — `.default` avoids the voice-processing
+                    // I/O unit that faults on the mic uplink on iOS-app-on-Mac.
+                    configuration.mode = AVAudioSession.Mode.default.rawValue
+                    configuration.categoryOptions = [.allowBluetoothHFP, .duckOthers]
+                    try rtc.setConfiguration(configuration, active: true)
+                    rtc.isAudioEnabled = true
+                    Logger.calls.info("[AUDIO_FALLBACK] RTCAudioSession activée manuellement (mode=\(configuration.mode), category=\(configuration.category))")
+                } catch {
+                    Logger.calls.error("[AUDIO_FALLBACK] échec activation manuelle: \(error.localizedDescription)")
+                }
+                rtc.unlockForConfiguration()
             }
-            rtc.unlockForConfiguration()
-        } else if !rtc.isAudioEnabled {
+        } else if !RTCAudioSession.sharedInstance().isAudioEnabled {
             Logger.calls.warning("[AUDIO] connected but RTCAudioSession not yet active — awaiting CallKit provider:didActivate (do NOT self-activate on iPhone/iPad)")
         }
 

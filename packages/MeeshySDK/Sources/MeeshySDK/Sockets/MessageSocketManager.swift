@@ -1054,6 +1054,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     private var socket: SocketIOClient?
     private var joinedConversations: Set<String> = []
     private var reconnectAttempt: Int = 0
+    private var reconnectAttempts: Int = 0
+    private var reconnectDelay: TimeInterval = 1
+    private var reconnectTask: Task<Void, Never>?
     private var hadPreviousConnection = false
     private var heartbeatTimer: Timer?
     private var lifecycleCancellables = Set<AnyCancellable>()
@@ -1289,6 +1292,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         let wasReconnect = hadPreviousConnection
         hadPreviousConnection = true
         reconnectAttempt = 0
+        reconnectAttempts = 0
+        reconnectDelay = 1
         if wasReconnect {
             DispatchQueue.main.async { [weak self] in self?.didReconnect.send(()) }
         }

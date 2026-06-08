@@ -930,7 +930,7 @@ class ConversationViewModel: ObservableObject {
                     let needsDecryption = self.isDirect
                         && mapped.contains { $0.isEncrypted && !$0.content.isEmpty }
                     guard needsDecryption else {
-                        self.messages = mapped
+                        self.messages = self.mergeIntoMessages(mapped)
                         return
                     }
                     Task { @MainActor [weak self] in
@@ -939,10 +939,22 @@ class ConversationViewModel: ObservableObject {
                         await self.decryptMessagesIfNeeded(&decrypted)
                         // Drop a stale decrypt that lost the race to a newer refresh.
                         guard generation == self.storeRefreshGeneration else { return }
-                        self.messages = decrypted
+                        self.messages = self.mergeIntoMessages(decrypted)
                     }
                 }
             }
+    }
+
+    /// Merges `incoming` messages into the current `messages` array, preserving
+    /// any in-memory messages not yet reflected in the GRDB snapshot (e.g., a
+    /// socket delivery that raced the REST load). Deduplicates by `id` so a
+    /// message received from both the initial REST response and the socket
+    /// never appears twice. Result is sorted by `createdAt`.
+    private func mergeIntoMessages(_ incoming: [Message]) -> [Message] {
+        let incomingIds = Set(incoming.map(\.id))
+        let preserved = messages.filter { !incomingIds.contains($0.id) }
+        guard !preserved.isEmpty else { return incoming }
+        return (incoming + preserved).sorted { $0.createdAt < $1.createdAt }
     }
 
     private func subscribeToQueueReconciliation() {
