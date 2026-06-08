@@ -29,6 +29,5 @@ export function useMessageStatusDetails(
     queryKey: queryKeys.messages.statusDetails(messageId ?? ''),
     queryFn: () => messagesService.getMessageStatusDetails(messageId!, { filter, limit: 50 }),
     enabled: enabled && !!messageId,
-    staleTime: 30_000,
   });
 }

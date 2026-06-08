@@ -180,12 +180,13 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
           const uniqueMemberIds = [...new Set(body.newConversation.memberIds)]
             .filter(id => id && id !== userId && id.trim().length > 0);
 
+          const memberUsers = await fastify.prisma.user.findMany({
+            where: { id: { in: uniqueMemberIds } },
+            select: { id: true, displayName: true, username: true }
+          });
+          const memberMap = new Map(memberUsers.map(u => [u.id, u]));
           for (const memberId of uniqueMemberIds) {
-            const memberUser = await fastify.prisma.user.findUnique({
-              where: { id: memberId },
-              select: { id: true, displayName: true, username: true }
-            });
-
+            const memberUser = memberMap.get(memberId);
             if (memberUser) {
               participantsToCreate.push({
                 userId: memberId,
