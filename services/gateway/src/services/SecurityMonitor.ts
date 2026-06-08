@@ -261,7 +261,7 @@ export class SecurityMonitor {
    * Send security alert
    */
   private async sendAlert(alert: SecurityAlert): Promise<void> {
-    console.warn('[SecurityMonitor] SECURITY ALERT:', alert);
+    logger.warn('SECURITY ALERT', { alert });
 
     // Send email alerts to admins
     if (this.emailService && this.admins.length > 0) {
@@ -274,7 +274,7 @@ export class SecurityMonitor {
             details: JSON.stringify(alert.details, null, 2)
           });
         } catch (error) {
-          console.error('[SecurityMonitor] Failed to send alert email:', error);
+          logger.error('Failed to send alert email', error as Error);
         }
       }
     }

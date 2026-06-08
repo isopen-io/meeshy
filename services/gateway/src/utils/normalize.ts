@@ -3,6 +3,9 @@
  */
 
 import { parsePhoneNumber, isValidPhoneNumber, CountryCode } from 'libphonenumber-js';
+import { enhancedLogger } from './logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'Normalize' });
 
 /**
  * Normalise un email en minuscules
@@ -86,7 +89,7 @@ export function normalizePhoneWithCountry(
       isValid: parsed.isValid()
     };
   } catch (error) {
-    console.warn('[normalizePhoneWithCountry] Parse error:', error);
+    logger.warn('normalizePhoneWithCountry parse error', error as Error);
     return null;
   }
 }

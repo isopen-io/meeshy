@@ -1,6 +1,9 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { buildPaginationMeta } from '../../utils/pagination';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'UserDevicesRoutes' });
 import {
   userMinimalSchema,
   errorResponseSchema
@@ -141,7 +144,7 @@ export async function getFriendRequests(fastify: FastifyInstance) {
         pagination: buildPaginationMeta(totalCount, offsetNum, limitNum, friendRequests.length)
       });
     } catch (error) {
-      console.error('Error retrieving friend requests:', error);
+      logger.error('Error retrieving friend requests', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Internal server error'
@@ -293,7 +296,7 @@ export async function sendFriendRequest(fastify: FastifyInstance) {
           recipientUserId: receiverId,
           requesterId: senderId,
           friendRequestId: friendRequest.id,
-        }).catch((err: any) => console.error('Notification friend request error:', err));
+        }).catch((err: unknown) => logger.error('Notification friend request error', err as Error));
       }
 
       // Email au destinataire (respect des preferences)
@@ -316,7 +319,7 @@ export async function sendFriendRequest(fastify: FastifyInstance) {
             senderAvatar: sender.avatar,
             viewRequestUrl: `${process.env.FRONTEND_URL || 'https://meeshy.me'}/contacts#pending`,
             language: receiver.systemLanguage || undefined,
-          }).catch((err: any) => console.error('Email friend request error:', err));
+          }).catch((err: unknown) => logger.error('Email friend request error', err as Error));
         }
       }
 
@@ -328,7 +331,7 @@ export async function sendFriendRequest(fastify: FastifyInstance) {
         }
       });
     } catch (error) {
-      console.error('Error sending friend request:', error);
+      logger.error('Error sending friend request', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Internal server error'
@@ -522,7 +525,7 @@ export async function respondToFriendRequest(fastify: FastifyInstance) {
               recipientUserId: friendRequest.senderId,
               accepterUserId: userId,
               conversationId,
-            }).catch((err: any) => console.error('Notification friend accepted error:', err));
+            }).catch((err: unknown) => logger.error('Notification friend accepted error', err as Error));
           }
 
           // Email a l'expediteur original (respect des preferences)
@@ -551,7 +554,7 @@ export async function respondToFriendRequest(fastify: FastifyInstance) {
                   accepterAvatar: accepter.avatar,
                   conversationUrl: `${process.env.FRONTEND_URL || 'https://meeshy.me'}/conversations/${conversationId}`,
                   language: sender.systemLanguage || undefined,
-                }).catch((err: any) => console.error('Email friend accepted error:', err));
+                }).catch((err: unknown) => logger.error('Email friend accepted error', err as Error));
               }
             }
           }
@@ -568,7 +571,7 @@ export async function respondToFriendRequest(fastify: FastifyInstance) {
               content: `${receiverName} declined your friend request`,
               priority: 'low',
               systemType: 'announcement',
-            }).catch((err: any) => console.error('Notification friend rejected error:', err));
+            }).catch((err: unknown) => logger.error('Notification friend rejected error', err as Error));
           }
         }
 
@@ -581,7 +584,7 @@ export async function respondToFriendRequest(fastify: FastifyInstance) {
         });
       }
     } catch (error) {
-      console.error('Error updating friend request:', error);
+      logger.error('Error updating friend request', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Internal server error'
@@ -663,7 +666,7 @@ export async function getAffiliateToken(fastify: FastifyInstance) {
         data: affiliateToken ? { token: affiliateToken.token } : null
       });
     } catch (error) {
-      console.error('[USERS] Error fetching affiliate token:', error);
+      logger.error('Error fetching affiliate token', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Internal server error'

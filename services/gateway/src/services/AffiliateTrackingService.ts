@@ -1,3 +1,7 @@
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'AffiliateTrackingService' });
+
 export class AffiliateTrackingService {
   /**
    * Enregistre une visite d'affiliation (pour tracking même si l'utilisateur ne s'inscrit pas immédiatement)
@@ -63,7 +67,7 @@ export class AffiliateTrackingService {
         }
       };
     } catch (error) {
-      console.error('Erreur tracking visite affiliation:', error);
+      logger.error('Erreur tracking visite affiliation', error as Error);
       return { success: false, error: 'Erreur lors du tracking' };
     }
   }
@@ -177,7 +181,7 @@ export class AffiliateTrackingService {
         }
       };
     } catch (error) {
-      console.error('Erreur conversion affiliation:', error);
+      logger.error('Erreur conversion affiliation', error as Error);
       return { success: false, error: 'Erreur lors de la conversion' };
     }
   }
@@ -307,7 +311,7 @@ export class AffiliateTrackingService {
         }
       };
     } catch (error) {
-      console.error('Erreur récupération stats affiliation:', error);
+      logger.error('Erreur récupération stats affiliation', error as Error);
       return { success: false, error: 'Erreur lors de la récupération des statistiques' };
     }
   }
@@ -333,7 +337,7 @@ export class AffiliateTrackingService {
 
       return { success: true, deletedCount: deletedSessions.count };
     } catch (error) {
-      console.error('Erreur nettoyage sessions:', error);
+      logger.error('Erreur nettoyage sessions', error as Error);
       return { success: false, error: 'Erreur lors du nettoyage' };
     }
   }

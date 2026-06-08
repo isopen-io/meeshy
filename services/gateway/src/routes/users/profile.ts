@@ -23,6 +23,9 @@ import { UserRoleEnum } from '@meeshy/shared/types';
 import { authUserCacheKey } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
 import { withMutationLog } from '../../utils/withMutationLog';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'UserProfileRoutes' });
 
 /**
  * Validate and sanitize pagination parameters
@@ -599,7 +602,7 @@ export async function updateUserPassword(fastify: FastifyInstance) {
       if (notificationService) {
         notificationService.createPasswordChangedNotification({
           recipientUserId: userId,
-        }).catch((err: unknown) => console.error('[Profile] Notification error (password_changed):', err));
+        }).catch((err: unknown) => logger.error('Notification error password_changed', err as Error));
       }
 
       return reply.send({

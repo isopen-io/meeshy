@@ -12,6 +12,9 @@ import {
   generateIdentifier
 } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'CommunitySettingsRoutes' });
 
 export async function registerSettingsRoutes(fastify: FastifyInstance) {
   // Route pour mettre a jour une communaute
@@ -155,7 +158,7 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
         data: updatedCommunity
       });
     } catch (error) {
-      console.error('Error updating community:', error);
+      logger.error('Error updating community', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to update community'
@@ -256,7 +259,7 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
         data: { message: 'Community deleted successfully' }
       });
     } catch (error) {
-      console.error('Error deleting community:', error);
+      logger.error('Error deleting community', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to delete community'

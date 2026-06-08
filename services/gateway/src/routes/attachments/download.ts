@@ -200,7 +200,7 @@ export async function registerDownloadRoutes(
         const stream = createReadStream(thumbnailPath);
         return reply.send(stream);
       } catch (error: any) {
-        console.error('[AttachmentRoutes] Error serving thumbnail:', error);
+        log.error('Error serving thumbnail', error as Error);
         return reply.status(500).send({
           success: false,
           error: 'Error serving thumbnail',

@@ -17,6 +17,9 @@
 
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import type { Redis } from 'ioredis';
+import { enhancedLogger } from './logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'RateLimiter' });
 
 /**
  * Check if an IP address is local (loopback or private network).
@@ -247,7 +250,7 @@ export class RateLimiter {
         }
       } catch (error) {
         // Log error but don't block request if rate limiter fails
-        console.error('[RateLimiter] Error:', error);
+        logger.error('Rate limiter error', error as Error);
         // Continue request processing
       }
     };

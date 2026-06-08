@@ -2,6 +2,9 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import { permissionsService } from '../services/admin/permissions.service';
 import { UnifiedAuthContext, UnifiedAuthRequest} from './auth';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'AdminPermissionsMiddleware' });
 
 /**
  * Generic admin permission middleware factory
@@ -203,6 +206,6 @@ export async function logAdminAction(
     });
   } catch (error) {
     // Log error but don't fail the request
-    console.error('[AdminAudit] Failed to log action:', error);
+    logger.error('Failed to log admin action', error as Error);
   }
 }

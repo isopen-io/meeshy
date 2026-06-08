@@ -14,6 +14,9 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../../utils/logger';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { enhancedLogger } from '../../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'PreferenceCategoriesRoutes' });
 import { createUnifiedAuthMiddleware } from '../../../middleware/auth';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type {
@@ -155,7 +158,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
   const prisma = (fastify as any).prisma;
 
   if (!prisma) {
-    console.error('[Categories] Missing required service: prisma');
+    logger.error('Missing required service: prisma');
     return;
   }
 

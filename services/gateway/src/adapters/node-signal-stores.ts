@@ -5,6 +5,7 @@
  * TODO: Replace with database persistence for production.
  */
 
+import { enhancedLogger } from '../utils/logger-enhanced.js';
 import {
   ProtocolAddress,
   IdentityKeyPair,
@@ -29,6 +30,8 @@ import type {
   SignalProtocolStores,
   SignalStoreConfig,
 } from '@meeshy/shared/encryption/signal/signal-store-interface';
+
+const logger = enhancedLogger.child({ module: 'NodeSignalStores' });
 
 /**
  * In-memory Identity Key Store
@@ -68,7 +71,7 @@ export class NodeIdentityKeyStore extends IdentityKeyStore {
       const changed = !this.arraysEqual(existing, newKey);
       if (changed) {
         // Identity key changed - this is a security event
-        console.warn(`Identity key changed for ${address.name()}:${address.deviceId()}`);
+        logger.warn('Identity key changed', { address: `${address.name()}:${address.deviceId()}` });
       }
       this.trustedIdentities.set(key, newKey);
       return changed;

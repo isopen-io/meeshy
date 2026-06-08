@@ -24,12 +24,15 @@ import {
   APPLICATION_PREFERENCE_DEFAULTS
 } from '@meeshy/shared/types/preferences';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { enhancedLogger } from '../../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'UserPreferencesRoutes' });
 
 export async function userPreferencesRoutes(fastify: FastifyInstance) {
   const prisma = (fastify as any).prisma;
 
   if (!prisma) {
-    console.error('[UserPreferences] Missing required service: prisma');
+    logger.error('Missing required service: prisma');
     return;
   }
 
