@@ -1634,7 +1634,7 @@ struct MessageDetailSheet: View {
 
             Image(systemName: "trash.fill")
                 .font(.system(size: 48))
-                .foregroundColor(.red)
+                .foregroundColor(MeeshyColors.error)
                 .scaleEffect(deleteIconScale)
                 .onAppear {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
@@ -1662,7 +1662,7 @@ struct MessageDetailSheet: View {
                         .frame(maxWidth: .infinity, minHeight: 44)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.red)
+                                .fill(MeeshyColors.error)
                         )
                 }
 
@@ -1888,7 +1888,7 @@ struct MessageDetailSheet: View {
         if sentToIds.contains(conv.id) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 24))
-                .foregroundColor(.green)
+                .foregroundColor(MeeshyColors.success)
         } else if sendingToId == conv.id {
             ProgressView()
                 .scaleEffect(0.8)
