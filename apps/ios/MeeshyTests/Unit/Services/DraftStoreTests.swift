@@ -132,6 +132,23 @@ final class DraftStoreTests: XCTestCase {
         XCTAssertEqual(drafts["conv1"]?.text, "hello")
     }
 
+    /// A swipe-to-reply with NO typed text persists a draft (empty text + a reply
+    /// reference) so the composer can restore the reply context — but it must NOT
+    /// raise the "Brouillon" badge, which would point the user at a draft message
+    /// that doesn't exist.
+    func test_allNonEmptyDrafts_excludesReplyOnlyDraft_withNoTypedText() {
+        let sut = makeSUT()
+        sut.save(MessageDraft(text: "", replyToId: "msg_42"), for: "conv-reply")
+        sut.save(MessageDraft(text: "real draft"), for: "conv-text")
+
+        let drafts = sut.allNonEmptyDrafts()
+
+        XCTAssertEqual(Array(drafts.keys), ["conv-text"],
+                       "a reply-only draft (no typed text) must not raise the Brouillon badge")
+        // The reply reference is still persisted so the composer restores it on open.
+        XCTAssertEqual(sut.load(for: "conv-reply")?.replyToId, "msg_42")
+    }
+
     func test_allNonEmptyDrafts_emptyStore_returnsEmpty() {
         let sut = makeSUT()
         XCTAssertTrue(sut.allNonEmptyDrafts().isEmpty)
