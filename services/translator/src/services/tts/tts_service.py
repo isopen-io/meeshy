@@ -10,6 +10,7 @@ Délègue aux modules spécialisés:
 """
 
 import os
+import hashlib
 import logging
 import asyncio
 import threading
@@ -21,6 +22,8 @@ from .models import TTSModel, TTSModelInfo, TTS_MODEL_INFO
 from .model_manager import ModelManager, ModelStatus
 from .language_router import LanguageRouter
 from .synthesizer import Synthesizer, UnifiedTTSResult
+
+TTS_AUDIO_CACHE_TTL = int(os.getenv("TTS_AUDIO_CACHE_TTL", str(7 * 24 * 3600)))  # 7 days
 
 logger = logging.getLogger(__name__)
 
@@ -421,7 +424,7 @@ class UnifiedTTSService:
         **kwargs
     ) -> UnifiedTTSResult:
         """
-        Synthèse vocale simple (sans clonage).
+        Synthèse vocale simple (sans clonage). Résultat mis en cache Redis 7 jours.
 
         Args:
             text: Texte à synthétiser
@@ -430,7 +433,31 @@ class UnifiedTTSService:
             model: Modèle TTS à utiliser
             cloning_params: Paramètres de synthèse (temperature, etc.)
         """
-        return await self.synthesize_with_voice(
+        effective_model = (model or self.model_manager.active_model or self.requested_model).value
+        effective_format = output_format or self.default_format
+        cache_key = "tts:audio:" + hashlib.sha256(
+            f"{text}:{language}:{effective_model}:{effective_format}".encode()
+        ).hexdigest()
+
+        try:
+            from services.redis_service import RedisService
+            redis = RedisService()
+            cached = await redis.get(cache_key)
+            if cached:
+                logger.debug(f"[TTS] Cache hit for key {cache_key[:16]}…")
+                import json, dataclasses
+                data = json.loads(cached)
+                result = UnifiedTTSResult(**{
+                    k: v for k, v in data.items()
+                    if k in {f.name for f in dataclasses.fields(UnifiedTTSResult)}
+                })
+                result.model_used = self.model_manager.active_model or self.requested_model
+                result.model_info = TTS_MODEL_INFO[result.model_used]
+                return result
+        except Exception:
+            pass
+
+        result = await self.synthesize_with_voice(
             text=text,
             speaker_audio_path=None,
             target_language=language,
@@ -439,6 +466,17 @@ class UnifiedTTSService:
             cloning_params=cloning_params,
             **kwargs
         )
+
+        try:
+            from services.redis_service import RedisService
+            import json, dataclasses
+            redis = RedisService()
+            safe = {k: v for k, v in dataclasses.asdict(result).items() if isinstance(v, (str, int, float, bool, type(None)))}
+            await redis.setex(cache_key, TTS_AUDIO_CACHE_TTL, json.dumps(safe))
+        except Exception:
+            pass
+
+        return result
 
     async def get_model_status(self, model: TTSModel) -> ModelStatus:
         """Retourne le statut d'un modèle."""

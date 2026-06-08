@@ -1,5 +1,6 @@
 'use client';
 
+import '@/lib/react-query/focus-manager';
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';

@@ -3,11 +3,16 @@
  * Compatible iOS, Android et tous les navigateurs modernes
  */
 
-export async function copyToClipboard(text: string, inputSelector?: string): Promise<{ success: boolean; message: string }> {
+export async function copyToClipboard(
+  text: string,
+  inputSelector?: string,
+  flashTarget?: HTMLElement | null,
+): Promise<{ success: boolean; message: string }> {
   try {
     // Méthode 1: API Clipboard moderne (iOS 13.4+, Chrome 63+, Firefox 53+)
     if (navigator.clipboard && window.isSecureContext) {
       await navigator.clipboard.writeText(text);
+      triggerCopyFlash(flashTarget);
       return { success: true, message: 'Copié dans le presse-papiers' };
     }
 
@@ -53,6 +58,7 @@ export async function copyToClipboard(text: string, inputSelector?: string): Pro
     document.body.removeChild(textArea);
 
     if (success) {
+      triggerCopyFlash(flashTarget);
       return { success: true, message: 'Copié dans le presse-papiers' };
     }
 
@@ -79,4 +85,12 @@ export async function copyToClipboard(text: string, inputSelector?: string): Pro
  */
 export function isClipboardSupported(): boolean {
   return !!(navigator.clipboard && window.isSecureContext);
+}
+
+function triggerCopyFlash(target?: HTMLElement | null): void {
+  if (!target) return;
+  target.classList.remove('copy-flash');
+  void target.offsetWidth; // force reflow to restart animation
+  target.classList.add('copy-flash');
+  target.addEventListener('animationend', () => target.classList.remove('copy-flash'), { once: true });
 }

@@ -377,6 +377,9 @@ final class WebRTCService {
         Logger.webrtc.info("Performing ICE restart")
         hasRemoteDescription = false
         iceCandidateBuffer.removeAll()
+        // P0-4 — signal the peer connection to embed new ICE credentials in the
+        // next offer (IceRestart:true constraint → full ICE re-gather, new ufrag/pwd).
+        client.restartIce()
         return await createOffer()
     }
 
@@ -468,7 +471,7 @@ extension WebRTCService: WebRTCClientDelegate {
             try? await Task.sleep(nanoseconds: nanos)
             if Task.isCancelled { return }
             guard self.connectionState == .disconnected else { return }
-            Logger.webrtc.info("[CALL-DIAG] disconnect debounce elapsed — escalating to reconnect")
+            Logger.webrtc.info("disconnect debounce elapsed — escalating to reconnect")
             self.delegate?.webRTCServiceDidDisconnect(self)
         }
     }

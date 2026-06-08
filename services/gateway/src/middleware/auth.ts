@@ -3,12 +3,17 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ParticipantType, ParticipantPermissions } from '@meeshy/shared/types/participant';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { StatusService } from '../services/StatusService';
 import { hashSessionToken } from '../utils/session-token';
 import { PermissionDeniedError } from '../errors/custom-errors';
 import { getCacheStore } from '../services/CacheStore';
 
-const AUTH_USER_CACHE_TTL = 300; // 5 minutes
+// Reduced from 300s: role/language changes propagate within 60s now.
+// Invalidated explicitly on profile updates via cache.del(`auth:user:{userId}`).
+const AUTH_USER_CACHE_TTL = 60; // 1 minute
+// JWT verification result cached for 55s (slightly shorter than user cache)
+const JWT_VERIFY_CACHE_TTL = 55;
 const expiredJwtLoggedTokens = new Map<string, number>(); // token prefix -> last log timestamp
 const EXPIRED_JWT_LOG_INTERVAL = 60_000; // Log same expired token at most once per minute
 
@@ -105,7 +110,24 @@ export class AuthMiddleware {
       let jwtExpired = false;
 
       try {
-        jwtPayload = jwt.verify(jwtToken, process.env.JWT_SECRET!) as Record<string, unknown>;
+        // Cache JWT verification result to avoid repeated HMAC-SHA256 per request
+        const tokenHash = crypto.createHash('sha256').update(jwtToken).digest('hex');
+        const jwtCacheKey = `jwt:v:${tokenHash}`;
+        const cache = getCacheStore();
+        let cachedPayload: Record<string, unknown> | null = null;
+        try {
+          const raw = await cache.get(jwtCacheKey);
+          if (raw) cachedPayload = JSON.parse(raw) as Record<string, unknown>;
+        } catch { /* cache miss — proceed to verify */ }
+
+        if (cachedPayload) {
+          jwtPayload = cachedPayload;
+        } else {
+          jwtPayload = jwt.verify(jwtToken, process.env.JWT_SECRET!) as Record<string, unknown>;
+          try {
+            await cache.set(jwtCacheKey, JSON.stringify(jwtPayload), JWT_VERIFY_CACHE_TTL);
+          } catch { /* non-fatal */ }
+        }
       } catch (error) {
         if (error instanceof jwt.TokenExpiredError && sessionToken) {
           jwtPayload = jwt.decode(jwtToken) as Record<string, unknown>;

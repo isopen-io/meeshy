@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiService } from '@/services/api.service';
 import { queryKeys } from '@/lib/react-query/query-keys';
+import { notificationSocketIO } from '@/services/notification-socketio.singleton';
 import type { FriendRequest, FriendRequestsData } from '@/types/contacts';
 
 export interface UseFriendRequestsV2Options {
@@ -67,7 +68,6 @@ export function useFriendRequestsV2(
       return extractRequests(response);
     },
     enabled,
-    refetchInterval: 30000,
   });
 
   const {
@@ -85,7 +85,6 @@ export function useFriendRequestsV2(
       return extractRequests(response);
     },
     enabled,
-    refetchInterval: 30000,
   });
 
   const received = useMemo(() => receivedData ?? [], [receivedData]);
@@ -125,6 +124,16 @@ export function useFriendRequestsV2(
       queryClient.invalidateQueries({ queryKey: sentQueryKey }),
     ]);
   }, [queryClient, receivedQueryKey, sentQueryKey]);
+
+  // Invalidate on friend_request notifications (replaces refetchInterval polling)
+  useEffect(() => {
+    if (!enabled) return;
+    return notificationSocketIO.onNotification((notification) => {
+      if (notification.type === 'friend_request' || notification.type === 'contact_request') {
+        invalidateAll();
+      }
+    });
+  }, [enabled, invalidateAll]);
 
   const sendMutation = useMutation({
     mutationFn: async ({ receiverId, message }: { receiverId: string; message?: string }) => {

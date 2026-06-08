@@ -45,7 +45,8 @@ export function useUnreadNotificationCountQuery() {
       const response = await NotificationService.getUnreadCount();
       return response.data?.count ?? 0;
     },
-    refetchInterval: 60 * 1000,
+    // No refetchInterval — the notification socket manager updates this count
+    // directly via setQueryData on every notification:new event.
   });
 }
 

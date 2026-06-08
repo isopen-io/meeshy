@@ -10,6 +10,9 @@ function queueKey(userId: string): string {
   return `${DELIVERY_QUEUE_PREFIX}${userId}`;
 }
 
+const MEMORY_QUEUE_MAX_USERS = 1000;
+const MEMORY_QUEUE_MAX_PER_USER = 50;
+
 export class RedisDeliveryQueue {
   private memoryQueue: Map<string, QueuedMessagePayload[]> = new Map();
 
@@ -34,8 +37,19 @@ export class RedisDeliveryQueue {
       }
     }
 
+    // Evict oldest user bucket when global cap reached
+    if (this.memoryQueue.size >= MEMORY_QUEUE_MAX_USERS && !this.memoryQueue.has(userId)) {
+      const firstUser = this.memoryQueue.keys().next().value;
+      if (firstUser !== undefined) {
+        logger.warn('Memory delivery queue at capacity, evicting oldest user', { evicted: firstUser });
+        this.memoryQueue.delete(firstUser);
+      }
+    }
     const existing = this.memoryQueue.get(userId) ?? [];
-    this.memoryQueue.set(userId, [...existing, entry]);
+    const bounded = existing.length >= MEMORY_QUEUE_MAX_PER_USER
+      ? existing.slice(existing.length - MEMORY_QUEUE_MAX_PER_USER + 1)
+      : existing;
+    this.memoryQueue.set(userId, [...bounded, entry]);
   }
 
   async drain(userId: string): Promise<QueuedMessagePayload[]> {
