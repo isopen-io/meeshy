@@ -413,6 +413,29 @@
       "single": "This file is already added",
       "multiple": "{count} files are already added"
     },
-    "pasteTooLongTxtCreated": "Text too long: a .txt file has been created automatically"
+    "pasteTooLongTxtCreated": "Text too long: a .txt file has been created automatically",
+    "filter": {
+      "all": "All",
+      "public": "Public",
+      "group": "Group",
+      "global": "Global",
+      "direct": "Direct",
+      "unread": "Unread",
+      "archived": "Archived"
+    },
+    "noContacts": "No contacts",
+    "noContactsDescription": "You have no contacts yet. Connect with other users.",
+    "noNotifications": "No notifications",
+    "noNotificationsDescription": "You're all caught up with your notifications.",
+    "noArchivedConversations": "No archived conversations",
+    "noArchivedConversationsDescription": "Archive conversations to find them later.",
+    "noSearchResults": "No results",
+    "noSearchResultsWithQuery": "No results found for \"{query}\". Try a different search.",
+    "noSearchResultsDescription": "No results found.",
+    "errorTitle": "Something went wrong",
+    "errorDescription": "We couldn't load the data. Please try again.",
+    "retry": "Retry",
+    "reconnecting": "Reconnecting...",
+    "clickToReconnect": "Click to reconnect"
   }
 }

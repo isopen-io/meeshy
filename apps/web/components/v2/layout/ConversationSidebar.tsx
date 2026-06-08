@@ -15,6 +15,7 @@ import {
 import { useConversationsV2 } from '@/hooks/v2';
 import { useAuth } from '@/hooks/use-auth';
 import { useSplitView } from './SplitViewContext';
+import { useI18n } from '@/hooks/use-i18n';
 
 // Conversation filter categories
 type ConversationFilter = 'toutes' | 'public' | 'groupe' | 'globale' | 'direct' | 'non_lue' | 'archivee';
@@ -42,10 +43,11 @@ function FilterTabs({
   counts: FilterCounts;
   isVisible: boolean;
 }) {
+  const { t } = useI18n('conversations');
   const filters: { id: ConversationFilter; label: string; count?: number; icon?: React.ReactNode }[] = [
     {
       id: 'toutes',
-      label: 'Toutes',
+      label: t('filter.all'),
       count: counts.toutes,
       icon: (
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -55,7 +57,7 @@ function FilterTabs({
     },
     {
       id: 'public',
-      label: 'Public',
+      label: t('filter.public'),
       count: counts.public,
       icon: (
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -65,7 +67,7 @@ function FilterTabs({
     },
     {
       id: 'groupe',
-      label: 'Groupe',
+      label: t('filter.group'),
       count: counts.groupe,
       icon: (
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -75,7 +77,7 @@ function FilterTabs({
     },
     {
       id: 'globale',
-      label: 'Globale',
+      label: t('filter.global'),
       count: counts.globale,
       icon: (
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -85,7 +87,7 @@ function FilterTabs({
     },
     {
       id: 'direct',
-      label: 'Direct',
+      label: t('filter.direct'),
       count: counts.direct,
       icon: (
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -95,7 +97,7 @@ function FilterTabs({
     },
     {
       id: 'non_lue',
-      label: 'Non lue',
+      label: t('filter.unread'),
       count: counts.non_lue,
       icon: (
         <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
@@ -105,7 +107,7 @@ function FilterTabs({
     },
     {
       id: 'archivee',
-      label: 'Archivées',
+      label: t('filter.archived'),
       count: counts.archivee,
       icon: (
         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -178,15 +180,18 @@ function ConversationsSkeleton() {
 }
 
 function ConnectionStatus({ isConnected }: { isConnected: boolean }) {
+  const { t } = useI18n('conversations');
   if (isConnected) return null;
 
   return (
     <div
+      role="status"
+      aria-live="polite"
       className="px-4 py-2 text-sm flex items-center gap-2"
       style={{ background: 'color-mix(in srgb, var(--gp-error) 15%, transparent)' }}
     >
-      <div className="w-2 h-2 rounded-full bg-[var(--gp-error)] animate-pulse" />
-      <span style={{ color: 'var(--gp-error)' }}>Reconnexion en cours...</span>
+      <div className="w-2 h-2 rounded-full bg-[var(--gp-error)] animate-pulse" aria-hidden="true" />
+      <span style={{ color: 'var(--gp-error)' }}>{t('reconnecting')}</span>
     </div>
   );
 }
@@ -200,6 +205,7 @@ function InfiniteScrollTrigger({
   isLoading: boolean;
   onLoadMore: () => void;
 }) {
+  const { t: tConv } = useI18n('conversations');
   const triggerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -232,8 +238,8 @@ function InfiniteScrollTrigger({
     <div ref={triggerRef} className="py-4 flex justify-center">
       {isLoading ? (
         <div className="flex items-center gap-2 text-sm" style={{ color: 'var(--gp-text-muted)' }}>
-          <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-          <span>Chargement...</span>
+          <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" aria-hidden="true" />
+          <span>{tConv('loadingMore')}</span>
         </div>
       ) : (
         <button
@@ -241,7 +247,7 @@ function InfiniteScrollTrigger({
           className="px-4 py-2 text-sm rounded-lg transition-colors hover:bg-[var(--gp-hover)]"
           style={{ color: 'var(--gp-text-secondary)' }}
         >
-          Charger plus de conversations
+          {tConv('loadMore')}
         </button>
       )}
     </div>
@@ -288,6 +294,7 @@ export function ConversationSidebar() {
   const searchParams = useSearchParams();
   const { user: currentUser, isAuthenticated } = useAuth();
   const { sidebarWidth, setSidebarWidth, showRightPanel, isMobile, setShowRightPanel } = useSplitView();
+  const { t } = useI18n('conversations');
 
   // Get selected conversation from URL
   const selectedConversationId = searchParams.get('id') || null;
@@ -439,7 +446,7 @@ export function ConversationSidebar() {
           <div className="flex-1">
             <Input
               ref={searchInputRef}
-              placeholder="Rechercher une conversation..."
+              placeholder={t('conversationSearch.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onFocus={() => setSearchFocused(true)}
@@ -464,7 +471,7 @@ export function ConversationSidebar() {
               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.207A1 1 0 013 6.5V4z" />
               </svg>
-              {{ toutes: 'Toutes', public: 'Public', groupe: 'Groupe', globale: 'Globale', direct: 'Direct', non_lue: 'Non lue', archivee: 'Archivées' }[activeFilter]}
+              {{ toutes: t('filter.all'), public: t('filter.public'), groupe: t('filter.group'), globale: t('filter.global'), direct: t('filter.direct'), non_lue: t('filter.unread'), archivee: t('filter.archived') }[activeFilter]}
             </button>
           )}
         </div>
@@ -497,15 +504,15 @@ export function ConversationSidebar() {
             </div>
             <p style={{ color: 'var(--gp-text-muted)' }}>
               {searchQuery
-                ? 'Aucun resultat pour cette recherche'
-                : `Aucune conversation ${({ toutes: '', public: 'publique', groupe: 'de groupe', globale: 'globale', direct: 'privee', non_lue: 'non lue', archivee: 'archivee' } as const)[activeFilter]}`}
+                ? t('noSearchResultsWithQuery', { query: searchQuery })
+                : t('noConversations')}
             </p>
           </div>
         ) : (
           <>
             {filteredPinned.length > 0 && (
               <div>
-                <CategoryHeader id="pinned" name="Epinglees" icon={CategoryIcons.pinned} count={filteredPinned.length} />
+                <CategoryHeader id="pinned" name={t('conversationsList.pinned')} icon={CategoryIcons.pinned} count={filteredPinned.length} />
                 {filteredPinned.map((conv) => (
                   <ConversationItem
                     key={conv.id}
@@ -518,7 +525,7 @@ export function ConversationSidebar() {
             )}
 
             {filteredPinned.length > 0 && filteredUnpinned.length > 0 && (
-              <CategoryHeader id="all" name="Conversations" icon={CategoryIcons.all} count={filteredUnpinned.length} />
+              <CategoryHeader id="all" name={t('conversations')} icon={CategoryIcons.all} count={filteredUnpinned.length} />
             )}
 
             {filteredUnpinned.map((conv) => (

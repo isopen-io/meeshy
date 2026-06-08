@@ -450,8 +450,8 @@ struct ThemedFeedOverlay: View {
                                 secondaryColor: "4ECDC4"
                             )
 
-                            Text("Partager quelque chose...")
-                                .font(.system(size: 14))
+                            Text(String(localized: "composer.placeholder.share", defaultValue: "Share something…", bundle: .main))
+                                .font(.footnote)
                                 .foregroundColor(theme.textMuted)
 
                             Spacer()
@@ -731,8 +731,8 @@ struct ThemedFeedComposer: View {
                 ZStack(alignment: .topLeading) {
                     // Placeholder
                     if text.isEmpty {
-                        Text("Partager quelque chose avec le monde...")
-                            .font(.system(size: 14))
+                        Text(String(localized: "composer.placeholder.shareWorld", defaultValue: "Share something with the world…", bundle: .main))
+                            .font(.footnote)
                             .foregroundColor(theme.textMuted)
                             .padding(.horizontal, 4)
                             .padding(.top, 8)
