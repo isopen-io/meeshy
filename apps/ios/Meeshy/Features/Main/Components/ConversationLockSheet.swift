@@ -53,8 +53,8 @@ struct ConversationLockSheet: View {
             dotsRow
             if let error = errorMessage {
                 Text(error)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(.red)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundColor(MeeshyColors.error)
                     .transition(.opacity.combined(with: .scale(scale: 0.9)))
             }
             numpad

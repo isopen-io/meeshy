@@ -65,6 +65,7 @@
     "confirmDeleteTitle": "Confirmer la suppression",
     "confirmDeleteDescription": "Êtes-vous sûr de vouloir supprimer ce fichier ?",
     "confirmDeleteIrreversible": "Cette action est irréversible. Le fichier sera définitivement supprimé.",
+    "cancel": "Annuler",
     "deleting": "Suppression..."
   }
 }

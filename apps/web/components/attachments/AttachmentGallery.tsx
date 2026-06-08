@@ -399,9 +399,9 @@ export function AttachmentGallery({
       <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Confirmer la suppression</DialogTitle>
+            <DialogTitle>{t('contextMenu.confirmDeleteTitle')}</DialogTitle>
             <DialogDescription>
-              Êtes-vous sûr de vouloir supprimer ce fichier ? Cette action est irréversible.
+              {t('contextMenu.confirmDeleteDescription')}
             </DialogDescription>
           </DialogHeader>
           {currentAttachment && (
@@ -410,7 +410,7 @@ export function AttachmentGallery({
                 {currentAttachment.originalName}
               </div>
               <div className="text-xs text-muted-foreground mt-1">
-                Le fichier sera définitivement supprimé du serveur.
+                {t('contextMenu.confirmDeleteIrreversible')}
               </div>
             </div>
           )}
@@ -420,14 +420,14 @@ export function AttachmentGallery({
               onClick={handleDeleteCancel}
               disabled={isDeleting}
             >
-              Annuler
+              {t('contextMenu.cancel')}
             </Button>
             <Button
               variant="destructive"
               onClick={handleDeleteConfirm}
               disabled={isDeleting}
             >
-              {isDeleting ? 'Suppression...' : 'Supprimer'}
+              {isDeleting ? t('contextMenu.deleting') : t('contextMenu.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>

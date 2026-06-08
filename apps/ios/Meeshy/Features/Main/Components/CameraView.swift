@@ -182,11 +182,11 @@ struct CameraView: View {
                     .frame(width: 72, height: 72)
                 if camera.isRecordingVideo {
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(.red)
+                        .fill(MeeshyColors.error)
                         .frame(width: 30, height: 30)
                 } else {
                     Circle()
-                        .fill(.red)
+                        .fill(MeeshyColors.error)
                         .frame(width: 60, height: 60)
                 }
             }
@@ -196,7 +196,7 @@ struct CameraView: View {
     private var recordingIndicator: some View {
         HStack(spacing: 8) {
             Circle()
-                .fill(.red)
+                .fill(MeeshyColors.error)
                 .frame(width: 10, height: 10)
             Text(formatDuration(camera.recordingDuration))
                 .font(.system(size: 16, weight: .semibold, design: .monospaced))

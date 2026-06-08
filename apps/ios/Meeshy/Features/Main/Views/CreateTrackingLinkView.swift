@@ -31,7 +31,7 @@ struct CreateTrackingLinkView: View {
                         utmSection
                         tokenSection
                         if let error = errorMessage {
-                            Text(error).font(.system(size: 13)).foregroundColor(.red)
+                            Text(error).font(.footnote).foregroundColor(MeeshyColors.error)
                                 .padding(.horizontal, 20)
                         }
                         createButton

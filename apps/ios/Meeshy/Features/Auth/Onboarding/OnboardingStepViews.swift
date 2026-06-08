@@ -908,9 +908,9 @@ struct StepLanguageView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 8) {
                     Circle()
-                        .fill(Color.blue.opacity(0.2))
+                        .fill(MeeshyColors.indigo400.opacity(0.2))
                         .frame(width: 32, height: 32)
-                        .overlay(Text("JP").font(.caption2.weight(.bold)).foregroundColor(.blue))
+                        .overlay(Text("JP").font(.caption2.weight(.bold)).foregroundColor(MeeshyColors.indigo400))
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Jean-Pierre")

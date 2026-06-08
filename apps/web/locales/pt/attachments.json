@@ -65,6 +65,7 @@
     "confirmDeleteTitle": "Confirmar exclusão",
     "confirmDeleteDescription": "Tem certeza de que deseja excluir este arquivo?",
     "confirmDeleteIrreversible": "Esta ação é irreversível. O arquivo será excluído permanentemente.",
+    "cancel": "Cancelar",
     "deleting": "Excluindo..."
   }
 }
