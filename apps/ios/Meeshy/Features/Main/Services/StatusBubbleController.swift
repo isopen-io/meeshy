@@ -73,7 +73,7 @@ final class StatusBubbleController: ObservableObject {
 // MARK: - View Modifier
 
 private struct StatusBubbleOverlayModifier: ViewModifier {
-    @ObservedObject private var controller = StatusBubbleController.shared
+    @EnvironmentObject private var controller: StatusBubbleController
 
     func body(content: Content) -> some View {
         ZStack {
