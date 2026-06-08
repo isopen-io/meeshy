@@ -636,20 +636,24 @@ public struct AudioPlayerView: View {
             loadWaveformSamples()
         }
         .onDisappear {
-            // Symmetrical to onAppear (BUG A fix): only unregister the legacy
-            // autoplay closure if it was registered — i.e. only in the
-            // owned-engine path. Never registered when an external engine
-            // drives the view, so never unregister there.
-            if !usesExternalPlayer {
-                AudioPlaybackManager.unregisterAutoplay(url: attachment.fileUrl)
-            }
-            // When an external engine is injected it is owned by the parent
-            // (e.g. ConversationAudioCoordinator) and survives view hierarchy
-            // churn. Unregistering it from PlaybackCoordinator on every
-            // scroll-off would break sibling bubbles + the coordinator itself.
-            if !usesExternalPlayer {
-                player.unregisterFromCoordinator()
-            }
+            // Owned-engine teardown. The external-engine path (conversation
+            // bubbles) is owned by a parent coordinator that survives view
+            // hierarchy churn and intentionally keeps playing via the
+            // mini-player + background continuation, so it must be left
+            // untouched here.
+            guard Self.shouldStopOwnedEngineOnDisappear(usesExternalPlayer: usesExternalPlayer) else { return }
+            // Symmetrical to onAppear (BUG A fix): the legacy autoplay closure
+            // is registered only in the owned-engine path.
+            AudioPlaybackManager.unregisterAutoplay(url: attachment.fileUrl)
+            // Leak fix — stop owned playback deterministically. Relying on ARC
+            // to dealloc the `@StateObject` is non-deterministic, and once the
+            // engine is unregistered from `PlaybackCoordinator` (next line) it
+            // can no longer be silenced when a story or conversation claims
+            // audio next — so post / feed-card audio would keep playing on top
+            // of the next screen (e.g. bleed over a story). Stop BEFORE
+            // unregistering so the audio is actually halted.
+            player.stop()
+            player.unregisterFromCoordinator()
         }
         .onChange(of: player.isPlaying) { playing in
             onPlayingChange?(playing)
@@ -1040,6 +1044,18 @@ public struct AudioPlayerView: View {
     ) -> Bool {
         if !usesExternalPlayer { return true }
         return playerAttachmentId != bubbleAttachmentId
+    }
+
+    /// Pure decision: should the owned playback engine be stopped when this
+    /// view leaves the hierarchy? `true` only for the owned-engine path (post
+    /// detail, feed post cards, composer preview, standalone players). An
+    /// externally-injected engine (e.g. `ConversationAudioCoordinator`) is
+    /// owned by a parent that survives view churn and intentionally keeps
+    /// playing (mini-player + background continuation), so it must NOT be
+    /// stopped here. Extracted as a `nonisolated static` so the lifecycle
+    /// contract is unit-testable without a SwiftUI render lifecycle.
+    nonisolated internal static func shouldStopOwnedEngineOnDisappear(usesExternalPlayer: Bool) -> Bool {
+        !usesExternalPlayer
     }
 
     private func handlePlayTap() {
