@@ -21,7 +21,7 @@ public struct StoryNotificationLoadingView: View {
                 ProgressView()
                     .progressViewStyle(.circular)
                     .tint(.white)
-                Text("Loading...")
+                Text(String(localized: "loading.message", defaultValue: "Loading…", bundle: .main))
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.85))
             }
