@@ -533,6 +533,7 @@ struct TwoFactorBackupCodesView: View {
 
     @State private var verificationCode = ""
     @State private var codeSubmitted = false
+    @State private var copiedCodes = false
 
     private let tfaColor = MeeshyColors.indigo500
 
