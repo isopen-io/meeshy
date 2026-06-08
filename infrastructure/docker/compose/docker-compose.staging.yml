@@ -246,6 +246,8 @@ services:
       - FIREBASE_ADMIN_CREDENTIALS_PATH=/app/secrets/firebase-admin-sdk.json
       - ATTACHMENT_MASTER_KEY=${ATTACHMENT_MASTER_KEY}
       - ENCRYPTION_MASTER_KEY=${ENCRYPTION_MASTER_KEY:-}
+      # Bandwidth sprint B1: per-language socket filtering (ON — validated 2026-06-08)
+      - SOCKET_LANG_FILTER=${SOCKET_LANG_FILTER:-true}
     volumes:
       - gateway_staging_uploads:/app/uploads
       - ./secrets/firebase-admin-sdk.json:/app/secrets/firebase-admin-sdk.json:ro

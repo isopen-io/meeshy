@@ -324,6 +324,8 @@ services:
       TURN_SECRET: ${TURN_SECRET:-meeshy-turn-secret-CHANGE-IN-PRODUCTION}
       TURN_SERVERS: ${TURN_SERVERS:-}
       TURN_CREDENTIAL_TTL: ${TURN_CREDENTIAL_TTL:-3600}
+      # Bandwidth sprint B1: per-language socket filtering (ON — validated 2026-06-08)
+      SOCKET_LANG_FILTER: ${SOCKET_LANG_FILTER:-true}
     ports:
       - "3000:3000"
     depends_on:

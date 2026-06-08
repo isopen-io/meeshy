@@ -18,6 +18,7 @@ export interface ConversationHeaderProps {
   onLinkCreated: (link: unknown) => void;
   onStartCall?: (type?: 'audio' | 'video') => void;
   onOpenGallery?: () => void;
+  onOpenSearch?: () => void;
   t: (key: string) => string;
   showBackButton?: boolean;
   otherUnreadCount?: number;

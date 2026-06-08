@@ -33,6 +33,7 @@ import { AuthMiddleware, createUnifiedAuthMiddleware } from './middleware/auth';
 import { registerGlobalRateLimiter } from './middleware/rate-limiter';
 import { registerClientMutationIdHook } from './middleware/clientMutationId';
 import { createDeviceLocaleMiddleware } from './middleware/deviceLocale';
+import { requestIdPlugin } from './middleware/request-id';
 import { MutationLogService } from './services/MutationLogService';
 import { authRoutes } from './routes/auth';
 import { conversationRoutes } from './routes/conversations';
@@ -403,6 +404,10 @@ class MeeshyServer {
 
   private async setupMiddleware(): Promise<void> {
     logger.info('Setting up middleware...');
+
+    // Distributed tracing: attaches X-Request-ID to every request/response.
+    // Registered first so all subsequent plugins and hooks see request.id.
+    await this.server.register(requestIdPlugin);
 
     // Register sensible plugin for httpErrors
     await this.server.register(sensible);

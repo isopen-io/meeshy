@@ -293,6 +293,8 @@ services:
       - MAX_SESSIONS_PER_USER=${MAX_SESSIONS_PER_USER:-10}
       # Branding (optional - defaults to ${FRONTEND_URL}/android-chrome-512x512.png)
       - BRAND_LOGO_URL=${BRAND_LOGO_URL:-}
+      # Bandwidth sprint B1: per-language socket filtering (ON — validated 2026-06-08)
+      - SOCKET_LANG_FILTER=${SOCKET_LANG_FILTER:-true}
       # Firebase
       - FIREBASE_ADMIN_CREDENTIALS_PATH=/app/secrets/firebase-admin-sdk.json
       # TURN server credentials (WebRTC calls)
