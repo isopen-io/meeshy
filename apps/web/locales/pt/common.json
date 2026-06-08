@@ -82,7 +82,18 @@
       "network": "Erro de rede",
       "unauthorized": "Acesso não autorizado",
       "forbidden": "Acesso proibido",
-      "notFound": "Recurso não encontrado",
+      "notFound": {
+        "title": "Página não encontrada",
+        "description": "Desculpe, esta página ainda não existe.",
+        "backToDashboard": "Voltar ao painel",
+        "previousPage": "Página anterior",
+        "suggestions": {
+          "label": "Sugestões:",
+          "dashboard": "Voltar ao painel",
+          "conversations": "Ver suas conversas",
+          "groups": "Ver seus grupos"
+        }
+      },
       "invalidCredentials": "Credenciais inválidas",
       "sessionExpired": "Sessão expirada",
       "validationError": "Erro de validação"

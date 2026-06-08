@@ -12,7 +12,6 @@
     "reset": "Reset",
     "resetAll": "Reset All",
     "disableAll": "Disable all effects",
-
     "recorder": {
       "initializing": "Initializing...",
       "audioEffects": "Audio effects",
@@ -29,7 +28,6 @@
         "cannotAccessMicrophone": "Cannot access microphone."
       }
     },
-
     "voiceCoder": {
       "title": "Perfect Voice",
       "description": "Automatic pitch correction for perfect singing",
@@ -39,15 +37,18 @@
       },
       "retuneSpeed": {
         "label": "Speed",
-        "tooltip": "Pitch correction speed. Slow (0-30%) = very natural and smooth. Medium (30-70%) = balanced. Fast (70-100%) = robotic effect"
+        "tooltip": "Pitch correction speed. Slow (0-30%) = very natural and smooth. Medium (30-70%) = balanced. Fast (70-100%) = robotic effect",
+        "shortDescription": "Correction speed"
       },
       "strength": {
         "label": "Strength",
-        "tooltip": "Auto-tune intensity. Higher = more perfect voice but less natural. Recommended: 30-50% for subtle effect"
+        "tooltip": "Auto-tune intensity. Higher = more perfect voice but less natural. Recommended: 30-50% for subtle effect",
+        "shortDescription": "Effect intensity"
       },
       "naturalVibrato": {
         "label": "Expression",
-        "tooltip": "Preserves natural variations and vibrato in your voice. Higher = more expression and emotion preserved"
+        "tooltip": "Preserves natural variations and vibrato in your voice. Higher = more expression and emotion preserved",
+        "shortDescription": "Keeps naturalness"
       },
       "pitch": {
         "label": "Pitch",
@@ -58,7 +59,8 @@
         "chromatic": "All notes",
         "major": "Major (happy)",
         "minor": "Minor (sad)",
-        "pentatonic": "Pentatonic"
+        "pentatonic": "Pentatonic",
+        "shortDescription": "Allowed notes"
       },
       "key": {
         "label": "Key"
@@ -68,7 +70,6 @@
         "tooltip": "Adds harmonic backing vocals to your main voice for a choir effect"
       }
     },
-
     "babyVoice": {
       "title": "Baby Voice",
       "pitch": {
@@ -84,7 +85,6 @@
         "tooltip": "Adds a soft, airy breath effect characteristic of a child's voice"
       }
     },
-
     "demonVoice": {
       "title": "Demon Voice",
       "pitch": {
@@ -100,7 +100,6 @@
         "tooltip": "Reverberation effect like in a dark, deep cathedral"
       }
     },
-
     "backSound": {
       "title": "Background Ambiance",
       "uploadLabel": "Load audio file",
@@ -121,7 +120,6 @@
         "labelMinutes": "Minutes"
       }
     },
-
     "effects": {
       "voice-coder": {
         "name": "Perfect Voice",
@@ -189,7 +187,6 @@
           "custom": "Custom"
         }
       },
-
       "baby-voice": {
         "name": "Baby Voice",
         "shortName": "Baby",
@@ -213,7 +210,6 @@
           }
         }
       },
-
       "demon-voice": {
         "name": "Demon Voice",
         "shortName": "Demon",
@@ -237,7 +233,6 @@
           }
         }
       },
-
       "back-sound": {
         "name": "Background Sound",
         "shortName": "Background",
@@ -269,12 +264,10 @@
         }
       }
     },
-
     "presets": {
       "custom": "Custom",
       "customDescription": "Your own settings"
     },
-
     "timeline": {
       "title": "Effects Timeline",
       "duration": "Duration",
@@ -292,12 +285,10 @@
         "parameterChanges": "Changes"
       }
     },
-
     "badge": {
       "hasEffects": "Audio effects",
       "clickToView": "Click to view timeline"
     },
-
     "status": {
       "on": "On",
       "off": "Off",

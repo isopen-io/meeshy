@@ -12,7 +12,6 @@
     "reset": "Redefinir",
     "resetAll": "Redefinir Tudo",
     "disableAll": "Desativar todos os efeitos",
-
     "recorder": {
       "initializing": "Inicializando...",
       "audioEffects": "Efeitos de áudio",
@@ -29,7 +28,6 @@
         "cannotAccessMicrophone": "Não é possível acessar o microfone."
       }
     },
-
     "voiceCoder": {
       "title": "Perfect Voice",
       "description": "Correção automática da afinação da sua voz para cantar afinado",
@@ -39,15 +37,18 @@
       },
       "retuneSpeed": {
         "label": "Rapidez",
-        "tooltip": "Velocidade de correção da afinação. Lento (0-30%) = muito natural e suave. Médio (30-70%) = equilibrado. Rápido (70-100%) = efeito robótico"
+        "tooltip": "Velocidade de correção da afinação. Lento (0-30%) = muito natural e suave. Médio (30-70%) = equilibrado. Rápido (70-100%) = efeito robótico",
+        "shortDescription": "Velocidade de correção"
       },
       "strength": {
         "label": "Força",
-        "tooltip": "Intensidade do auto-tune. Mais alto = voz mais perfeita mas menos natural. Recomendado: 30-50% para um efeito sutil"
+        "tooltip": "Intensidade do auto-tune. Mais alto = voz mais perfeita mas menos natural. Recomendado: 30-50% para um efeito sutil",
+        "shortDescription": "Intensidade do efeito"
       },
       "naturalVibrato": {
         "label": "Expressão",
-        "tooltip": "Preserva as variações e o vibrato natural da sua voz. Mais alto = mais expressão e emoção preservadas"
+        "tooltip": "Preserva as variações e o vibrato natural da sua voz. Mais alto = mais expressão e emoção preservadas",
+        "shortDescription": "Mantém naturalidade"
       },
       "pitch": {
         "label": "Altura",
@@ -58,7 +59,8 @@
         "chromatic": "Todas as notas",
         "major": "Maior (alegre)",
         "minor": "Menor (triste)",
-        "pentatonic": "Pentatônica"
+        "pentatonic": "Pentatônica",
+        "shortDescription": "Notas permitidas"
       },
       "key": {
         "label": "Tonalidade"
@@ -68,7 +70,6 @@
         "tooltip": "Adiciona vozes de acompanhamento harmônicas à sua voz principal para um efeito coral"
       }
     },
-
     "babyVoice": {
       "title": "Voz de Criança",
       "pitch": {
@@ -84,7 +85,6 @@
         "tooltip": "Adiciona um efeito de sopro suave e aéreo característico de uma voz infantil"
       }
     },
-
     "demonVoice": {
       "title": "Voz de Demônio",
       "pitch": {
@@ -100,7 +100,6 @@
         "tooltip": "Efeito de reverberação como em uma catedral escura e profunda"
       }
     },
-
     "backSound": {
       "title": "Ambiente de Fundo",
       "uploadLabel": "Carregar um arquivo de áudio",
@@ -121,7 +120,6 @@
         "labelMinutes": "Minutos"
       }
     },
-
     "effects": {
       "voice-coder": {
         "name": "Voz Perfeita",
@@ -189,7 +187,6 @@
           "custom": "Personalizado"
         }
       },
-
       "baby-voice": {
         "name": "Voz Infantil",
         "shortName": "Infantil",
@@ -213,7 +210,6 @@
           }
         }
       },
-
       "demon-voice": {
         "name": "Voz Demoníaca",
         "shortName": "Demoníaca",
@@ -237,7 +233,6 @@
           }
         }
       },
-
       "back-sound": {
         "name": "Som de Fundo",
         "shortName": "Fundo",
@@ -269,12 +264,10 @@
         }
       }
     },
-
     "presets": {
       "custom": "Personalizado",
       "customDescription": "Suas próprias configurações"
     },
-
     "timeline": {
       "title": "Linha do Tempo dos Efeitos",
       "duration": "Duração",
@@ -292,12 +285,10 @@
         "parameterChanges": "Modificações"
       }
     },
-
     "badge": {
       "hasEffects": "Efeitos de áudio",
       "clickToView": "Clique para ver a linha do tempo"
     },
-
     "status": {
       "on": "Ativado",
       "off": "Desativado",

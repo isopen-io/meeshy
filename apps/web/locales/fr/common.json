@@ -2,7 +2,7 @@
   "common": {
     "languageNames": {
       "en": "Anglais",
-      "fr": "Français", 
+      "fr": "Français",
       "pt": "Portugais",
       "es": "Espagnol",
       "de": "Allemand",
@@ -82,7 +82,18 @@
       "network": "Erreur réseau",
       "unauthorized": "Accès non autorisé",
       "forbidden": "Accès interdit",
-      "notFound": "Ressource non trouvée",
+      "notFound": {
+        "title": "Page non trouvée",
+        "description": "Désolé, cette page n'existe pas encore.",
+        "backToDashboard": "Retour au tableau de bord",
+        "previousPage": "Page précédente",
+        "suggestions": {
+          "label": "Suggestions :",
+          "dashboard": "Retourner au tableau de bord",
+          "conversations": "Consulter vos conversations",
+          "groups": "Voir vos groupes"
+        }
+      },
       "invalidCredentials": "Identifiants invalides",
       "sessionExpired": "Session expirée",
       "validationError": "Erreur de validation"
@@ -198,4 +209,3 @@
     }
   }
 }
-

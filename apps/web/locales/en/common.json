@@ -2,7 +2,7 @@
   "common": {
     "languageNames": {
       "en": "English",
-      "fr": "French", 
+      "fr": "French",
       "pt": "Portuguese",
       "es": "Spanish",
       "de": "German",
@@ -82,7 +82,18 @@
       "network": "Network error",
       "unauthorized": "Unauthorized access",
       "forbidden": "Access forbidden",
-      "notFound": "Resource not found",
+      "notFound": {
+        "title": "Page not found",
+        "description": "Sorry, this page does not exist yet.",
+        "backToDashboard": "Back to dashboard",
+        "previousPage": "Previous page",
+        "suggestions": {
+          "label": "Suggestions:",
+          "dashboard": "Return to dashboard",
+          "conversations": "View your conversations",
+          "groups": "View your groups"
+        }
+      },
       "invalidCredentials": "Invalid credentials",
       "sessionExpired": "Session expired",
       "validationError": "Validation error"
