@@ -1564,25 +1564,12 @@ export class MeeshySocketIOManager {
           for (const participant of participants) {
             const roomTarget = participant.userId || participant.id;
             const unreadCount = unreadCountMap.get(participant.id) ?? 0;
-          // Batch all unread-count queries in parallel instead of sequential N+1
-          const unreadResults = await Promise.all(
-            participants.map(async (participant) => {
-              const roomTarget = participant.userId || participant.id;
-              // Pass `participant.id` (not `roomTarget`) — the cursor's
-              // participantId column is the Participant.id.
-              const unreadCount = await readStatusService.getUnreadCount(participant.id, normalizedId);
-              return { participant, roomTarget, unreadCount };
-            })
-          );
 
-          for (const { participant, roomTarget, unreadCount } of unreadResults) {
-            // Émettre vers le socket personnel de l'utilisateur
             this.io.to(ROOMS.user(roomTarget)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
               conversationId: normalizedId,
               unreadCount
             });
 
-            // Queue message for offline participants
             if (this.deliveryQueue && !connectedUserIds.has(roomTarget)) {
               this.deliveryQueue.enqueue(roomTarget, {
                 messageId: message.id,
