@@ -70,7 +70,7 @@ export const SystemStatusBanner = memo(function SystemStatusBanner() {
           <Button
             size="sm"
             variant="secondary"
-            className="h-8 bg-white text-blue-600 hover:bg-blue-50 border-none font-bold"
+            className="h-8 bg-white dark:bg-blue-900 text-blue-600 dark:text-blue-200 hover:bg-blue-50 dark:hover:bg-blue-800 border-none font-bold"
             onClick={handleUpdate}
           >
             {t('updateNow') || 'Mettre à jour'}

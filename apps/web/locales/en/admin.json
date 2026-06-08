@@ -154,8 +154,14 @@
   },
   "translationMonitor": {
     "loadingMetrics": "Loading metrics...",
-    "languageBreakdown": "Language breakdown",
-    "title": "Translation monitoring",
-    "monitoringError": "Monitoring error"
+    "languageBreakdown": "Language breakdown"
+  },
+  "llm": {
+    "generationSettings": "Generation Settings",
+    "budgetManagement": "Budget Management"
+  },
+  "globalConfig": {
+    "defaultProvider": "Default Provider",
+    "globalScheduler": "Global Scheduler"
   }
 }

@@ -370,7 +370,7 @@ struct ConversationListView: View {
                 label: conversation.userState.isPinned
                     ? String(localized: "swipe.unpin", defaultValue: "D\u{00e9}s\u{00e9}pingler")
                     : String(localized: "swipe.pin", defaultValue: "\u{00c9}pingler"),
-                color: Color(hex: "3B82F6")
+                color: MeeshyColors.pinnedBlue
             ) {
                 Task { await conversationViewModel.togglePin(for: conversation.id) }
             },
@@ -379,7 +379,7 @@ struct ConversationListView: View {
                 label: conversation.userState.isMuted
                     ? String(localized: "swipe.unmute", defaultValue: "Son")
                     : String(localized: "swipe.mute", defaultValue: "Silence"),
-                color: Color(hex: "6B7280")
+                color: MeeshyColors.neutral500
             ) {
                 Task { await conversationViewModel.toggleMute(for: conversation.id) }
             },
@@ -388,7 +388,7 @@ struct ConversationListView: View {
                 label: isLocked
                     ? String(localized: "swipe.unlock", defaultValue: "D\u{00e9}verrouiller")
                     : String(localized: "swipe.lock", defaultValue: "Verrouiller"),
-                color: Color(hex: "F59E0B")
+                color: MeeshyColors.warning
             ) {
                 if isLocked {
                     lockSheetMode = .unlockConversation
@@ -425,7 +425,7 @@ struct ConversationListView: View {
                 label: isRead
                     ? String(localized: "swipe.mark_unread", defaultValue: "Non lu")
                     : String(localized: "swipe.mark_read", defaultValue: "Lu"),
-                color: Color(hex: "8B5CF6")
+                color: MeeshyColors.indigo400
             ) {
                 if isRead {
                     Task { await conversationViewModel.markAsUnread(conversationId: conversation.id) }
@@ -442,7 +442,7 @@ struct ConversationListView: View {
                 label: isBlocked
                     ? String(localized: "swipe.unblock", defaultValue: "D\u{00e9}bloquer")
                     : String(localized: "swipe.block", defaultValue: "Bloquer"),
-                color: Color(hex: "EF4444")
+                color: MeeshyColors.error
             ) {
                 if isBlocked {
                     Task {

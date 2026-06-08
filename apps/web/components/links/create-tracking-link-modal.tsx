@@ -217,12 +217,12 @@ export function CreateTrackingLinkModal({
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="p-4 bg-white border rounded-lg">
+                  <div className="p-4 bg-white dark:bg-gray-950 border dark:border-gray-700 rounded-lg">
                     <div className="flex items-center space-x-2">
                       <Input
                         value={generatedShortUrl}
                         readOnly
-                        className="flex-1 text-sm bg-white font-mono"
+                        className="flex-1 text-sm bg-white dark:bg-gray-950 font-mono"
                       />
                       <Button
                         onClick={handleCopyLink}
