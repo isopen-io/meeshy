@@ -60,6 +60,9 @@
     "node_modules",
     "dist",
     "src/dma-interoperability/**/*",
-    "../../packages/shared/encryption/**/*"
+    "../../packages/shared/encryption/**/*",
+    "**/__tests__/**/*",
+    "**/*.test.ts",
+    "**/*.spec.ts"
   ]
 }
