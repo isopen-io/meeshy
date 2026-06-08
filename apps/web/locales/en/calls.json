@@ -1,0 +1,25 @@
+{
+  "calls": {
+    "loading": "Loading call...",
+    "banner": {
+      "inProgress": "Call in progress",
+      "participant": "{count} participant",
+      "participants": "{count} participants",
+      "join": "Join",
+      "dismiss": "Dismiss"
+    },
+    "error": {
+      "title": "Call Error",
+      "message": "An unexpected error occurred during the call.",
+      "tryAgain": "Try Again",
+      "returnHome": "Return Home",
+      "troubleshooting": {
+        "title": "Troubleshooting:",
+        "permissions": "Make sure you granted camera and microphone permissions",
+        "browser": "Check that your browser supports video calls (Chrome, Firefox, Safari)",
+        "https": "Ensure you are using HTTPS connection",
+        "refresh": "Try refreshing the page"
+      }
+    }
+  }
+}

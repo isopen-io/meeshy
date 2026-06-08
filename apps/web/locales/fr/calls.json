@@ -1,0 +1,25 @@
+{
+  "calls": {
+    "loading": "Chargement de l'appel...",
+    "banner": {
+      "inProgress": "Appel en cours",
+      "participant": "{count} participant",
+      "participants": "{count} participants",
+      "join": "Rejoindre",
+      "dismiss": "Ignorer"
+    },
+    "error": {
+      "title": "Erreur d'appel",
+      "message": "Une erreur inattendue s'est produite pendant l'appel.",
+      "tryAgain": "Réessayer",
+      "returnHome": "Retour à l'accueil",
+      "troubleshooting": {
+        "title": "Dépannage :",
+        "permissions": "Assurez-vous d'avoir accordé les permissions caméra et microphone",
+        "browser": "Vérifiez que votre navigateur supporte les appels vidéo (Chrome, Firefox, Safari)",
+        "https": "Assurez-vous d'utiliser une connexion HTTPS",
+        "refresh": "Essayez de recharger la page"
+      }
+    }
+  }
+}
