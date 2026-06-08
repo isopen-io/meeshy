@@ -747,7 +747,7 @@ export class MessageTranslationService extends EventEmitter {
       this.processedTasks.set(taskKey, now);
 
       // Nettoyage périodique des entrées expirées (évite la fuite mémoire)
-      if (this.processedTasks.size > 2000) {
+      if (this.processedTasks.size > 500) {
         const expiry = now - this.PROCESSED_TASK_TTL_MS;
         for (const [key, ts] of this.processedTasks) {
           if (ts < expiry) this.processedTasks.delete(key);

@@ -13,7 +13,9 @@ import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketReactionAddSchema, SocketReactionRemoveSchema } from '../../validation/socket-event-schemas.js';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
 
+const logger = enhancedLogger.child({ module: 'ReactionHandler' });
 
 export interface ReactionHandlerDependencies {
   io: SocketIOServer;
@@ -59,7 +61,7 @@ export class ReactionHandler {
 
       const userIdOrToken = this.socketToUser.get(socket.id);
       if (!userIdOrToken) {
-        console.error('❌ [REACTION_ADD] No userId found for socket:', socket.id);
+        logger.error('reaction:add — unauthenticated socket', { socketId: socket.id });
         const errorResponse: SocketIOResponse<unknown> = {
           success: false,
           error: 'User not authenticated'
@@ -123,7 +125,7 @@ export class ReactionHandler {
 
       await this._createReactionNotification(validated.messageId, validated.emoji, userId, isAnonymous, reaction.id);
     } catch (error: unknown) {
-      console.error('❌ Erreur lors de l\'ajout de réaction:', error);
+      logger.error('reaction:add failed', { error });
       const errorResponse: SocketIOResponse<unknown> = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to add reaction'
@@ -210,7 +212,7 @@ export class ReactionHandler {
         await this._broadcastReactionEventWithConversationId(message.conversationId, updateEvent, SERVER_EVENTS.REACTION_REMOVED);
       }
     } catch (error: unknown) {
-      console.error('❌ Erreur lors de la suppression de réaction:', error);
+      logger.error('reaction:remove failed', { error });
       const errorResponse: SocketIOResponse<unknown> = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to remove reaction'
@@ -230,7 +232,7 @@ export class ReactionHandler {
     try {
       const userIdOrToken = this.socketToUser.get(socket.id);
       if (!userIdOrToken) {
-        console.error(`❌ [REACTION_SYNC] Utilisateur non authentifié pour socket ${socket.id}`);
+        logger.error('reaction:sync — unauthenticated socket', { socketId: socket.id });
         const errorResponse: SocketIOResponse<unknown> = {
           success: false,
           error: 'User not authenticated'
@@ -264,7 +266,7 @@ export class ReactionHandler {
       };
       if (callback) callback(successResponse);
     } catch (error: unknown) {
-      console.error('❌ Erreur lors de la synchronisation des réactions:', error);
+      logger.error('reaction:sync failed', { error });
       const errorResponse: SocketIOResponse<unknown> = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to sync reactions'
@@ -292,7 +294,7 @@ export class ReactionHandler {
     // its server id, so we skip gracefully; the caller replies "Could not resolve
     // participant" and the client retries after the send ACK reconciles the cid.
     if (!/^[0-9a-fA-F]{24}$/.test(messageId)) {
-      console.warn(`⚠️ [REACTION] messageId non réconcilié (cid/optimistic), skip: ${messageId}`);
+      logger.warn('reaction — unreconciled optimistic messageId, skipping', { messageId });
       return undefined;
     }
 
@@ -372,7 +374,7 @@ export class ReactionHandler {
         reactionEmoji: emoji,
       })
       .catch((error) => {
-        console.error('❌ [REACTION_NOTIFICATION] Erreur création notification:', error);
+        logger.error('reaction notification creation failed', { error });
       });
   }
 }
