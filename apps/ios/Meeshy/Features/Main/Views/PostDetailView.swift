@@ -667,7 +667,7 @@ struct PostDetailView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(post.author)
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.subheadline.weight(.bold))
                         .foregroundColor(theme.textPrimary)
                         .onTapGesture {
                             selectedProfileUser = .from(feedPost: post)
@@ -722,21 +722,21 @@ struct PostDetailView: View {
             Group {
                 if truncation.isTruncated && !isTextExpanded {
                     Text(truncation.text + "... ")
-                        .font(.system(size: 16))
+                        .font(.callout)
                         .foregroundColor(theme.textPrimary)
                     + Text(String(localized: "feed.post.detail.see_more", defaultValue: "voir plus", bundle: .main))
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.callout.weight(.semibold))
                         .foregroundColor(Color(hex: accentColor))
                 } else if truncation.isTruncated && isTextExpanded {
                     Text(effectiveContent + " ")
-                        .font(.system(size: 16))
+                        .font(.callout)
                         .foregroundColor(theme.textPrimary)
                     + Text(String(localized: "feed.post.detail.see_less", defaultValue: "voir moins", bundle: .main))
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.callout.weight(.semibold))
                         .foregroundColor(Color(hex: accentColor))
                 } else {
                     Text(effectiveContent)
-                        .font(.system(size: 16))
+                        .font(.callout)
                         .foregroundColor(theme.textPrimary)
                 }
             }

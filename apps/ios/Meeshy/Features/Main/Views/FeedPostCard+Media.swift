@@ -22,9 +22,13 @@ extension FeedPostCard {
                 galleryImageView(mediaList[0])
                     .contentShape(Rectangle())
                     .onTapGesture { openFullscreen(mediaList[0]) }
+                    .accessibilityLabel(String(localized: "feed.post.media.view", defaultValue: "View media", bundle: .main))
+                    .accessibilityAddTraits(.isButton)
                 galleryImageView(mediaList[1])
                     .contentShape(Rectangle())
                     .onTapGesture { openFullscreen(mediaList[1]) }
+                    .accessibilityLabel(String(localized: "feed.post.media.view", defaultValue: "View media", bundle: .main))
+                    .accessibilityAddTraits(.isButton)
             }
             .frame(height: 180)
             .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -35,14 +39,20 @@ extension FeedPostCard {
                     .aspectRatio(0.75, contentMode: .fill)
                     .contentShape(Rectangle())
                     .onTapGesture { openFullscreen(mediaList[0]) }
+                    .accessibilityLabel(String(localized: "feed.post.media.view", defaultValue: "View media", bundle: .main))
+                    .accessibilityAddTraits(.isButton)
 
                 VStack(spacing: spacing) {
                     galleryImageView(mediaList[1])
                         .contentShape(Rectangle())
                         .onTapGesture { openFullscreen(mediaList[1]) }
+                        .accessibilityLabel(String(localized: "feed.post.media.view", defaultValue: "View media", bundle: .main))
+                        .accessibilityAddTraits(.isButton)
                     galleryImageView(mediaList[2])
                         .contentShape(Rectangle())
                         .onTapGesture { openFullscreen(mediaList[2]) }
+                        .accessibilityLabel(String(localized: "feed.post.media.view", defaultValue: "View media", bundle: .main))
+                        .accessibilityAddTraits(.isButton)
                 }
             }
             .frame(height: 220)
@@ -54,17 +64,25 @@ extension FeedPostCard {
                     galleryImageView(mediaList[0])
                         .contentShape(Rectangle())
                         .onTapGesture { openFullscreen(mediaList[0]) }
+                        .accessibilityLabel(String(localized: "feed.post.media.view", defaultValue: "View media", bundle: .main))
+                        .accessibilityAddTraits(.isButton)
                     galleryImageView(mediaList[1])
                         .contentShape(Rectangle())
                         .onTapGesture { openFullscreen(mediaList[1]) }
+                        .accessibilityLabel(String(localized: "feed.post.media.view", defaultValue: "View media", bundle: .main))
+                        .accessibilityAddTraits(.isButton)
                 }
                 HStack(spacing: spacing) {
                     galleryImageView(mediaList[2])
                         .contentShape(Rectangle())
                         .onTapGesture { openFullscreen(mediaList[2]) }
+                        .accessibilityLabel(String(localized: "feed.post.media.view", defaultValue: "View media", bundle: .main))
+                        .accessibilityAddTraits(.isButton)
                     galleryImageView(mediaList[3])
                         .contentShape(Rectangle())
                         .onTapGesture { openFullscreen(mediaList[3]) }
+                        .accessibilityLabel(String(localized: "feed.post.media.view", defaultValue: "View media", bundle: .main))
+                        .accessibilityAddTraits(.isButton)
                 }
             }
             .frame(height: 220)
@@ -76,17 +94,25 @@ extension FeedPostCard {
                     galleryImageView(mediaList[0])
                         .contentShape(Rectangle())
                         .onTapGesture { openFullscreen(mediaList[0]) }
+                        .accessibilityLabel(String(localized: "feed.post.media.view", defaultValue: "View media", bundle: .main))
+                        .accessibilityAddTraits(.isButton)
                     galleryImageView(mediaList[1])
                         .contentShape(Rectangle())
                         .onTapGesture { openFullscreen(mediaList[1]) }
+                        .accessibilityLabel(String(localized: "feed.post.media.view", defaultValue: "View media", bundle: .main))
+                        .accessibilityAddTraits(.isButton)
                 }
                 HStack(spacing: spacing) {
                     galleryImageView(mediaList[2])
                         .contentShape(Rectangle())
                         .onTapGesture { openFullscreen(mediaList[2]) }
+                        .accessibilityLabel(String(localized: "feed.post.media.view", defaultValue: "View media", bundle: .main))
+                        .accessibilityAddTraits(.isButton)
                     galleryImageView(mediaList[3])
                         .contentShape(Rectangle())
                         .onTapGesture { openFullscreen(mediaList[3]) }
+                        .accessibilityLabel(String(localized: "feed.post.media.view", defaultValue: "View media", bundle: .main))
+                        .accessibilityAddTraits(.isButton)
                     ZStack {
                         galleryImageView(mediaList[4])
                         if count > 5 {
@@ -94,10 +120,13 @@ extension FeedPostCard {
                             Text("+\(count - 5)")
                                 .font(.system(size: 22, weight: .bold))
                                 .foregroundColor(.white)
+                                .accessibilityHidden(true)
                         }
                     }
                     .contentShape(Rectangle())
                     .onTapGesture { openFullscreen(mediaList[4]) }
+                    .accessibilityLabel(String(localized: "feed.post.media.view", defaultValue: "View media", bundle: .main))
+                    .accessibilityAddTraits(.isButton)
                 }
             }
             .frame(height: 240)
@@ -223,6 +252,8 @@ extension FeedPostCard {
         .clipped()
         .clipShape(RoundedRectangle(cornerRadius: 12))
         .onTapGesture { openFullscreen(media) }
+        .accessibilityLabel(String(localized: "feed.post.media.view", defaultValue: "View media", bundle: .main))
+        .accessibilityAddTraits(.isButton)
     }
 
     func videoMediaView(_ media: FeedMedia) -> some View {

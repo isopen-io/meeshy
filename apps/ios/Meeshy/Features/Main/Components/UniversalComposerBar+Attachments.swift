@@ -104,7 +104,7 @@ extension UniversalComposerBar {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { onCamera?() }
             }
             // Photo library
-            attachLadderButton(icon: "photo.fill", color: "9B59B6", delay: 0.16) {
+            attachLadderButton(icon: "photo.fill", color: "4F46E5", delay: 0.16) {
                 closeAttachMenu()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { onPhotoLibrary?() }
             }
