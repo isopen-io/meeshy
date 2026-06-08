@@ -20,6 +20,56 @@
         "https": "Asegúrese de utilizar una conexión HTTPS",
         "refresh": "Intente recargar la página"
       }
+    },
+    "controls": {
+      "toolbar": "Controles de llamada",
+      "muteAudio": "Silenciar micrófono",
+      "unmuteAudio": "Activar micrófono",
+      "mute": "Silenciar",
+      "unmute": "Activar",
+      "videoOff": "Desactivar cámara",
+      "videoOn": "Activar cámara",
+      "switchCamera": "Cambiar cámara",
+      "speakerOff": "Desactivar altavoz",
+      "speakerOn": "Activar altavoz",
+      "speakerOnTitle": "Altavoz activado",
+      "speakerOffTitle": "Altavoz desactivado",
+      "toggleEffects": "Efectos de audio",
+      "audioEffects": "Efectos de audio",
+      "toggleStats": "Estadísticas de conexión",
+      "connectionStats": "Stats de conexión",
+      "endCall": "Finalizar llamada"
+    },
+    "permissions": {
+      "title": "Acceso a cámara y micrófono",
+      "titleGranted": "Permisos concedidos",
+      "titleDenied": "Permiso denegado",
+      "description": "Para unirse a esta videollamada, necesitamos acceso a su cámara y micrófono.",
+      "descriptionGranted": "Ya puede unirse a la videollamada.",
+      "grantAccess": "Conceder acceso",
+      "cancel": "Cancelar",
+      "tryAgain": "Reintentar",
+      "requesting": "Por favor, permita el acceso en su navegador...",
+      "joining": "Conectando a la llamada...",
+      "errorDenied": "Acceso a cámara y micrófono denegado. Compruebe la configuración de su navegador y permita el acceso.",
+      "errorNotFound": "No se encontró cámara ni micrófono. Conecte un dispositivo e inténtelo de nuevo.",
+      "errorInUse": "La cámara o el micrófono ya está en uso por otra aplicación.",
+      "errorUnavailable": "No se puede acceder a la cámara y el micrófono. Inténtelo de nuevo.",
+      "errorUnexpected": "Se produjo un error inesperado. Inténtelo de nuevo.",
+      "howToEnable": "Cómo habilitar los permisos:",
+      "instructionChrome": "Haga clic en el icono de cámara en la barra de direcciones",
+      "instructionFirefox": "Haga clic en el icono de cámara en la barra de direcciones",
+      "instructionSafari": "Vaya a Ajustes Safari → Privacidad → Cámara/Micrófono"
+    },
+    "quality": {
+      "details": "Calidad de conexión",
+      "quality": "Calidad:",
+      "packetLoss": "Pérdida de paquetes:",
+      "latency": "Latencia (RTT):",
+      "jitter": "Fluctuación:",
+      "audioBitrate": "Bitrate audio:",
+      "videoBitrate": "Bitrate video:",
+      "updated": "Actualizado:"
     }
   }
 }

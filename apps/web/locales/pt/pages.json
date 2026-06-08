@@ -125,7 +125,9 @@
         "backHome": "Voltar ao início",
         "backDashboard": "Painel",
         "viewCommunities": "Ver comunidades"
-      }
+      },
+      "backPrevious": "Página anterior",
+      "suggestions": "Sugestões:"
     }
   }
 }
