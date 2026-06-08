@@ -20,6 +20,7 @@ import {
   getAttachmentEncryptionService,
 } from '../AttachmentEncryptionService';
 import { MetadataManager } from './MetadataManager';
+import { planVideoTranscode, buildVideoTranscodeArgs } from './video-transcode-plan.js';
 
 export interface FileToUpload {
   buffer: Buffer;
@@ -241,6 +242,73 @@ export class UploadProcessor {
     });
   }
 
+  /** Run ffmpeg with the given argv; resolves on exit 0, rejects otherwise. */
+  private runFfmpeg(args: string[], timeoutMs = 5 * 60_000): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const proc = spawn('ffmpeg', args);
+      let stderr = '';
+      const timer = setTimeout(() => {
+        proc.kill('SIGKILL');
+        reject(new Error('ffmpeg transcode timeout'));
+      }, timeoutMs);
+      proc.stderr.on('data', (d) => { stderr += d.toString(); });
+      proc.on('close', (code) => {
+        clearTimeout(timer);
+        code === 0 ? resolve() : reject(new Error(`ffmpeg exit ${code}: ${stderr.slice(-400)}`));
+      });
+      proc.on('error', (e) => { clearTimeout(timer); reject(e); });
+    });
+  }
+
+  /**
+   * D-video bandwidth — downscale/transcode an oversized clip to a lighter,
+   * progressively streamable H.264 mp4. Returns the new stored file (relative
+   * path + size + mime) on success, or `null` to keep the original.
+   *
+   * Defensive by construction: flag-gated (OFF by default), bounded by a max
+   * inline size, transcodes to a temp output and only swaps when the result is
+   * valid AND smaller — any failure/non-benefit leaves the upload untouched.
+   */
+  private async maybeTranscodeVideo(
+    filePath: string,
+    metadata: { width?: number; height?: number; bitrate?: number; videoCodec?: string },
+    fileSize: number
+  ): Promise<{ filePath: string; fileSize: number; mimeType: string } | null> {
+    if (process.env.VIDEO_TRANSCODE !== 'true') return null;
+
+    const plan = planVideoTranscode({
+      width: metadata.width,
+      height: metadata.height,
+      bitrateBps: metadata.bitrate,
+      videoCodec: metadata.videoCodec,
+      sizeBytes: fileSize,
+    });
+    if (!plan) return null;
+
+    const maxSync = Number(process.env.VIDEO_TRANSCODE_MAX_SYNC_BYTES || 200 * 1024 * 1024);
+    if (fileSize > maxSync) return null; // too large to transcode inline; leave as-is
+
+    const inputAbs = path.join(this.uploadBasePath, filePath);
+    const outputRel = filePath.replace(/\.[^.]+$/, '') + '_t.mp4';
+    const outputAbs = path.join(this.uploadBasePath, outputRel);
+
+    try {
+      await this.runFfmpeg(buildVideoTranscodeArgs(inputAbs, outputAbs, plan));
+      const stat = await fs.stat(outputAbs);
+      if (stat.size === 0 || stat.size >= fileSize) {
+        // No benefit — discard the transcode, keep the original.
+        await fs.unlink(outputAbs).catch(() => {});
+        return null;
+      }
+      await fs.unlink(inputAbs).catch(() => {});
+      return { filePath: outputRel, fileSize: stat.size, mimeType: 'video/mp4' };
+    } catch (error) {
+      console.error('[UploadProcessor] ⚠️ Video transcode failed, keeping original:', error);
+      await fs.unlink(outputAbs).catch(() => {});
+      return null;
+    }
+  }
+
   /**
    * Sauvegarde physiquement un fichier avec permissions sécurisées
    * Pour les fichiers audio, applique automatiquement une amplification de +9dB
@@ -317,13 +385,20 @@ export class UploadProcessor {
     await this.saveFile(file.buffer, filePath, file.mimeType);
 
     const attachmentType = getAttachmentType(file.mimeType, file.filename);
-    const metadata = await this.metadataManager.extractMetadata(
+    let metadata = await this.metadataManager.extractMetadata(
       filePath,
       attachmentType,
       file.mimeType,
       providedMetadata,
       file.size  // Passer la taille du fichier pour validation de cohérence
     );
+
+    // The stored representation may diverge from the upload after transcoding
+    // (e.g. video → capped-resolution H.264 mp4). Everything persisted below
+    // (URL, size, mime, dimensions) reads these, not the raw upload.
+    let storedFilePath = filePath;
+    let storedFileSize = file.size;
+    let storedMimeType = file.mimeType;
 
     let thumbnailPath: string | null = null;
     let imageVariants: Array<{ width: number; height: number; url: string; size: number; format: 'webp' }> | undefined;
@@ -342,6 +417,23 @@ export class UploadProcessor {
       }
     } else if (attachmentType === 'video') {
       thumbnailPath = await this.metadataManager.generateVideoThumbnail(filePath);
+      // D-video: downscale/transcode oversized clips to a lighter, progressively
+      // streamable H.264 mp4 (flag-gated, OFF by default; original kept on any
+      // failure or non-benefit). Re-probe so persisted dimensions/size match.
+      const transcoded = await this.maybeTranscodeVideo(filePath, metadata, file.size);
+      if (transcoded) {
+        storedFilePath = transcoded.filePath;
+        storedFileSize = transcoded.fileSize;
+        storedMimeType = transcoded.mimeType;
+        try {
+          metadata = await this.metadataManager.extractMetadata(
+            storedFilePath, attachmentType, storedMimeType, undefined, storedFileSize
+          );
+        } catch {
+          // Keep prior metadata (dimensions ~unchanged after a downscale-fit);
+          // never fail the upload over a re-probe.
+        }
+      }
     }
     metadata.thumbnailGenerated = !!thumbnailPath;
 
@@ -356,10 +448,10 @@ export class UploadProcessor {
         : null;
     if (!thumbHash) {
       const { ThumbHashGenerator } = await import('./ThumbHashGenerator.js');
-      thumbHash = await ThumbHashGenerator.generate(path.join(this.uploadBasePath, filePath), file.mimeType);
+      thumbHash = await ThumbHashGenerator.generate(path.join(this.uploadBasePath, storedFilePath), storedMimeType);
     }
 
-    const fileUrl = this.getAttachmentPath(filePath);
+    const fileUrl = this.getAttachmentPath(storedFilePath);
     const thumbnailUrl = thumbnailPath ? this.getAttachmentPath(thumbnailPath) : undefined;
     const finalMessageId = messageId || null;
 
@@ -370,11 +462,11 @@ export class UploadProcessor {
     const attachment = await this.prisma.messageAttachment.create({
       data: {
         messageId: finalMessageId,
-        fileName: path.basename(filePath),
+        fileName: path.basename(storedFilePath),
         originalName: file.filename,
-        mimeType: file.mimeType,
-        fileSize: file.size,
-        filePath: filePath,
+        mimeType: storedMimeType,
+        fileSize: storedFileSize,
+        filePath: storedFilePath,
         fileUrl: fileUrl,
         thumbnailPath: thumbnailPath || undefined,
         thumbnailUrl: thumbnailUrl,
