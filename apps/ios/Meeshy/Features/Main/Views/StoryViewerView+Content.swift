@@ -1060,7 +1060,7 @@ struct StoryViewersSheet: View {
                     HStack(spacing: 6) {
                         Image(systemName: "heart.fill")
                             .font(.system(size: 10))
-                            .foregroundColor(.red)
+                            .foregroundColor(MeeshyColors.error)
                         Text(reaction)
                             .font(.system(size: 14))
                     }

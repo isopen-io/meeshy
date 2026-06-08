@@ -42,14 +42,27 @@ final class DeliveryIndicatorView: UIView {
 
         guard isFromCurrentUser else {
             iconView.isHidden = true
+            accessibilityLabel = Self.timeFormatter.string(from: timestamp)
             return
         }
         iconView.isHidden = false
 
         let (image, color) = iconConfig(for: state)
+        iconView.accessibilityLabel = Self.stateLabel(for: state)
         UIView.transition(with: iconView, duration: 0.25, options: .transitionCrossDissolve) {
             self.iconView.image = image
             self.iconView.tintColor = color
+        }
+        accessibilityLabel = "\(Self.timeFormatter.string(from: timestamp)), \(Self.stateLabel(for: state))"
+    }
+
+    private static func stateLabel(for state: MessageState) -> String {
+        switch state {
+        case .sending, .queued, .draft: return NSLocalizedString("delivery.state.sending", value: "Sending", comment: "")
+        case .sent: return NSLocalizedString("delivery.state.sent", value: "Sent", comment: "")
+        case .delivered: return NSLocalizedString("delivery.state.delivered", value: "Delivered", comment: "")
+        case .read: return NSLocalizedString("delivery.state.read", value: "Read", comment: "")
+        case .failed: return NSLocalizedString("delivery.state.failed", value: "Failed to send", comment: "")
         }
     }
 

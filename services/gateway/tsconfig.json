@@ -3,6 +3,7 @@
     "target": "ES2022",
     "module": "commonjs",
     "moduleResolution": "node",
+    "ignoreDeprecations": "6.0",
     "strict": false,
     "noImplicitAny": false,
     "strictNullChecks": false,
@@ -59,6 +60,9 @@
     "node_modules",
     "dist",
     "src/dma-interoperability/**/*",
-    "../../packages/shared/encryption/**/*"
+    "../../packages/shared/encryption/**/*",
+    "src/**/__tests__/**/*",
+    "src/**/*.test.ts",
+    "src/**/*.spec.ts"
   ]
 }

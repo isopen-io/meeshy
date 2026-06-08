@@ -170,7 +170,7 @@ struct StepPseudoView: View {
 
                 GlassTextField(
                     icon: "at",
-                    placeholder: String(localized: "onboarding.step.pseudo.placeholder", defaultValue: "Ton pseudo de boss", bundle: .main),
+                    placeholder: String(localized: "onboarding.step.pseudo.placeholder", defaultValue: "Your cool username", bundle: .main),
                     text: $viewModel.username,
                     errorMessage: viewModel.usernameError,
                     accentColor: viewModel.currentStep.accentColor,
@@ -201,7 +201,7 @@ struct StepPseudoView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "lightbulb.max.fill").foregroundColor(.orange)
-                Text(String(localized: "onboarding.step.pseudo.suggestions", defaultValue: "Suggestions disponibles", bundle: .main))
+                Text(String(localized: "onboarding.step.pseudo.suggestions", defaultValue: "Available suggestions", bundle: .main))
                     .font(.footnote.weight(.semibold)).foregroundColor(.secondary)
             }
             FlowLayout(spacing: 8) {
@@ -234,12 +234,12 @@ struct StepPseudoView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 Image(systemName: "lightbulb.fill").foregroundColor(.yellow)
-                Text(String(localized: "onboarding.step.pseudo.tips.title", defaultValue: "Conseils Meeshy", bundle: .main)).font(.footnote.weight(.semibold)).foregroundColor(.secondary)
+                Text(String(localized: "onboarding.step.pseudo.tips.title", defaultValue: "Meeshy Tips", bundle: .main)).font(.footnote.weight(.semibold)).foregroundColor(.secondary)
             }
             VStack(alignment: .leading, spacing: 6) {
-                tipRow(icon: "checkmark.circle", text: String(localized: "onboarding.step.pseudo.tips.length", defaultValue: "2 a 16 caracteres, pas d'espaces", bundle: .main))
-                tipRow(icon: "star", text: String(localized: "onboarding.step.pseudo.tips.original", defaultValue: "Sois original, c'est ton identite!", bundle: .main))
-                tipRow(icon: "eye.slash", text: String(localized: "onboarding.step.pseudo.tips.privacy", defaultValue: "Pas de donnees perso dans le pseudo", bundle: .main))
+                tipRow(icon: "checkmark.circle", text: String(localized: "onboarding.step.pseudo.tips.length", defaultValue: "2 to 16 characters, no spaces", bundle: .main))
+                tipRow(icon: "star", text: String(localized: "onboarding.step.pseudo.tips.original", defaultValue: "Be original, it's your identity!", bundle: .main))
+                tipRow(icon: "eye.slash", text: String(localized: "onboarding.step.pseudo.tips.privacy", defaultValue: "No personal data in your username", bundle: .main))
             }
         }
         .padding(14)
@@ -655,18 +655,18 @@ enum PasswordStrength {
 
     var label: String {
         switch self {
-        case .weak: return String(localized: "onboarding.step.password.strength.weak", defaultValue: "Faible", bundle: .main)
-        case .fair: return String(localized: "onboarding.step.password.strength.fair", defaultValue: "Moyen", bundle: .main)
-        case .good: return String(localized: "onboarding.step.password.strength.good", defaultValue: "Bon", bundle: .main)
-        case .strong: return String(localized: "onboarding.step.password.strength.strong", defaultValue: "Fort", bundle: .main)
+        case .weak: return String(localized: "onboarding.step.password.strength.weak", defaultValue: "Weak", bundle: .main)
+        case .fair: return String(localized: "onboarding.step.password.strength.fair", defaultValue: "Fair", bundle: .main)
+        case .good: return String(localized: "onboarding.step.password.strength.good", defaultValue: "Good", bundle: .main)
+        case .strong: return String(localized: "onboarding.step.password.strength.strong", defaultValue: "Strong", bundle: .main)
         }
     }
 
     var color: Color {
         switch self {
         case .weak: return MeeshyColors.error
-        case .fair: return .orange
-        case .good: return .yellow
+        case .fair: return MeeshyColors.warning
+        case .good: return MeeshyColors.success.opacity(0.6)
         case .strong: return MeeshyColors.success
         }
     }
@@ -908,9 +908,9 @@ struct StepLanguageView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top, spacing: 8) {
                     Circle()
-                        .fill(Color.blue.opacity(0.2))
+                        .fill(MeeshyColors.indigo400.opacity(0.2))
                         .frame(width: 32, height: 32)
-                        .overlay(Text("JP").font(.caption2.weight(.bold)).foregroundColor(.blue))
+                        .overlay(Text("JP").font(.caption2.weight(.bold)).foregroundColor(MeeshyColors.indigo400))
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Jean-Pierre")

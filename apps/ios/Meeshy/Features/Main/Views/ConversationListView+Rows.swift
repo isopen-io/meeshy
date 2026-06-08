@@ -81,7 +81,7 @@ struct ConversationRowItem<Menu: View>: View {
             }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
-            .accessibilityHint("Ouvre la conversation")
+            .accessibilityHint(String(localized: "conversation.row.hint", defaultValue: "Opens the conversation", bundle: .main))
             .onDrag {
                 onDragStart()
                 return NSItemProvider(object: conversation.id as NSString)
@@ -126,7 +126,7 @@ struct ConversationPaginationFooter: View {
             if conversationViewModel.conversations.count > 30 {
                 Text(String(
                     localized: "conversations.pagination.allLoaded",
-                    defaultValue: "Toutes les conversations chargees"
+                    defaultValue: "All conversations loaded"
                 ))
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -137,7 +137,7 @@ struct ConversationPaginationFooter: View {
             VStack(spacing: 6) {
                 Text(String(
                     localized: "conversations.pagination.errorTitle",
-                    defaultValue: "Erreur de chargement"
+                    defaultValue: "Loading error"
                 ))
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -146,7 +146,7 @@ struct ConversationPaginationFooter: View {
                 } label: {
                     Text(String(
                         localized: "conversations.pagination.retry",
-                        defaultValue: "Reessayer"
+                        defaultValue: "Retry"
                     ))
                     .font(.caption.weight(.medium))
                     .foregroundStyle(MeeshyColors.indigo400)

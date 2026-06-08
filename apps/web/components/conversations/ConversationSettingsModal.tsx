@@ -337,10 +337,10 @@ export function ConversationSettingsModal({
       // Rafraîchir les préférences du store pour synchro complète
       await preferencesStore.refreshPreferences();
 
-      toast.success(t('conversationDetails.preferencesSaved') || 'Préférences enregistrées');
+      toast.success(t('conversationDetails.preferencesSaved'));
     } catch (error) {
       console.error('Erreur sauvegarde préférences:', error);
-      toast.error(t('conversationDetails.preferencesError') || 'Erreur lors de la sauvegarde');
+      toast.error(t('conversationDetails.preferencesError'));
     } finally {
       setIsSavingPrefs(false);
     }
@@ -611,7 +611,7 @@ export function ConversationSettingsModal({
                 className="gap-2 min-w-0 data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-indigo-600 data-[state=active]:text-white transition-colors duration-200"
               >
                 <User className="h-4 w-4 flex-shrink-0" />
-                <span className="truncate">{t('conversationDetails.myPreferences') || 'Préférences'}</span>
+                <span className="truncate">{t('conversationDetails.myPreferences')}</span>
               </TabsTrigger>
               {canAccessAdminSettings && (
                 <TabsTrigger
@@ -619,7 +619,7 @@ export function ConversationSettingsModal({
                   className="gap-2 min-w-0 data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-pink-600 data-[state=active]:text-white transition-colors duration-200"
                 >
                   <Settings className="h-4 w-4 flex-shrink-0" />
-                  <span className="truncate">{t('conversationDetails.configuration') || 'Configuration'}</span>
+                  <span className="truncate">{t('conversationDetails.configuration')}</span>
                 </TabsTrigger>
               )}
             </TabsList>
@@ -1172,7 +1172,7 @@ export function ConversationSettingsModal({
                               }}
                               disabled={isSavingDescription}
                               autoFocus
-                              placeholder="Description de la conversation..."
+                              placeholder={t('conversationDetails.descriptionPlaceholder2')}
                               className="backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border-white/30 dark:border-gray-700/40 text-xs min-h-[60px] resize-none w-full"
                             />
                             <div className="flex justify-end gap-1">
