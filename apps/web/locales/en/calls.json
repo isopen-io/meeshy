@@ -21,6 +21,62 @@
         "refresh": "Try refreshing the page"
       }
     },
+    "status": {
+      "connecting": "Connecting...",
+      "starting": "Starting...",
+      "reconnecting": "Reconnecting...",
+      "failed": "Connection failed",
+      "disconnected": "Disconnected",
+      "connected": "Connected",
+      "quality": {
+        "excellent": "Excellent",
+        "good": "Good",
+        "poor": "Poor connection",
+        "offline": "Offline"
+      }
+    },
+    "controls": {
+      "controls": "Call controls",
+      "mute": "Mute",
+      "unmute": "Unmute",
+      "videoOff": "Turn off video",
+      "videoOn": "Turn on video",
+      "switchCamera": "Switch camera",
+      "speakerOff": "Turn off speaker",
+      "speakerOn": "Turn on speaker",
+      "speakerOnLabel": "Speaker on",
+      "speakerOffLabel": "Speaker off",
+      "audioEffects": "Toggle audio effects",
+      "audioEffectsTitle": "Audio Effects",
+      "connectionStats": "Toggle connection stats",
+      "connectionStatsTitle": "Connection Stats",
+      "endCall": "End call"
+    },
+    "quality": {
+      "details": "Connection Quality Details",
+      "quality": "Quality:",
+      "packetLoss": "Packet Loss:",
+      "latency": "Latency (RTT):",
+      "jitter": "Jitter:",
+      "audioBitrate": "Audio Bitrate:",
+      "videoBitrate": "Video Bitrate:",
+      "updated": "Updated:"
+    },
+    "stream": {
+      "disconnected": "Disconnected",
+      "participantLeft": "{name} has left",
+      "participant": "Participant",
+      "micMuted": "Microphone muted",
+      "videoOff": "Camera off",
+      "fullscreen": "Toggle fullscreen",
+      "dragToMove": "Drag to move"
+    },
+    "toasts": {
+      "connectionError": "Connection error",
+      "videoSwitchFailed": "Failed to switch video",
+      "cameraSwitched": "Camera switched",
+      "cameraSwitchFailed": "Failed to switch camera"
+    },
     "permissions": {
       "title": {
         "idle": "Camera & Microphone Access",

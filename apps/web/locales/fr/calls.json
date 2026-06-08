@@ -21,6 +21,62 @@
         "refresh": "Essayez de recharger la page"
       }
     },
+    "status": {
+      "connecting": "Connexion en cours...",
+      "starting": "Démarrage...",
+      "reconnecting": "Reconnexion...",
+      "failed": "Échec de connexion",
+      "disconnected": "Déconnecté",
+      "connected": "Connecté",
+      "quality": {
+        "excellent": "Excellent",
+        "good": "Bon",
+        "poor": "Connexion médiocre",
+        "offline": "Hors ligne"
+      }
+    },
+    "controls": {
+      "controls": "Commandes d'appel",
+      "mute": "Couper le micro",
+      "unmute": "Activer le micro",
+      "videoOff": "Désactiver la vidéo",
+      "videoOn": "Activer la vidéo",
+      "switchCamera": "Changer de caméra",
+      "speakerOff": "Désactiver le haut-parleur",
+      "speakerOn": "Activer le haut-parleur",
+      "speakerOnLabel": "Haut-parleur activé",
+      "speakerOffLabel": "Haut-parleur désactivé",
+      "audioEffects": "Effets audio",
+      "audioEffectsTitle": "Effets audio",
+      "connectionStats": "Statistiques de connexion",
+      "connectionStatsTitle": "Statistiques de connexion",
+      "endCall": "Terminer l'appel"
+    },
+    "quality": {
+      "details": "Détails de la qualité de connexion",
+      "quality": "Qualité :",
+      "packetLoss": "Perte de paquets :",
+      "latency": "Latence (RTT) :",
+      "jitter": "Gigue :",
+      "audioBitrate": "Débit audio :",
+      "videoBitrate": "Débit vidéo :",
+      "updated": "Mis à jour :"
+    },
+    "stream": {
+      "disconnected": "Déconnecté",
+      "participantLeft": "{name} a quitté l'appel",
+      "participant": "Participant",
+      "micMuted": "Microphone coupé",
+      "videoOff": "Caméra désactivée",
+      "fullscreen": "Plein écran",
+      "dragToMove": "Glisser pour déplacer"
+    },
+    "toasts": {
+      "connectionError": "Erreur de connexion",
+      "videoSwitchFailed": "Échec du changement de vidéo",
+      "cameraSwitched": "Caméra changée",
+      "cameraSwitchFailed": "Échec du changement de caméra"
+    },
     "permissions": {
       "title": {
         "idle": "Accès caméra & microphone",

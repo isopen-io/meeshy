@@ -21,6 +21,62 @@
         "refresh": "Tente recarregar a página"
       }
     },
+    "status": {
+      "connecting": "Conectando...",
+      "starting": "Iniciando...",
+      "reconnecting": "Reconectando...",
+      "failed": "Falha na conexão",
+      "disconnected": "Desconectado",
+      "connected": "Conectado",
+      "quality": {
+        "excellent": "Excelente",
+        "good": "Boa",
+        "poor": "Conexão fraca",
+        "offline": "Sem conexão"
+      }
+    },
+    "controls": {
+      "controls": "Controles da chamada",
+      "mute": "Silenciar",
+      "unmute": "Ativar microfone",
+      "videoOff": "Desativar vídeo",
+      "videoOn": "Ativar vídeo",
+      "switchCamera": "Trocar câmera",
+      "speakerOff": "Desativar alto-falante",
+      "speakerOn": "Ativar alto-falante",
+      "speakerOnLabel": "Alto-falante ativado",
+      "speakerOffLabel": "Alto-falante desativado",
+      "audioEffects": "Efeitos de áudio",
+      "audioEffectsTitle": "Efeitos de áudio",
+      "connectionStats": "Estatísticas de conexão",
+      "connectionStatsTitle": "Estatísticas de conexão",
+      "endCall": "Encerrar chamada"
+    },
+    "quality": {
+      "details": "Detalhes da qualidade de conexão",
+      "quality": "Qualidade:",
+      "packetLoss": "Perda de pacotes:",
+      "latency": "Latência (RTT):",
+      "jitter": "Jitter:",
+      "audioBitrate": "Taxa de bits de áudio:",
+      "videoBitrate": "Taxa de bits de vídeo:",
+      "updated": "Atualizado:"
+    },
+    "stream": {
+      "disconnected": "Desconectado",
+      "participantLeft": "{name} saiu",
+      "participant": "Participante",
+      "micMuted": "Microfone silenciado",
+      "videoOff": "Câmera desativada",
+      "fullscreen": "Tela cheia",
+      "dragToMove": "Arrastar para mover"
+    },
+    "toasts": {
+      "connectionError": "Erro de conexão",
+      "videoSwitchFailed": "Falha ao trocar vídeo",
+      "cameraSwitched": "Câmera trocada",
+      "cameraSwitchFailed": "Falha ao trocar câmera"
+    },
     "permissions": {
       "title": {
         "idle": "Acesso à câmera e microfone",

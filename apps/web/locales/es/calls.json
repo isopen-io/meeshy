@@ -21,6 +21,62 @@
         "refresh": "Intente recargar la página"
       }
     },
+    "status": {
+      "connecting": "Conectando...",
+      "starting": "Iniciando...",
+      "reconnecting": "Reconectando...",
+      "failed": "Error de conexión",
+      "disconnected": "Desconectado",
+      "connected": "Conectado",
+      "quality": {
+        "excellent": "Excelente",
+        "good": "Buena",
+        "poor": "Conexión deficiente",
+        "offline": "Sin conexión"
+      }
+    },
+    "controls": {
+      "controls": "Controles de llamada",
+      "mute": "Silenciar",
+      "unmute": "Activar micrófono",
+      "videoOff": "Desactivar vídeo",
+      "videoOn": "Activar vídeo",
+      "switchCamera": "Cambiar cámara",
+      "speakerOff": "Desactivar altavoz",
+      "speakerOn": "Activar altavoz",
+      "speakerOnLabel": "Altavoz activado",
+      "speakerOffLabel": "Altavoz desactivado",
+      "audioEffects": "Efectos de audio",
+      "audioEffectsTitle": "Efectos de audio",
+      "connectionStats": "Estadísticas de conexión",
+      "connectionStatsTitle": "Estadísticas de conexión",
+      "endCall": "Finalizar llamada"
+    },
+    "quality": {
+      "details": "Detalles de calidad de conexión",
+      "quality": "Calidad:",
+      "packetLoss": "Pérdida de paquetes:",
+      "latency": "Latencia (RTT):",
+      "jitter": "Fluctuación:",
+      "audioBitrate": "Tasa de bits de audio:",
+      "videoBitrate": "Tasa de bits de vídeo:",
+      "updated": "Actualizado:"
+    },
+    "stream": {
+      "disconnected": "Desconectado",
+      "participantLeft": "{name} ha salido",
+      "participant": "Participante",
+      "micMuted": "Micrófono silenciado",
+      "videoOff": "Cámara desactivada",
+      "fullscreen": "Pantalla completa",
+      "dragToMove": "Arrastrar para mover"
+    },
+    "toasts": {
+      "connectionError": "Error de conexión",
+      "videoSwitchFailed": "Error al cambiar el vídeo",
+      "cameraSwitched": "Cámara cambiada",
+      "cameraSwitchFailed": "Error al cambiar la cámara"
+    },
     "permissions": {
       "title": {
         "idle": "Acceso a cámara y micrófono",
