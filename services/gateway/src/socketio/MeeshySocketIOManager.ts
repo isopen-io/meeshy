@@ -1563,9 +1563,6 @@ export class MeeshySocketIOManager {
 
           const connectedUserIds = new Set(this.getConnectedUsers());
 
-          for (const participant of participants) {
-            const roomTarget = participant.userId || participant.id;
-            const unreadCount = unreadCountMap.get(participant.id) ?? 0;
           // Batch all unread-count queries in parallel instead of sequential N+1
           const unreadResults = await Promise.all(
             participants.map(async (participant) => {
