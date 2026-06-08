@@ -233,6 +233,7 @@ final class MockWebRTCClient: WebRTCClientProviding {
         lastVideoEncoding = (maxBitrateBps, maxFramerate, scaleResolutionDownBy)
     }
     func switchCamera() async throws {}
+    func restartIce() {}
     var availableCamerasResult: [CameraDeviceOption] = []
     private(set) var lastSwitchToCameraId: String?
     func availableCameras() -> [CameraDeviceOption] { availableCamerasResult }
