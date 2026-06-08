@@ -104,7 +104,7 @@ export function RankingFilters({
                   <SelectValue placeholder={t('ranking.selectCriterion')} />
                 </SelectTrigger>
                 <SelectContent className="max-h-[400px]">
-                  <div className="sticky top-0 z-10 bg-white dark:bg-gray-950 p-2 border-b border-gray-200 dark:border-gray-700">
+                  <div className="sticky top-0 z-10 bg-white dark:bg-gray-800 p-2 border-b border-gray-200 dark:border-gray-700">
                     <input
                       type="text"
                       placeholder={t('admin.ranking.filterCriteria')}

@@ -145,7 +145,26 @@
     }
   },
   "agentLive": {
-    "selectConversation": "Selecione uma conversa para monitorar seu estado em tempo real"
+    "selectConversation": "Selecione uma conversa para monitorar seu estado em tempo real",
+    "conversationsActive": "Conversas ativas",
+    "loading": "Carregando...",
+    "monitoredUsers": "Usuários monitorados",
+    "noMonitoredUsers": "Sem usuários monitorados",
+    "toneProfiles": "Perfis de tom",
+    "noToneProfiles": "Sem perfis de tom",
+    "contextualSummary": "Resumo contextual",
+    "topics": "Tópicos",
+    "tone": "Tom:",
+    "noSummary": "Sem resumo disponível",
+    "metrics": "Métricas",
+    "messages": "Mensagens",
+    "words": "Palavras",
+    "confidence": "Confiança",
+    "cachedMessages": "mensagens em cache",
+    "noAnalytics": "Sem análises disponíveis",
+    "loadError": "Impossível carregar o estado ao vivo",
+    "connectionError": "Erro de conexão ou conversa não encontrada",
+    "queue": "Fila"
   },
   "userDetail": {
     "languagePreferences": "Preferências de Idioma",

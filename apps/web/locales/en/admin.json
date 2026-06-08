@@ -145,7 +145,26 @@
     }
   },
   "agentLive": {
-    "selectConversation": "Select a conversation to monitor its real-time state"
+    "selectConversation": "Select a conversation to monitor its real-time state",
+    "conversationsActive": "Active conversations",
+    "loading": "Loading...",
+    "monitoredUsers": "Monitored users",
+    "noMonitoredUsers": "No monitored users",
+    "toneProfiles": "Tone profiles",
+    "noToneProfiles": "No tone profiles",
+    "contextualSummary": "Contextual summary",
+    "topics": "Topics",
+    "tone": "Tone:",
+    "noSummary": "No summary available",
+    "metrics": "Metrics",
+    "messages": "Messages",
+    "words": "Words",
+    "confidence": "Confidence",
+    "cachedMessages": "cached messages",
+    "noAnalytics": "No analytics available",
+    "loadError": "Unable to load live state",
+    "connectionError": "Connection error or conversation not found",
+    "queue": "Queue"
   },
   "userDetail": {
     "languagePreferences": "Language Preferences",

@@ -27,16 +27,16 @@ import { UserDisplay } from './UserDisplay';
 import { useDebounce } from 'use-debounce';
 import { useI18n } from '@/hooks/useI18n';
 
-function formatTimeAgo(dateStr: string | null | undefined): string {
-  if (!dateStr) return 'Jamais';
+function formatTimeAgo(dateStr: string | null | undefined, t: (key: string) => string): string {
+  if (!dateStr) return t('agent.overview.timeAgo.never');
   const diff = Date.now() - new Date(dateStr).getTime();
   const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return 'maintenant';
-  if (minutes < 60) return `${minutes}min`;
+  if (minutes < 1) return t('timeAgo.now');
+  if (minutes < 60) return `${minutes}${t('timeAgo.minutes')}`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
+  if (hours < 24) return `${hours}${t('timeAgo.hours')}`;
   const days = Math.floor(hours / 24);
-  return `${days}j`;
+  return `${days}${t('timeAgo.days')}`;
 }
 
 function confidenceColor(value: number) {
@@ -84,6 +84,7 @@ function RecentConversationsList({
   selected: string | null;
   onSelect: (id: string) => void;
 }) {
+  const { t } = useI18n('admin');
   const [items, setItems] = useState<RecentConversationActivity[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -125,7 +126,7 @@ function RecentConversationsList({
               <Skeleton key={i} className="h-14 w-full rounded-lg" />
             ))
           ) : items.length === 0 ? (
-            <p className="text-xs text-gray-400 text-center py-6 italic">Aucune activité récente</p>
+            <p className="text-xs text-gray-400 text-center py-6 italic">{t('agent.overview.noRecentActivity')}</p>
           ) : (
             items.map((item) => {
               const isSelected = selected === item.conversationId;
@@ -157,7 +158,7 @@ function RecentConversationsList({
                   <div className="flex items-center gap-3 text-[10px] text-gray-400">
                     <span className="tabular-nums">{item.messagesSent} msgs</span>
                     <span className="tabular-nums">{item.controlledUsersCount} users</span>
-                    <span className="tabular-nums ml-auto">{formatTimeAgo(item.lastResponseAt)}</span>
+                    <span className="tabular-nums ml-auto">{formatTimeAgo(item.lastResponseAt, t)}</span>
                   </div>
                 </button>
               );
@@ -172,11 +173,12 @@ function RecentConversationsList({
 // ── Live State Detail Cards ───────────────────────────────────────────────
 
 function ActivityCard({ data }: { data: LiveStateData }) {
+  const { t } = useI18n('admin');
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">
-          Utilisateurs contrôlés
+          {t('agentLive.monitoredUsers')}
         </CardTitle>
         <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950">
           <Users className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
@@ -184,7 +186,7 @@ function ActivityCard({ data }: { data: LiveStateData }) {
       </CardHeader>
       <CardContent className="space-y-3">
         {(data.controlledUsers ?? []).length === 0 ? (
-          <p className="text-xs text-gray-400 dark:text-gray-500 italic">Aucun utilisateur contrôlé</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 italic">{t('agentLive.noMonitoredUsers')}</p>
         ) : (
           <div className="space-y-2">
             {(data.controlledUsers ?? []).map(user => (
@@ -210,13 +212,14 @@ function ActivityCard({ data }: { data: LiveStateData }) {
 }
 
 function ToneProfilesCard({ profiles }: { profiles: Record<string, ToneProfileEntry> }) {
+  const { t } = useI18n('admin');
   const entries = Object.values(profiles);
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">
-          Profils de ton ({entries.length})
+          {t('agentLive.toneProfiles')} ({entries.length})
         </CardTitle>
         <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950">
           <Activity className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
@@ -224,7 +227,7 @@ function ToneProfilesCard({ profiles }: { profiles: Record<string, ToneProfileEn
       </CardHeader>
       <CardContent>
         {entries.length === 0 ? (
-          <p className="text-xs text-gray-400 dark:text-gray-500 italic">Aucun profil de ton</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 italic">{t('agentLive.noToneProfiles')}</p>
         ) : (
           <div className="space-y-2">
             {entries.map(profile => (
@@ -256,13 +259,14 @@ function ToneProfilesCard({ profiles }: { profiles: Record<string, ToneProfileEn
 }
 
 function SummaryCard({ data }: { data: LiveStateData }) {
+  const { t } = useI18n('admin');
   const record = data.summaryRecord;
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">
-          Résumé contextuel
+          {t('agentLive.contextualSummary')}
         </CardTitle>
         <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950">
           <Brain className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
@@ -277,7 +281,7 @@ function SummaryCard({ data }: { data: LiveStateData }) {
 
             {(record.currentTopics ?? []).length > 0 && (
               <div>
-                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Sujets</p>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">{t('agentLive.topics')}</p>
                 <div className="flex flex-wrap gap-1">
                   {(record.currentTopics ?? []).map(topic => (
                     <Badge key={topic} variant="secondary" className="text-[10px]">
@@ -290,7 +294,7 @@ function SummaryCard({ data }: { data: LiveStateData }) {
 
             <div className="flex items-center justify-between text-xs">
               <div className="flex items-center gap-1.5">
-                <span className="text-gray-400">Ton :</span>
+                <span className="text-gray-400">{t('agentLive.tone')}</span>
                 <Badge variant="outline" className="border-indigo-300 text-indigo-600 dark:text-indigo-400 text-[10px]">
                   {record.overallTone}
                 </Badge>
@@ -303,7 +307,7 @@ function SummaryCard({ data }: { data: LiveStateData }) {
             {data.summary}
           </p>
         ) : (
-          <p className="text-xs text-gray-400 dark:text-gray-500 italic">Aucun résumé disponible</p>
+          <p className="text-xs text-gray-400 dark:text-gray-500 italic">{t('agentLive.noSummary')}</p>
         )}
       </CardContent>
     </Card>
@@ -311,11 +315,12 @@ function SummaryCard({ data }: { data: LiveStateData }) {
 }
 
 function MetricsCard({ data }: { data: LiveStateData }) {
+  const { t } = useI18n('admin');
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">
-          Métriques
+          {t('agentLive.metrics')}
         </CardTitle>
         <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950">
           <MessageSquare className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
@@ -324,7 +329,7 @@ function MetricsCard({ data }: { data: LiveStateData }) {
       <CardContent>
         <div className="space-y-3">
           <div className="flex items-center justify-between text-xs text-gray-400">
-            <span>{data.cachedMessageCount} messages en cache</span>
+            <span>{data.cachedMessageCount} {t('agentLive.cachedMessages')}</span>
             {data.analytics?.lastResponseAt && (
               <span className="flex items-center gap-1">
                 <Clock className="h-3 w-3" />
@@ -342,21 +347,21 @@ function MetricsCard({ data }: { data: LiveStateData }) {
             <div className="grid grid-cols-3 gap-2">
               <div className="text-center p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50">
                 <p className="text-xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{data.analytics.messagesSent}</p>
-                <p className="text-[10px] text-gray-500 uppercase tracking-wider">Messages</p>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider">{t('agentLive.messages')}</p>
               </div>
               <div className="text-center p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50">
                 <p className="text-xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">{data.analytics.totalWordsSent}</p>
-                <p className="text-[10px] text-gray-500 uppercase tracking-wider">Mots</p>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider">{t('agentLive.words')}</p>
               </div>
               <div className="text-center p-2.5 rounded-lg bg-gray-50 dark:bg-gray-800/50">
                 <p className="text-xl font-bold text-gray-900 dark:text-gray-100 tabular-nums">
                   {(data.analytics.avgConfidence * 100).toFixed(0)}%
                 </p>
-                <p className="text-[10px] text-gray-500 uppercase tracking-wider">Confiance</p>
+                <p className="text-[10px] text-gray-500 uppercase tracking-wider">{t('agentLive.confidence')}</p>
               </div>
             </div>
           ) : (
-            <p className="text-xs text-gray-400 dark:text-gray-500 italic">Aucune analytique disponible</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 italic">{t('agentLive.noAnalytics')}</p>
           )}
         </div>
       </CardContent>
@@ -387,10 +392,10 @@ export function AgentLiveTab() {
       if (response.success && response.data) {
         setLiveState(response.data);
       } else {
-        setError('Impossible de charger l\'état live');
+        setError(t('agentLive.loadError'));
       }
     } catch {
-      setError('Erreur de connexion ou conversation introuvable');
+      setError(t('agentLive.connectionError'));
     } finally {
       setLoading(false);
     }
@@ -426,7 +431,7 @@ export function AgentLiveTab() {
         <CardHeader className="pb-2 shrink-0">
           <CardTitle className="text-xs font-bold uppercase tracking-wider text-gray-500 flex items-center gap-1.5">
             <Zap className="h-3.5 w-3.5 text-indigo-500" />
-            Conversations actives
+            {t('agentLive.conversationsActive')}
           </CardTitle>
         </CardHeader>
         <div className="flex-1 overflow-hidden">
@@ -460,7 +465,7 @@ export function AgentLiveTab() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 min-w-0">
                 <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
-                  {liveState?.conversationId ? `Live : ${liveState.conversationId.slice(0, 12)}...` : 'Chargement...'}
+                  {liveState?.conversationId ? `Live : ${liveState.conversationId.slice(0, 12)}...` : t('agentLive.loading')}
                 </h3>
               </div>
               <div className="flex items-center gap-2 shrink-0">
@@ -515,7 +520,7 @@ export function AgentLiveTab() {
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm flex items-center gap-2">
                       <ListOrdered className="h-4 w-4 text-indigo-500" />
-                      File d&apos;attente
+                      {t('agentLive.queue')}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-0">
