@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { User, INTERFACE_LANGUAGES } from '@/types';
 import { Globe } from 'lucide-react';
 import { LanguageSelector } from '@/components/translation/language-selector';
+import { useI18n } from '@/hooks/useI18n';
 
 interface UserSettingsContentProps {
   user: User | null;
@@ -16,6 +17,7 @@ interface UserSettingsContentProps {
 }
 
 export function UserSettingsContent({ user, localSettings, onSettingUpdate, children }: UserSettingsContentProps) {
+  const { t } = useI18n('settings');
   const _getLanguageDisplay = (code: string) => {
     const lang = INTERFACE_LANGUAGES.find(l => l.code === code);
     return lang ? `${lang.flag} ${lang.name}` : code;
@@ -49,7 +51,7 @@ export function UserSettingsContent({ user, localSettings, onSettingUpdate, chil
                   <LanguageSelector
                     value={localSettings.systemLanguage || ''}
                     onValueChange={(value) => onSettingUpdate('systemLanguage', value)}
-                    placeholder="Sélectionnez votre langue système"
+                    placeholder={t('translation.mainLanguages.systemLanguagePlaceholder')}
                     interfaceOnly={false}
                   />
                 </div>
@@ -59,7 +61,7 @@ export function UserSettingsContent({ user, localSettings, onSettingUpdate, chil
                   <LanguageSelector
                     value={localSettings.regionalLanguage || ''}
                     onValueChange={(value) => onSettingUpdate('regionalLanguage', value)}
-                    placeholder="Sélectionnez votre langue régionale"
+                    placeholder={t('translation.mainLanguages.regionalLanguagePlaceholder')}
                     interfaceOnly={false}
                   />
                 </div>
@@ -70,7 +72,7 @@ export function UserSettingsContent({ user, localSettings, onSettingUpdate, chil
                 <LanguageSelector
                   value={localSettings.customDestinationLanguage || ''}
                   onValueChange={(value) => onSettingUpdate('customDestinationLanguage', value)}
-                  placeholder="Sélectionnez une langue personnalisée (optionnel)"
+                  placeholder={t('translation.mainLanguages.customLanguagePlaceholder')}
                 />
               </div>
             </CardContent>

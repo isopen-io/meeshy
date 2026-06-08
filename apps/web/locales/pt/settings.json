@@ -119,7 +119,10 @@
         "customDestinationLanguage": "Idioma de destino personalizado",
         "customDestinationLanguageDescription": "Idioma específico para tradução automática (opcional)",
         "selectLanguage": "Selecionar um idioma",
-        "none": "Nenhum"
+        "none": "Nenhum",
+        "systemLanguagePlaceholder": "Selecione seu idioma do sistema",
+        "regionalLanguagePlaceholder": "Selecione seu idioma regional",
+        "customLanguagePlaceholder": "Selecione um idioma personalizado (opcional)"
       },
       "autoTranslation": {
         "title": "Opções de tradução automática",

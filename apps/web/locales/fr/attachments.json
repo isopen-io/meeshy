@@ -40,6 +40,18 @@
     "invalidType": "Type de fichier invalide",
     "uploadFailed": "Échec de l'upload"
   },
+  "actions": {
+    "deleteImage": "Supprimer cette image",
+    "deleteVideo": "Supprimer cette vidéo",
+    "deleteFile": "Supprimer ce fichier",
+    "deleteTextFile": "Supprimer ce fichier texte",
+    "deletePdf": "Supprimer ce PDF",
+    "deleteImageNamed": "Supprimer l'image {name}",
+    "deleteVideoNamed": "Supprimer la vidéo {name}",
+    "deleteFileNamed": "Supprimer le fichier {name}",
+    "openImageNamed": "Ouvrir l'image {name}",
+    "openFileNamed": "Ouvrir le fichier {name}"
+  },
   "contextMenu": {
     "close": "Fermer",
     "download": "Télécharger",
