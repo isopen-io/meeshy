@@ -1103,8 +1103,25 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     private func handleNetworkBackOnline() {
         guard !isConnected else { return }
         guard APIClient.shared.authToken != nil else { return }
-        Logger.socket.info("MessageSocket: network back online → forcing reconnect")
-        forceReconnect()
+        scheduleReconnectWithBackoff()
+    }
+
+    private func scheduleReconnectWithBackoff() {
+        reconnectTask?.cancel()
+        let jittered = reconnectDelay * (0.8 + Double.random(in: 0...0.4))
+        let delay = jittered
+        let attempt = reconnectAttempts
+        Logger.socket.info("MessageSocket: backoff reconnect attempt=\(attempt) delay=\(delay, format: .fixed(precision: 2))s")
+        reconnectDelay = min(reconnectDelay * 2, 60)
+        reconnectAttempts += 1
+        reconnectTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled else { return }
+            await MainActor.run { [weak self] in
+                guard let self, !self.isConnected else { return }
+                self.forceReconnect()
+            }
+        }
     }
 
     // MARK: - JWT Helpers
@@ -1209,6 +1226,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// Contrast `disconnect()`, the logout/cold reset, which additionally clears
     /// all of that so the next login is a genuine cold connect with no rooms.
     private func suspendTransport() {
+        reconnectTask?.cancel()
+        reconnectTask = nil
         stopHeartbeat()
         socket?.disconnect()
         socket = nil
@@ -1289,6 +1308,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// whether it was a reconnect for the caller's logging/re-join branch.
     @discardableResult
     func handleConnectionEstablished() -> Bool {
+        reconnectTask?.cancel()
+        reconnectTask = nil
         let wasReconnect = hadPreviousConnection
         hadPreviousConnection = true
         reconnectAttempt = 0
