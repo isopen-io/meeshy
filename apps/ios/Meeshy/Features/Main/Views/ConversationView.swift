@@ -1491,13 +1491,13 @@ struct ConversationView: View {
                 onDeleteAttachment: { attachmentId in
                     Task { await viewModel.deleteAttachment(messageId: msg.id, attachmentId: attachmentId) }
                 },
-                onForward: {
-                    composerState.forwardMessage = msg
-                    HapticFeedback.medium()
-                },
                 onShowThread: {
                     overlayState.replyThreadParentId = msg.id
                     overlayState.showReplyThread = true
+                },
+                onForward: {
+                    composerState.forwardMessage = msg
+                    HapticFeedback.medium()
                 },
                 isDirect: isDirect,
                 preferredTranslation: viewModel.preferredTranslation(for: msg.id),
