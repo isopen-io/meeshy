@@ -116,6 +116,9 @@ class FeedViewModel: ObservableObject {
         guard !isFeedLoadInProgress else { return }
         isFeedLoadInProgress = true
         defer { isFeedLoadInProgress = false }
+        // Yield so concurrent tasks see the in-progress flag before any
+        // fast (e.g. cache or synchronous mock) path resets it.
+        await Task.yield()
         error = nil
 
         if !forceRefresh {

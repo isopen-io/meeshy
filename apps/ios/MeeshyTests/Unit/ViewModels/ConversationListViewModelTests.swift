@@ -1517,6 +1517,9 @@ final class ConversationListViewModelTests: XCTestCase {
             messageSocket: messageSocket
         )
 
+        // Allow init-time async subscriptions (receive(on: DispatchQueue.main)) to settle.
+        try? await Task.sleep(nanoseconds: 10_000_000)
+
         let event = makeConversationUpdatedEvent(
             conversationId: "69fe0bb526e040042fd28121",
             lastMessageAt: Date(timeIntervalSince1970: 9_000),
