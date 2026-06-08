@@ -10,6 +10,9 @@ import { RegisterData } from '../../services/AuthService';
 import { getRequestContext } from '../../services/GeoIPService';
 import { createRegisterRateLimiter, createAuthGlobalRateLimiter } from '../../utils/rate-limiter.js';
 import { AuthRouteContext, formatUserResponse } from './types';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'AuthRegisterRoute' });
 
 /**
  * Register registration and availability check routes
@@ -70,7 +73,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       // Check if phoneTransferToken is provided
       let phoneTransferValidated = false;
       if (validatedData.phoneTransferToken) {
-        console.log('[AUTH] 📱 Phone transfer token provided - validating...');
+        logger.info('Phone transfer token provided — validating');
         const transferData = await phoneTransferService.getTransferDataByToken(validatedData.phoneTransferToken);
 
         if (!transferData.valid) {
@@ -81,7 +84,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
           });
         }
 
-        console.log('[AUTH] 📱 Phone transfer token valid - phone:', transferData.phoneNumber);
+        logger.info('Phone transfer token valid');
         phoneTransferValidated = true;
         (validatedData as any).skipPhoneConflictCheck = true;
       }
@@ -97,7 +100,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
 
       // Handle phone ownership conflict
       if (result.phoneOwnershipConflict && result.phoneOwnerInfo) {
-        console.log('[AUTH] 📱 Phone ownership conflict - account NOT created');
+        logger.warn('Phone ownership conflict — account NOT created');
         return reply.send({
           success: true,
           data: {
@@ -134,7 +137,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
 
       // Execute phone transfer if validated
       if (phoneTransferValidated && validatedData.phoneTransferToken) {
-        console.log('[AUTH] 📱 Executing phone transfer for new user:', user.id);
+        logger.info('Executing phone transfer for new user');
         const transferResult = await phoneTransferService.executeRegistrationTransfer(
           validatedData.phoneTransferToken,
           user.id,
@@ -142,9 +145,9 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
         );
 
         if (!transferResult.success) {
-          console.error('[AUTH] ❌ Phone transfer failed:', transferResult.error);
+          logger.error('Phone transfer failed', { error: transferResult.error });
         } else {
-          console.log('[AUTH] ✅ Phone transfer completed successfully');
+          logger.info('Phone transfer completed successfully');
         }
       }
 
@@ -164,18 +167,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : undefined;
 
-      console.error('[AUTH] ❌ Registration error:', {
-        message: errorMessage,
-        stack: errorStack,
-        body: {
-          email: (request.body as any)?.email,
-          username: (request.body as any)?.username,
-          firstName: (request.body as any)?.firstName,
-          lastName: (request.body as any)?.lastName,
-          // Ne pas logger le password
-        },
-        ip: request.ip
-      });
+      logger.error('Registration error', error as Error);
 
       // Erreurs de validation connues
       if (errorMessage.includes('déjà utilisé') || errorMessage.includes('already exists')) {
@@ -342,7 +334,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
         data: result
       });
     } catch (error) {
-      console.error('Error checking availability:', error);
+      logger.error('Error checking availability', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la vérification'
@@ -362,7 +354,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
         data: { message: 'Database initialized successfully' }
       });
     } catch (error) {
-      console.error('Error during forced initialization:', error);
+      logger.error('Error during forced initialization', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Failed to initialize database'
