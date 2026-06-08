@@ -10,6 +10,8 @@ import { canAccessConversation } from './utils/access-control';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+const logger = enhancedLogger.child({ module: 'ConversationParticipantsRoutes' });
 
 /**
  * Enregistre les routes de gestion des participants
@@ -215,7 +217,7 @@ export function registerParticipantsRoutes(
       });
 
     } catch (error) {
-      console.error('Error fetching conversation participants:', error);
+      logger.error('Error fetching conversation participants', error as Error);
       sendInternalError(reply, 'Error retrieving participants');
     }
   });
@@ -355,7 +357,7 @@ export function registerParticipantsRoutes(
           recipientUserId: userId,
           addedByUserId: currentUserId,
           conversationId,
-        }).catch((err: unknown) => console.error('[Participants] Notification error (added):', err));
+        }).catch((err: unknown) => logger.error('Notification error added', err as Error));
 
         const existingMembers = await prisma.participant.findMany({
           where: { conversationId, isActive: true, type: 'user', userId: { notIn: [userId, currentUserId!] } },
@@ -368,7 +370,7 @@ export function registerParticipantsRoutes(
               newMemberUserId: userId,
               conversationId,
               joinMethod: 'invited' as const,
-            }).catch((err: unknown) => console.error('[Participants] Notification error (joined):', err));
+            }).catch((err: unknown) => logger.error('Notification error joined', err as Error));
           }
         }
       }
@@ -376,7 +378,7 @@ export function registerParticipantsRoutes(
       return sendSuccess(reply, { message: 'Participant ajouté avec succès' });
 
     } catch (error) {
-      console.error('Error adding participant:', error);
+      logger.error('Error adding participant', error as Error);
       sendInternalError(reply, 'Erreur lors de l\'ajout du participant');
     }
   });
@@ -499,7 +501,7 @@ export function registerParticipantsRoutes(
           recipientUserId: userId,
           removedByUserId: currentUserId,
           conversationId,
-        }).catch((err: unknown) => console.error('[Participants] Notification error (removed):', err));
+        }).catch((err: unknown) => logger.error('Notification error removed', err as Error));
 
         const adminParticipants = await prisma.participant.findMany({
           where: {
@@ -516,7 +518,7 @@ export function registerParticipantsRoutes(
               recipientUserId: admin.userId,
               removedByUserId: currentUserId,
               conversationId,
-            }).catch((err: unknown) => console.error('[Participants] Notification error (member_removed):', err));
+            }).catch((err: unknown) => logger.error('Notification error member_removed', err as Error));
           }
         }
       }
@@ -524,7 +526,7 @@ export function registerParticipantsRoutes(
       return sendSuccess(reply, { message: 'Participant supprimé avec succès' });
 
     } catch (error) {
-      console.error('Error removing participant:', error);
+      logger.error('Error removing participant', error as Error);
       sendInternalError(reply, 'Erreur lors de la suppression du participant');
     }
   });
@@ -680,7 +682,7 @@ export function registerParticipantsRoutes(
           conversationId,
           newRole,
           previousRole: targetParticipant.role,
-        }).catch((err: unknown) => console.error('[Participants] Notification error (role_changed):', err));
+        }).catch((err: unknown) => logger.error('Notification error role_changed', err as Error));
       }
 
       return sendSuccess(reply, {
@@ -691,7 +693,7 @@ export function registerParticipantsRoutes(
       });
 
     } catch (error) {
-      console.error('Error updating participant role:', error);
+      logger.error('Error updating participant role', error as Error);
       sendInternalError(reply, 'Error updating participant role');
     }
   });

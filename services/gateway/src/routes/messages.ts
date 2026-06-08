@@ -14,6 +14,9 @@ import {
   MessageStatusDetailsQuerySchema,
   AttachmentStatusBodySchema,
 } from '../validation/messages-schemas.js';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'MessagesRoutes' });
 
 interface MessageParams {
   messageId: string;
@@ -188,7 +191,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       });
 
     } catch (error) {
-      console.error('[MESSAGES] Error fetching message:', error);
+      logger.error('Error fetching message', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la récupération du message'
@@ -289,11 +292,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         if (translationService) {
           await (translationService as any)._processRetranslationAsync(messageId, messageForRetranslation);
         } else {
-          console.warn('[MESSAGES] MessageTranslationService non disponible, retraduction non effectuée');
+          logger.warn('MessageTranslationService non disponible, retraduction non effectuée');
         }
 
       } catch (translationError) {
-        console.error('[MESSAGES] Erreur lors de la retraduction:', translationError);
+        logger.error('Erreur lors de la retraduction', translationError as Error);
         // Ne pas faire échouer l'édition si la retraduction échoue
       }
 
@@ -323,7 +326,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           });
         }
       } catch (socketError) {
-        console.error('[MESSAGES] Erreur lors de la diffusion Socket.IO:', socketError);
+        logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);
         // Ne pas faire échouer l'édition si la diffusion échoue
       }
 
@@ -336,7 +339,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       });
 
     } catch (error) {
-      console.error('[MESSAGES] Error updating message:', error);
+      logger.error('Error updating message', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la modification du message'
@@ -420,7 +423,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           try {
             await attachmentService.deleteAttachment(attachment.id);
           } catch (error) {
-            console.error(`[MESSAGES] Erreur lors de la suppression de l'attachment ${attachment.id}:`, error);
+            logger.error('Erreur suppression attachment', error as Error);
             // Continuer même en cas d'erreur pour supprimer les autres
           }
         }
@@ -468,7 +471,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           });
         }
       } catch (socketError) {
-        console.error('[MESSAGES] Erreur lors de la diffusion Socket.IO:', socketError);
+        logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);
         // Ne pas faire échouer la suppression si la diffusion échoue
       }
 
@@ -478,7 +481,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       });
 
     } catch (error) {
-      console.error('[MESSAGES] Error deleting message:', error);
+      logger.error('Error deleting message', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la suppression du message'
@@ -594,7 +597,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
             emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
           }
         } catch (socketError) {
-          console.error('[MESSAGES] Erreur lors de la diffusion Socket.IO:', socketError);
+          logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);
         }
 
         return reply.send({
@@ -604,7 +607,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       }
 
     } catch (error) {
-      console.error('[MESSAGES] Error updating message status:', error);
+      logger.error('Error updating message status', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la mise à jour du statut du message'
@@ -685,7 +688,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       });
 
     } catch (error) {
-      console.error('[MESSAGES] Error fetching message history:', error);
+      logger.error('Error fetching message history', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la récupération de l\'historique du message'
@@ -757,7 +760,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       });
 
     } catch (error) {
-      console.error('[MESSAGES] Error fetching message translations:', error);
+      logger.error('Error fetching message translations', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la récupération des traductions du message'
@@ -830,7 +833,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       });
 
     } catch (error) {
-      console.error('[MESSAGES] Error fetching message status details:', error);
+      logger.error('Error fetching message status details', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la récupération des détails de statut'
@@ -900,7 +903,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       });
 
     } catch (error) {
-      console.error('[MESSAGES] Error fetching attachment status details:', error);
+      logger.error('Error fetching attachment status details', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la récupération des détails de statut de l\'attachment'
@@ -1006,7 +1009,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           });
         }
       } catch (socketError) {
-        console.error('[MESSAGES] Erreur lors de la diffusion Socket.IO:', socketError);
+        logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);
       }
 
       return reply.send({
@@ -1015,7 +1018,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       });
 
     } catch (error) {
-      console.error('[MESSAGES] Error updating attachment status:', error);
+      logger.error('Error updating attachment status', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la mise à jour du statut de l\'attachment'

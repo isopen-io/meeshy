@@ -17,6 +17,8 @@ import {
   ensureUniqueShareLinkIdentifier
 } from './utils/identifier-generator';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendConflict, sendInternalError, sendError } from '../../utils/response';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+const logger = enhancedLogger.child({ module: 'ConversationSharingRoutes' });
 
 /**
  * Enregistre les routes de partage et d'invitation
@@ -237,7 +239,7 @@ export function registerSharingRoutes(
       });
 
     } catch (error) {
-      console.error('Error creating new conversation link:', error);
+      logger.error('Error creating new conversation link', error as Error);
       sendInternalError(reply, 'Error creating link');
     }
   });
@@ -372,17 +374,7 @@ export function registerSharingRoutes(
       return sendSuccess(reply, updatedConversation);
 
     } catch (error) {
-      console.error('Error updating conversation:', error);
-      
-      // Gestion d'erreur améliorée avec détails spécifiques
-      console.error('Detailed error info:', {
-        code: error.code,
-        message: error.message,
-        meta: error.meta,
-        conversationId: id,
-        currentUserId: authRequest.authContext.userId,
-        updateData: { title, description, type }
-      });
+      logger.error('Error updating conversation', error as Error);
 
       if (error.code === 'P2002') {
         return sendConflict(reply, 'Une conversation avec ce nom existe déjà');
@@ -502,7 +494,7 @@ export function registerSharingRoutes(
         isModerator
       });
     } catch (error) {
-      console.error('Error fetching conversation links:', error);
+      logger.error('Error fetching conversation links', error as Error);
       return sendInternalError(reply, 'Error retrieving conversation links');
     }
   });
@@ -581,12 +573,12 @@ export function registerSharingRoutes(
       });
 
       if (existingMember) {
-        console.log('[JOIN_CONVERSATION] Utilisateur déjà membre, conversationId:', shareLink.conversationId);
+        logger.info('Utilisateur déjà membre', { conversationId: shareLink.conversationId });
         return sendSuccess(reply, { message: 'Vous êtes déjà membre de cette conversation', conversationId: shareLink.conversationId });
       }
 
       // Ajouter l'utilisateur à la conversation
-      console.log('[JOIN_CONVERSATION] Ajout utilisateur', userToken.userId, 'à conversation', shareLink.conversationId);
+      logger.info('Ajout utilisateur à conversation', { conversationId: shareLink.conversationId });
       const joiningUserInfo = await prisma.user.findUnique({
         where: { id: userToken.userId },
         select: { displayName: true, username: true }
@@ -617,7 +609,7 @@ export function registerSharingRoutes(
         where: { id: shareLink.id },
         data: { currentUses: { increment: 1 } }
       });
-      console.log('[JOIN_CONVERSATION] Membre créé avec succès');
+      logger.info('Membre créé avec succès');
 
       // Envoyer des notifications
       const notificationService = (fastify as any).notificationService;
@@ -667,22 +659,22 @@ export function registerSharingRoutes(
                 joinerUsername: userName,
                 joinerAvatar: joiningUser.avatar || undefined
               });
-              console.log(`📩 Notification "membre a rejoint" envoyée à l'admin ${member.userId}`);
+              logger.debug('Notification membre rejoint envoyée');
             }
 
-            console.log(`📩 Notification de confirmation envoyée à ${userToken.userId}`);
+            logger.debug('Notification confirmation envoyée');
           }
         } catch (notifError) {
-          console.error('Erreur lors de l\'envoi des notifications de jointure:', notifError);
+          logger.error('Erreur envoi notifications de jointure', notifError as Error);
           // Ne pas bloquer la jointure
         }
       }
 
-      console.log('[JOIN_CONVERSATION] Envoi réponse succès: conversationId =', shareLink.conversationId);
+      logger.info('Réponse succès join', { conversationId: shareLink.conversationId });
       return sendSuccess(reply, { message: 'Vous avez rejoint la conversation avec succès', conversationId: shareLink.conversationId });
 
     } catch (error) {
-      console.error('[JOIN_CONVERSATION] Error joining conversation via link:', error);
+      logger.error('Error joining conversation via link', error as Error);
       return sendInternalError(reply, 'Erreur lors de la jointure de la conversation');
     }
   });
@@ -864,10 +856,10 @@ export function registerSharingRoutes(
               conversationTitle: conversation.title,
               conversationType: conversation.type
             });
-            console.log(`📩 Notification d'invitation envoyée à ${userId} pour la conversation ${conversationId}`);
+            logger.debug('Notification invitation envoyée');
           }
         } catch (notifError) {
-          console.error('Erreur lors de l\'envoi de la notification d\'invitation:', notifError);
+          logger.error('Erreur envoi notification invitation', notifError as Error);
           // Ne pas bloquer l'invitation
         }
       }
@@ -877,9 +869,9 @@ export function registerSharingRoutes(
       if (mentionService) {
         try {
           await mentionService.invalidateCacheForConversation(conversationId);
-          console.log(`🔄 Cache d'autocomplete invalidé pour la conversation ${conversationId}`);
+          logger.debug('Cache autocomplete invalidé');
         } catch (cacheError) {
-          console.error('Erreur lors de l\'invalidation du cache:', cacheError);
+          logger.error('Erreur invalidation cache', cacheError as Error);
           // Ne pas bloquer l'invitation
         }
       }
@@ -890,7 +882,7 @@ export function registerSharingRoutes(
       });
 
     } catch (error) {
-      console.error('Erreur lors de l\'invitation:', error);
+      logger.error('Erreur invitation', error as Error);
       return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });

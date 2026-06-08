@@ -17,6 +17,9 @@ import type { CacheStore } from './CacheStore';
 import { EmailService } from './EmailService';
 import { GeoIPService, RequestContext } from './GeoIPService';
 import { createSession, initSessionService, generateSessionToken } from './SessionService';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'MagicLinkService' });
 
 const TOKEN_EXPIRY_MINUTES = 10; // 10 minutes
 // Higher limit in development for testing, strict in production
@@ -69,7 +72,7 @@ export class MagicLinkService {
       if (isRateLimited) {
         // Rate limiting can be signaled without revealing if email exists
         // because it's checked BEFORE user lookup
-        console.warn('[MagicLink] Rate limit exceeded for:', normalizedEmail);
+        logger.warn('Rate limit exceeded');
         return {
           success: false,
           message: 'Too many requests. Please try again in about an hour.',
@@ -94,7 +97,7 @@ export class MagicLinkService {
 
       if (!user) {
         // Return success to prevent email enumeration
-        console.log('[MagicLink] No user found for:', normalizedEmail);
+        logger.info('No user found for email');
         return { success: true, message: 'If an account exists, a login link has been sent.', expiresInSeconds: TOKEN_EXPIRY_MINUTES * 60 };
       }
 
@@ -146,11 +149,11 @@ export class MagicLinkService {
         geoLocation: geoData?.location
       });
 
-      console.log('[MagicLink] Token sent to:', normalizedEmail);
+      logger.info('Token sent');
       return { success: true, message: 'If an account exists, a login link has been sent.', expiresInSeconds: TOKEN_EXPIRY_MINUTES * 60 };
 
     } catch (error) {
-      console.error('[MagicLink] Error requesting magic link:', error);
+      logger.error('Error requesting magic link', error as Error);
       // Return success to prevent info leakage
       return { success: true, message: 'If an account exists, a login link has been sent.', expiresInSeconds: TOKEN_EXPIRY_MINUTES * 60 };
     }
@@ -194,7 +197,7 @@ export class MagicLinkService {
 
       return rawToken;
     } catch (error) {
-      console.error('[MagicLink] Error issuing login token for user:', error);
+      logger.error('Error issuing login token', error as Error);
       return null;
     }
   }
@@ -252,13 +255,13 @@ export class MagicLinkService {
 
       // 3. Validate token exists
       if (!magicLinkToken) {
-        console.warn('[MagicLink] Invalid token submitted');
+        logger.warn('Invalid token submitted');
         return { success: false, error: 'Invalid or expired link. Please request a new one.' };
       }
 
       // 4. Check if already used
       if (magicLinkToken.usedAt) {
-        console.warn('[MagicLink] Token already used:', magicLinkToken.id);
+        logger.warn('Token already used');
         await this.logSecurityEvent(magicLinkToken.userId, 'MAGIC_LINK_REUSE_ATTEMPT', 'MEDIUM', {
           ipAddress: requestContext.ip
         });
@@ -267,13 +270,13 @@ export class MagicLinkService {
 
       // 5. Check if revoked
       if (magicLinkToken.isRevoked) {
-        console.warn('[MagicLink] Token revoked:', magicLinkToken.id);
+        logger.warn('Token revoked');
         return { success: false, error: 'This link is no longer valid. Please request a new one.' };
       }
 
       // 6. Check expiry (1 minute)
       if (magicLinkToken.expiresAt < new Date()) {
-        console.warn('[MagicLink] Token expired:', magicLinkToken.id);
+        logger.warn('Token expired');
         await this.logSecurityEvent(magicLinkToken.userId, 'MAGIC_LINK_EXPIRED', 'LOW', {
           ipAddress: requestContext.ip,
           expiredAt: magicLinkToken.expiresAt.toISOString()
@@ -288,7 +291,7 @@ export class MagicLinkService {
       // token), so re-verify here — the single gate covering every magic-link
       // path (interactive + proactive digest).
       if (!user.isActive) {
-        console.warn('[MagicLink] Token for inactive user:', magicLinkToken.id);
+        logger.warn('Token for inactive user');
         await this.logSecurityEvent(magicLinkToken.userId, 'MAGIC_LINK_REUSE_ATTEMPT', 'MEDIUM', {
           ipAddress: requestContext.ip
         });
@@ -336,7 +339,7 @@ export class MagicLinkService {
         deviceType: requestContext.deviceInfo?.type
       });
 
-      console.log('[MagicLink] Login successful for:', user.email);
+      logger.info('Login successful');
 
       // 12. Return user data (convert to SocketIOUser format)
       const socketIOUser = {
@@ -375,7 +378,7 @@ export class MagicLinkService {
       };
 
     } catch (error) {
-      console.error('[MagicLink] Error validating token:', error);
+      logger.error('Error validating token', error as Error);
       return { success: false, error: 'An error occurred. Please try again.' };
     }
   }
@@ -401,7 +404,7 @@ export class MagicLinkService {
 
       return false;
     } catch (error) {
-      console.error('[MagicLink] Rate limit check error:', error);
+      logger.error('Rate limit check error', error as Error);
       return false; // Allow on error to not block users
     }
   }
@@ -449,7 +452,7 @@ export class MagicLinkService {
         }
       });
     } catch (error) {
-      console.error('[MagicLink] Error logging security event:', error);
+      logger.error('Error logging security event', error as Error);
     }
   }
 }

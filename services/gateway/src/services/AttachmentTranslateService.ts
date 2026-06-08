@@ -16,6 +16,9 @@ import { ZmqTranslationClient } from './zmq-translation';
 import { MultiLevelJobMappingCache } from './MultiLevelJobMappingCache';
 import type { VoiceTranslationResult, ServiceResult, VoiceProfileData } from '@meeshy/shared/types';
 import type { AttachmentTranscription, AttachmentTranslations } from '@meeshy/shared/types/attachment-audio';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'AttachmentTranslateService' });
 
 // Alias pour compatibilité
 type AudioTranslationResult = VoiceTranslationResult;
@@ -164,7 +167,7 @@ export class AttachmentTranslateService {
           };
       }
     } catch (error) {
-      console.error('[AttachmentTranslateService] Translation error:', error);
+      logger.error('Translation error', error as Error);
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Translation failed',
@@ -333,20 +336,14 @@ export class AttachmentTranslateService {
 
     const isForwarded = attachment.isForwarded || attachment.forwardedFromAttachmentId;
 
-    console.log(`[AttachmentTranslateService] 🎤 Audio ${attachment.id}`);
-    console.log(`   📦 Original attachment: ${originalAttachmentId}${isForwarded ? ' (forwarded)' : ''}`);
-    console.log(`   👤 Original sender: ${originalSenderId || 'unknown'}`);
-    console.log(`   🎙️ Voice profile: ${voiceUserId}${voiceProfile ? ' (loaded from DB)' : ' (will be created)'}`);
-    console.log(`   📝 Transcription: ${existingTranscription ? `✅ Existe (${existingTranscription.language})` : '❌ À créer'}`);
-    console.log(`   ✅ Déjà traduit: [${Array.from(existingLanguages).join(', ')}]`);
-    console.log(`   🔄 À traduire: [${languagesToTranslate.join(', ')}]`);
+    logger.debug('Processing audio attachment', { attachmentId: attachment.id });
 
     // =========================================================================
     // 2. SI TOUTES LES LANGUES SONT DÉJÀ TRADUITES, RETOURNER LE CACHE
     // =========================================================================
 
     if (languagesToTranslate.length === 0) {
-      console.log(`   ⚡ Cache HIT - Toutes les langues déjà traduites`);
+      logger.debug('Cache HIT — toutes langues traduites');
 
       // Si c'est un transfert, copier les traductions de l'original vers le nouvel attachement
       if (isForwarded && attachment.id !== originalAttachmentId) {
@@ -389,7 +386,7 @@ export class AttachmentTranslateService {
     // 3. TRADUIRE LES LANGUES MANQUANTES
     // =========================================================================
 
-    console.log(`   🚀 Envoi au Translator pour ${languagesToTranslate.length} langues`);
+    logger.debug('Envoi au Translator', { languageCount: languagesToTranslate.length });
 
     // Read audio file
     const audioBuffer = await this.readAttachmentFile(attachment.filePath);
@@ -539,7 +536,7 @@ export class AttachmentTranslateService {
       depth++;
     }
 
-    console.warn(`[AttachmentTranslateService] ⚠️ Chaîne de transferts trop longue (>${MAX_CHAIN_DEPTH})`);
+    logger.warn('Chaîne de transferts trop longue');
 
     // Récupérer le senderId du dernier attachement atteint
     const lastAttachment = await this.prisma.messageAttachment.findUnique({
@@ -602,7 +599,7 @@ export class AttachmentTranslateService {
         totalDurationMs: voiceModel.totalDurationMs
       };
     } catch (error) {
-      console.error(`[AttachmentTranslateService] Error fetching voice profile: ${error}`);
+      logger.error('Error fetching voice profile', error as Error);
       return null;
     }
   }
@@ -628,7 +625,7 @@ export class AttachmentTranslateService {
       });
 
       if (!sourceAttachment) {
-        console.warn(`[AttachmentTranslateService] Source attachment not found: ${originalAttachmentId}`);
+        logger.warn('Source attachment not found', { originalAttachmentId });
         return;
       }
 
@@ -656,7 +653,7 @@ export class AttachmentTranslateService {
           data: { transcription: transcriptionData as any }
         });
 
-        console.log(`   📝 Transcription copiée depuis l'original`);
+        logger.debug('Transcription copiée depuis original');
       }
 
       // 3. Copier les traductions
@@ -668,10 +665,10 @@ export class AttachmentTranslateService {
         });
 
         const translationCount = Object.keys(sourceTranslations).length;
-        console.log(`   📋 Copied ${translationCount} audio translations for forwarded attachment`);
+        logger.debug('Audio translations copied', { translationCount });
       }
     } catch (error) {
-      console.error(`[AttachmentTranslateService] Error copying translations: ${error}`);
+      logger.error('Error copying translations', error as Error);
     }
   }
 
