@@ -918,7 +918,7 @@ struct ConversationInfoSheet: View {
                 HStack(spacing: 12) {
                     Image(systemName: conversation.encryptionMode != nil ? "lock.shield.fill" : "lock.shield")
                         .font(.system(size: 16))
-                        .foregroundColor(conversation.encryptionMode != nil ? .green : Color(hex: accentColor))
+                        .foregroundColor(conversation.encryptionMode != nil ? MeeshyColors.success : Color(hex: accentColor))
                         .frame(width: 24)
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -1146,9 +1146,9 @@ struct ConversationInfoSheet: View {
 
     private func roleBadgeColor(_ role: String) -> Color {
         switch role.lowercased() {
-        case "admin", "creator": return Color(hex: "FF6B6B")
-        case "moderator": return Color(hex: "F8B500")
-        default: return Color(hex: "45B7D1")
+        case "admin", "creator": return MeeshyColors.error
+        case "moderator": return MeeshyColors.warning
+        default: return MeeshyColors.info
         }
     }
 

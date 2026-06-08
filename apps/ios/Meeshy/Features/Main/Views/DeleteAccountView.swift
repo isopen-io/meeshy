@@ -17,7 +17,6 @@ struct DeleteAccountView: View {
     @State private var showEmailConfirmation = false
 
     private let requiredPhrase = "SUPPRIMER MON COMPTE"
-    private let accentColor = "EF4444"
 
     var body: some View {
         ZStack {
@@ -56,7 +55,7 @@ struct DeleteAccountView: View {
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(.system(size: 15, weight: .medium))
                 }
-                .foregroundColor(Color(hex: accentColor))
+                .foregroundColor(MeeshyColors.error)
             }
             .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
 
@@ -64,7 +63,7 @@ struct DeleteAccountView: View {
 
             Text(String(localized: "account.delete.title", defaultValue: "Supprimer le compte", bundle: .main))
                 .font(.system(size: 17, weight: .bold))
-                .foregroundColor(Color(hex: accentColor))
+                .foregroundColor(MeeshyColors.error)
                 .accessibilityAddTraits(.isHeader)
 
             Spacer()
@@ -88,7 +87,7 @@ struct DeleteAccountView: View {
                 if let errorMessage {
                     Text(errorMessage)
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(Color(hex: "EF4444"))
+                        .foregroundColor(MeeshyColors.error)
                         .frame(maxWidth: .infinity, alignment: .center)
                         .padding(.horizontal, 16)
                 }
@@ -107,11 +106,11 @@ struct DeleteAccountView: View {
             HStack(spacing: 10) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 24))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundColor(MeeshyColors.error)
 
                 Text(String(localized: "account.delete.warning.title", defaultValue: "Action irreversible", bundle: .main))
                     .font(.system(size: 17, weight: .bold))
-                    .foregroundColor(Color(hex: accentColor))
+                    .foregroundColor(MeeshyColors.error)
             }
 
             Text(String(localized: "account.delete.warning.intro", defaultValue: "La suppression de votre compte entrainera la perte definitive de :", bundle: .main))
@@ -130,10 +129,10 @@ struct DeleteAccountView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color(hex: accentColor).opacity(0.08))
+                .fill(MeeshyColors.error.opacity(0.08))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color(hex: accentColor).opacity(0.3), lineWidth: 1)
+                        .stroke(MeeshyColors.error.opacity(0.3), lineWidth: 1)
                 )
         )
         .accessibilityElement(children: .combine)
@@ -143,7 +142,7 @@ struct DeleteAccountView: View {
         HStack(spacing: 8) {
             Image(systemName: "xmark.circle.fill")
                 .font(.system(size: 14))
-                .foregroundColor(Color(hex: accentColor).opacity(0.7))
+                .foregroundColor(MeeshyColors.error.opacity(0.7))
 
             Text(text)
                 .font(.system(size: 13, weight: .medium))
@@ -173,7 +172,7 @@ struct DeleteAccountView: View {
                     if confirmationText == requiredPhrase {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(Color(hex: "4ADE80"))
+                            .foregroundColor(MeeshyColors.success)
                             .transition(.scale.combined(with: .opacity))
                     }
                 }
@@ -186,7 +185,7 @@ struct DeleteAccountView: View {
                     Group {
                         if confirmationText == requiredPhrase {
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color(hex: "4ADE80").opacity(0.5), lineWidth: 1)
+                                .stroke(MeeshyColors.success.opacity(0.5), lineWidth: 1)
                         } else {
                             RoundedRectangle(cornerRadius: 12)
                                 .stroke(theme.border(tint: "F59E0B"), lineWidth: 1)
@@ -225,8 +224,8 @@ struct DeleteAccountView: View {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(
                         confirmationText == requiredPhrase && !isDeleting
-                            ? Color(hex: accentColor)
-                            : Color(hex: accentColor).opacity(0.3)
+                            ? MeeshyColors.error
+                            : MeeshyColors.error.opacity(0.3)
                     )
             )
         }
@@ -268,11 +267,7 @@ struct DeleteAccountView: View {
                 Image(systemName: "envelope.circle.fill")
                     .font(.system(size: 64))
                     .foregroundStyle(
-                        LinearGradient(
-                            colors: [Color(hex: "6366F1"), Color(hex: "8B5CF6")],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
+                        MeeshyColors.brandGradient
                     )
 
                 Text(String(localized: "account.delete.email.title", defaultValue: "Un email de confirmation vous a ete envoye", bundle: .main))
@@ -292,7 +287,7 @@ struct DeleteAccountView: View {
                     .fill(.ultraThinMaterial)
                     .overlay(
                         RoundedRectangle(cornerRadius: 20)
-                            .stroke(Color(hex: "6366F1").opacity(0.2), lineWidth: 1)
+                            .stroke(MeeshyColors.indigo500.opacity(0.2), lineWidth: 1)
                     )
             )
             .padding(.horizontal, 24)
@@ -308,13 +303,7 @@ struct DeleteAccountView: View {
                     .padding(.vertical, 14)
                     .background(
                         RoundedRectangle(cornerRadius: 16)
-                            .fill(
-                                LinearGradient(
-                                    colors: [Color(hex: "6366F1"), Color(hex: "8B5CF6")],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
+                            .fill(MeeshyColors.brandGradient)
                     )
             }
             .padding(.horizontal, 24)

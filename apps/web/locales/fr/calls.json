@@ -20,6 +20,37 @@
         "https": "Assurez-vous d'utiliser une connexion HTTPS",
         "refresh": "Essayez de recharger la page"
       }
+    },
+    "permissions": {
+      "title": {
+        "idle": "Accès caméra & microphone",
+        "granted": "Permissions accordées",
+        "denied": "Permission refusée"
+      },
+      "description": {
+        "idle": "Pour rejoindre cet appel vidéo, nous avons besoin d'accéder à votre caméra et votre microphone.",
+        "granted": "Vous pouvez maintenant rejoindre l'appel vidéo."
+      },
+      "error": {
+        "denied": "Accès caméra et microphone refusé. Vérifiez les paramètres de votre navigateur.",
+        "notFound": "Aucune caméra ou microphone trouvé. Connectez un appareil et réessayez.",
+        "notReadable": "La caméra ou le microphone est déjà utilisé par une autre application.",
+        "generic": "Impossible d'accéder à la caméra et au microphone. Veuillez réessayer.",
+        "unexpected": "Une erreur inattendue s'est produite. Veuillez réessayer."
+      },
+      "buttons": {
+        "grantAccess": "Autoriser l'accès",
+        "cancel": "Annuler",
+        "tryAgain": "Réessayer"
+      },
+      "requesting": "Veuillez autoriser l'accès dans votre navigateur...",
+      "joining": "Connexion à l'appel...",
+      "instructions": {
+        "title": "Comment activer les permissions :",
+        "chrome": "Chrome : Cliquez sur l'icône caméra dans la barre d'adresse",
+        "firefox": "Firefox : Cliquez sur l'icône caméra dans la barre d'adresse",
+        "safari": "Safari : Allez dans Réglages Safari > Confidentialité > Caméra/Microphone"
+      }
     }
   }
 }

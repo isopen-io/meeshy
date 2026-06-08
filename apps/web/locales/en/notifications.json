@@ -149,6 +149,13 @@
       "older": "Older"
     },
     "markAllRead": "Mark all read",
-    "settings": "Settings"
+    "settings": "Settings",
+    "push": {
+      "title": "Enable push notifications",
+      "description": "Get notified even when the app is in the background",
+      "enable": "Enable",
+      "enabled": "Push notifications enabled",
+      "denied": "Push notifications denied. You can change this in your browser settings."
+    }
   }
 }

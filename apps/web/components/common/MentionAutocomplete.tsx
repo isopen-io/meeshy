@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { getUserInitials } from '@/lib/avatar-utils';
 import { mentionsService } from '@/services/mentions.service';
 import type { MentionSuggestion } from '@meeshy/shared/types/mention';
+import { useI18n } from '@/hooks/useI18n';
 
 interface MentionAutocompleteProps {
   conversationId: string;
@@ -28,6 +29,7 @@ export function MentionAutocomplete({
   maxSuggestions = 10,
   isDarkMode = false
 }: MentionAutocompleteProps) {
+  const { t } = useI18n('bubbleStream');
   const [suggestions, setSuggestions] = useState<MentionSuggestion[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
@@ -151,11 +153,11 @@ export function MentionAutocomplete({
   const getBadgeLabel = (badge: MentionSuggestion['badge']) => {
     switch (badge) {
       case 'conversation':
-        return 'Présent';
+        return t('mention.badge.present');
       case 'friend':
-        return 'Inviter';
+        return t('mention.badge.invite');
       case 'other':
-        return 'Inviter';
+        return t('mention.badge.invite');
       default:
         return '';
     }
@@ -330,7 +332,7 @@ export function MentionAutocomplete({
               backdropFilter: 'blur(8px)',
             }}
           >
-            Mentionner un utilisateur
+            {t('mention.title')}
           </motion.div>
           {suggestions.map((suggestion, index) => (
             <motion.button
@@ -405,7 +407,7 @@ export function MentionAutocomplete({
           transition={{ duration: 0.3 }}
           className="p-4 text-center text-sm text-gray-500 dark:text-gray-400 font-medium"
         >
-          Tapez pour rechercher un utilisateur...
+          {t('mention.searchPlaceholder')}
         </motion.div>
       )}
 
@@ -416,7 +418,7 @@ export function MentionAutocomplete({
           transition={{ duration: 0.3, type: 'spring' }}
           className="p-4 text-center text-sm text-gray-500 dark:text-gray-400 font-medium"
         >
-          Aucun utilisateur trouvé pour &quot;{query}&quot;
+          {t('mention.noResults', { query })}
         </motion.div>
       )}
 
@@ -430,7 +432,7 @@ export function MentionAutocomplete({
           fontWeight: 500,
         }}
       >
-        ↑↓ pour naviguer • Entrée pour sélectionner • Échap pour fermer
+        {t('mention.helpText')}
       </motion.div>
     </motion.div>
     </AnimatePresence>

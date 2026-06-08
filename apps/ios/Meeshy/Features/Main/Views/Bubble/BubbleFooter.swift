@@ -153,12 +153,12 @@ struct BubbleFooter: View, Equatable {
             Button(action: { onTranslate(); HapticFeedback.light() }) {
                 Image(systemName: "translate")
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(Color(hex: "4ECDC4"))
+                    .foregroundColor(MeeshyColors.indigo400)
             }
             .buttonStyle(.plain)
             .accessibilityLabel(model.showsTranslate
-                                ? "Traduction disponible"
-                                : "Demander une traduction")
+                                ? String(localized: "bubble.footer.translation.available", defaultValue: "Translation available", bundle: .main)
+                                : String(localized: "bubble.footer.translation.request", defaultValue: "Request translation", bundle: .main))
         }
         if !model.flags.isEmpty {
             HStack(spacing: 2) {
