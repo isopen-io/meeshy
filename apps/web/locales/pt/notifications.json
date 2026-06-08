@@ -146,6 +146,13 @@
       "older": "Mais antigo"
     },
     "markAllRead": "Marcar tudo como lido",
-    "settings": "Configurações"
+    "settings": "Configurações",
+    "push": {
+      "title": "Ativar notificações push",
+      "description": "Seja notificado mesmo quando o app está em segundo plano",
+      "enable": "Ativar",
+      "enabled": "Notificações push ativadas",
+      "denied": "Notificações push negadas. Você pode alterar isso nas configurações do seu navegador."
+    }
   }
 }

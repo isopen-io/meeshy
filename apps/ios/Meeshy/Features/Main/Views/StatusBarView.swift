@@ -53,7 +53,7 @@ struct StatusBarView: View {
                 // Loading indicator
                 if viewModel.isLoadingMore {
                     ProgressView()
-                        .tint(Color(hex: "4ECDC4"))
+                        .tint(MeeshyColors.indigo300)
                         .frame(width: 30)
                 }
             }

@@ -20,6 +20,37 @@
         "https": "Ensure you are using HTTPS connection",
         "refresh": "Try refreshing the page"
       }
+    },
+    "permissions": {
+      "title": {
+        "idle": "Camera & Microphone Access",
+        "granted": "Permissions Granted",
+        "denied": "Permission Denied"
+      },
+      "description": {
+        "idle": "To join this video call, we need access to your camera and microphone.",
+        "granted": "You can now join the video call."
+      },
+      "error": {
+        "denied": "Camera and microphone access denied. Please check your browser settings and allow access.",
+        "notFound": "No camera or microphone found. Please connect a device and try again.",
+        "notReadable": "Camera or microphone is already in use by another application.",
+        "generic": "Unable to access camera and microphone. Please try again.",
+        "unexpected": "An unexpected error occurred. Please try again."
+      },
+      "buttons": {
+        "grantAccess": "Grant Access",
+        "cancel": "Cancel",
+        "tryAgain": "Try Again"
+      },
+      "requesting": "Please allow access in your browser...",
+      "joining": "Joining call...",
+      "instructions": {
+        "title": "How to enable permissions:",
+        "chrome": "Chrome: Click the camera icon in the address bar",
+        "firefox": "Firefox: Click the camera icon in the address bar",
+        "safari": "Safari: Go to Safari Settings > Privacy > Camera/Microphone"
+      }
     }
   }
 }
