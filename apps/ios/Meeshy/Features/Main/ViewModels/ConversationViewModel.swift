@@ -213,12 +213,6 @@ class ConversationViewModel: ObservableObject {
     /// Last unread message from another user (set only via socket, cleared on scroll-to-bottom)
     @Published var lastUnreadMessage: Message?
 
-    /// Snapshot of the current conversation's unread count. Initialised
-    /// from `initialUnreadCount`, then dropped to 0 when the user reads
-    /// (markAsRead). Combined with `syncEngine.totalConversationsUnread`
-    /// to derive `otherConversationsUnread`.
-    @Published private(set) var currentConversationUnreadCount: Int = 0
-
     /// Total unread across every OTHER conversation (excludes this one).
     /// Drives the cross-conversation pill stuck next to the back button.
     /// Always clamped ≥ 0 — never negative even when our local snapshot
@@ -880,15 +874,18 @@ class ConversationViewModel: ObservableObject {
         mirrorMessagesIntoStateStore()
         hydrateCurrentConversationFromCache()
         // Cross-conversation unread aggregator powers the back-button pill.
-        // Seed `currentConversationUnreadCount` BEFORE wiring the CombineLatest
-        // so the initial `totalConversationsUnread` value (delivered as soon
-        // as the sink subscribes — CurrentValueSubject semantics) is reduced
-        // against the right baseline.
-        currentConversationUnreadCount = unreadCount
-        Publishers.CombineLatest(syncEngine.totalConversationsUnread, $currentConversationUnreadCount)
+        // `setCurrentlyOpenConversation(conversationId)` (called above) makes the
+        // sync engine EXCLUDE this conversation from `totalConversationsUnread`,
+        // so the published aggregate is ALREADY "other conversations only" — we
+        // mirror it directly. Subtracting this conversation's own unread here
+        // would remove it a second time and under-shoot the pill to 0 while other
+        // conversations still have unread (the engine is the single source of
+        // truth for cross-conversation unread; the VM must not re-derive it).
+        // `max(0, …)` is a defensive clamp — the engine already clamps ≥ 0.
+        syncEngine.totalConversationsUnread
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] total, current in
-                self?.otherConversationsUnread = max(0, total - current)
+            .sink { [weak self] total in
+                self?.otherConversationsUnread = max(0, total)
             }
             .store(in: &cancellables)
         if let session = anonymousSession {
@@ -2752,11 +2749,6 @@ class ConversationViewModel: ObservableObject {
 
     func markAsRead() {
         let convId = conversationId
-        // 0. Drop our snapshot of the current conv's unread to 0 so the
-        // CombineLatest pipeline driving `otherConversationsUnread` no
-        // longer subtracts a stale count — without this, the back-button
-        // pill briefly under-shoots while the SDK aggregator catches up.
-        currentConversationUnreadCount = 0
         // 1. Update cache immediately (local-first) — survives reloadFromCache()
         Task { await ConversationSyncEngine.shared.markConversationReadLocally(convId) }
         // 2. Notify ConversationListViewModel to clear badge in current @Published state
