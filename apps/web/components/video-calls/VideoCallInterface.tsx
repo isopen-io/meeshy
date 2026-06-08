@@ -11,6 +11,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useWebRTCP2P } from '@/hooks/use-webrtc-p2p';
 import { useAudioEffects } from '@/hooks/use-audio-effects';
 import { useCallQuality } from '@/hooks/use-call-quality';
+import { useActivePeerConnection } from '@/hooks/use-active-peer-connection';
 import { VideoStream } from './VideoStream';
 import { CallControls } from './CallControls';
 import { CallStatusIndicator } from './CallStatusIndicator';
@@ -79,15 +80,21 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     inputStream: localStream,
   });
 
-  // Get active peer connection for quality monitoring
-  const activePeerConnection = React.useMemo(() => {
-    const peerConnections = useCallStore.getState().peerConnections;
-    return peerConnections.size > 0 ? Array.from(peerConnections.values())[0] : null;
-  }, []);
+  // Active peer connection for quality monitoring. MUST be selected reactively
+  // from the store — it is created lazily inside createOffer/handleOffer, after
+  // this component mounts. A one-shot useMemo([]) snapshot captured an empty map
+  // and stayed null forever, which silently disabled quality monitoring, the
+  // adaptive bitrate ladder and call:quality-report (root cause of the mid-call
+  // "instabilité de connexion": the encoder never shed bitrate under
+  // congestion).
+  const activePeerConnection = useActivePeerConnection();
 
-  // Monitor call quality
+  // Monitor call quality. callId is required for the server-side quality
+  // report (call:quality-report) that drives congestion alerts and persists
+  // "data spent / network quality" on the call summary.
   const { qualityStats } = useCallQuality({
     peerConnection: activePeerConnection,
+    callId,
     updateInterval: 2000,
   });
 
