@@ -213,7 +213,6 @@
       "Bash(do sleep 5)",
       "Bash(/Users/smpceo/Documents/v2_meeshy/batch-convert-webp.sh)",
       "Bash(unzip:*)",
-      "Bash(pnpm --filter @meeshy/web-v2 build:*)",
       "Bash(if [ -d \"$folder\" ])",
       "Bash([ ! -f \"$folder.zip\" ])",
       "Bash(zip:*)",

@@ -47,6 +47,14 @@ public final class PushNotificationManager: NSObject, ObservableObject {
     private let userDefaults: UserDefaults
     private let keychainStore: any KeychainStoring
 
+    /// Token dont l'enregistrement réseau est EN COURS. Le cooldown persisté
+    /// (`lastRegisteredAtKey`) n'est écrit qu'APRÈS le POST réussi : sur réseau
+    /// lent (POST 9-14s), les 3 déclencheurs du cold start (callback APNs natif
+    /// + `reRegisterTokenIfNeeded` au login, ×2 chemins) lisent tous
+    /// `lastAt == nil` et postent en parallèle. Cette réservation en mémoire
+    /// (sûre car @MainActor) coupe les doublons avant le réseau.
+    private var inFlightTokenRegistration: String?
+
     override private convenience init() {
         self.init(userDefaults: .standard, keychainStore: KeychainManager.shared)
     }
@@ -266,6 +274,16 @@ public final class PushNotificationManager: NSObject, ObservableObject {
             logger.debug("Skipping token registration: same token registered \(Int(now.timeIntervalSince(lastAt)))s ago")
             return
         }
+
+        // Réservation in-flight : empêche les appelants concurrents (callback
+        // APNs + reRegisterTokenIfNeeded au login) de poster le MÊME token en
+        // parallèle avant que le premier POST n'ait persisté son timestamp.
+        guard inFlightTokenRegistration != token else {
+            logger.debug("Skipping token registration: same token already in flight")
+            return
+        }
+        inFlightTokenRegistration = token
+        defer { inFlightTokenRegistration = nil }
 
         let request = RegisterDeviceTokenRequest(
             token: token,

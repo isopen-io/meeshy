@@ -240,8 +240,6 @@ public final class MessageStore: ObservableObject {
             return
         }
 
-        let count = newRecords?.count ?? -1
-        Logger.messages.debug("[DIAG] MessageStore.refreshFromDB conv=\(convId) fetched=\(count) current=\(self.messages.count)")
         guard let newRecords, newRecords != messages else { return }
 
         // Yield to a fresh runloop iteration before publishing the @Published

@@ -89,6 +89,19 @@ final class ConversationSocketHandler {
     private static let typingSafetyTimeout: TimeInterval = 15.0
     nonisolated(unsafe) private var typingSafetyTimers: [String: Timer] = [:]
 
+    /// `true` une fois que l'activation différée de ce handler a réellement
+    /// tourné (instance réelle, installée par `@StateObject`). SwiftUI alloue
+    /// EAGER un `ConversationViewModel` jetable — donc un handler jetable — à
+    /// chaque ré-évaluation d'un parent qui monte `ConversationView` (ex.
+    /// `iPadRootView`, qui observe `NotificationToastManager`). Ces jetables
+    /// sont rejetés AVANT que l'activation différée ne s'exécute : ils ne
+    /// doivent donc émettre NI `conversation:join`/`leave` NI publier
+    /// `onConversationOpened`/`Closed` — sinon ils re-déclenchent la
+    /// ré-évaluation du parent et créent une boucle create/destroy
+    /// auto-entretenue (pic CPU, 429 répétés sur `/read`). Gater les deux
+    /// sites d'effets de bord sur `didActivate` les confine à l'instance réelle.
+    nonisolated(unsafe) private var didActivate = false
+
     // MARK: - Init / Deinit
 
     init(
@@ -110,7 +123,11 @@ final class ConversationSocketHandler {
         // which causes SwiftUI to dismiss the navigation push and the user
         // sees an empty conversation list again.
         let convId = conversationId
-        DispatchQueue.main.async { [messageSocket] in
+        DispatchQueue.main.async { [weak self, messageSocket] in
+            // Le handler jetable (cf. didActivate) est déjà désalloué quand ce
+            // bloc s'exécute → `self` est nil → on n'émet aucun effet de bord.
+            guard let self else { return }
+            self.didActivate = true
             messageSocket.joinConversation(convId)
             NotificationToastManager.shared.onConversationOpened(convId)
             NotificationCoordinator.shared.markConversationRead(convId)
@@ -124,16 +141,21 @@ final class ConversationSocketHandler {
     }
 
     deinit {
-        Logger.messages.debug("[DIAG] ConversationSocketHandler deinit conv=\(self.conversationId)")
-        leaveRoom()
-        Task { @MainActor in
-            NotificationToastManager.shared.onConversationClosed()
+        // Seule l'instance réellement activée quitte la room / signale la
+        // fermeture / coupe le typing. Un handler jetable (didActivate=false)
+        // n'a jamais rejoint ni publié, donc il ne doit rien défaire — sinon
+        // il publie `onConversationClosed` et relance la boucle.
+        if didActivate {
+            leaveRoom()
+            Task { @MainActor in
+                NotificationToastManager.shared.onConversationClosed()
+            }
+            if isEmittingTyping {
+                MessageSocketManager.shared.emitTypingStop(conversationId: conversationId)
+            }
         }
         typingTimer?.invalidate()
         typingIdleTimer?.invalidate()
-        if isEmittingTyping {
-            MessageSocketManager.shared.emitTypingStop(conversationId: conversationId)
-        }
         typingSafetyTimers.values.forEach { $0.invalidate() }
     }
 

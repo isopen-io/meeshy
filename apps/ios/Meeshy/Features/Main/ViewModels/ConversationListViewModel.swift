@@ -403,6 +403,15 @@ class ConversationListViewModel: ObservableObject {
     /// disk for the next cold start.
     private var persistTask: Task<Void, Never>?
 
+    /// Task de chargement en vol. Coalesce les appelants concurrents : au
+    /// lancement, le `.task` de `RootView` ET celui de `ConversationListView`
+    /// appellent `loadConversations()` sur le MÊME VM partagé. L'ancien
+    /// `guard !isLoading` ne couvrait que la branche cold-sync — sur cache
+    /// chaud (`.fresh`/`.stale`, cas courant) `isLoading` n'est jamais posé,
+    /// donc les deux tournaient en entier (double loadCategories, double
+    /// prefetch stories + messages). On partage la Task pour 1 seul chargement.
+    private var loadConversationsTask: Task<Void, Never>?
+
     // MARK: - Background Processing
     private func setupBackgroundProcessing() {
         // Single unified pipeline: conversations, search, filter, or categories change
@@ -542,7 +551,6 @@ class ConversationListViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .debounce(for: .milliseconds(200), scheduler: DispatchQueue.main)
             .sink { [weak self] in
-                Logger.messages.info("[RT-DIAG] VM(list) conversationsDidChange -> reloadFromCache")
                 Task { @MainActor [weak self] in
                     await self?.reloadFromCache()
                 }
@@ -683,7 +691,6 @@ class ConversationListViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
-                Logger.messages.info("[RT-DIAG] VM(list) conversationUpdated conv=\(event.conversationId, privacy: .public) known=\(self.convIndex(for: event.conversationId) != nil, privacy: .public)")
                 guard let index = self.convIndex(for: event.conversationId) else {
                     // Conversation pas encore connue côté client : c'est le cas
                     // d'un DM tout neuf (ou d'un groupe qu'on vient d'ajouter
@@ -987,8 +994,24 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Load Conversations
 
     func loadConversations() async {
-        guard !isLoading else { return }
+        // Coalesce concurrent callers : si un chargement est déjà en vol, on
+        // l'attend au lieu d'en lancer un second. Les appels réellement
+        // séquentiels (après que la Task se soit terminée et remise à nil)
+        // relancent normalement un chargement frais.
+        if let task = loadConversationsTask {
+            await task.value
+            return
+        }
+        let task = Task { [weak self] in
+            guard let self else { return }
+            await self.performLoadConversations()
+        }
+        loadConversationsTask = task
+        await task.value
+        loadConversationsTask = nil
+    }
 
+    private func performLoadConversations() async {
         Logger.messages.debug("[ConversationListVM] loadConversations called")
 
         // Defensive: a re-entrant load (e.g. post-logout/login) should
@@ -1490,6 +1513,18 @@ class ConversationListViewModel: ObservableObject {
         storyPrefetchTask?.cancel()
 
         storyPrefetchTask = Task.detached(priority: .utility) { [storyService = self.storyService] in
+            // Cache-first : `StoryViewModel.loadStories()` récupère déjà le feed
+            // (limit=50) et préfetch ses médias au lancement, en écrivant le
+            // MÊME `storiesCacheKey`. On saute notre fetch réseau redondant
+            // (limit=30) quand ce cache est déjà peuplé — sinon les deux partent
+            // au cold start, tapant /posts/feed/stories deux fois et churnant la
+            // même clé de cache.
+            switch await CacheCoordinator.shared.stories.load(for: StoryViewModel.storiesCacheKey) {
+            case .fresh, .stale:
+                return
+            case .expired, .empty:
+                break
+            }
             do {
                 let response = try await storyService.list(cursor: nil, limit: 30)
                 guard response.success, !Task.isCancelled else { return }

@@ -257,7 +257,7 @@ struct BubbleStandardLayout: View {
     private var hasBubbleBodyContent: Bool {
         if !nonMediaAttachments.isEmpty { return true }
         if !(content.text?.raw.isEmpty ?? true) { return true }
-        if LinkPreviewFetcher.firstURL(in: effectiveContent) != nil { return true }
+        if content.text?.firstLinkURL != nil { return true }
         if secondaryContent != nil, secondaryLangCode != nil { return true }
         return false
     }
@@ -403,9 +403,17 @@ struct BubbleStandardLayout: View {
                 // d'ecran. Le -4pt de padding garde l'effet "sticker a cheval
                 // sur le coin" (~50% sous, ~50% dehors).
                 .overlay(alignment: isMe ? .bottomLeading : .bottomTrailing) {
-                    reactionsOverlay
-                        .padding(isMe ? .leading : .trailing, -4)
-                        .offset(y: 8)
+                    // Monte l'overlay réactions UNIQUEMENT s'il a quelque chose à
+                    // afficher (pills présentes OU bouton + sur le dernier reçu).
+                    // Sans ce gate, une bulle sans réaction allouait quand même la
+                    // vue + son `onAppear` + `adaptiveOnChange` sur CHAQUE cellule —
+                    // pur gâchis au scroll. `hasOverflowingOverlay` est exactement
+                    // la même condition que `BubbleReactionsOverlay.hasContent`.
+                    if hasOverflowingOverlay {
+                        reactionsOverlay
+                            .padding(isMe ? .leading : .trailing, -4)
+                            .offset(y: 8)
+                    }
                 }
 
             }
@@ -763,7 +771,8 @@ struct BubbleStandardLayout: View {
 
                 // Inline OpenGraph preview for the first URL in the
                 // effective (possibly translated) content. Self-loading.
-                if let url = LinkPreviewFetcher.firstURL(in: effectiveContent) {
+                // URL précalculée dans BubbleContent (plus de NSDataDetector ici).
+                if let url = content.text?.firstLinkURL {
                     LinkPreviewCard(
                         urlString: url,
                         accentColor: contactColor,
@@ -781,7 +790,6 @@ struct BubbleStandardLayout: View {
 
     @ViewBuilder
     private var textBubbleContent: some View {
-        let isMe = content.isMe
         let hasEdited = content.editedAt != nil
         // Body + footer are stacked by `BubbleBodyFooterLayout`, not a plain
         // VStack. The footer carries a trailing Spacer — language flags on the
@@ -828,11 +836,9 @@ struct BubbleStandardLayout: View {
             }
         }
         .clipShape(RoundedRectangle(cornerRadius: 18))
-        .shadow(
-            color: (isMe ? MeeshyColors.brandPrimary : Color(hex: otherBubbleColor)).opacity(isMe ? 0.3 : 0.2),
-            radius: 6,
-            y: 3
-        )
+        // Simplification forte : plus d'ombre portée par bulle. Une `.shadow`
+        // teintée par cellule force un rendu offscreen à chaque frame de scroll
+        // (classique tueur de FPS). Les bulles sont désormais plates et nettes.
     }
 
     // MARK: - Identity bar (top of bubble for received last-in-group, otherwise meta row)
