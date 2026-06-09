@@ -20,6 +20,12 @@ import {
   formatSessionResponse
 } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import {
+  sendSuccess,
+  sendUnauthorized,
+  sendBadRequest,
+  sendInternalError
+} from '../../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'AuthLoginRoute' });
 
@@ -86,10 +92,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
 
       if (!authResult) {
         logger.warn('Échec de connexion — identifiants invalides', { username });
-        return reply.status(401).send({
-          success: false,
-          error: 'Identifiants invalides'
-        });
+        return sendUnauthorized(reply, 'Identifiants invalides');
       }
 
       const { user, sessionToken, session, requires2FA, twoFactorToken } = authResult;
@@ -97,23 +100,20 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       // If 2FA is required, return partial response
       if (requires2FA) {
         logger.info('2FA requis', { username: user.username });
-        return reply.send({
-          success: true,
-          data: {
-            requires2FA: true,
-            twoFactorToken,
-            rememberDevice,
-            user: {
-              id: user.id,
-              username: user.username,
-              email: user.email,
-              firstName: user.firstName,
-              lastName: user.lastName,
-              displayName: user.displayName,
-              avatar: user.avatar
-            },
-            message: 'Veuillez entrer votre code d\'authentification à deux facteurs'
-          }
+        return sendSuccess(reply, {
+          requires2FA: true,
+          twoFactorToken,
+          rememberDevice,
+          user: {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            displayName: user.displayName,
+            avatar: user.avatar
+          },
+          message: 'Veuillez entrer votre code d\'authentification à deux facteurs'
         });
       }
 
@@ -159,23 +159,17 @@ export function registerLoginRoutes(context: AuthRouteContext) {
 
       const permissions = authService.getUserPermissions(user as any);
 
-      reply.send({
-        success: true,
-        data: {
-          user: formatUserResponse(user, permissions),
-          token: jwtToken,
-          sessionToken,
-          session: formatSessionResponse(session, rememberDevice || false),
-          expiresIn: rememberDevice ? 365 * 24 * 60 * 60 : 24 * 60 * 60
-        }
+      return sendSuccess(reply, {
+        user: formatUserResponse(user, permissions),
+        token: jwtToken,
+        sessionToken,
+        session: formatSessionResponse(session, rememberDevice || false),
+        expiresIn: rememberDevice ? 365 * 24 * 60 * 60 : 24 * 60 * 60
       });
 
     } catch (error) {
       logger.error('Erreur serveur lors de la connexion', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la connexion'
-      });
+      return sendInternalError(reply, 'Erreur lors de la connexion');
     }
   });
 
@@ -222,20 +216,14 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       const { twoFactorToken, code, rememberDevice } = request.body;
 
       if (!twoFactorToken || !code) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Token 2FA et code requis'
-        });
+        return sendBadRequest(reply, 'Token 2FA et code requis');
       }
 
       const requestContext = await getRequestContext(request);
       const result = await authService.completeAuthWith2FA(twoFactorToken, code, requestContext);
 
       if ('success' in result && result.success === false) {
-        return reply.status(401).send({
-          success: false,
-          error: result.error
-        });
+        return sendUnauthorized(reply, result.error);
       }
 
       const authResult = result as { user: any; sessionToken: string; session: any };
@@ -284,23 +272,17 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       const expiresIn = rememberDevice ? 365 * 24 * 60 * 60 : 24 * 60 * 60;
       const twoFAPermissions = authService.getUserPermissions(user as any);
 
-      return reply.send({
-        success: true,
-        data: {
-          user: formatUserResponse(user, twoFAPermissions),
-          token: jwtToken,
-          sessionToken,
-          session: formatSessionResponse(session, rememberDevice || false),
-          expiresIn
-        }
+      return sendSuccess(reply, {
+        user: formatUserResponse(user, twoFAPermissions),
+        token: jwtToken,
+        sessionToken,
+        session: formatSessionResponse(session, rememberDevice || false),
+        expiresIn
       });
 
     } catch (error) {
       logger.error('Erreur 2FA', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la vérification 2FA'
-      });
+      return sendInternalError(reply, 'Erreur lors de la vérification 2FA');
     }
   });
 
@@ -347,17 +329,11 @@ export function registerLoginRoutes(context: AuthRouteContext) {
         }
       }
 
-      reply.send({
-        success: true,
-        data: { message: 'Déconnexion réussie' }
-      });
+      return sendSuccess(reply, { message: 'Déconnexion réussie' });
 
     } catch (error) {
       logger.error('Error in logout', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la déconnexion'
-      });
+      return sendInternalError(reply, 'Erreur lors de la déconnexion');
     }
   });
 }

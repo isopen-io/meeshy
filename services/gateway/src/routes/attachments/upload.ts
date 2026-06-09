@@ -4,6 +4,13 @@
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import {
+  sendSuccess,
+  sendBadRequest,
+  sendUnauthorized,
+  sendForbidden,
+  sendInternalError,
+} from '../../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'AttachmentUploadRoutes' });
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
@@ -75,10 +82,7 @@ export async function registerUploadRoutes(
       try {
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || (!authContext.isAuthenticated && !authContext.isAnonymous)) {
-          return reply.status(401).send({
-            success: false,
-            error: 'Authentication required',
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         const userId = authContext.userId;
@@ -115,10 +119,7 @@ export async function registerUploadRoutes(
         logger.debug('Files received', { count: files.length });
 
         if (files.length === 0) {
-          return reply.status(400).send({
-            success: false,
-            error: 'No files provided',
-          });
+          return sendBadRequest(reply, 'No files provided');
         }
 
         if (isAnonymous && authContext.participantId) {
@@ -131,27 +132,18 @@ export async function registerUploadRoutes(
           });
 
           if (!shareLink) {
-            return reply.status(403).send({
-              success: false,
-              error: 'Share link not found',
-            });
+            return sendForbidden(reply, 'Share link not found');
           }
 
           for (const file of files) {
             const isImage = file.mimeType.startsWith('image/');
 
             if (isImage && !shareLink.allowAnonymousImages) {
-              return reply.status(403).send({
-                success: false,
-                error: 'Images are not allowed for anonymous users on this conversation',
-              });
+              return sendForbidden(reply, 'Images are not allowed for anonymous users on this conversation');
             }
 
             if (!isImage && !shareLink.allowAnonymousFiles) {
-              return reply.status(403).send({
-                success: false,
-                error: 'File uploads are not allowed for anonymous users on this conversation',
-              });
+              return sendForbidden(reply, 'File uploads are not allowed for anonymous users on this conversation');
             }
           }
         }
@@ -164,16 +156,10 @@ export async function registerUploadRoutes(
           metadataMap.size > 0 ? metadataMap : undefined
         );
 
-        return reply.send({
-          success: true,
-          data: { attachments: results },
-        });
+        return sendSuccess(reply, { attachments: results });
       } catch (error: any) {
         logger.error('Error uploading files', error as Error);
-        return reply.status(500).send({
-          success: false,
-          error: error.message || 'Error uploading files',
-        });
+        return sendInternalError(reply, error.message || 'Error uploading files');
       }
     }
   );
@@ -233,10 +219,7 @@ export async function registerUploadRoutes(
       try {
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || !authContext.isAuthenticated) {
-          return reply.status(401).send({
-            success: false,
-            error: 'Authentication required',
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         const { content, messageId } = request.body as UploadTextBody;
@@ -251,16 +234,10 @@ export async function registerUploadRoutes(
           messageId
         );
 
-        return reply.send({
-          success: true,
-          data: { attachment: result },
-        });
+        return sendSuccess(reply, { attachment: result });
       } catch (error: any) {
         logger.error('Error creating text attachment', error as Error);
-        return reply.status(500).send({
-          success: false,
-          error: error.message || 'Error creating text attachment',
-        });
+        return sendInternalError(reply, error.message || 'Error creating text attachment');
       }
     }
   );
