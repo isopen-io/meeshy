@@ -1,6 +1,9 @@
 package me.meeshy.sdk.notification
 
 import me.meeshy.sdk.model.ApiNotification
+import me.meeshy.sdk.model.RegisterDeviceTokenRequest
+import me.meeshy.sdk.model.RegisterDeviceTokenResponse
+import me.meeshy.sdk.model.UnregisterDeviceTokenRequest
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.NotificationApi
 import me.meeshy.sdk.net.apiCall
@@ -33,4 +36,10 @@ class NotificationRepository @Inject constructor(
 
     suspend fun delete(notificationId: String): NetworkResult<Unit> =
         apiCall { notificationApi.delete(notificationId) }
+
+    suspend fun registerDeviceToken(token: String): NetworkResult<RegisterDeviceTokenResponse> =
+        apiCall { notificationApi.registerDeviceToken(RegisterDeviceTokenRequest(token = token, platform = "android")) }
+
+    suspend fun unregisterDeviceToken(token: String): NetworkResult<Unit> =
+        apiCall { notificationApi.unregisterDeviceToken(UnregisterDeviceTokenRequest(token = token)) }
 }

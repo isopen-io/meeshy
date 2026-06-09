@@ -47,6 +47,9 @@ dependencies {
     implementation(project(":feature:auth"))
     implementation(project(":feature:conversations"))
     implementation(project(":feature:chat"))
+    implementation(project(":feature:feed"))
+    implementation(project(":feature:profile"))
+    implementation(project(":feature:notifications"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
@@ -60,6 +63,10 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
+    implementation(libs.hilt.work)
+    ksp(libs.hilt.work.compiler)
+    implementation(libs.work.runtime)
+    implementation(libs.timber)
     debugImplementation(libs.compose.ui.tooling)
 
     testImplementation(libs.junit)

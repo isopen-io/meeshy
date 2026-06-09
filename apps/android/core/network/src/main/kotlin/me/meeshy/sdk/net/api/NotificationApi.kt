@@ -3,7 +3,10 @@ package me.meeshy.sdk.net.api
 import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.sdk.model.ApiResponse
 import me.meeshy.sdk.model.MarkReadResponse
+import me.meeshy.sdk.model.RegisterDeviceTokenRequest
+import me.meeshy.sdk.model.RegisterDeviceTokenResponse
 import me.meeshy.sdk.model.UnreadCountResponse
+import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
 import retrofit2.http.POST
@@ -35,4 +38,10 @@ interface NotificationApi {
 
     @DELETE("notifications/{id}")
     suspend fun delete(@Path("id") notificationId: String): ApiResponse<Unit>
+
+    @POST("notifications/device-token")
+    suspend fun registerDeviceToken(@Body body: RegisterDeviceTokenRequest): ApiResponse<RegisterDeviceTokenResponse>
+
+    @DELETE("notifications/device-token")
+    suspend fun unregisterDeviceToken(@Body body: me.meeshy.sdk.model.UnregisterDeviceTokenRequest): ApiResponse<Unit>
 }

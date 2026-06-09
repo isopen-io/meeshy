@@ -1,0 +1,30 @@
+package me.meeshy.sdk.di
+
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.components.SingletonComponent
+import kotlinx.serialization.json.Json
+import me.meeshy.sdk.net.MeeshyApi
+import javax.inject.Singleton
+
+/**
+ * Hilt bindings for sdk-core dependencies not covered by NetworkModule
+ * (ARCHITECTURE.md §2).
+ *
+ * The [Json] instance mirrors [MeeshyApi.json] so socket payloads and REST
+ * responses share the same lenient deserialization settings.
+ */
+@Module
+@InstallIn(SingletonComponent::class)
+object SdkModule {
+
+    @Provides
+    @Singleton
+    fun providesJson(): Json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+        explicitNulls = false
+        coerceInputValues = true
+    }
+}
