@@ -344,10 +344,10 @@ export default function MessageSettings() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="7">7 jours</SelectItem>
-                  <SelectItem value="30">30 jours</SelectItem>
-                  <SelectItem value="60">60 jours</SelectItem>
-                  <SelectItem value="90">90 jours</SelectItem>
+                  <SelectItem value="7">{t('message.draftDays7')}</SelectItem>
+                  <SelectItem value="30">{t('message.draftDays30')}</SelectItem>
+                  <SelectItem value="60">{t('message.draftDays60')}</SelectItem>
+                  <SelectItem value="90">{t('message.draftDays90')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

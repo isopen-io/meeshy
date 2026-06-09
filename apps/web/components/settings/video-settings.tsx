@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { User } from '@/types';
 import { Video, Camera, Monitor, Wifi, Settings } from 'lucide-react';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface VideoSettingsProps {
   user?: User | null;
@@ -14,6 +15,7 @@ interface VideoSettingsProps {
 }
 
 export default function VideoSettings({ _user }: VideoSettingsProps) {
+  const { t } = useI18n('settings');
   const [settings, setSettings] = useState({
     enableVideo: true,
     autoStartVideo: false,
@@ -41,18 +43,18 @@ export default function VideoSettings({ _user }: VideoSettingsProps) {
         <CardHeader>
           <div className="flex items-center gap-2">
             <Video className="h-5 w-5 text-blue-600" />
-            <CardTitle>Video Call Settings</CardTitle>
+            <CardTitle>{t('video.title')}</CardTitle>
           </div>
           <CardDescription>
-            Configure your video call preferences
+            {t('video.description')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Enable video calls</Label>
+              <Label>{t('video.enableVideo.label')}</Label>
               <p className="text-sm text-muted-foreground">
-                Allow video calls in conversations
+                {t('video.enableVideo.description')}
               </p>
             </div>
             <Switch
@@ -63,9 +65,9 @@ export default function VideoSettings({ _user }: VideoSettingsProps) {
 
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Auto-start video</Label>
+              <Label>{t('video.autoStartVideo.label')}</Label>
               <p className="text-sm text-muted-foreground">
-                Automatically turn on camera when joining calls
+                {t('video.autoStartVideo.description')}
               </p>
             </div>
             <Switch
@@ -76,9 +78,9 @@ export default function VideoSettings({ _user }: VideoSettingsProps) {
 
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Mirror my video</Label>
+              <Label>{t('video.mirrorVideo.label')}</Label>
               <p className="text-sm text-muted-foreground">
-                Flip your video horizontally
+                {t('video.mirrorVideo.description')}
               </p>
             </div>
             <Switch
@@ -89,9 +91,9 @@ export default function VideoSettings({ _user }: VideoSettingsProps) {
 
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Virtual background</Label>
+              <Label>{t('video.virtualBackground.label')}</Label>
               <p className="text-sm text-muted-foreground">
-                Enable virtual background effects
+                {t('video.virtualBackground.description')}
               </p>
             </div>
             <Switch
@@ -107,15 +109,15 @@ export default function VideoSettings({ _user }: VideoSettingsProps) {
         <CardHeader>
           <div className="flex items-center gap-2">
             <Wifi className="h-5 w-5 text-green-600" />
-            <CardTitle>Video Quality</CardTitle>
+            <CardTitle>{t('video.quality.title')}</CardTitle>
           </div>
           <CardDescription>
-            Adjust video quality and bandwidth usage
+            {t('video.quality.description')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>Video quality</Label>
+            <Label>{t('video.quality.label')}</Label>
             <Select
               value={settings.videoQuality}
               onValueChange={(value) => updateSetting('videoQuality', value)}
@@ -124,17 +126,17 @@ export default function VideoSettings({ _user }: VideoSettingsProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="auto">Auto (Recommended)</SelectItem>
-                <SelectItem value="low">Low (240p) - Save bandwidth</SelectItem>
-                <SelectItem value="medium">Medium (480p)</SelectItem>
-                <SelectItem value="high">High (720p)</SelectItem>
-                <SelectItem value="hd">HD (1080p) - High bandwidth</SelectItem>
+                <SelectItem value="auto">{t('video.quality.auto')}</SelectItem>
+                <SelectItem value="low">{t('video.quality.low')}</SelectItem>
+                <SelectItem value="medium">{t('video.quality.medium')}</SelectItem>
+                <SelectItem value="high">{t('video.quality.high')}</SelectItem>
+                <SelectItem value="hd">{t('video.quality.hd')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
-            <Label>Frame rate</Label>
+            <Label>{t('video.frameRate.label')}</Label>
             <Select
               value={settings.frameRate}
               onValueChange={(value) => updateSetting('frameRate', value)}
@@ -143,10 +145,10 @@ export default function VideoSettings({ _user }: VideoSettingsProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="15">15 FPS - Save bandwidth</SelectItem>
-                <SelectItem value="24">24 FPS</SelectItem>
-                <SelectItem value="30">30 FPS (Recommended)</SelectItem>
-                <SelectItem value="60">60 FPS - Smooth motion</SelectItem>
+                <SelectItem value="15">{t('video.frameRate.fps15')}</SelectItem>
+                <SelectItem value="24">{t('video.frameRate.fps24')}</SelectItem>
+                <SelectItem value="30">{t('video.frameRate.fps30')}</SelectItem>
+                <SelectItem value="60">{t('video.frameRate.fps60')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -158,18 +160,18 @@ export default function VideoSettings({ _user }: VideoSettingsProps) {
         <CardHeader>
           <div className="flex items-center gap-2">
             <Settings className="h-5 w-5 text-purple-600" />
-            <CardTitle>Audio Processing</CardTitle>
+            <CardTitle>{t('video.audioProcessing.title')}</CardTitle>
           </div>
           <CardDescription>
-            Configure audio enhancement features
+            {t('video.audioProcessing.description')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Noise suppression</Label>
+              <Label>{t('video.audioProcessing.noiseSupression.label')}</Label>
               <p className="text-sm text-muted-foreground">
-                Reduce background noise during calls
+                {t('video.audioProcessing.noiseSupression.description')}
               </p>
             </div>
             <Switch
@@ -180,9 +182,9 @@ export default function VideoSettings({ _user }: VideoSettingsProps) {
 
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Echo cancellation</Label>
+              <Label>{t('video.audioProcessing.echoCancellation.label')}</Label>
               <p className="text-sm text-muted-foreground">
-                Prevent audio feedback and echo
+                {t('video.audioProcessing.echoCancellation.description')}
               </p>
             </div>
             <Switch
@@ -198,15 +200,15 @@ export default function VideoSettings({ _user }: VideoSettingsProps) {
         <CardHeader>
           <div className="flex items-center gap-2">
             <Monitor className="h-5 w-5 text-orange-600" />
-            <CardTitle>Screen Sharing</CardTitle>
+            <CardTitle>{t('video.screenSharing.title')}</CardTitle>
           </div>
           <CardDescription>
-            Configure screen sharing preferences
+            {t('video.screenSharing.description')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>Screen share quality</Label>
+            <Label>{t('video.screenSharing.qualityLabel')}</Label>
             <Select
               value={settings.screenShareQuality}
               onValueChange={(value) => updateSetting('screenShareQuality', value)}
@@ -215,19 +217,19 @@ export default function VideoSettings({ _user }: VideoSettingsProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="low">Low - Better performance</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="high">High (Recommended)</SelectItem>
-                <SelectItem value="ultra">Ultra - Best quality</SelectItem>
+                <SelectItem value="low">{t('video.screenSharing.qualityLow')}</SelectItem>
+                <SelectItem value="medium">{t('video.screenSharing.qualityMedium')}</SelectItem>
+                <SelectItem value="high">{t('video.screenSharing.qualityHigh')}</SelectItem>
+                <SelectItem value="ultra">{t('video.screenSharing.qualityUltra')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Share system audio</Label>
+              <Label>{t('video.screenSharing.systemAudio.label')}</Label>
               <p className="text-sm text-muted-foreground">
-                Include system audio when sharing screen
+                {t('video.screenSharing.systemAudio.description')}
               </p>
             </div>
             <Switch
@@ -243,15 +245,15 @@ export default function VideoSettings({ _user }: VideoSettingsProps) {
         <CardHeader>
           <div className="flex items-center gap-2">
             <Camera className="h-5 w-5 text-red-600" />
-            <CardTitle>Device Selection</CardTitle>
+            <CardTitle>{t('video.devices.title')}</CardTitle>
           </div>
           <CardDescription>
-            Choose your preferred camera and audio devices
+            {t('video.devices.description')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>Camera</Label>
+            <Label>{t('video.devices.camera')}</Label>
             <Select
               value={settings.preferredCamera}
               onValueChange={(value) => updateSetting('preferredCamera', value)}
@@ -260,13 +262,13 @@ export default function VideoSettings({ _user }: VideoSettingsProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="default">Default Camera</SelectItem>
+                <SelectItem value="default">{t('video.devices.cameraDefault')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
-            <Label>Microphone</Label>
+            <Label>{t('video.devices.microphone')}</Label>
             <Select
               value={settings.preferredMicrophone}
               onValueChange={(value) => updateSetting('preferredMicrophone', value)}
@@ -275,13 +277,13 @@ export default function VideoSettings({ _user }: VideoSettingsProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="default">Default Microphone</SelectItem>
+                <SelectItem value="default">{t('video.devices.microphoneDefault')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
-            <Label>Speaker</Label>
+            <Label>{t('video.devices.speaker')}</Label>
             <Select
               value={settings.preferredSpeaker}
               onValueChange={(value) => updateSetting('preferredSpeaker', value)}
@@ -290,7 +292,7 @@ export default function VideoSettings({ _user }: VideoSettingsProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="default">Default Speaker</SelectItem>
+                <SelectItem value="default">{t('video.devices.speakerDefault')}</SelectItem>
               </SelectContent>
             </Select>
           </div>

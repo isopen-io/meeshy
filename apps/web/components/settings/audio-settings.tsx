@@ -322,9 +322,9 @@ const TranslationSection = memo(function TranslationSection({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="mp3">MP3 (recommandé)</SelectItem>
-                <SelectItem value="ogg">OGG (meilleure qualité)</SelectItem>
-                <SelectItem value="wav">WAV (non compressé)</SelectItem>
+                <SelectItem value="mp3">{t('audio.translation.formatMp3')}</SelectItem>
+                <SelectItem value="ogg">{t('audio.translation.formatOgg')}</SelectItem>
+                <SelectItem value="wav">{t('audio.translation.formatWav')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
