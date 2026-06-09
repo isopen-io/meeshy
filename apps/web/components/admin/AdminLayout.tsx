@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { PermissionsService } from '@/services/permissions.service';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
 import { preloadRouteModules } from '@/lib/lazy-components';
 import {
   DropdownMenu,
@@ -45,6 +46,7 @@ interface AdminLayoutProps {
 }
 
 const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
+  const { t } = useI18n('admin');
   const user = useUser();
   const { logout } = useAuth();
   const router = useRouter();
@@ -66,11 +68,11 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
   const handleLogout = async () => {
     try {
       await logout();
-      toast.success('Déconnexion réussie');
+      toast.success(t('logoutSuccess'));
       // La redirection se fait automatiquement dans la fonction logout
     } catch (error) {
       console.error('Erreur déconnexion:', error);
-      toast.error('Erreur lors de la déconnexion');
+      toast.error(t('logoutError'));
     }
   };
 

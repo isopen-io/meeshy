@@ -3,8 +3,11 @@ Configuration du service de traduction Meeshy - Version Production
 Inclut: Audio services, Voice API, Analytics, Pipeline async
 """
 
+import logging
 import os
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 class Settings:
     """Configuration du service de traduction"""
@@ -95,16 +98,16 @@ class Settings:
         
         # Chemin des modèles - utiliser le dossier models local du translator
         models_path_env = os.getenv("MODELS_PATH", "models")
-        print(f"[SETTINGS] 🔍 MODELS_PATH depuis os.getenv: '{models_path_env}'")
+        logger.debug("[SETTINGS] MODELS_PATH depuis os.getenv: '%s'", models_path_env)
         if os.path.isabs(models_path_env):
             self.models_path = models_path_env
-            print(f"[SETTINGS] ✅ Chemin absolu utilisé: '{self.models_path}'")
+            logger.debug("[SETTINGS] Chemin absolu utilisé: '%s'", self.models_path)
         else:
             # Si chemin relatif, le calculer depuis le dossier translator
             current_dir = os.path.dirname(os.path.abspath(__file__))
             translator_dir = os.path.dirname(os.path.dirname(current_dir))  # remonte de src/config vers translator
             self.models_path = os.path.join(translator_dir, models_path_env)
-            print(f"[SETTINGS] ✅ Chemin relatif calculé: '{self.models_path}'")
+            logger.debug("[SETTINGS] Chemin relatif calculé: '%s'", self.models_path)
         
         # Configuration des langues
         self.default_language = os.getenv("DEFAULT_LANGUAGE", "fr")
@@ -195,10 +198,6 @@ class Settings:
 
     def ensure_model_directories(self):
         """Crée les répertoires de modèles s'ils n'existent pas"""
-        print("\n" + "="*80)
-        print("📦 CHEMINS DE TÉLÉCHARGEMENT DES MODÈLES ML")
-        print("="*80)
-
         paths_info = [
             ("Répertoire principal", self.models_path),
             ("HuggingFace (TTS, Traduction)", self.huggingface_cache_path),
@@ -210,14 +209,12 @@ class Settings:
 
         for name, path in paths_info:
             os.makedirs(path, exist_ok=True)
-            print(f"  {name:30} → {path}")
+            logger.info("[SETTINGS] %-30s → %s", name, path)
 
-        # Afficher aussi les variables d'environnement HuggingFace
-        print(f"\n🔧 Variables d'environnement:")
-        print(f"  {'HF_HOME':30} → {os.getenv('HF_HOME', 'NOT SET')}")
-        print(f"  {'TRANSFORMERS_CACHE':30} → {os.getenv('TRANSFORMERS_CACHE', 'NOT SET')}")
-        print(f"  {'TORCH_HOME':30} → {os.getenv('TORCH_HOME', 'NOT SET')}")
-        print("="*80 + "\n")
+        logger.debug("[SETTINGS] HF_HOME=%s TRANSFORMERS_CACHE=%s TORCH_HOME=%s",
+                     os.getenv('HF_HOME', 'NOT SET'),
+                     os.getenv('TRANSFORMERS_CACHE', 'NOT SET'),
+                     os.getenv('TORCH_HOME', 'NOT SET'))
 
     @property
     def supported_languages_list(self):

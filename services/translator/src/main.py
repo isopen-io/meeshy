@@ -9,28 +9,40 @@ import os
 import sys
 from pathlib import Path
 
+# Configure logging early so bootstrap messages are captured via the logger
+_log_level = getattr(logging, os.getenv('LOG_LEVEL', 'INFO').upper(), logging.INFO)
+logging.basicConfig(
+    level=_log_level,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('translator.log', mode='w')
+    ]
+)
+logger = logging.getLogger(__name__)
+
 # Charger les variables d'environnement
 try:
     from dotenv import load_dotenv
     # Load .env from parent directory (translator/.env)
     env_path = Path(__file__).parent.parent / '.env'
     env_local_path = Path(__file__).parent.parent / '.env.local'
-    
+
     if env_path.exists():
         load_dotenv(env_path)
-        print(f"[TRANSLATOR] ✅ Variables d'environnement chargées depuis {env_path}")
+        logger.info("[TRANSLATOR] ✅ Variables d'environnement chargées depuis %s", env_path)
     else:
-        print(f"[TRANSLATOR] ⚠️ Fichier .env non trouvé: {env_path}")
-    
+        logger.warning("[TRANSLATOR] ⚠️ Fichier .env non trouvé: %s", env_path)
+
     # Then load .env.local (overrides base - local development)
     if env_local_path.exists():
         load_dotenv(env_local_path, override=True)
-        print("[TRANSLATOR] ✅ Variables d'environnement .env.local chargées (override)")
-        print(f"[TRANSLATOR] 🔍 MODELS_PATH depuis .env.local: {os.getenv('MODELS_PATH', 'NOT SET')}")
-        print(f"[TRANSLATOR] 🔍 HF_HOME depuis .env.local: {os.getenv('HF_HOME', 'NOT SET')}")
-        print(f"[TRANSLATOR] 🔍 TRANSFORMERS_CACHE depuis .env.local: {os.getenv('TRANSFORMERS_CACHE', 'NOT SET')}")
+        logger.info("[TRANSLATOR] ✅ Variables d'environnement .env.local chargées (override)")
+        logger.debug("[TRANSLATOR] 🔍 MODELS_PATH: %s", os.getenv('MODELS_PATH', 'NOT SET'))
+        logger.debug("[TRANSLATOR] 🔍 HF_HOME: %s", os.getenv('HF_HOME', 'NOT SET'))
+        logger.debug("[TRANSLATOR] 🔍 TRANSFORMERS_CACHE: %s", os.getenv('TRANSFORMERS_CACHE', 'NOT SET'))
 except ImportError:
-    print("[TRANSLATOR] ⚠️ python-dotenv non disponible, utilisation des variables système")
+    logger.warning("[TRANSLATOR] ⚠️ python-dotenv non disponible, utilisation des variables système")
 
 # Ajouter le répertoire src au path
 src_path = Path(__file__).parent
@@ -81,11 +93,9 @@ try:
     get_unified_tts_service = get_tts_service
     UnifiedTTSService = TTSService
     UNIFIED_TTS_AVAILABLE = True
-    print("[TRANSLATOR] ✅ Service TTS unifié importé avec succès")
+    logger.info("[TRANSLATOR] ✅ Service TTS unifié importé avec succès")
 except ImportError as e:
-    print(f"[TRANSLATOR] ❌ CRITIQUE: Échec import TTS unifié: {e}")
-    import traceback
-    traceback.print_exc()
+    logger.critical("[TRANSLATOR] ❌ CRITIQUE: Échec import TTS unifié: %s", e, exc_info=True)
 
 # Import des services Voice API (optionnel)
 VOICE_API_AVAILABLE = False
@@ -106,26 +116,10 @@ try:
 except ImportError as e:
     pass  # Will be logged later
 
-# Configuration du logging
-# Configurable via LOG_LEVEL env var (default: INFO en dev, INFO en prod pour visibilite startup)
-log_level_str = os.getenv('LOG_LEVEL', 'INFO').upper()
-log_level = getattr(logging, log_level_str, logging.INFO)
-
-logging.basicConfig(
-    level=log_level,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('translator.log', mode='w')
-    ]
-)
-
 # Reduire le bruit des libs externes en production
 if os.getenv('NODE_ENV') == 'production':
     for noisy in ['urllib3', 'httpx', 'httpcore', 'transformers', 'torch', 'diffusers', 'huggingface_hub']:
         logging.getLogger(noisy).setLevel(logging.WARNING)
-
-logger = logging.getLogger(__name__)
 
 class MeeshyTranslationServer:
     """Serveur de traduction haute performance Meeshy"""
@@ -227,7 +221,6 @@ class MeeshyTranslationServer:
 
                         if license_warning:
                             logger.warning(license_warning)
-                            print(f"\n{license_warning}\n")
 
                         if is_commercial_ok:
                             logger.info(f"[TRANSLATOR] ✅ Modèle TTS '{tts_model_name}' - Licence commerciale OK")

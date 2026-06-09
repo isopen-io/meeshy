@@ -218,5 +218,7 @@
     "twoFactorEnabled": "2FA ativado com sucesso",
     "twoFactorDisabled": "2FA desativado com sucesso",
     "disabled": "Desativado"
-  }
+  },
+  "logoutSuccess": "Desconexão realizada com sucesso",
+  "logoutError": "Erro ao desconectar"
 }

@@ -46,7 +46,8 @@
         "microphoneAccessDenied": "Acesso ao microfone negado.",
         "noMicrophoneFound": "Nenhum microfone encontrado.",
         "microphoneError": "Erro no microfone.",
-        "cannotAccessMicrophone": "Não é possível acessar o microfone."
+        "cannotAccessMicrophone": "Não é possível acessar o microfone.",
+        "playbackError": "Erro de reprodução"
       }
     },
     "voiceCoder": {

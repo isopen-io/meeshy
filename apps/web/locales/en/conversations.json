@@ -458,7 +458,8 @@
     "createLinkButton": {
       "notAuthenticated": "Cannot create link: user not logged in",
       "noConversation": "Cannot create link: conversation not identified",
-      "error": "Error creating link"
+      "error": "Error creating link",
+      "fetchError": "Error retrieving conversation"
     },
     "messageSearch": {
       "placeholder": "Search in conversation…",
@@ -468,6 +469,12 @@
     },
     "pinnedBanner": {
       "close": "Close pinned message"
+    },
+    "inviteModal": {
+      "searchError": "Error searching for users",
+      "inviteSuccess": "{count} user(s) invited successfully",
+      "partialError": "{count} invitation(s) failed",
+      "inviteError": "Error inviting users"
     }
   }
 }

@@ -8,6 +8,7 @@ import { useState, useCallback } from 'react';
 import { Attachment } from '@meeshy/shared/types/attachment';
 import { AttachmentService } from '@/services/attachmentService';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
 
 export interface AttachmentDeletionState {
   attachmentToDelete: Attachment | null;
@@ -23,6 +24,7 @@ export function useAttachmentDeletion({
   token,
   onAttachmentDeleted,
 }: UseAttachmentDeletionOptions) {
+  const { t } = useI18n('attachments');
   const [attachmentToDelete, setAttachmentToDelete] = useState<Attachment | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -41,11 +43,11 @@ export function useAttachmentDeletion({
     try {
       await AttachmentService.deleteAttachment(attachmentToDelete.id, token);
       onAttachmentDeleted?.(attachmentToDelete.id);
-      toast.success('Fichier supprimé avec succès');
+      toast.success(t('gallery.deleteSuccess'));
       setAttachmentToDelete(null);
     } catch (error) {
       console.error('Erreur suppression attachment:', error);
-      toast.error('Impossible de supprimer le fichier');
+      toast.error(t('gallery.deleteError'));
     } finally {
       setIsDeleting(false);
     }

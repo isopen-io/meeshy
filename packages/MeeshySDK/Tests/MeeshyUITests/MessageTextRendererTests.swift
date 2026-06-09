@@ -39,6 +39,58 @@ final class MessageTextRendererTests: XCTestCase {
         XCTAssertNotNil(result)
     }
 
+    // MARK: - Display-name mentions (memoized rules path)
+
+    func test_render_withDisplayNameMentions_runsCachedRulesPath() {
+        // Exercises displayNameRules(from:) -> DisplayNameRulesCache: the map is
+        // hashed as the cache key and the per-member regexes are compiled once.
+        let names = ["atabeth": "Ata Beth", "jdoe": "John Doe"]
+        let result = MessageTextRenderer.render(
+            "Salut @Ata Beth et @John Doe",
+            color: .primary,
+            mentionDisplayNames: names
+        )
+        XCTAssertNotNil(result)
+    }
+
+    func test_render_withDisplayNameMentions_repeatedSameMap_isDeterministic() {
+        // Second render hits the cache (identical map); output must be identical.
+        let names = ["atabeth": "Ata Beth"]
+        let first = MessageTextRenderer.render("ping @Ata Beth", color: .primary, mentionDisplayNames: names)
+        let second = MessageTextRenderer.render("ping @Ata Beth", color: .primary, mentionDisplayNames: names)
+        XCTAssertEqual(first, second)
+    }
+
+    func test_render_withDifferentDisplayNameMaps_doesNotCrash() {
+        // Distinct maps -> distinct cache keys; both render correctly.
+        let r1 = MessageTextRenderer.render("@Ata Beth", color: .primary, mentionDisplayNames: ["atabeth": "Ata Beth"])
+        let r2 = MessageTextRenderer.render("@John Doe", color: .primary, mentionDisplayNames: ["jdoe": "John Doe"])
+        XCTAssertNotNil(r1)
+        XCTAssertNotNil(r2)
+    }
+
+    // MARK: - Plain-text fast-path (skips the regex pipeline)
+
+    func test_render_plainText_noInlineSyntax_rendersViaFastPath() {
+        // No markdown/mention/link trigger -> parse short-circuits to plain text.
+        XCTAssertNotNil(MessageTextRenderer.render("juste un message simple sans aucune syntaxe", color: .primary))
+    }
+
+    func test_render_markdownTriggers_runFullPipeline() {
+        // '*' / '~' / '_' triggers must NOT be skipped by the fast-path.
+        XCTAssertNotNil(MessageTextRenderer.render("ceci est **gras**, ~~barre~~ et __souligne__", color: .primary))
+    }
+
+    func test_render_urlAndTokenTriggers_runFullPipeline() {
+        XCTAssertNotNil(MessageTextRenderer.render("lien https://meeshy.me et token m+abc123", color: .primary))
+    }
+
+    func test_render_emojiPlainText_fastPath_roundTrips() {
+        // Multi-byte / emoji content with no trigger still round-trips via the
+        // fast-path (NSString full-range substring == original String).
+        XCTAssertNotNil(MessageTextRenderer.render("salut 👋 ça va 🎉 bien", color: .primary))
+    }
+
     // MARK: - highlightRanges (internal)
 
     func test_highlightRanges_findsAllOccurrences() {

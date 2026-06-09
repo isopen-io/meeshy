@@ -27,7 +27,10 @@
     "loading": "Cargando...",
     "noImage": "No hay imagen",
     "by": "por",
-    "of": "de"
+    "of": "de",
+    "deleteSuccess": "Archivo eliminado con éxito",
+    "deleteError": "No se puede eliminar el archivo",
+    "delete": "Eliminar"
   },
   "textDetection": {
     "title": "Texto largo detectado",

@@ -375,7 +375,6 @@ class ModelManager:
         # Afficher l'alerte de licence si nécessaire
         if show_license_warning and model_info.license_warning:
             logger.warning(model_info.license_warning)
-            print(f"\n{model_info.license_warning}\n")
 
         logger.info(f"[ModelManager] 🔄 Chargement du modèle {model.value}...")
 

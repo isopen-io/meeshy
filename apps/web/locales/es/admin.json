@@ -218,5 +218,7 @@
     "twoFactorEnabled": "2FA activado con éxito",
     "twoFactorDisabled": "2FA desactivado con éxito",
     "disabled": "Desactivado"
-  }
+  },
+  "logoutSuccess": "Sesión cerrada con éxito",
+  "logoutError": "Error al cerrar sesión"
 }
