@@ -10,9 +10,11 @@ import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, UserPlus, Save, AlertCircle } from 'lucide-react';
 import { apiService } from '@/services/api.service';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
 
 export default function NewUserPage() {
   const router = useRouter();
+  const { t } = useI18n('admin');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -36,28 +38,28 @@ export default function NewUserPage() {
 
     // Username validation
     if (!formData.username || formData.username.length < 3) {
-      newErrors.username = 'Le nom d\'utilisateur doit contenir au moins 3 caractères';
+      newErrors.username = t('users.newUser.errorUsernameMinLength');
     }
 
     // Email validation
     if (!formData.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      newErrors.email = 'Email invalide';
+      newErrors.email = t('users.newUser.errorEmailInvalid');
     }
 
     // Name validation
     if (!formData.firstName) {
-      newErrors.firstName = 'Le prénom est requis';
+      newErrors.firstName = t('users.newUser.errorFirstNameRequired');
     }
     if (!formData.lastName) {
-      newErrors.lastName = 'Le nom est requis';
+      newErrors.lastName = t('users.newUser.errorLastNameRequired');
     }
 
     // Password validation
     if (!formData.password) {
-      newErrors.password = 'Le mot de passe est requis';
+      newErrors.password = t('users.newUser.errorPasswordRequired');
     }
     if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = 'Les mots de passe ne correspondent pas';
+      newErrors.confirmPassword = t('users.newUser.errorPasswordMismatch');
     }
 
     setErrors(newErrors);
@@ -68,7 +70,7 @@ export default function NewUserPage() {
     e.preventDefault();
 
     if (!validateForm()) {
-      toast.error('Veuillez corriger les erreurs du formulaire');
+      toast.error(t('users.newUser.toastFormErrors'));
       return;
     }
 
@@ -93,12 +95,12 @@ export default function NewUserPage() {
       const response = await apiService.post('/admin/users', userData);
 
       if ((response.data as unknown)?.success) {
-        toast.success('Utilisateur créé avec succès!');
+        toast.success(t('users.newUser.toastSuccess'));
         router.push('/admin/users');
       }
     } catch (error: unknown) {
       console.error('Erreur création utilisateur:', error);
-      toast.error(error.message || 'Erreur lors de la création de l\'utilisateur');
+      toast.error(error.message || t('users.newUser.toastError'));
     } finally {
       setLoading(false);
     }
@@ -128,16 +130,16 @@ export default function NewUserPage() {
               className="flex items-center space-x-2"
             >
               <ArrowLeft className="h-4 w-4" />
-              <span>Retour</span>
+              <span>{t('users.newUser.back')}</span>
             </Button>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Nouvel utilisateur</h1>
-              <p className="text-sm text-gray-600">Créer un nouveau compte utilisateur</p>
+              <h1 className="text-2xl font-bold text-gray-900">{t('users.newUser.title')}</h1>
+              <p className="text-sm text-gray-600">{t('users.newUser.subtitle')}</p>
             </div>
           </div>
           <Badge className="bg-blue-600 text-white">
             <UserPlus className="h-4 w-4 mr-1" />
-            Création
+            {t('users.newUser.badgeCreation')}
           </Badge>
         </div>
 
@@ -145,13 +147,13 @@ export default function NewUserPage() {
           {/* Informations principales */}
           <Card>
             <CardHeader>
-              <CardTitle>Informations principales</CardTitle>
+  <CardTitle>{t('users.newUser.cardMainInfo')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">
-                    Nom d&apos;utilisateur <span className="text-red-500">*</span>
+                    {t('users.newUser.labelUsername')} <span className="text-red-500">*</span>
                   </label>
                   <Input
                     placeholder="johndoe"
@@ -165,12 +167,12 @@ export default function NewUserPage() {
                       {errors.username}
                     </p>
                   )}
-                  <p className="text-xs text-gray-500">3-32 caractères, lettres, chiffres, tirets et underscores</p>
+                  <p className="text-xs text-gray-500">{t('users.newUser.hintUsername')}</p>
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">
-                    Email <span className="text-red-500">*</span>
+                    {t('users.newUser.labelEmail')} <span className="text-red-500">*</span>
                   </label>
                   <Input
                     type="email"
@@ -189,7 +191,7 @@ export default function NewUserPage() {
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">
-                    Prénom <span className="text-red-500">*</span>
+                    {t('users.newUser.labelFirstName')} <span className="text-red-500">*</span>
                   </label>
                   <Input
                     placeholder="John"
@@ -207,7 +209,7 @@ export default function NewUserPage() {
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">
-                    Nom <span className="text-red-500">*</span>
+                    {t('users.newUser.labelLastName')} <span className="text-red-500">*</span>
                   </label>
                   <Input
                     placeholder="Doe"
@@ -229,13 +231,13 @@ export default function NewUserPage() {
           {/* Sécurité */}
           <Card>
             <CardHeader>
-              <CardTitle>Sécurité</CardTitle>
+  <CardTitle>{t('users.newUser.cardSecurity')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">
-                    Mot de passe <span className="text-red-500">*</span>
+                    {t('users.newUser.labelPassword')} <span className="text-red-500">*</span>
                   </label>
                   <Input
                     type="password"
@@ -250,12 +252,12 @@ export default function NewUserPage() {
                       {errors.password}
                     </p>
                   )}
-                  <p className="text-xs text-gray-500">Aucune contrainte de longueur ou de complexité</p>
+                  <p className="text-xs text-gray-500">{t('users.newUser.hintPassword')}</p>
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium">
-                    Confirmer le mot de passe <span className="text-red-500">*</span>
+                    {t('users.newUser.labelConfirmPassword')} <span className="text-red-500">*</span>
                   </label>
                   <Input
                     type="password"
@@ -278,12 +280,12 @@ export default function NewUserPage() {
           {/* Informations complémentaires */}
           <Card>
             <CardHeader>
-              <CardTitle>Informations complémentaires</CardTitle>
+  <CardTitle>{t('users.newUser.cardExtra')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Nom d&apos;affichage</label>
+                  <label className="text-sm font-medium">{t('users.newUser.labelDisplayName')}</label>
                   <Input
                     placeholder="John Doe"
                     value={formData.displayName}
@@ -292,17 +294,17 @@ export default function NewUserPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Téléphone</label>
+                  <label className="text-sm font-medium">{t('users.newUser.labelPhone')}</label>
                   <Input
                     placeholder="+33612345678"
                     value={formData.phoneNumber}
                     onChange={(e) => handleChange('phoneNumber', e.target.value)}
                   />
-                  <p className="text-xs text-gray-500">Format international E.164</p>
+                  <p className="text-xs text-gray-500">{t('users.newUser.hintPhone')}</p>
                 </div>
 
                 <div className="space-y-2 md:col-span-2">
-                  <label className="text-sm font-medium">Biographie</label>
+                  <label className="text-sm font-medium">{t('users.newUser.labelBio')}</label>
                   <textarea
                     className="w-full p-2 border rounded-md text-sm min-h-[80px]"
                     placeholder="À propos de cet utilisateur..."
@@ -310,7 +312,7 @@ export default function NewUserPage() {
                     onChange={(e) => handleChange('bio', e.target.value)}
                     maxLength={500}
                   />
-                  <p className="text-xs text-gray-500">{formData.bio.length}/500 caractères</p>
+                  <p className="text-xs text-gray-500">{t('users.newUser.hintBioLength', { count: formData.bio.length })}</p>
                 </div>
               </div>
             </CardContent>
@@ -319,71 +321,71 @@ export default function NewUserPage() {
           {/* Rôle et langues */}
           <Card>
             <CardHeader>
-              <CardTitle>Rôle et préférences</CardTitle>
+  <CardTitle>{t('users.newUser.cardRolePrefs')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">
-                    Rôle <span className="text-red-500">*</span>
+                    {t('users.newUser.labelRole')} <span className="text-red-500">*</span>
                   </label>
                   <select
                     className="w-full p-2 border rounded-md text-sm bg-white"
                     value={formData.role}
                     onChange={(e) => handleChange('role', e.target.value)}
                   >
-                    <option value="USER">Utilisateur</option>
-                    <option value="ADMIN">Administrateur</option>
-                    <option value="MODO">Modérateur</option>
-                    <option value="AUDIT">Auditeur</option>
-                    <option value="ANALYST">Analyste</option>
-                    <option value="BIGBOSS">Super Admin</option>
+                    <option value="USER">{t('users.newUser.roleUser')}</option>
+                    <option value="ADMIN">{t('users.newUser.roleAdmin')}</option>
+                    <option value="MODO">{t('users.newUser.roleModo')}</option>
+                    <option value="AUDIT">{t('users.newUser.roleAudit')}</option>
+                    <option value="ANALYST">{t('users.newUser.roleAnalyst')}</option>
+                    <option value="BIGBOSS">{t('users.newUser.roleBigboss')}</option>
                   </select>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Langue système</label>
+                  <label className="text-sm font-medium">{t('users.newUser.labelSystemLang')}</label>
                   <select
                     className="w-full p-2 border rounded-md text-sm bg-white"
                     value={formData.systemLanguage}
                     onChange={(e) => handleChange('systemLanguage', e.target.value)}
                   >
-                    <option value="en">Anglais</option>
-                    <option value="fr">Français</option>
-                    <option value="pt">Portugais</option>
-                    <option value="es">Espagnol</option>
-                    <option value="de">Allemand</option>
-                    <option value="it">Italien</option>
-                    <option value="zh">Chinois</option>
-                    <option value="ja">Japonais</option>
-                    <option value="ar">Arabe</option>
-                    <option value="ru">Russe</option>
-                    <option value="ko">Coréen</option>
-                    <option value="hi">Hindi</option>
-                    <option value="tr">Turc</option>
+                    <option value="en">{t('users.newUser.langEn')}</option>
+                    <option value="fr">{t('users.newUser.langFr')}</option>
+                    <option value="pt">{t('users.newUser.langPt')}</option>
+                    <option value="es">{t('users.newUser.langEs')}</option>
+                    <option value="de">{t('users.newUser.langDe')}</option>
+                    <option value="it">{t('users.newUser.langIt')}</option>
+                    <option value="zh">{t('users.newUser.langZh')}</option>
+                    <option value="ja">{t('users.newUser.langJa')}</option>
+                    <option value="ar">{t('users.newUser.langAr')}</option>
+                    <option value="ru">{t('users.newUser.langRu')}</option>
+                    <option value="ko">{t('users.newUser.langKo')}</option>
+                    <option value="hi">{t('users.newUser.langHi')}</option>
+                    <option value="tr">{t('users.newUser.langTr')}</option>
                   </select>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Langue régionale</label>
+                  <label className="text-sm font-medium">{t('users.newUser.labelRegionalLang')}</label>
                   <select
                     className="w-full p-2 border rounded-md text-sm bg-white"
                     value={formData.regionalLanguage}
                     onChange={(e) => handleChange('regionalLanguage', e.target.value)}
                   >
-                    <option value="en">Anglais</option>
-                    <option value="fr">Français</option>
-                    <option value="pt">Portugais</option>
-                    <option value="es">Espagnol</option>
-                    <option value="de">Allemand</option>
-                    <option value="it">Italien</option>
-                    <option value="zh">Chinois</option>
-                    <option value="ja">Japonais</option>
-                    <option value="ar">Arabe</option>
-                    <option value="ru">Russe</option>
-                    <option value="ko">Coréen</option>
-                    <option value="hi">Hindi</option>
-                    <option value="tr">Turc</option>
+                    <option value="en">{t('users.newUser.langEn')}</option>
+                    <option value="fr">{t('users.newUser.langFr')}</option>
+                    <option value="pt">{t('users.newUser.langPt')}</option>
+                    <option value="es">{t('users.newUser.langEs')}</option>
+                    <option value="de">{t('users.newUser.langDe')}</option>
+                    <option value="it">{t('users.newUser.langIt')}</option>
+                    <option value="zh">{t('users.newUser.langZh')}</option>
+                    <option value="ja">{t('users.newUser.langJa')}</option>
+                    <option value="ar">{t('users.newUser.langAr')}</option>
+                    <option value="ru">{t('users.newUser.langRu')}</option>
+                    <option value="ko">{t('users.newUser.langKo')}</option>
+                    <option value="hi">{t('users.newUser.langHi')}</option>
+                    <option value="tr">{t('users.newUser.langTr')}</option>
                   </select>
                 </div>
               </div>
@@ -398,7 +400,7 @@ export default function NewUserPage() {
               onClick={() => router.push('/admin/users')}
               disabled={loading}
             >
-              Annuler
+              {t('users.newUser.cancel')}
             </Button>
             <Button
               type="submit"
@@ -408,12 +410,12 @@ export default function NewUserPage() {
               {loading ? (
                 <>
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Création en cours...
+                  {t('users.newUser.submitting')}
                 </>
               ) : (
                 <>
                   <Save className="h-4 w-4 mr-2" />
-                  Créer l&apos;utilisateur
+                  {t('users.newUser.submit')}
                 </>
               )}
             </Button>

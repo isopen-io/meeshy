@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { UserPlus, ArrowLeft, Search, Filter, Calendar, User, Users, CheckCircle, XCircle, Clock, Send, RefreshCw, ChevronLeft, ChevronRight, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
 import { StatsGrid, TimeSeriesChart, DonutChart, StatItem, TimeSeriesDataPoint, DonutDataPoint } from '@/components/admin/Charts';
 import { TableSkeleton, StatCardSkeleton } from '@/components/admin/TableSkeleton';
 
@@ -53,6 +54,7 @@ interface Invitation {
 
 export default function AdminInvitationsPage() {
   const router = useRouter();
+  const { t } = useI18n('admin');
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -201,7 +203,7 @@ export default function AdminInvitationsPage() {
 
     } catch (error) {
       console.error('Erreur lors du chargement des invitations:', error);
-      toast.error('Erreur lors du chargement des invitations');
+      toast.error(t('invitations.loadError'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -251,10 +253,10 @@ export default function AdminInvitationsPage() {
 
   const getStatusLabel = (status: string) => {
     const labels = {
-      pending: 'En attente',
-      accepted: 'Acceptée',
-      rejected: 'Refusée',
-      expired: 'Expirée'
+      pending: t('invitations.statusPending'),
+      accepted: t('invitations.statusAccepted'),
+      rejected: t('invitations.statusRejected'),
+      expired: t('invitations.statusExpired')
     };
     return labels[status as keyof typeof labels] || status;
   };
@@ -270,9 +272,9 @@ export default function AdminInvitationsPage() {
 
   const getTypeLabel = (type: string) => {
     const labels = {
-      friend: 'Amitié',
-      community: 'Communauté',
-      conversation: 'Conversation'
+      friend: t('invitations.typeFriend'),
+      community: t('invitations.typeCommunity'),
+      conversation: t('invitations.typeConversation')
     };
     return labels[type as keyof typeof labels] || type;
   };
@@ -298,36 +300,36 @@ export default function AdminInvitationsPage() {
   // Données pour StatsGrid
   const stats: StatItem[] = [
     {
-      title: 'Total Invitations',
+      title: t('invitations.statTotal'),
       value: totalCount,
-      description: 'Invitations envoyées',
+      description: t('invitations.statTotalDesc'),
       icon: UserPlus,
       iconColor: 'text-indigo-600 dark:text-indigo-400',
       iconBgColor: 'bg-indigo-100 dark:bg-indigo-900/30',
       trend: { value: 10, isPositive: true }
     },
     {
-      title: 'En Attente',
+      title: t('invitations.statPending'),
       value: pendingInvitations,
-      description: 'À traiter',
+      description: t('invitations.statPendingDesc'),
       icon: Clock,
       iconColor: 'text-purple-600 dark:text-purple-400',
       iconBgColor: 'bg-purple-100 dark:bg-purple-900/30',
       trend: { value: 5, isPositive: true }
     },
     {
-      title: 'Acceptées',
+      title: t('invitations.statAccepted'),
       value: acceptedInvitations,
-      description: 'Confirmées',
+      description: t('invitations.statAcceptedDesc'),
       icon: CheckCircle,
       iconColor: 'text-green-600 dark:text-green-400',
       iconBgColor: 'bg-green-100 dark:bg-green-900/30',
       trend: { value: 20, isPositive: true }
     },
     {
-      title: 'Refusées',
+      title: t('invitations.statRejected'),
       value: rejectedInvitations,
-      description: 'Déclinées',
+      description: t('invitations.statRejectedDesc'),
       icon: XCircle,
       iconColor: 'text-red-600 dark:text-red-400',
       iconBgColor: 'bg-red-100 dark:bg-red-900/30',
@@ -390,16 +392,16 @@ export default function AdminInvitationsPage() {
                 size="sm"
               >
                 <ArrowLeft className="h-4 w-4" />
-                <span>Retour</span>
+                <span>{t('invitations.back')}</span>
               </Button>
               <div>
-                <h1 className="text-2xl font-bold">Gestion des Invitations</h1>
-                <p className="text-indigo-100 mt-1">Administration des invitations et demandes</p>
+                <h1 className="text-2xl font-bold">{t('invitations.pageTitle')}</h1>
+                <p className="text-indigo-100 mt-1">{t('invitations.pageSubtitle')}</p>
               </div>
             </div>
             <Button className="flex items-center space-x-2 bg-white text-indigo-600 hover:bg-indigo-50">
               <Send className="h-4 w-4" />
-              <span>Nouvelle invitation</span>
+              <span>{t('invitations.newInvitation')}</span>
             </Button>
           </div>
         </div>
@@ -411,16 +413,16 @@ export default function AdminInvitationsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <TimeSeriesChart
             data={timeSeriesData}
-            title="Invitations par jour"
-            description="Nombre d'invitations envoyées cette semaine"
+            title={t('invitations.chartTitle')}
+            description={t('invitations.chartDesc')}
             color="#6366f1"
             showArea={true}
           />
           {donutData.length > 0 && (
             <DonutChart
               data={donutData}
-              title="Répartition par type"
-              description="Distribution des invitations par type"
+              title={t('invitations.donutTitle')}
+              description={t('invitations.donutDesc')}
               showLegend={false}
             />
           )}
@@ -431,7 +433,7 @@ export default function AdminInvitationsPage() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2 text-lg">
               <Filter className="h-5 w-5" />
-              <span>Filtres et recherche</span>
+              <span>{t('invitations.filtersTitle')}</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -439,7 +441,7 @@ export default function AdminInvitationsPage() {
               <div className="relative md:col-span-2">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400 dark:text-gray-500" />
                 <Input
-                  placeholder="Expéditeur, destinataire, message..."
+                  placeholder={t('invitations.searchPlaceholder')}
                   value={searchTerm}
                   onChange={(e) => handleSearch(e.target.value)}
                   className="pl-10"
@@ -451,11 +453,11 @@ export default function AdminInvitationsPage() {
                   <SelectValue placeholder="Statut" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tous les statuts</SelectItem>
-                  <SelectItem value="pending">En attente</SelectItem>
-                  <SelectItem value="accepted">Acceptées</SelectItem>
-                  <SelectItem value="rejected">Refusées</SelectItem>
-                  <SelectItem value="expired">Expirées</SelectItem>
+                  <SelectItem value="all">{t('invitations.statusAll')}</SelectItem>
+                  <SelectItem value="pending">{t('invitations.statusPending')}</SelectItem>
+                  <SelectItem value="accepted">{t('invitations.statusAccepted')}</SelectItem>
+                  <SelectItem value="rejected">{t('invitations.statusRejected')}</SelectItem>
+                  <SelectItem value="expired">{t('invitations.statusExpired')}</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -464,10 +466,10 @@ export default function AdminInvitationsPage() {
                   <SelectValue placeholder="Type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tous les types</SelectItem>
-                  <SelectItem value="friend">Amitié</SelectItem>
-                  <SelectItem value="community">Communauté</SelectItem>
-                  <SelectItem value="conversation">Conversation</SelectItem>
+                  <SelectItem value="all">{t('invitations.typeAll')}</SelectItem>
+                  <SelectItem value="friend">{t('invitations.typeFriend')}</SelectItem>
+                  <SelectItem value="community">{t('invitations.typeCommunity')}</SelectItem>
+                  <SelectItem value="conversation">{t('invitations.typeConversation')}</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -476,9 +478,9 @@ export default function AdminInvitationsPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="20">20 par page</SelectItem>
-                  <SelectItem value="50">50 par page</SelectItem>
-                  <SelectItem value="100">100 par page</SelectItem>
+                  <SelectItem value="20">{t('invitations.perPage20')}</SelectItem>
+                  <SelectItem value="50">{t('invitations.perPage50')}</SelectItem>
+                  <SelectItem value="100">{t('invitations.perPage100')}</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -489,7 +491,7 @@ export default function AdminInvitationsPage() {
                 className="w-full"
               >
                 <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                Actualiser
+                {t('invitations.refresh')}
               </Button>
             </div>
           </CardContent>
@@ -500,7 +502,7 @@ export default function AdminInvitationsPage() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2 text-lg">
               <UserPlus className="h-5 w-5" />
-              <span>Invitations ({totalCount})</span>
+              <span>{t('invitations.listTitle', { count: totalCount })}</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -508,10 +510,10 @@ export default function AdminInvitationsPage() {
               <div className="text-center py-12">
                 <UserPlus className="h-16 w-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-                  Aucune invitation trouvée
+                  {t('invitations.emptyTitle')}
                 </h3>
                 <p className="text-gray-500 dark:text-gray-400">
-                  Aucune invitation ne correspond aux critères de recherche actuels.
+                  {t('invitations.emptySubtitle')}
                 </p>
               </div>
             ) : (
@@ -552,7 +554,7 @@ export default function AdminInvitationsPage() {
                             </div>
                             <div className="flex items-center space-x-1">
                               <Clock className="h-4 w-4" />
-                              <span>Màj {formatDate(invitation.updatedAt)}</span>
+                              <span>{t('invitations.updatedAt', { date: formatDate(invitation.updatedAt) })}</span>
                             </div>
                           </div>
                         </div>
@@ -562,16 +564,16 @@ export default function AdminInvitationsPage() {
                             <>
                               <Button variant="outline" size="sm" className="text-green-600 hover:text-green-700">
                                 <CheckCircle className="h-4 w-4 mr-1" />
-                                <span className="hidden sm:inline">Accepter</span>
+                                <span className="hidden sm:inline">{t('invitations.accept')}</span>
                               </Button>
                               <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
                                 <XCircle className="h-4 w-4 mr-1" />
-                                <span className="hidden sm:inline">Refuser</span>
+                                <span className="hidden sm:inline">{t('invitations.decline')}</span>
                               </Button>
                             </>
                           )}
                           <Button variant="outline" size="sm">
-                            Voir détails
+                            {t('invitations.viewDetails')}
                           </Button>
                         </div>
                       </div>
@@ -583,12 +585,12 @@ export default function AdminInvitationsPage() {
                             {invitation.community ? (
                               <>
                                 <Users className="h-4 w-4 text-indigo-600" />
-                                <span className="font-medium text-indigo-900 dark:text-indigo-300">Communauté</span>
+                                <span className="font-medium text-indigo-900 dark:text-indigo-300">{t('invitations.contextCommunity')}</span>
                               </>
                             ) : (
                               <>
                                 <MessageSquare className="h-4 w-4 text-purple-600" />
-                                <span className="font-medium text-purple-900 dark:text-purple-300">Conversation</span>
+                                <span className="font-medium text-purple-900 dark:text-purple-300">{t('invitations.contextConversation')}</span>
                               </>
                             )}
                           </div>
@@ -605,7 +607,7 @@ export default function AdminInvitationsPage() {
                             ) : (
                               <div>
                                 <div className="font-medium">
-                                  {invitation.conversation?.title || 'Conversation sans nom'}
+                                  {invitation.conversation?.title || t('invitations.noTitle')}
                                 </div>
                                 {invitation.conversation?.identifier && (
                                   <div className="text-xs text-gray-600 dark:text-gray-400">
@@ -630,7 +632,7 @@ export default function AdminInvitationsPage() {
             {invitations && invitations.length > 0 && (
               <div className="flex flex-col sm:flex-row items-center justify-between mt-6 gap-4 border-t dark:border-gray-700 pt-4">
                 <div className="text-sm text-gray-600 dark:text-gray-400">
-                  Page {currentPage} sur {totalPages} • {invitations.length} invitations affichées • {totalCount} au total
+                  {t('invitations.paginationInfo', { page: currentPage, total: totalPages, count: invitations.length, totalCount })}
                 </div>
                 <div className="flex space-x-2">
                   <Button
@@ -640,7 +642,7 @@ export default function AdminInvitationsPage() {
                     onClick={() => setCurrentPage(currentPage - 1)}
                   >
                     <ChevronLeft className="h-4 w-4" />
-                    <span className="hidden sm:inline ml-1">Précédent</span>
+                    <span className="hidden sm:inline ml-1">{t('invitations.prevPage')}</span>
                   </Button>
                   <div className="flex items-center px-3 py-2 border dark:border-gray-700 rounded-md text-sm font-medium">
                     {currentPage} / {totalPages}
@@ -651,7 +653,7 @@ export default function AdminInvitationsPage() {
                     disabled={currentPage === totalPages}
                     onClick={() => setCurrentPage(currentPage + 1)}
                   >
-                    <span className="hidden sm:inline mr-1">Suivant</span>
+                    <span className="hidden sm:inline mr-1">{t('invitations.nextPage')}</span>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
