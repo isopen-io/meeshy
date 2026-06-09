@@ -17,6 +17,7 @@ import { AuthSchemas, SessionSchemas, validateSchema } from '@meeshy/shared/util
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest} from '../../middleware/auth';
 import { AuthRouteContext, formatUserResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { sendSuccess, sendBadRequest, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response';
 
 // Logger dédié pour magic-link
 const logger = enhancedLogger.child({ module: 'magic-link' });
@@ -59,10 +60,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       const authContext = (request as UnifiedAuthRequest).authContext;
 
       if (!authContext.isAuthenticated) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Non authentifié'
-        });
+        return sendUnauthorized(reply, 'Non authentifié');
       }
 
       // Registered user (JWT)
@@ -70,11 +68,8 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         const user = authContext.registeredUser;
         const permissions = authService.getUserPermissions(user as any);
 
-        return reply.send({
-          success: true,
-          data: {
-            user: formatUserResponse(user, permissions)
-          }
+        return sendSuccess(reply, {
+          user: formatUserResponse(user, permissions)
         });
       }
 
@@ -82,44 +77,35 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       if (authContext.type === 'anonymous' && authContext.anonymousUser) {
         const anonymousUser = authContext.anonymousUser;
 
-        return reply.send({
-          success: true,
-          data: {
-            user: {
-              id: authContext.userId,
-              username: anonymousUser.username,
-              email: null,
-              firstName: anonymousUser.firstName,
-              lastName: anonymousUser.lastName,
-              displayName: authContext.displayName,
-              avatar: null,
-              role: 'ANONYMOUS',
-              systemLanguage: anonymousUser.language,
-              regionalLanguage: anonymousUser.language,
-              customDestinationLanguage: null,
-              autoTranslateEnabled: false,
-              isOnline: true,
-              lastActiveAt: new Date(),
-              isActive: true,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-              permissions: anonymousUser.permissions
-            }
+        return sendSuccess(reply, {
+          user: {
+            id: authContext.userId,
+            username: anonymousUser.username,
+            email: null,
+            firstName: anonymousUser.firstName,
+            lastName: anonymousUser.lastName,
+            displayName: authContext.displayName,
+            avatar: null,
+            role: 'ANONYMOUS',
+            systemLanguage: anonymousUser.language,
+            regionalLanguage: anonymousUser.language,
+            customDestinationLanguage: null,
+            autoTranslateEnabled: false,
+            isOnline: true,
+            lastActiveAt: new Date(),
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            permissions: anonymousUser.permissions
           }
         });
       }
 
-      return reply.status(404).send({
-        success: false,
-        error: 'Utilisateur non trouvé'
-      });
+      return sendNotFound(reply, 'Utilisateur non trouvé');
 
     } catch (error) {
       logger.error('Error in /auth/me', error);
-      reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la récupération du profil'
-      });
+      sendInternalError(reply, 'Erreur lors de la récupération du profil');
     }
   });
 
@@ -189,19 +175,13 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       }
 
       if (!decoded?.userId) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Token invalide ou expiré'
-        });
+        return sendUnauthorized(reply, 'Token invalide ou expiré');
       }
 
       const user = await authService.getUserById(decoded!.userId!);
 
       if (!user) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Utilisateur non trouvé'
-        });
+        return sendNotFound(reply, 'Utilisateur non trouvé');
       }
 
       const newToken = authService.generateToken(user);
@@ -227,22 +207,16 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
 
       const permissions = authService.getUserPermissions(user as any);
 
-      reply.send({
-        success: true,
-        data: {
-          user: formatUserResponse(user, permissions),
-          token: newToken,
-          sessionToken: sessionToken ?? undefined,
-          expiresIn: 24 * 60 * 60
-        }
+      sendSuccess(reply, {
+        user: formatUserResponse(user, permissions),
+        token: newToken,
+        sessionToken: sessionToken ?? undefined,
+        expiresIn: 24 * 60 * 60
       });
 
     } catch (error) {
       logger.error('Error in /auth/refresh', error);
-      reply.status(500).send({
-        success: false,
-        error: 'Erreur lors du rafraîchissement du token'
-      });
+      sendInternalError(reply, 'Erreur lors du rafraîchissement du token');
     }
   });
 
@@ -287,41 +261,29 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
 
       if (!result.success) {
         logger.warn(`[AUTH] ❌ Échec de vérification email result.error=${result.error}`);
-        return reply.status(400).send({
-          success: false,
-          error: result.error
-        });
+        return sendBadRequest(reply, result.error as string);
       }
 
       if (result.alreadyVerified && result.verifiedAt) {
         logger.info(`[AUTH] ℹ️ Email déjà vérifié pour email=${email} le result.verifiedAt.toISOString()=${result.verifiedAt.toISOString()}`);
-        return reply.send({
-          success: true,
-          data: {
-            message: 'Votre adresse email est déjà vérifiée.',
-            alreadyVerified: true,
-            verifiedAt: result.verifiedAt.toISOString()
-          }
+        return sendSuccess(reply, {
+          message: 'Votre adresse email est déjà vérifiée.',
+          alreadyVerified: true,
+          verifiedAt: result.verifiedAt.toISOString()
         });
       }
 
       logger.info(`[AUTH] ✅ Email vérifié avec succès pour email=${email}`);
 
-      return reply.send({
-        success: true,
-        data: {
-          message: 'Votre adresse email a été vérifiée avec succès !',
-          alreadyVerified: false,
-          verifiedAt: result.verifiedAt?.toISOString()
-        }
+      return sendSuccess(reply, {
+        message: 'Votre adresse email a été vérifiée avec succès !',
+        alreadyVerified: false,
+        verifiedAt: result.verifiedAt?.toISOString()
       });
 
     } catch (error) {
       logger.error('[AUTH] ❌ Erreur lors de la vérification email', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la vérification'
-      });
+      return sendInternalError(reply, 'Erreur lors de la vérification');
     }
   });
 
@@ -357,26 +319,17 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
 
       if (!result.success) {
         if (result.error?.includes('déjà vérifiée')) {
-          return reply.status(400).send({
-            success: false,
-            error: result.error
-          });
+          return sendBadRequest(reply, result.error);
         }
       }
 
       logger.info('[AUTH] ✅ Email de vérification envoyé (si compte existe)');
 
-      return reply.send({
-        success: true,
-        data: { message: 'Si un compte existe avec cette adresse email, un email de vérification a été envoyé.' }
-      });
+      return sendSuccess(reply, { message: 'Si un compte existe avec cette adresse email, un email de vérification a été envoyé.' });
 
     } catch (error) {
       logger.error('[AUTH] ❌ Erreur lors du renvoi de vérification', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de l\'envoi de l\'email'
-      });
+      return sendInternalError(reply, 'Erreur lors de l\'envoi de l\'email');
     }
   });
 
@@ -412,25 +365,16 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
 
       if (!result.success) {
         logger.warn(`[AUTH] ❌ Échec envoi code SMS result.error=${result.error}`);
-        return reply.status(400).send({
-          success: false,
-          error: result.error
-        });
+        return sendBadRequest(reply, result.error as string);
       }
 
       logger.info('[AUTH] ✅ Code SMS envoyé');
 
-      return reply.send({
-        success: true,
-        data: { message: 'Code de vérification envoyé par SMS.' }
-      });
+      return sendSuccess(reply, { message: 'Code de vérification envoyé par SMS.' });
 
     } catch (error) {
       logger.error('[AUTH] ❌ Erreur envoi code SMS', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de l\'envoi du code'
-      });
+      return sendInternalError(reply, 'Erreur lors de l\'envoi du code');
     }
   });
 
@@ -466,25 +410,16 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
 
       if (!result.success) {
         logger.warn(`[AUTH] ❌ Échec vérification téléphone result.error=${result.error}`);
-        return reply.status(400).send({
-          success: false,
-          error: result.error
-        });
+        return sendBadRequest(reply, result.error as string);
       }
 
       logger.info('[AUTH] ✅ Téléphone vérifié');
 
-      return reply.send({
-        success: true,
-        data: { message: 'Numéro de téléphone vérifié avec succès !' }
-      });
+      return sendSuccess(reply, { message: 'Numéro de téléphone vérifié avec succès !' });
 
     } catch (error) {
       logger.error('[AUTH] ❌ Erreur vérification téléphone', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la vérification'
-      });
+      return sendInternalError(reply, 'Erreur lors de la vérification');
     }
   });
 
@@ -515,38 +450,32 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
 
       const sessions = await authService.getUserActiveSessions(userId, currentToken);
 
-      return reply.send({
-        success: true,
-        data: {
-          sessions: sessions.map(session => ({
-            id: session.id,
-            deviceType: session.deviceType,
-            deviceVendor: session.deviceVendor,
-            deviceModel: session.deviceModel,
-            osName: session.osName,
-            osVersion: session.osVersion,
-            browserName: session.browserName,
-            browserVersion: session.browserVersion,
-            isMobile: session.isMobile,
-            ipAddress: session.ipAddress,
-            country: session.country,
-            city: session.city,
-            location: session.location,
-            createdAt: session.createdAt,
-            lastActivityAt: session.lastActivityAt,
-            isCurrentSession: session.isCurrentSession,
-            isTrusted: session.isTrusted
-          })),
-          totalCount: sessions.length
-        }
+      return sendSuccess(reply, {
+        sessions: sessions.map(session => ({
+          id: session.id,
+          deviceType: session.deviceType,
+          deviceVendor: session.deviceVendor,
+          deviceModel: session.deviceModel,
+          osName: session.osName,
+          osVersion: session.osVersion,
+          browserName: session.browserName,
+          browserVersion: session.browserVersion,
+          isMobile: session.isMobile,
+          ipAddress: session.ipAddress,
+          country: session.country,
+          city: session.city,
+          location: session.location,
+          createdAt: session.createdAt,
+          lastActivityAt: session.lastActivityAt,
+          isCurrentSession: session.isCurrentSession,
+          isTrusted: session.isTrusted
+        })),
+        totalCount: sessions.length
       });
 
     } catch (error) {
       logger.error('[AUTH] ❌ Erreur récupération sessions', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la récupération des sessions'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération des sessions');
     }
   });
 
@@ -599,34 +528,22 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       const sessionBelongsToUser = sessions.some(s => s.id === sessionId);
 
       if (!sessionBelongsToUser) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Session non trouvée'
-        });
+        return sendNotFound(reply, 'Session non trouvée');
       }
 
       const revoked = await authService.revokeSession(sessionId);
 
       if (!revoked) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Impossible de révoquer cette session'
-        });
+        return sendNotFound(reply, 'Impossible de révoquer cette session');
       }
 
       logger.info(`[AUTH] ✅ Session révoquée sessionId=${sessionId}`);
 
-      return reply.send({
-        success: true,
-        data: { message: 'Session révoquée avec succès' }
-      });
+      return sendSuccess(reply, { message: 'Session révoquée avec succès' });
 
     } catch (error) {
       logger.error('[AUTH] ❌ Erreur révocation session', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la révocation de la session'
-      });
+      return sendInternalError(reply, 'Erreur lors de la révocation de la session');
     }
   });
 
@@ -671,20 +588,14 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
 
         logger.info(`Sessions révoquées count=${revokedCount}`);
 
-      return reply.send({
-        success: true,
-        data: {
-          message: `${revokedCount} session(s) révoquée(s) avec succès`,
-          revokedCount
-        }
+      return sendSuccess(reply, {
+        message: `${revokedCount} session(s) révoquée(s) avec succès`,
+        revokedCount
       });
 
     } catch (error) {
       logger.error('[AUTH] ❌ Erreur révocation sessions', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la révocation des sessions'
-      });
+      return sendInternalError(reply, 'Erreur lors de la révocation des sessions');
     }
   });
 
@@ -722,40 +633,31 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       const session = await authService.validateSessionToken(sessionToken);
 
       if (!session) {
-        return reply.send({
-          success: true,
-          data: {
-            valid: false,
-            session: null
-          }
+        return sendSuccess(reply, {
+          valid: false,
+          session: null
         });
       }
 
-      return reply.send({
-        success: true,
-        data: {
-          valid: true,
-          session: {
-            id: session.id,
-            userId: session.userId,
-            deviceType: session.deviceType,
-            browserName: session.browserName,
-            osName: session.osName,
-            location: session.location,
-            isMobile: session.isMobile,
-            createdAt: session.createdAt,
-            lastActivityAt: session.lastActivityAt,
-            isTrusted: session.isTrusted
-          }
+      return sendSuccess(reply, {
+        valid: true,
+        session: {
+          id: session.id,
+          userId: session.userId,
+          deviceType: session.deviceType,
+          browserName: session.browserName,
+          osName: session.osName,
+          location: session.location,
+          isMobile: session.isMobile,
+          createdAt: session.createdAt,
+          lastActivityAt: session.lastActivityAt,
+          isTrusted: session.isTrusted
         }
       });
 
     } catch (error) {
       logger.error('[AUTH] ❌ Erreur validation session', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la validation de la session'
-      });
+      return sendInternalError(reply, 'Erreur lors de la validation de la session');
     }
   });
 }

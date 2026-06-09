@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { logError } from '../utils/logger';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
 import {
   errorResponseSchema,
   anonymousParticipantSchema,
@@ -223,10 +224,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       });
 
       if (!shareLink) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Lien de conversation introuvable'
-        });
+        return sendNotFound(reply, 'Lien de conversation introuvable');
       }
 
       // 2. Verifications de validite du lien
@@ -263,28 +261,19 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
 
       // Verifier pays autorises
       if (shareLink.allowedCountries.length > 0 && country && !shareLink.allowedCountries.includes(country)) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Acces non autorise depuis votre region'
-        });
+        return sendForbidden(reply, 'Acces non autorise depuis votre region');
       }
 
       // Verifier langues autorisees
       if (shareLink.allowedLanguages.length > 0 && !shareLink.allowedLanguages.includes(body.language)) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Langue non autorisee pour ce lien'
-        });
+        return sendForbidden(reply, 'Langue non autorisee pour ce lien');
       }
 
       // Verifier plages IP autorisees
       if (shareLink.allowedIpRanges.length > 0) {
         const isIpAllowed = shareLink.allowedIpRanges.some(range => isIpInRange(clientIP, range));
         if (!isIpAllowed) {
-          return reply.status(403).send({
-            success: false,
-            message: 'Acces non autorise depuis votre adresse IP'
-          });
+          return sendForbidden(reply, 'Acces non autorise depuis votre adresse IP');
         }
       }
 
@@ -299,18 +288,12 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
 
       // 5. Verifier si l'email est requis
       if (shareLink.requireEmail && (!body.email || body.email.trim() === '')) {
-        return reply.status(400).send({
-          success: false,
-          message: 'L\'email est obligatoire pour rejoindre cette conversation'
-        });
+        return sendBadRequest(reply, 'L\'email est obligatoire pour rejoindre cette conversation');
       }
 
       // 6. Verifier si la date de naissance est requise
       if (shareLink.requireBirthday && (!body.birthday || body.birthday.trim() === '')) {
-        return reply.status(400).send({
-          success: false,
-          message: 'La date de naissance est obligatoire pour rejoindre cette conversation'
-        });
+        return sendBadRequest(reply, 'La date de naissance est obligatoire pour rejoindre cette conversation');
       }
 
       // 7. Verifier si l'username est requis et generer le username
@@ -318,10 +301,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       if (shareLink.requireNickname) {
         // Si l'username est requis, il doit etre fourni
         if (!body.username || body.username.trim() === '') {
-          return reply.status(400).send({
-            success: false,
-            message: 'Le nom d\'utilisateur est obligatoire pour rejoindre cette conversation'
-          });
+          return sendBadRequest(reply, 'Le nom d\'utilisateur est obligatoire pour rejoindre cette conversation');
         }
         username = body.username.trim();
       } else {
@@ -474,9 +454,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       });
 
 
-      return reply.status(201).send({
-        success: true,
-        data: {
+      return sendSuccess(reply, {
           sessionToken: sessionToken,
           participant: {
             id: anonymousParticipant.id,
@@ -500,23 +478,15 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
           },
           linkId: shareLink.linkId,
           id: shareLink.id // ID pour l'acces authentifie aux endpoints /links
-        }
-      });
+        }, { statusCode: 201 });
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          message: 'Donnees invalides',
-          errors: error.errors
-        });
+        return sendBadRequest(reply, 'Donnees invalides');
       }
 
       logError(fastify.log, 'Anonymous join error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 
@@ -610,10 +580,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       });
 
       if (!participant || !participant.isActive) {
-        return reply.status(401).send({
-          success: false,
-          message: 'Session invalide ou expiree'
-        });
+        return sendUnauthorized(reply, 'Session invalide ou expiree');
       }
 
       // Lookup shareLink from anonymousSession
@@ -656,9 +623,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         }
       });
 
-      return reply.send({
-        success: true,
-        data: {
+      return sendSuccess(reply, {
           participant: {
             id: participant.id,
             username: participant.anonymousSession?.profile?.username ?? participant.displayName,
@@ -679,23 +644,15 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
             type: shareLink.conversation.type,
             allowViewHistory: shareLink.allowViewHistory
           }
-        }
-      });
+        });
 
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          message: 'Donnees invalides',
-          errors: error.errors
-        });
+        return sendBadRequest(reply, 'Donnees invalides');
       }
 
       logError(fastify.log, 'Anonymous refresh error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 
@@ -747,10 +704,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       });
 
       if (!participant) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Session introuvable'
-        });
+        return sendNotFound(reply, 'Session introuvable');
       }
 
       await fastify.prisma.participant.update({
@@ -772,17 +726,11 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         });
       }
 
-      return reply.send({
-        success: true,
-        data: { message: 'Session fermee avec succes' }
-      });
+      return sendSuccess(reply, { message: 'Session fermee avec succes' });
 
     } catch (error) {
       logError(fastify.log, 'Anonymous leave error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 
@@ -911,10 +859,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
         // Sinon, resoudre l'ID (peut etre un ObjectID ou un identifier)
         const shareLinkId = await resolveShareLinkId(identifier);
         if (!shareLinkId) {
-          return reply.status(404).send({
-            success: false,
-            message: 'Lien de partage non trouve'
-          });
+          return sendNotFound(reply, 'Lien de partage non trouve');
         }
 
         shareLink = await fastify.prisma.conversationShareLink.findUnique({
@@ -944,10 +889,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       }
 
       if (!shareLink) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Lien de conversation introuvable'
-        });
+        return sendNotFound(reply, 'Lien de conversation introuvable');
       }
 
       // Verifications de base
@@ -1025,9 +967,7 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
       const spokenLanguages = Array.from(languageSet).sort();
       const languageCount = spokenLanguages.length;
 
-      return reply.send({
-        success: true,
-        data: {
+      return sendSuccess(reply, {
           id: shareLink.id, // ID de la conversationShareLink pour les appels ulterieurs
           linkId: shareLink.linkId,
           name: shareLink.name,
@@ -1052,15 +992,11 @@ export async function anonymousRoutes(fastify: FastifyInstance) {
             languageCount,
             spokenLanguages
           }
-        }
-      });
+        });
 
     } catch (error) {
       logError(fastify.log, 'Get anonymous link error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 }

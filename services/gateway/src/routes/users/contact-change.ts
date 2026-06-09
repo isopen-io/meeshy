@@ -9,6 +9,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { smsService } from '../../services/SmsService';
 import crypto from 'crypto';
 import { getCacheStore } from '../../services/CacheStore';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict } from '../../utils/response';
 
 const logger = enhancedLogger.child({ module: 'contact-change' });
 
@@ -109,10 +110,7 @@ export async function initiateEmailChange(fastify: FastifyInstance) {
     try {
       const authContext = (request as AuthenticatedRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const userId = authContext.userId;
@@ -126,18 +124,12 @@ export async function initiateEmailChange(fastify: FastifyInstance) {
       });
 
       if (!user) {
-        return reply.status(404).send({
-          success: false,
-          error: 'User not found'
-        });
+        return sendNotFound(reply, 'User not found');
       }
 
       // Check if new email is same as current
       if (newEmail.toLowerCase() === user.email.toLowerCase()) {
-        return reply.status(400).send({
-          success: false,
-          error: 'New email must be different from current email'
-        });
+        return sendBadRequest(reply, 'New email must be different from current email');
       }
 
       // Check if new email is already in use by another user
@@ -152,10 +144,7 @@ export async function initiateEmailChange(fastify: FastifyInstance) {
       });
 
       if (existingUser) {
-        return reply.status(400).send({
-          success: false,
-          error: 'This email address is already in use'
-        });
+        return sendBadRequest(reply, 'This email address is already in use');
       }
 
       // Generate verification token
@@ -189,12 +178,9 @@ export async function initiateEmailChange(fastify: FastifyInstance) {
 
       logger.info(`[EMAIL_CHANGE] Verification email sent to ${newEmail} for user ${userId}`);
 
-      return reply.send({
-        success: true,
-        data: {
-          message: 'Verification email sent to new address',
-          pendingEmail: newEmail
-        }
+      return sendSuccess(reply, {
+        message: 'Verification email sent to new address',
+        pendingEmail: newEmail
       });
 
     } catch (error: unknown) {
@@ -207,10 +193,7 @@ export async function initiateEmailChange(fastify: FastifyInstance) {
       }
 
       logError(fastify.log, 'Initiate email change error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Internal server error'
-      });
+      return sendInternalError(reply, 'Internal server error');
     }
   });
 }
@@ -261,10 +244,7 @@ export async function verifyEmailChange(fastify: FastifyInstance) {
     try {
       const authContext = (request as AuthenticatedRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const userId = authContext.userId;
@@ -284,33 +264,21 @@ export async function verifyEmailChange(fastify: FastifyInstance) {
       });
 
       if (!user) {
-        return reply.status(404).send({
-          success: false,
-          error: 'User not found'
-        });
+        return sendNotFound(reply, 'User not found');
       }
 
       if (!user.pendingEmail || !user.pendingEmailVerificationToken) {
-        return reply.status(400).send({
-          success: false,
-          error: 'No pending email change'
-        });
+        return sendBadRequest(reply, 'No pending email change');
       }
 
       // Verify token
       if (user.pendingEmailVerificationToken !== hashedToken) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Invalid verification token'
-        });
+        return sendBadRequest(reply, 'Invalid verification token');
       }
 
       // Check expiry
       if (user.pendingEmailVerificationExpiry && user.pendingEmailVerificationExpiry < new Date()) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Verification token has expired'
-        });
+        return sendBadRequest(reply, 'Verification token has expired');
       }
 
       // Check if the pending email is still available (in case it was taken by another user since)
@@ -325,10 +293,7 @@ export async function verifyEmailChange(fastify: FastifyInstance) {
       });
 
       if (existingUser) {
-        return reply.status(400).send({
-          success: false,
-          error: 'This email address is no longer available'
-        });
+        return sendBadRequest(reply, 'This email address is no longer available');
       }
 
       // Activate the email change
@@ -345,12 +310,9 @@ export async function verifyEmailChange(fastify: FastifyInstance) {
 
       logger.info(`[EMAIL_CHANGE] Email changed successfully for user ${userId} to ${user.pendingEmail}`);
 
-      return reply.send({
-        success: true,
-        data: {
-          message: 'Email changed successfully',
-          newEmail: user.pendingEmail
-        }
+      return sendSuccess(reply, {
+        message: 'Email changed successfully',
+        newEmail: user.pendingEmail
       });
 
     } catch (error: unknown) {
@@ -363,10 +325,7 @@ export async function verifyEmailChange(fastify: FastifyInstance) {
       }
 
       logError(fastify.log, 'Verify email change error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Internal server error'
-      });
+      return sendInternalError(reply, 'Internal server error');
     }
   });
 }
@@ -417,10 +376,7 @@ export async function resendEmailChangeVerification(fastify: FastifyInstance) {
     try {
       const authContext = (request as AuthenticatedRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const userId = authContext.userId;
@@ -440,17 +396,11 @@ export async function resendEmailChangeVerification(fastify: FastifyInstance) {
       });
 
       if (!user) {
-        return reply.status(404).send({
-          success: false,
-          error: 'User not found'
-        });
+        return sendNotFound(reply, 'User not found');
       }
 
       if (!user.pendingEmail) {
-        return reply.status(400).send({
-          success: false,
-          error: 'No pending email change'
-        });
+        return sendBadRequest(reply, 'No pending email change');
       }
 
       // Rate limiting: Check if we sent an email in the last minute
@@ -501,20 +451,14 @@ export async function resendEmailChangeVerification(fastify: FastifyInstance) {
 
       logger.info(`[EMAIL_CHANGE] Verification email resent to ${user.pendingEmail} for user ${userId}`);
 
-      return reply.send({
-        success: true,
-        data: {
-          message: 'Verification email resent',
-          pendingEmail: user.pendingEmail
-        }
+      return sendSuccess(reply, {
+        message: 'Verification email resent',
+        pendingEmail: user.pendingEmail
       });
 
     } catch (error: unknown) {
       logError(fastify.log, 'Resend email change verification error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Internal server error'
-      });
+      return sendInternalError(reply, 'Internal server error');
     }
   });
 }
@@ -565,10 +509,7 @@ export async function initiatePhoneChange(fastify: FastifyInstance) {
     try {
       const authContext = (request as AuthenticatedRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const userId = authContext.userId;
@@ -582,18 +523,12 @@ export async function initiatePhoneChange(fastify: FastifyInstance) {
       });
 
       if (!user) {
-        return reply.status(404).send({
-          success: false,
-          error: 'User not found'
-        });
+        return sendNotFound(reply, 'User not found');
       }
 
       // Check if new phone is same as current
       if (user.phoneNumber && newPhoneNumber === user.phoneNumber) {
-        return reply.status(400).send({
-          success: false,
-          error: 'New phone number must be different from current number'
-        });
+        return sendBadRequest(reply, 'New phone number must be different from current number');
       }
 
       // Check if new phone is already in use by another user
@@ -605,10 +540,7 @@ export async function initiatePhoneChange(fastify: FastifyInstance) {
       });
 
       if (existingUser) {
-        return reply.status(400).send({
-          success: false,
-          error: 'This phone number is already in use'
-        });
+        return sendBadRequest(reply, 'This phone number is already in use');
       }
 
       // Generate verification code
@@ -631,20 +563,14 @@ export async function initiatePhoneChange(fastify: FastifyInstance) {
 
       if (!smsResult.success) {
         logger.error('[PHONE_CHANGE] Failed to send SMS', smsResult.error);
-        return reply.status(500).send({
-          success: false,
-          error: 'Failed to send verification code'
-        });
+        return sendInternalError(reply, 'Failed to send verification code');
       }
 
       logger.info(`[PHONE_CHANGE] Verification code sent to ${newPhoneNumber} for user ${userId} via ${smsResult.provider}`);
 
-      return reply.send({
-        success: true,
-        data: {
-          message: 'Verification code sent to new number',
-          pendingPhoneNumber: newPhoneNumber
-        }
+      return sendSuccess(reply, {
+        message: 'Verification code sent to new number',
+        pendingPhoneNumber: newPhoneNumber
       });
 
     } catch (error: unknown) {
@@ -657,10 +583,7 @@ export async function initiatePhoneChange(fastify: FastifyInstance) {
       }
 
       logError(fastify.log, 'Initiate phone change error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Internal server error'
-      });
+      return sendInternalError(reply, 'Internal server error');
     }
   });
 }
@@ -711,10 +634,7 @@ export async function verifyPhoneChange(fastify: FastifyInstance) {
     try {
       const authContext = (request as AuthenticatedRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const userId = authContext.userId;
@@ -734,33 +654,21 @@ export async function verifyPhoneChange(fastify: FastifyInstance) {
       });
 
       if (!user) {
-        return reply.status(404).send({
-          success: false,
-          error: 'User not found'
-        });
+        return sendNotFound(reply, 'User not found');
       }
 
       if (!user.pendingPhoneNumber || !user.pendingPhoneVerificationCode) {
-        return reply.status(400).send({
-          success: false,
-          error: 'No pending phone change'
-        });
+        return sendBadRequest(reply, 'No pending phone change');
       }
 
       // Verify code
       if (user.pendingPhoneVerificationCode !== hashedCode) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Invalid verification code'
-        });
+        return sendBadRequest(reply, 'Invalid verification code');
       }
 
       // Check expiry
       if (user.pendingPhoneVerificationExpiry && user.pendingPhoneVerificationExpiry < new Date()) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Verification code has expired'
-        });
+        return sendBadRequest(reply, 'Verification code has expired');
       }
 
       // Check if the pending phone is still available
@@ -772,10 +680,7 @@ export async function verifyPhoneChange(fastify: FastifyInstance) {
       });
 
       if (existingUser) {
-        return reply.status(400).send({
-          success: false,
-          error: 'This phone number is no longer available'
-        });
+        return sendBadRequest(reply, 'This phone number is no longer available');
       }
 
       // Activate the phone change
@@ -792,12 +697,9 @@ export async function verifyPhoneChange(fastify: FastifyInstance) {
 
       logger.info(`[PHONE_CHANGE] Phone changed successfully for user ${userId} to ${user.pendingPhoneNumber}`);
 
-      return reply.send({
-        success: true,
-        data: {
-          message: 'Phone number changed successfully',
-          newPhoneNumber: user.pendingPhoneNumber
-        }
+      return sendSuccess(reply, {
+        message: 'Phone number changed successfully',
+        newPhoneNumber: user.pendingPhoneNumber
       });
 
     } catch (error: unknown) {
@@ -810,10 +712,7 @@ export async function verifyPhoneChange(fastify: FastifyInstance) {
       }
 
       logError(fastify.log, 'Verify phone change error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Internal server error'
-      });
+      return sendInternalError(reply, 'Internal server error');
     }
   });
 }
