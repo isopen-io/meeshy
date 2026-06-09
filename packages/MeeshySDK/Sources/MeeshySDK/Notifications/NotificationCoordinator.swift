@@ -64,6 +64,13 @@ public final class NotificationCoordinator: ObservableObject {
     /// OUR own reads. Injectable for tests; defaults to the auth singleton.
     private let currentUserIdProvider: @MainActor () -> String?
 
+    /// Ids of conversations the user has muted. Muted conversations still show
+    /// their unread badge on their own row, but MUST NOT nag the app-icon badge
+    /// or the widget unread counter — the whole point of muting is to silence
+    /// that aggregate. Kept in sync from every `registerConversations` /
+    /// `reconcileConversationUnreads` snapshot (which carry `userState.isMuted`).
+    private var mutedConversationIds: Set<String> = []
+
     private var cancellables = Set<AnyCancellable>()
     private var debounceTask: Task<Void, Never>?
 
@@ -95,6 +102,7 @@ public final class NotificationCoordinator: ObservableObject {
         debounceTask?.cancel()
         debounceTask = nil
         conversationUnreadCounts = [:]
+        mutedConversationIds = []
         conversationUnreadTotal = 0
         inAppNotificationUnread = 0
         let writer = badgeWriter
@@ -139,6 +147,9 @@ public final class NotificationCoordinator: ObservableObject {
             conversationUnreadCounts[c.id] = c.userState.unreadCount
             didChange = true
         }
+        // Mute state can flip on any snapshot (the user muted/unmuted a thread),
+        // so refresh it for EVERY conversation here, not just newly-seen ones.
+        if applyMuteState(from: conversations) { didChange = true }
         if didChange {
             recomputeTotal()
         }
@@ -156,6 +167,7 @@ public final class NotificationCoordinator: ObservableObject {
             counts[c.id] = c.userState.unreadCount
         }
         conversationUnreadCounts = counts
+        mutedConversationIds = Set(conversations.filter { $0.userState.isMuted }.map(\.id))
         recomputeTotal()
         widgetSink?.publishConversations(conversations)
         widgetSink?.publishFavoriteContacts(conversations)
@@ -171,6 +183,7 @@ public final class NotificationCoordinator: ObservableObject {
     /// Forget a conversation entirely (user was removed from a group, conv deleted).
     public func removeConversation(_ conversationId: String) {
         guard conversationUnreadCounts.removeValue(forKey: conversationId) != nil else { return }
+        mutedConversationIds.remove(conversationId)
         recomputeTotal()
         scheduleSync()
     }
@@ -260,11 +273,32 @@ public final class NotificationCoordinator: ObservableObject {
             .store(in: &cancellables)
     }
 
+    /// Refreshes `mutedConversationIds` from a snapshot. Returns `true` if the
+    /// muted set actually changed (so the caller knows to recompute the total).
+    private func applyMuteState(from conversations: [MeeshyConversation]) -> Bool {
+        var changed = false
+        for c in conversations {
+            if c.userState.isMuted {
+                changed = mutedConversationIds.insert(c.id).inserted || changed
+            } else if mutedConversationIds.remove(c.id) != nil {
+                changed = true
+            }
+        }
+        return changed
+    }
+
     private func recomputeTotal() {
-        let total = conversationUnreadCounts.values.reduce(0, +)
+        let total = Self.unmutedTotal(counts: conversationUnreadCounts, mutedIds: mutedConversationIds)
         if total != conversationUnreadTotal {
             conversationUnreadTotal = total
         }
+    }
+
+    /// The app-icon / widget badge total: unread summed over UNMUTED
+    /// conversations only. Muted threads keep their per-row badge but never
+    /// inflate the aggregate the user muted them to silence. Pure + testable.
+    static func unmutedTotal(counts: [String: Int], mutedIds: Set<String>) -> Int {
+        counts.reduce(0) { $0 + (mutedIds.contains($1.key) ? 0 : $1.value) }
     }
 
     /// Debounce badge + widget writes so rapid socket bursts don't hammer the system.

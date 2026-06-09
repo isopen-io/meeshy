@@ -101,7 +101,7 @@ export class MessagingService {
             select: { id: true, conversationId: true, isActive: true }
           });
           if (!p || p.conversationId !== conversationId) {
-            console.error('[MessagingService] DEPRECATED: userId passed as participantId — caller MUST pass Participant.id. This fallback will be removed.', { participantId, conversationId });
+            logger.error('DEPRECATED: userId passed as participantId — caller must pass Participant.id', { participantId, conversationId });
             p = await this.prisma.participant.findFirst({
               where: { userId: participantId, conversationId, isActive: true },
               select: { id: true, conversationId: true, isActive: true }
@@ -182,7 +182,7 @@ export class MessagingService {
         const translations = (message as { translations?: unknown }).translations;
         if (this.isTranslationsEmpty(translations)) {
           void this.queueTranslation(message, originalLanguage).catch((err) =>
-            console.error('[MessagingService] background re-translation failed:', err)
+            logger.error('background re-translation failed', err as Error)
           );
         }
         const response = await this.createSuccessResponse(
@@ -231,7 +231,7 @@ export class MessagingService {
         durationMs: Date.now() - startTime, errored: true,
         errorMessage: error instanceof Error ? error.message : String(error)
       });
-      console.error('[MessagingService] Error handling message:', error);
+      logger.error('Error handling message', error as Error);
       return this.createErrorResponse(
         'Erreur interne lors de l\'envoi du message',
         requestId
@@ -256,21 +256,21 @@ export class MessagingService {
     const { message, conversationId, senderParticipantId, originalLanguage } = args;
 
     void this.updateConversation(conversationId).catch((err) =>
-      console.error('[MessagingService] post-save updateConversation failed:', err)
+      logger.error('post-save updateConversation failed', err as Error)
     );
 
     void this.readStatusService
       .markMessagesAsRead(senderParticipantId, conversationId, message.id)
       .catch((err) =>
-        console.error('[MessagingService] post-save markMessagesAsRead failed:', err)
+        logger.error('post-save markMessagesAsRead failed', err as Error)
       );
 
     void this.queueTranslation(message, originalLanguage).catch((err) =>
-      console.error('[MessagingService] post-save queueTranslation failed:', err)
+      logger.error('post-save queueTranslation failed', err as Error)
     );
 
     void this.updateStats(conversationId, originalLanguage).catch((err) =>
-      console.error('[MessagingService] post-save updateStats failed:', err)
+      logger.error('post-save updateStats failed', err as Error)
     );
   }
 
@@ -336,7 +336,7 @@ export class MessagingService {
       };
 
     } catch (error) {
-      console.error('[MessagingService] Error queuing translation:', error);
+      logger.error('Error queuing translation', error as Error);
       return {
         status: 'failed',
         languagesRequested: [],
@@ -358,7 +358,7 @@ export class MessagingService {
         () => []
       );
     } catch (error) {
-      console.error('[MessagingService] Error updating stats:', error);
+      logger.error('Error updating stats', error as Error);
       return undefined;
     }
   }
@@ -527,10 +527,10 @@ export class MessagingService {
         select: { id: true, conversationId: true, isActive: true }
       });
 
-      console.log(`[MessagingService] Auto-created Participant ${participant.id} for user ${userId} in conversation ${conversationId}`);
+      logger.info('Auto-created Participant', { conversationId });
       return participant;
     } catch (error) {
-      console.error('[MessagingService] Error auto-creating participant:', error);
+      logger.error('Error auto-creating participant', error as Error);
       return null;
     }
   }

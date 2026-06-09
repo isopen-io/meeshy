@@ -6,6 +6,9 @@
  */
 
 import type { Notification } from '@meeshy/shared/types/notification';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'NotificationFormatter' });
 
 export class NotificationFormatter {
   /**
@@ -20,7 +23,7 @@ export class NotificationFormatter {
       // Cas 2: déjà un objet Date (vérifier qu'il est valide)
       if (value instanceof Date) {
         if (isNaN(value.getTime())) {
-          console.warn('[NotificationFormatter] Invalid Date object detected', {
+          logger.warn('Invalid Date object detected', {
             value: value.toString(),
             defaultValue
           });
@@ -32,7 +35,7 @@ export class NotificationFormatter {
       // Cas 3: convertir en Date et vérifier
       const date = new Date(value);
       if (isNaN(date.getTime())) {
-        console.warn('[NotificationFormatter] Invalid date value detected', {
+        logger.warn('Invalid date value detected', {
           value,
           valueType: typeof value,
           defaultValue
@@ -42,7 +45,7 @@ export class NotificationFormatter {
 
       return date;
     } catch (error) {
-      console.error('[NotificationFormatter] Error sanitizing date', {
+      logger.error('Error sanitizing date', {
         error,
         value,
         defaultValue

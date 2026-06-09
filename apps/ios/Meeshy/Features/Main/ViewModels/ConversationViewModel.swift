@@ -663,7 +663,6 @@ class ConversationViewModel: ObservableObject {
     /// Public read-only accessor for the view layer (UIKit bridge needs the user id).
     var currentUserIdForView: String { currentUserId }
     private var currentUsername: String? { authManager.currentUser?.username }
-    private var _resolvedParticipantId: String?
 
     // Token bucket rate limiter for reaction spam prevention.
     // Allows burst of 10, refills at 3 tokens/second.
@@ -967,8 +966,25 @@ class ConversationViewModel: ObservableObject {
     private func mergeIntoMessages(_ incoming: [Message]) -> [Message] {
         let incomingIds = Set(incoming.map(\.id))
         let preserved = messages.filter { !incomingIds.contains($0.id) }
-        guard !preserved.isEmpty else { return incoming }
-        return (incoming + preserved).sorted { $0.createdAt < $1.createdAt }
+        let result = preserved.isEmpty ? incoming : (incoming + preserved).sorted { $0.createdAt < $1.createdAt }
+
+        // BUG1 diagnostics — this merge is supposed to NEVER drop a displayed row
+        // (it preserves anything not in `incoming`). If this fires, the loss is an
+        // id-identity problem (e.g. an optimistic cid replaced by a serverId so
+        // the "same" message changes id and the old row is neither matched nor
+        // preserved). Logs the count delta + a sample of dropped ids + how many
+        // were in-flight/failed so we can correlate with the send timeline.
+        let beforeIds = Set(messages.map(\.id))
+        let droppedIds = beforeIds.subtracting(Set(result.map(\.id)))
+        if !droppedIds.isEmpty {
+            let inFlight = messages.filter { droppedIds.contains($0.id) }
+                .filter { m in
+                    let s = String(describing: m.deliveryStatus)
+                    return s.contains("sending") || s.contains("clock") || s.contains("failed") || s.contains("sent") || s.contains("queued")
+                }
+            Logger.messages.error("[ConversationViewModel][BUG1] merge DROPPED \(droppedIds.count) display row(s) before=\(self.messages.count) incoming=\(incoming.count) result=\(result.count) inFlightOrSent=\(inFlight.count) ids=\(droppedIds.sorted().prefix(8).joined(separator: ","))")
+        }
+        return result
     }
 
     private func subscribeToQueueReconciliation() {
@@ -1023,7 +1039,9 @@ class ConversationViewModel: ObservableObject {
             )
         case .sendReaction:
             guard let reaction = payload.reaction else { return }
-            let participantId = _resolvedParticipantId ?? currentUserId
+            // Same canonical sentinel the optimistic add used (see toggleReaction):
+            // the rollback must match the key that was actually written.
+            let participantId = currentUserId
             let localId = reaction.messageId
             let emoji = reaction.emoji
             switch reaction.action {
@@ -2428,7 +2446,13 @@ class ConversationViewModel: ObservableObject {
         guard consumeReactionToken() else { return }
         guard let idx = messageIndex(for: messageId) else { return }
 
-        let participantId = _resolvedParticipantId ?? currentUserId
+        // Own reactions are ALWAYS keyed by the `currentUserId` sentinel — the
+        // canonical "my reaction" marker that `summarizeReactions` and
+        // `reconstructFromSummary` agree on. Keying the optimistic row by the
+        // resolved `Participant.id` instead (the old `_resolvedParticipantId`
+        // path) broke the "I reacted" highlight for the 2nd+ reaction in a
+        // conversation, because the badge ownership check is `== currentUserId`.
+        let participantId = currentUserId
         let alreadyReacted = messages[idx].reactions.contains { $0.emoji == emoji && $0.participantId == participantId }
         let convId = conversationId
         // Resolve the canonical server id so the queue replays against the
@@ -2475,31 +2499,6 @@ class ConversationViewModel: ObservableObject {
             }
         }
 
-        // Resolve participantId lazily for future reactions.
-        //
-        // SWR: a fresh or stale cache hit is enough — participantId is an
-        // immutable mapping (userId × conversationId → participantId) so
-        // staleness has no impact. `.expired` / `.empty` means we have no
-        // cached members; the next reaction will retry naturally once
-        // `ensureConversationDetail` (or a socket join event) populates the
-        // participants cache.
-        if _resolvedParticipantId == nil {
-            let convId = conversationId
-            let userId = currentUserId
-            Task {
-                let result = await CacheCoordinator.shared.participants.load(for: convId)
-                let cached: [PaginatedParticipant]
-                switch result {
-                case .fresh(let v, _), .stale(let v, _):
-                    cached = v
-                case .expired, .empty:
-                    cached = []
-                }
-                if let match = cached.first(where: { $0.userId == userId }) {
-                    self._resolvedParticipantId = match.id
-                }
-            }
-        }
     }
 
     // MARK: - Fetch Reaction Details

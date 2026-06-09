@@ -9,6 +9,9 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { AttachmentTranslateService } from '../services/AttachmentTranslateService';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest} from '../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'TranslationJobsRoutes' });
 
 // =============================================================================
 // OpenAPI Schemas
@@ -243,7 +246,7 @@ export async function translationJobsRoutes(fastify: FastifyInstance) {
           data: result.data
         });
       } catch (error: any) {
-        console.error('[TranslationJobsRoutes] ❌ Error getting translation status:', error);
+        logger.error('Error getting translation status', error as Error);
         return reply.status(500).send({
           success: false,
           error: error.message || 'Error getting translation status',
@@ -331,7 +334,7 @@ export async function translationJobsRoutes(fastify: FastifyInstance) {
           data: result.data
         });
       } catch (error: any) {
-        console.error('[TranslationJobsRoutes] ❌ Error cancelling translation:', error);
+        logger.error('Error cancelling translation', error as Error);
         return reply.status(500).send({
           success: false,
           error: error.message || 'Error cancelling translation',

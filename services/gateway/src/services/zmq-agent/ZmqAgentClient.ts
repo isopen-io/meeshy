@@ -1,6 +1,9 @@
 import type { Push, Subscriber } from 'zeromq';
 import * as zmq from 'zeromq';
 import { z } from 'zod';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'ZmqAgentClient' });
 
 const agentResponseSchema = z.object({
   type: z.literal('agent:response'),
@@ -56,14 +59,14 @@ export class ZmqAgentClient {
     try {
       this.pushSocket = new zmq.Push();
       await this.pushSocket.connect(`tcp://${this.host}:${this.pushPort}`);
-      console.log(`[ZMQ-AgentClient] PUSH connected to ${this.host}:${this.pushPort}`);
+      logger.info('PUSH socket connected', { host: this.host, port: this.pushPort });
 
       this.subSocket = new zmq.Subscriber();
       await this.subSocket.connect(`tcp://${this.host}:${this.subPort}`);
       await this.subSocket.subscribe('');
-      console.log(`[ZMQ-AgentClient] SUB connected to ${this.host}:${this.subPort}`);
+      logger.info('SUB socket connected', { host: this.host, port: this.subPort });
     } catch (error) {
-      console.error(`[ZMQ-AgentClient] Initialization error: ${error}`);
+      logger.error('Initialization error', error as Error);
       throw error;
     }
   }
@@ -83,7 +86,7 @@ export class ZmqAgentClient {
         const raw = JSON.parse(msg.toString());
         const result = agentMessageSchema.safeParse(raw);
         if (!result.success) {
-          console.warn('[ZMQ-AgentClient] Invalid message schema:', result.error.issues.map((i) => i.message).join(', '));
+          logger.warn('Invalid message schema', { issues: result.error.issues.map((i) => i.message) });
           continue;
         }
         const parsed = result.data;
@@ -94,13 +97,13 @@ export class ZmqAgentClient {
           await this.reactionHandler(parsed);
         }
       } catch (error) {
-        console.error('[ZMQ-AgentClient] Error processing message:', error);
+        logger.error('Error processing message', error as Error);
       }
     }
   }
 
   async close(): Promise<void> {
-    console.log('[ZMQ-AgentClient] Closing...');
+    logger.info('Closing ZMQ AgentClient');
     this.running = false;
 
     try {
@@ -114,9 +117,9 @@ export class ZmqAgentClient {
         this.subSocket = null;
       }
 
-      console.log('[ZMQ-AgentClient] Closed');
+      logger.info('ZMQ AgentClient closed');
     } catch (error) {
-      console.error(`[ZMQ-AgentClient] Error during close: ${error}`);
+      logger.error('Error during close', error as Error);
     }
   }
 }

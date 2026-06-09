@@ -480,6 +480,26 @@ class AudioMessagePipeline:
 
         logger.info(f"[PIPELINE] Filtered target languages: {target_languages}")
 
+        # Bandwidth lever #5 — eager vs on-demand TTS (OBSERVABILITY ONLY for now).
+        # We compute which languages COULD be deferred and log the potential
+        # saving, but we do NOT drop them from generation here: text + audio are
+        # produced together in this pipeline, so bounding `target_languages` would
+        # also drop the TEXT translation of deferred languages — a regression.
+        # Actually bounding generation must wait for the on-demand path that
+        # synthesizes audio (and, if needed, text) on first request. Until then
+        # this stays a no-op measurement so the default behaviour is unchanged.
+        from .tts_language_policy import select_eager_tts_languages
+        _tts_selection = select_eager_tts_languages(
+            target_languages,
+            mode=os.getenv("TTS_GENERATION_MODE", "all"),
+            max_eager=int(os.getenv("TTS_MAX_EAGER_LANGUAGES", "0")) or None,
+        )
+        if _tts_selection.deferred:
+            logger.info(
+                "[PIPELINE] TTS on-demand candidates (NOT yet deferred — needs the "
+                f"on-demand fetch path): {_tts_selection.deferred}"
+            )
+
         # Early return if no translations needed
         if not target_languages:
             logger.info("[PIPELINE] No translations needed, returning transcription only")

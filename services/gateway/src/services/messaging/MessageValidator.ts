@@ -12,6 +12,9 @@ import type {
 } from '@meeshy/shared/types';
 import { MESSAGE_LIMITS } from '../../config/message-limits';
 import { resolveConversationId as resolveConvId } from '../../utils/conversation-id-cache';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'MessageValidator' });
 
 export class MessageValidator {
   constructor(private readonly prisma: PrismaClient) {}
@@ -132,13 +135,7 @@ export class MessageValidator {
       }
 
     } catch (error) {
-      console.error('[MessageValidator] Error checking permissions:', error);
-      console.error('[MessageValidator] Auth context:', {
-        type: authContext.type,
-        isAnonymous: authContext.isAnonymous,
-        userId: authContext.userId,
-        sessionToken: authContext.sessionToken ? 'present' : 'missing'
-      });
+      logger.error('Error checking permissions', error as Error);
 
       return this.createPermissionDenied(
         `Erreur lors de la vérification des permissions: ${error instanceof Error ? error.message : 'Erreur inconnue'}`
@@ -335,7 +332,7 @@ export class MessageValidator {
       const { language } = await response.json() as { language: string };
       return language || 'fr';
     } catch (error) {
-      console.error('[MessageValidator] Language detection failed, fallback to fr:', error);
+      logger.error('Language detection failed, fallback to fr', error as Error);
       return 'fr';
     }
   }

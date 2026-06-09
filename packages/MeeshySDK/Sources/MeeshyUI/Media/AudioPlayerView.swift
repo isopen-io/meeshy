@@ -44,6 +44,14 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     public private(set) var currentUrl: String?
     private var listenStartTime: Date?
 
+    /// Unification Étape C (slice 4) — session routée via `MediaSessionCoordinator`
+    /// (source unique, refcomptée, call-aware via l'Étape B) au lieu d'un
+    /// `setCategory`/`setActive` direct. Flag idempotent : `play` ne libère pas
+    /// (resetState) puis ré-acquiert (no-op si déjà tenue) → pas de churn ; seul
+    /// `stop()` libère. ⚠️ Unifie le ducking : ce moteur posait `options: []`
+    /// (PAS de duck) → désormais `[.duckOthers]` comme tous les autres players.
+    private var sessionRequested = false
+
     /// Holds thread-safe-to-cancel handles (`Timer.invalidate()` /
     /// `Task.cancel()`) so `deinit` — which may run off the main thread — can
     /// release them WITHOUT `MainActor.assumeIsolated` (a precondition crash
@@ -76,6 +84,24 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - Audio session (routed through the single MediaSessionCoordinator)
+
+    /// Acquiert la session `.playback` via le coordinator (idempotent). Awaité
+    /// DANS le `loadTask` AVANT `playData` → session active avant lecture, sans
+    /// race. Call-aware (Étape B) : ne touche pas la session pendant un appel.
+    private func acquireSession() async {
+        guard !sessionRequested else { return }
+        sessionRequested = true
+        try? await MediaSessionCoordinator.shared.request(role: .playback)
+    }
+
+    /// Libère la session via le coordinator (refcompté : désactive au count 0).
+    private func releaseSession() {
+        guard sessionRequested else { return }
+        sessionRequested = false
+        Task { await MediaSessionCoordinator.shared.release() }
+    }
+
     // MARK: - Play from remote URL (through cache)
     public func play(urlString: String) {
         if let guardClosure = playbackPermissionGuard, !guardClosure() { return }
@@ -87,12 +113,9 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
 
         let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
 
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch { }
-
         loadTask = Task {
+            await acquireSession()
+            guard !Task.isCancelled else { return }
             do {
                 let data = try await CacheCoordinator.shared.audio.data(for: resolved)
                 guard !Task.isCancelled else { return }
@@ -129,14 +152,16 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             isLoading = false
             return
         }
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
-            try AVAudioSession.sharedInstance().setActive(true)
-            let data = try Data(contentsOf: url)
-            playData(data)
-        } catch {
-            Self.log.error("playLocal echec (\(url.lastPathComponent, privacy: .public)): \(error.localizedDescription, privacy: .public)")
-            isLoading = false
+        loadTask = Task {
+            await acquireSession()
+            guard !Task.isCancelled else { return }
+            do {
+                let data = try Data(contentsOf: url)
+                playData(data)
+            } catch {
+                Self.log.error("playLocal echec (\(url.lastPathComponent, privacy: .public)): \(error.localizedDescription, privacy: .public)")
+                isLoading = false
+            }
         }
     }
 
@@ -185,6 +210,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     public func stop() {
         resetState()
         currentUrl = nil
+        releaseSession()
     }
 
     public func togglePlayPause() {

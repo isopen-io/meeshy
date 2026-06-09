@@ -1,4 +1,7 @@
-import { filterMessagePayloadForLanguages } from '../message-payload-filter';
+import {
+  filterMessagePayloadForLanguages,
+  groupSocketsByLanguage,
+} from '../message-payload-filter';
 
 const basePayload = () => ({
   id: 'msg-1',
@@ -62,5 +65,70 @@ describe('filterMessagePayloadForLanguages', () => {
     const src = { id: 'x' };
     const out = filterMessagePayloadForLanguages(src, ['en']);
     expect(out).toEqual({ id: 'x' });
+  });
+});
+
+describe('groupSocketsByLanguage', () => {
+  // Two EN users, one ES user, one with no resolved langs, sender s-self.
+  const users: Record<string, { resolvedLanguages: string[]; language: string }> = {
+    'u-en1': { resolvedLanguages: ['en'], language: 'en' },
+    'u-en2': { resolvedLanguages: ['en'], language: 'en' },
+    'u-es': { resolvedLanguages: ['es'], language: 'es' },
+    'u-self': { resolvedLanguages: ['de'], language: 'de' },
+  };
+  const socketToUserMap: Record<string, string> = {
+    's-en1': 'u-en1',
+    's-en2': 'u-en2',
+    's-es': 'u-es',
+    's-unknown': 'u-missing', // user not in map → falls back
+    's-self': 'u-self',
+  };
+
+  const make = (overrides: Partial<Parameters<typeof groupSocketsByLanguage>[0]> = {}) =>
+    groupSocketsByLanguage({
+      socketIds: Object.keys(socketToUserMap),
+      originalLanguage: 'fr',
+      socketToUser: (sid) => socketToUserMap[sid],
+      resolveLanguages: (uid) => users[uid]?.resolvedLanguages,
+      userLanguage: (uid) => users[uid]?.language,
+      ...overrides,
+    });
+
+  it('coalesces sockets that share a language set into one group', () => {
+    const groups = make();
+    const en = groups.find((g) => g.languages.includes('en') && !g.languages.includes('es'));
+    expect(en?.socketIds.sort()).toEqual(['s-en1', 's-en2']);
+  });
+
+  it('always includes the original language for Prisme source fallback', () => {
+    const groups = make();
+    for (const g of groups) expect(g.languages).toContain('fr');
+  });
+
+  it('falls back to the original language when the recipient has none resolved', () => {
+    const groups = make();
+    const unknown = groups.find((g) => g.socketIds.includes('s-unknown'));
+    expect(unknown?.languages).toEqual(['fr']);
+  });
+
+  it('excludes the sender by user id (their devices get the cid-aware payload)', () => {
+    const groups = make({ excludeUserId: 'u-self' });
+    const all = groups.flatMap((g) => g.socketIds);
+    expect(all).not.toContain('s-self');
+  });
+
+  it('excludes specific sockets (anonymous sender)', () => {
+    const groups = make({ excludeSocketIds: new Set(['s-es']) });
+    const all = groups.flatMap((g) => g.socketIds);
+    expect(all).not.toContain('s-es');
+  });
+
+  it('produces one group per distinct language set (fan-out reduction)', () => {
+    // en1+en2 (en,fr), es (es,fr), unknown (fr), self (de,fr) → 4 groups.
+    const groups = make();
+    expect(groups).toHaveLength(4);
+    const totalEmitsAvoided =
+      Object.keys(socketToUserMap).length - groups.length; // 5 sockets → 4 emits
+    expect(totalEmitsAvoided).toBe(1);
   });
 });

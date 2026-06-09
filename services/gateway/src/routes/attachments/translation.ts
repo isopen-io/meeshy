@@ -9,6 +9,9 @@ import { ConsentValidationService } from '../../services/ConsentValidationServic
 import { messageAttachmentSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { AttachmentParams, TranslateBody, TranscribeBody } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'AttachmentTranslationRoutes' });
 
 /**
  * Whether the transcribe endpoint should short-circuit and return the
@@ -252,7 +255,7 @@ export async function registerTranslationRoutes(
           data: result.data
         });
       } catch (error: any) {
-        console.error('[AttachmentRoutes] Error translating attachment:', error);
+        logger.error('Error translating attachment', error as Error);
         return reply.status(500).send({
           success: false,
           error: 'TRANSLATION_FAILED',
@@ -475,7 +478,7 @@ export async function registerTranslationRoutes(
           }
         });
       } catch (error: any) {
-        console.error('[AttachmentRoutes] Error transcribing attachment:', error);
+        logger.error('Error transcribing attachment', error as Error);
         return reply.status(500).send({
           success: false,
           error: 'TRANSCRIPTION_FAILED',

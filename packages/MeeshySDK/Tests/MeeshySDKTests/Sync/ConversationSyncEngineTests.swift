@@ -487,6 +487,29 @@ final class ConversationSyncEngineTests: XCTestCase {
         XCTAssertEqual(row?.lastMessageId, "m1")
     }
 
+    /// Deleting the conversation's ONLY message leaves no survivor — the stale
+    /// deleted text must be cleared from the row, not left showing the content
+    /// the user just deleted.
+    func test_messageDeleted_onlyMessage_clearsStaleDeletedPreview() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        let m1 = TestFactories.makeMessage(id: "m1", conversationId: "c-del-solo", content: "Only message")
+        try? await CacheCoordinator.shared.messages.save([m1], for: "c-del-solo")
+        let conv = MeeshyConversation(
+            id: "c-del-solo", identifier: "test-c-del-solo", type: .direct,
+            lastMessagePreview: "Only message", lastMessageId: "m1")
+        try? await CacheCoordinator.shared.conversations.save([conv], for: "list")
+        await engine.startSocketRelay()
+
+        mockMessageSocket.messageDeleted.send(MessageDeletedEvent(messageId: "m1", conversationId: "c-del-solo"))
+        try? await Task.sleep(nanoseconds: 300_000_000)
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        let row = cached.first(where: { $0.id == "c-del-solo" })
+        XCTAssertEqual(row?.lastMessagePreview, "",
+                       "deleting the only message must clear the stale deleted text from the row")
+        XCTAssertNil(row?.lastMessageId)
+    }
+
     // Helper: seed the conversations cache with [id, unreadCount] tuples.
     // Uses `save()` (not `update()`): `update()` early-returns when the key
     // is absent from L1, which is exactly the state right after `invalidate`.
@@ -686,4 +709,114 @@ private final class GapMockConversationService: ConversationServiceProviding, @u
     func leave(conversationId: String) async throws {}
     func banParticipant(conversationId: String, userId: String) async throws {}
     func unbanParticipant(conversationId: String, userId: String) async throws {}
+}
+
+// MARK: - Read-receipt frontier (don't mark a message read after the read moment)
+
+final class ReadReceiptFrontierTests: XCTestCase {
+
+    private func ownMessage(_ content: String, at seconds: TimeInterval,
+                            status: MeeshyMessage.DeliveryStatus = .sent, isMe: Bool = true) -> MeeshyMessage {
+        MeeshyMessage(conversationId: "c", content: content,
+                      createdAt: Date(timeIntervalSince1970: seconds),
+                      deliveryStatus: status, isMe: isMe)
+    }
+
+    /// The bug: a message I send AFTER the peer's read moment must NOT be marked
+    /// `.read`. The read event's `updatedAt` is the frontier; only messages
+    /// created at or before it were actually seen.
+    func test_applyReadReceipt_messageSentAfterFrontier_staysUnread() {
+        let frontier = Date(timeIntervalSince1970: 1000)
+        let messages = [ownMessage("before", at: 900), ownMessage("after", at: 1100)]
+
+        let result = ConversationSyncEngine.applyReadReceipt(
+            to: messages, newStatus: .read, deliveredCount: 1, readCount: 1, frontier: frontier)
+
+        XCTAssertEqual(result[0].deliveryStatus, .read, "the message sent before the read moment is read")
+        XCTAssertEqual(result[1].deliveryStatus, .sent,
+                       "a message sent AFTER the read moment must NOT falsely show as read")
+    }
+
+    func test_applyReadReceipt_allWithinFrontier_allAdvance() {
+        let frontier = Date(timeIntervalSince1970: 1000)
+        let messages = [ownMessage("m1", at: 800), ownMessage("m2", at: 900)]
+
+        let result = ConversationSyncEngine.applyReadReceipt(
+            to: messages, newStatus: .read, deliveredCount: 1, readCount: 1, frontier: frontier)
+
+        XCTAssertEqual(result.map(\.deliveryStatus), [.read, .read])
+        XCTAssertEqual(result[1].readCount, 1)
+    }
+
+    /// The frontier `continue` must not break the "older than the first read are
+    /// all read" short-circuit: a newest message past the frontier is skipped,
+    /// the middle (in-frontier) advances, and the oldest already-read stops it.
+    func test_applyReadReceipt_skipPastFrontier_thenStopAtAlreadyRead() {
+        let frontier = Date(timeIntervalSince1970: 1000)
+        let messages = [
+            ownMessage("old", at: 700, status: .read),
+            ownMessage("mid", at: 900, status: .sent),
+            ownMessage("new", at: 1100, status: .sent)
+        ]
+
+        let result = ConversationSyncEngine.applyReadReceipt(
+            to: messages, newStatus: .read, deliveredCount: 1, readCount: 1, frontier: frontier)
+
+        XCTAssertEqual(result.map(\.deliveryStatus), [.read, .read, .sent])
+    }
+
+    func test_applyReadReceipt_ignoresOtherUsersMessages() {
+        let frontier = Date(timeIntervalSince1970: 1000)
+        let messages = [ownMessage("theirs", at: 900, status: .sent, isMe: false)]
+
+        let result = ConversationSyncEngine.applyReadReceipt(
+            to: messages, newStatus: .read, deliveredCount: 1, readCount: 1, frontier: frontier)
+
+        XCTAssertEqual(result[0].deliveryStatus, .sent, "a peer's message is never my delivery status")
+    }
+
+    func test_applyReadReceipt_deliveredDoesNotRegressRead() {
+        let frontier = Date(timeIntervalSince1970: 1000)
+        let messages = [ownMessage("m", at: 900, status: .read)]
+
+        let result = ConversationSyncEngine.applyReadReceipt(
+            to: messages, newStatus: .delivered, deliveredCount: 2, readCount: 0, frontier: frontier)
+
+        XCTAssertEqual(result[0].deliveryStatus, .read, "a delivered update must not downgrade a read message")
+    }
+}
+
+// MARK: - Last-message survivor after deletion
+
+final class LastMessageSurvivorTests: XCTestCase {
+
+    private func msg(_ id: String, at seconds: TimeInterval, deleted: Bool = false) -> MeeshyMessage {
+        MeeshyMessage(id: id, conversationId: "c", content: id,
+                      deletedAt: deleted ? Date(timeIntervalSince1970: seconds) : nil,
+                      createdAt: Date(timeIntervalSince1970: seconds))
+    }
+
+    func test_survivor_picksMostRecentNonDeleted_excludingTarget() {
+        let messages = [msg("m1", at: 100), msg("m2", at: 200), msg("m3", at: 300)]
+        let survivor = ConversationSyncEngine.mostRecentSurvivor(in: messages, excluding: "m3")
+        XCTAssertEqual(survivor?.id, "m2", "the newest surviving message becomes the preview")
+    }
+
+    /// The bug case: the deleted message was the only one — no survivor, so the
+    /// caller must clear the stale preview rather than leave the deleted text.
+    func test_survivor_nilWhenOnlyMessageDeleted() {
+        let messages = [msg("m1", at: 100)]
+        XCTAssertNil(ConversationSyncEngine.mostRecentSurvivor(in: messages, excluding: "m1"))
+    }
+
+    func test_survivor_skipsAlreadyDeletedMessages() {
+        let messages = [msg("m1", at: 100), msg("m2", at: 200, deleted: true)]
+        let survivor = ConversationSyncEngine.mostRecentSurvivor(in: messages, excluding: "m3")
+        XCTAssertEqual(survivor?.id, "m1", "an already-deleted newer message is not a valid survivor")
+    }
+
+    func test_survivor_nilWhenEverythingDeletedOrExcluded() {
+        let messages = [msg("m1", at: 100, deleted: true), msg("m2", at: 200)]
+        XCTAssertNil(ConversationSyncEngine.mostRecentSurvivor(in: messages, excluding: "m2"))
+    }
 }

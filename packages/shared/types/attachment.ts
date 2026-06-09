@@ -131,6 +131,18 @@ export type ScanStatus = 'pending' | 'clean' | 'infected' | 'error';
 export type ModerationStatus = 'pending' | 'approved' | 'flagged' | 'rejected';
 
 /**
+ * D4 — a single responsive downscaled WebP variant of an image attachment,
+ * used to build a client `srcset`. @see schema.prisma MessageAttachment.imageVariants
+ */
+export interface ImageVariant {
+  readonly width: number;
+  readonly height: number;
+  readonly url: string;
+  readonly size: number;
+  readonly format: 'webp';
+}
+
+/**
  * Attachement de message
  * Aligned with schema.prisma MessageAttachment model
  */
@@ -156,6 +168,13 @@ export interface Attachment {
   // ===== IMAGE METADATA =====
   readonly width?: number;
   readonly height?: number;
+  /**
+   * D4 — responsive downscaled WebP variants for `srcset` (non-encrypted images
+   * only). The full-resolution `fileUrl` always remains the largest candidate.
+   * Lets a client fetch a ~640px WebP (tens of KB) instead of a multi-MB
+   * original for inline previews.
+   */
+  readonly imageVariants?: readonly ImageVariant[];
 
   // ===== AUDIO/VIDEO METADATA =====
   readonly duration?: number;       // Duration in milliseconds

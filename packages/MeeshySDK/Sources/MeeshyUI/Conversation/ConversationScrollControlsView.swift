@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 public struct ConversationScrollControlsView: View {
     public var unreadCount: Int
@@ -21,7 +22,6 @@ public struct ConversationScrollControlsView: View {
     public var isAudioPlaying: Bool
     public var isOffline: Bool
     public var isSearchingQuotedMessage: Bool
-    public var typingDotPhase: Int
     public var accentColor: String
     public var secondaryColor: String
     
@@ -42,7 +42,6 @@ public struct ConversationScrollControlsView: View {
         isAudioPlaying: Bool,
         isOffline: Bool,
         isSearchingQuotedMessage: Bool = false,
-        typingDotPhase: Int,
         accentColor: String,
         secondaryColor: String,
         onScrollToBottom: @escaping () -> Void,
@@ -61,7 +60,6 @@ public struct ConversationScrollControlsView: View {
         self.isAudioPlaying = isAudioPlaying
         self.isOffline = isOffline
         self.isSearchingQuotedMessage = isSearchingQuotedMessage
-        self.typingDotPhase = typingDotPhase
         self.accentColor = accentColor
         self.secondaryColor = secondaryColor
         self.onScrollToBottom = onScrollToBottom
@@ -97,6 +95,14 @@ public struct ConversationScrollControlsView: View {
     }
     
     @State private var searchPulse: Bool = false
+    /// Phase d'animation des points "typing" (0 -> 1 -> 2), possedee par la vue.
+    /// L'indicateur n'a de sens qu'ici : son timer 0.5s vit dans la feuille qui
+    /// l'affiche, au lieu de remonter dans ConversationView (qui re-evaluait
+    /// alors tout l'ecran 2x/s pendant la frappe). Pattern WWDC "isoler l'etat
+    /// d'animation dans la sous-vue" ; le garde sur hasTypingIndicator evite tout
+    /// tick utile quand personne ne tape.
+    @State private var typingDotPhase: Int = 0
+    private let typingDotTimer = Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()
 
     public var body: some View {
         Button {
@@ -144,6 +150,10 @@ public struct ConversationScrollControlsView: View {
             )
         }
         .allowsHitTesting(!isSearchingQuotedMessage)
+        .onReceive(typingDotTimer) { _ in
+            guard hasTypingIndicator else { return }
+            typingDotPhase = (typingDotPhase + 1) % 3
+        }
     }
 
     // MARK: - Quoted Message Search Indicator
