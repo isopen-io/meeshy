@@ -307,8 +307,11 @@ struct MeeshyApp: App {
                     await authManager.checkExistingSession()
                     hasCheckedSession = true
                     // Splash gating : trois bornes temporelles concurrentes
-                    //   floor   1.2s — l'animation logo/title/subtitle joue
-                    //                    intégralement (sinon flash pénible).
+                    //   floor   1.0s — laisse l'intro jouer : à 1.0s logo/title
+                    //                    sont posés et le sous-titre (spring lancé
+                    //                    à 0.35s) est ~95% settled ; le résidu de
+                    //                    rebond passe sous le fade-out de 0.6s.
+                    //                    AVANT 1.2s = 200ms de splash en trop.
                     //   socket  1.5s — fenêtre BORNÉE pour que les sockets
                     //                    échangent leur 1er handshake. Cache-first
                     //                    (NON-NÉGOCIABLE) : on n'attend PAS le
@@ -321,7 +324,7 @@ struct MeeshyApp: App {
                     //                    on dismiss quand même pour ne JAMAIS
                     //                    bloquer l'utilisateur derrière un
                     //                    splash infini.
-                    let minSplashDuration: Duration = .milliseconds(1200)
+                    let minSplashDuration: Duration = .milliseconds(1000)
                     let socketTimeout: Duration = .milliseconds(1500)
                     let maxSplashDuration: Duration = .seconds(5)
 
