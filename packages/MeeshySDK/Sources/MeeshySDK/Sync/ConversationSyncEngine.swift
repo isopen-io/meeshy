@@ -474,17 +474,14 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             let deltaConversations = response.data.map { $0.toConversation(currentUserId: userId) }
 
             let existing = await cache.conversations.load(for: "list").snapshot() ?? []
-            var merged = existing
 
-            for delta in deltaConversations {
-                if !delta.isActive {
-                    merged.removeAll { $0.id == delta.id }
-                    await cache.messages.invalidate(for: delta.id)
-                } else if let idx = merged.firstIndex(where: { $0.id == delta.id }) {
-                    merged[idx] = delta
-                } else {
-                    merged.append(delta)
-                }
+            // O(existing + deltas) merge by id, instead of an O(deltas × convs)
+            // firstIndex / removeAll scan per delta — measurable on a foreground
+            // reconnect with hundreds of conversations. The merge order is
+            // irrelevant: `saveSorted` below re-sorts the result deterministically.
+            let (merged, removedIds) = Self.mergeDeltaConversations(existing: existing, deltas: deltaConversations)
+            for removedId in removedIds {
+                await cache.messages.invalidate(for: removedId)
             }
 
             await saveSorted(merged, to: "list")
@@ -498,6 +495,29 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             Self.logger.error("[SyncEngine] deltaSync error: \(error.localizedDescription)")
             return false
         }
+    }
+
+    /// Merge a batch of delta conversations into `existing` by id. Active deltas
+    /// upsert (replace-or-insert); inactive deltas remove. Returns the merged
+    /// list plus every inactive delta id (so the caller can invalidate their
+    /// message caches, exactly as the previous per-delta loop did). The merged
+    /// order is intentionally unspecified — callers re-sort via `saveSorted`.
+    /// O(existing + deltas) instead of O(deltas × existing).
+    static func mergeDeltaConversations(
+        existing: [MeeshyConversation],
+        deltas: [MeeshyConversation]
+    ) -> (merged: [MeeshyConversation], removedIds: [String]) {
+        var byId = Dictionary(existing.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
+        var removedIds: [String] = []
+        for delta in deltas {
+            if delta.isActive {
+                byId[delta.id] = delta
+            } else {
+                byId.removeValue(forKey: delta.id)
+                removedIds.append(delta.id)
+            }
+        }
+        return (Array(byId.values), removedIds)
     }
 
     // MARK: - Messages
