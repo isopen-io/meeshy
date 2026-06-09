@@ -21,7 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import me.meeshy.app.R
+import me.meeshy.feature.auth.R
 import me.meeshy.ui.component.BrandLogo
 import me.meeshy.ui.component.MeeshyPrimaryButton
 import me.meeshy.ui.theme.MeeshySpacing

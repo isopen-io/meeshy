@@ -214,5 +214,15 @@
     "rotate": "Girar"
   },
   "copied": "Copiado",
-  "never": "Nunca"
+  "never": "Nunca",
+  "clearSearch": "Limpar pesquisa",
+  "backToList": "Voltar à lista",
+  "backToConversations": "Voltar às conversas",
+  "breadcrumb": "Trilha de navegação",
+  "home": "Início",
+  "anonymous": "Anônimo",
+  "user": "Usuário",
+  "reactWith": "Reagir com {{emoji}}",
+  "limitReached": "Limite atingido: {{limit}} {{category}}s máximo",
+  "filesAdded": "Apenas {{count}} arquivo(s) adicionado(s)"
 }

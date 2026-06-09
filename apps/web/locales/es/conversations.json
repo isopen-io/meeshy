@@ -588,7 +588,13 @@
       "tooltipLocation": "Ubicación",
       "tooltipSend": "Enviar",
       "voiceAttachmentName": "Mensaje de voz ({duration})",
-      "locationAttachmentName": "Ubicación actual"
+      "locationAttachmentName": "Ubicación actual",
+      "replyTo": "Responder a {{sender}}",
+      "cancelReply": "Cancelar respuesta",
+      "messageInput": "Entrada de mensaje",
+      "attachFiles": "Seleccionar archivos para adjuntar",
+      "recordVoice": "Grabar mensaje de voz",
+      "attachFile": "Adjuntar archivo"
     }
   }
 }

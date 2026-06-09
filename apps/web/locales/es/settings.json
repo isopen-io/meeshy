@@ -787,4 +787,61 @@
       }
     }
   }
+},
+"v2settings": {
+  "translationLangUpdated": "Idioma de traducción actualizado",
+  "uiLangUpdated": "Idioma de la interfaz actualizado",
+  "passwordChanged": "Contraseña cambiada con éxito",
+  "passwordChangeError": "Error al cambiar la contraseña",
+  "accountDeleted": "Cuenta eliminada",
+  "accountDeleteError": "Error al eliminar la cuenta",
+  "deleteAccount": "Eliminar mi cuenta",
+  "deleteAccountTitle": "¿Eliminar tu cuenta?",
+  "delete": "Eliminar"
+},
+"v2me": {
+  "logoutSuccess": "Sesión cerrada con éxito",
+  "logoutError": "Error al cerrar sesión",
+  "profileUpdated": "Perfil actualizado con éxito",
+  "profileUpdateError": "Error al actualizar el perfil",
+  "editProfile": "Editar perfil"
+},
+"chats": {
+  "loading": "Cargando...",
+  "loadMore": "Cargar más mensajes",
+  "emptyState": "No hay mensajes en esta conversación",
+  "emptyStateCta": "¡Envía el primer mensaje!"
+},
+"consentDialog": {
+  "title": "Consentimiento requerido",
+  "description": "Algunas funciones requieren su consentimiento explícito para procesar datos sensibles. Por favor, revise y acepte los permisos requeridos a continuación.",
+  "violationsTitle": "Las siguientes acciones requieren consentimiento adicional:",
+  "labels": {
+    "voiceDataConsent": "Procesamiento de datos de voz",
+    "audioTranscription": "Transcripción de audio",
+    "videoRecording": "Grabación de video",
+    "biometricData": "Procesamiento de datos biométricos",
+    "locationSharing": "Compartir ubicación",
+    "analytics": "Datos de análisis y uso"
+  },
+  "descriptions": {
+    "voiceDataConsent": "Permite el procesamiento de sus grabaciones de voz para servicios de transcripción y traducción.",
+    "audioTranscription": "Habilita la transcripción automática de mensajes de audio.",
+    "videoRecording": "Permite la grabación y procesamiento de videollamadas.",
+    "biometricData": "Habilita el uso de autenticación biométrica para mayor seguridad.",
+    "locationSharing": "Permite compartir su ubicación con los participantes de la conversación.",
+    "analytics": "Nos ayuda a mejorar Meeshy recopilando estadísticas de uso anónimas.",
+    "default": "Esta función requiere su consentimiento para procesar datos sensibles."
+  },
+  "legalNote": "Puede revocar estos consentimientos en cualquier momento en su configuración de privacidad.",
+  "buttons": {
+    "accept": "Aceptar y continuar",
+    "cancel": "Cancelar",
+    "submitting": "Procesando..."
+  },
+  "errors": {
+    "allRequired": "Todos los consentimientos requeridos deben ser aceptados para continuar",
+    "submitFailed": "Error al guardar las preferencias de consentimiento. Por favor, inténtelo de nuevo."
+  }
+}
 }
