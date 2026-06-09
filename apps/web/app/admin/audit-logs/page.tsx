@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useI18n } from '@/hooks/use-i18n';
 import { ArrowLeft, Shield, Activity, AlertCircle, CheckCircle, XCircle, User, Settings, Key, FileText, Search, Filter, Download, Clock } from 'lucide-react';
-import { useI18n } from '@/hooks/use-i18n';
 
 import { StatsGrid, type StatItem } from '@/components/admin/Charts';
 
