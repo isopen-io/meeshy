@@ -446,7 +446,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       const userId = request.user?.userId;
       const currentToken = request.headers['x-session-token'] as string | undefined;
 
-      logger.info('[AUTH] Récupération des sessions pour:', userId);
+      logger.info('[AUTH] Récupération des sessions pour:', { userId });
 
       const sessions = await authService.getUserActiveSessions(userId, currentToken);
 
