@@ -14,6 +14,9 @@ import { VoiceProfileService, ConsentRequest, RegisterProfileRequest, UpdateProf
 import { createUnifiedAuthMiddleware, UnifiedAuthContext, UnifiedAuthRequest} from '../middleware/auth';
 import { ZMQSingleton } from '../services/ZmqSingleton';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'VoiceProfileRoutes' });
 
 // Extend FastifyRequest to include auth
 declare module 'fastify' {
@@ -27,7 +30,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
   const prisma = (fastify as any).prisma;
 
   if (!prisma) {
-    console.error('[VoiceProfile] Missing required service: prisma');
+    logger.error('Missing required service: prisma');
     return;
   }
 
@@ -434,7 +437,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
           const filename = part.filename || '';
           const ext = filename.split('.').pop()?.toLowerCase();
           audioFormat = ext || part.mimetype?.split('/').pop() || 'wav';
-          console.log(`[VoiceProfile] File upload: ${filename}, format=${audioFormat}, size=${(buffer.length / 1024).toFixed(1)}KB`);
+          logger.debug('File upload', { filename, audioFormat, sizeKB: (buffer.length / 1024).toFixed(1) });
         } else if (part.type === 'field') {
           // Parse form fields
           const value = part.value as string;
@@ -842,5 +845,5 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
     return reply.send(result);
   });
 
-  console.log('[VoiceProfile] Routes registered: /consent, /register, /:profileId, /, DELETE /');
+  logger.info('VoiceProfile routes registered');
 }

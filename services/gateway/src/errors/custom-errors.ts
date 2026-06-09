@@ -3,6 +3,10 @@
  * Fournit des codes d'erreur spécifiques et des messages clairs
  */
 
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'CustomErrors' });
+
 export class BaseAppError extends Error {
   public readonly statusCode: number;
   public readonly code: string;
@@ -268,7 +272,7 @@ export function errorHandler(error: Error, request: any, reply: any) {
   }
 
   // Erreur non gérée - log et retour 500
-  console.error('Unhandled error:', error);
+  logger.error('Unhandled error', error as Error);
   return reply.status(500).send({
     success: false,
     error: {

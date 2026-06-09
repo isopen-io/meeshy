@@ -9,6 +9,9 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import type { SearchQuery } from './types';
 import { sendSuccess, sendInternalError } from '../../utils/response';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'ConversationSearchRoutes' });
 
 /**
  * Enregistre les routes de recherche de conversations
@@ -213,7 +216,7 @@ export function registerSearchRoutes(
 
       return sendSuccess(reply, results);
     } catch (error) {
-      console.error('Error searching conversations:', error);
+      logger.error('Error searching conversations', error as Error);
       sendInternalError(reply, 'Erreur lors de la recherche de conversations');
     }
   });

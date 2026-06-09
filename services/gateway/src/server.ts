@@ -1465,7 +1465,7 @@ function writeCrashLog(type: string, error: unknown, promise?: Promise<unknown>)
   fs.appendFileSync(crashFile, crashMessage);
 
   // Aussi logger dans la console avec le stack complet
-  console.error(crashMessage);
+  logger.error('Crash', { message: crashMessage });
 }
 
 process.on('uncaughtException', (error) => {
