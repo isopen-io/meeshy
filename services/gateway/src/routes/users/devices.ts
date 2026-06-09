@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { buildPaginationMeta } from '../../utils/pagination';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'UserDevicesRoutes' });
 import {
@@ -82,10 +83,7 @@ export async function getFriendRequests(fastify: FastifyInstance) {
     try {
       const authContext = (request as AuthenticatedRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const userId = authContext.userId;
@@ -138,17 +136,10 @@ export async function getFriendRequests(fastify: FastifyInstance) {
         fastify.prisma.friendRequest.count({ where: whereClause })
       ]);
 
-      return reply.send({
-        success: true,
-        data: friendRequests,
-        pagination: buildPaginationMeta(totalCount, offsetNum, limitNum, friendRequests.length)
-      });
+      return sendPaginatedSuccess(reply, friendRequests, buildPaginationMeta(totalCount, offsetNum, limitNum, friendRequests.length));
     } catch (error) {
       logger.error('Error retrieving friend requests', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Internal server error'
-      });
+      return sendInternalError(reply, 'Internal server error');
     }
   });
 }
@@ -205,10 +196,7 @@ export async function sendFriendRequest(fastify: FastifyInstance) {
     try {
       const authContext = (request as AuthenticatedRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const senderId = authContext.userId;
@@ -216,10 +204,7 @@ export async function sendFriendRequest(fastify: FastifyInstance) {
       const { receiverId } = body;
 
       if (senderId === receiverId) {
-        return reply.status(400).send({
-          success: false,
-          error: 'You cannot add yourself as a friend'
-        });
+        return sendBadRequest(reply, 'You cannot add yourself as a friend');
       }
 
       const receiver = await fastify.prisma.user.findUnique({
@@ -237,10 +222,7 @@ export async function sendFriendRequest(fastify: FastifyInstance) {
       });
 
       if (!receiver) {
-        return reply.status(404).send({
-          success: false,
-          error: 'User not found'
-        });
+        return sendNotFound(reply, 'User not found');
       }
 
       const existingRequest = await fastify.prisma.friendRequest.findFirst({
@@ -253,10 +235,7 @@ export async function sendFriendRequest(fastify: FastifyInstance) {
       });
 
       if (existingRequest) {
-        return reply.status(400).send({
-          success: false,
-          error: 'A friend request already exists between these users'
-        });
+        return sendBadRequest(reply, 'A friend request already exists between these users');
       }
 
       const friendRequest = await fastify.prisma.friendRequest.create({
@@ -323,19 +302,13 @@ export async function sendFriendRequest(fastify: FastifyInstance) {
         }
       }
 
-      return reply.send({
-        success: true,
-        data: {
-          friendRequest,
-          message: 'Friend request sent successfully'
-        }
+      return sendSuccess(reply, {
+        friendRequest,
+        message: 'Friend request sent successfully'
       });
     } catch (error) {
       logger.error('Error sending friend request', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Internal server error'
-      });
+      return sendInternalError(reply, 'Internal server error');
     }
   });
 }
@@ -404,10 +377,7 @@ export async function respondToFriendRequest(fastify: FastifyInstance) {
     try {
       const authContext = (request as AuthenticatedRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const userId = authContext.userId;
@@ -424,34 +394,22 @@ export async function respondToFriendRequest(fastify: FastifyInstance) {
       });
 
       if (!friendRequest) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Friend request not found or already processed'
-        });
+        return sendNotFound(reply, 'Friend request not found or already processed');
       }
 
       if (action === 'cancel') {
         if (friendRequest.senderId !== userId) {
-          return reply.status(403).send({
-            success: false,
-            error: 'Only the sender can cancel a friend request'
-          });
+          return sendForbidden(reply, 'Only the sender can cancel a friend request');
         }
 
         await fastify.prisma.friendRequest.delete({
           where: { id: id }
         });
 
-        return reply.send({
-          success: true,
-          data: { message: 'Friend request cancelled successfully' }
-        });
+        return sendSuccess(reply, { message: 'Friend request cancelled successfully' });
       } else {
         if (friendRequest.receiverId !== userId) {
-          return reply.status(403).send({
-            success: false,
-            error: 'Only the receiver can accept or reject a friend request'
-          });
+          return sendForbidden(reply, 'Only the receiver can accept or reject a friend request');
         }
 
         const updatedRequest = await fastify.prisma.friendRequest.update({
@@ -575,20 +533,14 @@ export async function respondToFriendRequest(fastify: FastifyInstance) {
           }
         }
 
-        return reply.send({
-          success: true,
-          data: {
-            request: updatedRequest,
-            message: action === 'accept' ? 'Friend request accepted' : 'Friend request rejected'
-          }
+        return sendSuccess(reply, {
+          request: updatedRequest,
+          message: action === 'accept' ? 'Friend request accepted' : 'Friend request rejected'
         });
       }
     } catch (error) {
       logger.error('Error updating friend request', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Internal server error'
-      });
+      return sendInternalError(reply, 'Internal server error');
     }
   });
 }
@@ -637,10 +589,7 @@ export async function getAffiliateToken(fastify: FastifyInstance) {
       });
 
       if (!user) {
-        return reply.status(404).send({
-          success: false,
-          error: 'User not found'
-        });
+        return sendNotFound(reply, 'User not found');
       }
 
       const affiliateToken = await fastify.prisma.affiliateToken.findFirst({
@@ -661,16 +610,10 @@ export async function getAffiliateToken(fastify: FastifyInstance) {
         }
       });
 
-      return reply.send({
-        success: true,
-        data: affiliateToken ? { token: affiliateToken.token } : null
-      });
+      return sendSuccess(reply, affiliateToken ? { token: affiliateToken.token } : null);
     } catch (error) {
       logger.error('Error fetching affiliate token', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Internal server error'
-      });
+      return sendInternalError(reply, 'Internal server error');
     }
   });
 }
@@ -700,10 +643,7 @@ export async function getAllUsers(fastify: FastifyInstance) {
       }
     }
   }, async (request, reply) => {
-    reply.send({
-      success: true,
-      data: { message: 'Get all users - to be implemented' }
-    });
+    return sendSuccess(reply, { message: 'Get all users - to be implemented' });
   });
 }
 
@@ -736,10 +676,7 @@ export async function updateUserById(fastify: FastifyInstance) {
       }
     }
   }, async (request, reply) => {
-    reply.send({
-      success: true,
-      data: { message: 'Update user - to be implemented' }
-    });
+    return sendSuccess(reply, { message: 'Update user - to be implemented' });
   });
 }
 
@@ -772,9 +709,6 @@ export async function deleteUserById(fastify: FastifyInstance) {
       }
     }
   }, async (request, reply) => {
-    reply.send({
-      success: true,
-      data: { message: 'Delete user - to be implemented' }
-    });
+    return sendSuccess(reply, { message: 'Delete user - to be implemented' });
   });
 }
