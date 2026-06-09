@@ -867,14 +867,21 @@ struct ProfileView: View {
     }
 
 
-    private func parseAndFormatDate(_ dateString: String) -> String? {
+    private static let isoParser: ISO8601DateFormatter = {
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        guard let date = iso.date(from: dateString) else { return nil }
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.locale = Locale(identifier: "fr_FR")
-        return formatter.string(from: date)
+        return iso
+    }()
+    private static let mediumDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .medium
+        f.locale = Locale(identifier: "fr_FR")
+        return f
+    }()
+
+    private func parseAndFormatDate(_ dateString: String) -> String? {
+        guard let date = Self.isoParser.date(from: dateString) else { return nil }
+        return Self.mediumDateFormatter.string(from: date)
     }
 }
 
