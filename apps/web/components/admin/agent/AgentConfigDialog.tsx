@@ -89,6 +89,7 @@ const DEFAULTS: AgentConfigUpsert = {
 export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentConfigDialogProps) {
   const isNew = !config;
   const { t } = useI18n('admin');
+  const { t: tCommon } = useI18n('common');
   const [saving, setSaving] = useState(false);
   const [conversationId, setConversationId] = useState('');
 
@@ -145,7 +146,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
 
   const handleSave = async () => {
     if (!conversationId.match(/^[0-9a-fA-F]{24}$/)) {
-      toast.error('ID de conversation invalide (24 caractères hexadécimaux)');
+      toast.error(t('agent.toasts.invalidConversationId'));
       return;
     }
 
@@ -209,7 +210,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                   <button
                     className="font-mono text-gray-600 dark:text-gray-300 hover:text-indigo-600 transition-colors truncate max-w-full text-left"
                     title="Copier"
-                    onClick={() => { navigator.clipboard.writeText(convMeta.id); toast.success('ID copie'); }}
+                    onClick={() => { navigator.clipboard.writeText(convMeta.id); toast.success(tCommon('copied')); }}
                   >
                     {convMeta.id}
                   </button>
