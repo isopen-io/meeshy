@@ -29,6 +29,7 @@ import {
   Zap
 } from 'lucide-react';
 import { monitoringService } from '@/services/monitoring.service';
+import { useI18n } from '@/hooks/use-i18n';
 import { toast } from 'sonner';
 
 const TimeSeriesChart = dynamic(
@@ -73,6 +74,7 @@ function CardSkeleton() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function RealtimeTab() {
+  const { t } = useI18n('admin');
   const [loading, setLoading] = useState(true);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [realtimeData, setRealtimeData] = useState<Record<string, unknown> | null>(null);
@@ -99,7 +101,7 @@ function RealtimeTab() {
         setHourlyData(Array.isArray(raw) ? raw as TimeSeriesDataPoint[] : []);
       }
     } catch {
-      toast.error('Erreur lors du chargement des donnees temps reel');
+      toast.error(t('monitoring.errorRealtime'));
     } finally {
       setLoading(false);
     }
@@ -131,34 +133,34 @@ function RealtimeTab() {
 
   const stats: StatItem[] = [
     {
-      title: 'Users en ligne',
+      title: t('monitoring.realtime.onlineUsers'),
       value: onlineUsers,
-      description: 'Connectes maintenant',
+      description: t('monitoring.realtime.onlineUsersDesc'),
       icon: Users,
       iconColor: 'text-green-600 dark:text-green-400',
       iconBgColor: 'bg-green-100 dark:bg-green-900/30',
       badge: { text: 'Live', variant: 'default' }
     },
     {
-      title: 'Messages derniere heure',
+      title: t('monitoring.realtime.messagesLastHour'),
       value: messagesLastHour,
-      description: '60 dernieres minutes',
+      description: t('monitoring.realtime.messagesLastHourDesc'),
       icon: MessageSquare,
       iconColor: 'text-cyan-600 dark:text-cyan-400',
       iconBgColor: 'bg-cyan-100 dark:bg-cyan-900/30',
     },
     {
-      title: 'Conversations actives',
+      title: t('monitoring.realtime.activeConversations'),
       value: activeConversations,
-      description: 'Avec activite recente',
+      description: t('monitoring.realtime.activeConversationsDesc'),
       icon: Radio,
       iconColor: 'text-slate-600 dark:text-slate-400',
       iconBgColor: 'bg-slate-100 dark:bg-slate-900/30',
     },
     {
-      title: 'Connexions Socket.IO',
+      title: t('monitoring.realtime.socketConnections'),
       value: socketConnections,
-      description: 'Connexions WebSocket',
+      description: t('monitoring.realtime.socketConnectionsDesc'),
       icon: Wifi,
       iconColor: 'text-blue-600 dark:text-blue-400',
       iconBgColor: 'bg-blue-100 dark:bg-blue-900/30',
@@ -196,11 +198,11 @@ function RealtimeTab() {
             className={autoRefresh ? 'bg-cyan-600 hover:bg-cyan-700' : ''}
           >
             <RefreshCw className={`h-4 w-4 mr-2 ${autoRefresh ? 'animate-spin' : ''}`} />
-            Auto-refresh {autoRefresh ? 'ON' : 'OFF'}
+            {autoRefresh ? t('monitoring.autoRefreshOn') : t('monitoring.autoRefreshOff')}
           </Button>
           <Button variant="outline" size="sm" onClick={fetchData}>
             <RefreshCw className="h-4 w-4 mr-2" />
-            Actualiser
+            {t('monitoring.refresh')}
           </Button>
         </div>
       </div>
@@ -227,6 +229,7 @@ function RealtimeTab() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function HealthTab() {
+  const { t } = useI18n('admin');
   const [loading, setLoading] = useState(true);
   const [healthData, setHealthData] = useState<Record<string, unknown> | null>(null);
   const [circuitBreakers, setCircuitBreakers] = useState<Array<Record<string, unknown>>>([]);
@@ -246,7 +249,7 @@ function HealthTab() {
         setCircuitBreakers(Array.isArray(raw) ? raw as Array<Record<string, unknown>> : []);
       }
     } catch {
-      toast.error('Erreur lors du chargement des donnees de sante');
+      toast.error(t('monitoring.errorHealth'));
     } finally {
       setLoading(false);
     }
@@ -281,9 +284,9 @@ function HealthTab() {
   };
 
   const getLatencyBadge = (ms: number) => {
-    if (ms < 100) return { text: 'Excellent', className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' };
-    if (ms < 500) return { text: 'Acceptable', className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' };
-    return { text: 'Lent', className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' };
+    if (ms < 100) return { text: t('monitoring.health.excellent'), className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' };
+    if (ms < 500) return { text: t('monitoring.health.acceptable'), className: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' };
+    return { text: t('monitoring.health.slow'), className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' };
   };
 
   const getCbStateBadge = (state: string) => {
@@ -312,7 +315,7 @@ function HealthTab() {
       <div className="flex items-center justify-end">
         <Button variant="outline" size="sm" onClick={fetchData}>
           <RefreshCw className="h-4 w-4 mr-2" />
-          Actualiser
+          {t('monitoring.refresh')}
         </Button>
       </div>
 
@@ -331,7 +334,7 @@ function HealthTab() {
             <div className={`text-2xl font-bold ${getLatencyColor(dbLatency)}`}>
               {dbLatency}ms
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Latence</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('monitoring.health.latency')}</p>
             <Badge className={`mt-2 text-xs ${latencyBadge.className}`}>
               {latencyBadge.text}
             </Badge>
@@ -359,7 +362,7 @@ function HealthTab() {
                 {redisStatus}
               </span>
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Ping status</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{t('monitoring.health.pingStatus')}</p>
             <Badge
               className={`mt-2 text-xs ${
                 redisStatus === 'OK' || redisStatus === 'connected'
@@ -367,7 +370,7 @@ function HealthTab() {
                   : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
               }`}
             >
-              {redisStatus === 'OK' || redisStatus === 'connected' ? 'Operationnel' : 'Erreur'}
+              {redisStatus === 'OK' || redisStatus === 'connected' ? t('monitoring.health.operational') : t('monitoring.health.error')}
             </Badge>
           </CardContent>
         </Card>
@@ -406,7 +409,7 @@ function HealthTab() {
           {circuitBreakers.length === 0 ? (
             <div className="text-center py-8 text-gray-500 dark:text-gray-400">
               <Heart className="h-8 w-8 mx-auto mb-2 text-green-500" />
-              <p>Tous les circuits sont operationnels</p>
+              <p>{t('monitoring.health.allCircuitsOk')}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -461,6 +464,7 @@ function HealthTab() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 function MetricsTab() {
+  const { t } = useI18n('admin');
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState<'7d' | '30d' | '90d'>('7d');
   const [kpis, setKpis] = useState<Record<string, unknown> | null>(null);
@@ -520,7 +524,7 @@ function MetricsTab() {
         setMessageTypes(Array.isArray(raw) ? raw as Array<Record<string, unknown>> : []);
       }
     } catch {
-      toast.error('Erreur lors du chargement des metriques');
+      toast.error(t('monitoring.errorMetrics'));
     } finally {
       setLoading(false);
     }
@@ -537,34 +541,34 @@ function MetricsTab() {
 
   const kpiStats: StatItem[] = [
     {
-      title: 'Taux d\'engagement',
+      title: t('monitoring.metrics.engagementRate'),
       value: `${engagementRate.toFixed(1)}%`,
-      description: 'Messages lus / envoyes',
+      description: t('monitoring.metrics.engagementRateDesc'),
       icon: TrendingUp,
       iconColor: 'text-cyan-600 dark:text-cyan-400',
       iconBgColor: 'bg-cyan-100 dark:bg-cyan-900/30',
     },
     {
-      title: 'Croissance',
+      title: t('monitoring.metrics.growth'),
       value: `${growthRate >= 0 ? '+' : ''}${growthRate.toFixed(1)}%`,
-      description: 'Nouveaux utilisateurs',
+      description: t('monitoring.metrics.growthDesc'),
       icon: Zap,
       iconColor: 'text-green-600 dark:text-green-400',
       iconBgColor: 'bg-green-100 dark:bg-green-900/30',
       trend: { value: Math.abs(growthRate), isPositive: growthRate >= 0 }
     },
     {
-      title: 'Messages/utilisateur',
+      title: t('monitoring.metrics.messagesPerUser'),
       value: messagesPerUser.toFixed(1),
-      description: 'Moyenne par utilisateur actif',
+      description: t('monitoring.metrics.messagesPerUserDesc'),
       icon: MessageSquare,
       iconColor: 'text-blue-600 dark:text-blue-400',
       iconBgColor: 'bg-blue-100 dark:bg-blue-900/30',
     },
     {
-      title: 'Taux utilisateurs actifs',
+      title: t('monitoring.metrics.activeUserRate'),
       value: `${activeUserRate.toFixed(1)}%`,
-      description: 'Utilisateurs avec activite',
+      description: t('monitoring.metrics.activeUserRateDesc'),
       icon: Users,
       iconColor: 'text-slate-600 dark:text-slate-400',
       iconBgColor: 'bg-slate-100 dark:bg-slate-900/30',
@@ -586,16 +590,16 @@ function MetricsTab() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          KPIs et tendances sur la periode selectionnee
+          {t('monitoring.metrics.periodDescription')}
         </p>
         <Select value={period} onValueChange={(v) => setPeriod(v as '7d' | '30d' | '90d')}>
           <SelectTrigger className="w-[140px]">
             <SelectValue placeholder="Periode" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="7d">7 jours</SelectItem>
-            <SelectItem value="30d">30 jours</SelectItem>
-            <SelectItem value="90d">90 jours</SelectItem>
+            <SelectItem value="7d">{t('monitoring.metrics.7d')}</SelectItem>
+            <SelectItem value="30d">{t('monitoring.metrics.30d')}</SelectItem>
+            <SelectItem value="90d">{t('monitoring.metrics.90d')}</SelectItem>
           </SelectContent>
         </Select>
       </div>
@@ -604,12 +608,12 @@ function MetricsTab() {
 
       {volumeData.length > 0 && (
         <TimeSeriesChart
-          title="Volume dans le temps"
-          subtitle="Messages et auteurs uniques"
+          title={t('monitoring.metrics.volumeChartTitle')}
+          subtitle={t('monitoring.metrics.volumeChartSubtitle')}
           data={volumeData}
           dataKeys={[
-            { key: 'messages', name: 'Messages', color: '#0891b2' },
-            { key: 'uniqueAuthors', name: 'Auteurs uniques', color: '#64748b' }
+            { key: 'messages', name: t('monitoring.metrics.messagesLabel'), color: '#0891b2' },
+            { key: 'uniqueAuthors', name: t('monitoring.metrics.uniqueAuthorsLabel'), color: '#64748b' }
           ]}
           xAxisKey="date"
           showArea={false}
@@ -619,16 +623,16 @@ function MetricsTab() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {languageData.length > 0 && (
           <DonutChart
-            title="Distribution des langues"
-            subtitle="Langues les plus utilisees"
+            title={t('monitoring.metrics.languageDistTitle')}
+            subtitle={t('monitoring.metrics.languageDistSubtitle')}
             data={languageData}
           />
         )}
 
         {userDistData.length > 0 && (
           <DonutChart
-            title="Distribution des utilisateurs"
-            subtitle="Par niveau d'activite"
+            title={t('monitoring.metrics.userDistTitle')}
+            subtitle={t('monitoring.metrics.userDistSubtitle')}
             data={userDistData}
           />
         )}
@@ -639,7 +643,7 @@ function MetricsTab() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <BarChart3 className="h-5 w-5 text-cyan-600" />
-              Types de messages
+              {t('monitoring.metrics.messageTypes')}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -685,12 +689,13 @@ function MetricsTab() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const tabConfig = [
-  { id: 'realtime', label: 'Temps reel', icon: Activity },
-  { id: 'health', label: 'Sante', icon: Heart },
-  { id: 'metrics', label: 'Metriques', icon: BarChart3 },
+  { id: 'realtime', icon: Activity },
+  { id: 'health', icon: Heart },
+  { id: 'metrics', icon: BarChart3 },
 ] as const;
 
 export default function MonitoringPage() {
+  const { t } = useI18n('admin');
   const [activeTab, setActiveTab] = useState('realtime');
 
   return (
@@ -700,8 +705,8 @@ export default function MonitoringPage() {
         <div className="bg-gradient-to-r from-cyan-600 to-slate-600 rounded-lg p-6 text-white shadow-lg">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold">Monitoring</h1>
-              <p className="text-cyan-100 mt-1">Supervision en temps reel de la plateforme</p>
+              <h1 className="text-2xl font-bold">{t('monitoring.title')}</h1>
+              <p className="text-cyan-100 mt-1">{t('monitoring.description')}</p>
             </div>
           </div>
         </div>
@@ -714,7 +719,7 @@ export default function MonitoringPage() {
               return (
                 <TabsTrigger key={tab.id} value={tab.id}>
                   <Icon className="h-4 w-4 mr-2" />
-                  <span className="hidden sm:inline">{tab.label}</span>
+                  <span className="hidden sm:inline">{t(`monitoring.tabs.${tab.id}`)}</span>
                 </TabsTrigger>
               );
             })}

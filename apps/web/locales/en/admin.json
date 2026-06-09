@@ -378,5 +378,65 @@
         "description": "Server and services configuration"
       }
     }
+  },
+  "monitoring": {
+    "title": "Monitoring",
+    "description": "Real-time platform supervision",
+    "refresh": "Refresh",
+    "autoRefreshOn": "Auto-refresh ON",
+    "autoRefreshOff": "Auto-refresh OFF",
+    "errorRealtime": "Error loading real-time data",
+    "errorHealth": "Error loading health data",
+    "errorMetrics": "Error loading metrics",
+    "tabs": {
+      "realtime": "Real-time",
+      "health": "Health",
+      "metrics": "Metrics"
+    },
+    "realtime": {
+      "onlineUsers": "Online users",
+      "onlineUsersDesc": "Connected now",
+      "messagesLastHour": "Messages last hour",
+      "messagesLastHourDesc": "Last 60 minutes",
+      "activeConversations": "Active conversations",
+      "activeConversationsDesc": "With recent activity",
+      "socketConnections": "Socket.IO connections",
+      "socketConnectionsDesc": "WebSocket connections",
+      "chartTitle": "Activity by hour",
+      "chartSubtitle": "Message volume over last 24h"
+    },
+    "health": {
+      "latency": "Latency",
+      "pingStatus": "Ping status",
+      "operational": "Operational",
+      "error": "Error",
+      "excellent": "Excellent",
+      "acceptable": "Acceptable",
+      "slow": "Slow",
+      "allCircuitsOk": "All circuits are operational"
+    },
+    "metrics": {
+      "periodDescription": "KPIs and trends for the selected period",
+      "7d": "7 days",
+      "30d": "30 days",
+      "90d": "90 days",
+      "engagementRate": "Engagement rate",
+      "engagementRateDesc": "Messages read / sent",
+      "growth": "Growth",
+      "growthDesc": "New users",
+      "messagesPerUser": "Messages/user",
+      "messagesPerUserDesc": "Average per active user",
+      "activeUserRate": "Active user rate",
+      "activeUserRateDesc": "Users with activity",
+      "volumeChartTitle": "Volume over time",
+      "volumeChartSubtitle": "Messages and unique authors",
+      "messagesLabel": "Messages",
+      "uniqueAuthorsLabel": "Unique authors",
+      "languageDistTitle": "Language distribution",
+      "languageDistSubtitle": "Most used languages",
+      "userDistTitle": "User distribution",
+      "userDistSubtitle": "By activity level",
+      "messageTypes": "Message types"
+    }
   }
 }
