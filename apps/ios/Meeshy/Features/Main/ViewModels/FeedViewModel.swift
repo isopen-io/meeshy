@@ -313,21 +313,24 @@ class FeedViewModel: ObservableObject {
             do {
                 let response = try await self.postService.getComments(postId: postId, cursor: nil, limit: 20)
                 let langs = self.preferredLanguages
-                let comments = response.data.map { c -> FeedComment in
-                    let translatedContent = PostDetailViewModel.resolveCommentTranslation(
-                        translations: c.translations,
-                        originalLanguage: c.originalLanguage,
-                        preferredLanguages: langs
-                    )
-                    return FeedComment(
-                        id: c.id, author: c.author.name, authorId: c.author.id,
-                        authorAvatarURL: c.author.avatar,
-                        content: c.content, timestamp: c.createdAt,
-                        likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                        parentId: c.parentId,
-                        originalLanguage: c.originalLanguage, translatedContent: translatedContent
-                    )
-                }
+                let payload = response.data
+                let comments = await Task.detached(priority: .utility) {
+                    payload.map { c -> FeedComment in
+                        let translatedContent = PostDetailViewModel.resolveCommentTranslation(
+                            translations: c.translations,
+                            originalLanguage: c.originalLanguage,
+                            preferredLanguages: langs
+                        )
+                        return FeedComment(
+                            id: c.id, author: c.author.name, authorId: c.author.id,
+                            authorAvatarURL: c.author.avatar,
+                            content: c.content, timestamp: c.createdAt,
+                            likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                            parentId: c.parentId,
+                            originalLanguage: c.originalLanguage, translatedContent: translatedContent
+                        )
+                    }
+                }.value
                 try? await CacheCoordinator.shared.comments.save(comments, for: cacheKey)
             } catch {
                 // Silent fail on prefetch — user-triggered open will retry the network.
