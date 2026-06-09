@@ -17,6 +17,7 @@ import type {
 } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { sendSuccess, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'AttachmentMetadataRoutes' });
 
@@ -96,12 +97,7 @@ export async function registerMetadataRoutes(
         reply.header('Cache-Control', 'private, max-age=3600, stale-while-revalidate=86400');
         reply.header('ETag', etag);
 
-        return reply.status(200).send({
-          success: true,
-          data: {
-            attachment
-          }
-        });
+        return sendSuccess(reply, { attachment });
       } catch (error: unknown) {
         logger.error('error fetching attachment metadata', { error });
         return reply.status(500).send({
@@ -173,10 +169,7 @@ export async function registerMetadataRoutes(
         const authContext = (request as UnifiedAuthRequest).authContext;
 
         if (!authContext || (!authContext.isAuthenticated && !authContext.isAnonymous)) {
-          return reply.status(401).send({
-            success: false,
-            error: 'Authentication required',
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         const { attachmentId } = request.params as AttachmentParams;
@@ -185,10 +178,7 @@ export async function registerMetadataRoutes(
 
         const attachment = await attachmentService.getAttachment(attachmentId);
         if (!attachment) {
-          return reply.status(404).send({
-            success: false,
-            error: 'Attachment not found',
-          });
+          return sendNotFound(reply, 'Attachment not found');
         }
 
         let hasPermission = false;
@@ -203,24 +193,15 @@ export async function registerMetadataRoutes(
         }
 
         if (!hasPermission) {
-          return reply.status(403).send({
-            success: false,
-            error: 'Insufficient permissions - You can only delete your own attachments',
-          });
+          return sendForbidden(reply, 'Insufficient permissions - You can only delete your own attachments');
         }
 
         await attachmentService.deleteAttachment(attachmentId);
 
-        return reply.send({
-          success: true,
-          data: { message: 'Attachment deleted successfully' },
-        });
+        return sendSuccess(reply, { message: 'Attachment deleted successfully' });
       } catch (error: unknown) {
         logger.error('error deleting attachment', { error });
-        return reply.status(500).send({
-          success: false,
-          error: error instanceof Error ? error.message : 'Error deleting attachment',
-        });
+        return sendInternalError(reply, error instanceof Error ? error.message : 'Error deleting attachment');
       }
     }
   );
@@ -307,10 +288,7 @@ export async function registerMetadataRoutes(
         const authContext = (request as UnifiedAuthRequest).authContext;
 
         if (!authContext || (!authContext.isAuthenticated && !authContext.isAnonymous)) {
-          return reply.status(401).send({
-            success: false,
-            error: 'Authentication required',
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         const { conversationId } = request.params as ConversationParams;
@@ -326,10 +304,7 @@ export async function registerMetadataRoutes(
           });
 
           if (!member) {
-            return reply.status(403).send({
-              success: false,
-              error: 'Access denied to this conversation',
-            });
+            return sendForbidden(reply, 'Access denied to this conversation');
           }
         } else if (authContext.isAnonymous && authContext.participantId) {
           const participant = await prisma.participant.findUnique({
@@ -342,17 +317,11 @@ export async function registerMetadataRoutes(
           });
 
           if (!participant) {
-            return reply.status(403).send({
-              success: false,
-              error: 'Participant not found',
-            });
+            return sendForbidden(reply, 'Participant not found');
           }
 
           if (participant.conversationId !== conversationId) {
-            return reply.status(403).send({
-              success: false,
-              error: 'Access denied to this conversation',
-            });
+            return sendForbidden(reply, 'Access denied to this conversation');
           }
 
           if (participant.type === 'anonymous' && participant.anonymousSession?.shareLinkId) {
@@ -361,10 +330,7 @@ export async function registerMetadataRoutes(
               select: { allowViewHistory: true }
             });
             if (!shareLink?.allowViewHistory) {
-              return reply.status(403).send({
-                success: false,
-                error: 'History viewing not allowed on this link',
-              });
+              return sendForbidden(reply, 'History viewing not allowed on this link');
             }
           }
         }
@@ -378,16 +344,10 @@ export async function registerMetadataRoutes(
           }
         );
 
-        return reply.send({
-          success: true,
-          data: { attachments },
-        });
+        return sendSuccess(reply, { attachments });
       } catch (error: unknown) {
         logger.error('error fetching conversation attachments', { conversationId: (request.params as ConversationParams)?.conversationId, error });
-        return reply.status(500).send({
-          success: false,
-          error: error instanceof Error ? error.message : 'Error fetching attachments',
-        });
+        return sendInternalError(reply, error instanceof Error ? error.message : 'Error fetching attachments');
       }
     }
   );

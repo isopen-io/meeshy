@@ -14,6 +14,7 @@ import {
   errorResponseSchema
 } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../middleware/auth';
+import { sendSuccess, sendUnauthorized, sendNotFound, sendBadRequest, sendInternalError } from '../utils/response.js';
 
 // ============================================
 // VALIDATION SCHEMAS
@@ -149,10 +150,7 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const userId = authContext.userId;
@@ -223,16 +221,13 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
 
       fastify.log.info(`[PUSH_TOKEN] ${isNew ? 'Registered new' : 'Updated'} ${body.type} token for user ${userId}`);
 
-      return reply.send({
-        success: true,
-        data: {
-          id: pushToken.id,
-          type: pushToken.type,
-          platform: pushToken.platform,
-          deviceName: pushToken.deviceName,
-          isNew,
-          message: isNew ? 'Device token registered successfully' : 'Device token updated successfully'
-        }
+      return sendSuccess(reply, {
+        id: pushToken.id,
+        type: pushToken.type,
+        platform: pushToken.platform,
+        deviceName: pushToken.deviceName,
+        isNew,
+        message: isNew ? 'Device token registered successfully' : 'Device token updated successfully'
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -245,10 +240,7 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
       }
 
       logError(fastify.log, '[PUSH_TOKEN] Error registering device token:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Failed to register device token'
-      });
+      return sendInternalError(reply, 'Failed to register device token');
     }
   });
 
@@ -300,10 +292,7 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const userId = authContext.userId;
@@ -329,14 +318,11 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
 
       fastify.log.info(`[PUSH_TOKEN] Deleted ${result.count} token(s) for user ${userId}`);
 
-      return reply.send({
-        success: true,
-        data: {
-          deletedCount: result.count,
-          message: result.count > 0
-            ? `Successfully unregistered ${result.count} device token(s)`
-            : 'No matching tokens found'
-        }
+      return sendSuccess(reply, {
+        deletedCount: result.count,
+        message: result.count > 0
+          ? `Successfully unregistered ${result.count} device token(s)`
+          : 'No matching tokens found'
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -349,10 +335,7 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
       }
 
       logError(fastify.log, '[PUSH_TOKEN] Error unregistering device token:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Failed to unregister device token'
-      });
+      return sendInternalError(reply, 'Failed to unregister device token');
     }
   });
 
@@ -399,10 +382,7 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const userId = authContext.userId;
@@ -424,16 +404,10 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
         orderBy: { updatedAt: 'desc' }
       });
 
-      return reply.send({
-        success: true,
-        data: devices
-      });
+      return sendSuccess(reply, devices);
     } catch (error) {
       logError(fastify.log, '[PUSH_TOKEN] Error listing devices:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Failed to list devices'
-      });
+      return sendInternalError(reply, 'Failed to list devices');
     }
   });
 
@@ -476,10 +450,7 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const userId = authContext.userId;
@@ -494,26 +465,17 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
       });
 
       if (result.count === 0) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Device not found or not owned by user'
-        });
+        return sendNotFound(reply, 'Device not found or not owned by user');
       }
 
       fastify.log.info(`[PUSH_TOKEN] Deleted device ${deviceId} for user ${userId}`);
 
-      return reply.send({
-        success: true,
-        data: {
-          message: 'Device removed successfully'
-        }
+      return sendSuccess(reply, {
+        message: 'Device removed successfully'
       });
     } catch (error) {
       logError(fastify.log, '[PUSH_TOKEN] Error removing device:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Failed to remove device'
-      });
+      return sendInternalError(reply, 'Failed to remove device');
     }
   });
 }

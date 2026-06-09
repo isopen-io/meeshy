@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { logError } from '../utils/logger';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { sendSuccess, sendNotFound, sendForbidden, sendBadRequest } from '../utils/response.js';
 
 // Schémas de validation
 const TranslateRequestSchema = z.object({
@@ -329,10 +330,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
 
 
         if (!existingMessage) {
-          return reply.status(404).send({
-            success: false,
-            error: 'Message not found'
-          });
+          return sendNotFound(reply, 'Message not found');
         }
 
         // SECURITY: E2EE messages cannot be translated by the server
@@ -349,10 +347,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
         if (userId) {
           const hasAccess = existingMessage.conversation.participants.some((member: any) => member.userId === userId);
           if (!hasAccess) {
-            return reply.status(403).send({
-              success: false,
-              error: 'Access denied to this message'
-            });
+            return sendForbidden(reply, 'Access denied to this message');
           }
         }
 
@@ -363,18 +358,15 @@ export async function translationRoutes(fastify: FastifyInstance) {
         // OPTIMISATION: Éviter la traduction si source = target (après récupération du message)
         if (messageSourceLanguage && messageSourceLanguage !== 'auto' &&
             messageSourceLanguage === validatedData.target_language) {
-          return reply.send({
-            success: true,
-            data: {
-              message_id: validatedData.message_id,
-              translated_text: messageText,
-              source_language: messageSourceLanguage,
-              target_language: validatedData.target_language,
-              confidence: 1.0,
-              processing_time: 0,
-              model: 'none', // Pas de traduction nécessaire
-              timestamp: new Date().toISOString()
-            }
+          return sendSuccess(reply, {
+            message_id: validatedData.message_id,
+            translated_text: messageText,
+            source_language: messageSourceLanguage,
+            target_language: validatedData.target_language,
+            confidence: 1.0,
+            processing_time: 0,
+            model: 'none', // Pas de traduction nécessaire
+            timestamp: new Date().toISOString()
           });
         }
 
@@ -428,10 +420,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
         // Cas 2: Nouveau message (comportement WebSocket)
 
         if (!validatedData.conversation_id) {
-          return reply.status(400).send({
-            success: false,
-            error: 'conversation_id is required when message_id is not provided'
-          });
+          return sendBadRequest(reply, 'conversation_id is required when message_id is not provided');
         }
 
         // Déterminer le type de modèle pour le nouveau message
@@ -499,19 +488,16 @@ export async function translationRoutes(fastify: FastifyInstance) {
       const processingTime = (Date.now() - startTime) / 1000;
 
 
-      return reply.send({
-        success: true,
-        data: {
-          message_id: messageId,
-          translated_text: result.translatedText,
-          original_text: validatedData.text,
-          source_language: result.sourceLanguage,
-          target_language: result.targetLanguage,
-          confidence: result.confidenceScore,
-          processing_time: processingTime,
-          model: result.modelType || 'basic',
-          timestamp: new Date().toISOString()
-        }
+      return sendSuccess(reply, {
+        message_id: messageId,
+        translated_text: result.translatedText,
+        original_text: validatedData.text,
+        source_language: result.sourceLanguage,
+        target_language: result.targetLanguage,
+        confidence: result.confidenceScore,
+        processing_time: processingTime,
+        model: result.modelType || 'basic',
+        timestamp: new Date().toISOString()
       });
 
     } catch (error: unknown) {
@@ -551,20 +537,17 @@ export async function translationRoutes(fastify: FastifyInstance) {
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     reply.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
-    return reply.send({
-      success: true,
-      data: {
-        languages: [
-          { code: 'fr', name: 'Francais', flag: 'FR' },
-          { code: 'en', name: 'English', flag: 'US' },
-          { code: 'es', name: 'Espanol', flag: 'ES' },
-          { code: 'de', name: 'Deutsch', flag: 'DE' },
-          { code: 'pt', name: 'Portugues', flag: 'PT' },
-          { code: 'zh', name: 'Chinese', flag: 'CN' },
-          { code: 'ja', name: 'Japanese', flag: 'JP' },
-          { code: 'ar', name: 'Arabic', flag: 'SA' }
-        ]
-      }
+    return sendSuccess(reply, {
+      languages: [
+        { code: 'fr', name: 'Francais', flag: 'FR' },
+        { code: 'en', name: 'English', flag: 'US' },
+        { code: 'es', name: 'Espanol', flag: 'ES' },
+        { code: 'de', name: 'Deutsch', flag: 'DE' },
+        { code: 'pt', name: 'Portugues', flag: 'PT' },
+        { code: 'zh', name: 'Chinese', flag: 'CN' },
+        { code: 'ja', name: 'Japanese', flag: 'JP' },
+        { code: 'ar', name: 'Arabic', flag: 'SA' }
+      ]
     });
   });
 
@@ -615,13 +598,10 @@ export async function translationRoutes(fastify: FastifyInstance) {
         confidence = 0.7;
       }
 
-      return reply.send({
-        success: true,
-        data: {
-          language: detectedLanguage,
-          confidence: confidence,
-          text: text
-        }
+      return sendSuccess(reply, {
+        language: detectedLanguage,
+        confidence: confidence,
+        text: text
       });
 
     } catch (error: unknown) {
@@ -702,18 +682,15 @@ export async function translationRoutes(fastify: FastifyInstance) {
         });
       }
 
-      return reply.send({
-        success: true,
-        data: {
-          message: 'Translation service is working',
-          message_id: handleResult.messageId,
-          test_result: {
-            translated_text: testResult.translatedText,
-            source_language: testResult.sourceLanguage,
-            target_language: testResult.targetLanguage,
-            model: testResult.modelType,
-            confidence: testResult.confidenceScore
-          }
+      return sendSuccess(reply, {
+        message: 'Translation service is working',
+        message_id: handleResult.messageId,
+        test_result: {
+          translated_text: testResult.translatedText,
+          source_language: testResult.sourceLanguage,
+          target_language: testResult.targetLanguage,
+          model: testResult.modelType,
+          confidence: testResult.confidenceScore
         }
       });
 
