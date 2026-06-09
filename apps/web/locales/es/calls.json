@@ -1,0 +1,118 @@
+{
+  "calls": {
+    "loading": "Cargando llamada...",
+    "banner": {
+      "inProgress": "Llamada en curso",
+      "participant": "{count} participante",
+      "participants": "{count} participantes",
+      "join": "Unirse",
+      "dismiss": "Ignorar"
+    },
+    "error": {
+      "title": "Error de llamada",
+      "message": "Se produjo un error inesperado durante la llamada.",
+      "tryAgain": "Reintentar",
+      "returnHome": "Volver al inicio",
+      "troubleshooting": {
+        "title": "Solución de problemas:",
+        "permissions": "Asegúrese de haber concedido permisos de cámara y micrófono",
+        "browser": "Compruebe que su navegador admite videollamadas (Chrome, Firefox, Safari)",
+        "https": "Asegúrese de utilizar una conexión HTTPS",
+        "refresh": "Intente recargar la página"
+      }
+    },
+    "status": {
+      "connecting": "Conectando...",
+      "starting": "Iniciando...",
+      "reconnecting": "Reconectando...",
+      "failed": "Error de conexión",
+      "disconnected": "Desconectado",
+      "connected": "Conectado",
+      "quality": {
+        "excellent": "Excelente",
+        "good": "Buena",
+        "poor": "Conexión deficiente",
+        "offline": "Sin conexión"
+      }
+    },
+    "controls": {
+      "controls": "Controles de llamada",
+      "mute": "Silenciar",
+      "unmute": "Activar micrófono",
+      "videoOff": "Desactivar vídeo",
+      "videoOn": "Activar vídeo",
+      "videoPausedWeak": "Vídeo en pausa (conexión débil)",
+      "switchCamera": "Cambiar cámara",
+      "speakerOff": "Desactivar altavoz",
+      "speakerOn": "Activar altavoz",
+      "speakerOnLabel": "Altavoz activado",
+      "speakerOffLabel": "Altavoz desactivado",
+      "audioEffects": "Efectos de audio",
+      "audioEffectsTitle": "Efectos de audio",
+      "connectionStats": "Estadísticas de conexión",
+      "connectionStatsTitle": "Estadísticas de conexión",
+      "endCall": "Finalizar llamada"
+    },
+    "quality": {
+      "details": "Detalles de calidad de conexión",
+      "quality": "Calidad:",
+      "packetLoss": "Pérdida de paquetes:",
+      "latency": "Latencia (RTT):",
+      "jitter": "Fluctuación:",
+      "audioBitrate": "Tasa de bits de audio:",
+      "videoBitrate": "Tasa de bits de vídeo:",
+      "updated": "Actualizado:"
+    },
+    "stream": {
+      "disconnected": "Desconectado",
+      "participantLeft": "{name} ha salido",
+      "participant": "Participante",
+      "micMuted": "Micrófono silenciado",
+      "videoOff": "Cámara desactivada",
+      "videoSuspended": "Vídeo en pausa",
+      "videoSuspendedHint": "Conexión débil · reanudación auto",
+      "fullscreen": "Pantalla completa",
+      "dragToMove": "Arrastrar para mover"
+    },
+    "toasts": {
+      "connectionError": "Error de conexión",
+      "videoSwitchFailed": "Error al cambiar el vídeo",
+      "cameraSwitched": "Cámara cambiada",
+      "cameraSwitchFailed": "Error al cambiar la cámara",
+      "joinFailed": "Error al unirse a la llamada"
+      "videoSuspendedPoorConnection": "Conexión débil — vídeo en pausa para mantener la llamada",
+      "videoResumed": "Conexión recuperada — vídeo reactivado"
+    },
+    "permissions": {
+      "title": {
+        "idle": "Acceso a cámara y micrófono",
+        "granted": "Permisos concedidos",
+        "denied": "Permiso denegado"
+      },
+      "description": {
+        "idle": "Para unirse a esta videollamada, necesitamos acceso a su cámara y micrófono.",
+        "granted": "Ahora puede unirse a la videollamada."
+      },
+      "error": {
+        "denied": "Acceso a cámara y micrófono denegado. Verifique la configuración de su navegador.",
+        "notFound": "No se encontró cámara ni micrófono. Conecte un dispositivo e intente de nuevo.",
+        "notReadable": "La cámara o el micrófono ya está en uso por otra aplicación.",
+        "generic": "No se puede acceder a la cámara y al micrófono. Inténtelo de nuevo.",
+        "unexpected": "Ocurrió un error inesperado. Inténtelo de nuevo."
+      },
+      "buttons": {
+        "grantAccess": "Conceder acceso",
+        "cancel": "Cancelar",
+        "tryAgain": "Reintentar"
+      },
+      "requesting": "Por favor, permita el acceso en su navegador...",
+      "joining": "Uniéndose a la llamada...",
+      "instructions": {
+        "title": "Cómo activar los permisos:",
+        "chrome": "Chrome: Haga clic en el icono de cámara en la barra de direcciones",
+        "firefox": "Firefox: Haga clic en el icono de cámara en la barra de direcciones",
+        "safari": "Safari: Vaya a Ajustes de Safari > Privacidad > Cámara/Micrófono"
+      }
+    }
+  }
+}

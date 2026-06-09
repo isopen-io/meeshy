@@ -51,7 +51,7 @@ import { Prisma } from '@meeshy/shared/prisma/client';
  *
  * Field set:
  *   File:       id, messageId, fileName, originalName, mimeType, fileSize,
- *               fileUrl, thumbnailUrl, width, height, thumbHash
+ *               fileUrl, thumbnailUrl, width, height, thumbHash, imageVariants
  *   Audio/video: duration, bitrate, sampleRate, codec, channels, fps,
  *               videoCodec
  *   Document:   pageCount, lineCount
@@ -76,6 +76,7 @@ export const attachmentMediaSelect = Prisma.validator<Prisma.MessageAttachmentSe
   fileUrl: true,
   thumbnailUrl: true,
   thumbHash: true,
+  imageVariants: true,
   width: true,
   height: true,
   duration: true,

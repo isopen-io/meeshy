@@ -3,10 +3,10 @@ import Foundation
 // MARK: - Protocol
 
 public protocol MessageServiceProviding: Sendable {
-    func list(conversationId: String, offset: Int, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse
-    func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse
-    func listAfter(conversationId: String, after: Date, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse
-    func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse
+    func list(conversationId: String, offset: Int, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse
+    func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse
+    func listAfter(conversationId: String, after: Date, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse
+    func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool, includeTranslations: Bool, languages: [String]?) async throws -> MessagesAPIResponse
     func send(conversationId: String, request: SendMessageRequest) async throws -> SendMessageResponseData
     func edit(messageId: String, content: String) async throws -> APIMessage
     func delete(conversationId: String, messageId: String) async throws
@@ -39,32 +39,49 @@ public final class MessageService: MessageServiceProviding, @unchecked Sendable 
         self.api = api
     }
 
+    /// Bandwidth opt-in (E3, mirror of gateway A3): when `languages` is a
+    /// non-empty set, serialize `?languages=fr,en` so the gateway restricts
+    /// BOTH text and audio (Prisme) translations to those languages. `nil` /
+    /// empty = the historical "all languages" behaviour. The SDK stays
+    /// product-agnostic — the *resolution* of which languages (the Prisme set)
+    /// is the app's decision, passed here as an opaque list.
+    private static func languagesQueryItem(_ languages: [String]?) -> URLQueryItem? {
+        guard let languages, !languages.isEmpty else { return nil }
+        return URLQueryItem(name: "languages", value: languages.joined(separator: ","))
+    }
+
     /// - Parameter includeTranslations: when `false`, the gateway omits the
     ///   `translations` Json field from each message in the response — used by
     ///   warm-cache refreshes (GRDB already holds them, the socket pushes
     ///   future updates). Defaults to `true` so first-open / cold-start
     ///   call sites keep their existing behaviour.
-    public func list(conversationId: String, offset: Int = 0, limit: Int = 30, includeReplies: Bool = true, includeTranslations: Bool = true) async throws -> MessagesAPIResponse {
-        try await api.request(
+    /// - Parameter languages: see ``languagesQueryItem(_:)`` — opt-in Prisme
+    ///   language filter; `nil` keeps the all-languages default.
+    public func list(conversationId: String, offset: Int = 0, limit: Int = 30, includeReplies: Bool = true, includeTranslations: Bool = true, languages: [String]? = nil) async throws -> MessagesAPIResponse {
+        var items: [URLQueryItem] = [
+            URLQueryItem(name: "limit", value: "\(limit)"),
+            URLQueryItem(name: "offset", value: "\(offset)"),
+            URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
+            URLQueryItem(name: "include_translations", value: "\(includeTranslations)"),
+        ]
+        if let langItem = Self.languagesQueryItem(languages) { items.append(langItem) }
+        return try await api.request(
             endpoint: "/conversations/\(conversationId)/messages",
-            queryItems: [
-                URLQueryItem(name: "limit", value: "\(limit)"),
-                URLQueryItem(name: "offset", value: "\(offset)"),
-                URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
-                URLQueryItem(name: "include_translations", value: "\(includeTranslations)"),
-            ]
+            queryItems: items
         )
     }
 
-    public func listBefore(conversationId: String, before: String, limit: Int = 30, includeReplies: Bool = true, includeTranslations: Bool = true) async throws -> MessagesAPIResponse {
-        try await api.request(
+    public func listBefore(conversationId: String, before: String, limit: Int = 30, includeReplies: Bool = true, includeTranslations: Bool = true, languages: [String]? = nil) async throws -> MessagesAPIResponse {
+        var items: [URLQueryItem] = [
+            URLQueryItem(name: "before", value: before),
+            URLQueryItem(name: "limit", value: "\(limit)"),
+            URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
+            URLQueryItem(name: "include_translations", value: "\(includeTranslations)"),
+        ]
+        if let langItem = Self.languagesQueryItem(languages) { items.append(langItem) }
+        return try await api.request(
             endpoint: "/conversations/\(conversationId)/messages",
-            queryItems: [
-                URLQueryItem(name: "before", value: before),
-                URLQueryItem(name: "limit", value: "\(limit)"),
-                URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
-                URLQueryItem(name: "include_translations", value: "\(includeTranslations)"),
-            ]
+            queryItems: items
         )
     }
 
@@ -76,27 +93,31 @@ public final class MessageService: MessageServiceProviding, @unchecked Sendable 
     /// missed-message gap of any size contiguously. The instant is serialized
     /// with fractional seconds so a millisecond-precise watermark survives the
     /// round trip.
-    public func listAfter(conversationId: String, after: Date, limit: Int = 30, includeReplies: Bool = true, includeTranslations: Bool = true) async throws -> MessagesAPIResponse {
-        try await api.request(
+    public func listAfter(conversationId: String, after: Date, limit: Int = 30, includeReplies: Bool = true, includeTranslations: Bool = true, languages: [String]? = nil) async throws -> MessagesAPIResponse {
+        var items: [URLQueryItem] = [
+            URLQueryItem(name: "after", value: Self.watermarkFormatter.string(from: after)),
+            URLQueryItem(name: "limit", value: "\(limit)"),
+            URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
+            URLQueryItem(name: "include_translations", value: "\(includeTranslations)"),
+        ]
+        if let langItem = Self.languagesQueryItem(languages) { items.append(langItem) }
+        return try await api.request(
             endpoint: "/conversations/\(conversationId)/messages",
-            queryItems: [
-                URLQueryItem(name: "after", value: Self.watermarkFormatter.string(from: after)),
-                URLQueryItem(name: "limit", value: "\(limit)"),
-                URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
-                URLQueryItem(name: "include_translations", value: "\(includeTranslations)"),
-            ]
+            queryItems: items
         )
     }
 
-    public func listAround(conversationId: String, around: String, limit: Int = 30, includeReplies: Bool = true, includeTranslations: Bool = true) async throws -> MessagesAPIResponse {
-        try await api.request(
+    public func listAround(conversationId: String, around: String, limit: Int = 30, includeReplies: Bool = true, includeTranslations: Bool = true, languages: [String]? = nil) async throws -> MessagesAPIResponse {
+        var items: [URLQueryItem] = [
+            URLQueryItem(name: "around", value: around),
+            URLQueryItem(name: "limit", value: "\(limit)"),
+            URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
+            URLQueryItem(name: "include_translations", value: "\(includeTranslations)"),
+        ]
+        if let langItem = Self.languagesQueryItem(languages) { items.append(langItem) }
+        return try await api.request(
             endpoint: "/conversations/\(conversationId)/messages",
-            queryItems: [
-                URLQueryItem(name: "around", value: around),
-                URLQueryItem(name: "limit", value: "\(limit)"),
-                URLQueryItem(name: "include_replies", value: "\(includeReplies)"),
-                URLQueryItem(name: "include_translations", value: "\(includeTranslations)"),
-            ]
+            queryItems: items
         )
     }
 
@@ -157,39 +178,42 @@ public final class MessageService: MessageServiceProviding, @unchecked Sendable 
 
 // MARK: - Backward-compat overloads
 
-/// Legacy 4-arg call sites (every site predating the bandwidth-aware
-/// `includeTranslations` flag) keep working without modification : these
-/// forwarding overloads default `includeTranslations` to `true`, preserving
-/// the historical "always include translations" behaviour. New call sites
-/// that are warm-cache aware should call the 5-arg canonical method
-/// explicitly with `includeTranslations: false` (e.g. the iOS app's
-/// `ConversationViewModel.refreshMessagesFromAPI` after first fetch).
+/// Forwarding overloads keep every pre-`languages` call site compiling
+/// unchanged. Two arities are provided per method:
+///   - 5-arg (with `includeTranslations`, no `languages`) → forwards
+///     `languages: nil` (the all-languages default). Used by warm-cache-aware
+///     sites like `ConversationViewModel.refreshMessagesFromAPI`.
+///   - 4-arg (no `includeTranslations`, no `languages`) → forwards
+///     `includeTranslations: true, languages: nil` (historical behaviour).
+/// New, bandwidth-aware sites call the 6-arg canonical method with an explicit
+/// Prisme `languages` set (E3) to filter translations server-side (gateway A3).
 public extension MessageServiceProviding {
-    func list(conversationId: String, offset: Int, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse {
+    func list(conversationId: String, offset: Int, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse {
         try await list(
             conversationId: conversationId, offset: offset, limit: limit,
-            includeReplies: includeReplies, includeTranslations: true
+            includeReplies: includeReplies, includeTranslations: includeTranslations, languages: nil
         )
     }
+ 
 
-    func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse {
+    func listBefore(conversationId: String, before: String, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse {
         try await listBefore(
             conversationId: conversationId, before: before, limit: limit,
-            includeReplies: includeReplies, includeTranslations: true
+            includeReplies: includeReplies, includeTranslations: includeTranslations, languages: nil
         )
-    }
-
-    func listAfter(conversationId: String, after: Date, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse {
+    } 
+    func listAfter(conversationId: String, after: Date, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse {
         try await listAfter(
             conversationId: conversationId, after: after, limit: limit,
-            includeReplies: includeReplies, includeTranslations: true
+            includeReplies: includeReplies, includeTranslations: includeTranslations, languages: nil
         )
     }
+ 
 
-    func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool) async throws -> MessagesAPIResponse {
+    func listAround(conversationId: String, around: String, limit: Int, includeReplies: Bool, includeTranslations: Bool) async throws -> MessagesAPIResponse {
         try await listAround(
             conversationId: conversationId, around: around, limit: limit,
-            includeReplies: includeReplies, includeTranslations: true
+            includeReplies: includeReplies, includeTranslations: includeTranslations, languages: nil
         )
-    }
+    } 
 }

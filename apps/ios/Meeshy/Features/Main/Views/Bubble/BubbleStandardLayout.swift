@@ -280,6 +280,11 @@ struct BubbleStandardLayout: View {
 
     private var timeString: String { content.meta.timeString }
 
+    /// BUG3 — an outgoing message whose send failed (drives the orange retry band).
+    private var isFailedOutgoing: Bool {
+        content.isMe && content.meta.deliveryStatus == .failed
+    }
+
     private var deliveryStatusAccessibilityLabel: String {
         switch message.deliveryStatus {
         case .sending: return "en cours d'envoi"
@@ -383,7 +388,7 @@ struct BubbleStandardLayout: View {
                         Color.clear
                             .contentShape(Rectangle())
                             .accessibilityElement(children: .combine)
-                            .accessibilityLabel("Contenu masque")
+                            .accessibilityLabel(String(localized: "bubble.content.hidden", defaultValue: "Hidden content", bundle: .main))
                             .accessibilityHint("Toucher pour reveler le contenu")
                             .onTapGesture { revealBlurredContent() }
                     }
@@ -813,6 +818,15 @@ struct BubbleStandardLayout: View {
             }
         }
         .background(bubbleBackground)
+        // BUG3 — failed outgoing message: an orange left-edge band attached to
+        // the bubble; tapping it re-triggers the send (placed before clipShape so
+        // it follows the rounded corners). Gated so non-failed bubbles are
+        // untouched.
+        .overlay(alignment: .leading) {
+            if isFailedOutgoing {
+                BubbleFailedRetryBar(onRetry: { performManualRetry() })
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .shadow(
             color: (isMe ? MeeshyColors.brandPrimary : Color(hex: otherBubbleColor)).opacity(isMe ? 0.3 : 0.2),
@@ -931,7 +945,7 @@ struct BubbleStandardLayout: View {
     }
 
     private var mentionTint: Color {
-        Color(hex: "818CF8") // indigo400 — distinct des liens URL
+        MeeshyColors.indigo400 // distinct des liens URL
     }
 
     @ViewBuilder

@@ -1,0 +1,50 @@
+{
+  "pdf": {
+    "loadError": "No se puede cargar el PDF",
+    "openInNewTab": "Abrir en nueva pestaña",
+    "download": "Descargar",
+    "downloadPdf": "Descargar PDF",
+    "delete": "Eliminar este PDF",
+    "fullscreen": "Abrir en pantalla completa",
+    "previousPage": "Página anterior",
+    "nextPage": "Página siguiente",
+    "zoomOut": "Alejar",
+    "zoomIn": "Acercar",
+    "close": "Cerrar",
+    "nativeControls": "Use los controles nativos del PDF para navegar • Escape para cerrar"
+  },
+  "pptx": {
+    "loadError": "No se puede cargar la presentación",
+    "publicRequired": "El archivo debe ser accesible públicamente para ser visualizado",
+    "downloadFile": "Descargar archivo",
+    "delete": "Eliminar esta presentación",
+    "fullscreen": "Abrir en pantalla completa",
+    "download": "Descargar"
+  },
+  "markdown": {
+    "loadError": "No se puede cargar el archivo",
+    "document": "Documento Markdown",
+    "formattedView": "Vista formateada",
+    "rawView": "Vista sin formato",
+    "download": "Descargar archivo Markdown",
+    "delete": "Eliminar este archivo Markdown",
+    "fullscreen": "Abrir en pantalla completa",
+    "close": "Cerrar",
+    "escToClose": "Presione Escape para cerrar"
+  },
+  "video": {
+    "enterFullscreen": "Pantalla completa",
+    "exitFullscreen": "Salir de pantalla completa",
+    "download": "Descargar"
+  },
+  "text": {
+    "enableWordWrap": "Activar ajuste de línea",
+    "disableWordWrap": "Desactivar ajuste de línea",
+    "copy": "Copiar contenido",
+    "fullscreen": "Abrir en pantalla completa",
+    "download": "Descargar",
+    "copied": "Copiado al portapapeles",
+    "copyError": "No se pudo copiar",
+    "loadError": "No se pudo cargar el archivo"
+  }
+}

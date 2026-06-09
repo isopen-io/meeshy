@@ -1,0 +1,118 @@
+{
+  "calls": {
+    "loading": "Chargement de l'appel...",
+    "banner": {
+      "inProgress": "Appel en cours",
+      "participant": "{count} participant",
+      "participants": "{count} participants",
+      "join": "Rejoindre",
+      "dismiss": "Ignorer"
+    },
+    "error": {
+      "title": "Erreur d'appel",
+      "message": "Une erreur inattendue s'est produite pendant l'appel.",
+      "tryAgain": "Réessayer",
+      "returnHome": "Retour à l'accueil",
+      "troubleshooting": {
+        "title": "Dépannage :",
+        "permissions": "Assurez-vous d'avoir accordé les permissions caméra et microphone",
+        "browser": "Vérifiez que votre navigateur supporte les appels vidéo (Chrome, Firefox, Safari)",
+        "https": "Assurez-vous d'utiliser une connexion HTTPS",
+        "refresh": "Essayez de recharger la page"
+      }
+    },
+    "status": {
+      "connecting": "Connexion en cours...",
+      "starting": "Démarrage...",
+      "reconnecting": "Reconnexion...",
+      "failed": "Échec de connexion",
+      "disconnected": "Déconnecté",
+      "connected": "Connecté",
+      "quality": {
+        "excellent": "Excellent",
+        "good": "Bon",
+        "poor": "Connexion médiocre",
+        "offline": "Hors ligne"
+      }
+    },
+    "controls": {
+      "controls": "Commandes d'appel",
+      "mute": "Couper le micro",
+      "unmute": "Activer le micro",
+      "videoOff": "Désactiver la vidéo",
+      "videoOn": "Activer la vidéo",
+      "videoPausedWeak": "Vidéo en pause (connexion faible)",
+      "switchCamera": "Changer de caméra",
+      "speakerOff": "Désactiver le haut-parleur",
+      "speakerOn": "Activer le haut-parleur",
+      "speakerOnLabel": "Haut-parleur activé",
+      "speakerOffLabel": "Haut-parleur désactivé",
+      "audioEffects": "Effets audio",
+      "audioEffectsTitle": "Effets audio",
+      "connectionStats": "Statistiques de connexion",
+      "connectionStatsTitle": "Statistiques de connexion",
+      "endCall": "Terminer l'appel"
+    },
+    "quality": {
+      "details": "Détails de la qualité de connexion",
+      "quality": "Qualité :",
+      "packetLoss": "Perte de paquets :",
+      "latency": "Latence (RTT) :",
+      "jitter": "Gigue :",
+      "audioBitrate": "Débit audio :",
+      "videoBitrate": "Débit vidéo :",
+      "updated": "Mis à jour :"
+    },
+    "stream": {
+      "disconnected": "Déconnecté",
+      "participantLeft": "{name} a quitté l'appel",
+      "participant": "Participant",
+      "micMuted": "Microphone coupé",
+      "videoOff": "Caméra désactivée",
+      "videoSuspended": "Vidéo en pause",
+      "videoSuspendedHint": "Connexion faible · reprise auto",
+      "fullscreen": "Plein écran",
+      "dragToMove": "Glisser pour déplacer"
+    },
+    "toasts": {
+      "connectionError": "Erreur de connexion",
+      "videoSwitchFailed": "Échec du changement de vidéo",
+      "cameraSwitched": "Caméra changée",
+      "cameraSwitchFailed": "Échec du changement de caméra",
+      "joinFailed": "Impossible de rejoindre l'appel"
+      "videoSuspendedPoorConnection": "Connexion faible — vidéo suspendue pour maintenir l'appel",
+      "videoResumed": "Connexion rétablie — vidéo réactivée"
+    },
+    "permissions": {
+      "title": {
+        "idle": "Accès caméra & microphone",
+        "granted": "Permissions accordées",
+        "denied": "Permission refusée"
+      },
+      "description": {
+        "idle": "Pour rejoindre cet appel vidéo, nous avons besoin d'accéder à votre caméra et votre microphone.",
+        "granted": "Vous pouvez maintenant rejoindre l'appel vidéo."
+      },
+      "error": {
+        "denied": "Accès caméra et microphone refusé. Vérifiez les paramètres de votre navigateur.",
+        "notFound": "Aucune caméra ou microphone trouvé. Connectez un appareil et réessayez.",
+        "notReadable": "La caméra ou le microphone est déjà utilisé par une autre application.",
+        "generic": "Impossible d'accéder à la caméra et au microphone. Veuillez réessayer.",
+        "unexpected": "Une erreur inattendue s'est produite. Veuillez réessayer."
+      },
+      "buttons": {
+        "grantAccess": "Autoriser l'accès",
+        "cancel": "Annuler",
+        "tryAgain": "Réessayer"
+      },
+      "requesting": "Veuillez autoriser l'accès dans votre navigateur...",
+      "joining": "Connexion à l'appel...",
+      "instructions": {
+        "title": "Comment activer les permissions :",
+        "chrome": "Chrome : Cliquez sur l'icône caméra dans la barre d'adresse",
+        "firefox": "Firefox : Cliquez sur l'icône caméra dans la barre d'adresse",
+        "safari": "Safari : Allez dans Réglages Safari > Confidentialité > Caméra/Microphone"
+      }
+    }
+  }
+}

@@ -73,6 +73,10 @@ export function useCallQuality({
       let audioBitrate = 0;
       let videoBitrate = 0;
       let jitter = 0;
+      // Cumulative byte counters (summed across all RTP streams) — reported so
+      // the gateway can persist real "data spent" on the call-summary message.
+      let bytesSent = 0;
+      let bytesReceived = 0;
 
       // Parse WebRTC stats
       stats.forEach((report) => {
@@ -91,12 +95,18 @@ export function useCallQuality({
             jitter = report.jitter * 1000; // Convert to ms
           }
 
+          bytesReceived += report.bytesReceived || 0;
+
           // Get bitrate
           if (report.kind === 'audio') {
             audioBitrate = (report.bytesReceived || 0) * 8 / 1000; // kbps
           } else if (report.kind === 'video') {
             videoBitrate = (report.bytesReceived || 0) * 8 / 1000; // kbps
           }
+        }
+
+        if (report.type === 'outbound-rtp') {
+          bytesSent += report.bytesSent || 0;
         }
 
         if (report.type === 'candidate-pair' && report.state === 'succeeded') {
@@ -128,6 +138,8 @@ export function useCallQuality({
         },
         jitter: Math.round(jitter * 100) / 100, // Round to 2 decimals
         timestamp: new Date(),
+        bytesSent,
+        bytesReceived,
       };
 
       setQualityStats(newStats);
@@ -185,6 +197,8 @@ export function useCallQuality({
           bitrate: qualityStats.bitrate ?? { audio: 0, video: 0 },
           jitter: qualityStats.jitter ?? 0,
           timestamp: qualityStats.timestamp ?? new Date(),
+          bytesSent: qualityStats.bytesSent ?? 0,
+          bytesReceived: qualityStats.bytesReceived ?? 0,
         },
       });
     }, 10_000);

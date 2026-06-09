@@ -287,6 +287,21 @@ export const messageAttachmentSchema = {
     thumbnailPath: { type: 'string', nullable: true, description: 'Thumbnail file path' },
     thumbnailUrl: { type: 'string', nullable: true, description: 'Thumbnail URL' },
     thumbHash: { type: 'string', nullable: true, description: 'ThumbHash base64 for instant placeholder (~33 chars)' },
+    imageVariants: {
+      type: 'array',
+      nullable: true,
+      description: 'Responsive downscaled WebP variants for srcset (D4) — non-encrypted images only',
+      items: {
+        type: 'object',
+        properties: {
+          width: { type: 'number', description: 'Variant width in pixels' },
+          height: { type: 'number', description: 'Variant height in pixels' },
+          url: { type: 'string', description: 'Variant file URL' },
+          size: { type: 'number', description: 'Variant byte size' },
+          format: { type: 'string', description: 'Encoded format (webp)' },
+        },
+      },
+    },
 
     // Audio/Video metadata
     duration: { type: 'number', nullable: true, description: 'Duration in milliseconds' },

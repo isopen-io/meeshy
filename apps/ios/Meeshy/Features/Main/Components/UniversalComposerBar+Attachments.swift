@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshyUI
 import AVFoundation
 import CoreLocation
 import Combine
@@ -214,7 +215,7 @@ extension UniversalComposerBar {
         HStack(spacing: 10) {
             Image(systemName: "doc.plaintext.fill")
                 .font(.system(size: 18))
-                .foregroundColor(Color(hex: "9B59B6"))
+                .foregroundColor(MeeshyColors.indigo500)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(String(localized: "composer.clipboard.title", defaultValue: "Contenu du presse-papier", bundle: .main))
@@ -228,7 +229,7 @@ extension UniversalComposerBar {
 
                 Text(String(localized: "composer.clipboard.charCount", defaultValue: "\(clip.charCount) caract\u{00E8}res", bundle: .main))
                     .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(Color(hex: "9B59B6"))
+                    .foregroundColor(MeeshyColors.indigo500)
             }
 
             Spacer()
@@ -240,7 +241,7 @@ extension UniversalComposerBar {
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 16))
-                    .foregroundColor(Color(hex: "FF6B6B"))
+                    .foregroundColor(MeeshyColors.error)
             }
         }
         .padding(.horizontal, 12)
@@ -250,7 +251,7 @@ extension UniversalComposerBar {
                 .fill(style == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.03))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color(hex: "9B59B6").opacity(0.3), lineWidth: 1)
+                        .stroke(MeeshyColors.indigo500.opacity(0.3), lineWidth: 1)
                 )
         )
         .padding(.horizontal, 12)

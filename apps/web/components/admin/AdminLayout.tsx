@@ -197,7 +197,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
                 <Crown className="w-8 h-8 text-purple-600" />
                 {isSidebarOpen && (
                   <div>
-                    <h1 className="text-xl font-bold text-gray-900">Administration</h1>
+                    <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100">Administration</h1>
                     <p className="text-sm text-gray-500">Panel de contrôle</p>
                   </div>
                 )}
@@ -236,7 +236,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
               </Avatar>
               {isSidebarOpen && (
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                     {user.displayName || user.username}
                   </p>
                   <Badge className={`text-xs ${getRoleColor(user.role)}`}>
@@ -303,7 +303,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
         {/* Main Content */}
         <div className="flex-1 flex flex-col">
           {/* Top Bar */}
-          <header className="bg-white shadow-sm border-b px-4 sm:px-6 py-4">
+          <header className="bg-white dark:bg-gray-900 shadow-sm border-b dark:border-gray-800 px-4 sm:px-6 py-4">
             <div className="flex items-center justify-between">
               {/* Mobile Menu Button + Title */}
               <div className="flex items-center gap-3">
@@ -317,7 +317,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
                   <Menu className="w-5 h-5" />
                 </Button>
                 <div>
-                  <h2 className="text-lg sm:text-2xl font-bold text-gray-900">
+                  <h2 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-gray-100">
                     {currentPage === '/admin' && 'Tableau de bord'}
                     {currentPage === '/admin/users' && 'Gestion des utilisateurs'}
                     {currentPage === '/admin/moderation' && 'Modération'}
@@ -330,7 +330,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
                     {currentPage === '/admin/agent' && 'Agent IA'}
                     {currentPage === '/admin/monitoring' && 'Monitoring'}
                   </h2>
-                  <p className="text-xs sm:text-sm text-gray-500 mt-1 hidden sm:block">
+                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1 hidden sm:block">
                     Administration Meeshy - Niveau d&apos;accès: {PermissionsService.getRoleDisplayName(user.role)}
                   </p>
                 </div>
@@ -343,7 +343,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = ({ children, currentPage }) => {
                     <Button variant="ghost" size="icon" className="h-9 w-9">
                       <Sun className="h-4 w-4 rotate-0 scale-100 transition-transform dark:-rotate-90 dark:scale-0" />
                       <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-transform dark:rotate-0 dark:scale-100" />
-                      <span className="sr-only">Changer de thème</span>
+                      <span className="sr-only">Toggle theme</span>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">

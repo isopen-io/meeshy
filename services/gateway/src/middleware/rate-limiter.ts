@@ -9,8 +9,69 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import rateLimit from '@fastify/rate-limit';
+import type Redis from 'ioredis';
 import { isLocalIp } from '../utils/rate-limiter';
 import { UnifiedAuthRequest } from './auth';
+import { getCacheStore } from '../services/CacheStore';
+
+// Lua script: atomic INCR + PEXPIRE on first hit, returns [current, pttl]
+const INCR_LUA = `
+local c = redis.call('INCR', KEYS[1])
+local ttl = redis.call('PTTL', KEYS[1])
+if ttl == -1 then
+  redis.call('PEXPIRE', KEYS[1], ARGV[1])
+  ttl = tonumber(ARGV[1])
+end
+return {c, ttl}
+`;
+
+function parseTimeWindow(tw: string | number): number {
+  if (typeof tw === 'number') return tw;
+  const m = tw.match(/^(\d+)\s*(ms|s|minute?|m|hour?|h)$/i);
+  if (!m) return 60_000;
+  const n = parseInt(m[1], 10);
+  const unit = m[2].toLowerCase();
+  if (unit === 'ms') return n;
+  if (unit === 's') return n * 1_000;
+  if (unit === 'm' || unit.startsWith('minute')) return n * 60_000;
+  if (unit === 'h' || unit.startsWith('hour')) return n * 3_600_000;
+  return 60_000;
+}
+
+class RedisRateLimitStore {
+  private redis: Redis;
+  private windowMs: number;
+
+  constructor(redis: Redis, windowMs: number) {
+    this.redis = redis;
+    this.windowMs = windowMs;
+  }
+
+  incr(key: string, cb: (err: Error | null, current: number, ttl: number) => void): void {
+    (this.redis as any).eval(INCR_LUA, 1, `rl:${key}`, this.windowMs)
+      .then((result: unknown) => {
+        const [current, ttl] = result as [number, number];
+        cb(null, current, ttl);
+      })
+      .catch(() => {
+        // Redis error — fail open (allow request, reset counter)
+        cb(null, 1, this.windowMs);
+      });
+  }
+
+  child(routeOptions: { timeWindow?: string | number }): RedisRateLimitStore {
+    const windowMs = routeOptions.timeWindow !== undefined
+      ? parseTimeWindow(routeOptions.timeWindow)
+      : this.windowMs;
+    return new RedisRateLimitStore(this.redis, windowMs);
+  }
+}
+
+function makeRedisStore(windowMs: number): RedisRateLimitStore | undefined {
+  const redis = getCacheStore().getNativeClient();
+  if (!redis) return undefined;
+  return new RedisRateLimitStore(redis, windowMs);
+}
 
 /**
  * Rate limiter pour les messages
@@ -20,6 +81,8 @@ export async function registerMessageRateLimiter(fastify: FastifyInstance) {
   await fastify.register(rateLimit, {
     max: 20,
     timeWindow: '1 minute',
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    store: makeRedisStore(60_000) as any,
     keyGenerator: (request: FastifyRequest) => {
       // Rate limit par utilisateur
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -55,6 +118,8 @@ export async function registerGlobalRateLimiter(fastify: FastifyInstance) {
     global: true,
     max: 300, // Augmenté de 100 à 300 pour l'édition de liens
     timeWindow: '1 minute',
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    store: makeRedisStore(60_000) as any,
     keyGenerator: (request: FastifyRequest) => {
       return `global:${request.ip}`;
     },

@@ -200,6 +200,17 @@
   }
 }
 
+/* Copy-to-clipboard flash feedback */
+@keyframes copy-flash {
+  0% { background-color: transparent; }
+  30% { background-color: color-mix(in srgb, var(--primary) 15%, transparent); }
+  100% { background-color: transparent; }
+}
+
+.copy-flash {
+  animation: copy-flash 0.6s ease-out;
+}
+
 /* Styles personnalisés pour les scrollbars */
 @layer utilities {
   .scrollbar-thin {

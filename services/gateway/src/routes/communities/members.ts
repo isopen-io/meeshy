@@ -2,6 +2,9 @@
  * Member management routes for communities
  */
 import { FastifyInstance } from 'fastify';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'CommunityMembersRoutes' });
 import {
   communityMemberSchema,
   errorResponseSchema
@@ -166,7 +169,7 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
         }
       });
     } catch (error) {
-      console.error('Error fetching community members:', error);
+      logger.error('Error fetching community members', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to fetch community members'
@@ -331,7 +334,7 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
         data: member
       });
     } catch (error) {
-      console.error('Error adding community member:', error);
+      logger.error('Error adding community member', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to add community member'
@@ -465,7 +468,7 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
         data: updatedMember
       });
     } catch (error) {
-      console.error('[COMMUNITIES] Error updating member role:', error);
+      logger.error('Error updating member role', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to update member role'
@@ -584,7 +587,7 @@ export async function registerMemberRoutes(fastify: FastifyInstance) {
         data: { message: 'Member removed successfully' }
       });
     } catch (error) {
-      console.error('Error removing community member:', error);
+      logger.error('Error removing community member', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to remove community member'

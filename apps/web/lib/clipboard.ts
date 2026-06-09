@@ -3,12 +3,34 @@
  * Compatible iOS, Android et tous les navigateurs modernes
  */
 
-export async function copyToClipboard(text: string, inputSelector?: string): Promise<{ success: boolean; message: string }> {
+export type ClipboardMessages = {
+  success?: string;
+  manualSelectHint?: string;
+  unavailable?: string;
+  error?: string;
+};
+
+const defaultMessages: Required<ClipboardMessages> = {
+  success: 'Copié dans le presse-papiers',
+  manualSelectHint: 'Texte sélectionné - utilisez Ctrl+C pour copier',
+  unavailable: 'Copie automatique non disponible - veuillez copier manuellement',
+  error: 'Erreur lors de la copie',
+};
+
+export async function copyToClipboard(
+  text: string,
+  inputSelector?: string,
+  flashTarget?: HTMLElement | null,
+  messages?: ClipboardMessages,
+): Promise<{ success: boolean; message: string }> {
+  const msg = { ...defaultMessages, ...messages };
+
   try {
     // Méthode 1: API Clipboard moderne (iOS 13.4+, Chrome 63+, Firefox 53+)
     if (navigator.clipboard && window.isSecureContext) {
       await navigator.clipboard.writeText(text);
-      return { success: true, message: 'Copié dans le presse-papiers' };
+      triggerCopyFlash(flashTarget);
+      return { success: true, message: msg.success };
     }
 
     // Méthode 2: Fallback avec textarea temporaire (compatible iOS et anciens navigateurs)
@@ -53,7 +75,8 @@ export async function copyToClipboard(text: string, inputSelector?: string): Pro
     document.body.removeChild(textArea);
 
     if (success) {
-      return { success: true, message: 'Copié dans le presse-papiers' };
+      triggerCopyFlash(flashTarget);
+      return { success: true, message: msg.success };
     }
 
     // Méthode 3: Si un input selector est fourni, l'utiliser
@@ -63,14 +86,14 @@ export async function copyToClipboard(text: string, inputSelector?: string): Pro
         inputElement.value = text;
         inputElement.select();
         inputElement.setSelectionRange(0, 99999);
-        return { success: false, message: 'Texte sélectionné - utilisez Ctrl+C pour copier' };
+        return { success: false, message: msg.manualSelectHint };
       }
     }
 
-    return { success: false, message: 'Copie automatique non disponible - veuillez copier manuellement' };
+    return { success: false, message: msg.unavailable };
   } catch (error) {
     console.warn('Erreur lors de la copie:', error);
-    return { success: false, message: 'Erreur lors de la copie' };
+    return { success: false, message: msg.error };
   }
 }
 
@@ -79,4 +102,12 @@ export async function copyToClipboard(text: string, inputSelector?: string): Pro
  */
 export function isClipboardSupported(): boolean {
   return !!(navigator.clipboard && window.isSecureContext);
+}
+
+function triggerCopyFlash(target?: HTMLElement | null): void {
+  if (!target) return;
+  target.classList.remove('copy-flash');
+  void target.offsetWidth; // force reflow to restart animation
+  target.classList.add('copy-flash');
+  target.addEventListener('animationend', () => target.classList.remove('copy-flash'), { once: true });
 }

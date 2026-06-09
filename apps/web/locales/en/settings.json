@@ -193,7 +193,12 @@
         "customDestinationLanguage": "Custom destination language",
         "customDestinationLanguageDescription": "Specific language for automatic translation (optional)",
         "selectLanguage": "Select a language",
-        "none": "None"
+        "none": "None",
+        "systemLanguagePlaceholder": "Select your system language",
+        "regionalLanguagePlaceholder": "Select your regional language",
+        "customLanguagePlaceholder": "Select a custom language (optional)",
+        "configurationTitle": "Language configuration",
+        "configurationDescription": "Define your system and regional languages"
       },
       "autoTranslation": {
         "title": "Automatic Translation Options",
@@ -209,7 +214,8 @@
         "translateToCustomDescription": "Translates messages to {flag} {language} only",
         "noCustomLanguage": "No custom language defined - set one above",
         "tip": "Tip:",
-        "tipDescription": "If no option is selected, messages will be translated to all your configured languages (system + regional + custom)."
+        "tipDescription": "If no option is selected, messages will be translated to all your configured languages (system + regional + custom).",
+        "settingsTitle": "Translation settings"
       },
       "preview": {
         "title": "Configuration Preview",
@@ -495,7 +501,8 @@
         "transcription": "Transcription error",
         "creation": "Error creating profile",
         "consent": "Error updating consent",
-        "delete": "Error deleting profile"
+        "delete": "Error deleting profile",
+        "noRecording": "No recording available"
       },
       "consentUpdated": "Consent updated",
       "transcriptionComplete": "Transcription complete",
@@ -624,6 +631,10 @@
           "description": "Download, preview and storage settings"
         }
       }
+    },
+    "betaPlayground": {
+      "featureEnabled": "Beta feature enabled",
+      "featureDisabled": "Beta feature disabled"
     }
   },
   "emailChange": {

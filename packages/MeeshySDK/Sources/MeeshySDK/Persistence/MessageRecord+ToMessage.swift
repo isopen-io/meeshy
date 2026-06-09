@@ -30,9 +30,17 @@ extension MessageRecord {
             }
         }()
 
+        // Un seul JSONDecoder reutilise pour toutes les colonnes JSON de cette
+        // ligne. toMessage() est appele PAR MESSAGE au chargement d'une
+        // conversation ; reutiliser l'instance evite jusqu'a 5 allocations de
+        // decoder par message. Tous les blobs sont en config par defaut (aucune
+        // strategie date/cle custom), donc l'instance partagee est byte-identique
+        // a l'ancien code (et l'usage reste sequentiel mono-thread).
+        let decoder = JSONDecoder()
+
         let uiAttachments: [MeeshyMessageAttachment]
         if let data = attachmentsJson,
-           let decoded = try? JSONDecoder().decode([MeeshyMessageAttachment].self, from: data) {
+           let decoded = try? decoder.decode([MeeshyMessageAttachment].self, from: data) {
             uiAttachments = decoded
         } else {
             uiAttachments = []
@@ -40,7 +48,7 @@ extension MessageRecord {
 
         let uiReactions: [MeeshyReaction]
         if let data = reactionsJson,
-           let decoded = try? JSONDecoder().decode([MeeshyReaction].self, from: data) {
+           let decoded = try? decoder.decode([MeeshyReaction].self, from: data) {
             uiReactions = decoded
         } else {
             uiReactions = []
@@ -48,7 +56,7 @@ extension MessageRecord {
 
         let uiReplyTo: ReplyReference?
         if let data = replyToJson,
-           let decoded = try? JSONDecoder().decode(ReplyReference.self, from: data) {
+           let decoded = try? decoder.decode(ReplyReference.self, from: data) {
             uiReplyTo = decoded
         } else {
             uiReplyTo = nil
@@ -56,10 +64,18 @@ extension MessageRecord {
 
         let uiForwardedFrom: ForwardReference?
         if let data = forwardedFromJson,
-           let decoded = try? JSONDecoder().decode(ForwardReference.self, from: data) {
+           let decoded = try? decoder.decode(ForwardReference.self, from: data) {
             uiForwardedFrom = decoded
         } else {
             uiForwardedFrom = nil
+        }
+
+        let uiCallSummary: CallSummaryMetadata?
+        if let data = callSummaryJson,
+           let decoded = try? decoder.decode(CallSummaryMetadata.self, from: data) {
+            uiCallSummary = decoded
+        } else {
+            uiCallSummary = nil
         }
 
         var effects = MessageEffects.none
@@ -130,7 +146,8 @@ extension MessageRecord {
             readByAllAt: readByAllAt,
             deliveredCount: deliveredCount,
             readCount: readCount,
-            cachedTimeString: cachedTimeString
+            cachedTimeString: cachedTimeString,
+            callSummary: uiCallSummary
         )
     }
 }

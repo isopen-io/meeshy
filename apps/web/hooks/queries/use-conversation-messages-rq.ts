@@ -72,7 +72,8 @@ async function fetchMessagesFromService(
   conversationId: string,
   pageParam: number | string,
   limit: number,
-  linkId?: string
+  linkId?: string,
+  signal?: AbortSignal
 ): Promise<{ messages: Message[]; hasMore: boolean; total: number; nextCursor?: string | null }> {
   if (linkId) {
     // Utilisateur anonyme via lien partagé - utiliser AnonymousChatService
@@ -90,7 +91,7 @@ async function fetchMessagesFromService(
     // Utilisateur authentifié - utiliser conversationsService
     const cursor = typeof pageParam === 'string' ? pageParam : null;
     const page = typeof pageParam === 'number' ? pageParam : 1;
-    const result = await conversationsService.getMessages(conversationId, page, limit, cursor);
+    const result = await conversationsService.getMessages(conversationId, page, limit, cursor, signal);
 
     return {
       messages: result.messages || [],
@@ -140,8 +141,8 @@ export function useConversationMessagesRQ(
     refetch,
   } = useInfiniteQuery({
     queryKey,
-    queryFn: ({ pageParam = 1 }) =>
-      fetchMessagesFromService(conversationId!, pageParam, limit, linkId),
+    queryFn: ({ pageParam = 1, signal }) =>
+      fetchMessagesFromService(conversationId!, pageParam, limit, linkId, signal),
     initialPageParam: 1 as number | string,
     getNextPageParam: (lastPage) => {
       if (!lastPage.hasMore) return undefined;
@@ -166,11 +167,15 @@ export function useConversationMessagesRQ(
     if (!data?.messages) return [];
 
     // Tri DESC par createdAt (plus récent en premier)
-    // Le composant MessagesDisplay inverse l'ordre pour l'affichage
+    // Le composant MessagesDisplay inverse l'ordre pour l'affichage.
+    // Départage déterministe par id quand deux messages partagent le même
+    // timestamp (même milliseconde) : sans cela l'ordre relatif est instable
+    // entre deux rendus et React réconcilie/permute des cellules pour rien.
     return [...data.messages].sort((a, b) => {
       const dateA = new Date(a.createdAt).getTime();
       const dateB = new Date(b.createdAt).getTime();
-      return dateB - dateA;
+      if (dateB !== dateA) return dateB - dateA;
+      return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
     });
   }, [data?.messages]);
 

@@ -12,6 +12,9 @@ import {
   errorResponseSchema,
 } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../middleware/auth';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'AffiliateRoutes' });
 
 // Schémas de validation Zod
 const createAffiliateTokenSchema = z.object({
@@ -174,7 +177,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
         }
       });
     } catch (error) {
-      console.error('Erreur création token affiliation:', error);
+      logger.error('Erreur création token affiliation', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la création du token d\'affiliation'
@@ -334,7 +337,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
         }
       });
     } catch (error) {
-      console.error('Erreur récupération tokens:', error);
+      logger.error('Erreur récupération tokens', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la récupération des tokens'
@@ -424,7 +427,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
         });
       }
     } catch (error) {
-      console.error('Erreur récupération stats:', error);
+      logger.error('Erreur récupération stats', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la récupération des statistiques'
@@ -584,7 +587,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
         }
       });
     } catch (error) {
-      console.error('Erreur validation token:', error);
+      logger.error('Erreur validation token', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la validation du token'
@@ -670,7 +673,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
         });
       }
     } catch (error) {
-      console.error('Erreur tracking visite:', error);
+      logger.error('Erreur tracking visite', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors du tracking de la visite'
@@ -751,7 +754,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
         });
       }
     } catch (error) {
-      console.error('Erreur enregistrement affiliation:', error);
+      logger.error('Erreur enregistrement affiliation', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la création de la relation d\'affiliation'
@@ -825,7 +828,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
 
       return reply.send({ success: true, data: { tracked: true } });
     } catch (error) {
-      console.error('Erreur tracking clic affiliation:', error);
+      logger.error('Erreur tracking clic affiliation', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors du tracking du clic'
@@ -913,7 +916,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
         success: true
       });
     } catch (error) {
-      console.error('Erreur suppression token:', error);
+      logger.error('Erreur suppression token', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la suppression du token'

@@ -181,7 +181,16 @@ public final class MessageStore: ObservableObject {
                   notifConvId == convId else { return }
             Task { @MainActor in
                 guard let store = weakStore.value else { return }
-                await store.refreshFromDB()
+                // Real-time refresh (socket insert / delivery / read / reaction
+                // write). Merge in-memory messages absent from the fresh GRDB
+                // window so a bubble that just rendered from a previous write
+                // never vanishes when the NEXT write triggers a window read
+                // that momentarily races the commit ordering. Mirrors the
+                // protective merge `apply(records:)` already performs on the
+                // REST-refresh path. Window transitions (jump / restore /
+                // paginate) bypass this notification and call refreshFromDB()
+                // directly with a straight replace.
+                await store.refreshFromDB(mergeInMemory: true)
             }
         }
         // Wrap the NotificationCenter observer in an AnyDatabaseCancellable so
@@ -209,7 +218,7 @@ public final class MessageStore: ObservableObject {
 
     // MARK: - Off-main DB read + progressive decrypt
 
-    func refreshFromDB() async {
+    func refreshFromDB(mergeInMemory: Bool = false) async {
         let convId = conversationId
         let mode = windowMode
         let anchor = windowAnchor
@@ -250,7 +259,59 @@ public final class MessageStore: ObservableObject {
         // a socket message arrived and another refresh wrote first).
         guard newRecords != messages else { return }
 
-        messages = newRecords
+        publish(records: newRecords, mergeInMemory: mergeInMemory)
+    }
+
+    /// Publishes a freshly-read window into `@Published messages` and fires the
+    /// downstream side-effects (id index reset, section recompute, change
+    /// signal). Shared by `refreshFromDB` (real-time) and `apply` (REST/cold
+    /// load) so both paths agree on the protective-merge rule.
+    ///
+    /// Protective merge (`mergeInMemory == true` AND `.latest` window only):
+    /// any in-memory record whose `localId` is absent from `records` is
+    /// preserved and re-sorted by `createdAt`. This guards the "vanish after
+    /// delivery" race — a row already displayed from a prior write must not be
+    /// erased by a later window read that races the commit ordering. Disabled
+    /// in `.around(date:)` mode (jump-to-message) and on explicit straight
+    /// replaces (window transitions) so a stale slice never pollutes the view.
+    private func publish(records: [MessageRecord], mergeInMemory: Bool) {
+        // BUG1 diagnostics — capture the pre-state to detect any publish that
+        // DROPS currently-displayed messages (the suspected "all sent messages
+        // vanish while one is pending" path). Cheap: only sets/array maps.
+        let beforeCount = messages.count
+        let beforeById = Dictionary(messages.map { ($0.localId, $0) }, uniquingKeysWith: { a, _ in a })
+
+        let next: [MessageRecord]
+        if mergeInMemory, windowMode == .latest {
+            let snapshotIds = Set(records.map(\.localId))
+            let preserved = messages.filter { !snapshotIds.contains($0.localId) }
+            next = preserved.isEmpty
+                ? records
+                : (records + preserved).sorted { $0.createdAt < $1.createdAt }
+        } else {
+            next = records
+        }
+
+        let afterIds = Set(next.map(\.localId))
+        let droppedIds = Set(beforeById.keys).subtracting(afterIds)
+        if !droppedIds.isEmpty {
+            // What did we drop, and was any of it still in-flight / failed? That
+            // distinguishes a benign window scroll from the real bug (losing a
+            // sent/pending row the user can see).
+            let droppedInFlight = droppedIds.compactMap { beforeById[$0] }
+                .filter { ["sending", "queued", "failed", "sent"].contains(String(describing: $0.state)) }
+            Logger.messages.error("""
+            [MessageStore][BUG1] publish DROPPED \(droppedIds.count) displayed row(s) \
+            before=\(beforeCount) records=\(records.count) result=\(next.count) \
+            merge=\(mergeInMemory) window=\(String(describing: self.windowMode)) \
+            droppedInFlightOrSent=\(droppedInFlight.count) \
+            ids=\(droppedIds.sorted().prefix(8).joined(separator: ","))
+            """)
+        } else if next.count != beforeCount {
+            Logger.messages.debug("[MessageStore] publish before=\(beforeCount) -> after=\(next.count) records=\(records.count) merge=\(mergeInMemory) window=\(String(describing: self.windowMode))")
+        }
+
+        messages = next
         _idIndex = nil
         recomputeSections()
         messagesDidChange.send()
@@ -329,23 +390,7 @@ public final class MessageStore: ObservableObject {
     /// pollute the jumped window with messages from a different time slice,
     /// breaking the search-result navigation. Replace strictly instead.
     public func apply(records: [MessageRecord]) {
-        guard windowMode == .latest else {
-            messages = records
-            _idIndex = nil
-            recomputeSections()
-            messagesDidChange.send()
-            return
-        }
-        let snapshotIds = Set(records.map(\.localId))
-        let preserved = messages.filter { !snapshotIds.contains($0.localId) }
-        if preserved.isEmpty {
-            messages = records
-        } else {
-            messages = (records + preserved).sorted { $0.createdAt < $1.createdAt }
-        }
-        _idIndex = nil
-        recomputeSections()
-        messagesDidChange.send()
+        publish(records: records, mergeInMemory: true)
     }
 
     // MARK: - Pagination

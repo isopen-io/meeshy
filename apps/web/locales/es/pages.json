@@ -121,11 +121,15 @@
       "title": "Página no encontrada",
       "description": "La página que busca no existe o ha sido movida.",
       "backToDashboard": "Volver al panel de control",
+      "previousPage": "Página anterior",
+      "suggestions": "Sugerencias:",
       "actions": {
         "backHome": "Volver al inicio",
         "backDashboard": "Panel de control",
         "viewCommunities": "Ver las comunidades"
-      }
+      },
+      "backPrevious": "Página anterior",
+      "suggestions": "Sugerencias:"
     }
   }
 }

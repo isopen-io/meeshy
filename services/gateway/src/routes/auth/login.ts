@@ -19,6 +19,9 @@ import {
   formatUserResponse,
   formatSessionResponse
 } from './types';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'AuthLoginRoute' });
 
 /**
  * Register login and logout routes
@@ -74,15 +77,15 @@ export function registerLoginRoutes(context: AuthRouteContext) {
     try {
       const validatedData = validateSchema(AuthSchemas.login, request.body, 'login');
       const { username, password, rememberDevice } = validatedData;
-      console.log('[AUTH] Tentative de connexion pour:', username, '| Remember device:', rememberDevice);
+      logger.info('Tentative de connexion', { username, rememberDevice });
 
       const requestContext = await getRequestContext(request);
-      console.log('[AUTH] Contexte:', requestContext.ip, requestContext.geoData?.location || 'Local');
+      logger.debug('Auth context', { ip: requestContext.ip, location: requestContext.geoData?.location });
 
       const authResult = await authService.authenticate({ username, password }, requestContext);
 
       if (!authResult) {
-        console.error('[AUTH] ❌ Échec de connexion pour:', username, '- Identifiants invalides');
+        logger.warn('Échec de connexion — identifiants invalides', { username });
         return reply.status(401).send({
           success: false,
           error: 'Identifiants invalides'
@@ -93,7 +96,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
 
       // If 2FA is required, return partial response
       if (requires2FA) {
-        console.log('[AUTH] 🔐 2FA requis pour:', user.username);
+        logger.info('2FA requis', { username: user.username });
         return reply.send({
           success: true,
           data: {
@@ -114,7 +117,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
         });
       }
 
-      console.log('[AUTH] ✅ Connexion réussie pour:', user.username, '(ID:', user.id, ', Session:', session.id, ')');
+      logger.info('Connexion réussie', { username: user.username });
 
       // Notification login nouvel appareil (session non trustée = nouvel appareil)
       if (!session.isTrusted) {
@@ -132,7 +135,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
             ipAddress: requestContext.ip,
             geoData: requestContext.geoData,
             revokeToken,
-          }).catch((err: unknown) => console.error('[AUTH] Notification error (login_new_device):', err));
+          }).catch((err: unknown) => logger.error('Notification error login_new_device', err as Error));
         }
       }
 
@@ -147,10 +150,10 @@ export function registerLoginRoutes(context: AuthRouteContext) {
           source: 'login'
         }).then(marked => {
           if (!marked) {
-            console.warn('[AUTH] ⚠️ Échec du marquage session trusted - voir logs SECURITY_AUDIT_ERROR');
+            logger.warn('Échec du marquage session trusted');
           }
         }).catch(err => {
-          console.error('[AUTH] ⚠️ Erreur lors du marquage session trusted:', err);
+          logger.error('Erreur lors du marquage session trusted', err as Error);
         });
       }
 
@@ -168,10 +171,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       });
 
     } catch (error) {
-      console.error('[AUTH] ❌ Erreur serveur lors de la connexion:', error);
-      if (error instanceof Error) {
-        console.error('[AUTH] Détails de l\'erreur:', error.message, error.stack);
-      }
+      logger.error('Erreur serveur lors de la connexion', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors de la connexion'
@@ -241,7 +241,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       const authResult = result as { user: any; sessionToken: string; session: any };
       const { user, sessionToken, session } = authResult;
 
-      console.log('[AUTH] ✅ Connexion 2FA réussie pour:', user.username);
+      logger.info('Connexion 2FA réussie', { username: user.username });
 
       // Notification login nouvel appareil (session non trustée = nouvel appareil)
       if (!session.isTrusted) {
@@ -259,7 +259,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
             ipAddress: requestContext.ip,
             geoData: requestContext.geoData,
             revokeToken,
-          }).catch((err: unknown) => console.error('[AUTH] Notification error (login_new_device 2FA):', err));
+          }).catch((err: unknown) => logger.error('Notification error login_new_device 2FA', err as Error));
         }
       }
 
@@ -274,10 +274,10 @@ export function registerLoginRoutes(context: AuthRouteContext) {
           source: '2fa_verification'
         }).then(marked => {
           if (!marked) {
-            console.warn('[AUTH] ⚠️ Échec du marquage session trusted après 2FA - voir logs SECURITY_AUDIT_ERROR');
+            logger.warn('Échec du marquage session trusted après 2FA');
           }
         }).catch(err => {
-          console.error('[AUTH] ⚠️ Erreur lors du marquage session trusted après 2FA:', err);
+          logger.error('Erreur lors du marquage session trusted après 2FA', err as Error);
         });
       }
 
@@ -296,7 +296,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       });
 
     } catch (error) {
-      console.error('[AUTH] ❌ Erreur 2FA:', error);
+      logger.error('Erreur 2FA', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la vérification 2FA'
@@ -343,7 +343,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       if (sessionToken) {
         const loggedOut = await authService.logout(sessionToken);
         if (loggedOut) {
-          console.log('[AUTH] ✅ Session invalidée pour:', userId);
+          logger.info('Session invalidée');
         }
       }
 
@@ -353,7 +353,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
       });
 
     } catch (error) {
-      console.error('Error in logout:', error);
+      logger.error('Error in logout', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Erreur lors de la déconnexion'

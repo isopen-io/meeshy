@@ -958,20 +958,20 @@ struct MessageOverlayMenu: View {
 
         actions.append(MessageAction(
             id: "reply", icon: "arrowshape.turn.up.left.fill",
-            label: "Repondre", color: "4ECDC4",
+            label: "Repondre", color: MeeshyColors.indigo400,
             handler: { dismissThen { onReply?() } }
         ))
 
         actions.append(MessageAction(
             id: "thread", icon: "bubble.left.and.bubble.right.fill",
-            label: "Discussion", color: "F39C12",
+            label: "Discussion", color: MeeshyColors.warning,
             handler: { dismissThen { onShowThread?() } }
         ))
 
         if hasText {
             actions.append(MessageAction(
                 id: "copy", icon: "doc.on.doc.fill",
-                label: "Copier", color: "9B59B6",
+                label: "Copier", color: MeeshyColors.indigo500,
                 handler: { dismissThen { onCopy?() } }
             ))
         }
@@ -980,7 +980,7 @@ struct MessageOverlayMenu: View {
             id: "pin",
             icon: message.pinnedAt != nil ? "pin.slash.fill" : "pin.fill",
             label: message.pinnedAt != nil ? "Desepingler" : "Epingler",
-            color: "3498DB",
+            color: MeeshyColors.info,
             handler: { dismissThen { onPin?() } }
         ))
 
@@ -989,14 +989,14 @@ struct MessageOverlayMenu: View {
             id: "star",
             icon: isStarred ? "star.slash.fill" : "star.fill",
             label: isStarred ? "Retirer des favoris" : "Ajouter aux favoris",
-            color: "FBBF24",
+            color: MeeshyColors.warning,
             handler: { dismissThen { onToggleStar?() } }
         ))
 
         if canEdit && hasText {
             actions.append(MessageAction(
                 id: "edit", icon: "pencil",
-                label: "Modifier", color: "F8B500",
+                label: "Modifier", color: MeeshyColors.warning,
                 handler: { dismissThen { onEdit?() } }
             ))
         }
@@ -1006,7 +1006,7 @@ struct MessageOverlayMenu: View {
                 let attId = message.attachments[0].id
                 actions.append(MessageAction(
                     id: "deleteAttachment", icon: "paperclip.badge.ellipsis",
-                    label: "Supprimer le media", color: "F87171",
+                    label: "Supprimer le media", color: MeeshyColors.error,
                     handler: { dismissThen { onDeleteAttachment(attId) } }
                 ))
             }
@@ -1134,7 +1134,7 @@ private struct PreviewAudioPlayer: View {
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Reculer de 5 secondes")
+                .accessibilityLabel(String(localized: "media.skipBack5s", defaultValue: "Skip back 5 seconds", bundle: .main))
 
                 Slider(
                     value: Binding(
@@ -1144,7 +1144,7 @@ private struct PreviewAudioPlayer: View {
                     in: 0...1
                 )
                 .tint(accent)
-                .accessibilityLabel("Position de lecture")
+                .accessibilityLabel(String(localized: "media.playbackPosition", defaultValue: "Playback position", bundle: .main))
                 .accessibilityValue("\(player.percentInt) %")
 
                 // Pourcentage d'avancement
@@ -1162,7 +1162,7 @@ private struct PreviewAudioPlayer: View {
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Avancer de 5 secondes")
+                .accessibilityLabel(String(localized: "media.skipForward5s", defaultValue: "Skip forward 5 seconds", bundle: .main))
             }
         }
         .padding(.horizontal, 12)
@@ -1221,7 +1221,7 @@ private struct PreviewVideoPlayer: View {
                             )
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Lire la vidéo")
+                    .accessibilityLabel(String(localized: "media.playVideo", defaultValue: "Play video", bundle: .main))
                 }
             }
             .clipShape(UnevenRoundedRectangle(topLeadingRadius: 14, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 14))
@@ -1267,7 +1267,7 @@ private struct PreviewVideoPlayer: View {
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Reculer de 5 secondes")
+                .accessibilityLabel(String(localized: "media.skipBack5s", defaultValue: "Skip back 5 seconds", bundle: .main))
 
                 Text("\(player.percentInt)%")
                     .font(.system(size: 10, weight: .heavy, design: .monospaced))
@@ -1283,7 +1283,7 @@ private struct PreviewVideoPlayer: View {
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Avancer de 5 secondes")
+                .accessibilityLabel(String(localized: "media.skipForward5s", defaultValue: "Skip forward 5 seconds", bundle: .main))
 
                 Spacer()
 

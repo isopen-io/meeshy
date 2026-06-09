@@ -362,6 +362,8 @@ export class TransformersService {
       originalLanguage,
       messageType: (String(msg.messageType) || 'text') as MessageType,
       messageSource: (String(msg.messageSource) || 'user') as MessageSource,
+      // Structured per-type payload (call-summary facts for system messages).
+      metadata: msg.metadata as Record<string, unknown> | undefined,
       isEdited: Boolean(msg.isEdited),
       deletedAt: msg.deletedAt ? new Date(String(msg.deletedAt)) : undefined,
       isViewOnce: Boolean(msg.isViewOnce),

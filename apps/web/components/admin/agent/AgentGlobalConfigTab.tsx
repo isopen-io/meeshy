@@ -13,18 +13,12 @@ import { Loader2, Save, Shield, LayoutGrid } from 'lucide-react';
 import { InfoIcon } from './InfoIcon';
 import { agentAdminService, type AgentGlobalConfigUpsert } from '@/services/agent-admin.service';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/useI18n';
 
 const CONVERSATION_TYPES = ['group', 'channel', 'public', 'global', 'broadcast'] as const;
-const TYPE_LABELS: Record<string, string> = {
-  direct: 'Direct',
-  group: 'Groupe',
-  public: 'Public',
-  global: 'Globale',
-  broadcast: 'Communication',
-  channel: 'Canal',
-};
 
 export function AgentGlobalConfigTab() {
+  const { t } = useI18n('admin');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<AgentGlobalConfigUpsert>({
@@ -69,7 +63,7 @@ export function AgentGlobalConfigTab() {
         });
       }
     }).catch(() => {
-      toast.error('Erreur de chargement de la configuration globale');
+      toast.error(t('agent.toasts.globalConfigLoadError'));
     }).finally(() => {
       setLoading(false);
     });
@@ -83,15 +77,15 @@ export function AgentGlobalConfigTab() {
         const invalidation = (res as unknown as { cacheInvalidation?: { anyChannelSucceeded?: boolean } })
           .cacheInvalidation;
         if (invalidation && invalidation.anyChannelSucceeded === false) {
-          toast.warning('Config globale sauvegardée — propagation au service agent en attente (cache stale possible quelques minutes)');
+          toast.warning(t('agent.toasts.globalConfigSavedPending'));
         } else {
-          toast.success('Configuration globale mise à jour');
+          toast.success(t('agent.toasts.globalConfigUpdated'));
         }
       } else {
-        toast.error('Erreur lors de la mise à jour');
+        toast.error(t('agent.toasts.globalConfigUpdateError'));
       }
     } catch {
-      toast.error('Erreur de connexion au serveur');
+      toast.error(t('agent.toasts.globalConfigConnectionError'));
     } finally {
       setSaving(false);
     }
@@ -129,7 +123,7 @@ export function AgentGlobalConfigTab() {
         <div className="flex items-center gap-3">
           <Badge variant={form.enabled ? 'default' : 'destructive'} className="text-xs">
             <Shield className="h-3 w-3 mr-1" />
-            {form.enabled ? 'Actif' : 'Désactivé'}
+            {form.enabled ? t('globalConfig.active') : t('globalConfig.disabled')}
           </Badge>
           <Switch checked={form.enabled ?? true} onCheckedChange={v => updateField('enabled', v)} />
         </div>
@@ -154,7 +148,7 @@ export function AgentGlobalConfigTab() {
 
         {/* Provider & Model */}
         <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
-          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Provider par défaut</h3>
+          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">{t('globalConfig.defaultProvider')}</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <div className="flex items-center">
@@ -196,7 +190,7 @@ export function AgentGlobalConfigTab() {
               <Input
                 value={form.fallbackProvider ?? ''}
                 onChange={e => updateField('fallbackProvider', e.target.value || null)}
-                placeholder="Aucun"
+                placeholder={t('globalConfig.none')}
                 className="bg-white dark:bg-gray-800"
               />
             </div>
@@ -208,7 +202,7 @@ export function AgentGlobalConfigTab() {
               <Input
                 value={form.fallbackModel ?? ''}
                 onChange={e => updateField('fallbackModel', e.target.value || null)}
-                placeholder="Aucun"
+                placeholder={t('globalConfig.none')}
                 className="bg-white dark:bg-gray-800"
               />
             </div>
@@ -256,7 +250,7 @@ export function AgentGlobalConfigTab() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <LayoutGrid className="h-4 w-4 text-indigo-500" />
-              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Planificateur Global</h3>
+              <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">{t('globalConfig.globalScheduler')}</h3>
               <InfoIcon content="Mode séquentiel : l'agent traite les conversations une par une avec un délai aléatoire, au lieu de tout scanner en même temps. Réduit la charge et simule une activité humaine plus naturelle." />
             </div>
             <Switch
@@ -312,7 +306,7 @@ export function AgentGlobalConfigTab() {
                     className="cursor-pointer select-none"
                     onClick={() => toggleConversationType(type)}
                   >
-                    {TYPE_LABELS[type] ?? type}
+                    {t(`agent.overview.conversationType.${type}`) ?? type}
                   </Badge>
                 );
               })}

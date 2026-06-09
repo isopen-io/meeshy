@@ -1,0 +1,50 @@
+{
+  "pdf": {
+    "loadError": "Não foi possível carregar o PDF",
+    "openInNewTab": "Abrir em nova aba",
+    "download": "Baixar",
+    "downloadPdf": "Baixar PDF",
+    "delete": "Excluir este PDF",
+    "fullscreen": "Abrir em tela cheia",
+    "previousPage": "Página anterior",
+    "nextPage": "Próxima página",
+    "zoomOut": "Diminuir zoom",
+    "zoomIn": "Aumentar zoom",
+    "close": "Fechar",
+    "nativeControls": "Use os controles nativos do PDF para navegar • Esc para fechar"
+  },
+  "pptx": {
+    "loadError": "Não foi possível carregar a apresentação",
+    "publicRequired": "O arquivo deve ser acessível publicamente para ser visualizado",
+    "downloadFile": "Baixar arquivo",
+    "delete": "Excluir esta apresentação",
+    "fullscreen": "Abrir em tela cheia",
+    "download": "Baixar"
+  },
+  "markdown": {
+    "loadError": "Não foi possível carregar o arquivo",
+    "document": "Documento Markdown",
+    "formattedView": "Visualização formatada",
+    "rawView": "Visualização bruta",
+    "download": "Baixar arquivo Markdown",
+    "delete": "Excluir este arquivo Markdown",
+    "fullscreen": "Abrir em tela cheia",
+    "close": "Fechar",
+    "escToClose": "Pressione Esc para fechar"
+  },
+  "video": {
+    "enterFullscreen": "Tela cheia",
+    "exitFullscreen": "Sair da tela cheia",
+    "download": "Baixar"
+  },
+  "text": {
+    "enableWordWrap": "Ativar quebra de linha",
+    "disableWordWrap": "Desativar quebra de linha",
+    "copy": "Copiar conteúdo",
+    "fullscreen": "Abrir em tela cheia",
+    "download": "Baixar",
+    "copied": "Copiado para a área de transferência",
+    "copyError": "Não foi possível copiar",
+    "loadError": "Não foi possível carregar o arquivo"
+  }
+}

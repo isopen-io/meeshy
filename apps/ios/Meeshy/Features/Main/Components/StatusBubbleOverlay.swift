@@ -7,6 +7,8 @@ struct StatusBubbleOverlay: View {
     let anchorPoint: CGPoint
     @Binding var isPresented: Bool
     var onRepublish: ((StatusEntry) -> Void)? = nil
+    /// Touché du CONTENU du mood (pas la zone extérieure) → amorce la réponse.
+    var onReplyTapped: (() -> Void)? = nil
 
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
@@ -62,6 +64,11 @@ struct StatusBubbleOverlay: View {
                 bubbleContent
                     .frame(width: bubbleW)
                     .fixedSize(horizontal: false, vertical: true)
+                    .contentShape(Rectangle())
+                    .onTapGesture { replyTapped() }
+                    .accessibilityHint(onReplyTapped != nil
+                        ? String(localized: "status.bubble.reply_hint", defaultValue: "Toucher pour répondre à cette humeur", bundle: .main)
+                        : "")
                     .position(x: bubbleX, y: anchor.y + dir * 52)
                     .scaleEffect(appearAnimation ? 1 : 0.2, anchor: showAbove ? .bottomLeading : .topLeading)
                     .opacity(appearAnimation ? 1 : 0)
@@ -179,6 +186,15 @@ struct StatusBubbleOverlay: View {
         .onAppear {
             audioPlayer.play(urlString: urlString)
         }
+    }
+
+    // MARK: - Reply
+
+    private func replyTapped() {
+        guard let onReplyTapped else { return }
+        HapticFeedback.light()
+        audioPlayer.stop()
+        onReplyTapped()
     }
 
     // MARK: - Dismiss

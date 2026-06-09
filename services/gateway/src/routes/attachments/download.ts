@@ -5,6 +5,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AttachmentService } from '../../services/attachments';
+import { thumbnailContentType } from '../../services/attachments/thumbnail';
 import { createReadStream } from 'fs';
 import { stat } from 'fs/promises';
 import { resolve as pathResolve, sep as pathSep } from 'path';
@@ -27,6 +28,10 @@ export async function registerDownloadRoutes(
   fastify.get(
     '/attachments/:attachmentId',
     {
+      // Never compress: media is already compressed (mime-db non-compressible)
+      // and text attachments are served via Range (206) where re-compression
+      // would corrupt Content-Range/Content-Length.
+      compress: false,
       schema: {
         description: 'Stream the original file by attachment ID. Returns the file with appropriate content-type headers for inline display. Supports cross-origin requests with CORS headers. Files are cached for 1 year (immutable).',
         tags: ['attachments'],
@@ -131,6 +136,7 @@ export async function registerDownloadRoutes(
   fastify.get(
     '/attachments/:attachmentId/thumbnail',
     {
+      compress: false, // already-compressed JPEG thumbnail
       schema: {
         description: 'Stream the thumbnail image for an attachment. Only available for image attachments. Thumbnails are JPEG format, optimized for fast loading in lists and previews. Supports CORS and aggressive caching.',
         tags: ['attachments'],
@@ -147,7 +153,7 @@ export async function registerDownloadRoutes(
         },
         response: {
           200: {
-            description: 'Thumbnail stream returned successfully (image/jpeg)',
+            description: 'Thumbnail stream returned successfully (image/webp for new uploads, image/jpeg for legacy)',
             type: 'string',
             format: 'binary'
           },
@@ -183,7 +189,9 @@ export async function registerDownloadRoutes(
           });
         }
 
-        reply.header('Content-Type', 'image/jpeg');
+        // WebP thumbnails (sprint D4) advertise image/webp; legacy thumbnails
+        // (always JPEG bytes whatever their extension) stay image/jpeg.
+        reply.header('Content-Type', thumbnailContentType(thumbnailPath));
         reply.header('Content-Disposition', 'inline');
         reply.header('Cross-Origin-Resource-Policy', 'cross-origin');
         reply.header('Access-Control-Allow-Origin', '*');
@@ -192,7 +200,7 @@ export async function registerDownloadRoutes(
         const stream = createReadStream(thumbnailPath);
         return reply.send(stream);
       } catch (error: any) {
-        console.error('[AttachmentRoutes] Error serving thumbnail:', error);
+        log.error('Error serving thumbnail', error as Error);
         return reply.status(500).send({
           success: false,
           error: 'Error serving thumbnail',
@@ -208,6 +216,8 @@ export async function registerDownloadRoutes(
   fastify.get(
     '/attachments/file/*',
     {
+      // Never compress: binary/media stream with Range (206) support.
+      compress: false,
       schema: {
         description: 'Stream a file by its file path. Supports Range requests for audio/video seeking. Determines MIME type from file extension. Allows iframe embedding for PDFs and other documents. CORS-enabled for cross-origin access.',
         tags: ['attachments'],

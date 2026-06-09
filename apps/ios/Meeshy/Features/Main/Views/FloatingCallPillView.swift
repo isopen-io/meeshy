@@ -1,6 +1,46 @@
 import SwiftUI
 import MeeshyUI
 
+// MARK: - Call Pill Status
+
+/// What the minimised call pill's status line should convey, derived purely from
+/// `CallState`. Only `.connected` shows the running call duration (green); every
+/// pre-connection state shows a textual status (amber) so a call that is merely
+/// ringing/connecting/reconnecting is never misrepresented as an established
+/// 00:00 call.
+enum CallPillStatus: Equatable {
+    case connected
+    case ringing
+    case connecting
+    case reconnecting
+
+    /// `true` only for an established call → the pill shows the live duration.
+    var isConnected: Bool { self == .connected }
+
+    /// Pre-connection status label (empty for `.connected`, where the view shows
+    /// the formatted duration instead).
+    var label: String {
+        switch self {
+        case .connected:    return ""
+        case .ringing:      return String(localized: "call.pill.status.ringing", defaultValue: "Sonnerie…")
+        case .connecting:   return String(localized: "call.pill.status.connecting", defaultValue: "Connexion…")
+        case .reconnecting: return String(localized: "call.pill.status.reconnecting", defaultValue: "Reconnexion…")
+        }
+    }
+
+    static func from(_ state: CallState) -> CallPillStatus {
+        switch state {
+        case .connected:             return .connected
+        case .ringing:               return .ringing
+        case .offering, .connecting: return .connecting
+        case .reconnecting:          return .reconnecting
+        // The pill is hidden in `.idle`/`.ended` (callState.isActive == false);
+        // map to a safe non-connected status so a stray render never shows green.
+        case .idle, .ended:          return .connecting
+        }
+    }
+}
+
 // MARK: - Floating Call Pill View
 
 struct FloatingCallPillView: View {
@@ -103,15 +143,21 @@ struct FloatingCallPillView: View {
 
     private var userInfoSection: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(callManager.remoteUsername ?? "Inconnu")
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
+            Text(callManager.remoteUsername ?? String(localized: "call.pill.unknown", defaultValue: "Unknown"))
+                .font(.subheadline.weight(.semibold))
                 .foregroundColor(.white)
                 .lineLimit(1)
 
-            Text(formattedDuration)
-                .font(.system(size: 12, weight: .medium).monospacedDigit())
-                .foregroundColor(MeeshyColors.success)
+            Text(pillStatus.isConnected ? formattedDuration : pillStatus.label)
+                .font(.caption.weight(.medium).monospacedDigit())
+                .foregroundColor(pillStatus.isConnected ? MeeshyColors.success : MeeshyColors.warning)
         }
+    }
+
+    /// Status conveyed by the pill's second line — drives whether the live
+    /// duration (green) or a pre-connection label (amber) is shown.
+    private var pillStatus: CallPillStatus {
+        CallPillStatus.from(callManager.callState)
     }
 
     // MARK: - Control Buttons
@@ -140,7 +186,9 @@ struct FloatingCallPillView: View {
                 )
         }
         .pressable()
-        .accessibilityLabel(callManager.isMuted ? "Reactiver le micro" : "Couper le micro")
+        .accessibilityLabel(callManager.isMuted
+            ? String(localized: "call.pill.unmute", defaultValue: "Réactiver le micro")
+            : String(localized: "call.pill.mute", defaultValue: "Couper le micro"))
     }
 
     private var speakerButton: some View {
@@ -158,7 +206,9 @@ struct FloatingCallPillView: View {
                 )
         }
         .pressable()
-        .accessibilityLabel(callManager.isSpeaker ? "Désactiver le haut-parleur" : "Activer le haut-parleur")
+        .accessibilityLabel(callManager.isSpeaker
+            ? String(localized: "call.pill.speaker.off", defaultValue: "Désactiver le haut-parleur")
+            : String(localized: "call.pill.speaker.on", defaultValue: "Activer le haut-parleur"))
     }
 
     private var expandButton: some View {

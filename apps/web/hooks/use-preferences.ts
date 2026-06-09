@@ -30,7 +30,7 @@ import type {
   ConsentViolation,
 } from '@/types/preferences';
 
-const STALE_TIME = 5 * 60 * 1000;
+const STALE_TIME = Infinity;
 
 function getPreferenceQueryKey(category: PreferenceCategory): readonly string[] {
   return queryKeys.preferences.category(category);

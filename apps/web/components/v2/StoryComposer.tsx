@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useMemo } from 'react';
+import { useI18n } from '@/hooks/use-i18n';
 import { cn } from '@/lib/utils';
 import { Dialog, DialogHeader, DialogBody } from './Dialog';
 import { Button } from './Button';
@@ -115,6 +116,7 @@ function getCategoryLabel(category: MediaCategory): string {
 // ============================================================================
 
 function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS' }: StoryComposerProps) {
+  const { t } = useI18n('common');
   const [selectedBg, setSelectedBg] = useState<string>(BACKGROUND_COLORS[0].value);
   const [selectedTextStyle, setSelectedTextStyle] = useState<TextStyle>('bold');
   const [content, setContent] = useState<string>('');
@@ -208,7 +210,7 @@ function StoryComposer({ open, onClose, onPublish, defaultVisibility = 'FRIENDS'
             'text-[var(--gp-text-secondary)] hover:bg-[var(--gp-hover)]',
             'transition-colors duration-300'
           )}
-          aria-label="Fermer"
+          aria-label={t('common.close')}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"

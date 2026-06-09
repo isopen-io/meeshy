@@ -13,6 +13,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '../ui/tooltip';
+import { useI18n } from '@/hooks/useI18n';
 
 export interface FileAttachmentProps {
   attachment: Attachment;
@@ -27,6 +28,7 @@ export const FileAttachment = React.memo(function FileAttachment({
   isMobile,
   onDeleteClick,
 }: FileAttachmentProps) {
+  const { t } = useI18n('attachments');
   const handleFileClick = useCallback((_event: React.MouseEvent) => {
     window.open(attachment.fileUrl, '_blank');
   }, [attachment.fileUrl]);
@@ -77,7 +79,7 @@ export const FileAttachment = React.memo(function FileAttachment({
             }}
             role="button"
             tabIndex={0}
-            aria-label={`Ouvrir le fichier ${attachment.originalName}`}
+            aria-label={t('actions.openFileNamed', { name: attachment.originalName })}
           >
             <div className={`relative flex flex-col items-center justify-center bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-600 rounded-lg hover:border-blue-400 dark:hover:border-blue-500 transition-[border-color,box-shadow] hover:shadow-md dark:hover:shadow-blue-500/20 flex-shrink-0 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
               isMobile ? 'w-14 h-14' : 'w-16 h-16'
@@ -93,8 +95,8 @@ export const FileAttachment = React.memo(function FileAttachment({
                 <button
                   onClick={handleDeleteClick}
                   className="!absolute !top-0.5 !right-0.5 !w-[22px] !h-[22px] !min-w-[22px] !min-h-[22px] !max-w-[22px] !max-h-[22px] rounded-full bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white flex items-center justify-center transition-opacity shadow-md !z-[100] opacity-0 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1 !p-0"
-                  title="Supprimer ce fichier"
-                  aria-label={`Supprimer le fichier ${attachment.originalName}`}
+                  title={t('actions.deleteFile')}
+                  aria-label={t('actions.deleteFileNamed', { name: attachment.originalName })}
                 >
                   <X className="!w-[11px] !h-[11px]" />
                 </button>

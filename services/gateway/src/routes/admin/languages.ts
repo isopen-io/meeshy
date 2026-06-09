@@ -83,32 +83,41 @@ export async function languagesRoutes(fastify: FastifyInstance) {
       );
 
       // Enrichir avec pourcentages et nombre d'utilisateurs par langue
-      const topLanguages = await Promise.all(
-        topLanguagesByMessages.map(async (lang) => {
-          // Compter utilisateurs distincts pour cette langue (resolve participant → user)
-          const langMessages = await fastify.prisma.message.findMany({
+      // iter-11: 1 query pour toutes les langues au lieu de N queries parallèles
+      const topLangCodes = topLanguagesByMessages.map(l => l.originalLanguage).filter(Boolean) as string[];
+      const allLangMessages = topLangCodes.length > 0
+        ? await fastify.prisma.message.findMany({
             where: {
-              originalLanguage: lang.originalLanguage,
+              originalLanguage: { in: topLangCodes },
               createdAt: { gte: startDate },
               deletedAt: null,
               senderId: { not: null }
             },
             select: {
+              originalLanguage: true,
               sender: { select: { userId: true } }
             }
-          });
-          const uniqueUserIds = new Set(langMessages.map(m => m.sender?.userId).filter(Boolean));
+          })
+        : [];
 
-          return {
-            language: lang.originalLanguage || 'Unknown',
-            messageCount: lang._count.id,
-            userCount: uniqueUserIds.size,
-            percentage: totalMessages > 0
-              ? Math.round((lang._count.id / totalMessages) * 100)
-              : 0
-          };
-        })
-      );
+      const usersByLang = new Map<string, Set<string>>();
+      for (const msg of allLangMessages) {
+        const lang = msg.originalLanguage;
+        const uid = msg.sender?.userId;
+        if (lang && uid) {
+          if (!usersByLang.has(lang)) usersByLang.set(lang, new Set());
+          usersByLang.get(lang)!.add(uid);
+        }
+      }
+
+      const topLanguages = topLanguagesByMessages.map((lang) => ({
+        language: lang.originalLanguage || 'Unknown',
+        messageCount: lang._count.id,
+        userCount: usersByLang.get(lang.originalLanguage ?? '') ?.size ?? 0,
+        percentage: totalMessages > 0
+          ? Math.round((lang._count.id / totalMessages) * 100)
+          : 0
+      }));
 
       // Paires de langues les plus traduites (source -> target)
       // Récupérer messages avec translations (JSON)

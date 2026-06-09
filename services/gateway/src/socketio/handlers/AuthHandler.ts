@@ -9,6 +9,10 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import jwt from 'jsonwebtoken';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketAuthenticateSchema } from '../../validation/socket-event-schemas.js';
+import { resolveUserLanguagesOrdered } from '@meeshy/shared/utils/conversation-helpers';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'AuthHandler' });
 
 export interface AuthHandlerDependencies {
   prisma: PrismaClient;
@@ -54,10 +58,10 @@ export class AuthHandler {
       const sessionToken = extractSessionToken(socket);
 
       if (!token && !sessionToken) {
-        console.warn(`[AUTH] ⚠️  Socket ${socket.id} sans token — déconnexion dans 10s si non authentifié`);
+        logger.warn('socket sans token — déconnexion dans 10s si non authentifié', { socketId: socket.id });
         const authTimeout = setTimeout(() => {
           if (!this.socketToUser.has(socket.id)) {
-            console.warn(`[AUTH] ⏰ Socket ${socket.id} toujours non authentifié après 10s — déconnexion`);
+            logger.warn('socket toujours non authentifié après 10s — déconnexion', { socketId: socket.id });
             socket.disconnect(true);
           }
         }, 10_000);
@@ -75,7 +79,7 @@ export class AuthHandler {
         return;
       }
     } catch (error) {
-      console.error('[AUTH] ❌ Erreur authentification automatique:', error);
+      logger.error('erreur authentification automatique', { error });
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Authentication failed' });
     }
   }
@@ -107,7 +111,13 @@ export class AuthHandler {
       if (userId) {
         const user = await this.prisma.user.findUnique({
           where: { id: userId },
-          select: { id: true, systemLanguage: true }
+          select: {
+            id: true,
+            systemLanguage: true,
+            regionalLanguage: true,
+            customDestinationLanguage: true,
+            deviceLocale: true,
+          }
         });
 
         if (!user) {
@@ -115,11 +125,16 @@ export class AuthHandler {
           return;
         }
 
+        const resolvedLanguages = resolveUserLanguagesOrdered(user, {
+          deviceLocale: user.deviceLocale ?? undefined,
+        });
+
         const socketUser: SocketUser = {
           id: user.id,
           socketId: socket.id,
           isAnonymous: false,
           language: language || user.systemLanguage || 'en',
+          resolvedLanguages,
           userId: user.id
         };
 
@@ -132,7 +147,7 @@ export class AuthHandler {
             socket.join(ROOMS.feed(user.id));
           }
         } catch (error) {
-          console.error(`[AUTH] Failed to join personal rooms for user ${user.id}:`, error);
+          logger.error('failed to join personal rooms', { userId: user.id, error });
         }
 
         this.statusService.markConnected(user.id, false);
@@ -154,12 +169,12 @@ export class AuthHandler {
         // qu'un changement d'état arrive. Best-effort, on swallow les erreurs.
         if (this.emitPresenceSnapshot) {
           this.emitPresenceSnapshot(socket, user.id, false).catch(error => {
-            console.error(`[AUTH] Failed to emit presence snapshot for ${user.id}:`, error);
+            logger.error('failed to emit presence snapshot', { userId: user.id, error });
           });
         }
       }
     } catch (error) {
-      console.error('[AUTH] ❌ Erreur authentification manuelle:', error);
+      logger.error('erreur authentification manuelle', { error });
       socket.emit(SERVER_EVENTS.ERROR, { message: 'Authentication failed' });
     }
   }
@@ -175,7 +190,13 @@ export class AuthHandler {
 
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, systemLanguage: true }
+      select: {
+        id: true,
+        systemLanguage: true,
+        regionalLanguage: true,
+        customDestinationLanguage: true,
+        deviceLocale: true,
+      }
     });
 
     if (!user) {
@@ -183,11 +204,16 @@ export class AuthHandler {
       return;
     }
 
+    const resolvedLanguages = resolveUserLanguagesOrdered(user, {
+      deviceLocale: user.deviceLocale ?? undefined,
+    });
+
     const socketUser: SocketUser = {
       id: user.id,
       socketId: socket.id,
       isAnonymous: false,
       language: user.systemLanguage || 'en',
+      resolvedLanguages,
       userId: user.id
     };
 
@@ -200,7 +226,7 @@ export class AuthHandler {
         socket.join(ROOMS.feed(user.id));
       }
     } catch (error) {
-      console.error(`[AUTH] Failed to join personal rooms for user ${user.id}:`, error);
+      logger.error('failed to join personal rooms (JWT auth)', { userId: user.id, error });
     }
 
     this.statusService.markConnected(user.id, false);
@@ -249,6 +275,7 @@ export class AuthHandler {
       socketId: socket.id,
       isAnonymous: true,
       language: language || participant.language || 'en',
+      resolvedLanguages: [],
       participantId: participant.id,
       displayName: participant.displayName,
       sessionToken
@@ -261,7 +288,7 @@ export class AuthHandler {
         socket.join(socketUser.id);
       }
     } catch (error) {
-      console.error(`[AUTH] Failed to join personal room for anonymous user ${socketUser.id}:`, error);
+      logger.error('failed to join personal room for anonymous user', { anonymousId: socketUser.id, error });
     }
 
     await this.maintenanceService.updateAnonymousOnlineStatus(socketUser.id, true, true);
@@ -279,7 +306,7 @@ export class AuthHandler {
     // Snapshot de présence pour les anonymes aussi (autres participants de la conversation)
     if (this.emitPresenceSnapshot) {
       this.emitPresenceSnapshot(socket, socketUser.id, true).catch(error => {
-        console.error(`[AUTH] Failed to emit presence snapshot for anonymous ${socketUser.id}:`, error);
+        logger.error('failed to emit presence snapshot for anonymous', { anonymousId: socketUser.id, error });
       });
     }
   }
@@ -292,13 +319,13 @@ export class AuthHandler {
     userSocketsSet.add(socket.id);
     this.userSockets.set(user.id, userSocketsSet);
 
-    console.log(`[AUTH] ✅ User ${user.id} authenticated (anonymous: ${user.isAnonymous})`);
+    logger.info('user authenticated', { userId: user.id, isAnonymous: user.isAnonymous });
   }
 
   async handleDisconnection(socket: Socket): Promise<void> {
     const userIdOrToken = this.socketToUser.get(socket.id);
     if (!userIdOrToken) return;
-    console.log(`[RT-DIAG] socket disconnected id=${socket.id} user=${userIdOrToken}`);
+    logger.debug('socket disconnected', { socketId: socket.id, userId: userIdOrToken });
 
     const user = this.connectedUsers.get(userIdOrToken);
     const isAnonymous = user?.isAnonymous || false;
@@ -337,15 +364,13 @@ export class AuthHandler {
         }
       });
 
-      // CALL-DIAG (temp instrumentation — remove on rollback): correlate double-cleanup race (RC-4)
       if (activeParticipations.length > 0) {
-        console.log('🔬 [CALL-DIAG] disconnect-cleanup-path', JSON.stringify({
-          path: 'AuthHandler.handleDisconnection',
+        logger.debug('disconnect-cleanup: active call participations found', {
           socketId: socket.id,
           userId: userIdOrToken,
           count: activeParticipations.length,
-          callIds: activeParticipations.map((p: any) => p.callSessionId)
-        }));
+          callIds: activeParticipations.map((p: { callSessionId: string }) => p.callSessionId)
+        });
       }
 
       for (const participation of activeParticipations) {
@@ -356,11 +381,11 @@ export class AuthHandler {
             participantId: participation.participantId
           });
         } catch (error) {
-          console.error(`[AUTH] Error auto-leaving call ${participation.callSessionId}:`, error);
+          logger.error('error auto-leaving call on disconnect', { callId: participation.callSessionId, error });
         }
       }
     } catch (error) {
-      console.error(`[AUTH] Error checking/leaving active calls for user ${userIdOrToken}:`, error);
+      logger.error('error checking/leaving active calls on disconnect', { userId: userIdOrToken, error });
     }
 
     this.connectedUsers.delete(userIdOrToken);
@@ -372,7 +397,7 @@ export class AuthHandler {
         await this.maintenanceService.updateUserOnlineStatus(userIdOrToken, false, true);
       }
     } catch (error) {
-      console.error(`[AUTH] Error updating offline status for ${userIdOrToken}:`, error);
+      logger.error('error updating offline status on disconnect', { userId: userIdOrToken, error });
     }
   }
 
@@ -414,9 +439,9 @@ export class AuthHandler {
       for (const conv of conversations) {
         socket.join(ROOMS.conversation(conv.conversationId));
       }
-      console.log(`[RT-DIAG] auth: user=${userId} joined ${conversations.length} conversation room(s) — NO delivery marking happens on connect (bug A)`);
+      logger.debug('user joined conversation rooms', { userId, count: conversations.length });
     } catch (error) {
-      console.error(`[AUTH] Error joining conversations for ${userId}:`, error);
+      logger.error('error joining conversations for user', { userId, error });
     }
   }
 }

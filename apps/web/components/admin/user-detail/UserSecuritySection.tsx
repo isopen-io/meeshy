@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Shield, Lock, Key, CheckCircle, XCircle, Unlock } from 'lucide-react';
 import { apiService } from '@/services/api.service';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface UserSecuritySectionProps {
   user: unknown;
@@ -21,8 +22,11 @@ export function UserSecuritySection({
   onUpdate,
   onResetPassword
 }: UserSecuritySectionProps) {
+  const { t } = useI18n('admin');
+  const { t: tCommon } = useI18n('common');
+
   const formatDate = (date: Date | string | null) => {
-    if (!date) return 'Jamais';
+    if (!date) return tCommon('never');
     try {
       return new Date(date).toLocaleDateString('fr-FR', {
         day: '2-digit',
@@ -39,7 +43,7 @@ export function UserSecuritySection({
   const handleUnlockAccount = async () => {
     try {
       await apiService.post(`/admin/users/${userId}/unlock`);
-      toast.success('Compte déverrouillé avec succès');
+      toast.success(t('security.accountUnlocked'));
       onUpdate();
     } catch (error: unknown) {
       toast.error(error.message || 'Erreur lors du déverrouillage');
@@ -50,7 +54,7 @@ export function UserSecuritySection({
     try {
       const has2FA = !!user.twoFactorEnabledAt;
       await apiService.post(`/admin/users/${userId}/${has2FA ? 'disable' : 'enable'}-2fa`);
-      toast.success(`2FA ${has2FA ? 'désactivé' : 'activé'} avec succès`);
+      toast.success(t(has2FA ? 'security.twoFactorDisabled' : 'security.twoFactorEnabled'));
       onUpdate();
     } catch (error: unknown) {
       toast.error(error.message || 'Erreur lors de la modification 2FA');
@@ -136,7 +140,7 @@ export function UserSecuritySection({
             ) : (
               <Badge variant="secondary" className="flex items-center space-x-1">
                 <XCircle className="h-3 w-3" />
-                <span>Désactivé</span>
+                <span>{t('security.disabled')}</span>
               </Badge>
             )}
           </div>
@@ -167,7 +171,7 @@ export function UserSecuritySection({
             className="w-full dark:bg-gray-700 dark:border-gray-600 dark:hover:bg-gray-600 dark:text-gray-200"
           >
             <Key className="h-4 w-4 mr-2" />
-            {has2FA ? 'Désactiver 2FA' : 'Activer 2FA'}
+            {has2FA ? t('security.disable2FA') : t('security.enable2FA')}
           </Button>
         </div>
 

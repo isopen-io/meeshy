@@ -130,7 +130,7 @@ struct DataStorageView: View {
 
                     Text(String(localized: "settings.data.storage.action.clear", defaultValue: "Vider le cache", bundle: .main))
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(Color(hex: "EF4444"))
+                        .foregroundColor(MeeshyColors.error)
 
                     Spacer()
 

@@ -20,6 +20,7 @@ import {
 import { toast } from 'sonner';
 import { Attachment } from '@meeshy/shared/types';
 import { createPortal } from 'react-dom';
+import { useI18n } from '@/hooks/useI18n';
 
 export interface AttachmentContextMenuProps {
   attachment: Attachment;
@@ -38,11 +39,11 @@ export function AttachmentContextMenu({
   canDelete = false,
   position,
 }: AttachmentContextMenuProps) {
+  const { t } = useI18n('attachments');
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   const handleDownload = () => {
-    // Créer un lien temporaire pour télécharger le fichier
     const link = document.createElement('a');
     link.href = attachment.fileUrl;
     link.download = attachment.originalName;
@@ -51,17 +52,17 @@ export function AttachmentContextMenu({
     link.click();
     document.body.removeChild(link);
 
-    toast.success('Téléchargement démarré');
+    toast.success(t('contextMenu.downloadStarted'));
     onClose();
   };
 
   const handleCopyLink = async () => {
     try {
       await navigator.clipboard.writeText(attachment.fileUrl);
-      toast.success('Lien copié dans le presse-papiers');
+      toast.success(t('contextMenu.linkCopied'));
       onClose();
     } catch (_error) {
-      toast.error('Impossible de copier le lien');
+      toast.error(t('contextMenu.linkCopyError'));
     }
   };
 
@@ -75,12 +76,12 @@ export function AttachmentContextMenu({
     setIsDeleting(true);
     try {
       await onDelete();
-      toast.success('Fichier supprimé avec succès');
+      toast.success(t('contextMenu.deleteSuccess'));
       setShowDeleteConfirm(false);
       onClose();
     } catch (error) {
       console.error('Erreur suppression attachment:', error);
-      toast.error('Impossible de supprimer le fichier');
+      toast.error(t('contextMenu.deleteError'));
     } finally {
       setIsDeleting(false);
     }
@@ -168,7 +169,7 @@ export function AttachmentContextMenu({
           size="icon"
           className="h-6 w-6 flex-shrink-0 ml-2"
           onClick={onClose}
-          aria-label="Fermer"
+          aria-label={t('contextMenu.close')}
         >
           <X className="h-3 w-3" />
         </Button>
@@ -183,7 +184,7 @@ export function AttachmentContextMenu({
           onClick={handleDownload}
         >
           <Download className="h-4 w-4" />
-          <span>Télécharger</span>
+          <span>{t('contextMenu.download')}</span>
         </Button>
 
         {/* Copier le lien */}
@@ -193,7 +194,7 @@ export function AttachmentContextMenu({
           onClick={handleCopyLink}
         >
           <LinkIcon className="h-4 w-4" />
-          <span>Copier le lien</span>
+          <span>{t('contextMenu.copyLink')}</span>
         </Button>
 
         {/* Supprimer (uniquement si autorisé) */}
@@ -206,7 +207,7 @@ export function AttachmentContextMenu({
               onClick={handleDeleteClick}
             >
               <Trash2 className="h-4 w-4" />
-              <span>Supprimer</span>
+              <span>{t('contextMenu.delete')}</span>
             </Button>
           </>
         )}
@@ -223,15 +224,15 @@ export function AttachmentContextMenu({
       <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Confirmer la suppression</DialogTitle>
+            <DialogTitle>{t('contextMenu.confirmDeleteTitle')}</DialogTitle>
             <DialogDescription>
-              Êtes-vous sûr de vouloir supprimer ce fichier ?
+              {t('contextMenu.confirmDeleteDescription')}
               <div className="mt-2 p-2 bg-muted rounded-md">
                 <div className="text-sm font-medium text-foreground">
                   {attachment.originalName}
                 </div>
                 <div className="text-xs text-muted-foreground mt-1">
-                  Cette action est irréversible. Le fichier sera définitivement supprimé.
+                  {t('contextMenu.confirmDeleteIrreversible')}
                 </div>
               </div>
             </DialogDescription>
@@ -242,14 +243,14 @@ export function AttachmentContextMenu({
               onClick={handleDeleteCancel}
               disabled={isDeleting}
             >
-              Annuler
+              {t('contextMenu.close')}
             </Button>
             <Button
               variant="destructive"
               onClick={handleDeleteConfirm}
               disabled={isDeleting}
             >
-              {isDeleting ? 'Suppression...' : 'Supprimer'}
+              {isDeleting ? t('contextMenu.deleting') : t('contextMenu.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>

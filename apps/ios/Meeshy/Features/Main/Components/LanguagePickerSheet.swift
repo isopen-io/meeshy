@@ -43,13 +43,13 @@ struct ProfileLanguagePickerSheet: View {
                     .padding(.top, 8)
                 }
             }
-            .searchable(text: $searchText, prompt: String(localized: "language-picker.search", defaultValue: "Rechercher une langue", bundle: .main))
+            .searchable(text: $searchText, prompt: String(localized: "language-picker.search", defaultValue: "Search a language", bundle: .main))
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { dismiss() }
-                        .foregroundColor(Color(hex: "6366F1"))
+                    Button(String(localized: "common.close", defaultValue: "Close", bundle: .main)) { dismiss() }
+                        .foregroundColor(MeeshyColors.indigo500)
                 }
             }
         }
@@ -63,16 +63,16 @@ struct ProfileLanguagePickerSheet: View {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: "xmark.circle")
-                    .font(.system(size: 20))
+                    .font(.title3)
                     .foregroundColor(theme.textMuted)
                     .frame(width: 36)
-                Text(String(localized: "language-picker.none", defaultValue: "Aucune", bundle: .main))
-                    .font(.system(size: 15, weight: .medium))
+                Text(String(localized: "language-picker.none", defaultValue: "None", bundle: .main))
+                    .font(.body.weight(.medium))
                     .foregroundColor(theme.textPrimary)
                 Spacer()
                 if selectedCode.isEmpty {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(Color(hex: "6366F1"))
+                        .foregroundColor(MeeshyColors.indigo500)
                 }
             }
             .padding(.horizontal, 14)
@@ -80,7 +80,7 @@ struct ProfileLanguagePickerSheet: View {
             .background(
                 RoundedRectangle(cornerRadius: 12)
                     .fill(selectedCode.isEmpty
-                        ? Color(hex: "6366F1").opacity(0.1)
+                        ? MeeshyColors.indigo500.opacity(0.1)
                         : Color.clear)
             )
         }
@@ -95,15 +95,15 @@ struct ProfileLanguagePickerSheet: View {
         } label: {
             HStack(spacing: 12) {
                 Text(lang.flag)
-                    .font(.system(size: 24))
+                    .font(.title2)
                     .frame(width: 36)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(lang.nativeName)
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.body.weight(.medium))
                         .foregroundColor(theme.textPrimary)
                     Text(lang.name)
-                        .font(.system(size: 12))
+                        .font(.caption)
                         .foregroundColor(theme.textMuted)
                 }
 

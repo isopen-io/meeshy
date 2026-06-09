@@ -308,7 +308,19 @@
       "activity": "Activité",
       "viewAllParticipants": "Voir tous les participants",
       "selectedReaction": "Réaction sélectionnée :",
-      "customReactionPlaceholder": "🎯 Personnalisée"
+      "customReactionPlaceholder": "🎯 Personnalisée",
+      "descriptionError": "Erreur lors de la sauvegarde de la description",
+      "bannerUpdated": "Bannière mise à jour",
+      "bannerError": "Erreur lors de l'upload de la bannière",
+      "editTitle": "Modifier le titre",
+      "confirm": "Valider",
+      "removeReaction": "Supprimer la réaction",
+      "bannerAlt": "Bannière",
+      "directConversationBadge": "Conversation directe",
+      "fallbackUser": "Utilisateur",
+      "reactionAdded": "Réaction {emoji} ajoutée",
+      "reactionRemoved": "Réaction supprimée",
+      "inviteSearchPlaceholder": "Rechercher des utilisateurs..."
     },
     "conversationImage": {
       "title": "Changer l'image de la conversation",
@@ -423,7 +435,49 @@
       "single": "Ce fichier est déjà ajouté",
       "multiple": "{count} fichiers sont déjà ajoutés"
     },
-    "pasteTooLongTxtCreated": "Texte trop long : un fichier .txt a été créé automatiquement"
+    "pasteTooLongTxtCreated": "Texte trop long : un fichier .txt a été créé automatiquement",
+    "filter": {
+      "all": "Toutes",
+      "public": "Public",
+      "group": "Groupe",
+      "global": "Globale",
+      "direct": "Direct",
+      "unread": "Non lues",
+      "archived": "Archivées"
+    },
+    "noContacts": "Aucun contact",
+    "noContactsDescription": "Vous n'avez pas encore de contacts. Connectez-vous avec d'autres utilisateurs.",
+    "noNotifications": "Aucune notification",
+    "noNotificationsDescription": "Vous êtes à jour avec toutes vos notifications.",
+    "noArchivedConversations": "Aucune conversation archivée",
+    "noArchivedConversationsDescription": "Archivez des conversations pour les retrouver plus tard.",
+    "noSearchResults": "Aucun résultat",
+    "noSearchResultsWithQuery": "Aucun résultat pour \"{query}\". Essayez une autre recherche.",
+    "noSearchResultsDescription": "Aucun résultat trouvé.",
+    "errorTitle": "Une erreur s'est produite",
+    "errorDescription": "Nous n'avons pas pu charger les données. Veuillez réessayer.",
+    "retry": "Réessayer",
+    "reconnecting": "Reconnexion en cours...",
+    "clickToReconnect": "Cliquez pour reconnecter",
+    "participants": {
+      "refreshed": "Statuts rafraîchis",
+      "refreshError": "Erreur lors du rafraîchissement",
+      "roleError": "Erreur lors de la mise à jour du rôle",
+      "addError": "Erreur lors de l'ajout du participant"
+    },
+    "createLinkButton": {
+      "notAuthenticated": "Impossible de créer le lien : utilisateur non connecté",
+      "noConversation": "Impossible de créer le lien : conversation non identifiée",
+      "error": "Erreur lors de la création du lien"
+    },
+    "messageSearch": {
+      "placeholder": "Rechercher dans la conversation…",
+      "close": "Fermer la recherche",
+      "error": "Une erreur est survenue lors de la recherche.",
+      "noResults": "Aucun résultat"
+    },
+    "pinnedBanner": {
+      "close": "Fermer le message épinglé"
+    }
   }
 }
-

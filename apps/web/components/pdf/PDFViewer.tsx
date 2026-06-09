@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
+import { useI18n } from '@/hooks/useI18n';
 
 // Chargement dynamique pour éviter les erreurs SSR
 const Document = dynamic(
@@ -54,6 +55,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
   onDelete,
   canDelete = false
 }) => {
+  const { t } = useI18n('viewers');
   const [numPages, setNumPages] = useState<number>(0);
   const [pageNumber, setPageNumber] = useState<number>(1);
   const [scale, setScale] = useState<number>(1.0);
@@ -72,7 +74,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
   const onDocumentLoadError = (error: Error) => {
     console.error('Erreur chargement PDF:', error);
     setHasError(true);
-    setErrorMessage('Impossible de charger le PDF');
+    setErrorMessage(t('pdf.loadError'));
     setIsLoading(false);
   };
 
@@ -164,7 +166,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
             size="sm"
             variant="destructive"
             className="absolute top-2 right-2 w-8 h-8 p-0 opacity-0 hover:opacity-100 focus-visible:opacity-100 transition-opacity"
-            title="Supprimer ce PDF"
+            title={t('pdf.delete')}
           >
             <X className="w-4 h-4" />
           </Button>
@@ -195,7 +197,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
                 size="sm"
                 variant="ghost"
                 className="w-8 h-8 p-0"
-                title="Page précédente"
+                title={t('pdf.previousPage')}
               >
                 <ChevronLeft className="w-4 h-4" />
               </Button>
@@ -205,7 +207,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
                 size="sm"
                 variant="ghost"
                 className="w-8 h-8 p-0"
-                title="Page suivante"
+                title={t('pdf.nextPage')}
               >
                 <ChevronRight className="w-4 h-4" />
               </Button>
@@ -221,7 +223,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
                 size="sm"
                 variant="ghost"
                 className="w-8 h-8 p-0"
-                title="Dézoomer"
+                title={t('pdf.zoomOut')}
               >
                 <ZoomOut className="w-4 h-4" />
               </Button>
@@ -231,7 +233,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
                 size="sm"
                 variant="ghost"
                 className="w-8 h-8 p-0"
-                title="Zoomer"
+                title={t('pdf.zoomIn')}
               >
                 <ZoomIn className="w-4 h-4" />
               </Button>
@@ -246,7 +248,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
               size="sm"
               variant="ghost"
               className="w-8 h-8 p-0"
-              title="Ouvrir en plein écran"
+              title={t('pdf.fullscreen')}
             >
               <Maximize className="w-4 h-4" />
             </Button>
@@ -257,7 +259,7 @@ export const PDFViewer: React.FC<PDFViewerProps> = ({
             href={attachmentFileUrl}
             download={attachment.originalName}
             className="flex-shrink-0 p-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-full transition-colors duration-200"
-            title="Télécharger"
+            title={t('pdf.download')}
             onClick={(e) => e.stopPropagation()}
           >
             <Download className="w-4 h-4 text-gray-600 dark:text-gray-300" />

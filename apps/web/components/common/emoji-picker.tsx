@@ -33,6 +33,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
   maxHeight = 400
 }) => {
   const { t } = useI18n('reactions');
+  const { t: tCommon } = useI18n('common');
   const [activeCategory, setActiveCategory] = useState('frequent');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -355,7 +356,7 @@ export const EmojiPicker: React.FC<EmojiPickerProps> = ({
             <button
               onClick={onClose}
               className="p-2 hover:bg-secondary rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-              aria-label="Fermer"
+              aria-label={tCommon('common.close')}
             >
               <X className="w-4 h-4" aria-hidden="true" />
             </button>

@@ -2,7 +2,7 @@
 
 import { memo } from 'react';
 import { motion } from 'framer-motion';
-import { Phone, Video, Link2 } from 'lucide-react';
+import { Phone, Video, Link2, Search } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -43,6 +43,7 @@ interface HeaderToolbarProps {
   onToggleMute: () => void;
   onToggleArchive: () => void;
   onShareConversation: () => void;
+  onOpenSearch?: () => void;
   t: (key: string) => string;
 }
 
@@ -66,6 +67,7 @@ export const HeaderToolbar = memo(function HeaderToolbar({
   onToggleMute,
   onToggleArchive,
   onShareConversation,
+  onOpenSearch,
   t
 }: HeaderToolbarProps) {
   const userIsGlobalAdmin = isGlobalAdmin(currentUser.role);
@@ -151,6 +153,28 @@ export const HeaderToolbar = memo(function HeaderToolbar({
             <Link2 className="h-5 w-5" />
           </CreateLinkButton>
         </motion.div>
+      )}
+
+      {onOpenSearch && (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={onOpenSearch}
+                className="inline-flex items-center justify-center rounded-full h-10 w-10 p-0 hover:bg-gradient-to-br hover:from-blue-500/10 hover:to-indigo-500/10 transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                aria-label={t('conversationHeader.searchMessages') || 'Rechercher'}
+              >
+                <Search className="h-5 w-5" aria-hidden="true" />
+              </motion.button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>{t('conversationHeader.searchMessages') || 'Rechercher dans la conversation'}</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       )}
 
       <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>

@@ -256,6 +256,16 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 60
         config.timeoutIntervalForResource = 120
+        // HTTP RFC 7234 cache: exploite les ETag/304 renvoyés par le gateway pour
+        // éviter les re-fetches inutiles. 10 MB mémoire + 50 MB disque.
+        // iter-4: active le cache HTTP — la politique par défaut laisse NSURLCache inactif
+        // pour les sessions authentifiées (Authorization header) sans ce paramétrage.
+        config.urlCache = URLCache(
+            memoryCapacity: 10 * 1_024 * 1_024,
+            diskCapacity: 50 * 1_024 * 1_024,
+            diskPath: "meeshy_http_cache"
+        )
+        config.requestCachePolicy = .useProtocolCachePolicy
         // SOTA P11: HTTP/3 is enabled by default on iOS 15+. The optimistic HTTP/3 flag lives on
         // URLRequest (assumesHTTP3Capable), not on URLSessionConfiguration. Apply per-request
         // via makeRequest() to skip the HTTP/2 → HTTP/3 upgrade negotiation on first upload.
@@ -341,6 +351,16 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         // Saves ~150-300ms on the user's first upload after app launch.
         urlRequest.assumesHTTP3Capable = true
 
+        // Compression (E1, bandwidth sprint): deliberately NO explicit
+        // `Accept-Encoding` header. URLSession advertises gzip/br on its own
+        // and transparently decompresses the response; setting the header by
+        // hand flips URLSession into manual-decompression mode (Foundation
+        // can't decode brotli natively), so the gateway's @fastify/compress
+        // output would arrive still-compressed and fail to decode. The gateway
+        // honours the automatic header, so JSON is already compressed on the
+        // wire. Never add `Accept-Encoding` here, in ClientInfoProvider, or in
+        // per-request `headers`.
+
         // Client identification headers (version, device, locale, geo)
         let clientHeaders = await ClientInfoProvider.shared.buildHeaders()
         for (key, value) in clientHeaders {
@@ -366,6 +386,10 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
             urlRequest.httpBody = body
         }
+
+        // E1 — Declare Brotli + gzip support explicitly so the gateway's @fastify/compress
+        // returns compressed responses. URLSession does not always advertise Brotli unless told.
+        urlRequest.setValue("br, gzip, deflate", forHTTPHeaderField: "Accept-Encoding")
 
         // Caller-provided headers are applied last so they win over defaults
         // (relevant for `X-Client-Mutation-Id` which has no built-in setter).

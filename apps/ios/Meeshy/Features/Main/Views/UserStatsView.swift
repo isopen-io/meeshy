@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import MeeshySDK
+import MeeshyUI
 import Charts
 
 struct UserStatsView: View {
@@ -10,7 +11,7 @@ struct UserStatsView: View {
     private var isDark: Bool { colorScheme == .dark }
     @StateObject private var viewModel = UserStatsViewModel()
 
-    private let accentColor = "4ECDC4"
+    private let accentColor = "6366F1"
 
     var body: some View {
         ZStack {
@@ -128,10 +129,10 @@ struct UserStatsView: View {
             HStack(spacing: 6) {
                 Image(systemName: "chart.xyaxis.line")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Color(hex: "3498DB"))
+                    .foregroundColor(MeeshyColors.info)
                 Text(String(localized: "user.stats.activity", defaultValue: "ACTIVITE", bundle: .main))
                     .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundColor(Color(hex: "3498DB"))
+                    .foregroundColor(MeeshyColors.info)
                     .tracking(1.2)
             }
             .padding(.leading, 4)
@@ -157,10 +158,10 @@ struct UserStatsView: View {
             HStack(spacing: 6) {
                 Image(systemName: "trophy.fill")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(Color(hex: "F8B500"))
+                    .foregroundColor(MeeshyColors.warning)
                 Text(String(localized: "user.stats.badges", defaultValue: "BADGES", bundle: .main))
                     .font(.system(size: 11, weight: .bold, design: .rounded))
-                    .foregroundColor(Color(hex: "F8B500"))
+                    .foregroundColor(MeeshyColors.warning)
                     .tracking(1.2)
             }
             .padding(.leading, 4)

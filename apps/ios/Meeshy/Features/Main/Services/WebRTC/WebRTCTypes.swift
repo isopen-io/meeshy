@@ -61,6 +61,9 @@ struct CallStats: Equatable, Sendable {
     let roundTripTimeMs: Double
     let packetsLost: Int
     let bandwidth: Int
+    /// Cumulative bytes received (sum of inbound-rtp `bytesReceived`). Paired
+    /// with `bandwidth` (cumulative bytes sent) to report total data spent.
+    let bytesReceived: Int
     let codec: String?
     let inboundPacketsReceived: Int   // Phase 1 fix E6 — RTP gate (sum of all kinds)
     // §5.7 — inbound parsed per `kind` so a single-direction *per media* (audio OK
@@ -77,6 +80,7 @@ struct CallStats: Equatable, Sendable {
         roundTripTimeMs: Double = 0,
         packetsLost: Int = 0,
         bandwidth: Int = 0,
+        bytesReceived: Int = 0,
         codec: String? = nil,
         inboundPacketsReceived: Int = 0,
         inboundAudioPackets: Int = 0,
@@ -86,6 +90,7 @@ struct CallStats: Equatable, Sendable {
         self.roundTripTimeMs = roundTripTimeMs
         self.packetsLost = packetsLost
         self.bandwidth = bandwidth
+        self.bytesReceived = bytesReceived
         self.codec = codec
         self.inboundPacketsReceived = inboundPacketsReceived
         self.inboundAudioPackets = inboundAudioPackets
@@ -142,6 +147,7 @@ extension CallStats {
         var rtt = 0.0
         var packetsLost = 0
         var bytesSent = 0
+        var bytesReceived = 0
         var inboundAudio = 0
         var inboundVideo = 0
         var outbound = 0
@@ -160,6 +166,7 @@ extension CallStats {
                 if let lost = entry.values["packetsLost"] { packetsLost += Int(lost) }
                 let received = Int(entry.values["packetsReceived"] ?? 0)
                 if entry.kind == "video" { inboundVideo += received } else { inboundAudio += received }
+                bytesReceived += Int(entry.values["bytesReceived"] ?? 0)
                 if primaryCodecId == nil { primaryCodecId = entry.codecId }
             case "outbound-rtp":
                 outbound += Int(entry.values["packetsSent"] ?? 0)
@@ -177,6 +184,7 @@ extension CallStats {
             roundTripTimeMs: rtt,
             packetsLost: packetsLost,
             bandwidth: bytesSent,
+            bytesReceived: bytesReceived,
             codec: resolvedCodec,
             inboundPacketsReceived: inboundAudio + inboundVideo,
             inboundAudioPackets: inboundAudio,
@@ -259,6 +267,10 @@ protocol WebRTCClientProviding: AnyObject {
     /// in the glare-collision guard.
     func setNegotiationRole(isPolite: Bool)
     func createOffer() async throws -> SessionDescription
+    /// P0-4 — schedule an ICE restart on the next `createOffer()`. Must be
+    /// called before `createOffer()` to set the `IceRestart: true` constraint
+    /// so the SDP carries new ICE credentials and the peer reconnects.
+    func restartIce()
     func createAnswer(for offer: SessionDescription) async throws -> SessionDescription
     func setRemoteAnswer(_ answer: SessionDescription) async throws
     func addIceCandidate(_ candidate: IceCandidate) async throws

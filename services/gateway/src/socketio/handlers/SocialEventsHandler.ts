@@ -4,7 +4,7 @@
  * vers les rooms feed:{userId} des amis
  */
 
-import type { Server as SocketIOServer } from 'socket.io';
+import type { Server as SocketIOServer, Socket } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -75,10 +75,19 @@ export class SocialEventsHandler {
         f.senderId === userId ? f.receiverId : f.senderId
       );
 
+      if (this.friendsCache.size >= 500) {
+        const now = Date.now();
+        for (const [k, v] of this.friendsCache) {
+          if (v.expiresAt <= now) this.friendsCache.delete(k);
+        }
+        if (this.friendsCache.size >= 500) {
+          this.friendsCache.delete(this.friendsCache.keys().next().value!);
+        }
+      }
       this.friendsCache.set(userId, { ids, expiresAt: Date.now() + this.FRIENDS_CACHE_TTL_MS });
       return ids;
     } catch (error) {
-      console.error('[SocialEventsHandler] Error fetching friend IDs:', error);
+      logger.error('social events — error fetching friend IDs', { userId, error });
       return [];
     }
   }
@@ -108,7 +117,7 @@ export class SocialEventsHandler {
   /**
    * Appelé quand un socket reçoit feed:subscribe
    */
-  handleFeedSubscribe(socket: any, userId: string): void {
+  handleFeedSubscribe(socket: Socket, userId: string): void {
     const room = ROOMS.feed(userId);
     socket.join(room);
   }
@@ -116,7 +125,7 @@ export class SocialEventsHandler {
   /**
    * Appelé quand un socket reçoit feed:unsubscribe
    */
-  handleFeedUnsubscribe(socket: any, userId: string): void {
+  handleFeedUnsubscribe(socket: Socket, userId: string): void {
     const room = ROOMS.feed(userId);
     socket.leave(room);
   }
@@ -149,7 +158,7 @@ export class SocialEventsHandler {
 
   async broadcastPostCreated(post: Post, authorId: string, clientMutationId?: string): Promise<void> {
     const friendIds = await this.getFriendIds(authorId);
-    logger.info(`📣 post:created fanout author=${authorId} postId=${(post as any).id} friends=${friendIds.length}`);
+    logger.info(`📣 post:created fanout author=${authorId} postId=${post.id} friends=${friendIds.length}`);
     // U1 — echo the cmid so the author's offline-created optimistic post (keyed
     // by cmid) reconciles to the server id instead of duplicating.
     this.emitToFriends(friendIds, authorId, SERVER_EVENTS.POST_CREATED, { post, clientMutationId });
@@ -189,11 +198,11 @@ export class SocialEventsHandler {
     // previously this always fanned out to ALL friends, leaking ONLY/EXCEPT
     // stories via the realtime event payload even though the REST list was
     // correctly filtered.
-    const visibility = (story as any).visibility ?? 'PUBLIC';
-    const visibilityUserIds = (story as any).visibilityUserIds ?? [];
+    const visibility = story.visibility;
+    const visibilityUserIds = [...(story.visibilityUserIds ?? [])];
     const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds);
     logger.info(
-      `📣 story:created fanout author=${authorId} storyId=${(story as any).id} visibility=${visibility} recipients=${recipients.length}`
+      `📣 story:created fanout author=${authorId} storyId=${story.id} visibility=${visibility} recipients=${recipients.length}`
     );
     this.emitToFriends(recipients, authorId, SERVER_EVENTS.STORY_CREATED, { story });
   }
@@ -202,8 +211,8 @@ export class SocialEventsHandler {
   /// `broadcastStoryCreated`'s visibility filtering — only viewers who can
   /// currently see the story receive the update.
   async broadcastStoryUpdated(story: Post, authorId: string): Promise<void> {
-    const visibility = (story as any).visibility ?? 'PUBLIC';
-    const visibilityUserIds = (story as any).visibilityUserIds ?? [];
+    const visibility = story.visibility;
+    const visibilityUserIds = [...(story.visibilityUserIds ?? [])];
     const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds);
     this.emitToFriends(recipients, authorId, SERVER_EVENTS.STORY_UPDATED, { story });
   }
@@ -238,18 +247,18 @@ export class SocialEventsHandler {
   // ==============================================
 
   async broadcastStatusCreated(status: Post, authorId: string): Promise<void> {
-    const visibility = (status as any).visibility ?? 'PUBLIC';
-    const visibilityUserIds = (status as any).visibilityUserIds ?? [];
+    const visibility = status.visibility;
+    const visibilityUserIds = [...(status.visibilityUserIds ?? [])];
     const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds);
     logger.info(
-      `📣 status:created fanout author=${authorId} statusId=${(status as any).id} visibility=${visibility} recipients=${recipients.length}`
+      `📣 status:created fanout author=${authorId} statusId=${status.id} visibility=${visibility} recipients=${recipients.length}`
     );
     this.emitToFriends(recipients, authorId, SERVER_EVENTS.STATUS_CREATED, { status });
   }
 
   async broadcastStatusUpdated(status: Post, authorId: string): Promise<void> {
-    const visibility = (status as any).visibility ?? 'PUBLIC';
-    const visibilityUserIds = (status as any).visibilityUserIds ?? [];
+    const visibility = status.visibility;
+    const visibilityUserIds = [...(status.visibilityUserIds ?? [])];
     const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds);
     this.emitToFriends(recipients, authorId, SERVER_EVENTS.STATUS_UPDATED, { status });
   }

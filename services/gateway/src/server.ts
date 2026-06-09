@@ -12,6 +12,8 @@
 import './env';
 
 import fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import compress from '@fastify/compress';
+import { constants as zlibConstants } from 'zlib';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import jwt from '@fastify/jwt';
@@ -31,6 +33,8 @@ import { AuthMiddleware, createUnifiedAuthMiddleware } from './middleware/auth';
 import { registerGlobalRateLimiter } from './middleware/rate-limiter';
 import { registerClientMutationIdHook } from './middleware/clientMutationId';
 import { createDeviceLocaleMiddleware } from './middleware/deviceLocale';
+import { requestIdPlugin } from './middleware/request-id';
+import { conditionalGetOnSend } from './utils/etag';
 import { MutationLogService } from './services/MutationLogService';
 import { authRoutes } from './routes/auth';
 import { conversationRoutes } from './routes/conversations';
@@ -402,8 +406,39 @@ class MeeshyServer {
   private async setupMiddleware(): Promise<void> {
     logger.info('Setting up middleware...');
 
+    // Distributed tracing: attaches X-Request-ID to every request/response.
+    // Registered first so all subsequent plugins and hooks see request.id.
+    await this.server.register(requestIdPlugin);
+
     // Register sensible plugin for httpErrors
     await this.server.register(sensible);
+
+    // Bandwidth sprint Phase D6 — app-wide conditional GET (ETag/304).
+    // Registered BEFORE compression so the ETag is computed over the logical
+    // (uncompressed) body and an unchanged GET short-circuits to a body-less
+    // 304 before we spend CPU compressing it. Generalizes the per-route
+    // `sendWithETag` to every eligible read without touching handlers; routes
+    // that already set an ETag or `max-age` are left untouched.
+    this.server.addHook('onSend', conditionalGetOnSend);
+
+    // HTTP response compression (Brotli > gzip > deflate).
+    // Bandwidth sprint Phase A: all JSON/text API responses are compressed
+    // transparently. Already-compressed media (jpeg/png/webp/mp3/mp4/...) is
+    // skipped automatically because mime-db marks those content-types as
+    // non-compressible, so range requests on attachment downloads are untouched.
+    await this.server.register(compress, {
+      global: true,
+      threshold: 1024, // skip tiny payloads where header overhead dominates
+      encodings: ['br', 'gzip', 'deflate'],
+      brotliOptions: {
+        params: {
+          // Quality 5 is the sweet spot for dynamic JSON: ~gzip-9 ratio at a
+          // fraction of brotli-11 CPU cost.
+          [zlibConstants.BROTLI_PARAM_QUALITY]: 5,
+        },
+      },
+      zlibOptions: { level: 6 },
+    });
 
     // Register multipart plugin for file uploads
     await this.server.register(multipart, {
@@ -1430,7 +1465,7 @@ function writeCrashLog(type: string, error: unknown, promise?: Promise<unknown>)
   fs.appendFileSync(crashFile, crashMessage);
 
   // Aussi logger dans la console avec le stack complet
-  console.error(crashMessage);
+  logger.error('Crash', { message: crashMessage });
 }
 
 process.on('uncaughtException', (error) => {

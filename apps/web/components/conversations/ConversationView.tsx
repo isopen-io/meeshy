@@ -9,13 +9,15 @@
  * @module components/conversations/ConversationView
  */
 
-import React, { memo, forwardRef, useMemo } from 'react';
+import React, { memo, forwardRef, useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { ConversationHeader } from './ConversationHeader';
 import { ConversationMessages } from './ConversationMessages';
 import { MessageComposer } from '@/components/common/message-composer';
 import { ConnectionStatusIndicator } from './connection-status-indicator';
 import { FailedMessageBanner } from '@/components/messages/failed-message-banner';
+import { PinnedMessageBanner } from './PinnedMessageBanner';
+import { MessageSearch } from './MessageSearch';
 import { getAuthToken } from '@/utils/token-utils';
 import type { Conversation, Message, User } from '@meeshy/shared/types';
 import type { Participant } from '@meeshy/shared/types/participant';
@@ -120,6 +122,10 @@ interface ConversationViewProps {
   // Options
   showBackButton?: boolean;
   otherUnreadCount?: number;
+
+  // Search
+  isSearchOpen?: boolean;
+  onSearchClose?: () => void;
 }
 
 /**
@@ -185,7 +191,14 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
       tCommon,
       showBackButton = false,
       otherUnreadCount = 0,
+      isSearchOpen,
+      onSearchClose,
     } = props;
+
+    // Search panel state (controlled locally when parent doesn't supply it)
+    const [localSearchOpen, setLocalSearchOpen] = useState(false);
+    const resolvedSearchOpen = isSearchOpen !== undefined ? isSearchOpen : localSearchOpen;
+    const resolvedSearchClose = onSearchClose ?? (() => setLocalSearchOpen(false));
 
     // Normaliser le type de conversation
     const conversationType = normalizeConversationType(conversation.type);
@@ -238,6 +251,7 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
             onLinkCreated={onLinkCreated || (() => {})}
             onStartCall={onStartCall}
             onOpenGallery={onOpenGallery}
+            onOpenSearch={() => setLocalSearchOpen(true)}
             t={t}
             showBackButton={showBackButton}
             otherUnreadCount={otherUnreadCount}
@@ -250,11 +264,17 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
           )}
         </header>
 
+        {/* Pinned message banner */}
+        <PinnedMessageBanner
+          conversationId={conversation.id}
+          onNavigateToMessage={(id) => void onNavigateToMessage(id)}
+        />
+
         {/* Messages */}
         <div
           ref={scrollContainerRef}
           className={cn(
-            "flex-1 overflow-y-auto overflow-x-hidden min-h-0",
+            "flex-1 overflow-y-auto overflow-x-hidden min-h-0 relative",
             isMobile
               ? "bg-transparent pb-4"
               : "bg-gradient-to-b from-gray-50/50 to-white dark:from-gray-900/50 dark:to-gray-950"
@@ -263,6 +283,12 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
           aria-live="polite"
           aria-label={t('conversationLayout.messagesList')}
         >
+          <MessageSearch
+            conversationId={conversation.id}
+            onNavigateToMessage={(id) => void onNavigateToMessage(id)}
+            onClose={resolvedSearchClose}
+            isOpen={resolvedSearchOpen}
+          />
           <ConversationMessages
             messages={messages}
             translatedMessages={messages as unknown}

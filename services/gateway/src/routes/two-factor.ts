@@ -15,6 +15,9 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { TwoFactorService } from '../services/TwoFactorService';
 import { validateBody } from '../validation/helpers.js';
 import { EnableBodySchema, DisableBodySchema, VerifyBodySchema, BackupCodesBodySchema } from '../validation/two-factor-schemas.js';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'TwoFactorRoutes' });
 
 // Request body types
 interface EnableBody {
@@ -81,7 +84,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
         data: status
       });
     } catch (error) {
-      console.error('[2FA] Status error:', error);
+      logger.error('2FA status error', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la récupération du statut 2FA'
@@ -150,7 +153,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
         }
       });
     } catch (error) {
-      console.error('[2FA] Setup error:', error);
+      logger.error('2FA setup error', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la configuration du 2FA'
@@ -215,7 +218,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
         notificationService.createTwoFactorNotification({
           recipientUserId: userId,
           enabled: true,
-        }).catch((err: unknown) => console.error('[2FA] Notification error (enabled):', err));
+        }).catch((err: unknown) => logger.error('2FA notification error enabled', err as Error));
       }
 
       return reply.send({
@@ -226,7 +229,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
         }
       });
     } catch (error) {
-      console.error('[2FA] Enable error:', error);
+      logger.error('2FA enable error', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de l\'activation du 2FA'
@@ -286,7 +289,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
         notificationService.createTwoFactorNotification({
           recipientUserId: userId,
           enabled: false,
-        }).catch((err: unknown) => console.error('[2FA] Notification error (disabled):', err));
+        }).catch((err: unknown) => logger.error('2FA notification error disabled', err as Error));
       }
 
       return reply.send({
@@ -296,7 +299,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
         }
       });
     } catch (error) {
-      console.error('[2FA] Disable error:', error);
+      logger.error('2FA disable error', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la désactivation du 2FA'
@@ -359,7 +362,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
         }
       });
     } catch (error) {
-      console.error('[2FA] Verify error:', error);
+      logger.error('2FA verify error', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la vérification du code'
@@ -426,7 +429,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
         }
       });
     } catch (error) {
-      console.error('[2FA] Regenerate backup codes error:', error);
+      logger.error('2FA regenerate backup codes error', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la régénération des codes de secours'
@@ -477,7 +480,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
         }
       });
     } catch (error) {
-      console.error('[2FA] Cancel setup error:', error);
+      logger.error('2FA cancel setup error', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de l\'annulation'

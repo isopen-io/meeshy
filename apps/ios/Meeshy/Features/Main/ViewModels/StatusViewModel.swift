@@ -147,7 +147,7 @@ class StatusViewModel: ObservableObject {
                 await saveCacheSnapshot()
             }
         } catch {
-            FeedbackToastManager.shared.showError("Erreur lors de la publication du statut")
+            FeedbackToastManager.shared.showError(String(localized: "status.publishError", defaultValue: "Error publishing status", bundle: .main))
         }
     }
 
@@ -167,7 +167,7 @@ class StatusViewModel: ObservableObject {
         } catch {
             statuses = snapshot
             myStatus = previousStatus
-            FeedbackToastManager.shared.showError("Erreur lors de la suppression du statut")
+            FeedbackToastManager.shared.showError(String(localized: "status.deleteError", defaultValue: "Error deleting status", bundle: .main))
         }
     }
 
@@ -198,12 +198,15 @@ class StatusViewModel: ObservableObject {
 
     // MARK: - Mood Tap Handler
 
-    func moodTapHandler(for userId: String) -> ((CGPoint) -> Void)? {
+    /// - Parameter repliesInline: vrai quand le mood est affiché dans la barre de
+    ///   la conversation directe de son auteur — toucher son contenu répond alors
+    ///   immédiatement (sans pop-up de confirmation).
+    func moodTapHandler(for userId: String, repliesInline: Bool = false) -> ((CGPoint) -> Void)? {
         guard statusForUser(userId: userId) != nil else { return nil }
         return { [weak self] point in
             guard let entry = self?.statusForUser(userId: userId) else { return }
             Task { @MainActor in
-                StatusBubbleController.shared.show(entry: entry, anchor: point)
+                StatusBubbleController.shared.show(entry: entry, anchor: point, repliesInline: repliesInline)
             }
         }
     }
@@ -251,7 +254,7 @@ class StatusViewModel: ObservableObject {
         do {
             try await statusService.react(statusId: statusId, emoji: emoji)
         } catch {
-            FeedbackToastManager.shared.showError("Erreur lors de la reaction")
+            FeedbackToastManager.shared.showError(String(localized: "status.reactError", defaultValue: "Error reacting to status", bundle: .main))
         }
     }
 

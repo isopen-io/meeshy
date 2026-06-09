@@ -10,7 +10,6 @@ export function useConversationPreferencesQuery(enabled = true) {
     queryKey: queryKeys.preferences.conversations(),
     queryFn: () => userPreferencesService.getAllPreferences(),
     enabled,
-    staleTime: 5 * 60 * 1000,
   });
 }
 
@@ -19,7 +18,6 @@ export function useCategoriesQuery(enabled = true) {
     queryKey: queryKeys.preferences.categories(),
     queryFn: () => userPreferencesService.getCategories(),
     enabled,
-    staleTime: 5 * 60 * 1000,
   });
 }
 

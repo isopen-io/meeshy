@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useI18n } from '@/hooks/use-i18n';
 import { Input } from './Input';
 import { TagInput, TagItem } from './TagInput';
 import { Label } from './Label';
@@ -73,6 +74,7 @@ export function ConversationDrawer({
   showProfile = true,
   className = '',
 }: ConversationDrawerProps) {
+  const { t } = useI18n('common');
   const [localName, setLocalName] = useState(conversationName);
   const [mounted, setMounted] = useState(false);
 
@@ -130,7 +132,7 @@ export function ConversationDrawer({
           <button
             onClick={onClose}
             className="p-2 rounded-lg hover:bg-[var(--gp-hover)] transition-colors duration-300"
-            aria-label="Fermer"
+            aria-label={t('common.close')}
           >
             <svg
               className="w-5 h-5 text-[var(--gp-text-muted)]"

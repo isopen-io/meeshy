@@ -6,7 +6,16 @@ import MeeshySDK
 
 /// Exercises `ConversationViewModel.otherConversationsUnread` — the
 /// cross-conversation unread count shown next to the back button.
-/// Pattern: `totalAcrossAll − currentConversation.unreadCount`, clamped ≥ 0.
+///
+/// Contract: `ConversationSyncEngine.totalConversationsUnread` ALREADY excludes
+/// the currently-open conversation. The VM calls `setCurrentlyOpenConversation`
+/// on init, and the engine then zeroes + excludes that conversation from the
+/// aggregate (proven by
+/// `ConversationSyncEngineTests.test_setCurrentlyOpenConversation_excludesOpenConvFromAggregator`).
+/// So the published total IS "other conversations only" — the VM MUST mirror it
+/// directly. Subtracting the current conversation's own unread again would
+/// double-count and under-shoot the pill (e.g. 0 while other conversations still
+/// have unread). `max(0, …)` is purely a defensive clamp.
 @MainActor
 final class ConversationViewModelOtherUnreadTests: XCTestCase {
 
@@ -72,9 +81,9 @@ final class ConversationViewModelOtherUnreadTests: XCTestCase {
         XCTAssertEqual(sut.otherConversationsUnread, 0)
     }
 
-    /// When the SDK publishes a total of 12 and the current conv has 5
-    /// unread, the pill must show 12 − 5 = 7 (other conversations only).
-    func test_otherConversationsUnread_excludesCurrentConversation() async {
+    /// The engine aggregate already excludes the open conversation, so when it
+    /// publishes 7 the pill must show 7 — mirrored directly, NOT reduced again.
+    func test_otherConversationsUnread_mirrorsEngineAggregate() async {
         let sut = makeSUT(currentConversationUnread: 5)
 
         let exp = expectation(description: "otherConversationsUnread updated")
@@ -85,17 +94,40 @@ final class ConversationViewModelOtherUnreadTests: XCTestCase {
             .sink { _ in exp.fulfill() }
             .store(in: &cancellables)
 
-        mockSyncEngine.simulateTotalUnread(12)
+        mockSyncEngine.simulateTotalUnread(7)
 
         await fulfillment(of: [exp], timeout: 2.0)
         XCTAssertEqual(sut.otherConversationsUnread, 7)
     }
 
-    /// `markAsRead` on the current conv may race ahead of the published
-    /// total; the SDK may publish "12" while our local snapshot still has
-    /// the current at "15" (over-eager). Clamp at 0, never negative.
-    func test_otherConversationsUnread_clampsAtZero_whenCurrentExceedsTotal() async {
-        let sut = makeSUT(currentConversationUnread: 15)
+    /// Regression guard for the double-subtraction bug: the open conversation's
+    /// own unread count MUST NOT influence the pill, because the engine has
+    /// already excluded it. With current=5 and the engine publishing 7, the pill
+    /// must show 7 — not 7 − 5 = 2 (the old, wrong formula that under-shot the
+    /// count while the open conversation still had unread messages).
+    func test_otherConversationsUnread_independentOfCurrentConversationUnread() async {
+        let sut = makeSUT(currentConversationUnread: 5)
+
+        let exp = expectation(description: "otherConversationsUnread updated")
+        var cancellables = Set<AnyCancellable>()
+        sut.$otherConversationsUnread
+            .dropFirst()
+            .first()
+            .sink { _ in exp.fulfill() }
+            .store(in: &cancellables)
+
+        mockSyncEngine.simulateTotalUnread(7)
+
+        await fulfillment(of: [exp], timeout: 2.0)
+        XCTAssertEqual(sut.otherConversationsUnread, 7,
+            "the open conversation's local unread must not be subtracted again — the engine already excluded it")
+    }
+
+    /// Defensive clamp: the engine clamps its own aggregate ≥ 0, but the VM
+    /// applies `max(0, …)` so a hypothetical negative emission never surfaces a
+    /// negative badge.
+    func test_otherConversationsUnread_clampsNegativeAtZero() async {
+        let sut = makeSUT(currentConversationUnread: 0)
 
         let exp = expectation(description: "clamped")
         var cancellables = Set<AnyCancellable>()
@@ -105,17 +137,14 @@ final class ConversationViewModelOtherUnreadTests: XCTestCase {
             .sink { _ in exp.fulfill() }
             .store(in: &cancellables)
 
-        mockSyncEngine.simulateTotalUnread(12)
+        mockSyncEngine.simulateTotalUnread(-3)
 
         await fulfillment(of: [exp], timeout: 2.0)
         XCTAssertEqual(sut.otherConversationsUnread, 0, "must clamp at 0, never negative")
     }
 
-    /// Each new total from the SDK must propagate immediately to the VM.
-    /// We assert the final published value rather than the full sequence:
-    /// CombineLatest may coalesce emissions on the main runloop, and the
-    /// @Published assignment of the init's seed-pass introduces one extra
-    /// "noop" 0 emission that doesn't belong to the observed sequence.
+    /// Each new aggregate from the engine must propagate immediately and
+    /// verbatim to the pill (the engine already excludes the open conversation).
     func test_otherConversationsUnread_updates_whenSyncEnginePublishes() async {
         let sut = makeSUT(currentConversationUnread: 2)
         // Drain the seed-pass emission first
@@ -123,13 +152,13 @@ final class ConversationViewModelOtherUnreadTests: XCTestCase {
 
         mockSyncEngine.simulateTotalUnread(10)
         try? await Task.sleep(nanoseconds: 50_000_000)
-        XCTAssertEqual(sut.otherConversationsUnread, 8)
+        XCTAssertEqual(sut.otherConversationsUnread, 10)
 
         mockSyncEngine.simulateTotalUnread(5)
         try? await Task.sleep(nanoseconds: 50_000_000)
-        XCTAssertEqual(sut.otherConversationsUnread, 3)
+        XCTAssertEqual(sut.otherConversationsUnread, 5)
 
-        mockSyncEngine.simulateTotalUnread(2)
+        mockSyncEngine.simulateTotalUnread(0)
         try? await Task.sleep(nanoseconds: 50_000_000)
         XCTAssertEqual(sut.otherConversationsUnread, 0)
     }

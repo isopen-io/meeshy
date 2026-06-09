@@ -12,7 +12,27 @@
     "reset": "Réinitialiser",
     "resetAll": "Tout Réinitialiser",
     "disableAll": "Désactiver tous les effets",
-
+    "controls": {
+      "speed": {
+        "ariaLabel": "Ajuster la vitesse de lecture"
+      },
+      "transcription": {
+        "inProgress": {
+          "title": "Transcription en cours...",
+          "ariaLabel": "Transcription en cours"
+        },
+        "view": {
+          "title": "Voir la transcription",
+          "toggleAriaLabel": "Afficher/masquer la transcription"
+        },
+        "request": {
+          "title": "Transcrire l'audio (texte)",
+          "ariaLabel": "Demander la transcription"
+        },
+        "expandMore": "Voir plus de transcription",
+        "expandLess": "Voir moins de transcription"
+      }
+    },
     "recorder": {
       "initializing": "Initialisation...",
       "audioEffects": "Effets audio",
@@ -29,7 +49,6 @@
         "cannotAccessMicrophone": "Impossible d'accéder au microphone."
       }
     },
-
     "voiceCoder": {
       "title": "Perfect Voice",
       "description": "Correction automatique de la justesse de votre voix pour chanter juste",
@@ -66,9 +85,16 @@
       "harmonization": {
         "label": "Harmonies vocales",
         "tooltip": "Ajoute des voix d'accompagnement harmoniques à votre voix principale pour un effet chorale"
+      },
+      "tooltip": {
+        "title": "Perfect Voice - Auto-Tune",
+        "description": "Correction automatique de la justesse de votre voix pour chanter juste.",
+        "retuneSpeedHint": "Vitesse de correction",
+        "scaleHint": "Notes autorisées",
+        "strengthHint": "Intensité de l'effet",
+        "naturalVibratoHint": "Garde le naturel"
       }
     },
-
     "babyVoice": {
       "title": "Voix d'Enfant",
       "pitch": {
@@ -84,7 +110,6 @@
         "tooltip": "Ajoute un effet de souffle doux et aérien caractéristique d'une voix d'enfant"
       }
     },
-
     "demonVoice": {
       "title": "Voix de Démon",
       "pitch": {
@@ -100,7 +125,6 @@
         "tooltip": "Effet de réverbération comme dans une cathédrale sombre et profonde"
       }
     },
-
     "backSound": {
       "title": "Ambiance de Fond",
       "uploadLabel": "Charger un fichier audio",
@@ -121,7 +145,6 @@
         "labelMinutes": "Minutes"
       }
     },
-
     "effects": {
       "voice-coder": {
         "name": "Voix Parfaite",
@@ -189,7 +212,6 @@
           "custom": "Personnalisé"
         }
       },
-
       "baby-voice": {
         "name": "Voix Enfantine",
         "shortName": "Enfantine",
@@ -213,7 +235,6 @@
           }
         }
       },
-
       "demon-voice": {
         "name": "Voix Démoniaque",
         "shortName": "Démoniaque",
@@ -237,7 +258,6 @@
           }
         }
       },
-
       "back-sound": {
         "name": "Fond Sonore",
         "shortName": "Fond",
@@ -269,12 +289,10 @@
         }
       }
     },
-
     "presets": {
       "custom": "Personnalisé",
       "customDescription": "Vos propres réglages"
     },
-
     "timeline": {
       "title": "Timeline des Effets",
       "duration": "Durée",
@@ -292,17 +310,20 @@
         "parameterChanges": "Modifications"
       }
     },
-
     "badge": {
       "hasEffects": "Effets audio",
       "clickToView": "Cliquer pour voir la timeline"
     },
-
     "status": {
       "on": "Activé",
       "off": "Désactivé",
       "active": "Actif",
       "inactive": "Inactif"
     }
+  },
+  "microphone": {
+    "noMicDetected": "Aucun microphone détecté.",
+    "error": "Erreur microphone.",
+    "accessError": "Impossible d'accéder au microphone."
   }
 }

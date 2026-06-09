@@ -17,6 +17,14 @@ class AudioPlayerManager: NSObject, ObservableObject, StoppablePlayer, AVAudioPl
     private var isRegistered = false
     private var mediaEventsCancellable: AnyCancellable?
 
+    /// Unification Étape C — cette session est désormais routée via le
+    /// `MediaSessionCoordinator` (source unique, refcomptée, call-aware via
+    /// l'Étape B) au lieu d'un `setCategory`/`setActive` direct. Le flag rend
+    /// l'acquisition/libération idempotente : `play()` ne libère PAS la session
+    /// (resetPlayback) puis ré-acquiert (no-op si déjà tenue) → pas de churn
+    /// release→request. Seul `stop()` libère réellement.
+    private var sessionRequested = false
+
     override init() {
         super.init()
         // Subscribe once to audio session events so interruptions (phone
@@ -46,30 +54,42 @@ class AudioPlayerManager: NSObject, ObservableObject, StoppablePlayer, AVAudioPl
         }
     }
 
+    // MARK: - Audio session (routed through the single MediaSessionCoordinator)
+
+    /// Acquiert la session `.playback` via le coordinator (idempotent). Le
+    /// coordinator pose `.playback/.default/[.duckOthers]` — config identique à
+    /// l'ancien `setCategory` direct — et, étant call-aware (Étape B), NE TOUCHE
+    /// PAS la session pendant un appel VoIP (plus besoin de la garde CallManager
+    /// inline ici). Awaité dans le `loadTask` AVANT `playData` → session active
+    /// avant la lecture, sans race.
+    private func acquireSession() async {
+        guard !sessionRequested else { return }
+        sessionRequested = true
+        try? await MediaSessionCoordinator.shared.request(role: .playback)
+    }
+
+    /// Libère la session via le coordinator (refcompté : ne désactive réellement
+    /// qu'au refcount 0). No-op si déjà libérée.
+    private func releaseSession() {
+        guard sessionRequested else { return }
+        sessionRequested = false
+        Task { await MediaSessionCoordinator.shared.release() }
+    }
+
     // MARK: - Play from URL string
 
     func play(urlString: String) {
-        stop()
+        resetPlayback()
 
         guard !urlString.isEmpty else { return }
 
         registerIfNeeded()
         PlaybackCoordinator.shared.willStartPlaying(external: self)
 
-        // Audit P1-8 — do NOT touch the audio session category while a VoIP
-        // call is active. RTCAudioSession holds it with .playAndRecord +
-        // .voiceChat; switching to .playback breaks the microphone path
-        // (peer hears silence). Playback under the existing call category is
-        // fine as a side effect of .playAndRecord.
-        if !CallManager.shared.callState.isActive {
-            do {
-                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.duckOthers])
-                try AVAudioSession.sharedInstance().setActive(true)
-            } catch {}
-        }
-
         let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
         loadTask = Task {
+            await acquireSession()
+            guard !Task.isCancelled else { return }
             do {
                 let data = try await CacheCoordinator.shared.audio.data(for: resolved)
                 guard !Task.isCancelled else { return }
@@ -81,23 +101,19 @@ class AudioPlayerManager: NSObject, ObservableObject, StoppablePlayer, AVAudioPl
     // MARK: - Play from local file URL
 
     func playLocalFile(url: URL) {
-        stop()
+        resetPlayback()
 
         registerIfNeeded()
         PlaybackCoordinator.shared.willStartPlaying(external: self)
 
-        // Audit P1-8 — see play(urlString:); same guard for the local-file path.
-        if !CallManager.shared.callState.isActive {
+        loadTask = Task {
+            await acquireSession()
+            guard !Task.isCancelled else { return }
             do {
-                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.duckOthers])
-                try AVAudioSession.sharedInstance().setActive(true)
+                let data = try Data(contentsOf: url)
+                playData(data)
             } catch {}
         }
-
-        do {
-            let data = try Data(contentsOf: url)
-            playData(data)
-        } catch {}
     }
 
     private func playData(_ data: Data) {
@@ -129,7 +145,10 @@ class AudioPlayerManager: NSObject, ObservableObject, StoppablePlayer, AVAudioPl
 
     // MARK: - Controls
 
-    func stop() {
+    /// Arrête le player et nettoie l'état SANS libérer la session — utilisé par
+    /// `play()` pour une relecture immédiate (la session est ré-acquise juste
+    /// après, idempotemment). Évite le churn release→request.
+    private func resetPlayback() {
         player?.stop()
         player = nil
         timer?.invalidate()
@@ -138,13 +157,13 @@ class AudioPlayerManager: NSObject, ObservableObject, StoppablePlayer, AVAudioPl
         progress = 0
         loadTask?.cancel()
         loadTask = nil
-        // Audit P1-9 — do NOT deactivate the shared AVAudioSession while a
-        // VoIP call is active. CallKit owns activation/deactivation via
-        // provider:didActivate:/didDeactivate:; tearing it down here drops
-        // call audio until the next route change re-activates it.
-        if !CallManager.shared.callState.isActive {
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        }
+    }
+
+    func stop() {
+        resetPlayback()
+        // Libère la session partagée via le coordinator (call-aware : ne
+        // désactive pas pendant un appel ; refcompté : seulement au refcount 0).
+        releaseSession()
     }
 
     func togglePlayPause() {
@@ -156,6 +175,8 @@ class AudioPlayerManager: NSObject, ObservableObject, StoppablePlayer, AVAudioPl
         } else {
             registerIfNeeded()
             PlaybackCoordinator.shared.willStartPlaying(external: self)
+            // La session est toujours tenue depuis le `play()` initial (la pause
+            // ne la libère pas) → reprise directe sans ré-acquisition.
             player.play()
             isPlaying = true
             startProgressTimer()

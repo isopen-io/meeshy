@@ -8,6 +8,9 @@
  */
 
 import type { Socket } from 'socket.io';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'SocketHelpers' });
 
 /**
  * Represents a connected socket's identity.
@@ -22,6 +25,13 @@ export interface SocketUser {
   socketId: string;
   isAnonymous: boolean;
   language: string;
+  /**
+   * Ordered list of languages this socket can consume, derived from
+   * resolveUserLanguagesOrdered() at connection time.
+   * Priority: systemLanguage → regionalLanguage → customDestinationLanguage → deviceLocale.
+   * Empty for anonymous users (they use `language` only).
+   */
+  resolvedLanguages: string[];
   /** For anonymous participants: the participant.id */
   participantId?: string;
   /** For registered users: the user.id */
@@ -92,7 +102,7 @@ export async function normalizeConversationId(
     }
     return conversationId;
   } catch (error) {
-    console.error('❌ [NORMALIZE] Erreur normalisation:', error);
+    logger.error('Erreur normalisation', error as Error);
     return conversationId;
   }
 }

@@ -63,6 +63,7 @@ export class CallCleanupService {
         logger.error('[CallCleanupService] Scheduled cleanup failed', { error });
       });
     }, this.CLEANUP_INTERVAL_MS);
+    this.cleanupInterval.unref?.();
   }
 
   stop(): void {

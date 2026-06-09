@@ -37,12 +37,16 @@ enum BubbleAnimationDurations {
     static let standard: TimeInterval = 0.18
     static let reactionFeedback: TimeInterval = 0.20
 
-    static let overlaySpring: TimeInterval = 0.32
-    static let overlayBubble: TimeInterval = 0.28
-    static let overlayLift: TimeInterval = 0.35
-    static let overlayMenu: TimeInterval = 0.28
-    static let overlayMenuScale: TimeInterval = 0.30
-    static let overlayDismiss: TimeInterval = 0.22
-    static let overlayDismissBubble: TimeInterval = 0.26
+    // BUG4: snappier open. The custom context overlay previously took ~0.32s+
+    // for the action menu to settle (perceptible lag vs iMessage). Tightened the
+    // open-side springs (~25-30% faster) while keeping high damping for a fluid,
+    // non-bouncy feel. Dismiss timings are left as-is (already quick).
+    static let overlaySpring: TimeInterval = 0.24
+    static let overlayBubble: TimeInterval = 0.22
+    static let overlayLift: TimeInterval = 0.26
+    static let overlayMenu: TimeInterval = 0.20
+    static let overlayMenuScale: TimeInterval = 0.22
+    static let overlayDismiss: TimeInterval = 0.20
+    static let overlayDismissBubble: TimeInterval = 0.24
     static let overlayRevealCrossfade: TimeInterval = 0.016
 }

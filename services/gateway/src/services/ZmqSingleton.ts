@@ -3,6 +3,9 @@
  */
 
 import { ZmqTranslationClient } from './zmq-translation';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'ZmqSingleton' });
 
 class ZMQSingleton {
   private static instance: ZmqTranslationClient | null = null;
@@ -43,7 +46,7 @@ class ZMQSingleton {
       await this.instance.initialize();
 
     } catch (error) {
-      console.error('Erreur lors de l\'initialisation:', error);
+      logger.error('Erreur lors de l\'initialisation', error as Error);
       this.instance = null;
       throw error;
     }
@@ -54,7 +57,7 @@ class ZMQSingleton {
       try {
         await this.instance.close();
       } catch (error) {
-        console.error('Erreur lors de la fermeture:', error);
+        logger.error('Erreur lors de la fermeture', error as Error);
       } finally {
         this.instance = null;
       }

@@ -11,6 +11,9 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'UserDeletionsRoutes' });
 
 interface ConversationIdParams {
   conversationId: string;
@@ -105,14 +108,14 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
           },
         });
 
-        console.log(`[UserDeletions] Conversation ${conversationId} deleted for user ${userId}`);
+        logger.info('Conversation deleted', { conversationId });
 
         return reply.send({
           success: true,
           data: { message: 'Conversation deleted from your view' },
         });
       } catch (error) {
-        console.error('[UserDeletions] Error deleting conversation for user:', error);
+        logger.error('Error deleting conversation for user', error as Error);
         return reply.status(500).send({
           success: false,
           error: 'Internal server error',
@@ -187,14 +190,14 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
           },
         });
 
-        console.log(`[UserDeletions] Conversation ${conversationId} restored for user ${userId}`);
+        logger.info('Conversation restored', { conversationId });
 
         return reply.send({
           success: true,
           data: { message: 'Conversation restored' },
         });
       } catch (error) {
-        console.error('[UserDeletions] Error restoring conversation for user:', error);
+        logger.error('Error restoring conversation for user', error as Error);
         return reply.status(500).send({
           success: false,
           error: 'Internal server error',
@@ -302,7 +305,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
           },
         });
 
-        console.log(`[UserDeletions] History cleared before ${clearDate.toISOString()} for user ${userId} in conversation ${conversationId}`);
+        logger.info('History cleared', { conversationId });
 
         return reply.send({
           success: true,
@@ -312,7 +315,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
           },
         });
       } catch (error) {
-        console.error('[UserDeletions] Error clearing history:', error);
+        logger.error('Error clearing history', error as Error);
         return reply.status(500).send({
           success: false,
           error: 'Internal server error',
@@ -407,14 +410,14 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
           },
         });
 
-        console.log(`[UserDeletions] Message ${messageId} deleted for user ${userId}`);
+        logger.info('Message deleted');
 
         return reply.send({
           success: true,
           data: { message: 'Message deleted from your view' },
         });
       } catch (error) {
-        console.error('[UserDeletions] Error deleting message for user:', error);
+        logger.error('Error deleting message for user', error as Error);
         return reply.status(500).send({
           success: false,
           error: 'Internal server error',
@@ -487,14 +490,14 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
           },
         });
 
-        console.log(`[UserDeletions] Message ${messageId} restored for user ${userId}`);
+        logger.info('Message restored');
 
         return reply.send({
           success: true,
           data: { message: 'Message restored' },
         });
       } catch (error) {
-        console.error('[UserDeletions] Error restoring message for user:', error);
+        logger.error('Error restoring message for user', error as Error);
         return reply.status(500).send({
           success: false,
           error: 'Internal server error',
@@ -603,7 +606,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
           )
         );
 
-        console.log(`[UserDeletions] ${validMessageIds.length} messages deleted for user ${userId}`);
+        logger.info('Messages bulk deleted', { count: validMessageIds.length });
 
         return reply.send({
           success: true,
@@ -614,7 +617,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
           },
         });
       } catch (error) {
-        console.error('[UserDeletions] Error bulk deleting messages:', error);
+        logger.error('Error bulk deleting messages', error as Error);
         return reply.status(500).send({
           success: false,
           error: 'Internal server error',
@@ -701,7 +704,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
           })),
         });
       } catch (error) {
-        console.error('[UserDeletions] Error fetching deleted conversations:', error);
+        logger.error('Error fetching deleted conversations', error as Error);
         return reply.status(500).send({
           success: false,
           error: 'Internal server error',

@@ -5,6 +5,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import NextImage from 'next/image';
 import { X, ChevronLeft, ChevronRight, Download, MessageSquare, Maximize2, Trash2 } from 'lucide-react';
 import { Button } from '../ui/button';
 import {
@@ -325,12 +326,14 @@ export function AttachmentGallery({
             {loading ? (
               <div className="text-white">{t('gallery.loading')}</div>
             ) : currentAttachment && currentAttachmentUrl ? (
-              <div className="w-full h-full flex items-center justify-center">
-                <img
+              <div className="relative w-full h-full">
+                <NextImage
                   src={currentAttachmentUrl}
                   alt={currentAttachment.originalName}
-                  className="w-full h-full object-contain"
-                  style={{ maxWidth: '100%', maxHeight: '100%' }}
+                  fill
+                  sizes="100vw"
+                  className="object-contain"
+                  loading="eager"
                 />
               </div>
             ) : (
@@ -396,9 +399,9 @@ export function AttachmentGallery({
       <Dialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Confirmer la suppression</DialogTitle>
+            <DialogTitle>{t('contextMenu.confirmDeleteTitle')}</DialogTitle>
             <DialogDescription>
-              Êtes-vous sûr de vouloir supprimer ce fichier ? Cette action est irréversible.
+              {t('contextMenu.confirmDeleteDescription')}
             </DialogDescription>
           </DialogHeader>
           {currentAttachment && (
@@ -407,7 +410,7 @@ export function AttachmentGallery({
                 {currentAttachment.originalName}
               </div>
               <div className="text-xs text-muted-foreground mt-1">
-                Le fichier sera définitivement supprimé du serveur.
+                {t('contextMenu.confirmDeleteIrreversible')}
               </div>
             </div>
           )}
@@ -417,14 +420,14 @@ export function AttachmentGallery({
               onClick={handleDeleteCancel}
               disabled={isDeleting}
             >
-              Annuler
+              {t('contextMenu.cancel')}
             </Button>
             <Button
               variant="destructive"
               onClick={handleDeleteConfirm}
               disabled={isDeleting}
             >
-              {isDeleting ? 'Suppression...' : 'Supprimer'}
+              {isDeleting ? t('contextMenu.deleting') : t('contextMenu.delete')}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -292,6 +292,12 @@ model User {
 
   // Unified participant model (replaces conversations + anonymousParticipants)
   participations Participant[]
+
+  @@index([isOnline, lastActiveAt(sort: Desc)]) // Optimisation: présence — "utilisateurs en ligne triés par activité"
+  @@index([systemLanguage]) // Prisme Linguistique: language extraction queries et Optimisation: utilisateurs par langue (broadcast ciblé)
+  @@index([deviceLocale])   // Prisme Linguistique: 4th-priority locale resolution
+  @@index([lastActiveAt]) // Optimisation: utilisateurs actifs récemment 
+  @@index([isActive, lastActiveAt]) // Optimisation: utilisateurs actifs triés
 }
 
 /// Conversation entre utilisateurs (direct, group, public, global)
@@ -385,6 +391,7 @@ model Conversation {
   @@index([type]) // Optimisation: filtrer conversations par type (direct, group, global, etc.)
   @@index([isActive]) // Optimisation: filtrer conversations actives
   @@index([lastMessageAt]) // Optimisation: trier par activité récente
+  @@index([isActive, lastMessageAt]) // iter-4: tri post-filtre participants (isActive+lastMessageAt DESC)
 }
 
 /// Share/forward a conversation to a community or another context
@@ -531,6 +538,11 @@ model Message {
   messageType                 String    @default("text")
   /// Message origin: user, system, ads, app, agent, authority
   messageSource               String    @default("user")
+  /// Structured, type-specific payload for non-plain messages. For call-summary
+  /// system messages (messageSource = "system") this carries the call facts the
+  /// client needs to render a rich, actionable bubble (direction, media type,
+  /// outcome, duration, data spent, network quality). @see packages/shared/utils/call-summary.ts
+  metadata                    Json?
   isEdited                    Boolean   @default(false)
   editedAt                    DateTime?
   deletedAt                   DateTime?
@@ -677,7 +689,11 @@ model Message {
   @@index([conversationId])
   @@index([conversationId, deletedAt, createdAt]) // Optimisation: requête lastMessage avec tri
   @@index([senderId])
+  @@index([senderId, conversationId]) // Optimisation: messages d'un user dans une conv
   @@index([messageSource])
+  @@index([conversationId, messageSource]) // Filtrage rapide messages système (call summaries)
+  @@index([replyToId]) // Expansion thread — évite full-scan sur replyToId nullable
+  @@index([forwardedFromId]) // Forwarded messages lookup in broadcastNewMessage
   @@index([createdAt])
 }
 
@@ -732,6 +748,7 @@ model MessageAttachment {
   thumbnailPath String? // Miniature générée pour images
   thumbnailUrl  String?
   thumbHash     String?   // ThumbHash base64 (~33 chars) — placeholder image instantane
+  imageVariants Json?     // Variantes WebP responsive (D4) : [{ width, height, url, size, format }] — images non chiffrées uniquement
 
   // Métadonnées spécifiques audio/vidéo
   duration   Int? // Durée en MILLISECONDES (précision complète)
@@ -933,6 +950,8 @@ model MessageStatusEntry {
   @@index([participantId])
   @@index([readAt])
   @@index([deliveredAt])
+  @@index([conversationId, participantId, readAt]) // Comptage non-lus par participant dans une conversation
+  @@index([participantId, conversationId]) // Historique lecture d'un participant toutes conversations
 }
 
 /// Per-attachment status entry for each user
@@ -1067,6 +1086,8 @@ model ConversationReadCursor {
   @@unique([conversationId, participantId], name: "conversation_participant_cursor")
   @@index([participantId])
   @@index([unreadCount])
+  @@index([participantId, lastReadAt])   // Optimisation: batch unread count par participant
+  @@index([conversationId, participantId, lastReadAt]) // Optimisation: requêtes curseur combinées
 }
 
 /// Réaction emoji sur un message par un utilisateur
@@ -1085,6 +1106,7 @@ model Reaction {
   @@index([messageId])
   @@index([participantId])
   @@index([emoji])
+  @@index([participantId, createdAt(sort: Desc)]) // User's reaction timeline
 }
 
 /// Réaction emoji sur un commentaire de post par un utilisateur
@@ -1139,6 +1161,7 @@ model Mention {
   @@index([messageId])
   @@index([mentionedParticipantId])
   @@index([mentionedAt])
+  @@index([mentionedParticipantId, mentionedAt(sort: Desc)]) // User's mention inbox sorted by time
 }
 
 /// Demande d'amitié entre utilisateurs
@@ -1235,6 +1258,7 @@ model Notification {
   @@index([userId, createdAt(sort: Desc)])
   @@index([createdAt])
   @@index([type])
+  @@index([userId, isRead, createdAt(sort: Desc)]) // Optimisation: pagination non-lus par user
 }
 
 /// Fonctionnalités et consentements utilisateur (1:1 avec User)
@@ -1614,6 +1638,15 @@ model CallSession {
   endedAt    DateTime?
   duration   Int? // Duration in seconds
 
+  /// Cumulative data transferred during the call, in bytes, as reported by the
+  /// client's WebRTC stats at teardown (last `call:quality-report`). Used to
+  /// surface "data spent" in the call-summary message. Null when never reported.
+  bytesSent     Int?
+  bytesReceived Int?
+  /// Overall network quality tier observed during the call:
+  /// excellent | good | fair | poor. Null when never reported (e.g. missed).
+  networkQuality String?
+
   /// Participants in this call
   participants CallParticipant[]
 
@@ -1641,6 +1674,7 @@ model CallSession {
   @@index([conversationId])
   @@index([status])
   @@index([startedAt])
+  @@index([conversationId, status, startedAt]) // Optimisation: active call lookup par conversation
 }
 
 /// Call Participant - Represents a user participating in a call

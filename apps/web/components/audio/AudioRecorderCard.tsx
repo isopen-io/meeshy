@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from 'react';
 import { Square, Play, Pause, X, Mic, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
 
 // Types pour les métadonnées audio extraites
 interface AudioMetadata {
@@ -64,6 +65,8 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
   onRecordingStateChange,
   onStop
 }, ref) => {
+  const { t } = useI18n('audioEffects');
+
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0); // En millisecondes
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -300,13 +303,13 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
           toast.error('Accès au microphone refusé.');
         } else if (error.name === 'NotFoundError') {
           setPermissionError('No microphone found');
-          toast.error('Aucun microphone détecté.');
+          toast.error(t('microphone.noMicDetected'));
         } else {
           setPermissionError('Microphone error');
-          toast.error('Erreur microphone.');
+          toast.error(t('microphone.error'));
         }
       } else {
-        toast.error('Impossible d\'accéder au microphone.');
+        toast.error(t('microphone.accessError'));
         setPermissionError('Recording error');
       }
     }

@@ -121,11 +121,15 @@
       "title": "Page non trouvée",
       "description": "La page que vous recherchez n'existe pas ou a été déplacée.",
       "backToDashboard": "Retour au tableau de bord",
+      "previousPage": "Page précédente",
+      "suggestions": "Suggestions :",
       "actions": {
         "backHome": "Retour à l'accueil",
         "backDashboard": "Tableau de bord",
         "viewCommunities": "Voir les communautés"
-      }
+      },
+      "backPrevious": "Page précédente",
+      "suggestions": "Suggestions :"
     }
   }
 }

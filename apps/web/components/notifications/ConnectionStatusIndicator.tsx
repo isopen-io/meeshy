@@ -3,10 +3,12 @@
 import { memo, useState, useEffect } from 'react';
 import { notificationSocketIO } from '@/services/notification-socketio.singleton';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/hooks/useI18n';
 
 type ConnectionStatus = 'connected' | 'connecting' | 'disconnected';
 
 export const ConnectionStatusIndicator = memo(function ConnectionStatusIndicator() {
+  const { t } = useI18n('notifications');
   const [status, setStatus] = useState<ConnectionStatus>(() => {
     const { isConnected, isConnecting } = notificationSocketIO.getConnectionStatus();
     if (isConnected) return 'connected';
@@ -32,15 +34,15 @@ export const ConnectionStatusIndicator = memo(function ConnectionStatusIndicator
   const statusConfig = {
     connected: {
       color: 'bg-green-500',
-      title: 'Connected',
+      title: t('connectionStatus.connected'),
     },
     connecting: {
       color: 'bg-orange-500 animate-pulse',
-      title: 'Reconnecting...',
+      title: t('connectionStatus.reconnecting'),
     },
     disconnected: {
       color: 'bg-red-500',
-      title: 'Disconnected',
+      title: t('connectionStatus.disconnected'),
     },
   };
 

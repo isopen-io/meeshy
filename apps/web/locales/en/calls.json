@@ -1,0 +1,118 @@
+{
+  "calls": {
+    "loading": "Loading call...",
+    "banner": {
+      "inProgress": "Call in progress",
+      "participant": "{count} participant",
+      "participants": "{count} participants",
+      "join": "Join",
+      "dismiss": "Dismiss"
+    },
+    "error": {
+      "title": "Call Error",
+      "message": "An unexpected error occurred during the call.",
+      "tryAgain": "Try Again",
+      "returnHome": "Return Home",
+      "troubleshooting": {
+        "title": "Troubleshooting:",
+        "permissions": "Make sure you granted camera and microphone permissions",
+        "browser": "Check that your browser supports video calls (Chrome, Firefox, Safari)",
+        "https": "Ensure you are using HTTPS connection",
+        "refresh": "Try refreshing the page"
+      }
+    },
+    "status": {
+      "connecting": "Connecting...",
+      "starting": "Starting...",
+      "reconnecting": "Reconnecting...",
+      "failed": "Connection failed",
+      "disconnected": "Disconnected",
+      "connected": "Connected",
+      "quality": {
+        "excellent": "Excellent",
+        "good": "Good",
+        "poor": "Poor connection",
+        "offline": "Offline"
+      }
+    },
+    "controls": {
+      "controls": "Call controls",
+      "mute": "Mute",
+      "unmute": "Unmute",
+      "videoOff": "Turn off video",
+      "videoOn": "Turn on video",
+      "videoPausedWeak": "Video paused (weak connection)",
+      "switchCamera": "Switch camera",
+      "speakerOff": "Turn off speaker",
+      "speakerOn": "Turn on speaker",
+      "speakerOnLabel": "Speaker on",
+      "speakerOffLabel": "Speaker off",
+      "audioEffects": "Toggle audio effects",
+      "audioEffectsTitle": "Audio Effects",
+      "connectionStats": "Toggle connection stats",
+      "connectionStatsTitle": "Connection Stats",
+      "endCall": "End call"
+    },
+    "quality": {
+      "details": "Connection Quality Details",
+      "quality": "Quality:",
+      "packetLoss": "Packet Loss:",
+      "latency": "Latency (RTT):",
+      "jitter": "Jitter:",
+      "audioBitrate": "Audio Bitrate:",
+      "videoBitrate": "Video Bitrate:",
+      "updated": "Updated:"
+    },
+    "stream": {
+      "disconnected": "Disconnected",
+      "participantLeft": "{name} has left",
+      "participant": "Participant",
+      "micMuted": "Microphone muted",
+      "videoOff": "Camera off",
+      "videoSuspended": "Video paused",
+      "videoSuspendedHint": "Weak connection · auto-resume",
+      "fullscreen": "Toggle fullscreen",
+      "dragToMove": "Drag to move"
+    },
+    "toasts": {
+      "connectionError": "Connection error",
+      "videoSwitchFailed": "Failed to switch video",
+      "cameraSwitched": "Camera switched",
+      "cameraSwitchFailed": "Failed to switch camera",
+      "joinFailed": "Failed to join call"
+      "videoSuspendedPoorConnection": "Weak connection — video paused to keep the call going",
+      "videoResumed": "Connection recovered — video back on"
+    },
+    "permissions": {
+      "title": {
+        "idle": "Camera & Microphone Access",
+        "granted": "Permissions Granted",
+        "denied": "Permission Denied"
+      },
+      "description": {
+        "idle": "To join this video call, we need access to your camera and microphone.",
+        "granted": "You can now join the video call."
+      },
+      "error": {
+        "denied": "Camera and microphone access denied. Please check your browser settings and allow access.",
+        "notFound": "No camera or microphone found. Please connect a device and try again.",
+        "notReadable": "Camera or microphone is already in use by another application.",
+        "generic": "Unable to access camera and microphone. Please try again.",
+        "unexpected": "An unexpected error occurred. Please try again."
+      },
+      "buttons": {
+        "grantAccess": "Grant Access",
+        "cancel": "Cancel",
+        "tryAgain": "Try Again"
+      },
+      "requesting": "Please allow access in your browser...",
+      "joining": "Joining call...",
+      "instructions": {
+        "title": "How to enable permissions:",
+        "chrome": "Chrome: Click the camera icon in the address bar",
+        "firefox": "Firefox: Click the camera icon in the address bar",
+        "safari": "Safari: Go to Safari Settings > Privacy > Camera/Microphone"
+      }
+    }
+  }
+}

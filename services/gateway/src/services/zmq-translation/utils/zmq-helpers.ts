@@ -7,6 +7,9 @@ import { promises as fs } from 'fs';
 import { existsSync, statSync } from 'fs';
 import path from 'path';
 import { AUDIO_BASE64_SIZE_THRESHOLD } from '../types';
+import { enhancedLogger } from '../../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'ZmqHelpers' });
 
 /**
  * Résultat du chargement d'un fichier audio en binaire
@@ -31,14 +34,14 @@ export async function loadAudioAsBinary(audioPath?: string): Promise<AudioBinary
   try {
     // Vérifier si le fichier existe
     if (!existsSync(audioPath)) {
-      console.log(`[ZMQ-Client] Fichier audio non accessible localement: ${audioPath}`);
+      logger.debug('Fichier audio non accessible localement', { audioPath });
       return null;
     }
 
     // Vérifier la taille
     const stats = statSync(audioPath);
     if (stats.size > AUDIO_BASE64_SIZE_THRESHOLD) {
-      console.log(`[ZMQ-Client] Fichier trop gros pour transfert ZMQ (${(stats.size / 1024 / 1024).toFixed(2)}MB > ${AUDIO_BASE64_SIZE_THRESHOLD / 1024 / 1024}MB), Translator téléchargera via URL`);
+      logger.debug('Fichier trop gros pour transfert ZMQ', { sizeMB: (stats.size / 1024 / 1024).toFixed(2), thresholdMB: AUDIO_BASE64_SIZE_THRESHOLD / 1024 / 1024 });
       return null;
     }
 
@@ -58,11 +61,11 @@ export async function loadAudioAsBinary(audioPath?: string): Promise<AudioBinary
     };
     const mimeType = mimeTypes[ext] || 'audio/wav';
 
-    console.log(`[ZMQ-Client] Audio chargé en binaire: ${(stats.size / 1024).toFixed(1)}KB (${mimeType})`);
+    logger.debug('Audio chargé en binaire', { sizeKB: (stats.size / 1024).toFixed(1), mimeType });
 
     return { buffer, mimeType, size: stats.size };
   } catch (error) {
-    console.warn(`[ZMQ-Client] Erreur lecture fichier audio: ${error}`);
+    logger.warn('Erreur lecture fichier audio', error as Error);
     return null;
   }
 }

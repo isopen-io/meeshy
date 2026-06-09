@@ -140,13 +140,22 @@ describe('TranslationCache', () => {
     });
 
     it('should log cache initialization', () => {
-      const consoleSpy = jest.spyOn(console, 'log');
+      // The cache logs via enhancedLogger (Pino), whose FormattedStream writes
+      // structured lines through process.stdout.write — not console.log.
+      const stdoutSpy = jest
+        .spyOn(process.stdout, 'write')
+        .mockImplementation(() => true);
 
       translationCache = new TranslationCache();
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[TranslationCache] Cache initialized')
+      const stdoutLines = stdoutSpy.mock.calls.map(call => String(call[0]));
+      const initLog = stdoutLines.find(
+        line =>
+          line.includes('[TranslationCache]') &&
+          line.includes('Cache initialized')
       );
+
+      expect(initLog).toBeDefined();
     });
   });
 

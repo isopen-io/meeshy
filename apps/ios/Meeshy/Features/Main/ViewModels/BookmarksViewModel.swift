@@ -61,7 +61,7 @@ class BookmarksViewModel: ObservableObject {
                 try? await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
             }
         } catch {
-            FeedbackToastManager.shared.showError("Erreur lors du chargement des favoris")
+            FeedbackToastManager.shared.showError(String(localized: "feed.bookmark.loadError", defaultValue: "Error loading bookmarks", bundle: .main))
         }
     }
 
@@ -73,7 +73,7 @@ class BookmarksViewModel: ObservableObject {
             try? await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
         } catch {
             posts = snapshot
-            FeedbackToastManager.shared.showError("Erreur lors de la suppression du favori")
+            FeedbackToastManager.shared.showError(String(localized: "feed.bookmark.removeError", defaultValue: "Error removing bookmark", bundle: .main))
         }
     }
 

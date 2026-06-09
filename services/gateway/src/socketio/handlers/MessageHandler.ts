@@ -10,6 +10,7 @@ import * as path from 'path';
 import type { Socket } from 'socket.io';
 import type { Server as SocketIOServer } from 'socket.io';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { getCacheStore } from '../../services/CacheStore';
 import { MessagingService } from '../../services/MessagingService';
 import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/notifications/NotificationService';
@@ -24,6 +25,10 @@ import {
   normalizeConversationId,
   type SocketUser
 } from '../utils/socket-helpers';
+import {
+  filterMessagePayloadForLanguages,
+  groupSocketsByLanguage,
+} from '../utils/message-payload-filter.js';
 import { resolveParticipant } from '../utils/participant-resolver.js';
 import type {
   MessageRequest,
@@ -123,7 +128,7 @@ export class MessageHandler {
       }
 
       const { participantId, userId, isAnonymous } = userContext;
-      console.log(`[RT-DIAG] message:send received conv=${validated.conversationId} from=${userId ?? participantId} anon=${isAnonymous}`);
+      handlerLogger.debug('message:send received', { conversationId: validated.conversationId, userId: userId ?? participantId, isAnonymous });
 
       const rateLimitAllowed = await this.rateLimiter.checkLimit(userId || participantId, SOCKET_RATE_LIMITS.MESSAGE_SEND);
       if (!rateLimitAllowed) {
@@ -161,11 +166,21 @@ export class MessageHandler {
             .map(p => p.userId)
             .filter((id): id is string => id !== null && id !== userId);
           if (otherMemberIds.length > 0) {
-            const blockers = await this.prisma.user.findMany({
-              where: { id: { in: otherMemberIds }, blockedUserIds: { has: userId } },
-              select: { id: true }
-            });
-            if (blockers.length > 0) {
+            const cacheStore = getCacheStore();
+            const cacheKey = `blocks:${userId}:${otherMemberIds.sort().join(',')}`;
+            const cached = await cacheStore.get(cacheKey);
+            let isBlocked: boolean;
+            if (cached !== null) {
+              isBlocked = cached === '1';
+            } else {
+              const blockers = await this.prisma.user.findMany({
+                where: { id: { in: otherMemberIds }, blockedUserIds: { has: userId } },
+                select: { id: true }
+              });
+              isBlocked = blockers.length > 0;
+              await cacheStore.set(cacheKey, isBlocked ? '1' : '0', 300);
+            }
+            if (isBlocked) {
               this._sendError(callback, 'You are blocked by this user', socket);
               return;
             }
@@ -269,7 +284,7 @@ export class MessageHandler {
 
         conversationMessageStatsService.onNewMessage(
           this.prisma, message.conversationId, userId || participantId, data.content ?? '', [], null
-        ).catch(err => console.error('[MessageHandler] Stats update error:', err));
+        ).catch(err => handlerLogger.warn('stats update error', { error: err }));
       }
 
       handlerLogger.info('perf:ws.message.send', {
@@ -281,7 +296,7 @@ export class MessageHandler {
 
       this.stats.messages_processed++;
     } catch (error: unknown) {
-      console.error('[MESSAGE_SEND] Erreur:', error);
+      handlerLogger.error('message:send failed', { error });
       this.stats.errors++;
       this._sendError(callback, 'Failed to send message', socket);
     }
@@ -445,7 +460,7 @@ export class MessageHandler {
         });
         conversationMessageStatsService.onNewMessage(
           this.prisma, message.conversationId, userId || participantId, data.content ?? '', attachmentTypes, null
-        ).catch(err => console.error('[MessageHandler] Stats update error:', err));
+        ).catch(err => handlerLogger.warn('stats update error', { error: err }));
       }
 
       handlerLogger.info('perf:ws.message.send-with-attachments', {
@@ -457,7 +472,7 @@ export class MessageHandler {
 
       this.stats.messages_processed++;
     } catch (error: unknown) {
-      console.error('[MESSAGE_SEND_ATTACHMENTS] Erreur:', error);
+      handlerLogger.error('message:send-with-attachments failed', { error });
       this.stats.errors++;
       this._sendError(callback, 'Failed to send message', socket);
     }
@@ -478,7 +493,7 @@ export class MessageHandler {
       // sont diffusées via l'event dédié `conversation:stats`. L'appel
       // updateOnNewMessage reste pour son side-effect (cache stats).
       const [translations] = await Promise.allSettled([
-        this._getMessageTranslations(message.id),
+        this._getMessageTranslations(message),
         conversationStatsService.updateOnNewMessage(
           this.prisma,
           conversationId,
@@ -545,30 +560,54 @@ export class MessageHandler {
       const senderParticipant = (message as unknown as { sender?: { userId?: string | null } }).sender;
       const senderUserId = senderParticipant?.userId ?? null;
 
+      // Bandwidth sprint Phase B1 — per-recipient language filtering of the
+      // `message:new` broadcast. The payload carries every translation; each
+      // recipient under the Prisme reads ONE language, so room-wide emission
+      // wastes ~75% of the translation weight for the majority of users. When
+      // SOCKET_LANG_FILTER=true we group the room's peer sockets by their
+      // resolved languages (zero DB query — from the in-memory connectedUsers
+      // map) and emit a trimmed payload once per distinct language set. The
+      // original language is always kept (Prisme source fallback). The sender's
+      // own devices still receive the full, cid-aware `senderPayload`.
+      // Opt-in (OFF by default) — flip per-deploy after staging measurement.
+      const langFilterOn = process.env.SOCKET_LANG_FILTER === 'true';
+
       if (senderUserId) {
         // Multi-device : send the cid-aware payload to the sender's
         // user room (catches every iOS / web session of this user)
         // and the cid-stripped payload to the conversation room
         // EXCEPT the sender's user room so peers do not receive a
         // duplicate.
-        this.io
-          .to(room)
-          .except(ROOMS.user(senderUserId))
-          .emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
+        if (langFilterOn) {
+          this._emitMessageNewByLanguage(room, broadcastPayload, { excludeUserId: senderUserId });
+        } else {
+          this.io
+            .to(room)
+            .except(ROOMS.user(senderUserId))
+            .emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
+        }
         this.io.to(ROOMS.user(senderUserId)).emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
       } else if (senderSocket) {
         // Anonymous sender with an active socket : same single-session
         // split as before. Multi-device anonymous is undefined.
-        senderSocket.broadcast.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
+        if (langFilterOn) {
+          this._emitMessageNewByLanguage(room, broadcastPayload, { excludeSocketId: senderSocket.id });
+        } else {
+          senderSocket.broadcast.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
+        }
         senderSocket.emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
       } else {
         // No senderSocket context (REST path or background flush) and
         // no resolvable user id : fall back to the cid-stripped payload
         // for the whole room. The sender's other sessions still
         // reconcile via the REST / socket ACK path which carries the cid.
-        this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
+        if (langFilterOn) {
+          this._emitMessageNewByLanguage(room, broadcastPayload, {});
+        } else {
+          this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
+        }
       }
-      console.log(`[RT-DIAG] message:new emitted conv=${normalizedId} msg=${message.id} senderUserId=${senderUserId ?? 'anon'} room=${room}`);
+      handlerLogger.debug('message:new emitted', { conversationId: normalizedId, messageId: message.id, senderUserId: senderUserId ?? 'anon' });
 
       // Notify each participant's user room that the conversation has
       // been updated (lastMessageAt advanced) so their conversation
@@ -598,9 +637,9 @@ export class MessageHandler {
             updatePayload
           );
         }
-        console.log(`[RT-DIAG] conversation:updated emitted conv=${normalizedId} to ${participants.filter((p) => p.userId).length} user room(s)`);
+        handlerLogger.debug('conversation:updated emitted', { conversationId: normalizedId, recipients: participants.filter((p) => p.userId).length });
       } catch (err) {
-        console.warn('[BROADCAST] CONVERSATION_UPDATED emit failed:', err);
+        handlerLogger.warn('conversation:updated emit failed', { error: err });
       }
 
       // Mettre à jour unread counts
@@ -613,10 +652,47 @@ export class MessageHandler {
       // room, so an online recipient outside the conversation never triggers
       // mark-as-received and the sender stays stuck at a single checkmark.
       this._autoDeliverToOnlineRecipients(message, normalizedId).catch((err) => {
-        console.warn('[AUTO_DELIVERED] background failure:', err);
+        handlerLogger.warn('auto-deliver background failure', { error: err });
       });
     } catch (error) {
-      console.error('[BROADCAST] Erreur:', error);
+      handlerLogger.error('broadcastNewMessage failed', { error });
+    }
+  }
+
+  /**
+   * Phase B1 — emit `message:new` to a conversation room grouped by each peer's
+   * preferred language, sending a translation-trimmed payload once per distinct
+   * language set (delegating the pure grouping/trimming to unit-tested helpers).
+   * The sender's own sockets are excluded here; their cid-aware payload is sent
+   * separately by the caller.
+   */
+  private _emitMessageNewByLanguage(
+    room: string,
+    payload: Record<string, unknown>,
+    opts: { excludeUserId?: string; excludeSocketId?: string }
+  ): void {
+    const socketIds = this.io.sockets.adapter.rooms.get(room);
+    if (!socketIds || socketIds.size === 0) return;
+
+    const originalLanguage = String((payload as { originalLanguage?: unknown }).originalLanguage || 'fr');
+    const groups = groupSocketsByLanguage({
+      socketIds,
+      originalLanguage,
+      excludeUserId: opts.excludeUserId,
+      excludeSocketIds: opts.excludeSocketId ? new Set([opts.excludeSocketId]) : undefined,
+      socketToUser: (sid) => this.socketToUser.get(sid),
+      resolveLanguages: (uid) => this.connectedUsers.get(uid)?.resolvedLanguages,
+      userLanguage: (uid) => this.connectedUsers.get(uid)?.language,
+    });
+
+    for (const group of groups) {
+      if (group.socketIds.length === 0) continue;
+      const filtered = filterMessagePayloadForLanguages(payload, group.languages);
+      // Chain `.to(socketId)` so a single emit fans out to exactly this group's
+      // sockets (mirrors the manager's per-language emit).
+      let emitter: any = this.io;
+      for (const sid of group.socketIds) emitter = emitter.to(sid);
+      emitter.emit(SERVER_EVENTS.MESSAGE_NEW, filtered);
     }
   }
 
@@ -643,7 +719,7 @@ export class MessageHandler {
     const onlineRecipients = participants.filter(
       (p) => p.userId && this.connectedUsers.has(p.userId)
     );
-    console.log(`[RT-DIAG] autoDeliver conv=${conversationId} msg=${message.id} participants=${participants.length} onlineRecipients=${onlineRecipients.length}`);
+    handlerLogger.debug('auto-deliver', { conversationId, messageId: message.id, participants: participants.length, onlineRecipients: onlineRecipients.length });
     if (onlineRecipients.length === 0) return;
 
     const { PrivacyPreferencesService } = await import('../../services/PrivacyPreferencesService.js');
@@ -665,12 +741,12 @@ export class MessageHandler {
         didMarkAny = true;
         if (!firstAcker) firstAcker = { id: recipient.id, userId: recipient.userId };
       } catch (err) {
-        console.warn('[AUTO_DELIVERED] markAsReceived failed:', err);
+        handlerLogger.warn('auto-deliver markAsReceived failed', { error: err });
       }
     }
 
     if (!didMarkAny || !firstAcker) {
-      console.log(`[RT-DIAG] autoDeliver conv=${conversationId} SKIP read-status:updated emit (didMarkAny=${didMarkAny}) — recipients likely have read receipts disabled`);
+      handlerLogger.debug('auto-deliver skipped — no receipts marked', { conversationId, didMarkAny });
       return;
     }
 
@@ -701,7 +777,7 @@ export class MessageHandler {
       emitter = emitter.to(userRoom);
     }
     emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
-    console.log(`[RT-DIAG] autoDeliver conv=${conversationId} read-status:updated EMITTED rooms=[${[...seen].join(', ')}] deliveredCount=${summary.deliveredCount}`);
+    handlerLogger.debug('auto-deliver read-status:updated emitted', { conversationId, rooms: [...seen], deliveredCount: summary.deliveredCount });
   }
 
   /**
@@ -756,74 +832,23 @@ export class MessageHandler {
   }
 
   /**
-   * Récupère un message complet pour le broadcast
-   * Unified Participant: sender is a Participant, no anonymousSender
-   * Still needed for attachment and forward paths where relations are added post-create
+   * Récupère les traductions d'un message.
+   * Court-circuite la DB si le champ translations est déjà présent sur l'objet
+   * (messages tout juste créés → null, messages re-broadcastés après traduction → objet).
    */
-  private async _fetchMessageForBroadcast(messageId: string): Promise<Message | null> {
+  private async _getMessageTranslations(message: Message): Promise<unknown[]> {
+    const inMemory = (message as unknown as Record<string, unknown>).translations;
+    if (inMemory !== undefined) {
+      return this._parseTranslations(inMemory);
+    }
     const msg = await this.prisma.message.findUnique({
-      where: { id: messageId },
-      include: {
-        sender: {
-          select: {
-            id: true,
-            displayName: true,
-            avatar: true,
-            type: true,
-            nickname: true,
-            userId: true,
-            user: {
-              select: {
-                id: true,
-                username: true,
-                displayName: true,
-                firstName: true,
-                lastName: true,
-                avatar: true
-              }
-            }
-          }
-        },
-        attachments: true,
-        replyTo: {
-          include: {
-            sender: {
-              select: {
-                id: true,
-                displayName: true,
-                avatar: true,
-                type: true,
-                nickname: true,
-                userId: true,
-                user: {
-                  select: {
-                    id: true,
-                    username: true,
-                    displayName: true,
-                    firstName: true,
-                    lastName: true,
-                    avatar: true
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    });
-    if (!msg) return null;
-    return { ...msg, timestamp: msg.createdAt, translations: [] } as unknown as Message;
-  }
-
-  /**
-   * Récupère les traductions d'un message
-   */
-  private async _getMessageTranslations(messageId: string): Promise<unknown[]> {
-    const msg = await this.prisma.message.findUnique({
-      where: { id: messageId },
+      where: { id: message.id },
       select: { translations: true }
     });
-    const translations = msg?.translations;
+    return this._parseTranslations(msg?.translations);
+  }
+
+  private _parseTranslations(translations: unknown): unknown[] {
     if (!translations || typeof translations !== 'object') return [];
     if (Array.isArray(translations)) return translations;
     return Object.entries(translations as Record<string, unknown>).map(([lang, data]) => ({
@@ -922,37 +947,33 @@ export class MessageHandler {
       const senderId = message.senderId;
       if (!senderId) return;
 
-      // Get all active participants except the sender
+      // Get all active participants except the sender (include joinedAt for batch count floor)
       const participants = await this.prisma.participant.findMany({
         where: {
           conversationId,
           isActive: true,
           id: { not: senderId }
         },
-        select: { id: true, userId: true }
+        select: { id: true, userId: true, joinedAt: true }
       });
 
-      const readStatusService = this.readStatusService;
+      // Batch: 1 cursor query + N parallel counts instead of 3N sequential queries
+      const unreadCounts = await this.readStatusService.getUnreadCountsForParticipants(
+        participants,
+        conversationId,
+        senderId
+      );
 
       await Promise.all(participants.map(async (participant) => {
-        // Use userId for registered users (for their personal room), participantId for anonymous
-        const roomTarget = participant.userId || participant.id;
-        // CRITICAL: pass `participant.id` (not `roomTarget`) to
-        // `getUnreadCount`. `ConversationReadCursor.participantId` is the
-        // Participant.id per the schema — passing the userId here used to
-        // silently miss the cursor lookup and fall back to a "count all
-        // historical messages" path, returning wildly inflated unread
-        // counts (e.g. 75 for users who had read everything). The room
-        // target stays based on userId for socket delivery.
-        const unreadCount = await readStatusService.getUnreadCount(participant.id, conversationId);
+        const roomTarget = participant.userId ?? participant.id;
+        const unreadCount = unreadCounts.get(participant.id) ?? 0;
         this.io.to(ROOMS.user(roomTarget)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
           conversationId,
           unreadCount
         });
-        console.log(`[RT-DIAG] conversation:unread-updated emitted conv=${conversationId} user=${roomTarget} unread=${unreadCount}`);
       }));
     } catch (error) {
-      console.warn('⚠️ [UNREAD_COUNT] Erreur:', error);
+      handlerLogger.warn('unread count update failed', { error });
     }
   }
 

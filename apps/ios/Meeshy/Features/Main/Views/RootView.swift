@@ -79,10 +79,6 @@ struct RootView: View {
         return ButtonPosition(x: CGFloat(x), y: CGFloat(y))
     }
 
-    private var isCallActive: Bool {
-        callManager.callState.isActive
-    }
-
     var body: some View {
         ZStack {
             // 1. Dynamic Background
@@ -314,6 +310,7 @@ struct RootView: View {
         .environmentObject(statusViewModel)
         .environmentObject(conversationViewModel)
         .environmentObject(storyViewerCoordinator)
+        .environmentObject(StatusBubbleController.shared)
         // Propagate story viewer presentation state down to chrome (sync
         // pill, etc.) so they can skip rendering while a `fullScreenCover`
         // story is on top. Read by `ConnectionBanner` via
@@ -350,6 +347,17 @@ struct RootView: View {
 
             // Observe sync events for conversation list
             conversationViewModel.observeSync()
+
+            // Réponse à un mood (confirmée via pop-up, ou immédiate en DM) :
+            // résout/ouvre la DM avec l'auteur et amorce le composer.
+            StatusBubbleController.shared.onConfirmedReply = { entry in
+                router.navigateToStoryReply(
+                    .status(statusId: entry.id, authorId: entry.userId,
+                            authorName: entry.username, emoji: entry.moodEmoji,
+                            content: entry.content, publishedAt: entry.createdAt),
+                    conversationListViewModel: conversationViewModel
+                )
+            }
 
             // Pilier 22 V3 wiring — register the StoryViewModel as the
             // queue's upload executor. setExecutor also registers the
@@ -411,7 +419,12 @@ struct RootView: View {
         // the call. The hangup button on either UI still routes through
         // `callManager.endCall()` explicitly.
         .fullScreenCover(isPresented: Binding(
-            get: { isCallActive && callManager.displayMode == .fullScreen },
+            get: {
+                CallState.shouldPresentFullScreenCover(
+                    callState: callManager.callState,
+                    displayMode: callManager.displayMode
+                )
+            },
             set: { if !$0 { callManager.displayMode = .pip } }
         )) {
             CallView()
@@ -579,6 +592,7 @@ struct RootView: View {
                 .environmentObject(conversationViewModel)
                 .environmentObject(router)
                 .environmentObject(statusViewModel)
+                .environmentObject(StatusBubbleController.shared)
                 .presentationDetents([.medium, .large])
             }
         }
@@ -590,6 +604,7 @@ struct RootView: View {
         .sheet(isPresented: $showNewConversation) {
             NewConversationView()
                 .environmentObject(statusViewModel)
+                .environmentObject(StatusBubbleController.shared)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }

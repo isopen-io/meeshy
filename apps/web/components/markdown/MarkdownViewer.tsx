@@ -19,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 import { MermaidDiagram } from '@/components/markdown/MermaidDiagram';
+import { useI18n } from '@/hooks/useI18n';
 
 // ======================
 // Dynamic Import for Syntax Highlighter (~150KB saved)
@@ -61,10 +62,10 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
   onDelete,
   canDelete = false
 }) => {
+  const { t } = useI18n('markdown');
   const [content, setContent] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
   const [showRaw, setShowRaw] = useState(false);
   const { theme, resolvedTheme } = useTheme();
 
@@ -86,9 +87,8 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
         const text = await response.text();
         setContent(text);
       } catch (error) {
-        console.error('Erreur chargement markdown:', error);
+        console.error('Markdown load error:', error);
         setHasError(true);
-        setErrorMessage('Impossible de charger le fichier');
       } finally {
         setIsLoading(false);
       }
@@ -130,7 +130,7 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
         ) : hasError ? (
           <div className="flex flex-col items-center justify-center py-12 gap-2 text-gray-600 dark:text-gray-400">
             <AlertTriangle className="w-12 h-12" />
-            <span className="text-sm">{errorMessage}</span>
+            <span className="text-sm">{t('markdown.loadError')}</span>
           </div>
         ) : showRaw ? (
           <pre className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-mono">
@@ -186,7 +186,7 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
             size="sm"
             variant="destructive"
             className="absolute top-2 right-2 w-8 h-8 p-0 opacity-0 hover:opacity-100 focus-visible:opacity-100 transition-opacity"
-            title="Supprimer ce fichier Markdown"
+            title={t('markdown.delete')}
           >
             <X className="w-4 h-4" />
           </Button>
@@ -213,7 +213,7 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
             size="sm"
             variant="ghost"
             className="w-8 h-8 p-0 flex-shrink-0"
-            title={showRaw ? 'Vue formatée' : 'Vue brute'}
+            title={showRaw ? t('markdown.viewFormatted') : t('markdown.viewRaw')}
             disabled={isLoading || hasError}
           >
             {showRaw ? (
@@ -230,7 +230,7 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
               size="sm"
               variant="ghost"
               className="w-8 h-8 p-0"
-              title="Ouvrir en plein écran"
+              title={t('markdown.fullscreen')}
             >
               <Maximize className="w-4 h-4" />
             </Button>
@@ -241,7 +241,7 @@ export const MarkdownViewer: React.FC<MarkdownViewerProps> = ({
             href={downloadUrl}
             download={attachment.originalName}
             className="flex-shrink-0 p-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-full transition-colors duration-200"
-            title="Télécharger"
+            title={t('markdown.download')}
             onClick={(e) => e.stopPropagation()}
           >
             <Download className="w-4 h-4 text-gray-600 dark:text-gray-300" />

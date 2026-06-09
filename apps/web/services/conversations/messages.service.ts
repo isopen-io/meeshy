@@ -38,7 +38,8 @@ export class MessagesService {
     conversationId: string,
     page = 1,
     limit = 20,
-    cursor?: string | null
+    cursor?: string | null,
+    signal?: AbortSignal
   ): Promise<GetMessagesResponse> {
     try {
       const requestKey = `messages-${conversationId}`;
@@ -51,6 +52,10 @@ export class MessagesService {
         queryParams.before = cursor;
       } else {
         queryParams.offset = offset;
+      }
+
+      if (signal) {
+        signal.addEventListener('abort', () => controller.abort(), { once: true });
       }
 
       const response = await apiService.get<{

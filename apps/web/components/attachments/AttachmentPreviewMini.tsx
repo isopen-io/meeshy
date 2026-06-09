@@ -5,7 +5,8 @@
 
 'use client';
 
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo } from 'react';
+import NextImage from 'next/image';
 import { FileText, Music, Video, File } from 'lucide-react';
 import { Attachment, getAttachmentType } from '@meeshy/shared/types/attachment';
 import { buildAttachmentsUrls } from '@/utils/attachment-url';
@@ -81,19 +82,6 @@ export const AttachmentPreviewMini = React.memo(function AttachmentPreviewMini({
   // Compter les attachements restants si on n'affiche que le premier
   const remainingCount = attachments.length - 1;
 
-  // Handler pour gérer les erreurs de chargement d'image
-  const handleImageError = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
-    const img = e.currentTarget;
-    img.style.display = 'none';
-    const parent = img.parentElement;
-    if (parent) {
-      parent.classList.add('bg-gray-100', 'dark:bg-gray-700', 'flex', 'items-center', 'justify-center');
-      const icon = document.createElement('div');
-      icon.innerHTML = '📷';
-      icon.className = 'text-2xl opacity-50';
-      parent.appendChild(icon);
-    }
-  }, []);
 
   return (
     <div
@@ -113,13 +101,13 @@ export const AttachmentPreviewMini = React.memo(function AttachmentPreviewMini({
                 className="relative rounded overflow-hidden border border-white/20 dark:border-gray-600/20 flex-shrink-0"
                 style={{ width: PREVIEW_SIZE, height: PREVIEW_SIZE }}
               >
-                <img
+                <NextImage
                   src={safeFileUrl}
                   alt={`Aperçu de l'image ${attachment.originalName || attachment.fileName}`}
-                  className="w-full h-full object-cover"
-                  onError={handleImageError}
+                  fill
+                  sizes={`${PREVIEW_SIZE}px`}
+                  className="object-cover"
                   loading="lazy"
-                  role="img"
                 />
               </div>
               {index === 0 && remainingCount > 0 && showOnlyFirst && (

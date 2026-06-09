@@ -10,7 +10,7 @@ struct NotificationSettingsView: View {
     private var theme: ThemeManager { ThemeManager.shared }
     @ObservedObject private var prefs = UserPreferencesManager.shared
 
-    private let accentColor = "08D9D6"
+    private let accentColor = "6366F1"
 
     var body: some View {
         ZStack {
@@ -81,10 +81,10 @@ struct NotificationSettingsView: View {
             notifToggle(icon: "bell.badge.fill", title: String(localized: "settings.notifications.push", defaultValue: "Push", bundle: .main), color: "FF6B6B",
                         keyPath: \.pushEnabled)
 
-            notifToggle(icon: "envelope.fill", title: String(localized: "settings.notifications.email", defaultValue: "Email", bundle: .main), color: "45B7D1",
+            notifToggle(icon: "envelope.fill", title: String(localized: "settings.notifications.email", defaultValue: "Email", bundle: .main), color: "60A5FA",
                         keyPath: \.emailEnabled)
 
-            notifToggle(icon: "speaker.wave.2.fill", title: String(localized: "settings.notifications.sounds", defaultValue: "Sons", bundle: .main), color: "4ECDC4",
+            notifToggle(icon: "speaker.wave.2.fill", title: String(localized: "settings.notifications.sounds", defaultValue: "Sons", bundle: .main), color: "6366F1",
                         keyPath: \.soundEnabled)
 
             notifToggle(icon: "iphone.radiowaves.left.and.right", title: String(localized: "settings.notifications.vibrations", defaultValue: "Vibrations", bundle: .main), color: "9B59B6",
@@ -98,8 +98,8 @@ struct NotificationSettingsView: View {
     // MARK: - Messages
 
     private var messagesSection: some View {
-        settingsSection(title: String(localized: "settings.notifications.messages", defaultValue: "Messages", bundle: .main), icon: "message.fill", color: "4ECDC4") {
-            notifToggle(icon: "bubble.left.fill", title: String(localized: "settings.notifications.new_messages", defaultValue: "Nouveaux messages", bundle: .main), color: "4ECDC4",
+        settingsSection(title: String(localized: "settings.notifications.messages", defaultValue: "Messages", bundle: .main), icon: "message.fill", color: "6366F1") {
+            notifToggle(icon: "bubble.left.fill", title: String(localized: "settings.notifications.new_messages", defaultValue: "Nouveaux messages", bundle: .main), color: "6366F1",
                         keyPath: \.newMessageEnabled)
 
             notifToggle(icon: "phone.arrow.down.left", title: String(localized: "settings.notifications.missed_calls", defaultValue: "Appels manqués", bundle: .main), color: "FF6B6B",
@@ -108,7 +108,7 @@ struct NotificationSettingsView: View {
             notifToggle(icon: "mic.fill", title: String(localized: "settings.notifications.voicemail", defaultValue: "Messages vocaux", bundle: .main), color: "9B59B6",
                         keyPath: \.voicemailEnabled)
 
-            notifToggle(icon: "gear", title: String(localized: "settings.notifications.system", defaultValue: "Système", bundle: .main), color: "45B7D1",
+            notifToggle(icon: "gear", title: String(localized: "settings.notifications.system", defaultValue: "Système", bundle: .main), color: "60A5FA",
                         keyPath: \.systemEnabled)
         }
     }
@@ -120,7 +120,7 @@ struct NotificationSettingsView: View {
             notifToggle(icon: "text.bubble.fill", title: String(localized: "settings.notifications.conversations", defaultValue: "Conversations", bundle: .main), color: "9B59B6",
                         keyPath: \.conversationEnabled)
 
-            notifToggle(icon: "arrowshape.turn.up.left.fill", title: String(localized: "settings.notifications.replies", defaultValue: "Réponses", bundle: .main), color: "4ECDC4",
+            notifToggle(icon: "arrowshape.turn.up.left.fill", title: String(localized: "settings.notifications.replies", defaultValue: "Réponses", bundle: .main), color: "6366F1",
                         keyPath: \.replyEnabled)
 
             notifToggle(icon: "at", title: String(localized: "settings.notifications.mentions", defaultValue: "Mentions", bundle: .main), color: "F8B500",
@@ -134,11 +134,11 @@ struct NotificationSettingsView: View {
     // MARK: - Contacts & Groups
 
     private var contactsSection: some View {
-        settingsSection(title: String(localized: "settings.notifications.contacts_groups", defaultValue: "Contacts & Groupes", bundle: .main), icon: "person.2.fill", color: "4ECDC4") {
-            notifToggle(icon: "person.badge.plus", title: String(localized: "settings.notifications.contact_requests", defaultValue: "Demandes de contact", bundle: .main), color: "4ECDC4",
+        settingsSection(title: String(localized: "settings.notifications.contacts_groups", defaultValue: "Contacts & Groupes", bundle: .main), icon: "person.2.fill", color: "6366F1") {
+            notifToggle(icon: "person.badge.plus", title: String(localized: "settings.notifications.contact_requests", defaultValue: "Demandes de contact", bundle: .main), color: "6366F1",
                         keyPath: \.contactRequestEnabled)
 
-            notifToggle(icon: "person.3.fill", title: String(localized: "settings.notifications.group_invites", defaultValue: "Invitations groupe", bundle: .main), color: "45B7D1",
+            notifToggle(icon: "person.3.fill", title: String(localized: "settings.notifications.group_invites", defaultValue: "Invitations groupe", bundle: .main), color: "60A5FA",
                         keyPath: \.groupInviteEnabled)
 
             notifToggle(icon: "person.badge.shield.checkmark", title: String(localized: "settings.notifications.member_joined", defaultValue: "Membre rejoint", bundle: .main), color: "4ADE80",
@@ -156,10 +156,10 @@ struct NotificationSettingsView: View {
             notifToggle(icon: "heart.fill", title: String(localized: "settings.notifications.post_likes", defaultValue: "Likes posts", bundle: .main), color: "FF6B6B",
                         keyPath: \.postLikeEnabled)
 
-            notifToggle(icon: "text.bubble.fill", title: String(localized: "settings.notifications.post_comments", defaultValue: "Commentaires posts", bundle: .main), color: "4ECDC4",
+            notifToggle(icon: "text.bubble.fill", title: String(localized: "settings.notifications.post_comments", defaultValue: "Commentaires posts", bundle: .main), color: "6366F1",
                         keyPath: \.postCommentEnabled)
 
-            notifToggle(icon: "arrow.triangle.2.circlepath", title: String(localized: "settings.notifications.reposts", defaultValue: "Reposts", bundle: .main), color: "45B7D1",
+            notifToggle(icon: "arrow.triangle.2.circlepath", title: String(localized: "settings.notifications.reposts", defaultValue: "Reposts", bundle: .main), color: "60A5FA",
                         keyPath: \.postRepostEnabled)
 
             notifToggle(icon: "sparkles", title: String(localized: "settings.notifications.story_reactions", defaultValue: "Réactions stories", bundle: .main), color: "F8B500",
@@ -176,14 +176,14 @@ struct NotificationSettingsView: View {
     // MARK: - Display
 
     private var displaySection: some View {
-        settingsSection(title: String(localized: "settings.notifications.display", defaultValue: "Affichage", bundle: .main), icon: "eye.fill", color: "45B7D1") {
-            notifToggle(icon: "text.below.photo.fill", title: String(localized: "settings.notifications.preview", defaultValue: "Aperçu", bundle: .main), color: "45B7D1",
+        settingsSection(title: String(localized: "settings.notifications.display", defaultValue: "Display", bundle: .main), icon: "eye.fill", color: "60A5FA") {
+            notifToggle(icon: "text.below.photo.fill", title: String(localized: "settings.notifications.preview", defaultValue: "Preview", bundle: .main), color: "60A5FA",
                         keyPath: \.showPreview)
 
-            notifToggle(icon: "person.text.rectangle", title: String(localized: "settings.notifications.sender_name", defaultValue: "Nom expéditeur", bundle: .main), color: "9B59B6",
+            notifToggle(icon: "person.text.rectangle", title: String(localized: "settings.notifications.sender_name", defaultValue: "Sender name", bundle: .main), color: "9B59B6",
                         keyPath: \.showSenderName)
 
-            notifToggle(icon: "rectangle.stack.fill", title: String(localized: "settings.notifications.group_notifications", defaultValue: "Grouper notifications", bundle: .main), color: "4ECDC4",
+            notifToggle(icon: "rectangle.stack.fill", title: String(localized: "settings.notifications.group_notifications", defaultValue: "Group notifications", bundle: .main), color: "6366F1",
                         keyPath: \.groupNotifications)
         }
     }
@@ -195,7 +195,7 @@ struct NotificationSettingsView: View {
             notifToggle(icon: "moon.zzz.fill", title: String(localized: "settings.notifications.dnd_enable", defaultValue: "Activer DnD", bundle: .main), color: "9B59B6",
                         keyPath: \.dndEnabled)
 
-            settingsRow(icon: "clock.fill", title: String(localized: "settings.notifications.dnd_start", defaultValue: "Heure début", bundle: .main), color: "45B7D1") {
+            settingsRow(icon: "clock.fill", title: String(localized: "settings.notifications.dnd_start", defaultValue: "Heure début", bundle: .main), color: "60A5FA") {
                 TextField("", text: Binding(
                     get: { prefs.notification.dndStartTime },
                     set: { val in prefs.updateNotification { $0.dndStartTime = val } }
@@ -206,7 +206,7 @@ struct NotificationSettingsView: View {
                 .frame(width: 60)
             }
 
-            settingsRow(icon: "clock.badge.checkmark", title: String(localized: "settings.notifications.dnd_end", defaultValue: "Heure fin", bundle: .main), color: "4ECDC4") {
+            settingsRow(icon: "clock.badge.checkmark", title: String(localized: "settings.notifications.dnd_end", defaultValue: "Heure fin", bundle: .main), color: "6366F1") {
                 TextField("", text: Binding(
                     get: { prefs.notification.dndEndTime },
                     set: { val in prefs.updateNotification { $0.dndEndTime = val } }
@@ -248,6 +248,8 @@ struct NotificationSettingsView: View {
                                 .fill(isSelected ? Color(hex: accentColor) : Color(hex: accentColor).opacity(0.15))
                         )
                 }
+                .accessibilityLabel(dayAccessibilityLabel(day))
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
         }
     }
@@ -256,13 +258,25 @@ struct NotificationSettingsView: View {
 
     private func dayLabel(_ day: DndDay) -> String {
         switch day {
-        case .mon: return "L"
-        case .tue: return "M"
-        case .wed: return "M"
-        case .thu: return "J"
-        case .fri: return "V"
-        case .sat: return "S"
-        case .sun: return "D"
+        case .mon: return String(localized: "common.day.mon.short", defaultValue: "M", bundle: .main)
+        case .tue: return String(localized: "common.day.tue.short", defaultValue: "T", bundle: .main)
+        case .wed: return String(localized: "common.day.wed.short", defaultValue: "W", bundle: .main)
+        case .thu: return String(localized: "common.day.thu.short", defaultValue: "T", bundle: .main)
+        case .fri: return String(localized: "common.day.fri.short", defaultValue: "F", bundle: .main)
+        case .sat: return String(localized: "common.day.sat.short", defaultValue: "S", bundle: .main)
+        case .sun: return String(localized: "common.day.sun.short", defaultValue: "S", bundle: .main)
+        }
+    }
+
+    private func dayAccessibilityLabel(_ day: DndDay) -> String {
+        switch day {
+        case .mon: return String(localized: "common.day.mon", defaultValue: "Monday", bundle: .main)
+        case .tue: return String(localized: "common.day.tue", defaultValue: "Tuesday", bundle: .main)
+        case .wed: return String(localized: "common.day.wed", defaultValue: "Wednesday", bundle: .main)
+        case .thu: return String(localized: "common.day.thu", defaultValue: "Thursday", bundle: .main)
+        case .fri: return String(localized: "common.day.fri", defaultValue: "Friday", bundle: .main)
+        case .sat: return String(localized: "common.day.sat", defaultValue: "Saturday", bundle: .main)
+        case .sun: return String(localized: "common.day.sun", defaultValue: "Sunday", bundle: .main)
         }
     }
 

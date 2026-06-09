@@ -30,6 +30,9 @@ import {
   type EncryptedUploadResult,
 } from './UploadProcessor';
 import { MetadataManager } from './MetadataManager';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'AttachmentService' });
 
 /**
  * Service principal de gestion des attachements
@@ -67,7 +70,7 @@ export class AttachmentService {
     if (isProduction) {
       const domain = process.env.DOMAIN || 'meeshy.me';
       const url = `https://gate.${domain}`;
-      console.warn('[AttachmentService] PUBLIC_URL non définie, utilisation du domaine par défaut:', url);
+      logger.warn('PUBLIC_URL non définie, utilisation du domaine par défaut', { url });
       return url;
     }
 
@@ -77,12 +80,12 @@ export class AttachmentService {
 
       const port = process.env.PORT || '3000';
       const url = `http://localhost:${port}`;
-      console.warn('[AttachmentService] BACKEND_URL non définie en développement, utilisation de localhost:', url);
+      logger.warn('BACKEND_URL non définie, utilisation de localhost', { url });
       return url;
     }
 
     const fallback = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:3000';
-    console.error('[AttachmentService] Impossible de déterminer PUBLIC_URL, utilisation du fallback:', fallback);
+    logger.error('Impossible de déterminer PUBLIC_URL', { fallback });
     return fallback;
   }
 
@@ -278,7 +281,7 @@ export class AttachmentService {
         await fs.unlink(thumbnailFullPath).catch(() => {});
       }
     } catch (error) {
-      console.error('[AttachmentService] Erreur suppression fichiers:', error);
+      logger.error('Erreur suppression fichiers', error as Error);
     }
 
     await this.prisma.messageAttachment.delete({
@@ -425,7 +428,7 @@ export class AttachmentService {
     });
 
     if (!decryptResult.hashVerified) {
-      console.warn('[AttachmentService] Hash verification failed for attachment:', attachmentId);
+      logger.warn('Hash verification failed', { attachmentId });
     }
 
     return {

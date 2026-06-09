@@ -538,6 +538,11 @@ class MeeshySocketIOService {
       originalContent: (socketMessage as any).originalContent || socketMessage.content,
       originalLanguage: socketMessage.originalLanguage || 'fr',
       messageType: socketMessage.messageType,
+      // Origin + structured payload so realtime system notices (call summaries)
+      // render rich, not only after a REST reload. Default to 'user' for parity
+      // with the REST transformer when the field is absent.
+      messageSource: (socketMessage as any).messageSource || 'user',
+      metadata: (socketMessage as any).metadata,
       timestamp: socketMessage.createdAt,
       createdAt: socketMessage.createdAt,
       updatedAt: socketMessage.updatedAt,

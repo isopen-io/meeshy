@@ -8,7 +8,7 @@ extension ConversationView {
     // MARK: - Scroll to Bottom Button
 
     var hasTypingIndicator: Bool {
-        !viewModel.typingUsernames.isEmpty
+        !typingObserver.typingUsernames.isEmpty
     }
 
     /// Unread message attachment (for rich preview in button)
@@ -29,17 +29,18 @@ extension ConversationView {
     var scrollToBottomButton: some View {
         ConversationScrollControlsView(
             unreadCount: scrollState.unreadBadgeCount,
-            typingUsernames: viewModel.typingUsernames,
+            typingUsernames: typingObserver.typingUsernames,
             lastUnreadMessageContent: viewModel.lastUnreadMessage?.content,
             unreadAttachmentTypeLabel: unreadAttachmentTypeLabel,
             unreadAttachmentThumbHash: unreadAttachment?.thumbHash,
             unreadAttachmentThumbnailUrl: unreadAttachment?.thumbnailUrl,
             unreadAttachmentFullUrl: unreadAttachment?.type == .image ? unreadAttachment?.fileUrl : nil,
             unreadAttachmentIsAudio: unreadAttachment?.type == .audio,
+            unreadAttachmentDetail: unreadAttachmentDetail,
+            unreadAttachmentSymbol: unreadAttachmentSymbol,
             isAudioPlaying: scrollButtonAudioPlayer.isPlaying,
             isOffline: isOffline,
             isSearchingQuotedMessage: viewModel.isSearchingQuotedMessage,
-            typingDotPhase: headerState.typingDotPhase,
             accentColor: accentColor,
             secondaryColor: secondaryColor,
             onScrollToBottom: {
@@ -81,8 +82,45 @@ extension ConversationView {
         }
     }
 
+    /// SF Symbol describing the last unread attachment's type — drives the
+    /// type glyph in the scroll-to-bottom button when no thumbnail exists.
+    var unreadAttachmentSymbol: String? {
+        guard let att = unreadAttachment else { return nil }
+        switch att.type {
+        case .image: return "photo.fill"
+        case .video: return "video.fill"
+        case .audio: return "waveform"
+        case .file: return "doc.fill"
+        case .location: return "mappin.circle.fill"
+        }
+    }
+
+    /// Formatted media detail of the last unread attachment shown after its
+    /// type label: dimensions for image/video, duration for audio/video, and
+    /// file size when known. Returns `nil` when nothing meaningful is known
+    /// (e.g. fileSize 0 and no duration), matching the size-display convention.
+    var unreadAttachmentDetail: String? {
+        guard let att = unreadAttachment else { return nil }
+        var parts: [String] = []
+        switch att.type {
+        case .image, .video:
+            if let w = att.width, let h = att.height, w > 0, h > 0 {
+                parts.append("\(w)×\(h)")
+            }
+        default:
+            break
+        }
+        if att.type == .audio || att.type == .video, let duration = att.durationFormatted {
+            parts.append(duration)
+        }
+        if att.fileSize > 0 {
+            parts.append(att.fileSizeFormatted)
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
     var typingLabel: String {
-        let names = viewModel.typingUsernames
+        let names = typingObserver.typingUsernames
         switch names.count {
         case 1: return "\(names[0]) écrit"
         case 2: return "\(names[0]) et \(names[1]) écrivent"

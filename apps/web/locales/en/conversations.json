@@ -118,7 +118,7 @@
       "pinned": "Conversation pinned",
       "unpinned": "Conversation unpinned",
       "muted": "Notifications muted",
-      "unmuted": "Notifications unmuted",
+      "unmuted": "Notifications enabled",
       "archived": "Conversation archived",
       "unarchived": "Conversation unarchived",
       "pinError": "Error pinning conversation",
@@ -298,7 +298,19 @@
       "configError": "Error saving configuration",
       "saveConfig": "Save configuration",
       "selectedReaction": "Selected reaction:",
-      "customReactionPlaceholder": "🎯 Custom"
+      "customReactionPlaceholder": "🎯 Custom",
+      "descriptionError": "Error saving description",
+      "bannerUpdated": "Banner updated",
+      "bannerError": "Error uploading banner",
+      "editTitle": "Edit title",
+      "confirm": "Confirm",
+      "removeReaction": "Remove reaction",
+      "bannerAlt": "Banner",
+      "directConversationBadge": "Direct conversation",
+      "fallbackUser": "User",
+      "reactionAdded": "Reaction {emoji} added",
+      "reactionRemoved": "Reaction removed",
+      "inviteSearchPlaceholder": "Search users..."
     },
     "conversationImage": {
       "title": "Change conversation image",
@@ -413,6 +425,49 @@
       "single": "This file is already added",
       "multiple": "{count} files are already added"
     },
-    "pasteTooLongTxtCreated": "Text too long: a .txt file has been created automatically"
+    "pasteTooLongTxtCreated": "Text too long: a .txt file has been created automatically",
+    "filter": {
+      "all": "All",
+      "public": "Public",
+      "group": "Group",
+      "global": "Global",
+      "direct": "Direct",
+      "unread": "Unread",
+      "archived": "Archived"
+    },
+    "noContacts": "No contacts",
+    "noContactsDescription": "You have no contacts yet. Connect with other users.",
+    "noNotifications": "No notifications",
+    "noNotificationsDescription": "You're all caught up with your notifications.",
+    "noArchivedConversations": "No archived conversations",
+    "noArchivedConversationsDescription": "Archive conversations to find them later.",
+    "noSearchResults": "No results",
+    "noSearchResultsWithQuery": "No results found for \"{query}\". Try a different search.",
+    "noSearchResultsDescription": "No results found.",
+    "errorTitle": "Something went wrong",
+    "errorDescription": "We couldn't load the data. Please try again.",
+    "retry": "Retry",
+    "reconnecting": "Reconnecting...",
+    "clickToReconnect": "Click to reconnect",
+    "participants": {
+      "refreshed": "Statuses refreshed",
+      "refreshError": "Error refreshing",
+      "roleError": "Error updating role",
+      "addError": "Error adding participant"
+    },
+    "createLinkButton": {
+      "notAuthenticated": "Cannot create link: user not logged in",
+      "noConversation": "Cannot create link: conversation not identified",
+      "error": "Error creating link"
+    },
+    "messageSearch": {
+      "placeholder": "Search in conversation…",
+      "close": "Close search",
+      "error": "An error occurred while searching.",
+      "noResults": "No results"
+    },
+    "pinnedBanner": {
+      "close": "Close pinned message"
+    }
   }
 }

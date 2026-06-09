@@ -1,154 +1,291 @@
 {
-  "notifications": {
-    "pageTitle": "Notifications",
-    "title": "Notifications",
-    "empty": {
-      "title": "No notifications",
-      "description": "You have no notifications at the moment",
-      "tryDifferentSearch": "Try a different search"
-    },
-    "noResults": "No notifications found",
-    "search": "Search notifications...",
-    "emptyUnread": "All caught up! No unread notifications.",
-    "emptyMentions": "No mentions yet",
-    "markAllAsRead": "Mark all as read",
-    "markAsRead": "Mark as read",
-    "delete": "Delete",
-    "viewAll": "View all notifications",
-    "loadMore": "Load more",
-    "loading": "Loading notifications...",
-    "reachedEnd": "You've reached the end",
-    "tabs": {
-      "all": "All",
-      "unread": "Unread",
-      "mentions": "Mentions"
-    },
-    "filters": {
-      "title": "Filters",
-      "type": "Type",
-      "status": "Status",
-      "clearAll": "Clear all",
-      "all": "All",
-      "read": "Read",
-      "unread": "Unread",
-      "messages": "Messages",
-      "messagesShort": "Msg",
-      "mentions": "Mentions",
-      "mentionsShort": "@",
-      "conversations": "Conversations",
-      "conversationsShort": "Conv",
-      "calls": "Missed calls",
-      "callsShort": "📞",
-      "friendRequests": "Friend requests",
-      "friendRequestsShort": "Friends",
-      "reactions": "Reactions",
-      "reactionsShort": "❤️",
-      "system": "System",
-      "new_message": "Messages",
-      "friend_request": "Friend requests",
-      "missed_call": "Missed calls",
-      "conversation": "Conversations",
-      "message_reaction": "Reactions"
-    },
-    "types": {
-      "new_message": "New message",
-      "message": "Message",
-      "message_reply": "Reply",
-      "user_mentioned": "Mention",
-      "message_reaction": "Reaction",
-      "contact_request": "Contact request",
-      "contact_accepted": "Contact accepted",
-      "new_conversation_direct": "New conversation",
-      "new_conversation_group": "Group invitation",
-      "member_joined": "Member joined",
-      "missed_call": "Missed call",
-      "system": "System notification"
-    },
-    "priorities": {
-      "low": "Low",
-      "normal": "Normal",
-      "high": "Important",
-      "urgent": "Urgent"
-    },
-    "titles": {
-      "newMessage": "Message from @{sender}",
-      "reply": "Reply from @{sender}",
-      "mentioned": "@{sender} mentioned you",
-      "reaction": "@{sender} reacted {emoji} to your message",
-      "contactRequest": "@{sender} wants to connect",
-      "contactAccepted": "@{sender} accepted your invitation",
-      "newConversationDirect": "New conversation with @{sender}",
-      "newConversationGroup": "Invitation to \"{title}\"",
-      "memberJoined": "New member in \"{title}\"",
-      "missedCall": "Missed {type} call",
-      "system": "System notification",
-      "default": "New notification"
-    },
-    "content": {
-      "memberJoinedMessage": "{sender} joined the group",
-      "contactAcceptedMessage": "{sender} accepted your invitation. You can now chat together.",
-      "contactRequestMessage": "{sender} sent you an invitation",
-      "notMemberHint": "You are not a member of this conversation. Click to join."
-    },
-    "conversationTypes": {
-      "private": "Private",
-      "direct": "Private",
-      "group": "Group"
-    },
-    "timeAgo": {
-      "now": "just now",
-      "minute": "{count} min ago",
-      "hour": "{count}h ago",
-      "day": "{count}d ago"
-    },
-    "actions": {
-      "accept": "Accept",
-      "decline": "Decline",
-      "join": "Join",
-      "callBack": "Call Back",
-      "view": "View",
-      "reply": "Reply",
-      "select": "Select",
-      "markAsRead": "Mark as read",
-      "delete": "Delete",
-      "clearSearch": "Clear search",
-      "allMarkedRead": "All notifications marked as read"
-    },
-    "unreadCount": {
-      "single": "{count} unread of {total}",
-      "plural": "{count} unread of {total}",
-      "active": "{count} unread of {total}",
-      "allRead": "All your {total} notification{plural} are read",
-      "empty": "You have no notifications"
-    },
-    "timestamps": {
-      "justNow": "just now",
-      "secondsAgo": "{count} second ago",
-      "secondsAgo_plural": "{count} seconds ago",
-      "minutesAgo": "{count} minute ago",
-      "minutesAgo_plural": "{count} minutes ago",
-      "hoursAgo": "{count} hour ago",
-      "hoursAgo_plural": "{count} hours ago",
-      "daysAgo": "{count} day ago",
-      "daysAgo_plural": "{count} days ago",
-      "in": "in"
-    },
-    "attachments": {
-      "photo": "Photo",
-      "video": "Video",
-      "audio": "Audio",
-      "pdf": "PDF",
-      "document": "Document",
-      "file": "File"
-    },
-    "groups": {
-      "today": "Today",
-      "yesterday": "Yesterday",
-      "thisWeek": "This week",
-      "thisMonth": "This month",
-      "older": "Older"
-    },
-    "markAllRead": "Mark all read",
-    "settings": "Settings"
-  }
+    "notifications": {
+        "pageTitle": "Notifications",
+        "title": "Notifications",
+        "empty": {
+            "title": "No notifications",
+            "description": "You have no notifications at the moment",
+            "tryDifferentSearch": "Try a different search"
+        },
+        "noResults": "No notifications found",
+        "search": "Search notifications...",
+        "emptyUnread": "All caught up! No unread notifications.",
+        "emptyMentions": "No mentions yet",
+        "markAllAsRead": "Mark all as read",
+        "markAsRead": "Mark as read",
+        "delete": "Delete",
+        "viewAll": "View all notifications",
+        "loadMore": "Load more",
+        "loading": "Loading notifications...",
+        "reachedEnd": "You've reached the end",
+        "tabs": {
+            "all": "All",
+            "unread": "Unread",
+            "mentions": "Mentions"
+        },
+        "filters": {
+            "title": "Filters",
+            "type": "Type",
+            "status": "Status",
+            "clearAll": "Clear all",
+            "all": "All",
+            "read": "Read",
+            "unread": "Unread",
+            "messages": "Messages",
+            "messagesShort": "Msg",
+            "mentions": "Mentions",
+            "mentionsShort": "@",
+            "conversations": "Conversations",
+            "conversationsShort": "Conv",
+            "calls": "Missed calls",
+            "callsShort": "📞",
+            "friendRequests": "Friend requests",
+            "friendRequestsShort": "Friends",
+            "reactions": "Reactions",
+            "reactionsShort": "❤️",
+            "system": "System",
+            "new_message": "Messages",
+            "friend_request": "Friend requests",
+            "missed_call": "Missed calls",
+            "conversation": "Conversations",
+            "message_reaction": "Reactions"
+        },
+        "types": {
+            "new_message": "New message",
+            "message": "Message",
+            "message_reply": "Reply",
+            "user_mentioned": "Mention",
+            "message_reaction": "Reaction",
+            "contact_request": "Contact request",
+            "contact_accepted": "Contact accepted",
+            "new_conversation_direct": "New conversation",
+            "new_conversation_group": "Group invitation",
+            "member_joined": "Member joined",
+            "missed_call": "Missed call",
+            "system": "System notification"
+        },
+        "priorities": {
+            "low": "Low",
+            "normal": "Normal",
+            "high": "Important",
+            "urgent": "Urgent"
+        },
+        "titles": {
+            "newMessage": "Message from @{sender}",
+            "reply": "Reply from @{sender}",
+            "mentioned": "@{sender} mentioned you",
+            "reaction": "@{sender} reacted {emoji} to your message",
+            "contactRequest": "@{sender} wants to connect",
+            "contactAccepted": "@{sender} accepted your invitation",
+            "newConversationDirect": "New conversation with @{sender}",
+            "newConversationGroup": "Invitation to \"{title}\"",
+            "memberJoined": "New member in \"{title}\"",
+            "missedCall": "Missed {type} call",
+            "system": "System notification",
+            "default": "New notification"
+        },
+        "content": {
+            "memberJoinedMessage": "{sender} joined the group",
+            "contactAcceptedMessage": "{sender} accepted your invitation. You can now chat together.",
+            "contactRequestMessage": "{sender} sent you an invitation",
+            "notMemberHint": "You are not a member of this conversation. Click to join."
+        },
+        "conversationTypes": {
+            "private": "Private",
+            "direct": "Private",
+            "group": "Group"
+        },
+        "timeAgo": {
+            "now": "just now",
+            "minute": "{count} min ago",
+            "hour": "{count}h ago",
+            "day": "{count}d ago"
+        },
+        "actions": {
+            "accept": "Accept",
+            "decline": "Decline",
+            "join": "Join",
+            "callBack": "Call Back",
+            "view": "View",
+            "reply": "Reply",
+            "select": "Select",
+            "markAsRead": "Mark as read",
+            "delete": "Delete",
+            "clearSearch": "Clear search",
+            "allMarkedRead": "All notifications marked as read"
+        },
+        "unreadCount": {
+            "single": "{count} unread of {total}",
+            "plural": "{count} unread of {total}",
+            "active": "{count} unread of {total}",
+            "allRead": "All your {total} notification{plural} are read",
+            "empty": "You have no notifications"
+        },
+        "timestamps": {
+            "justNow": "just now",
+            "secondsAgo": "{count} second ago",
+            "secondsAgo_plural": "{count} seconds ago",
+            "minutesAgo": "{count} minute ago",
+            "minutesAgo_plural": "{count} minutes ago",
+            "hoursAgo": "{count} hour ago",
+            "hoursAgo_plural": "{count} hours ago",
+            "daysAgo": "{count} day ago",
+            "daysAgo_plural": "{count} days ago",
+            "in": "in"
+        },
+        "attachments": {
+            "photo": "Photo",
+            "video": "Video",
+            "audio": "Audio",
+            "pdf": "PDF",
+            "document": "Document",
+            "file": "File"
+        },
+        "groups": {
+            "today": "Today",
+            "yesterday": "Yesterday",
+            "thisWeek": "This week",
+            "thisMonth": "This month",
+            "older": "Older"
+        },
+        "markAllRead": "Mark all read",
+        "settings": "Settings",
+        "push": {
+            "title": "Enable push notifications",
+            "description": "Get notified even when the app is in the background",
+            "enable": "Enable",
+            "enabled": "Push notifications enabled",
+            "denied": "Push notifications denied. You can change this in your browser settings."
+        },
+        "notifPrefs": {
+            "saved": "Preferences saved",
+            "dndTimeError": "Start time must differ from end time",
+            "resetConfirm": "Reset all notification preferences?",
+            "reset": "Preferences reset",
+            "permissionGranted": "Notifications allowed",
+            "permissionDenied": "Notifications denied",
+            "loading": "Loading preferences...",
+            "noPreferences": "No preferences available",
+            "saving": "Saving...",
+            "missingConsents": "Missing required consents:",
+            "allowButton": "Allow",
+            "channels": {
+                "title": "Notification channels",
+                "description": "Choose how you want to receive notifications",
+                "push": {
+                    "label": "Push notifications",
+                    "description": "Receive notifications in the browser"
+                },
+                "email": {
+                    "label": "Email notifications",
+                    "description": "Receive a summary by email"
+                },
+                "sound": {
+                    "label": "Notification sounds",
+                    "description": "Play a sound for new notifications"
+                },
+                "vibration": {
+                    "label": "Vibration",
+                    "description": "Vibrate for new notifications (mobile)"
+                }
+            },
+            "types": {
+                "title": "Notification types",
+                "description": "Choose the events you want to be notified about",
+                "newMessage": {
+                    "label": "New messages",
+                    "description": "Notifications for new messages received"
+                },
+                "reply": {
+                    "label": "Replies",
+                    "description": "When someone replies to your messages"
+                },
+                "mention": {
+                    "label": "Mentions",
+                    "description": "When you are mentioned (@) in a message"
+                },
+                "reaction": {
+                    "label": "Reactions",
+                    "description": "Notifications for reactions to your messages"
+                },
+                "contactRequest": {
+                    "label": "Contact requests",
+                    "description": "Notifications for new contact requests"
+                },
+                "groupInvite": {
+                    "label": "Group invitations",
+                    "description": "When you are invited to join a group"
+                },
+                "memberJoined": {
+                    "label": "New members",
+                    "description": "When a member joins a group"
+                },
+                "memberLeft": {
+                    "label": "Members left",
+                    "description": "When a member leaves a group"
+                },
+                "conversation": {
+                    "label": "Conversation activity",
+                    "description": "Updates and changes in conversations"
+                },
+                "missedCall": {
+                    "label": "Missed calls",
+                    "description": "Notifications for missed calls"
+                },
+                "voicemail": {
+                    "label": "Voice messages",
+                    "description": "Notifications for new voice messages"
+                },
+                "system": {
+                    "label": "System notifications",
+                    "description": "Important updates and announcements"
+                }
+            },
+            "dnd": {
+                "title": "Do not disturb",
+                "description": "Set a notification-free time range",
+                "enableLabel": "Enable \"Do not disturb\"",
+                "enableDescription": "Suspend notifications for a defined period",
+                "startTime": "Start time",
+                "endTime": "End time",
+                "activePeriodNote": "During this period, you will not receive any push or sound notifications."
+            },
+            "display": {
+                "title": "Notification display",
+                "description": "Control what is shown in notifications",
+                "preview": {
+                    "label": "Message preview",
+                    "description": "Show message content in the notification"
+                },
+                "senderName": {
+                    "label": "Sender name",
+                    "description": "Show sender name in the notification"
+                },
+                "group": {
+                    "label": "Group notifications",
+                    "description": "Group multiple notifications into one"
+                },
+                "badge": {
+                    "label": "Notification badge",
+                    "description": "Show the number of unread notifications"
+                }
+            },
+            "permissionsTitle": "Permission status",
+            "permissionStatusTitle": "Current notification permission status",
+            "browserNotifications": "Browser notifications",
+            "permissionStatus": {
+                "granted": "Allowed",
+                "denied": "Denied",
+                "pending": "Pending"
+            },
+            "permissionDeniedInstructions": "Notifications were denied. You can re-enable them in your browser settings.",
+            "unsupported": "Notifications are not supported by your browser.",
+            "resetButton": "Reset to defaults"
+        },
+        "connectionStatus": {
+            "connected": "Connected",
+            "reconnecting": "Reconnecting...",
+            "disconnected": "Disconnected"
+        }
+    }
 }

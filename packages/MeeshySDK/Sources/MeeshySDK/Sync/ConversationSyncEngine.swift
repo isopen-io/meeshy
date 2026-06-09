@@ -515,7 +515,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
         do {
             let response = try await messageService.list(
-                conversationId: conversationId, offset: 0, limit: 30, includeReplies: true, includeTranslations: true
+                conversationId: conversationId, offset: 0, limit: 30, includeReplies: true, includeTranslations: true, languages: nil
             )
             let userId = await currentUserId()
             let username = await currentUsername()
@@ -539,7 +539,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     public func fetchOlderMessages(for conversationId: String, before messageId: String) async {
         do {
             let response = try await messageService.listBefore(
-                conversationId: conversationId, before: messageId, limit: 30, includeReplies: true, includeTranslations: true
+                conversationId: conversationId, before: messageId, limit: 30, includeReplies: true, includeTranslations: true, languages: nil
             )
             let userId = await currentUserId()
             let username = await currentUsername()
@@ -847,6 +847,10 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             existing = msg
         }
         _messagesDidChange.send(msg.conversationId)
+        // If the edited message is the conversation's last message, the list-row
+        // preview still shows the pre-edit text — refresh it in place.
+        await refreshLastMessagePreviewIfEdited(
+            conversationId: msg.conversationId, messageId: msg.id, newContent: msg.content)
     }
 
     private func handleDeletedMessage(_ event: MessageDeletedEvent) async {
@@ -856,6 +860,78 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             msg.content = ""
         }
         _messagesDidChange.send(event.conversationId)
+        // If the deleted message was the conversation's last message, the list-row
+        // preview still shows the (now-deleted) text — recompute it from the most
+        // recent surviving message, mirroring the gateway's `deletedAt: null` REST list.
+        await recomputeLastMessagePreviewAfterDeletion(
+            conversationId: event.conversationId, deletedMessageId: event.messageId)
+    }
+
+    /// Updates a conversation row's `lastMessagePreview` when the edited message
+    /// is that row's `lastMessageId`. No-op otherwise (editing an older message
+    /// leaves the preview untouched). Fires `_conversationsDidChange` only when a
+    /// row actually changed.
+    private func refreshLastMessagePreviewIfEdited(
+        conversationId: String, messageId: String, newContent: String
+    ) async {
+        let list = await cache.conversations.load(for: "list").snapshot() ?? []
+        guard list.first(where: { $0.id == conversationId })?.lastMessageId == messageId else { return }
+        await cache.conversations.update(for: "list") { conversations in
+            var updated = conversations
+            if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
+                updated[idx].lastMessagePreview = newContent
+            }
+            return updated
+        }
+        _conversationsDidChange.send()
+    }
+
+    /// Recomputes a conversation row's last-message fields when the deleted
+    /// message was that row's `lastMessageId`, picking the most recent surviving
+    /// (non-deleted) message from the messages cache. If the cache holds no
+    /// replacement (older messages never loaded), the row is left untouched — the
+    /// next REST list refresh (which filters `deletedAt: null`) corrects it —
+    /// rather than wrongly clearing a preview that should show an earlier message.
+    private func recomputeLastMessagePreviewAfterDeletion(
+        conversationId: String, deletedMessageId: String
+    ) async {
+        let list = await cache.conversations.load(for: "list").snapshot() ?? []
+        guard list.first(where: { $0.id == conversationId })?.lastMessageId == deletedMessageId else { return }
+        let messages = await cache.messages.load(for: conversationId).snapshot() ?? []
+        let newLast = Self.mostRecentSurvivor(in: messages, excluding: deletedMessageId)
+        await cache.conversations.update(for: "list") { conversations in
+            var updated = conversations
+            if let idx = updated.firstIndex(where: { $0.id == conversationId }) {
+                if let newLast {
+                    updated[idx].lastMessagePreview = newLast.content
+                    updated[idx].lastMessageId = newLast.id
+                    if let name = newLast.senderName ?? newLast.senderUsername, !name.isEmpty {
+                        updated[idx].lastMessageSenderName = name
+                    }
+                    updated[idx].lastMessageAt = newLast.createdAt
+                } else {
+                    // The deleted message was the conversation's ONLY message — there
+                    // is no survivor to surface. Clear the stale preview so the list
+                    // row stops showing the deleted message's text (displayed ≠ real).
+                    updated[idx].lastMessagePreview = ""
+                    updated[idx].lastMessageId = nil
+                }
+            }
+            return updated
+        }
+        _conversationsDidChange.send()
+    }
+
+    /// The most recent non-deleted message in a conversation, excluding the one
+    /// just deleted — i.e. the message that should become the list-row preview
+    /// after a deletion. `nil` when every message is gone. Pure + testable.
+    nonisolated static func mostRecentSurvivor(
+        in messages: [MeeshyMessage],
+        excluding deletedMessageId: String
+    ) -> MeeshyMessage? {
+        messages
+            .filter { $0.deletedAt == nil && $0.id != deletedMessageId }
+            .max(by: { $0.createdAt < $1.createdAt })
     }
 
     private func handleReactionAdded(_ event: ReactionUpdateEvent) async {
@@ -963,21 +1039,47 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             : summary.deliveredCount > 0 ? .delivered : .sent
 
         await cache.messages.update(for: event.conversationId) { messages in
-            var updated = messages
-            for i in updated.indices.reversed() {
-                guard updated[i].isMe else { continue }
-                let current = updated[i].deliveryStatus
-                if current == .read { break }
-                if newStatus.isBetterThan(current) {
-                    updated[i].deliveryStatus = newStatus
-                    updated[i].deliveredCount = summary.deliveredCount
-                    updated[i].readCount = summary.readCount
-                }
-            }
-            return updated
+            Self.applyReadReceipt(
+                to: messages,
+                newStatus: newStatus,
+                deliveredCount: summary.deliveredCount,
+                readCount: summary.readCount,
+                frontier: event.updatedAt
+            )
         }
         Self.logger.info("[RT-DIAG] handleReadStatusUpdated -> messagesDidChange.send conv=\(event.conversationId, privacy: .public) newStatus=\(String(describing: newStatus), privacy: .public) delivered=\(summary.deliveredCount, privacy: .public) read=\(summary.readCount, privacy: .public)")
         _messagesDidChange.send(event.conversationId)
+    }
+
+    /// Applies a read/deliver-status update to the sender's own messages, gated
+    /// by the read frontier `frontier` (the event's `updatedAt`). A message
+    /// created AFTER the recipient's read/deliver moment cannot have been
+    /// read/delivered yet, so it must NOT advance to `.read`/`.delivered` —
+    /// otherwise a message sent right after the peer read would falsely render
+    /// the double-check / "Lu". Iterates newest-first: messages beyond the
+    /// frontier are skipped, the monotonic guard only advances a status that is
+    /// genuinely better, and once an already-`.read` message is reached every
+    /// older one is read too. Pure + testable.
+    nonisolated static func applyReadReceipt(
+        to messages: [MeeshyMessage],
+        newStatus: MeeshyMessage.DeliveryStatus,
+        deliveredCount: Int,
+        readCount: Int,
+        frontier: Date
+    ) -> [MeeshyMessage] {
+        var updated = messages
+        for i in updated.indices.reversed() {
+            guard updated[i].isMe else { continue }
+            if updated[i].createdAt > frontier { continue }
+            let current = updated[i].deliveryStatus
+            if current == .read { break }
+            if newStatus.isBetterThan(current) {
+                updated[i].deliveryStatus = newStatus
+                updated[i].deliveredCount = deliveredCount
+                updated[i].readCount = readCount
+            }
+        }
+        return updated
     }
 
     // MARK: - Local-First Updates

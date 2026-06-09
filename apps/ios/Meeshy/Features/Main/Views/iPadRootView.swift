@@ -80,6 +80,7 @@ struct iPadRootView: View {
             .environmentObject(statusViewModel)
             .environmentObject(conversationViewModel)
             .environmentObject(storyViewerCoordinator)
+            .environmentObject(StatusBubbleController.shared)
             // Propagate story viewer presentation state — same role as
             // RootView (cf. ConnectionBanner sync pill chevauchement fix
             // 2026-05-27).
@@ -125,6 +126,18 @@ struct iPadRootView: View {
                 }
 
                 conversationViewModel.observeSync()
+
+                // Réponse à un mood : résout/ouvre la DM avec l'auteur et amorce
+                // le composer (voir RootView pour l'équivalent iPhone).
+                StatusBubbleController.shared.onConfirmedReply = { entry in
+                    router.navigateToStoryReply(
+                        .status(statusId: entry.id, authorId: entry.userId,
+                                authorName: entry.username, emoji: entry.moodEmoji,
+                                content: entry.content, publishedAt: entry.createdAt),
+                        conversationListViewModel: conversationViewModel
+                    )
+                }
+
                 await storyViewModel.loadStories()
                 await statusViewModel.loadStatuses()
                 await conversationViewModel.loadConversations()

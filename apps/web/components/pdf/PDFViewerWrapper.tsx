@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
+import { useI18n } from '@/hooks/useI18n';
 
 interface PDFViewerWrapperProps {
   attachment: UploadedAttachmentResponse;
@@ -30,14 +31,13 @@ export const PDFViewerWrapper: React.FC<PDFViewerWrapperProps> = ({
   onDelete,
   canDelete = false
 }) => {
+  const { t } = useI18n('viewers');
   const [hasError, setHasError] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
 
   const attachmentFileUrl = attachment.fileUrl;
 
   const handleIframeError = () => {
     setHasError(true);
-    setErrorMessage('Impossible de charger le PDF');
   };
 
   const handleOpenInNewTab = () => {
@@ -78,14 +78,14 @@ export const PDFViewerWrapper: React.FC<PDFViewerWrapperProps> = ({
           <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800">
             <div className="flex flex-col items-center gap-2 text-gray-600 dark:text-gray-400">
               <AlertTriangle className="w-12 h-12" />
-              <span className="text-sm text-center px-4">{errorMessage}</span>
+              <span className="text-sm text-center px-4">{t('pdf.loadError')}</span>
               <Button
                 onClick={handleOpenInNewTab}
                 size="sm"
                 className="mt-2 bg-red-600 hover:bg-red-700 text-white"
               >
                 <FileText className="w-4 h-4 mr-2" />
-                Ouvrir dans un nouvel onglet
+                {t('pdf.openInNewTab')}
               </Button>
             </div>
           </div>
@@ -101,7 +101,7 @@ export const PDFViewerWrapper: React.FC<PDFViewerWrapperProps> = ({
             size="sm"
             variant="destructive"
             className="absolute top-2 right-2 w-8 h-8 p-0 opacity-0 hover:opacity-100 focus-visible:opacity-100 transition-opacity"
-            title="Supprimer ce PDF"
+            title={t('pdf.delete')}
           >
             <X className="w-4 h-4" />
           </Button>
@@ -127,7 +127,7 @@ export const PDFViewerWrapper: React.FC<PDFViewerWrapperProps> = ({
               size="sm"
               variant="ghost"
               className="w-8 h-8 p-0"
-              title="Ouvrir en plein écran"
+              title={t('pdf.fullscreen')}
             >
               <Maximize className="w-4 h-4" />
             </Button>
@@ -138,7 +138,7 @@ export const PDFViewerWrapper: React.FC<PDFViewerWrapperProps> = ({
             href={attachmentFileUrl}
             download={attachment.originalName}
             className="flex-shrink-0 p-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-full transition-colors duration-200"
-            title="Télécharger"
+            title={t('pdf.download')}
             onClick={(e) => e.stopPropagation()}
           >
             <Download className="w-4 h-4 text-gray-600 dark:text-gray-300" />

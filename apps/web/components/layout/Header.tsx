@@ -106,8 +106,8 @@ export function Header({
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2">
-            <MessageSquare className="h-8 w-8 text-blue-600" />
-            <span className="text-xl font-bold text-gray-900 dark:text-white">
+            <MessageSquare className="h-8 w-8 text-primary" />
+            <span className="text-xl font-bold text-foreground">
               {conversationTitle || 'Meeshy'}
             </span>
           </Link>
@@ -141,7 +141,7 @@ export function Header({
                             {user.displayName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username}
                           </span>
                           {isAnonymous && (
-                            <span className="text-xs text-gray-500 dark:text-gray-400">Guest</span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">{t('guest')}</span>
                           )}
                         </div>
                         <ChevronDown className="h-4 w-4 text-gray-500 dark:text-gray-400" />
@@ -326,7 +326,9 @@ export function Header({
             size="icon"
             className="md:hidden"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            aria-label={isMobileMenuOpen ? 'Fermer le menu' : 'Ouvrir le menu'}
+            aria-label={isMobileMenuOpen ? t('closeMenu') : t('openMenu')}
+            aria-expanded={isMobileMenuOpen}
+            aria-controls="mobile-nav"
           >
             {isMobileMenuOpen ? (
               <X className="h-6 w-6" />
@@ -338,7 +340,7 @@ export function Header({
 
         {/* Mobile Menu */}
         {isMobileMenuOpen && (
-          <div className="md:hidden py-4 border-t">
+          <div id="mobile-nav" className="md:hidden py-4 border-t" role="navigation" aria-label="Menu mobile">
             <nav className="flex flex-col space-y-4">
               {/* Mode Chat */}
               {mode === 'chat' && (

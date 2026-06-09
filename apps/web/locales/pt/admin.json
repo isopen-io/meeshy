@@ -1,0 +1,222 @@
+{
+  "ranking": {
+    "users": "Classificação de usuários",
+    "conversations": "Classificação de conversas",
+    "messages": "Classificação de mensagens",
+    "links": "Classificação de links",
+    "default": "Classificação",
+    "resultsUnit": "resultados",
+    "retry": "Tentar novamente",
+    "empty": "Nenhum resultado encontrado",
+    "selectEntity": "Selecionar tipo de entidade",
+    "selectCriterion": "Selecionar critério",
+    "selectPeriod": "Selecionar período",
+    "filterTitle": "Filtros de classificação",
+    "entityTypeLabel": "Tipo de entidade",
+    "entityUsers": "Usuários",
+    "entityConversations": "Conversas",
+    "entityMessages": "Mensagens",
+    "entityLinks": "Links",
+    "criterionLabel": "Critério",
+    "filterCriteria": "Filtrar critérios...",
+    "noCriteriaFound": "Nenhum critério encontrado",
+    "periodLabel": "Período",
+    "resultCountLabel": "Número de resultados",
+    "period1d": "Último dia (24h)",
+    "period7d": "Última semana (7d)",
+    "period30d": "Último mês (30d)",
+    "period90d": "Último trimestre (90d)",
+    "period180d": "Último semestre (180d)",
+    "period365d": "Último ano (365d)",
+    "periodAll": "Todo o tempo"
+  },
+  "scanLog": {
+    "title": "Logs de varredura",
+    "empty": "Nenhum log de varredura"
+  },
+  "filter": {
+    "all": "Todos",
+    "sent": "Enviados",
+    "skip": "Ignorados",
+    "error": "Erros"
+  },
+  "trigger": {
+    "auto": "Auto",
+    "manual": "Manual",
+    "timeout": "Timeout",
+    "message": "Mensagem",
+    "reply": "Resposta"
+  },
+  "timeAgo": {
+    "now": "agora",
+    "minutes": "min",
+    "hours": "h",
+    "days": "d"
+  },
+  "regexTester": {
+    "title": "Testar regex contra texto de amostra",
+    "placeholder": "Cole um trecho de conversa aqui para ver quais padrões correspondem…",
+    "test": "Testar",
+    "noPatterns": "Nenhum padrão definido para este tópico.",
+    "match": "correspondência",
+    "matches": "correspondências",
+    "invalidRegex": "regex inválido"
+  },
+  "agent": {
+    "overview": {
+      "kpi": {
+        "conversations": "Conversas",
+        "active": "Ativos",
+        "users": "Utilizadores",
+        "roles": "Funções",
+        "messages": "Mensagens",
+        "words": "Palavras",
+        "avgConfidence": "Conf. média",
+        "archetypes": "Arquétipos"
+      },
+      "distribution": "Distribuição",
+      "recentActivity": "Atividade recente",
+      "noRecentActivity": "Sem atividade recente",
+      "resetConversation": "Repor conversa",
+      "resetUser": "Repor utilizador",
+      "dangerZone": "Zona de perigo",
+      "resetting": "A repor...",
+      "resetAll": "Reposição completa",
+      "timeAgo": {
+        "never": "Nunca",
+        "justNow": "Agora mesmo",
+        "minutes": "há {{count}}min",
+        "hours": "há {{count}}h",
+        "days": "há {{count}}d"
+      },
+      "conversationType": {
+        "direct": "Direto",
+        "group": "Grupo",
+        "public": "Público",
+        "global": "Global",
+        "broadcast": "Transmissão",
+        "channel": "Canal"
+      }
+    },
+    "toasts": {
+      "statsLoadError": "Não foi possível carregar as estatísticas",
+      "connectionError": "Erro de ligação ao serviço de agente",
+      "resetSuccess": "Reposição completa: {{configs}} configs, {{roles}} funções, {{analytics}} análises, {{redisKeys}} chaves Redis eliminadas",
+      "resetError": "Erro durante a reposição",
+      "resetAiConfigError": "Erro ao repor configurações de IA",
+      "invalidConversationId": "ID de conversa inválido (24 caracteres hex)",
+      "confirmResetConversation": "Eliminar todos os dados do agente para a conversa {{id}}?",
+      "conversationReset": "Conversa {{id}} reposta",
+      "conversationResetError": "Erro ao repor a conversa",
+      "invalidUserId": "ID de utilizador inválido (24 caracteres hex)",
+      "confirmResetUser": "Eliminar todos os perfis de agente do utilizador {{id}} (todas as conversas)?",
+      "userReset": "Utilizador {{id}} reposto",
+      "userResetError": "Erro ao repor o utilizador",
+      "confirmResetAll": "ATENÇÃO: Esta ação eliminará TODAS as configurações de IA, perfis, análises e cache Redis. Esta ação é irreversível. Continuar?",
+      "globalConfigLoadError": "Erro ao carregar a configuração global",
+      "globalConfigSavedPending": "Config global guardada — propagação ao serviço de agente pendente (cache pode demorar alguns minutos)",
+      "globalConfigUpdated": "Configuração global atualizada",
+      "globalConfigUpdateError": "Erro ao atualizar a configuração",
+      "globalConfigConnectionError": "Erro de ligação ao servidor",
+      "llmConfigLoadError": "Erro ao carregar a config LLM",
+      "llmConfigSavedPending": "Config LLM guardada — o serviço de agente não confirmou o recarregamento (pode necessitar de reinício)",
+      "llmConfigUpdated": "Configuração LLM atualizada",
+      "llmConfigSaveError": "Erro ao guardar a configuração",
+      "rolesLoadError": "Erro ao carregar as funções",
+      "archetypeAssigned": "Arquétipo atribuído",
+      "archetypeAssignError": "Erro ao atribuir o arquétipo",
+      "profileUnlocked": "Perfil desbloqueado",
+      "profileUnlockError": "Erro ao desbloquear o perfil",
+      "triggerInterrupted": "Interrupção solicitada",
+      "scanTriggered": "Análise iniciada",
+      "scanTriggerError": "Erro ao iniciar a análise",
+      "networkError": "Erro de rede",
+      "triggerScheduled": "Gatilho agendado para as {{time}}",
+      "triggerScheduledIn": "Gatilho agendado em {{delay}}",
+      "triggerCancelled": "Gatilho cancelado",
+      "frequencyUpdated": "Frequência atualizada: {{minutes}}min",
+      "updateError": "Erro de atualização",
+      "intervalAdjusted": "Intervalo ajustado: {{minutes}}min",
+      "queueItemDeleted": "Mensagem removida da fila",
+      "queueItemAlreadySent": "Mensagem já enviada",
+      "queueItemDeleteError": "Erro ao remover a mensagem",
+      "queueItemEdited": "Mensagem editada",
+      "queueItemEditError": "Erro ao editar a mensagem",
+      "conversationConfigUpdated": "Configuração da conversa atualizada",
+      "archetypesLoadError": "Erro ao carregar arquétipos",
+      "configLoadError": "Erro ao carregar configurações",
+      "agentEnabled": "Agente ativado",
+      "agentDisabled": "Agente desativado",
+      "configDeleted": "Configuração excluída",
+      "deleteError": "Erro ao excluir"
+    },
+    "scheduling": {
+      "fixedTime": "Hora fixa",
+      "delay": "Em X tempo",
+      "frequency": "Frequência",
+      "timerWarning": "Este cronômetro é perdido se você fechar a página ou o navegador.",
+      "dragToMove": "arrastar para mover",
+      "notAvailable": "Agendamento não disponível",
+      "triggerNow": "Acionar agora",
+      "stop": "STOP!"
+    }
+  },
+  "agentLive": {
+    "selectConversation": "Selecione uma conversa para monitorar seu estado em tempo real",
+    "conversationsActive": "Conversas ativas",
+    "loading": "Carregando...",
+    "monitoredUsers": "Usuários monitorados",
+    "noMonitoredUsers": "Sem usuários monitorados",
+    "toneProfiles": "Perfis de tom",
+    "noToneProfiles": "Sem perfis de tom",
+    "contextualSummary": "Resumo contextual",
+    "topics": "Tópicos",
+    "tone": "Tom:",
+    "noSummary": "Sem resumo disponível",
+    "metrics": "Métricas",
+    "messages": "Mensagens",
+    "words": "Palavras",
+    "confidence": "Confiança",
+    "cachedMessages": "mensagens em cache",
+    "noAnalytics": "Sem análises disponíveis",
+    "loadError": "Impossível carregar o estado ao vivo",
+    "connectionError": "Erro de conexão ou conversa não encontrada",
+    "queue": "Fila"
+  },
+  "userDetail": {
+    "languagePreferences": "Preferências de Idioma",
+    "languagePreferencesSaved": "Preferências de idioma atualizadas",
+    "languagePreferencesError": "Erro ao atualizar preferências"
+  },
+  "translationMonitor": {
+    "loadingMetrics": "Carregando métricas...",
+    "languageBreakdown": "Distribuição por idioma"
+  },
+  "llm": {
+    "generationSettings": "Configurações de geração",
+    "budgetManagement": "Gestão de orçamento"
+  },
+  "globalConfig": {
+    "defaultProvider": "Provedor padrão",
+    "globalScheduler": "Agendador global",
+    "active": "Ativo",
+    "disabled": "Desativado",
+    "none": "Nenhum"
+  },
+  "agentConfig": {
+    "titleNew": "Nova configuração de agente",
+    "titleEdit": "Editar configuração",
+    "created": "Configuração criada",
+    "updated": "Configuração atualizada",
+    "saveError": "Erro ao salvar configuração",
+    "pendingPropagation": "Config salva — propagação ao serviço de agente pendente (cache pode demorar alguns minutos)"
+  },
+  "security": {
+    "enable2FA": "Ativar 2FA",
+    "disable2FA": "Desativar 2FA",
+    "accountUnlocked": "Conta desbloqueada com sucesso",
+    "twoFactorEnabled": "2FA ativado com sucesso",
+    "twoFactorDisabled": "2FA desativado com sucesso",
+    "disabled": "Desativado"
+  }
+}

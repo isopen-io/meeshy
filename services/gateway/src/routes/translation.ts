@@ -550,6 +550,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
       }
     }
   }, async (request: FastifyRequest, reply: FastifyReply) => {
+    reply.header('Cache-Control', 'public, max-age=3600, stale-while-revalidate=86400');
     return reply.send({
       success: true,
       data: {

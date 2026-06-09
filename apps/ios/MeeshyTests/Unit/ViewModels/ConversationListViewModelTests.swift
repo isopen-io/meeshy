@@ -1517,6 +1517,9 @@ final class ConversationListViewModelTests: XCTestCase {
             messageSocket: messageSocket
         )
 
+        // Allow init-time async subscriptions (receive(on: DispatchQueue.main)) to settle.
+        try? await Task.sleep(nanoseconds: 10_000_000)
+
         let event = makeConversationUpdatedEvent(
             conversationId: "69fe0bb526e040042fd28121",
             lastMessageAt: Date(timeIntervalSince1970: 9_000),
@@ -2444,6 +2447,68 @@ final class ConversationListViewModelTests: XCTestCase {
 
         XCTAssertTrue(sut.userCategories.contains { $0.id == "c9" && $0.name == "Cross-device" },
                       "a cross-device category event (via the socket bridge) must reflect into the list")
+    }
+
+    // MARK: - Typing indicator (own-typing filter)
+
+    func test_typingStarted_otherUser_showsOnRow() async {
+        let auth = MockAuthManager()
+        auth.simulateLoggedIn(user: MeeshyUser(id: "me", username: "me", displayName: "Me"))
+        let socket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket, authManager: auth)
+
+        socket.typingStarted.send(TypingEvent(userId: "other", username: "bob", displayName: "Bob", conversationId: "c1"))
+        await drainMainQueue()
+
+        XCTAssertEqual(sut.typingUsernames["c1"], "Bob",
+                       "another user's typing must surface on the conversation row")
+    }
+
+    func test_typingStarted_ownEcho_isIgnored() async {
+        let auth = MockAuthManager()
+        auth.simulateLoggedIn(user: MeeshyUser(id: "me", username: "me", displayName: "Me"))
+        let socket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket, authManager: auth)
+
+        // The gateway echoes typing to the author too — on multi-device this would
+        // otherwise surface "<You> écrit…" on your own row.
+        socket.typingStarted.send(TypingEvent(userId: "me", username: "me", displayName: "Me", conversationId: "c1"))
+        await drainMainQueue()
+
+        XCTAssertNil(sut.typingUsernames["c1"],
+                     "your own typing (multi-device echo) must not show on your conversation row")
+    }
+
+    /// The group multi-typer bug: A and B both type, A stops. The row must keep
+    /// showing that someone is typing (B), not blank out — the old single-name
+    /// model cleared the whole conversation entry on any `typing:stop`.
+    func test_typingStopped_oneOfTwoGroupTypers_keepsTheOther() async {
+        let auth = MockAuthManager()
+        auth.simulateLoggedIn(user: MeeshyUser(id: "me", username: "me", displayName: "Me"))
+        let socket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: socket, authManager: auth)
+
+        socket.typingStarted.send(TypingEvent(userId: "ua", username: "alice", displayName: "Alice", conversationId: "g1"))
+        socket.typingStarted.send(TypingEvent(userId: "ub", username: "bob", displayName: "Bob", conversationId: "g1"))
+        await drainMainQueue()
+        XCTAssertNotNil(sut.typingUsernames["g1"], "two members typing must surface on the row")
+
+        socket.typingStopped.send(TypingEvent(userId: "ua", username: "alice", displayName: "Alice", conversationId: "g1"))
+        await drainMainQueue()
+        XCTAssertEqual(sut.typingUsernames["g1"], "Bob",
+                       "one member stopping must NOT clear the row while another is still typing")
+
+        socket.typingStopped.send(TypingEvent(userId: "ub", username: "bob", displayName: "Bob", conversationId: "g1"))
+        await drainMainQueue()
+        XCTAssertNil(sut.typingUsernames["g1"], "the row clears once the last typer stops")
+    }
+
+    func test_typingDisplayName_pickIsDeterministicAndNilWhenEmpty() {
+        XCTAssertNil(ConversationListViewModel.typingDisplayName(for: nil))
+        XCTAssertNil(ConversationListViewModel.typingDisplayName(for: [:]))
+        XCTAssertEqual(ConversationListViewModel.typingDisplayName(for: ["u1": "Alice"]), "Alice")
+        XCTAssertEqual(ConversationListViewModel.typingDisplayName(for: ["u1": "Bob", "u2": "Alice"]), "Alice",
+                       "several typers → deterministic (sorted) single-name pick for the single-name row API")
     }
 }
 

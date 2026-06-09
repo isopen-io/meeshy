@@ -65,7 +65,7 @@ beforeEach(() => {
   mockFriendRequestFindMany = jest.fn().mockResolvedValue([]);
   mockParticipantFindMany = jest.fn().mockResolvedValue([]);
   mockPostViewFindMany = jest.fn().mockResolvedValue([]);
-  mockPostBookmarkFindMany = jest.fn();
+  mockPostBookmarkFindMany = jest.fn().mockResolvedValue([]);
 
   mockPrisma = {
     post: {

@@ -143,8 +143,18 @@ class ConversationViewModel: ObservableObject {
     /// Set before prepend so the view can restore scroll position
     @Published var scrollAnchorId: String?
 
-    /// Users currently typing in this conversation
-    @Published var typingUsernames: [String] = []
+    /// Users currently typing in this conversation.
+    /// Backed by stateStore — changes fire stateStore.objectWillChange, NOT self.objectWillChange.
+    /// This prevents the full conversation view graph from re-evaluating on every keystroke.
+    var typingUsernames: [String] {
+        get { stateStore.typingUsernames }
+        set { stateStore.typingUsernames = newValue }
+    }
+
+    /// Combine publisher for typing usernames — used by UIKit consumers (MessageListViewController).
+    var typingUsernamesPublisher: AnyPublisher<[String], Never> {
+        stateStore.$typingUsernames.eraseToAnyPublisher()
+    }
 
     /// Real-time translation/transcription/audio data keyed by messageId
     @Published var messageTranslations: [String: [MessageTranslation]] = [:] {
@@ -192,17 +202,16 @@ class ConversationViewModel: ObservableObject {
     /// translation is replaced with the one matching the new preference.
     @Published var preferredLanguageRevision: Int = 0
 
+    /// Resolution cache for `preferredTranslation(for:)` — invalidated on language revision bump.
+    /// Uses double-Optional semantics: key absent = not cached, .some(nil) = cached as "show original".
+    private var translationResolutionCache: [String: MessageTranslation?] = [:]
+    private var cachedRevisionForTranslation: Int = -1
+
     /// Active live location sessions in this conversation
     @Published var activeLiveLocations: [ActiveLiveLocation] = []
 
     /// Last unread message from another user (set only via socket, cleared on scroll-to-bottom)
     @Published var lastUnreadMessage: Message?
-
-    /// Snapshot of the current conversation's unread count. Initialised
-    /// from `initialUnreadCount`, then dropped to 0 when the user reads
-    /// (markAsRead). Combined with `syncEngine.totalConversationsUnread`
-    /// to derive `otherConversationsUnread`.
-    @Published private(set) var currentConversationUnreadCount: Int = 0
 
     /// Total unread across every OTHER conversation (excludes this one).
     /// Drives the cross-conversation pill stuck next to the back button.
@@ -616,7 +625,9 @@ class ConversationViewModel: ObservableObject {
     // state into `stateStore.messages` so that the delegated methods
     // (currently `searchMessages`, `prefetchRecentMedia`, …) work against
     // the same source of truth. See `[[project_conversation_vm_split_staged]]`.
-    private let stateStore: ConversationStateStore
+    /// Exposed so ConversationView and MessageListViewController can observe typing
+    /// state independently — avoids triggering the full VM objectWillChange on every keystroke.
+    let stateStore: ConversationStateStore
     private let commandHandler: ConversationCommandHandler
     private let mediaHandler: ConversationMediaHandler
     private let searchHandler: ConversationSearchHandler
@@ -652,7 +663,6 @@ class ConversationViewModel: ObservableObject {
     /// Public read-only accessor for the view layer (UIKit bridge needs the user id).
     var currentUserIdForView: String { currentUserId }
     private var currentUsername: String? { authManager.currentUser?.username }
-    private var _resolvedParticipantId: String?
 
     // Token bucket rate limiter for reaction spam prevention.
     // Allows burst of 10, refills at 3 tokens/second.
@@ -863,15 +873,18 @@ class ConversationViewModel: ObservableObject {
         mirrorMessagesIntoStateStore()
         hydrateCurrentConversationFromCache()
         // Cross-conversation unread aggregator powers the back-button pill.
-        // Seed `currentConversationUnreadCount` BEFORE wiring the CombineLatest
-        // so the initial `totalConversationsUnread` value (delivered as soon
-        // as the sink subscribes — CurrentValueSubject semantics) is reduced
-        // against the right baseline.
-        currentConversationUnreadCount = unreadCount
-        Publishers.CombineLatest(syncEngine.totalConversationsUnread, $currentConversationUnreadCount)
+        // `setCurrentlyOpenConversation(conversationId)` (called above) makes the
+        // sync engine EXCLUDE this conversation from `totalConversationsUnread`,
+        // so the published aggregate is ALREADY "other conversations only" — we
+        // mirror it directly. Subtracting this conversation's own unread here
+        // would remove it a second time and under-shoot the pill to 0 while other
+        // conversations still have unread (the engine is the single source of
+        // truth for cross-conversation unread; the VM must not re-derive it).
+        // `max(0, …)` is a defensive clamp — the engine already clamps ≥ 0.
+        syncEngine.totalConversationsUnread
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] total, current in
-                self?.otherConversationsUnread = max(0, total - current)
+            .sink { [weak self] total in
+                self?.otherConversationsUnread = max(0, total)
             }
             .store(in: &cancellables)
         if let session = anonymousSession {
@@ -930,7 +943,7 @@ class ConversationViewModel: ObservableObject {
                     let needsDecryption = self.isDirect
                         && mapped.contains { $0.isEncrypted && !$0.content.isEmpty }
                     guard needsDecryption else {
-                        self.messages = mapped
+                        self.messages = self.mergeIntoMessages(mapped)
                         return
                     }
                     Task { @MainActor [weak self] in
@@ -939,10 +952,39 @@ class ConversationViewModel: ObservableObject {
                         await self.decryptMessagesIfNeeded(&decrypted)
                         // Drop a stale decrypt that lost the race to a newer refresh.
                         guard generation == self.storeRefreshGeneration else { return }
-                        self.messages = decrypted
+                        self.messages = self.mergeIntoMessages(decrypted)
                     }
                 }
             }
+    }
+
+    /// Merges `incoming` messages into the current `messages` array, preserving
+    /// any in-memory messages not yet reflected in the GRDB snapshot (e.g., a
+    /// socket delivery that raced the REST load). Deduplicates by `id` so a
+    /// message received from both the initial REST response and the socket
+    /// never appears twice. Result is sorted by `createdAt`.
+    private func mergeIntoMessages(_ incoming: [Message]) -> [Message] {
+        let incomingIds = Set(incoming.map(\.id))
+        let preserved = messages.filter { !incomingIds.contains($0.id) }
+        let result = preserved.isEmpty ? incoming : (incoming + preserved).sorted { $0.createdAt < $1.createdAt }
+
+        // BUG1 diagnostics — this merge is supposed to NEVER drop a displayed row
+        // (it preserves anything not in `incoming`). If this fires, the loss is an
+        // id-identity problem (e.g. an optimistic cid replaced by a serverId so
+        // the "same" message changes id and the old row is neither matched nor
+        // preserved). Logs the count delta + a sample of dropped ids + how many
+        // were in-flight/failed so we can correlate with the send timeline.
+        let beforeIds = Set(messages.map(\.id))
+        let droppedIds = beforeIds.subtracting(Set(result.map(\.id)))
+        if !droppedIds.isEmpty {
+            let inFlight = messages.filter { droppedIds.contains($0.id) }
+                .filter { m in
+                    let s = String(describing: m.deliveryStatus)
+                    return s.contains("sending") || s.contains("clock") || s.contains("failed") || s.contains("sent") || s.contains("queued")
+                }
+            Logger.messages.error("[ConversationViewModel][BUG1] merge DROPPED \(droppedIds.count) display row(s) before=\(self.messages.count) incoming=\(incoming.count) result=\(result.count) inFlightOrSent=\(inFlight.count) ids=\(droppedIds.sorted().prefix(8).joined(separator: ","))")
+        }
+        return result
     }
 
     private func subscribeToQueueReconciliation() {
@@ -997,7 +1039,9 @@ class ConversationViewModel: ObservableObject {
             )
         case .sendReaction:
             guard let reaction = payload.reaction else { return }
-            let participantId = _resolvedParticipantId ?? currentUserId
+            // Same canonical sentinel the optimistic add used (see toggleReaction):
+            // the rollback must match the key that was actually written.
+            let participantId = currentUserId
             let localId = reaction.messageId
             let emoji = reaction.emoji
             switch reaction.action {
@@ -1246,7 +1290,8 @@ class ConversationViewModel: ObservableObject {
                 offset: 0,
                 limit: 30,
                 includeReplies: true,
-                includeTranslations: !warmCache
+                includeTranslations: !warmCache,
+                languages: nil
             )
 
             // Upsert authoritative server data into GRDB; the MessageStore observation
@@ -1440,7 +1485,8 @@ class ConversationViewModel: ObservableObject {
                 conversationId: conversationId,
                 before: beforeValue,
                 limit: 50,
-                includeReplies: true
+                includeReplies: true,
+                includeTranslations: true
             )
 
             // GRDB write and legacy CacheCoordinator processing are
@@ -1518,6 +1564,31 @@ class ConversationViewModel: ObservableObject {
     }
 
     // MARK: - Audio Continuous Playback (Phase 4)
+
+    /// Re-initiate ("call back") a call from a tapped call-summary notice.
+    /// Mirrors the conversation header's call entry point: direct (1:1) calls
+    /// only, re-using the SAME media type (audio/video) as the summarized call.
+    /// The peer display name is resolved best-effort from a received message so
+    /// the CallKit / in-app outgoing UI shows a name, not a raw id.
+    func callBack(for summary: CallSummaryMetadata) {
+        guard isDirect, let peerUserId = participantUserId, !peerUserId.isEmpty else { return }
+        let displayName = resolvedPeerDisplayName
+            ?? String(localized: "call.peer.fallback", defaultValue: "Appel", bundle: .main)
+        CallManager.shared.startCall(
+            conversationId: conversationId,
+            userId: peerUserId,
+            displayName: displayName,
+            isVideo: summary.callType == .video
+        )
+    }
+
+    /// Best-effort peer display name from the most recent received message in
+    /// the current snapshot (sender differs from the current user).
+    private var resolvedPeerDisplayName: String? {
+        messageStore.messages
+            .last { $0.senderId != currentUserId && !($0.senderName ?? "").isEmpty }?
+            .senderName
+    }
 
     /// Kicks off conversation-wide audio playback starting at `attachmentId`.
     ///
@@ -2375,7 +2446,13 @@ class ConversationViewModel: ObservableObject {
         guard consumeReactionToken() else { return }
         guard let idx = messageIndex(for: messageId) else { return }
 
-        let participantId = _resolvedParticipantId ?? currentUserId
+        // Own reactions are ALWAYS keyed by the `currentUserId` sentinel — the
+        // canonical "my reaction" marker that `summarizeReactions` and
+        // `reconstructFromSummary` agree on. Keying the optimistic row by the
+        // resolved `Participant.id` instead (the old `_resolvedParticipantId`
+        // path) broke the "I reacted" highlight for the 2nd+ reaction in a
+        // conversation, because the badge ownership check is `== currentUserId`.
+        let participantId = currentUserId
         let alreadyReacted = messages[idx].reactions.contains { $0.emoji == emoji && $0.participantId == participantId }
         let convId = conversationId
         // Resolve the canonical server id so the queue replays against the
@@ -2422,31 +2499,6 @@ class ConversationViewModel: ObservableObject {
             }
         }
 
-        // Resolve participantId lazily for future reactions.
-        //
-        // SWR: a fresh or stale cache hit is enough — participantId is an
-        // immutable mapping (userId × conversationId → participantId) so
-        // staleness has no impact. `.expired` / `.empty` means we have no
-        // cached members; the next reaction will retry naturally once
-        // `ensureConversationDetail` (or a socket join event) populates the
-        // participants cache.
-        if _resolvedParticipantId == nil {
-            let convId = conversationId
-            let userId = currentUserId
-            Task {
-                let result = await CacheCoordinator.shared.participants.load(for: convId)
-                let cached: [PaginatedParticipant]
-                switch result {
-                case .fresh(let v, _), .stale(let v, _):
-                    cached = v
-                case .expired, .empty:
-                    cached = []
-                }
-                if let match = cached.first(where: { $0.userId == userId }) {
-                    self._resolvedParticipantId = match.id
-                }
-            }
-        }
     }
 
     // MARK: - Fetch Reaction Details
@@ -2696,11 +2748,6 @@ class ConversationViewModel: ObservableObject {
 
     func markAsRead() {
         let convId = conversationId
-        // 0. Drop our snapshot of the current conv's unread to 0 so the
-        // CombineLatest pipeline driving `otherConversationsUnread` no
-        // longer subtracts a stale count — without this, the back-button
-        // pill briefly under-shoots while the SDK aggregator catches up.
-        currentConversationUnreadCount = 0
         // 1. Update cache immediately (local-first) — survives reloadFromCache()
         Task { await ConversationSyncEngine.shared.markConversationReadLocally(convId) }
         // 2. Notify ConversationListViewModel to clear badge in current @Published state
@@ -2774,7 +2821,7 @@ class ConversationViewModel: ObservableObject {
             while collected.count < maxTotal {
                 let response = try await messageService.listAfter(
                     conversationId: conversationId, after: cursor, limit: pageSize,
-                    includeReplies: true, includeTranslations: true
+                    includeReplies: true, includeTranslations: true, languages: nil
                 )
                 let page = response.data  // ascending (oldest-after-watermark first), per gateway contract
                 guard !page.isEmpty else { break }
@@ -2847,7 +2894,7 @@ class ConversationViewModel: ObservableObject {
     func loadMessagesAround(messageId: String) async {
         do {
             let response = try await messageService.listAround(
-                conversationId: conversationId, around: messageId, limit: limit, includeReplies: true
+                conversationId: conversationId, around: messageId, limit: limit, includeReplies: true, includeTranslations: true
             )
 
             // Upsert the API batch into GRDB so the window has fresh content.
@@ -2907,7 +2954,7 @@ class ConversationViewModel: ObservableObject {
 
         do {
             let response = try await messageService.listAround(
-                conversationId: conversationId, around: messageId, limit: limit, includeReplies: true
+                conversationId: conversationId, around: messageId, limit: limit, includeReplies: true, includeTranslations: true
             )
 
             // Upsert the API batch into GRDB so the window has fresh content.
@@ -2957,7 +3004,7 @@ class ConversationViewModel: ObservableObject {
         for attempt in 1...Self.paginationRetryCount {
             do {
                 let response = try await messageService.listAround(
-                    conversationId: conversationId, around: lastMsg.id, limit: limit, includeReplies: true
+                    conversationId: conversationId, around: lastMsg.id, limit: limit, includeReplies: true, includeTranslations: true
                 )
 
                 // Upsert newer messages into GRDB; the GRDB DatabaseRegionObservation
@@ -3009,10 +3056,12 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Extract Text Translations from REST Responses
 
     private func extractTextTranslations(from apiMessages: [APIMessage]) {
+        let prismeLangs = Set(preferredLanguages.map { $0.lowercased() })
         for msg in apiMessages {
             guard let translations = msg.translations, !translations.isEmpty else { continue }
             var existing = messageTranslations[msg.id] ?? []
             for t in translations {
+                guard prismeLangs.contains(t.targetLanguage.lowercased()) else { continue }
                 let mt = MessageTranslation(
                     id: t.id,
                     messageId: t.messageId,
@@ -3029,17 +3078,20 @@ class ConversationViewModel: ObservableObject {
                 }
             }
             messageTranslations[msg.id] = existing
+            translationResolutionCache.removeValue(forKey: msg.id)
         }
     }
 
     private func hydrateTranslationsFromCache() async {
         let msgIds = messages.map(\.id)
+        let prismeLangs = Set(preferredLanguages.map { $0.lowercased() })
 
         // 1. In-memory CacheCoordinator (fast, volatile)
         let cached = await CacheCoordinator.shared.cachedTranslations(for: msgIds)
         for (msgId, translations) in cached {
             var existing = messageTranslations[msgId] ?? []
             for t in translations {
+                guard prismeLangs.contains(t.targetLanguage.lowercased()) else { continue }
                 let mt = MessageTranslation(
                     id: t.id,
                     messageId: t.messageId,
@@ -3056,6 +3108,7 @@ class ConversationViewModel: ObservableObject {
                 }
             }
             messageTranslations[msgId] = existing
+            translationResolutionCache.removeValue(forKey: msgId)
         }
 
         // 2. GRDB fallback — for message IDs not covered by the volatile cache,
@@ -3074,6 +3127,7 @@ class ConversationViewModel: ObservableObject {
         for (msgId, records) in grdbTranslations {
             var existing = messageTranslations[msgId] ?? []
             for r in records {
+                guard prismeLangs.contains(r.targetLanguage.lowercased()) else { continue }
                 let mt = MessageTranslation(
                     id: r.id,
                     messageId: msgId,
@@ -3090,6 +3144,7 @@ class ConversationViewModel: ObservableObject {
                 }
             }
             messageTranslations[msgId] = existing
+            translationResolutionCache.removeValue(forKey: msgId)
         }
     }
 
@@ -3119,9 +3174,11 @@ class ConversationViewModel: ObservableObject {
 
         guard !grouped.isEmpty else { return }
 
+        let prismeLangs = Set(preferredLanguages.map { $0.lowercased() })
         for (msgId, records) in grouped {
             var existing = messageTranslations[msgId] ?? []
             for r in records {
+                guard prismeLangs.contains(r.targetLanguage.lowercased()) else { continue }
                 let mt = MessageTranslation(
                     id: r.id,
                     messageId: msgId,
@@ -3138,6 +3195,7 @@ class ConversationViewModel: ObservableObject {
                 }
             }
             messageTranslations[msgId] = existing
+            translationResolutionCache.removeValue(forKey: msgId)
         }
     }
 
@@ -3170,21 +3228,37 @@ class ConversationViewModel: ObservableObject {
         if let override = activeTranslationOverrides[messageId] {
             return override
         }
-        guard let translations = messageTranslations[messageId], !translations.isEmpty else { return nil }
+        if cachedRevisionForTranslation != preferredLanguageRevision {
+            translationResolutionCache.removeAll()
+            cachedRevisionForTranslation = preferredLanguageRevision
+        }
+        switch translationResolutionCache[messageId] {
+        case .some(let cached):
+            return cached
+        case .none:
+            break
+        }
+        guard let translations = messageTranslations[messageId], !translations.isEmpty else {
+            translationResolutionCache.updateValue(nil, forKey: messageId)
+            return nil
+        }
 
-        // Determine original language of this message
         let originalLang = messageIndex(for: messageId)
             .map { messages[$0].originalLanguage.lowercased() }
 
         let langs = preferredLanguages
         for lang in langs {
             let langLower = lang.lowercased()
-            // If the original is already in this preferred language, show original (no translation needed)
-            if let orig = originalLang, orig == langLower { return nil }
+            if let orig = originalLang, orig == langLower {
+                translationResolutionCache.updateValue(nil, forKey: messageId)
+                return nil
+            }
             if let match = translations.first(where: { $0.targetLanguage.lowercased() == langLower }) {
+                translationResolutionCache[messageId] = match
                 return match
             }
         }
+        translationResolutionCache.updateValue(nil, forKey: messageId)
         return nil
     }
 
@@ -3222,7 +3296,8 @@ class ConversationViewModel: ObservableObject {
                         conversationId: convId,
                         around: msgId,
                         limit: 5,
-                        includeReplies: false
+                        includeReplies: false,
+                        includeTranslations: true
                     )
                     await MainActor.run {
                         self.extractAttachmentTranscriptions(from: response.data)

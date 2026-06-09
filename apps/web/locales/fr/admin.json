@@ -1,0 +1,222 @@
+{
+  "ranking": {
+    "users": "Classement des utilisateurs",
+    "conversations": "Classement des conversations",
+    "messages": "Classement des messages",
+    "links": "Classement des liens",
+    "default": "Classement",
+    "resultsUnit": "résultats",
+    "retry": "Réessayer",
+    "empty": "Aucun résultat trouvé",
+    "selectEntity": "Sélectionnez le type d'entité",
+    "selectCriterion": "Sélectionnez le critère",
+    "selectPeriod": "Sélectionnez la période",
+    "filterTitle": "Filtres de classement",
+    "entityTypeLabel": "Type d'entité",
+    "entityUsers": "Utilisateurs",
+    "entityConversations": "Conversations",
+    "entityMessages": "Messages",
+    "entityLinks": "Liens",
+    "criterionLabel": "Critère",
+    "filterCriteria": "Filtrer les critères...",
+    "noCriteriaFound": "Aucun critère trouvé",
+    "periodLabel": "Période",
+    "resultCountLabel": "Nombre de résultats",
+    "period1d": "Dernier jour (24h)",
+    "period7d": "Dernière semaine (7j)",
+    "period30d": "Dernier mois (30j)",
+    "period90d": "Dernier trimestre (90j)",
+    "period180d": "Dernier semestre (180j)",
+    "period365d": "Dernière année (365j)",
+    "periodAll": "Tous les temps"
+  },
+  "scanLog": {
+    "title": "Scan Logs",
+    "empty": "Aucun scan log"
+  },
+  "filter": {
+    "all": "Tous",
+    "sent": "Envoyés",
+    "skip": "Ignorés",
+    "error": "Erreurs"
+  },
+  "trigger": {
+    "auto": "Auto",
+    "manual": "Manuel",
+    "timeout": "Timeout",
+    "message": "Message",
+    "reply": "Réponse"
+  },
+  "timeAgo": {
+    "now": "maintenant",
+    "minutes": "min",
+    "hours": "h",
+    "days": "j"
+  },
+  "regexTester": {
+    "title": "Tester regex contre texte sample",
+    "placeholder": "Colle un extrait de conversation ici pour voir quels patterns matchent…",
+    "test": "Tester",
+    "noPatterns": "Aucun pattern défini pour ce topic.",
+    "match": "correspondance",
+    "matches": "correspondances",
+    "invalidRegex": "regex invalide"
+  },
+  "agent": {
+    "overview": {
+      "kpi": {
+        "conversations": "Conversations",
+        "active": "Actifs",
+        "users": "Utilisateurs",
+        "roles": "Rôles",
+        "messages": "Messages",
+        "words": "Mots",
+        "avgConfidence": "Confiance moy.",
+        "archetypes": "Archétypes"
+      },
+      "distribution": "Répartition",
+      "recentActivity": "Activité récente",
+      "noRecentActivity": "Aucune activité récente",
+      "resetConversation": "Reset conversation",
+      "resetUser": "Reset utilisateur",
+      "dangerZone": "Zone dangereuse",
+      "resetting": "Reset en cours...",
+      "resetAll": "Reset complet",
+      "timeAgo": {
+        "never": "Jamais",
+        "justNow": "À l'instant",
+        "minutes": "il y a {{count}}min",
+        "hours": "il y a {{count}}h",
+        "days": "il y a {{count}}j"
+      },
+      "conversationType": {
+        "direct": "Direct",
+        "group": "Groupe",
+        "public": "Public",
+        "global": "Globale",
+        "broadcast": "Communication",
+        "channel": "Canal"
+      }
+    },
+    "toasts": {
+      "statsLoadError": "Impossible de charger les statistiques",
+      "connectionError": "Erreur de connexion au service agent",
+      "resetSuccess": "Reset complet : {{configs}} configs, {{roles}} rôles, {{analytics}} analytics, {{redisKeys}} clés Redis supprimés",
+      "resetError": "Erreur lors du reset",
+      "resetAiConfigError": "Erreur lors du reset des configurations IA",
+      "invalidConversationId": "ID de conversation invalide (24 caractères hex)",
+      "confirmResetConversation": "Supprimer toutes les données agent pour la conversation {{id}} ?",
+      "conversationReset": "Conversation {{id}} réinitialisée",
+      "conversationResetError": "Erreur lors du reset conversation",
+      "invalidUserId": "ID utilisateur invalide (24 caractères hex)",
+      "confirmResetUser": "Supprimer tous les profils agent pour l'utilisateur {{id}} (toutes conversations) ?",
+      "userReset": "Utilisateur {{id}} réinitialisé",
+      "userResetError": "Erreur lors du reset utilisateur",
+      "confirmResetAll": "ATTENTION : Cette action va supprimer TOUTES les configurations IA, profils, analytics et cache Redis. Cette action est irréversible. Continuer ?",
+      "globalConfigLoadError": "Erreur de chargement de la configuration globale",
+      "globalConfigSavedPending": "Config globale sauvegardée — propagation au service agent en attente (cache stale possible quelques minutes)",
+      "globalConfigUpdated": "Configuration globale mise à jour",
+      "globalConfigUpdateError": "Erreur lors de la mise à jour",
+      "globalConfigConnectionError": "Erreur de connexion au serveur",
+      "llmConfigLoadError": "Erreur lors du chargement de la config LLM",
+      "llmConfigSavedPending": "Config LLM sauvegardée — le service agent n'a pas confirmé le rechargement (peut nécessiter un redémarrage)",
+      "llmConfigUpdated": "Configuration LLM mise à jour",
+      "llmConfigSaveError": "Erreur lors de la sauvegarde",
+      "rolesLoadError": "Erreur lors du chargement des rôles",
+      "archetypeAssigned": "Archétype assigné",
+      "archetypeAssignError": "Erreur lors de l'assignation",
+      "profileUnlocked": "Profil déverrouillé",
+      "profileUnlockError": "Erreur lors du déverrouillage",
+      "triggerInterrupted": "Interruption demandée",
+      "scanTriggered": "Scan déclenché",
+      "scanTriggerError": "Erreur lors du déclenchement",
+      "networkError": "Erreur réseau",
+      "triggerScheduled": "Trigger programmé à {{time}}",
+      "triggerScheduledIn": "Trigger programmé dans {{delay}}",
+      "triggerCancelled": "Trigger programmé annulé",
+      "frequencyUpdated": "Fréquence mise à jour : {{minutes}}min",
+      "updateError": "Erreur",
+      "intervalAdjusted": "Intervalle ajusté : {{minutes}}min",
+      "queueItemDeleted": "Message supprimé de la file",
+      "queueItemAlreadySent": "Message déjà envoyé",
+      "queueItemDeleteError": "Erreur lors de la suppression",
+      "queueItemEdited": "Message modifié",
+      "queueItemEditError": "Erreur lors de la modification",
+      "conversationConfigUpdated": "Config conversation mise à jour",
+      "archetypesLoadError": "Erreur lors du chargement des archétypes",
+      "configLoadError": "Erreur lors du chargement des configurations",
+      "agentEnabled": "Agent activé",
+      "agentDisabled": "Agent désactivé",
+      "configDeleted": "Configuration supprimée",
+      "deleteError": "Erreur lors de la suppression"
+    },
+    "scheduling": {
+      "fixedTime": "Heure fixe",
+      "delay": "Dans X temps",
+      "frequency": "Fréquence",
+      "timerWarning": "Ce timer est perdu si vous fermez la page ou le navigateur.",
+      "dragToMove": "glisser pour déplacer",
+      "notAvailable": "Schedule non disponible",
+      "triggerNow": "Déclencher maintenant",
+      "stop": "STOP!"
+    }
+  },
+  "agentLive": {
+    "selectConversation": "Sélectionnez une conversation pour superviser son état en temps réel",
+    "conversationsActive": "Conversations actives",
+    "loading": "Chargement...",
+    "monitoredUsers": "Utilisateurs contrôlés",
+    "noMonitoredUsers": "Aucun utilisateur contrôlé",
+    "toneProfiles": "Profils de ton",
+    "noToneProfiles": "Aucun profil de ton",
+    "contextualSummary": "Résumé contextuel",
+    "topics": "Sujets",
+    "tone": "Ton :",
+    "noSummary": "Aucun résumé disponible",
+    "metrics": "Métriques",
+    "messages": "Messages",
+    "words": "Mots",
+    "confidence": "Confiance",
+    "cachedMessages": "messages en cache",
+    "noAnalytics": "Aucune analytique disponible",
+    "loadError": "Impossible de charger l'état live",
+    "connectionError": "Erreur de connexion ou conversation introuvable",
+    "queue": "File d'attente"
+  },
+  "userDetail": {
+    "languagePreferences": "Préférences de Langue",
+    "languagePreferencesSaved": "Préférences de langue mises à jour",
+    "languagePreferencesError": "Erreur lors de la mise à jour"
+  },
+  "translationMonitor": {
+    "loadingMetrics": "Chargement des métriques...",
+    "languageBreakdown": "Répartition par langue"
+  },
+  "llm": {
+    "generationSettings": "Paramètres de génération",
+    "budgetManagement": "Gestion du Budget"
+  },
+  "globalConfig": {
+    "defaultProvider": "Provider par défaut",
+    "globalScheduler": "Planificateur Global",
+    "active": "Actif",
+    "disabled": "Désactivé",
+    "none": "Aucun"
+  },
+  "agentConfig": {
+    "titleNew": "Nouvelle configuration agent",
+    "titleEdit": "Modifier la configuration",
+    "created": "Configuration créée",
+    "updated": "Configuration mise à jour",
+    "saveError": "Erreur lors de la sauvegarde",
+    "pendingPropagation": "Config sauvegardée — propagation au service agent en attente (cache stale possible quelques minutes)"
+  },
+  "security": {
+    "enable2FA": "Activer 2FA",
+    "disable2FA": "Désactiver 2FA",
+    "accountUnlocked": "Compte déverrouillé avec succès",
+    "twoFactorEnabled": "2FA activé avec succès",
+    "twoFactorDisabled": "2FA désactivé avec succès",
+    "disabled": "Désactivé"
+  }
+}

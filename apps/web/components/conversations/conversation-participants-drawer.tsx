@@ -145,9 +145,9 @@ export function ConversationParticipantsDrawer({
   const handleManualRefresh = async () => {
     try {
       await manualRefresh();
-      toast.success('Statuts rafraîchis');
+      toast.success(t('participants.refreshed'));
     } catch (_error) {
-      toast.error('Erreur lors du rafraîchissement');
+      toast.error(t('participants.refreshError'));
     }
   };
 
@@ -304,7 +304,7 @@ export function ConversationParticipantsDrawer({
       toast.success(`Rôle mis à jour avec succès: ${roleNames[newRole]}`);
     } catch (error: unknown) {
       console.error('Erreur lors de la mise à jour du rôle:', error);
-      toast.error(error.message || 'Erreur lors de la mise à jour du rôle');
+      toast.error(error.message || t('participants.roleError'));
     } finally {
       setIsLoading(false);
     }
@@ -366,7 +366,7 @@ export function ConversationParticipantsDrawer({
       setPlatformResults([]);
     } catch (error: unknown) {
       console.error('Erreur lors de l\'ajout du participant:', error);
-      toast.error(error.message || 'Erreur lors de l\'ajout du participant');
+      toast.error(error.message || t('participants.addError'));
     } finally {
       setIsLoading(false);
     }

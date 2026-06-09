@@ -193,7 +193,6 @@ struct ConversationHeaderState {
     var storyUserIdForHeader: String?
     var showSearch = false
     var searchQuery = ""
-    var typingDotPhase: Int = 0
 }
 
 struct ConversationView: View {
@@ -216,6 +215,10 @@ struct ConversationView: View {
     @EnvironmentObject var router: Router
     @EnvironmentObject var conversationListViewModel: ConversationListViewModel
     @StateObject var viewModel: ConversationViewModel
+    /// Observes ONLY typing state — avoids full-view re-render on every keystroke.
+    /// `internal` (not `private`): accessed by the `ConversationView+ScrollIndicators`
+    /// extension, which lives in a separate file (private is file-scoped).
+    @ObservedObject var typingObserver: ConversationStateStore
     @State var messageText = ""
     @StateObject var audioRecorder = AudioRecorderManager()
     @StateObject var scrollButtonAudioPlayer = AudioPlayerManager()
@@ -241,9 +244,6 @@ struct ConversationView: View {
     @State var composerHeight: CGFloat = 130
     @State private var keyboardHeight: CGFloat = 0
     @State private var initialScrollCompleted: Bool = false
-
-    @State var typingDotPublisher = Timer.publish(every: 0.5, on: .main, in: .common)
-    @State var typingDotConnection: Cancellable?
 
 
     let defaultReactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉", "💯", "😍", "👀", "🤣", "💪", "✨", "🥺"]
@@ -346,7 +346,7 @@ struct ConversationView: View {
         self.conversation = conversation
         self.replyContext = replyContext
         self.anonymousSession = anonymousSession
-        _viewModel = StateObject(wrappedValue: ConversationViewModel(
+        let vm = ConversationViewModel(
             conversationId: conversation?.id ?? "",
             unreadCount: conversation?.userState.unreadCount ?? 0,
             isDirect: conversation?.type == .direct,
@@ -354,7 +354,11 @@ struct ConversationView: View {
             memberJoinedAt: conversation?.currentUserJoinedAt,
             closedAt: conversation?.closedAt,
             anonymousSession: anonymousSession
-        ))
+        )
+        _viewModel = StateObject(wrappedValue: vm)
+        // Wire the typing observer separately so typing changes don't re-evaluate
+        // the full conversation body — only typing-specific sub-views update.
+        _typingObserver = ObservedObject(wrappedValue: vm.stateStore)
     }
 
     // MARK: - Date Sections
@@ -472,9 +476,9 @@ struct ConversationView: View {
             VStack(spacing: 8) {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(Color(hex: "4ECDC4"))
+                    .foregroundColor(MeeshyColors.indigo400)
                     .padding(8)
-                    .background(Circle().fill(Color(hex: "4ECDC4").opacity(0.15)))
+                    .background(Circle().fill(MeeshyColors.indigo400.opacity(0.15)))
 
                 Text(String(localized: "conversation.view.e2e_notice", defaultValue: "Les messages dans cette conversation sont chiffrés de bout en bout. Personne, pas même Meeshy, ne peut les lire.", bundle: .main))
                     .font(.system(size: 12))
@@ -734,7 +738,6 @@ struct ConversationView: View {
         bodyContent
             .background(InteractivePopEnabler())
             .task {
-                Logger.messages.debug("[DIAG] ConversationView.task ENTERED conv=\(viewModel.conversationId)")
                 viewModel.observeSync()
                 await viewModel.loadMessages()
                 MessageSocketManager.shared.connect()
@@ -804,15 +807,17 @@ struct ConversationView: View {
                         viewModel.ephemeralDuration = duration
                     }
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { overlayState.longPressEnabled = true }
-                if typingDotConnection == nil {
-                    typingDotConnection = typingDotPublisher.connect()
-                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { overlayState.longPressEnabled = true }
             }
-            .onDisappear {
-                Logger.messages.debug("[DIAG] ConversationView.onDisappear conv=\(viewModel.conversationId)")
-                typingDotConnection?.cancel()
-                typingDotConnection = nil
+            .adaptiveOnChange(of: router.replyContextVersion) { _, _ in
+                // Réponse à un mood affiché dans la barre directe courante : la vue
+                // est déjà à l'écran, `onAppear` ne se redéclenche pas. On applique
+                // le contexte au composer ssi il cible CETTE conversation directe.
+                guard isDirect,
+                      let ctx = router.pendingReplyContext,
+                      ctx.authorId == conversation?.participantUserId else { return }
+                composerState.pendingReplyReference = ctx.toReplyReference
+                router.pendingReplyContext = nil
             }
             .adaptiveOnChange(of: messageText) { _, newValue in
                 persistDraft(text: newValue)
@@ -838,9 +843,8 @@ struct ConversationView: View {
                 // ViewModel has already wiped per-conversation cache and
                 // local message state. We dismiss the screen here and
                 // surface a toast so the user knows why.
-                Logger.messages.debug("[DIAG] accessRevoked.onChange revoked=\(revoked)")
                 guard revoked else { return }
-                FeedbackToastManager.shared.showError(viewModel.error ?? "Vous n'avez plus acces a cette conversation")
+                FeedbackToastManager.shared.showError(viewModel.error ?? String(localized: "conversation.accessRevoked", defaultValue: "You no longer have access to this conversation", bundle: .main))
                 dismiss()
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { notification in
@@ -926,7 +930,7 @@ struct ConversationView: View {
                             scrollState.scrollToMessageTrigger += 1
                         case .notFound:
                             HapticFeedback.error()
-                            FeedbackToastManager.shared.show("Message introuvable", type: .info)
+                            FeedbackToastManager.shared.show(String(localized: "conversation.messageNotFound", defaultValue: "Message not found", bundle: .main), type: .info)
                         }
                     }
                 },
@@ -1075,7 +1079,7 @@ struct ConversationView: View {
                         Color.clear.frame(height: composerState.showOptions ? 72 : 56)
                         HStack {
                             Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.yellow)
+                                .foregroundStyle(MeeshyColors.warning)
                             Text(error)
                                 .font(.caption)
                                 .lineLimit(2)
@@ -1123,10 +1127,6 @@ struct ConversationView: View {
                     .transition(.asymmetric(insertion: .scale(scale: 0.8).combined(with: .opacity), removal: .scale(scale: 0.6).combined(with: .opacity)))
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: scrollState.isNearBottom)
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isSearchingQuotedMessage)
-                    .onReceive(typingDotPublisher) { _ in
-                        guard !viewModel.typingUsernames.isEmpty else { return }
-                        headerState.typingDotPhase = (headerState.typingDotPhase + 1) % 3
-                    }
             }
 
             VStack {

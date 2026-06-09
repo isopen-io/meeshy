@@ -82,6 +82,8 @@ public struct APIMessageAttachment: Decodable, Sendable {
     public let thumbHash: String?
     public let width: Int?
     public let height: Int?
+    /// D4 — responsive downscaled WebP variants for `srcset`-style selection.
+    public let imageVariants: [MeeshyImageVariant]?
 
     // ── Audio / video ──
     public let duration: Int?
@@ -152,7 +154,7 @@ public struct APIMessageAttachment: Decodable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, messageId
         case fileName, originalName, mimeType, fileSize, fileUrl
-        case thumbnailUrl, thumbHash, width, height
+        case thumbnailUrl, thumbHash, width, height, imageVariants
         case duration, bitrate, sampleRate, codec, channels, fps, videoCodec
         case pageCount, lineCount
         case latitude, longitude
@@ -189,6 +191,7 @@ public struct APIMessageAttachment: Decodable, Sendable {
         self.thumbHash = try c.decodeIfPresent(String.self, forKey: .thumbHash)
         self.width = try c.decodeIfPresent(Int.self, forKey: .width)
         self.height = try c.decodeIfPresent(Int.self, forKey: .height)
+        self.imageVariants = try c.decodeIfPresent([MeeshyImageVariant].self, forKey: .imageVariants)
         self.duration = try c.decodeIfPresent(Int.self, forKey: .duration)
         self.bitrate = try c.decodeIfPresent(Int.self, forKey: .bitrate)
         self.sampleRate = try c.decodeIfPresent(Int.self, forKey: .sampleRate)
@@ -278,9 +281,12 @@ public struct APIStoryReplyTarget: Decodable, Sendable {
     public let createdAt: Date
     public let thumbnailUrl: String?
     public let previewText: String
+    /// Présent quand le post cité est un mood/statut — déclenche le rendu
+    /// dédié (emoji + contenu + date) côté bulle.
+    public let moodEmoji: String?
 
     private enum CodingKeys: String, CodingKey {
-        case id, reactionCount, commentCount, createdAt, thumbnailUrl, previewText
+        case id, reactionCount, commentCount, createdAt, thumbnailUrl, previewText, moodEmoji
     }
 
     nonisolated(unsafe) private static let isoFractional: ISO8601DateFormatter = {
@@ -297,6 +303,7 @@ public struct APIStoryReplyTarget: Decodable, Sendable {
         commentCount = try c.decode(Int.self, forKey: .commentCount)
         thumbnailUrl = try c.decodeIfPresent(String.self, forKey: .thumbnailUrl)
         previewText = try c.decode(String.self, forKey: .previewText)
+        moodEmoji = try c.decodeIfPresent(String.self, forKey: .moodEmoji)
         // `createdAt` est décodé depuis une String puis parsé ici — agnostique
         // de la `dateDecodingStrategy` du JSONDecoder appelant (la prod utilise
         // une stratégie `.custom`, les tests `.iso8601`). Tolère les
@@ -355,6 +362,9 @@ public struct APIMessage: Sendable {
     public let effectFlags: UInt32?
     public let translations: [APITextTranslation]?
     public let mentionedUsers: [MentionedUser]?
+    /// Structured per-type payload. For call-summary system messages this decodes
+    /// into a `CallSummaryMetadata`; absent / non-call metadata yields `nil`.
+    public let callSummary: CallSummaryMetadata?
 }
 
 extension APIMessage: Decodable {
@@ -368,6 +378,7 @@ extension APIMessage: Decodable {
         case reactionSummary, reactionCount, currentUserReactions
         case deliveredToAllAt, readByAllAt, deliveredCount, readCount
         case effectFlags, translations, mentionedUsers
+        case metadata
         // MongoDB fallback
         case _id
     }
@@ -418,6 +429,9 @@ extension APIMessage: Decodable {
         effectFlags = try c.decodeIfPresent(UInt32.self, forKey: .effectFlags)
         translations = try c.decodeIfPresent([APITextTranslation].self, forKey: .translations)
         mentionedUsers = try c.decodeIfPresent([MentionedUser].self, forKey: .mentionedUsers)
+        // Tolerant: a present-but-non-call metadata object must not fail the
+        // whole message decode, so swallow shape mismatches into nil.
+        callSummary = try? c.decodeIfPresent(CallSummaryMetadata.self, forKey: .metadata)
     }
 }
 
@@ -536,7 +550,8 @@ extension APIMessage {
                 fileUrl: apiAtt.fileUrl ?? "", width: apiAtt.width, height: apiAtt.height,
                 thumbnailUrl: apiAtt.thumbnailUrl, thumbHash: apiAtt.thumbHash, duration: apiAtt.duration, uploadedBy: senderId,
                 latitude: apiAtt.latitude, longitude: apiAtt.longitude,
-                thumbnailColor: thumbnailColor
+                thumbnailColor: thumbnailColor,
+                imageVariants: apiAtt.imageVariants
             )
         }
 
@@ -569,6 +584,16 @@ extension APIMessage {
             // counts + publish date) — lets the quoted-reply citation show
             // the real story preview instead of a bare "Story" placeholder.
             if let target = storyReplyTo {
+                // Réponse à un mood : rendu dédié (emoji + contenu + date).
+                if let emoji = target.moodEmoji {
+                    return ReplyReference(
+                        messageId: target.id, authorName: "",
+                        previewText: target.previewText,
+                        isStoryReply: true,
+                        storyPublishedAt: target.createdAt,
+                        moodEmoji: emoji
+                    )
+                }
                 return ReplyReference(
                     messageId: target.id, authorName: "Story",
                     previewText: target.previewText.isEmpty ? "\u{1F4F7} Story" : target.previewText,
@@ -648,7 +673,8 @@ extension APIMessage {
             isMe: (sender?.resolvedUserId ?? senderId) == currentUserId
                 || (currentUsername != nil && resolvedUsername?.lowercased() == currentUsername?.lowercased()),
             deliveredToAllAt: deliveredToAllAt, readByAllAt: readByAllAt,
-            deliveredCount: deliveredCount ?? 0, readCount: readCount ?? 0
+            deliveredCount: deliveredCount ?? 0, readCount: readCount ?? 0,
+            callSummary: callSummary
         )
     }
 }

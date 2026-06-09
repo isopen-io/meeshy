@@ -12,6 +12,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { parseFile } from 'music-metadata';
 import { PDFParse } from 'pdf-parse';
 import * as ffmpeg from 'fluent-ffmpeg';
+import { createImageThumbnail, thumbnailPathFor, createResponsiveVariants, variantPathFor } from './thumbnail';
 import type { AttachmentMetadata } from '@meeshy/shared/types/attachment';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 
@@ -61,22 +62,16 @@ export class MetadataManager {
   }
 
   /**
-   * Génère une miniature pour une image
+   * Génère une miniature pour une image (WebP — sprint bande passante D4)
    */
   async generateThumbnail(imagePath: string): Promise<string | null> {
     try {
       const fullPath = path.join(this.uploadBasePath, imagePath);
-      const ext = path.extname(imagePath);
-      const thumbnailPath = imagePath.replace(ext, `_thumb${ext}`);
+      const thumbnailPath = thumbnailPathFor(imagePath);
       const fullThumbnailPath = path.join(this.uploadBasePath, thumbnailPath);
 
-      await sharp(fullPath)
-        .resize(this.thumbnailSize, this.thumbnailSize, {
-          fit: 'inside',
-          withoutEnlargement: true,
-        })
-        .jpeg({ quality: 80 })
-        .toFile(fullThumbnailPath);
+      const thumb = await createImageThumbnail(fullPath, { size: this.thumbnailSize });
+      await fs.writeFile(fullThumbnailPath, thumb);
 
       return thumbnailPath;
     } catch (error) {
@@ -86,17 +81,43 @@ export class MetadataManager {
   }
 
   /**
-   * Génère une miniature à partir d'un buffer (pour fichiers chiffrés)
+   * Génère les variantes WebP responsive d'une image pleine résolution (D4).
+   * Écrit chaque variante sur disque à côté de l'original et renvoie leurs
+   * chemins relatifs + dimensions + taille. Tableau vide = source déjà petite.
+   * Réservé aux images NON chiffrées (générer des variantes côté serveur d'une
+   * image E2EE révélerait son contenu en clair).
+   */
+  async generateImageVariants(
+    imagePath: string
+  ): Promise<Array<{ path: string; width: number; height: number; size: number }>> {
+    try {
+      const fullPath = path.join(this.uploadBasePath, imagePath);
+      const variants = await createResponsiveVariants(fullPath);
+
+      const written: Array<{ path: string; width: number; height: number; size: number }> = [];
+      for (const variant of variants) {
+        const relPath = variantPathFor(imagePath, variant.width);
+        await fs.writeFile(path.join(this.uploadBasePath, relPath), variant.buffer);
+        written.push({
+          path: relPath,
+          width: variant.width,
+          height: variant.height,
+          size: variant.buffer.length,
+        });
+      }
+      return written;
+    } catch (error) {
+      logger.error('[MetadataManager] Erreur génération variantes responsive', error);
+      return [];
+    }
+  }
+
+  /**
+   * Génère une miniature à partir d'un buffer (pour fichiers chiffrés) — WebP
    */
   async generateThumbnailFromBuffer(buffer: Buffer): Promise<Buffer | undefined> {
     try {
-      return await sharp(buffer)
-        .resize(this.thumbnailSize, this.thumbnailSize, {
-          fit: 'inside',
-          withoutEnlargement: true,
-        })
-        .jpeg({ quality: 80 })
-        .toBuffer();
+      return await createImageThumbnail(buffer, { size: this.thumbnailSize });
     } catch (error) {
       logger.warn('[MetadataManager] Could not generate thumbnail from buffer:', error);
       return undefined;

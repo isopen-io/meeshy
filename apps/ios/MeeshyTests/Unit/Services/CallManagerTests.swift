@@ -241,6 +241,8 @@ final class MockWebRTCClient: WebRTCClientProviding {
     func createDataChannel(label: String) -> Bool { false }
     func sendDataChannelMessage(_ data: Data) {}
     func disconnect() { disconnectCallCount += 1; isConnected = false }
+    private(set) var restartIceCallCount = 0
+    func restartIce() { restartIceCallCount += 1 }
     func setAudioEffect(_ effect: AudioEffectConfig?) throws {}
     func updateAudioEffectParams(_ config: AudioEffectConfig) throws {}
 }
@@ -595,10 +597,10 @@ final class CallStatsReducerTests: XCTestCase {
     private func codec(_ id: String, _ mime: String) -> CallStats.RawEntry {
         CallStats.RawEntry(id: id, type: "codec", mimeType: mime)
     }
-    private func inbound(_ kind: String, packets: Int, codecId: String? = nil, lost: Int = 0) -> CallStats.RawEntry {
+    private func inbound(_ kind: String, packets: Int, codecId: String? = nil, lost: Int = 0, bytes: Int = 0) -> CallStats.RawEntry {
         CallStats.RawEntry(
             id: "in-\(kind)", type: "inbound-rtp", kind: kind, codecId: codecId,
-            values: ["packetsReceived": Double(packets), "packetsLost": Double(lost)]
+            values: ["packetsReceived": Double(packets), "packetsLost": Double(lost), "bytesReceived": Double(bytes)]
         )
     }
     private func outbound(_ kind: String, packets: Int, bytes: Int = 0) -> CallStats.RawEntry {
@@ -639,6 +641,24 @@ final class CallStatsReducerTests: XCTestCase {
         ])
         XCTAssertEqual(stats.outboundPacketsSent, 1000)
         XCTAssertEqual(stats.bandwidth, 51000)
+    }
+
+    func test_reduce_sumsInboundBytesReceived() {
+        // bytesReceived (cumulative) is summed across all inbound-rtp streams —
+        // paired with bandwidth (bytesSent) to report total data spent.
+        let stats = CallStats.reduce(entries: [
+            inbound("audio", packets: 200, bytes: 2000),
+            inbound("video", packets: 800, bytes: 90000)
+        ])
+        XCTAssertEqual(stats.bytesReceived, 92000)
+    }
+
+    func test_connectionQualityLabel_collapsesCriticalIntoPoor() {
+        XCTAssertEqual(CallManager.connectionQualityLabel(for: .excellent), "excellent")
+        XCTAssertEqual(CallManager.connectionQualityLabel(for: .good), "good")
+        XCTAssertEqual(CallManager.connectionQualityLabel(for: .fair), "fair")
+        XCTAssertEqual(CallManager.connectionQualityLabel(for: .poor), "poor")
+        XCTAssertEqual(CallManager.connectionQualityLabel(for: .critical), "poor")
     }
 
     func test_reduce_resolvesRealCodecName_notGraphReference() {
@@ -739,5 +759,82 @@ final class CallReliabilityPolicyTests: XCTestCase {
     func test_connecting_failBudgetWins_evenIfRestartNotAttempted() {
         let outcome = Policy.evaluateConnecting(secondsInConnecting: 30, didAttemptRestart: false)
         XCTAssertEqual(outcome, .fail)
+    }
+}
+
+// MARK: - CallPillStatus (minimised call pill never shows a running timer pre-connection)
+
+final class CallPillStatusTests: XCTestCase {
+
+    func test_connected_isConnected_showsDuration() {
+        XCTAssertEqual(CallPillStatus.from(.connected), .connected)
+        XCTAssertTrue(CallPillStatus.from(.connected).isConnected,
+                      "only an established call shows the live duration (green)")
+    }
+
+    func test_ringing_isNotConnected() {
+        XCTAssertEqual(CallPillStatus.from(.ringing(isOutgoing: true)), .ringing)
+        XCTAssertEqual(CallPillStatus.from(.ringing(isOutgoing: false)), .ringing)
+        XCTAssertFalse(CallPillStatus.from(.ringing(isOutgoing: true)).isConnected,
+                       "a ringing call must NOT show a running 00:00 timer")
+    }
+
+    func test_offeringAndConnecting_mapToConnecting_notConnected() {
+        XCTAssertEqual(CallPillStatus.from(.offering), .connecting)
+        XCTAssertEqual(CallPillStatus.from(.connecting), .connecting)
+        XCTAssertFalse(CallPillStatus.from(.connecting).isConnected)
+    }
+
+    func test_reconnecting_isNotConnected() {
+        XCTAssertEqual(CallPillStatus.from(.reconnecting(attempt: 2)), .reconnecting)
+        XCTAssertFalse(CallPillStatus.from(.reconnecting(attempt: 2)).isConnected)
+    }
+}
+
+// MARK: - Full-screen cover gate keeps the end-of-call panel reachable
+
+/// `CallManager.endCallInternal` holds `.ended(reason:)` for ~1.5 s so the user
+/// can read why the call ended (and the final duration) before the state resets
+/// to `.idle`. The cover gate must therefore stay presented across `.ended`,
+/// otherwise `CallView.endedView` is dead code that flashes away instantly.
+final class CallCoverPresentationTests: XCTestCase {
+
+    func test_isEnded_trueOnlyForEnded() {
+        XCTAssertTrue(CallState.ended(reason: .local).isEnded)
+        XCTAssertFalse(CallState.idle.isEnded)
+        XCTAssertFalse(CallState.connected.isEnded)
+        XCTAssertFalse(CallState.ringing(isOutgoing: true).isEnded)
+    }
+
+    func test_cover_activeCall_fullScreen_isPresented() {
+        XCTAssertTrue(CallState.shouldPresentFullScreenCover(
+            callState: .connected, displayMode: .fullScreen))
+    }
+
+    /// The bug: the call ends, state becomes `.ended`, and the cover used to
+    /// dismiss instantly because `isActive` is `false` for `.ended`. The panel
+    /// must remain reachable during the settle window.
+    func test_cover_endedCall_fullScreen_staysPresented() {
+        XCTAssertTrue(CallState.shouldPresentFullScreenCover(
+            callState: .ended(reason: .local), displayMode: .fullScreen),
+            "the end-of-call panel must stay up during the 1.5s settle window")
+    }
+
+    func test_cover_idle_isNotPresented() {
+        XCTAssertFalse(CallState.shouldPresentFullScreenCover(
+            callState: .idle, displayMode: .fullScreen),
+            "no call → no cover, even though the user never minimised")
+    }
+
+    func test_cover_activeCall_pip_isNotPresented() {
+        XCTAssertFalse(CallState.shouldPresentFullScreenCover(
+            callState: .connected, displayMode: .pip),
+            "in PiP the floating pill carries the call, not the full-screen cover")
+    }
+
+    func test_cover_endedCall_pip_isNotPresented() {
+        XCTAssertFalse(CallState.shouldPresentFullScreenCover(
+            callState: .ended(reason: .local), displayMode: .pip),
+            "an ended call that was in PiP must not pop a full-screen cover")
     }
 }

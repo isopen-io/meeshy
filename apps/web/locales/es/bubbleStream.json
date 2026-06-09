@@ -1,5 +1,21 @@
 {
   "bubbleStream": {
+    "callSystemMessage": {
+      "callVideo": "Videollamada",
+      "callAudio": "Llamada de voz",
+      "callVideoMissed": "Videollamada perdida",
+      "callAudioMissed": "Llamada perdida",
+      "callRejected": "Llamada rechazada",
+      "callVideoFailed": "Videollamada interrumpida",
+      "callAudioFailed": "Llamada interrumpida",
+      "outgoing": "Saliente",
+      "incoming": "Entrante",
+      "callBack": "Devolver llamada",
+      "qualityExcellent": "Excelente",
+      "qualityGood": "Buena",
+      "qualityFair": "Regular",
+      "qualityPoor": "Débil"
+    },
     "title": "Flujo de mensajes",
     "loading": "Cargando mensajes...",
     "noMessages": "No hay mensajes",
@@ -125,6 +141,16 @@
       "retry": "Reintentar",
       "cancel": "Eliminar",
       "retrying": "Reintentando..."
+    },
+    "mention": {
+      "badge": {
+        "present": "Presente",
+        "invite": "Invitar"
+      },
+      "title": "Mencionar un usuario",
+      "searchPlaceholder": "Escribe para buscar un usuario...",
+      "noResults": "No se encontró ningún usuario para \"{query}\"",
+      "helpText": "↑↓ navegar • Enter seleccionar • Esc cerrar"
     }
   }
 }

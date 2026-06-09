@@ -10,6 +10,9 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { conversationStatsService } from '../../services/ConversationStatsService';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketConversationJoinSchema, SocketConversationLeaveSchema } from '../../validation/socket-event-schemas.js';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'ConversationHandler' });
 
 export interface ConversationHandlerDependencies {
   prisma: PrismaClient;
@@ -107,7 +110,7 @@ export class ConversationHandler {
         await this.sendConversationStatsToSocket(socket, validated.conversationId).catch(() => {});
       }
     } catch (error) {
-      console.error('[CONVERSATION_JOIN] Erreur:', error);
+      logger.error('conversation:join failed', { error });
       socket.emit(SERVER_EVENTS.CONVERSATION_JOIN_ERROR, {
         conversationId: requestedId,
         reason: 'server_error',
@@ -144,7 +147,7 @@ export class ConversationHandler {
         });
       }
     } catch (error) {
-      console.error('[CONVERSATION_LEAVE] Erreur:', error);
+      logger.error('conversation:leave failed', { error });
     }
   }
 
@@ -167,7 +170,7 @@ export class ConversationHandler {
         });
       }
     } catch (error) {
-      console.error('[CONVERSATION_STATS] Erreur:', error);
+      logger.error('conversation stats emit failed', { error });
     }
   }
 }

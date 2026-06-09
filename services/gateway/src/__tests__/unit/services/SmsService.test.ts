@@ -30,6 +30,11 @@ let mockConsoleLog: ReturnType<typeof jest.spyOn>;
 let mockConsoleError: ReturnType<typeof jest.spyOn>;
 let mockConsoleWarn: ReturnType<typeof jest.spyOn>;
 
+// The service logs via enhancedLogger (Pino), whose FormattedStream writes
+// structured lines through process.stdout.write — not console.* — so the
+// warning assertion spies on stdout to capture the real log sink.
+let mockStdoutWrite: ReturnType<typeof jest.spyOn>;
+
 // Helper to get fresh module with specific environment
 async function getSmsServiceWithEnv(envOverrides: Record<string, string> = {}) {
   // Clear all provider keys
@@ -71,6 +76,9 @@ describe('SmsService', () => {
     mockConsoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
     mockConsoleWarn = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
+    // Capture structured logger output (Pino → process.stdout.write)
+    mockStdoutWrite = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
     // Reset environment variables before each test
     process.env = { ...originalEnv };
   });
@@ -80,6 +88,7 @@ describe('SmsService', () => {
     mockConsoleLog?.mockRestore();
     mockConsoleError?.mockRestore();
     mockConsoleWarn?.mockRestore();
+    mockStdoutWrite?.mockRestore();
   });
 
   // ==============================================
@@ -136,9 +145,15 @@ describe('SmsService', () => {
       const { SmsService } = await getSmsServiceWithEnv({});
       new SmsService();
 
-      expect(mockConsoleWarn).toHaveBeenCalledWith(
-        expect.stringContaining('No SMS providers configured')
+      const stdoutLines = mockStdoutWrite.mock.calls.map(call => String(call[0]));
+      const warning = stdoutLines.find(
+        line =>
+          line.includes('[WARN]') &&
+          line.includes('[SmsService]') &&
+          line.includes('no SMS providers configured')
       );
+
+      expect(warning).toBeDefined();
     });
   });
 

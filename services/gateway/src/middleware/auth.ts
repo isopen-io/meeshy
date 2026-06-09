@@ -3,12 +3,20 @@ import { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { ParticipantType, ParticipantPermissions } from '@meeshy/shared/types/participant';
 import { resolveUserLanguage } from '@meeshy/shared/utils/conversation-helpers';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { StatusService } from '../services/StatusService';
 import { hashSessionToken } from '../utils/session-token';
 import { PermissionDeniedError } from '../errors/custom-errors';
 import { getCacheStore } from '../services/CacheStore';
+import { enhancedLogger } from '../utils/logger-enhanced';
 
-const AUTH_USER_CACHE_TTL = 300; // 5 minutes
+const authLogger = enhancedLogger.child({ module: 'auth' });
+
+// Reduced from 300s: role/language changes propagate within 60s now.
+// Invalidated explicitly on profile updates via cache.del(`auth:user:{userId}`).
+const AUTH_USER_CACHE_TTL = 60; // 1 minute
+// JWT verification result cached for 55s (slightly shorter than user cache)
+const JWT_VERIFY_CACHE_TTL = 55;
 const expiredJwtLoggedTokens = new Map<string, number>(); // token prefix -> last log timestamp
 const EXPIRED_JWT_LOG_INTERVAL = 60_000; // Log same expired token at most once per minute
 
@@ -105,7 +113,24 @@ export class AuthMiddleware {
       let jwtExpired = false;
 
       try {
-        jwtPayload = jwt.verify(jwtToken, process.env.JWT_SECRET!) as Record<string, unknown>;
+        // Cache JWT verification result to avoid repeated HMAC-SHA256 per request
+        const tokenHash = crypto.createHash('sha256').update(jwtToken).digest('hex');
+        const jwtCacheKey = `jwt:v:${tokenHash}`;
+        const cache = getCacheStore();
+        let cachedPayload: Record<string, unknown> | null = null;
+        try {
+          const raw = await cache.get(jwtCacheKey);
+          if (raw) cachedPayload = JSON.parse(raw) as Record<string, unknown>;
+        } catch { /* cache miss — proceed to verify */ }
+
+        if (cachedPayload) {
+          jwtPayload = cachedPayload;
+        } else {
+          jwtPayload = jwt.verify(jwtToken, process.env.JWT_SECRET!) as Record<string, unknown>;
+          try {
+            await cache.set(jwtCacheKey, JSON.stringify(jwtPayload), JWT_VERIFY_CACHE_TTL);
+          } catch { /* non-fatal */ }
+        }
       } catch (error) {
         if (error instanceof jwt.TokenExpiredError && sessionToken) {
           jwtPayload = jwt.decode(jwtToken) as Record<string, unknown>;
@@ -137,14 +162,14 @@ export class AuthMiddleware {
           where: { id: trustedSession.id },
           data: { lastActivityAt: new Date() }
         }).catch(err => {
-          console.warn('[UnifiedAuth] Failed to update trusted session lastActivityAt:', err);
+          authLogger.warn('Failed to update trusted session lastActivityAt', { err });
         });
       }
 
       const cacheKey = `auth:user:${jwtUserId}`;
       const cache = getCacheStore();
 
-      type UserRow = {
+      type CachedUserRow = {
         id: string;
         username: string;
         email: string;
@@ -153,45 +178,103 @@ export class AuthMiddleware {
         displayName: string | null;
         avatar: string | null;
         role: string;
+        isActive: boolean;
         systemLanguage: string;
         regionalLanguage: string;
         customDestinationLanguage: string | null;
         isOnline: boolean;
-        lastActiveAt: string | Date;
-        isActive: boolean;
-        emailVerifiedAt: string | Date | null;
-        createdAt: string | Date;
-        updatedAt: string | Date;
+        lastActiveAt: string;
+        emailVerifiedAt: string | null;
+        createdAt: string;
+        updatedAt: string;
+        deviceLocale: string | null;
       };
 
-      let user: UserRow | null = null;
+      type FullUserRow = Omit<CachedUserRow, 'lastActiveAt' | 'emailVerifiedAt' | 'createdAt' | 'updatedAt'> & {
+        lastActiveAt: Date;
+        emailVerifiedAt: Date | null;
+        createdAt: Date;
+        updatedAt: Date;
+      };
+
+      const deserializeCachedUser = (cached: CachedUserRow): FullUserRow => ({
+        ...cached,
+        lastActiveAt: new Date(cached.lastActiveAt),
+        emailVerifiedAt: cached.emailVerifiedAt ? new Date(cached.emailVerifiedAt) : null,
+        createdAt: new Date(cached.createdAt),
+        updatedAt: new Date(cached.updatedAt),
+      });
+
+      let cachedRow: CachedUserRow | null = null;
 
       try {
-        const cached = await cache.get(cacheKey);
-        if (cached) {
-          const parsed = JSON.parse(cached) as UserRow;
-          // Rehydrate Date fields that JSON.stringify serialized as ISO strings
-          user = {
-            ...parsed,
-            lastActiveAt: new Date(parsed.lastActiveAt),
-            emailVerifiedAt: parsed.emailVerifiedAt ? new Date(parsed.emailVerifiedAt) : null,
-            createdAt: new Date(parsed.createdAt),
-            updatedAt: new Date(parsed.updatedAt),
-          };
+        const raw = await cache.get(cacheKey);
+        if (raw) {
+          cachedRow = JSON.parse(raw) as CachedUserRow;
         }
       } catch {
         // Redis unavailable or parse error — fall through to Prisma
-        user = null;
+      }
+
+      let user: FullUserRow | null = null;
+
+      if (cachedRow) {
+        if (!cachedRow.isActive) {
+          throw new Error('User not found or inactive');
+        }
+        user = deserializeCachedUser(cachedRow);
       }
 
       if (!user) {
-        user = await this.prisma.user.findUnique({
+        const prismaUser = await this.prisma.user.findUnique({
           where: { id: jwtUserId },
-        }) as UserRow | null;
+          select: {
+            id: true,
+            username: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            displayName: true,
+            avatar: true,
+            role: true,
+            systemLanguage: true,
+            regionalLanguage: true,
+            customDestinationLanguage: true,
+            isOnline: true,
+            lastActiveAt: true,
+            isActive: true,
+            emailVerifiedAt: true,
+            createdAt: true,
+            updatedAt: true,
+            deviceLocale: true,
+          },
+        }) as FullUserRow | null;
+
+        user = prismaUser;
 
         if (user?.isActive) {
+          const toCache: CachedUserRow = {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            displayName: user.displayName,
+            avatar: user.avatar,
+            role: user.role,
+            isActive: user.isActive,
+            systemLanguage: user.systemLanguage,
+            regionalLanguage: user.regionalLanguage,
+            customDestinationLanguage: user.customDestinationLanguage,
+            isOnline: user.isOnline,
+            lastActiveAt: user.lastActiveAt.toISOString(),
+            emailVerifiedAt: user.emailVerifiedAt?.toISOString() ?? null,
+            createdAt: user.createdAt.toISOString(),
+            updatedAt: user.updatedAt.toISOString(),
+            deviceLocale: user.deviceLocale,
+          };
           try {
-            await cache.set(cacheKey, JSON.stringify(user), AUTH_USER_CACHE_TTL);
+            await cache.set(cacheKey, JSON.stringify(toCache), AUTH_USER_CACHE_TTL);
           } catch {
             // Redis write failure is non-fatal
           }
@@ -215,11 +298,11 @@ export class AuthMiddleware {
           where: { sessionToken: hashedSessionToken },
           data: { lastActivityAt: new Date() }
         }).catch(err => {
-          console.warn('[UnifiedAuth] Failed to update trusted session lastActivityAt:', err);
+          authLogger.warn('Failed to update trusted session lastActivityAt (anon)', { err });
         });
       }
 
-      const userLanguage = resolveUserLanguage(user as any);
+      const userLanguage = resolveUserLanguage(user);
 
       return {
         type: 'user',
@@ -245,9 +328,8 @@ export class AuthMiddleware {
         const now = Date.now();
         const lastLogged = expiredJwtLoggedTokens.get(tokenPrefix) ?? 0;
         if (now - lastLogged > EXPIRED_JWT_LOG_INTERVAL) {
-          console.warn('[UnifiedAuth] JWT expired:', new Date(error.expiredAt).toISOString(), `(token ...${tokenPrefix})`);
+          authLogger.warn('JWT expired', { expiredAt: new Date(error.expiredAt).toISOString() });
           expiredJwtLoggedTokens.set(tokenPrefix, now);
-          // Prevent memory leak: clean old entries
           if (expiredJwtLoggedTokens.size > 100) {
             for (const [key, ts] of expiredJwtLoggedTokens) {
               if (now - ts > EXPIRED_JWT_LOG_INTERVAL * 10) expiredJwtLoggedTokens.delete(key);
@@ -255,9 +337,9 @@ export class AuthMiddleware {
           }
         }
       } else if (error instanceof jwt.JsonWebTokenError) {
-        console.warn('[UnifiedAuth] JWT invalid:', error.message);
+        authLogger.warn('JWT invalid', { message: error.message });
       } else {
-        console.error('[UnifiedAuth] Unexpected JWT error:', error);
+        authLogger.error('Unexpected JWT error', { error });
       }
       throw new Error('Invalid JWT token');
     }
@@ -347,7 +429,7 @@ export class AuthMiddleware {
       };
 
     } catch (error) {
-      console.warn('[UnifiedAuth] Invalid session token or inactive participant');
+      authLogger.warn('Invalid session token or inactive participant');
       throw new Error('Invalid session token');
     }
   }
@@ -417,7 +499,7 @@ export function createUnifiedAuthMiddleware(
           reqUser.userId = reqUser.userId || null;
         }
       } catch (e) {
-        console.error('[UnifiedAuth] Failed to attach legacy request.user:', e);
+        authLogger.error('Failed to attach legacy request.user', { e });
       }
 
       try {
@@ -428,12 +510,12 @@ export function createUnifiedAuthMiddleware(
           isAnonymous: authContext.isAnonymous
         };
       } catch (e) {
-        console.error('[UnifiedAuth] Failed to attach request.auth:', e);
+        authLogger.error('Failed to attach request.auth', { e });
       }
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Authentication failed';
-      console.warn('[UnifiedAuth] Auth failure:', errorMessage);
+      authLogger.warn('Auth failure', { errorMessage });
 
       if (options.requireAuth) {
         return reply.status(401).send({
@@ -510,7 +592,7 @@ export function getUserPermissions(authContext: UnifiedAuthContext) {
 
 /** @deprecated Use createUnifiedAuthMiddleware */
 export async function authenticate(request: FastifyRequest, reply: FastifyReply) {
-  console.warn('[AUTH] authenticate() is deprecated, use createUnifiedAuthMiddleware instead');
+  authLogger.warn('authenticate() is deprecated, use createUnifiedAuthMiddleware instead');
 
   try {
     const authHeader = request.headers.authorization;
@@ -550,7 +632,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
     reqUser.id = userId;
 
   } catch (error) {
-    console.error('Authentication failed:', error);
+    authLogger.error('Authentication failed (legacy)', { error });
     reply.code(401).send({
       success: false,
       message: 'Token invalide ou manquant'

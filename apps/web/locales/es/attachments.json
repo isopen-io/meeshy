@@ -39,5 +39,33 @@
     "fileTooBig": "Archivo demasiado grande (máx {size})",
     "invalidType": "Tipo de archivo no válido",
     "uploadFailed": "Fallo en la subida"
+  },
+  "actions": {
+    "deleteImage": "Eliminar esta imagen",
+    "deleteVideo": "Eliminar este video",
+    "deleteFile": "Eliminar este archivo",
+    "deleteTextFile": "Eliminar este archivo de texto",
+    "deletePdf": "Eliminar este PDF",
+    "deleteImageNamed": "Eliminar imagen {name}",
+    "deleteVideoNamed": "Eliminar video {name}",
+    "deleteFileNamed": "Eliminar archivo {name}",
+    "openImageNamed": "Abrir imagen {name}",
+    "openFileNamed": "Abrir archivo {name}"
+  },
+  "contextMenu": {
+    "close": "Cerrar",
+    "download": "Descargar",
+    "copyLink": "Copiar enlace",
+    "delete": "Eliminar",
+    "downloadStarted": "Descarga iniciada",
+    "linkCopied": "Enlace copiado al portapapeles",
+    "linkCopyError": "No se pudo copiar el enlace",
+    "deleteSuccess": "Archivo eliminado correctamente",
+    "deleteError": "No se pudo eliminar el archivo",
+    "confirmDeleteTitle": "Confirmar eliminación",
+    "confirmDeleteDescription": "¿Está seguro de que desea eliminar este archivo?",
+    "confirmDeleteIrreversible": "Esta acción es irreversible. El archivo se eliminará permanentemente.",
+    "cancel": "Cancelar",
+    "deleting": "Eliminando..."
   }
 }

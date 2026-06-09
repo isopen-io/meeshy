@@ -17,6 +17,7 @@ import {
   type AgentScheduleData,
 } from '@/services/agent-admin.service';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/useI18n';
 import dynamic from 'next/dynamic';
 
 const ScanHistoryChart = dynamic(() => import('./ScanHistoryChart'), {
@@ -61,6 +62,7 @@ function budgetGlow(ratio: number): string {
 export default memo(function TriggerSchedulingModal({
   conversationId, conversationTitle, open, onOpenChange,
 }: TriggerSchedulingModalProps) {
+  const { t } = useI18n('admin');
   const [schedule, setSchedule] = useState<AgentScheduleData | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [currentNode, setCurrentNode] = useState<string | null>(null);
@@ -137,20 +139,20 @@ export default memo(function TriggerSchedulingModal({
       if (isScanning) {
         const res = await agentAdminService.stopScan(conversationId);
         if (res.success) {
-          toast.success('Interruption demandée');
+          toast.success(t('agent.toasts.triggerInterrupted'));
           setTimeout(fetchSchedule, 1000);
         }
       } else {
         const res = await agentAdminService.triggerScan(conversationId);
         if (res.success) {
-          toast.success('Scan declenche');
+          toast.success(t('agent.toasts.scanTriggered'));
           setTimeout(fetchSchedule, 1000);
         } else {
-          toast.error('Erreur lors du declenchement');
+          toast.error(t('agent.toasts.scanTriggerError'));
         }
       }
     } catch {
-      toast.error('Erreur reseau');
+      toast.error(t('agent.toasts.networkError'));
     } finally {
       setTriggering(false);
     }
@@ -172,7 +174,7 @@ export default memo(function TriggerSchedulingModal({
     }, delayMs);
 
     setScheduledTimer({ target: target.getTime(), label: formatTime(target.getTime()) });
-    toast.success(`Trigger programme a ${formatTime(target.getTime())}`);
+    toast.success(t('agent.toasts.triggerScheduled').replace('{{time}}', formatTime(target.getTime())));
   }, [scheduleTime, handleTriggerNow]);
 
   const handleScheduleDelay = useCallback(() => {
@@ -186,7 +188,7 @@ export default memo(function TriggerSchedulingModal({
     }, ms);
 
     setScheduledTimer({ target, label: formatTime(target) });
-    toast.success(`Trigger programme dans ${delayValue}${delayUnit}`);
+    toast.success(t('agent.toasts.triggerScheduledIn').replace('{{delay}}', `${delayValue}${delayUnit}`));
   }, [delayValue, delayUnit, handleTriggerNow]);
 
   const handleCancelSchedule = useCallback(() => {
@@ -195,7 +197,7 @@ export default memo(function TriggerSchedulingModal({
       scheduledTimerRef.current = null;
     }
     setScheduledTimer(null);
-    toast.info('Trigger programme annule');
+    toast.info(t('agent.toasts.triggerCancelled'));
   }, []);
 
   const handleSaveFrequency = useCallback(async () => {
@@ -204,13 +206,13 @@ export default memo(function TriggerSchedulingModal({
     try {
       const res = await agentAdminService.upsertConfig(conversationId, { scanIntervalMinutes: totalMinutes });
       if (res.success) {
-        toast.success(`Frequence mise a jour : ${totalMinutes}min`);
+        toast.success(t('agent.toasts.frequencyUpdated').replace('{{minutes}}', String(totalMinutes)));
         fetchSchedule();
       } else {
-        toast.error('Erreur');
+        toast.error(t('agent.toasts.updateError'));
       }
     } catch {
-      toast.error('Erreur reseau');
+      toast.error(t('agent.toasts.networkError'));
     } finally {
       setSavingFreq(false);
     }
@@ -266,10 +268,10 @@ export default memo(function TriggerSchedulingModal({
     setDragPct(null);
     try {
       await agentAdminService.upsertConfig(conversationId, { scanIntervalMinutes: newIntervalMinutes });
-      toast.success(`Intervalle ajuste : ${newIntervalMinutes}min`);
+      toast.success(t('agent.toasts.intervalAdjusted').replace('{{minutes}}', String(newIntervalMinutes)));
       fetchSchedule();
     } catch {
-      toast.error('Erreur');
+      toast.error(t('agent.toasts.updateError'));
     }
   }, [dragging, dragPct, timelineData, now, conversationId, fetchSchedule]);
 
@@ -295,7 +297,7 @@ export default memo(function TriggerSchedulingModal({
               <span>Trigger programme a <strong>{scheduledTimer.label}</strong></span>
               <span className="text-xs text-amber-500">({formatDuration(scheduledTimer.target - now)})</span>
             </div>
-            <Button variant="ghost" size="sm" onClick={handleCancelSchedule} className="h-6 w-6 p-0 text-amber-600 hover:text-amber-800">
+            <Button variant="ghost" size="sm" onClick={handleCancelSchedule} className="h-6 w-6 p-0 text-amber-600 hover:text-amber-800" aria-label="Cancel scheduled trigger">
               <X className="h-3.5 w-3.5" />
             </Button>
           </div>
@@ -344,7 +346,7 @@ export default memo(function TriggerSchedulingModal({
                         className={`w-full h-8 text-xs gap-1.5 ${!isScanning ? 'border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/50' : ''}`}
                       >
                         {triggering ? <Loader2 className="h-3 w-3 animate-spin" /> : (isScanning ? <Square className="h-2.5 w-2.5 fill-current" /> : <Zap className="h-3 w-3" />)}
-                        {isScanning ? 'STOP!' : 'Declencher maintenant'}
+                        {isScanning ? t('agent.scheduling.stop') : t('agent.scheduling.triggerNow')}
                       </Button>
                     </div>
 
@@ -352,7 +354,7 @@ export default memo(function TriggerSchedulingModal({
                     <div className="p-2.5 sm:p-3 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 space-y-2">
                       <div className="flex items-center gap-1.5">
                         <Clock className="h-3 w-3 text-indigo-500" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Heure fixe</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{t('agent.scheduling.fixedTime')}</span>
                       </div>
                       <div className="flex gap-1.5">
                         <Input
@@ -377,7 +379,7 @@ export default memo(function TriggerSchedulingModal({
                     <div className="p-2.5 sm:p-3 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 space-y-2">
                       <div className="flex items-center gap-1.5">
                         <Timer className="h-3 w-3 text-indigo-500" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Dans X temps</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{t('agent.scheduling.delay')}</span>
                       </div>
                       <div className="flex gap-1.5">
                         <Input
@@ -412,7 +414,7 @@ export default memo(function TriggerSchedulingModal({
                     <div className="p-2.5 sm:p-3 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800 space-y-2">
                       <div className="flex items-center gap-1.5">
                         <RotateCcw className="h-3 w-3 text-indigo-500" />
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">Frequence</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{t('agent.scheduling.frequency')}</span>
                       </div>
                       <div className="flex gap-1.5 items-center">
                         <div className="flex-1 flex gap-1 items-center min-w-0">
@@ -450,7 +452,7 @@ export default memo(function TriggerSchedulingModal({
                   {scheduledTimer && (
                     <div className="text-[10px] text-amber-500 flex items-center gap-1">
                       <AlertTriangle className="h-3 w-3 shrink-0" />
-                      Ce timer est perdu si vous fermez la page ou le navigateur.
+                      {t('agent.scheduling.timerWarning')}
                     </div>
                   )}
 
@@ -559,7 +561,7 @@ export default memo(function TriggerSchedulingModal({
                                     {isNext && dragPct !== null
                                       ? formatTime(now + (dragPct / 100) * timelineData.horizonMs)
                                       : formatTime(ts)}
-                                    {isNext && <span className="block text-[8px] text-center text-indigo-300 dark:text-indigo-600">glisser pour deplacer</span>}
+                                    {isNext && <span className="block text-[8px] text-center text-indigo-300 dark:text-indigo-600">{t('agent.scheduling.dragToMove')}</span>}
                                   </div>
                                 </div>
                               </div>
@@ -670,7 +672,7 @@ export default memo(function TriggerSchedulingModal({
                   {!schedule && (
                     <div className="flex items-center gap-2 text-sm text-gray-400 py-4">
                       <AlertTriangle className="h-4 w-4" />
-                      <span>Schedule non disponible</span>
+                      <span>{t('agent.scheduling.notAvailable')}</span>
                     </div>
                   )}
                 </div>

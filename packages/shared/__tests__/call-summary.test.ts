@@ -1,9 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildCallSummary,
+  buildCallSummaryMetadata,
   formatCallDuration,
+  formatCallDataSize,
   callSummaryClientMessageId,
-  type CallSummaryInput
+  callContentKey,
+  type CallSummaryInput,
+  type CallSummaryMetadataInput
 } from '../utils/call-summary';
 
 const makeInput = (overrides: Partial<CallSummaryInput> = {}): CallSummaryInput => ({
@@ -48,8 +52,16 @@ describe('buildCallSummary — completed calls', () => {
       outcome: 'completed',
       callType: 'audio',
       durationSeconds: 272,
+      contentKey: 'call_completed_audio',
       content: 'Appel audio · 04:32'
     });
+  });
+
+  it('exposes a stable contentKey for i18n consumers', () => {
+    expect(callContentKey('completed', 'audio')).toBe('call_completed_audio');
+    expect(callContentKey('missed', 'video')).toBe('call_missed_video');
+    expect(callContentKey('rejected', 'audio')).toBe('call_rejected_audio');
+    expect(callContentKey('failed', 'video')).toBe('call_failed_video');
   });
 
   it('labels a completed video call with its duration', () => {
@@ -121,6 +133,102 @@ describe('buildCallSummary — duration hygiene', () => {
 
   it('defaults a missing duration to zero', () => {
     expect(buildCallSummary(makeInput({ durationSeconds: null }))?.durationSeconds).toBe(0);
+  });
+});
+
+const makeMetaInput = (
+  overrides: Partial<CallSummaryMetadataInput> = {}
+): CallSummaryMetadataInput => ({
+  status: 'ended',
+  endReason: 'completed',
+  callType: 'video',
+  durationSeconds: 272,
+  callId: 'call_1',
+  initiatorId: 'user_a',
+  ...overrides
+});
+
+describe('formatCallDataSize', () => {
+  it('renders sub-KB and zero as a floor of "0 KB"/"1 KB"', () => {
+    expect(formatCallDataSize(0)).toBe('0 KB');
+    expect(formatCallDataSize(-100)).toBe('0 KB');
+    expect(formatCallDataSize(NaN)).toBe('0 KB');
+    expect(formatCallDataSize(400)).toBe('1 KB');
+  });
+
+  it('renders KB below 1000 KB (decimal units)', () => {
+    expect(formatCallDataSize(512_000)).toBe('512 KB');
+    expect(formatCallDataSize(999_000)).toBe('999 KB');
+  });
+
+  it('renders MB with one decimal, trailing .0 stripped', () => {
+    expect(formatCallDataSize(2_400_000)).toBe('2.4 MB');
+    expect(formatCallDataSize(3_000_000)).toBe('3 MB');
+  });
+
+  it('renders GB past 1000 MB', () => {
+    expect(formatCallDataSize(1_100_000_000)).toBe('1.1 GB');
+  });
+
+  it('promotes the unit when rounding crosses the boundary (no "1000 KB")', () => {
+    expect(formatCallDataSize(999_700)).toBe('1 MB');   // 999.7 KB → 1 MB
+    expect(formatCallDataSize(999_400)).toBe('999 KB');  // stays KB
+    expect(formatCallDataSize(999_960_000)).toBe('1 GB'); // 999.96 MB → 1 GB
+  });
+});
+
+describe('buildCallSummaryMetadata', () => {
+  it('mirrors null gating from buildCallSummary', () => {
+    expect(buildCallSummaryMetadata(makeMetaInput({ endReason: 'garbageCollected' }))).toBeNull();
+    expect(buildCallSummaryMetadata(makeMetaInput({ status: 'ringing', endReason: null }))).toBeNull();
+  });
+
+  it('carries call facts for a completed call', () => {
+    const meta = buildCallSummaryMetadata(makeMetaInput({
+      callType: 'video',
+      durationSeconds: 272,
+      bytesSent: 1_000_000,
+      bytesReceived: 1_400_000,
+      networkQuality: 'good'
+    }));
+    expect(meta).toEqual({
+      kind: 'call',
+      callId: 'call_1',
+      initiatorId: 'user_a',
+      callType: 'video',
+      outcome: 'completed',
+      durationSeconds: 272,
+      bytesTotal: 2_400_000,
+      bytesEstimated: false,
+      networkQuality: 'good'
+    });
+  });
+
+  it('estimates data spent from duration when no bytes were measured', () => {
+    const meta = buildCallSummaryMetadata(makeMetaInput({
+      callType: 'audio',
+      durationSeconds: 60,
+      bytesSent: null,
+      bytesReceived: null
+    }));
+    expect(meta?.bytesEstimated).toBe(true);
+    expect(meta?.bytesTotal).toBe(25_000 * 60);
+  });
+
+  it('reports null data for missed calls and never estimates them', () => {
+    const meta = buildCallSummaryMetadata(makeMetaInput({
+      status: 'missed',
+      endReason: 'missed',
+      durationSeconds: 0
+    }));
+    expect(meta?.outcome).toBe('missed');
+    expect(meta?.bytesTotal).toBeNull();
+    expect(meta?.bytesEstimated).toBe(false);
+  });
+
+  it('rejects an unknown network quality value', () => {
+    expect(buildCallSummaryMetadata(makeMetaInput({ networkQuality: 'amazing' }))?.networkQuality).toBeNull();
+    expect(buildCallSummaryMetadata(makeMetaInput({ networkQuality: null }))?.networkQuality).toBeNull();
   });
 });
 

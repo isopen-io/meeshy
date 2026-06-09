@@ -142,6 +142,7 @@ export function CustomizationManager({ conversationId, currentUser, onPreference
               variant="ghost"
               className="h-8 w-8 p-0"
               onClick={() => setIsEditingName(false)}
+              aria-label="Cancel editing name"
             >
               <X className="h-4 w-4 text-red-600" />
             </Button>
@@ -210,6 +211,7 @@ export function CustomizationManager({ conversationId, currentUser, onPreference
               variant="ghost"
               className="h-8 w-8 p-0"
               onClick={() => setIsEditingReaction(false)}
+              aria-label="Cancel editing reaction"
             >
               <X className="h-4 w-4 text-red-600" />
             </Button>

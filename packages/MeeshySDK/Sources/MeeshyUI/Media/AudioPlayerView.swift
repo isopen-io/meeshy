@@ -44,6 +44,14 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     public private(set) var currentUrl: String?
     private var listenStartTime: Date?
 
+    /// Unification Étape C (slice 4) — session routée via `MediaSessionCoordinator`
+    /// (source unique, refcomptée, call-aware via l'Étape B) au lieu d'un
+    /// `setCategory`/`setActive` direct. Flag idempotent : `play` ne libère pas
+    /// (resetState) puis ré-acquiert (no-op si déjà tenue) → pas de churn ; seul
+    /// `stop()` libère. ⚠️ Unifie le ducking : ce moteur posait `options: []`
+    /// (PAS de duck) → désormais `[.duckOthers]` comme tous les autres players.
+    private var sessionRequested = false
+
     /// Holds thread-safe-to-cancel handles (`Timer.invalidate()` /
     /// `Task.cancel()`) so `deinit` — which may run off the main thread — can
     /// release them WITHOUT `MainActor.assumeIsolated` (a precondition crash
@@ -76,6 +84,24 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - Audio session (routed through the single MediaSessionCoordinator)
+
+    /// Acquiert la session `.playback` via le coordinator (idempotent). Awaité
+    /// DANS le `loadTask` AVANT `playData` → session active avant lecture, sans
+    /// race. Call-aware (Étape B) : ne touche pas la session pendant un appel.
+    private func acquireSession() async {
+        guard !sessionRequested else { return }
+        sessionRequested = true
+        try? await MediaSessionCoordinator.shared.request(role: .playback)
+    }
+
+    /// Libère la session via le coordinator (refcompté : désactive au count 0).
+    private func releaseSession() {
+        guard sessionRequested else { return }
+        sessionRequested = false
+        Task { await MediaSessionCoordinator.shared.release() }
+    }
+
     // MARK: - Play from remote URL (through cache)
     public func play(urlString: String) {
         if let guardClosure = playbackPermissionGuard, !guardClosure() { return }
@@ -87,12 +113,9 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
 
         let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
 
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch { }
-
         loadTask = Task {
+            await acquireSession()
+            guard !Task.isCancelled else { return }
             do {
                 let data = try await CacheCoordinator.shared.audio.data(for: resolved)
                 guard !Task.isCancelled else { return }
@@ -129,14 +152,16 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             isLoading = false
             return
         }
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
-            try AVAudioSession.sharedInstance().setActive(true)
-            let data = try Data(contentsOf: url)
-            playData(data)
-        } catch {
-            Self.log.error("playLocal echec (\(url.lastPathComponent, privacy: .public)): \(error.localizedDescription, privacy: .public)")
-            isLoading = false
+        loadTask = Task {
+            await acquireSession()
+            guard !Task.isCancelled else { return }
+            do {
+                let data = try Data(contentsOf: url)
+                playData(data)
+            } catch {
+                Self.log.error("playLocal echec (\(url.lastPathComponent, privacy: .public)): \(error.localizedDescription, privacy: .public)")
+                isLoading = false
+            }
         }
     }
 
@@ -185,6 +210,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
     public func stop() {
         resetState()
         currentUrl = nil
+        releaseSession()
     }
 
     public func togglePlayPause() {
@@ -636,20 +662,24 @@ public struct AudioPlayerView: View {
             loadWaveformSamples()
         }
         .onDisappear {
-            // Symmetrical to onAppear (BUG A fix): only unregister the legacy
-            // autoplay closure if it was registered — i.e. only in the
-            // owned-engine path. Never registered when an external engine
-            // drives the view, so never unregister there.
-            if !usesExternalPlayer {
-                AudioPlaybackManager.unregisterAutoplay(url: attachment.fileUrl)
-            }
-            // When an external engine is injected it is owned by the parent
-            // (e.g. ConversationAudioCoordinator) and survives view hierarchy
-            // churn. Unregistering it from PlaybackCoordinator on every
-            // scroll-off would break sibling bubbles + the coordinator itself.
-            if !usesExternalPlayer {
-                player.unregisterFromCoordinator()
-            }
+            // Owned-engine teardown. The external-engine path (conversation
+            // bubbles) is owned by a parent coordinator that survives view
+            // hierarchy churn and intentionally keeps playing via the
+            // mini-player + background continuation, so it must be left
+            // untouched here.
+            guard Self.shouldStopOwnedEngineOnDisappear(usesExternalPlayer: usesExternalPlayer) else { return }
+            // Symmetrical to onAppear (BUG A fix): the legacy autoplay closure
+            // is registered only in the owned-engine path.
+            AudioPlaybackManager.unregisterAutoplay(url: attachment.fileUrl)
+            // Leak fix — stop owned playback deterministically. Relying on ARC
+            // to dealloc the `@StateObject` is non-deterministic, and once the
+            // engine is unregistered from `PlaybackCoordinator` (next line) it
+            // can no longer be silenced when a story or conversation claims
+            // audio next — so post / feed-card audio would keep playing on top
+            // of the next screen (e.g. bleed over a story). Stop BEFORE
+            // unregistering so the audio is actually halted.
+            player.stop()
+            player.unregisterFromCoordinator()
         }
         .onChange(of: player.isPlaying) { playing in
             onPlayingChange?(playing)
@@ -1040,6 +1070,18 @@ public struct AudioPlayerView: View {
     ) -> Bool {
         if !usesExternalPlayer { return true }
         return playerAttachmentId != bubbleAttachmentId
+    }
+
+    /// Pure decision: should the owned playback engine be stopped when this
+    /// view leaves the hierarchy? `true` only for the owned-engine path (post
+    /// detail, feed post cards, composer preview, standalone players). An
+    /// externally-injected engine (e.g. `ConversationAudioCoordinator`) is
+    /// owned by a parent that survives view churn and intentionally keeps
+    /// playing (mini-player + background continuation), so it must NOT be
+    /// stopped here. Extracted as a `nonisolated static` so the lifecycle
+    /// contract is unit-testable without a SwiftUI render lifecycle.
+    nonisolated internal static func shouldStopOwnedEngineOnDisappear(usesExternalPlayer: Bool) -> Bool {
+        !usesExternalPlayer
     }
 
     private func handlePlayTap() {

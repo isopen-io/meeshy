@@ -98,7 +98,7 @@ extension ConversationView {
                         Image(systemName: "lock.fill")
                             .font(.system(size: 9, weight: .semibold))
                             .foregroundColor(theme.success)
-                            .accessibilityLabel("Conversation chiffrée")
+                            .accessibilityLabel(String(localized: "conversation.encrypted", defaultValue: "Encrypted conversation", bundle: .main))
                     }
 
                     // Category tag
@@ -415,7 +415,7 @@ private struct ConversationHeaderAvatarView: View {
                         headerState.showStoryViewerFromHeader = true
                     }
                 } : nil,
-                onMoodTap: isDirect ? statusViewModel.moodTapHandler(for: conversation?.participantUserId ?? "") : nil,
+                onMoodTap: isDirect ? statusViewModel.moodTapHandler(for: conversation?.participantUserId ?? "", repliesInline: true) : nil,
                 contextMenuItems: directContextMenu
             )
         }

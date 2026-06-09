@@ -155,7 +155,7 @@ final class FeedViewModelTests: XCTestCase {
         let post2 = Self.makeAPIPost(id: "p2", content: "Second post")
         api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: [post1, post2]))
 
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         XCTAssertEqual(sut.posts.count, 2)
         XCTAssertEqual(sut.posts[0].id, "p1")
@@ -169,7 +169,7 @@ final class FeedViewModelTests: XCTestCase {
         let (sut, api, _, _) = makeSUT()
         api.errorToThrow = APIError.networkError(URLError(.notConnectedToInternet))
 
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         XCTAssertTrue(sut.posts.isEmpty)
         XCTAssertTrue(sut.hasLoaded)
@@ -180,8 +180,8 @@ final class FeedViewModelTests: XCTestCase {
         let (sut, api, _, _) = makeSUT()
         api.stub("/posts/feed", result: Self.makePaginatedResponse())
 
-        let task1 = Task { await sut.loadFeed() }
-        let task2 = Task { await sut.loadFeed() }
+        let task1 = Task { await sut.loadFeed(forceRefresh: true) }
+        let task2 = Task { await sut.loadFeed(forceRefresh: true) }
 
         await task1.value
         await task2.value
@@ -196,7 +196,7 @@ final class FeedViewModelTests: XCTestCase {
         """)
         api.stub("/posts/feed", result: failResponse)
 
-        await sut.loadFeed()
+        await sut.loadFeed(forceRefresh: true)
 
         XCTAssertTrue(sut.posts.isEmpty)
         XCTAssertTrue(sut.hasLoaded)
@@ -1288,6 +1288,57 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(payload?.liked, true)
         XCTAssertTrue(sut.posts[0].isLiked)
         XCTAssertEqual(sut.posts[0].likes, 6)
+    }
+
+    // MARK: - mergePreservingRealtimeHead (regression — a realtime post that
+    // arrived via socket vanished when a `.stale` background refresh
+    // straight-replaced `posts = fetched`)
+
+    func test_mergePreservingRealtimeHead_preservesNewerRealtimePostAbsentFromFetch() {
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        let realtime = FeedPost(id: "rt", author: "a", content: "arrived via socket", timestamp: base.addingTimeInterval(100))
+        let serverHead = FeedPost(id: "s1", author: "a", content: "server head", timestamp: base.addingTimeInterval(50))
+        let serverOld = FeedPost(id: "s2", author: "a", content: "older", timestamp: base)
+
+        // Background refresh returns the server's latest (realtime post not yet
+        // reflected); `posts` already had it inserted at index 0 via socket.
+        let merged = FeedViewModel.mergePreservingRealtimeHead(
+            fetched: [serverHead, serverOld],
+            existing: [realtime, serverHead, serverOld]
+        )
+
+        XCTAssertEqual(
+            merged.map(\.id), ["rt", "s1", "s2"],
+            "a realtime post newer than the server head and absent from the fetch must survive the refresh"
+        )
+    }
+
+    func test_mergePreservingRealtimeHead_dropsStaleInMemoryPostWithinFetchedRange() {
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        let serverHead = FeedPost(id: "s1", author: "a", content: "head", timestamp: base.addingTimeInterval(50))
+        let serverOld = FeedPost(id: "s2", author: "a", content: "old", timestamp: base)
+        // Older than the server head AND absent from the fetch (e.g. deleted
+        // server-side) — must NOT be resurrected by the merge.
+        let deletedLocally = FeedPost(id: "gone", author: "a", content: "deleted on server", timestamp: base.addingTimeInterval(10))
+
+        let merged = FeedViewModel.mergePreservingRealtimeHead(
+            fetched: [serverHead, serverOld],
+            existing: [serverHead, deletedLocally, serverOld]
+        )
+
+        XCTAssertEqual(
+            merged.map(\.id), ["s1", "s2"],
+            "an older in-memory post absent from the fetched range must not be preserved (server deletion wins)"
+        )
+    }
+
+    func test_mergePreservingRealtimeHead_emptyFetchReplacesEntirely() {
+        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        let merged = FeedViewModel.mergePreservingRealtimeHead(
+            fetched: [],
+            existing: [FeedPost(id: "x", author: "a", content: "stale", timestamp: base)]
+        )
+        XCTAssertTrue(merged.isEmpty, "an empty server response is authoritative — no merge from memory")
     }
 
 }

@@ -115,6 +115,9 @@ final class MessageListViewController: UIViewController {
     var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)?
     /// Request an on-demand translation for a message into a target language.
     var onRequestTranslation: ((String, String) -> Void)?
+    /// Tap on a call-summary notice → re-initiate (call back) the same media
+    /// type with the conversation peer.
+    var onCallBack: ((CallSummaryMetadata) -> Void)?
     /// Live source of dynamic per-message data (translations, transcriptions,
     /// audio translations, last-message gating). Held weakly: the cell
     /// registration closure runs on the main runloop alongside the VM, but
@@ -428,6 +431,7 @@ final class MessageListViewController: UIViewController {
             let showReadStatusHandler = self.onShowReadStatus
             let showReactionsHandler = self.onShowReactions
             let showTranslationHandler = self.onShowTranslationDetail
+            let callBackHandler = self.onCallBack
             let mediaTapHandler = self.onMediaTap
             let consumeViewOnceHandler = self.onConsumeViewOnce
             let requestTranslationHandler = self.onRequestTranslation
@@ -480,6 +484,7 @@ final class MessageListViewController: UIViewController {
                         },
                         allAudioItems: allAudioItems,
                         onScrollToMessage: scrollHandler,
+                        onCallBack: callBackHandler,
                         isLastInGroup: true,
                         isLastReceivedMessage: isLastReceived,
                         isLastSentMessage: isLastSent,
@@ -560,7 +565,20 @@ final class MessageListViewController: UIViewController {
         // forces the registration to re-run for every visible row, picking up
         // GRDB-driven state / content / delivery / reaction changes in place
         // without triggering the costly insert/move/delete diff animation.
-        snapshot.reconfigureItems(items)
+        //
+        // CRITICAL: only reconfigure items that ALREADY exist in the applied
+        // snapshot. Reconfiguring an identifier that this same apply is also
+        // INSERTING is unsupported — UIKit resolves the insert against the new
+        // snapshot and the reconfigure against the old one, and the conflicting
+        // instructions can drop a freshly-inserted bubble (the new message
+        // flashes in then vanishes when the next message triggers the next
+        // apply). Inserted items are configured fresh anyway, so excluding them
+        // here is both correct and sufficient.
+        let previousItems = Set(dataSource.snapshot().itemIdentifiers)
+        let itemsToReconfigure = items.filter { previousItems.contains($0) }
+        if !itemsToReconfigure.isEmpty {
+            snapshot.reconfigureItems(itemsToReconfigure)
+        }
 
         // Detect genuinely-new messages: the MESSAGE count grew AND the newest
         // message changed. Tracking message items only (never the typing cell)
@@ -729,7 +747,8 @@ final class MessageListViewController: UIViewController {
 
         // Typing roster — re-snapshot (animated) so the in-flow typing cell
         // inserts / updates / removes fluidly. Low-frequency signal, no debounce.
-        vm.$typingUsernames
+        // Uses stateStore publisher so typing doesn't trigger full ConversationViewModel re-render.
+        vm.typingUsernamesPublisher
             .receive(on: DispatchQueue.main)
             .dropFirst()
             .sink { [weak self] _ in

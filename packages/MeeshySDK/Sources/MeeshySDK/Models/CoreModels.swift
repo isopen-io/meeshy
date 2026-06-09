@@ -653,6 +653,11 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     // Pre-computed "HH:mm" string set at ingestion time — avoids DateFormatter in bubble body
     public var cachedTimeString: String?
 
+    /// Structured call facts for a call-summary system message
+    /// (`messageSource == .system`). Drives the rich, actionable call bubble.
+    /// `nil` for ordinary messages.
+    public var callSummary: CallSummaryMetadata?
+
     public enum DeliveryStatus: String, Codable, Sendable {
         case sending    // optimistic, not yet sent
         case invisible  // < 200ms, status hidden in UI (debounce — spec §6.2)
@@ -709,7 +714,8 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
                 deliveryStatus: DeliveryStatus = .sent, isMe: Bool = false,
                 deliveredToAllAt: Date? = nil, readByAllAt: Date? = nil,
                 deliveredCount: Int = 0, readCount: Int = 0,
-                cachedTimeString: String? = nil) {
+                cachedTimeString: String? = nil,
+                callSummary: CallSummaryMetadata? = nil) {
         self.id = id; self.clientMessageId = clientMessageId
         self.conversationId = conversationId; self.senderId = senderId
         self.content = content
@@ -728,6 +734,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         self.deliveredToAllAt = deliveredToAllAt; self.readByAllAt = readByAllAt
         self.deliveredCount = deliveredCount; self.readCount = readCount
         self.cachedTimeString = cachedTimeString
+        self.callSummary = callSummary
         self.effects = effects
     }
 
@@ -743,6 +750,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         case deliveryStatus, isMe
         case deliveredToAllAt, readByAllAt, deliveredCount, readCount
         case cachedTimeString
+        case callSummary
         // Legacy keys for migration from old cached data
         case isViewOnce, isBlurred
     }
@@ -790,6 +798,9 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         deliveredCount = try c.decodeIfPresent(Int.self, forKey: .deliveredCount) ?? 0
         readCount = try c.decodeIfPresent(Int.self, forKey: .readCount) ?? 0
         cachedTimeString = try c.decodeIfPresent(String.self, forKey: .cachedTimeString)
+        // Tolerant: a malformed / future-shape call-summary blob must not fail
+        // the whole cached-message decode (mirrors the APIMessage path).
+        callSummary = try? c.decodeIfPresent(CallSummaryMetadata.self, forKey: .callSummary)
         // Legacy migration: merge old isViewOnce/isBlurred bools into effects
         if let legacyViewOnce = try c.decodeIfPresent(Bool.self, forKey: .isViewOnce), legacyViewOnce {
             effects.flags.insert(.viewOnce)
@@ -842,6 +853,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         try c.encode(deliveredCount, forKey: .deliveredCount)
         try c.encode(readCount, forKey: .readCount)
         try c.encodeIfPresent(cachedTimeString, forKey: .cachedTimeString)
+        try c.encodeIfPresent(callSummary, forKey: .callSummary)
     }
 
     public var text: String { content }
@@ -895,6 +907,25 @@ public enum EphemeralDuration: Int, CaseIterable, Identifiable {
 
 // MARK: - Message Attachment
 
+/// D4 — a responsive downscaled WebP variant of an image attachment, used to
+/// pick the smallest sufficient image instead of fetching the multi-MB original
+/// for inline previews. Non-encrypted images only. Mirrors the gateway payload.
+public struct MeeshyImageVariant: Codable, Sendable, Hashable {
+    public let width: Int
+    public let height: Int
+    public let url: String
+    public let size: Int
+    public let format: String
+
+    public init(width: Int, height: Int, url: String, size: Int, format: String = "webp") {
+        self.width = width
+        self.height = height
+        self.url = url
+        self.size = size
+        self.format = format
+    }
+}
+
 public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     public let id: String
     public var messageId: String?
@@ -915,6 +946,8 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     public var isBlurred: Bool = false
     public var width: Int?
     public var height: Int?
+    /// D4 — responsive downscaled WebP variants for picking a lighter image.
+    public var imageVariants: [MeeshyImageVariant]?
     public var thumbnailPath: String?
     public var thumbnailUrl: String?
     public var thumbHash: String?
@@ -997,7 +1030,8 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
                 isEncrypted: Bool = false, encryptionMode: String? = nil,
                 latitude: Double? = nil, longitude: Double? = nil, thumbnailColor: String = "4ECDC4",
                 transcription: EmbeddedTranscription? = nil,
-                audioTranslations: [String: EmbeddedAudioTranslation]? = nil) {
+                audioTranslations: [String: EmbeddedAudioTranslation]? = nil,
+                imageVariants: [MeeshyImageVariant]? = nil) {
         self.id = id; self.messageId = messageId; self.fileName = fileName; self.originalName = originalName
         self.mimeType = mimeType; self.fileSize = fileSize; self.filePath = filePath; self.fileUrl = fileUrl
         self.title = title; self.alt = alt; self.caption = caption
@@ -1011,6 +1045,7 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
         self.isEncrypted = isEncrypted; self.encryptionMode = encryptionMode
         self.latitude = latitude; self.longitude = longitude; self.thumbnailColor = thumbnailColor
         self.transcription = transcription; self.audioTranslations = audioTranslations
+        self.imageVariants = imageVariants
     }
 
     public static func image(color: String = "4ECDC4") -> MeeshyMessageAttachment {
@@ -1061,9 +1096,13 @@ public struct ReplyReference: Codable, Sendable {
     public var storyReactionCount: Int?
     public var storyCommentCount: Int?
     public var storyThumbnailUrl: String?
+    /// Emoji de l'humeur citée. Non-nil ⇒ cette réponse cite un mood/statut
+    /// (rendu dédié : emoji + contenu + date) plutôt qu'une story générique.
+    /// `storyPublishedAt` porte alors la date de publication du mood.
+    public var moodEmoji: String?
 
     public init(messageId: String = "", authorName: String, previewText: String, isMe: Bool = false, authorColor: String? = nil, attachmentType: String? = nil, attachmentThumbnailUrl: String? = nil, isStoryReply: Bool = false,
-                storyPublishedAt: Date? = nil, storyReactionCount: Int? = nil, storyCommentCount: Int? = nil, storyThumbnailUrl: String? = nil) {
+                storyPublishedAt: Date? = nil, storyReactionCount: Int? = nil, storyCommentCount: Int? = nil, storyThumbnailUrl: String? = nil, moodEmoji: String? = nil) {
         self.messageId = messageId
         self.authorName = authorName
         self.previewText = previewText
@@ -1076,6 +1115,7 @@ public struct ReplyReference: Codable, Sendable {
         self.storyReactionCount = storyReactionCount
         self.storyCommentCount = storyCommentCount
         self.storyThumbnailUrl = storyThumbnailUrl
+        self.moodEmoji = moodEmoji
     }
 }
 

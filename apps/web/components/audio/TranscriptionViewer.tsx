@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useRef, useEffect, useState, memo } from 'react';
+import NextImage from 'next/image';
 import { User, Users, UserCircle2, Baby } from 'lucide-react';
 import type { TranscriptionSegment, SpeakerAnalysis } from '@meeshy/shared/types/attachment-transcription';
 import {
@@ -458,10 +459,12 @@ export const TranscriptionViewer = memo<TranscriptionViewerProps>(({
                       {/* Avatar de l'utilisateur ou icône de genre avec couleur */}
                       {isUser && userAvatar ? (
                         <div className="relative w-full h-full rounded-full overflow-hidden">
-                          <img
+                          <NextImage
                             src={userAvatar}
                             alt="Vous"
-                            className="w-full h-full object-cover"
+                            fill
+                            sizes="32px"
+                            className="object-cover"
                           />
                         </div>
                       ) : (

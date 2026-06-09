@@ -97,11 +97,13 @@ export class MaintenanceService {
       logger.debug('🔄 Exécution de la tâche de maintenance automatique...');
       await this.updateOfflineUsers();
     }, 15000); // Vérifier toutes les 15 secondes (4x plus rapide)
+    this.maintenanceInterval.unref?.();
 
     // Tâche de nettoyage journalier (toutes les heures, mais ne s'exécute qu'une fois par jour)
     this.dailyCleanupInterval = setInterval(async () => {
       await this.runDailyCleanup();
     }, 60 * 60 * 1000); // Vérifier toutes les heures
+    this.dailyCleanupInterval.unref?.();
 
     // Exécuter immédiatement le nettoyage journalier au démarrage
     await this.runDailyCleanup();

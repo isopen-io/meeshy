@@ -8,6 +8,7 @@ import { Server as HTTPServer } from 'http';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService, MessageData } from '../services/message-translation/MessageTranslationService';
 import { transformTranslationsToArray } from '../utils/translation-transformer';
+import { filterMessagePayloadForLanguages } from './utils/message-payload-filter';
 import { MaintenanceService } from '../services/MaintenanceService';
 import { StatusService } from '../services/StatusService';
 import { MessagingService } from '../services/MessagingService';
@@ -59,6 +60,13 @@ export interface SocketUser {
   socketId: string;
   isAnonymous: boolean;
   language: string;
+  /**
+   * Ordered list of languages this socket can consume, derived from
+   * resolveUserLanguagesOrdered() at connection time.
+   * Priority: systemLanguage → regionalLanguage → customDestinationLanguage → deviceLocale.
+   * Empty for anonymous users (they use `language` only).
+   */
+  resolvedLanguages: string[];
   /** For anonymous participants: the participant.id */
   participantId?: string;
   /** For registered users: the user.id */
@@ -114,8 +122,16 @@ export class MeeshySocketIOManager {
   private socketToUser: Map<string, string> = new Map();
   private userSockets: Map<string, Set<string>> = new Map();
 
-  // Cache immutable identifier → ObjectId (populated on first lookup)
+  // Rate limiter in-memory par socket (clé → timestamps des requêtes)
+  private socketRateLimits: Map<string, number[]> = new Map();
+
+  // Cache immutable identifier → ObjectId (populated on first lookup, bounded to 2000 entries LRU)
   private conversationIdCache = new Map<string, string>();
+  private readonly CONVERSATION_ID_CACHE_MAX = 2000;
+
+  // Cache presence snapshot par userId — évite 2 queries Prisma par reconnexion (TTL 60s)
+  private presenceSnapshotCache = new Map<string, { users: Array<{ userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }>; cachedAt: number }>();
+  private readonly PRESENCE_SNAPSHOT_CACHE_TTL_MS = 60_000;
 
   // Statistiques
   private stats = {
@@ -196,14 +212,20 @@ export class MeeshySocketIOManager {
       connectTimeout: 45000, // 45s - Timeout pour la connexion initiale
       // Autoriser reconnexion rapide
       allowEIO3: true,
+      // Bandwidth sprint Phase A: lower the deflate threshold from 1024→256 so
+      // frequent mid-size events (reaction:added, read-status:updated,
+      // per-user presence, typing payloads with display names) are compressed
+      // too. Their JSON keys are highly repetitive → strong deflate ratio.
+      // Context takeover stays disabled to cap per-connection memory at the
+      // 100k+ concurrent socket scale.
       perMessageDeflate: {
-        threshold: 1024,
+        threshold: 256,
         zlibDeflateOptions: { level: 6, memLevel: 7 },
         clientNoContextTakeover: true,
         serverNoContextTakeover: true,
       },
       httpCompression: {
-        threshold: 1024,
+        threshold: 256,
       },
     });
 
@@ -336,6 +358,11 @@ export class MeeshySocketIOManager {
         select: { id: true, identifier: true }
       });
       if (conversation) {
+        // Evict oldest entry when cap reached (simple FIFO bounded LRU)
+        if (this.conversationIdCache.size >= this.CONVERSATION_ID_CACHE_MAX) {
+          const firstKey = this.conversationIdCache.keys().next().value;
+          if (firstKey !== undefined) this.conversationIdCache.delete(firstKey);
+        }
         this.conversationIdCache.set(conversationId, conversation.id);
         return conversation.id;
       }
@@ -388,6 +415,14 @@ export class MeeshySocketIOManager {
    */
   private async _emitPresenceSnapshot(socket: any, userId: string, isAnonymous: boolean): Promise<void> {
     try {
+      const cached = this.presenceSnapshotCache.get(userId);
+      if (cached && Date.now() - cached.cachedAt < this.PRESENCE_SNAPSHOT_CACHE_TTL_MS) {
+        const users = cached.users.map(u => ({ ...u, isOnline: this.connectedUsers.has(u.userId) }));
+        socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
+        logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts (cache) sent to ${userId}`);
+        return;
+      }
+
       // Trouver toutes les conversations du user/participant
       const participantRows = isAnonymous
         ? await this.prisma.participant.findMany({
@@ -445,6 +480,7 @@ export class MeeshySocketIOManager {
         });
       }
 
+      this.presenceSnapshotCache.set(userId, { users, cachedAt: Date.now() });
       socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
       logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts sent to ${userId} (${users.filter(u => u.isOnline).length} online)`);
     } catch (error) {
@@ -541,7 +577,7 @@ export class MeeshySocketIOManager {
     this.io.on('connection', (socket) => {
       this.stats.total_connections++;
       this.stats.active_connections++;
-      console.log(`[RT-DIAG] socket connected id=${socket.id} activeConnections=${this.stats.active_connections}`);
+      logger.debug('socket connected', { socketId: socket.id, activeConnections: this.stats.active_connections });
 
       this.authHandler.handleTokenAuthentication(socket);
 
@@ -550,14 +586,31 @@ export class MeeshySocketIOManager {
       });
 
       socket.on(CLIENT_EVENTS.MESSAGE_SEND, async (data, callback) => {
-        try { await this.messageHandler.handleMessageSend(socket, data, callback); } catch (error) { logger.error('[MESSAGE_SEND] Error:', error); }
+        try { await this.messageHandler.handleMessageSend(socket, data, callback); } catch (error) { logger.error('[MESSAGE_SEND] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.MESSAGE_SEND_WITH_ATTACHMENTS, async (data, callback) => {
-        try { await this.messageHandler.handleMessageSendWithAttachments(socket, data, callback); } catch (error) { logger.error('[MESSAGE_SEND_WITH_ATTACHMENTS] Error:', error); }
+        try { await this.messageHandler.handleMessageSendWithAttachments(socket, data, callback); } catch (error) { logger.error('[MESSAGE_SEND_WITH_ATTACHMENTS] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.REQUEST_TRANSLATION, async (data: { messageId: string; targetLanguage: string }) => {
+        // Rate limit: 10 requêtes/min par userId (multi-device inclus) pour éviter la saturation ZMQ
+        const translationUserId = this.socketToUser.get(socket.id);
+        if (!translationUserId) {
+          socket.emit(SERVER_EVENTS.ERROR, { message: 'Not authenticated' });
+          return;
+        }
+        const rateLimitKey = `translation_request:${translationUserId}`;
+        const now = Date.now();
+        const windowMs = 60_000;
+        const maxRequests = 10;
+        const existing = this.socketRateLimits.get(rateLimitKey) ?? [];
+        const recent = existing.filter(t => now - t < windowMs);
+        if (recent.length >= maxRequests) {
+          socket.emit(SERVER_EVENTS.ERROR, { message: 'Rate limit exceeded for translation requests' });
+          return;
+        }
+        this.socketRateLimits.set(rateLimitKey, [...recent, now]);
         try { await this._handleTranslationRequest(socket, data); } catch (error) { logger.error('[REQUEST_TRANSLATION] Error:', error); }
       });
 
@@ -615,55 +668,55 @@ export class MeeshySocketIOManager {
       });
 
       socket.on(CLIENT_EVENTS.REACTION_ADD, async (data, callback) => {
-        try { await this.reactionHandler.handleReactionAdd(socket, data, callback); } catch (error) { logger.error('[REACTION_ADD] Error:', error); }
+        try { await this.reactionHandler.handleReactionAdd(socket, data, callback); } catch (error) { logger.error('[REACTION_ADD] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.REACTION_REMOVE, async (data, callback) => {
-        try { await this.reactionHandler.handleReactionRemove(socket, data, callback); } catch (error) { logger.error('[REACTION_REMOVE] Error:', error); }
+        try { await this.reactionHandler.handleReactionRemove(socket, data, callback); } catch (error) { logger.error('[REACTION_REMOVE] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.REACTION_REQUEST_SYNC, async (messageId, callback) => {
-        try { await this.reactionHandler.handleReactionSync(socket, messageId, callback); } catch (error) { logger.error('[REACTION_SYNC] Error:', error); }
+        try { await this.reactionHandler.handleReactionSync(socket, messageId, callback); } catch (error) { logger.error('[REACTION_SYNC] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.COMMENT_REACTION_ADD, async (data, callback) => {
-        try { await this.commentReactionHandler.handleAddReaction(socket, data, callback); } catch (error) { logger.error('[COMMENT_REACTION_ADD] Error:', error); }
+        try { await this.commentReactionHandler.handleAddReaction(socket, data, callback); } catch (error) { logger.error('[COMMENT_REACTION_ADD] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.COMMENT_REACTION_REMOVE, async (data, callback) => {
-        try { await this.commentReactionHandler.handleRemoveReaction(socket, data, callback); } catch (error) { logger.error('[COMMENT_REACTION_REMOVE] Error:', error); }
+        try { await this.commentReactionHandler.handleRemoveReaction(socket, data, callback); } catch (error) { logger.error('[COMMENT_REACTION_REMOVE] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.COMMENT_REACTION_REQUEST_SYNC, async (data, callback) => {
-        try { await this.commentReactionHandler.handleRequestSync(socket, data, callback); } catch (error) { logger.error('[COMMENT_REACTION_SYNC] Error:', error); }
+        try { await this.commentReactionHandler.handleRequestSync(socket, data, callback); } catch (error) { logger.error('[COMMENT_REACTION_SYNC] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.JOIN_POST, async (data, callback) => {
-        try { await this.postReactionHandler.handleJoinPost(socket, data, callback); } catch (error) { logger.error('[JOIN_POST] Error:', error); }
+        try { await this.postReactionHandler.handleJoinPost(socket, data, callback); } catch (error) { logger.error('[JOIN_POST] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.LEAVE_POST, async (data, callback) => {
-        try { await this.postReactionHandler.handleLeavePost(socket, data, callback); } catch (error) { logger.error('[LEAVE_POST] Error:', error); }
+        try { await this.postReactionHandler.handleLeavePost(socket, data, callback); } catch (error) { logger.error('[LEAVE_POST] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.POST_REACTION_ADD, async (data, callback) => {
-        try { await this.postReactionHandler.handleAddReaction(socket, data, callback); } catch (error) { logger.error('[POST_REACTION_ADD] Error:', error); }
+        try { await this.postReactionHandler.handleAddReaction(socket, data, callback); } catch (error) { logger.error('[POST_REACTION_ADD] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.POST_REACTION_REMOVE, async (data, callback) => {
-        try { await this.postReactionHandler.handleRemoveReaction(socket, data, callback); } catch (error) { logger.error('[POST_REACTION_REMOVE] Error:', error); }
+        try { await this.postReactionHandler.handleRemoveReaction(socket, data, callback); } catch (error) { logger.error('[POST_REACTION_REMOVE] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.POST_REACTION_REQUEST_SYNC, async (data, callback) => {
-        try { await this.postReactionHandler.handleRequestSync(socket, data, callback); } catch (error) { logger.error('[POST_REACTION_SYNC] Error:', error); }
+        try { await this.postReactionHandler.handleRequestSync(socket, data, callback); } catch (error) { logger.error('[POST_REACTION_SYNC] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.LOCATION_SHARE, async (data, callback) => {
-        try { await this.locationHandler.handleLocationShare(socket, data, callback); } catch (error) { logger.error('[LOCATION_SHARE] Error:', error); }
+        try { await this.locationHandler.handleLocationShare(socket, data, callback); } catch (error) { logger.error('[LOCATION_SHARE] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.LOCATION_LIVE_START, async (data, callback) => {
-        try { await this.locationHandler.handleLiveLocationStart(socket, data, callback); } catch (error) { logger.error('[LOCATION_LIVE_START] Error:', error); }
+        try { await this.locationHandler.handleLiveLocationStart(socket, data, callback); } catch (error) { logger.error('[LOCATION_LIVE_START] Error:', error); callback?.({ success: false, error: 'Internal server error' }); }
       });
 
       socket.on(CLIENT_EVENTS.LOCATION_LIVE_UPDATE, async (data) => {
@@ -674,24 +727,22 @@ export class MeeshySocketIOManager {
         try { await this.locationHandler.handleLiveLocationStop(socket, data); } catch (error) { logger.error('[LOCATION_LIVE_STOP] Error:', error); }
       });
 
-      // CALL-DIAG (temp instrumentation — remove on rollback): capture disconnect
-      // reason + rooms to diagnose socket churn. `disconnecting` fires while the
-      // socket's rooms are still populated (the `disconnect` event fires after
-      // Socket.IO has already emptied them), so this is the only place we can see
-      // which user room / call room the dropping socket belonged to.
-      socket.on('disconnecting', (reason: string) => {
-        try {
-          const rooms = Array.from(socket.rooms || []).filter((r) => r !== socket.id);
-          logger.warn('🔬 [CALL-DIAG] socket disconnecting', {
-            socketId: socket.id,
-            reason,
-            rooms
-          });
-        } catch (e) { /* never throw from instrumentation */ }
-      });
-
       socket.on('disconnect', (reason: string) => {
-        logger.warn('🔬 [CALL-DIAG] socket disconnect', { socketId: socket.id, reason });
+        logger.debug('socket disconnect', { socketId: socket.id, reason });
+        const disconnectedUserId = this.socketToUser.get(socket.id);
+        if (disconnectedUserId) {
+          this.statusHandler.invalidateIdentityCache(disconnectedUserId);
+          this.statusHandler.clearTypingThrottle(disconnectedUserId);
+          // Invalider le snapshot de présence pour forcer un recalcul à la prochaine connexion
+          this.presenceSnapshotCache.delete(disconnectedUserId);
+          // Nettoyage du rate limiter in-memory (keyed by userId — purge si dernier socket)
+          // Note: socket.id est encore dans userSockets ici (authHandler.handleDisconnection
+          // n'a pas encore tourné), donc size === 1 signifie "dernier socket de cet user".
+          const remainingUserSockets = this.userSockets.get(disconnectedUserId);
+          if (!remainingUserSockets || remainingUserSockets.size <= 1) {
+            this.socketRateLimits.delete(`translation_request:${disconnectedUserId}`);
+          }
+        }
         this.authHandler.handleDisconnection(socket).catch((error) => logger.error('[DISCONNECT] Error:', error));
         this.stats.active_connections--;
       });
@@ -1183,15 +1234,54 @@ export class MeeshySocketIOManager {
   }
 
   private _findUsersForLanguage(targetLanguage: string): SocketUser[] {
+    const lang = targetLanguage.toLowerCase();
     const targetUsers: SocketUser[] = [];
 
-    for (const [userId, user] of this.connectedUsers) {
-      if (user.language === targetLanguage) {
+    for (const [, user] of this.connectedUsers) {
+      const matches =
+        user.resolvedLanguages.includes(lang) ||
+        user.language.toLowerCase() === lang;
+      if (matches) {
         targetUsers.push(user);
       }
     }
 
     return targetUsers;
+  }
+
+  /**
+   * Phase B1 — emit `message:new` to a conversation room grouped by each
+   * recipient's preferred language, sending a translation-trimmed payload once
+   * per distinct language. Recipients whose language is unknown fall back to the
+   * message's original language. Opt-in via `SOCKET_LANG_FILTER=true` (OFF by
+   * default). Pure trimming is
+   * delegated to `filterMessagePayloadForLanguages` (unit-tested).
+   */
+  private _emitMessageNewByLanguage(room: string, payload: Record<string, any>): void {
+    const socketIds = this.io.sockets.adapter.rooms.get(room);
+    if (!socketIds || socketIds.size === 0) return;
+
+    const originalLanguage = String(payload.originalLanguage || 'fr').toLowerCase();
+    const socketsByLanguageKey = new Map<string, { socketIds: string[]; langs: string[] }>();
+    for (const socketId of socketIds) {
+      const userId = this.socketToUser.get(socketId);
+      const socketUser = userId ? this.connectedUsers.get(userId) : undefined;
+      const langs: string[] =
+        socketUser && socketUser.resolvedLanguages.length > 0
+          ? socketUser.resolvedLanguages
+          : [String(socketUser?.language || originalLanguage).toLowerCase()];
+      const key = langs.join(',');
+      const bucket = socketsByLanguageKey.get(key);
+      if (bucket) bucket.socketIds.push(socketId);
+      else socketsByLanguageKey.set(key, { socketIds: [socketId], langs });
+    }
+
+    for (const { socketIds: socketsForLangs, langs } of socketsByLanguageKey.values()) {
+      const filtered = filterMessagePayloadForLanguages(payload, [...langs, originalLanguage]);
+      let emitter: any = this.io;
+      for (const socketId of socketsForLangs) emitter = emitter.to(socketId);
+      emitter.emit(SERVER_EVENTS.MESSAGE_NEW, filtered);
+    }
   }
 
   /**
@@ -1306,23 +1396,17 @@ export class MeeshySocketIOManager {
 
       // Lancer les 2 requêtes en parallèle
       const [translationsResult, statsResult] = await Promise.allSettled([
-        // Récupérer les traductions existantes du message (format JSON)
+        // Utiliser les traductions déjà présentes sur l'objet message (pas de query DB)
         (async () => {
           if (!message.id) return [];
           try {
-            const messageWithTranslations = await this.prisma.message.findUnique({
-              where: { id: message.id },
-              select: {
-                translations: true
-              }
-            });
-            // Transformer JSON vers array pour frontend
+            // `message.translations` est déjà le champ JSON MongoDB — éviter un findUnique redondant
             return transformTranslationsToArray(
               message.id,
-              messageWithTranslations?.translations as Record<string, any>
+              (message as any).translations as Record<string, any>
             );
           } catch (error) {
-            logger.warn(`⚠️ [DEBUG] Erreur récupération traductions pour ${message.id}:`, error);
+            logger.warn(`⚠️ [DEBUG] Erreur transformation traductions pour ${message.id}:`, error);
             return [];
           }
         })(),
@@ -1362,6 +1446,11 @@ export class MeeshySocketIOManager {
         originalLanguage: message.originalLanguage || 'fr',
         originalContent: (message as any).originalContent || message.content,
         messageType: (message.messageType || 'text') as MessageType,
+        // Message origin (user/system/...) so clients render system notices
+        // (e.g. call summaries) in real time, not only after a REST reload.
+        messageSource: (message as any).messageSource || undefined,
+        // Structured per-type payload (call-summary facts for system messages)
+        metadata: (message as any).metadata || undefined,
         isEdited: Boolean(message.isEdited),
         deletedAt: message.deletedAt || undefined,
         isBlurred: Boolean((message as any).isBlurred),
@@ -1437,8 +1526,18 @@ export class MeeshySocketIOManager {
 
       // COMPORTEMENT SIMPLE ET FIABLE DE L'ANCIENNE MÉTHODE
       const room = ROOMS.conversation(normalizedId);
-      // 1. Broadcast vers tous les clients de la conversation
-      this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
+      // 1. Broadcast vers tous les clients de la conversation.
+      //
+      // Bandwidth sprint Phase B1 — per-language filtered broadcast.
+      // Groups room sockets by preferred language (zero DB query, from connectedUsers map)
+      // and sends a trimmed payload once per distinct language. Original content preserved.
+      // Opt-in (OFF by default): enable explicitly with SOCKET_LANG_FILTER=true once
+      // validated in staging (measured savings + multi-device + Prisme fallback check).
+      if (process.env.SOCKET_LANG_FILTER === 'true') {
+        this._emitMessageNewByLanguage(room, messagePayload);
+      } else {
+        this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
+      }
 
       // 2. S'assurer que l'auteur reçoit aussi (au cas où il ne serait pas dans la room encore)
       if (senderSocket) {
@@ -1479,31 +1578,26 @@ export class MeeshySocketIOManager {
               isActive: true,
               id: { not: senderId }
             },
-            select: { id: true, userId: true }
+            select: { id: true, userId: true, joinedAt: true }
           });
 
-          // Calculer le unreadCount pour chaque participant et émettre l'événement
+          // Calculer le unreadCount pour tous les participants en batch (1 query au lieu de N)
           const { MessageReadStatusService } = await import('../services/MessageReadStatusService.js');
           const readStatusService = new MessageReadStatusService(this.prisma);
+
+          const unreadCountMap = await readStatusService.getUnreadCountsForParticipants(participants, normalizedId, senderId);
 
           const connectedUserIds = new Set(this.getConnectedUsers());
 
           for (const participant of participants) {
             const roomTarget = participant.userId || participant.id;
-            // Pass `participant.id` (not `roomTarget`) — the cursor's
-            // participantId column is the Participant.id. Using the userId
-            // here previously caused every registered recipient to fall
-            // through to a stale "count all historical messages" path and
-            // see inflated unread counts (e.g. 75).
-            const unreadCount = await readStatusService.getUnreadCount(participant.id, normalizedId);
+            const unreadCount = unreadCountMap.get(participant.id) ?? 0;
 
-            // Émettre vers le socket personnel de l'utilisateur
             this.io.to(ROOMS.user(roomTarget)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
               conversationId: normalizedId,
               unreadCount
             });
 
-            // Queue message for offline participants
             if (this.deliveryQueue && !connectedUserIds.has(roomTarget)) {
               this.deliveryQueue.enqueue(roomTarget, {
                 messageId: message.id,

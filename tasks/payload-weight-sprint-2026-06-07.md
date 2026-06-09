@@ -1,0 +1,231 @@
+# Sprint « Poids des Payloads » — optimisation SOTA de la bande passante
+
+> **Date** : 2026-06-07
+> **Branche** : `claude/pensive-bardeen-woBc4`
+> **Thèse** : rendre **chaque octet transféré le plus léger possible, TOUT LE TEMPS**.
+> **Hors scope (sprint 2)** : réduire la *fréquence* / le *nombre* d'échanges (ETag,
+> pagination adaptative, batching, upload gates). Cf. `ios-bandwidth-audit-2026-05-21.md`.
+
+Ce sprint est orthogonal à l'audit `ios-bandwidth-audit-2026-05-21.md` (BW1–BW8) qui
+traite la *fréquence*. Ici on attaque le **poids unitaire** de chaque réponse REST,
+chaque frame WebSocket, chaque blob média.
+
+## Décisions cadrantes (validées 2026-06-07)
+1. **Approche** : phasée — quick-wins JSON d'abord, puis sérialisation binaire.
+2. **Compat** : breaking accepté **si versionné** (web + iOS migrés ensemble).
+3. **Ordre** : **gateway d'abord** (bénéficie instantanément à tous les clients sans
+   redéploiement d'app), puis translator/média, puis SDK iOS.
+
+---
+
+## Diagnostic — état actuel (3 explorations parallèles)
+
+### Top tueurs de bande passante (par impact)
+| # | Problème | Localisation | Coût |
+|---|---|---|---|
+| 1 | **REST 100 % non compressé** (pas de `@fastify/compress`) | `services/gateway/src/server.ts` | −70 à −85 % gratuits sur tout le JSON |
+| 2 | **Toutes les langues à tous les clients** | `MeeshySocketIOManager.ts:1376`, `routes/conversations/messages.ts`, `utils/translation-transformer.ts` | message 10 langues = 10× la charge, par client, alors qu'1 langue lue |
+| 3 | **Pipeline audio** : M4A→WAV ×15, base64 +33 %, TTS dupliqué par langue | `translator/src/services/audio_pipeline/audio_message_pipeline.py:365`, `tts/synthesizer.py:638` | poste le plus lourd en absolu |
+
+### Gaspillages structurels secondaires
+- **Participants complets** embarqués dans chaque ligne de liste de conversations
+  (`firstName/lastName/isOnline/lastActiveAt` × 5 participants) — non affichés.
+  `services/gateway/src/routes/conversations/core.ts:264-426`.
+- **Métadonnées d'attachements** complètes (codec/bitrate/fps/sampleRate/segments) dans
+  la liste de messages — seuls thumbnail + taille affichés.
+  `packages/MeeshySDK/.../Models/MessageModels.swift:68-234`.
+- **JSON verbeux** : clés longues répétées (`translatedContent` 16c, `conversationId` 15c,
+  `voiceSimilarityScore` 19c), timestamps ISO8601 28 o, ObjectIds 24c répétés en
+  `id/messageId/conversationId/senderId/...`.
+- **Images** servies pleine résolution, pas de variantes WebP/AVIF.
+  `services/gateway/src/services/attachments/UploadProcessor.ts`.
+- **Voice embeddings** float32 → base64 (+33 %), `audio_message_pipeline.py:813`.
+- **iOS** : aucune garantie `Accept-Encoding`, décode toutes les traductions en mémoire
+  (~99 % inutilisées). `MessageService.swift:42-57`, `ConversationViewModel.swift:150-181`.
+- **Presence snapshot** : 50 KB en burst à chaque auth socket (1 event/contact).
+
+---
+
+## Phase A — Quick-wins gateway (non-breaking)  ⟶ EN COURS
+
+| Item | Statut | Détail |
+|---|---|---|
+| **A1** Compression REST Brotli/gzip | ✅ **Livré** | `@fastify/compress` global, br q5 / gzip 6, seuil 1 Ko. Médias auto-exclus (mime-db non-compressible) → range requests intacts. |
+| **A2** Tuning deflate WebSocket | ✅ **Livré** | seuil `perMessageDeflate` 1024→256 : compresse reaction/read-status/presence/typing. Context-takeover off (mémoire @100k sockets). |
+| **A3** Filtre langue REST (opt-in) | ✅ **Livré** | `GET /messages?languages=fr,en` → un seul param filtre les traductions **texte ET audio** (Prisme). Additif, défaut = toutes les langues. Param plumbé via `transformTranslationsToArray(opts)` + `cleanAttachmentsForApi(langFilter)`. 6 tests unitaires verts. Adoption client = E3. |
+| **A4** Trim participants liste conv | ✅ **Déjà fait** | `conversationListParticipantSelect` (T17) ne contient déjà ni `firstName/lastName` ni `permissions`. Sender de message aussi trimmé (T16, `messageSenderUserSelect`). Rien à faire. |
+| **A5** Trim métadonnées attachement | ⚠️ **Écarté (risque>gain)** | `attachmentMediaSelect` porte `transcription`+`translations` (Prisme audio) **nécessaires** au rendu instantané en liste. Les scalaires (codec/bitrate/fps) sont petits. Le vrai poids = les traductions audio multi-langues → déjà couvert par A3. Pas de trim scalaire agressif. |
+
+## Phase B — Filtrage par destinataire + compaction (breaking, versionné)
+| Item | Statut | Détail |
+|---|---|---|
+| **B1** Filtre langue par socket | 🟡 **Cœur livré, flag OFF (opt-in)** | Fonction pure `filterMessagePayloadForLanguages` (texte + audio) + 7 tests. Câblée dans `_broadcastNewMessage` via `_emitMessageNewByLanguage` (emit groupé par langue, zéro requête DB — utilise `SocketUser.language` + `socketToUser`). Garde : `if (process.env.SOCKET_LANG_FILTER === 'true')` (`MeeshySocketIOManager.ts:1507`) → **OFF par défaut**, comportement prod inchangé ; activation opt-in explicite via `SOCKET_LANG_FILTER=true` après validation staging. *(Écart corrigé 2026-06-08 : le garde était `!== 'false'` = ON par défaut, contraire à la décision d'origine.)* Voir checklist B1 §Activation. |
+
+### B1 — reste à faire pour activer en prod
+- Mesurer en staging avec `SOCKET_LANG_FILTER=true` (octets émis avant/après, latence emit groupé).
+- `SocketUser.language` = langue primaire uniquement. Pour le Prisme complet (regional, customDestination, deviceLocale), enrichir `SocketUser` à l'auth via `resolveUserLanguage()` et filtrer sur le set complet.
+- Étendre le filtrage au payload de la **delivery queue offline** (≈ ligne 1517) et au `senderSocket` re-emit (aujourd'hui payload complet — blast-radius volontairement minimal).
+- Négociation client `supportsLangFilter` au handshake pour les vieux clients.
+
+### B1 — design d'origine (référence)
+Hot-path : `MeeshySocketIOManager._broadcastNewMessage` — aujourd'hui un seul
+`this.io.to(room).emit(MESSAGE_NEW, payload)` (≈ ligne 1447) avec TOUTES les langues.
+
+Plan SOTA (grouper par jeu-de-langues pour éviter N sérialisations) :
+1. Extraire une fonction **pure** `filterMessagePayloadForLanguages(payload, langs)`
+   → renvoie une copie avec `translations` (texte) + `attachments[].translations`
+   (audio) restreints. **Unit-testable** sans Prisma/socket (à faire en TDD comme A3).
+2. Construire `socketId → preferredLanguages` (cache `connectedUsers`, résolu via
+   `resolveUserLanguage()` à l'auth, déjà partiellement dispo).
+3. Dans le broadcast : regrouper les sockets de la room par **signature de jeu de
+   langues** ; sérialiser **une fois par signature distincte** ; emit au sous-ensemble.
+   Fallback `originalLanguage`-only pour sockets sans préférence connue.
+4. Filtrer aussi le payload poussé dans la **delivery queue offline** (≈ ligne 1514)
+   par destinataire.
+5. Versionner : négociation client (handshake `supportsLangFilter`) — les vieux
+   clients continuent de recevoir le payload complet.
+
+> ⚠️ **Non implémenté dans cette session** : refactor perf-critique du chemin
+> 100k msg/s, **non vérifiable** dans ce container éphémère (client Prisma non
+> générable — CDN binaries.prisma.sh bloqué par cert self-signed ; pas de runtime
+> socket). À exécuter contre un build complet + staging avec mesure avant/après.
+> La fonction pure de l'étape 1 peut, elle, être livrée + testée dès maintenant.
+| **B2** Champs creux (`fields=`) | Sélection serveur type GraphQL sparse fieldset sur conv/messages/users. |
+| **B3** Field-aliasing / compaction clés | Mapping clés courtes (`tc`→`translatedContent`) ou bascule MessagePack (voir Phase C). |
+| **B4** Timestamps epoch ms (number) au lieu d'ISO8601 string | −16 o/timestamp ; gros volume sur listes. |
+| **B5** Delta presence snapshot | n'envoyer que les deltas online/offline, pas le full set. |
+
+## Phase C — Sérialisation binaire (SOTA)
+| Item | Détail |
+|---|---|
+| **C1** MessagePack/CBOR sur Socket.IO | parser binaire Socket.IO (`socket.io-msgpack-parser`) côté gateway + web + SDK iOS. −30 à −50 % vs JSON+deflate sur payloads structurés. |
+| **C2** Dictionnaire zstd entraîné | dictionnaire partagé sur clés/valeurs récurrentes (langues, modèles, rôles) → compression REST encore meilleure que brotli générique. |
+| **C3** Protobuf pour endpoints chauds | message list / conversation list en `application/x-protobuf` négocié via `Accept`. |
+
+## Phase D — Média / Translator
+| Item | Détail |
+|---|---|
+| **D1** Opus partout (voice/TTS) | 🟡 **Encodage livré, défaut OFF**. Util pur `utils/audio_format.py::export_options` → Opus = `libopus` mono basse bande (VoIP, `-ac 1`, bitrate `TTS_OPUS_BITRATE=32k`). Câblé dans `synthesizer._convert_format`. **Défaut `TTS_DEFAULT_FORMAT` reste `mp3`** : passer à `opus` casserait les clients non encore migrés au décodage Opus (cf. décision « breaking si versionné »). Activation = flip env **après** Phase E (web + iOS). 8 tests purs verts. |
+| **D2** Supprimer base64 interne TTS | ✅ **Livré (non-breaking)**. Le base64 n'était qu'un round-trip *interne* synthétiseur → handler ZMQ (la frame ZMQ vers la gateway était déjà binaire). Supprimé : `synthesizer` ne produit plus de base64 (`mime_type_for`), le cache (`translation_stage._load_cached_audio`) non plus, et `zmq_audio_handler` lit les octets via `read_audio_bytes` (disque d'abord, base64 = fallback legacy). Économie CPU + ~33 % mémoire dans le hot-path audio @100k msg/s. Embeddings vocaux (D3) gardent base64 — hors scope. |
+| **D3** Embeddings binaires + quantisés | float32→float16 (ou int8) + frame binaire (pas base64) : 4 KB→1-2 KB. |
+| **D4** WebP/AVIF + variantes responsive | 🟢 **Thumbnails + variantes WebP responsive livrés**. Thumbnails WebP (−25-35 % vs JPEG-80, déjà là). **Nouveau** : variantes pleine-résolution `createResponsiveVariants` (util pur `thumbnail.ts`, échelle `640/1080/1920`, jamais d'upscale, WebP q78) + `variantPathFor` ; tests jest (algo validé sur Sharp réel 0.34.5). Générées dans `MetadataManager.generateImageVariants`, persistées par `UploadProcessor` (**images NON chiffrées uniquement** — variantes serveur d'une image E2EE révéleraient le clair). Champ Prisma `MessageAttachment.imageVariants Json?` ; exposé via `attachmentMediaSelect`/`attachmentFullSelect` + `messageAttachmentSchema` (sinon Fastify strip) + `serializeAttachmentForSocket` ; REST via spread `cleanAttachmentsForApi`. Le client construit son `srcset` ; l'original (`fileUrl`) reste la plus grande entrée. **Reste** : AVIF (encodage coûteux, gated libheif/aom — util format-paramétrable prêt) ; variantes pour images E2EE (côté client) ; `prisma generate` + type-check/jest gateway en CI (non exécutables dans ce container). |
+| **D5** Dédup média content-addressed | stockage par hash (SHA256) → 1 seule copie des fichiers identiques. |
+| **D6** TTS à la demande, pas broadcast N langues | ne synthétiser/pousser l'audio que pour les langues réellement consommées. |
+
+## Phase E — SDK iOS
+| Item | Détail |
+|---|---|
+| **E1** Garantir `Accept-Encoding: br, gzip` | ✅ **Vérifié + verrouillé**. Contre-intuitif : il NE FAUT PAS poser le header à la main — `URLSession` annonce gzip/br et décompresse automatiquement ; le poser bascule en décompression manuelle (Foundation ne décode pas brotli nativement) → la sortie `@fastify/compress` arriverait encore compressée. `APIClient` ne pose aucun `Accept-Encoding` (donc gzip/br déjà actifs) ; commentaire anti-régression ajouté (jamais l'ajouter ici/`ClientInfoProvider`/headers per-request). |
+| **E3** Consommer `?languages=` | 🟡 **Building block SDK livré, activation app à faire**. `MessageService.list/listBefore/listAfter/listAround` acceptent un param opaque `languages: [String]?` → sérialisé `?languages=fr,en` (miroir gateway A3, filtre texte + audio). Non-breaking : `nil`/vide = toutes langues ; overloads 4-arg/5-arg conservent tous les call sites existants ; 3 mocks conformes mis à jour ; 4 tests SDK (sérialisation, omission nil/vide, plumbing listAfter). **Reste (activation)** : `ConversationViewModel` passe `preferredLanguages` (set Prisme) aux call sites — diffère car implique un refetch on-language-switch et rend l'exploration d'une langue hors-Prisme on-demand (validation produit on-device requise). |
+| **E2** Décodage sélectif traductions | ↪ **Largement subsumé par E3** : avec `?languages=` actif, le serveur n'envoie que les langues du Prisme, donc le ViewModel ne décode/stocke que celles-ci. Reste optionnel : filtrer aussi quand `?languages=` absent (gain mémoire marginal). |
+| **E4** Compression upload client | 🟡 **Building block SDK livré, activation différée**. Voix enregistrée aujourd'hui en AAC/M4A (mono, 44.1 kHz, 64-96 kbps), uploadée brute (TUS, `audio/mp4`). Ajouté : enum `AudioCodec` (`.aac`/`.opus`) avec mappings purs (`avFormatID`, `fileExtension`, `mimeType`), champ `AudioRecordingSettings.codec` (défaut `.aac` → non-breaking), preset `opusVoiceMessage` (mono, 48 kHz — Opus ne supporte PAS 44.1 —, 24 kbps ≈ −60-75 % vs AAC), et builder pur `avRecorderSettings` (centralise le dict AVAudioRecorder ; `.aac` byte-identique à l'historique). `DefaultSDKAudioRecorder` câblé sur le builder (branche Opus dormante, atteinte seulement via `.opusVoiceMessage`). 9 tests SDK. **Reste (activation, breaking versionné + validation device)** : (1) `AudioRecorderManager` (app) + sites d'appel passent `.opusVoiceMessage` ; (2) `AttachmentPreparationService`/`AttachmentSendService` dérivent `mimeType`/extension du codec (au lieu de `audio/mp4` en dur) ; (3) valider on-device que `AVAudioRecorder` produit bien le conteneur au sample rate choisi ; (4) lecture cross-client — CAF-Opus n'est pas lisible en navigateur → la gateway devra remux Ogg/WebM pour le web. |
+
+> ⚠️ **Non builé dans ce container** : pas de toolchain Swift/Xcode. Les changements suivent exactement le pattern `includeTranslations` existant (prouvé) ; `./apps/ios/meeshy.sh test` + build SDK tournent en CI/local.
+
+---
+
+## Checklists d'activation
+
+Chaque item « 🟡 building block livré » ou « gated par flag » a sa procédure d'activation
+ci-dessous. **Toutes les bascules de défaut sont *breaking-si-mal-versionnées*** : web + iOS
+doivent supporter le nouveau format AVANT le flip serveur (cf. décision cadrante #2).
+
+> **Légende statut** — ☐ à faire · ☑ fait · ⚠️ point de décision/risque.
+
+### B1 — Filtre langue par socket (OFF par défaut, opt-in)
+
+> **État** : ☑ Écart résolu (2026-06-08, Option 1) — garde repassé à
+> `SOCKET_LANG_FILTER === 'true'` (`MeeshySocketIOManager.ts:1507`), défaut **OFF**,
+> comportement prod inchangé. L'activation est désormais opt-in explicite après validation.
+
+**Activation (poser `SOCKET_LANG_FILTER=true` en staging d'abord)**
+- ☐ Mesure staging ON vs OFF : octets émis/msg, latence `_emitMessageNewByLanguage`, CPU sérialisation groupée.
+- ☐ Vérif multi-device : un même user sur 2 appareils aux langues différentes reçoit chacun le bon sous-ensemble.
+- ☐ Vérif Prisme : un destinataire dont la traduction préférée est absente reçoit bien l'**original** (jamais `translations.first`).
+
+**Pré-requis à l'activation complète**
+- ☐ Enrichir `SocketUser` à l'auth : remplacer `language` (primaire seule) par le **set Prisme complet** résolu via `resolveUserLanguage()` (systemLanguage → regionalLanguage → customDestinationLanguage → deviceLocale), et filtrer sur ce set.
+- ☐ Étendre le filtrage à la **delivery queue offline** (`RedisDeliveryQueue`, ≈ ligne 1517) — aujourd'hui payload complet par destinataire.
+- ☐ Étendre au **re-emit `senderSocket`** (ligne 1515) — aujourd'hui payload complet (blast-radius volontairement minimal).
+- ☐ Négociation handshake `supportsLangFilter` : les vieux clients (sans support du payload filtré) continuent de recevoir TOUTES les langues.
+- ☐ Instrumentation : compteur bytes émis par type d'event (cf. §Métriques).
+
+**Rollback** : `SOCKET_LANG_FILTER=false` (instantané, sans redéploiement).
+
+### A3 + E3 — Filtre langue REST `?languages=` (serveur livré, adoption client à activer)
+
+> Serveur (A3) et building block SDK (E3) livrés et non-breaking. Reste l'**adoption** côté apps.
+
+**iOS**
+- ☐ `ConversationViewModel` : passer `preferredLanguages` (set Prisme via `resolveUserLanguage()`) aux call sites `MessageService.list/listBefore/listAfter/listAround`.
+- ☐ Gérer le **refetch on-language-switch** : changer de langue primaire → invalider/recharger la fenêtre courante avec le nouveau filtre.
+- ☐ Exploration hors-Prisme (long-press « voir autre langue ») → fetch on-demand de la langue demandée (validation produit on-device requise).
+- ☐ E2 (subsumé) : vérifier que le ViewModel ne décode/stocke plus que les langues reçues.
+
+**Web**
+- ☐ Plomber `?languages=` dans les hooks `use-messages-query` / `use-conversation-messages-rq` à partir des préférences utilisateur.
+
+**Validation** : diff octets `GET /messages` avec vs sans `?languages=` (devrait chuter ~×N langues).
+**Rollback** : omettre le param `languages` → comportement actuel (toutes langues).
+
+### D1 — Opus pour TTS/voix (encodage livré, défaut `mp3`)
+
+- ☐ **Pré-requis client** : web + iOS savent décoder Opus servi par la gateway (Phase E ci-dessous).
+- ☐ Flip `TTS_DEFAULT_FORMAT=opus` (translator) — `services/translator/.env.example:126`.
+- ☐ Régler `TTS_OPUS_BITRATE` si besoin (défaut `32k`, mono VoIP).
+- ☐ Vérifier la lecture cross-client de l'audio TTS Opus (web Audio API + iOS `AVPlayer`).
+- ☐ Mesurer la taille des blobs TTS avant/après par langue.
+
+**Rollback** : `TTS_DEFAULT_FORMAT=mp3`.
+
+### D4 — Variantes image WebP/AVIF (WebP responsive livré ; reste AVIF + E2EE)
+
+- ☑ Thumbnails WebP + variantes responsive WebP (`createResponsiveVariants`, `imageVariants` Json) — images **non chiffrées** uniquement.
+- ☐ **AVIF** : activer l'encodage (util format-paramétrable prêt) une fois `libheif`/`aom` disponibles dans l'image runtime gateway ; gater par capacité `Accept` client.
+- ☐ **Images E2EE** : générer les variantes **côté client** (le serveur ne voit que le chiffré — pas de variante serveur d'une image E2EE).
+- ☐ CI : `prisma generate` + type-check + jest gateway (non exécutables dans le container éphémère).
+- ☐ Client : construire le `srcset` à partir de `imageVariants` (web `<img srcset>`, iOS sélection par taille d'affichage × scale).
+
+### E4 — Upload voix Opus (building block SDK livré, défaut `.aac`)
+
+> Breaking versionné + validation device. Ne PAS flip sans le remux gateway (point 4).
+
+- ☐ `AudioRecorderManager` (app) + sites d'appel passent le preset `.opusVoiceMessage`.
+- ☐ `AttachmentPreparationService` / `AttachmentSendService` dérivent `mimeType`/extension **du codec** (au lieu de `audio/mp4` en dur).
+- ☐ Valider on-device qu'`AVAudioRecorder` produit bien le conteneur attendu au sample rate choisi (Opus = 48 kHz, pas 44.1).
+- ☐ **Gateway remux** : CAF-Opus iOS n'est pas lisible en navigateur → la gateway doit remux en Ogg/WebM pour la lecture web (bloquant pour le cross-client).
+- ☐ Négocier la version : vieux clients continuent d'uploader/lire AAC.
+
+**Rollback** : repasser les sites d'appel sur le preset AAC (défaut conservé).
+
+### E1 — `Accept-Encoding` iOS
+
+- ☑ **Verrouillé** : ne RIEN poser à la main (`URLSession` annonce gzip/br + décode auto). Commentaire anti-régression en place. Aucune action requise — ne pas réintroduire le header.
+
+### Ordre d'activation recommandé
+
+1. **B1** — ☑ défaut remis OFF ; valider en staging (`SOCKET_LANG_FILTER=true`) avant tout flip prod.
+2. **A3+E3** — adoption client REST (non-breaking, gain immédiat, faible risque).
+3. **D4** — AVIF + variantes E2EE client.
+4. **Phase E client decode Opus** → **D1** (TTS Opus) → **E4** (upload Opus + remux) — chaîne audio, breaking, en dernier.
+
+---
+
+## SOTA — références appliquées
+- **Compression** : Brotli (RFC 7932) pour le statique/dynamique ; zstd + dictionnaire pour
+  JSON répétitif ; deflate per-message pour WS.
+- **Sérialisation** : MessagePack / CBOR (RFC 8949) / Protobuf / FlatBuffers selon le chaud.
+- **Audio** : Opus (RFC 6716) — référence VoIP/streaming basse latence basse bande.
+- **Image** : AVIF (AV1) > WebP > JPEG ; variantes responsive + `thumbhash` (déjà présent).
+- **Transport** : HTTP/3 (déjà `assumesHTTP3Capable` côté iOS), 304/ETag (sprint 2).
+
+## Métriques avant/après (à instrumenter)
+- Gateway : middleware `onSend` logguant `Content-Length` avant/après compression par route.
+- Socket : compteur bytes émis/reçus par type d'event.
+- iOS : `MetricKit networkTransferMetrics` (non exploité aujourd'hui — cf. audit BW).
+
+## Vérification
+- Phase A non testable en build complet dans cet environnement éphémère (prisma client non
+  généré, `@meeshy/shared` non buildé). Changements minimes & conformes API
+  `@fastify/compress` v8 (plugin résolu, types présents). À valider par `pnpm --filter
+  @meeshy/gateway type-check` + smoke `curl -H 'Accept-Encoding: br'` en CI/local.

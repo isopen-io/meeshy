@@ -28,6 +28,10 @@ export interface MessageTranslationJSON {
  *
  * @param messageId - ID du message
  * @param translationsJson - Objet JSON des traductions depuis MongoDB
+ * @param options.languages - Si fourni, ne sérialise que ces langues (filtrage
+ *   bandwidth opt-in : un client ne demande que ses langues du Prisme au lieu de
+ *   recevoir les N traductions). Comparaison insensible à la casse. Absent =
+ *   toutes les langues (comportement historique).
  * @returns Array de MessageTranslation pour rétrocompatibilité frontend
  *
  * @example
@@ -36,24 +40,31 @@ export interface MessageTranslationJSON {
  */
 export function transformTranslationsToArray(
   messageId: string,
-  translationsJson: Record<string, MessageTranslationJSON> | null | undefined
+  translationsJson: Record<string, MessageTranslationJSON> | null | undefined,
+  options?: { languages?: readonly string[] }
 ): MessageTranslation[] {
   if (!translationsJson) return [];
 
-  return Object.entries(translationsJson).map(([lang, data]) => ({
-    id: `${messageId}-${lang}`, // ID synthétique pour compatibilité
-    messageId,
-    targetLanguage: lang,
-    translatedContent: data.text,
-    translationModel: data.translationModel,
-    confidenceScore: data.confidenceScore,
-    isEncrypted: data.isEncrypted || false,
-    encryptionKeyId: data.encryptionKeyId || undefined,
-    encryptionIv: data.encryptionIv || undefined,
-    encryptionAuthTag: data.encryptionAuthTag || undefined,
-    createdAt: data.createdAt,
-    updatedAt: data.updatedAt
-  }));
+  const langFilter = options?.languages && options.languages.length > 0
+    ? new Set(options.languages.map((l) => l.toLowerCase()))
+    : null;
+
+  return Object.entries(translationsJson)
+    .filter(([lang]) => !langFilter || langFilter.has(lang.toLowerCase()))
+    .map(([lang, data]) => ({
+      id: `${messageId}-${lang}`, // ID synthétique pour compatibilité
+      messageId,
+      targetLanguage: lang,
+      translatedContent: data.text,
+      translationModel: data.translationModel,
+      confidenceScore: data.confidenceScore,
+      isEncrypted: data.isEncrypted || false,
+      encryptionKeyId: data.encryptionKeyId || undefined,
+      encryptionIv: data.encryptionIv || undefined,
+      encryptionAuthTag: data.encryptionAuthTag || undefined,
+      createdAt: data.createdAt,
+      updatedAt: data.updatedAt
+    }));
 }
 
 /**

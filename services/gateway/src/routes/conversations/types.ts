@@ -63,6 +63,7 @@ export interface MessagesQuery {
   include_translations?: string;
   include_status?: string;
   include_replies?: string;
+  languages?: string; // CSV des langues du Prisme (ex: "fr,en"): filtre les traductions texte ET audio renvoyées. Absent = toutes.
 }
 
 export interface MessageSearchQuery {

@@ -8,7 +8,9 @@ import type { Message } from '@meeshy/shared/types/conversation';
 import { useI18n } from '@/hooks/useI18n';
 import { useMessageView } from '@/hooks/use-message-view-state';
 import { reportService } from '@/services/report.service';
+import type { CallSummaryMetadata } from '@meeshy/shared/utils/call-summary';
 import { BubbleMessageNormalView } from './bubble-message/BubbleMessageNormalView';
+import { CallSystemMessage } from './bubble-message/CallSystemMessage';
 import { ReactionSelectionMessageView } from './bubble-message/ReactionSelectionMessageView';
 import { LanguageSelectionMessageView } from './bubble-message/LanguageSelectionMessageView';
 import { EditMessageView } from './bubble-message/EditMessageView';
@@ -224,6 +226,24 @@ const BubbleMessageInner = memo(function BubbleMessageInner({
 
   // Emojis récents (dummy data pour l'instant)
   const recentEmojis = ['❤️', '😀', '👍', '😂', '🔥', '🎉', '💯', '✨'];
+
+  // Call-summary system message → rich, actionable call bubble (bypasses the
+  // view-mode machine; it has no reactions/edit/translation affordances).
+  const callMetadata =
+    message.messageSource === 'system' &&
+    (message.metadata as CallSummaryMetadata | undefined)?.kind === 'call'
+      ? (message.metadata as CallSummaryMetadata)
+      : null;
+  if (callMetadata) {
+    return (
+      <CallSystemMessage
+        metadata={callMetadata}
+        currentUserId={currentUser?.id ?? ''}
+        conversationId={conversationId ?? message.conversationId}
+        conversationType={conversationType}
+      />
+    );
+  }
 
   // VIRTUALIZATION SMART: Rendu conditionnel selon le mode
   return (

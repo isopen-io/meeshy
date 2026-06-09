@@ -313,6 +313,11 @@ struct CallView: View {
             // stream. Tap to swap it with the full-area primary (FaceTime).
             if callManager.isVideoEnabled && callManager.hasLocalVideoTrack {
                 pipView
+            } else if callManager.isVideoEnabled && callManager.isVideoSuspended {
+                // Survival: outbound video dropped to audio-only on a weak link.
+                // The live local track is gone, so show a dedicated "paused" tile
+                // over the user's avatar rather than letting the self-view vanish.
+                localVideoSuspendedTile
             }
         }
         .simultaneousGesture(
@@ -664,6 +669,72 @@ struct CallView: View {
         }
     }
 
+    /// True when the survival layer has auto-dropped our outbound video while the
+    /// user still wants the camera on (distinct from a deliberate camera-off).
+    private var videoAutoPaused: Bool {
+        callManager.isVideoSuspended && callManager.isVideoEnabled
+    }
+
+    /// Survival self-tile: the local user's avatar with a discreet "video paused
+    /// · auto-resume" overlay ON TOP, shown where the PiP normally sits when the
+    /// adaptive controller has dropped our outbound video to audio-only.
+    private var localVideoSuspendedTile: some View {
+        GeometryReader { geo in
+            let base = pipCenter(pipCorner, in: geo.size)
+            videoSuspendedTileBody
+                .frame(width: Self.pipSize.width, height: Self.pipSize.height)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(MeeshyColors.warning.opacity(0.7), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
+                .position(x: base.x, y: base.y)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(String(localized: "call.video.suspended", defaultValue: "Vidéo en pause", bundle: .main))
+                .accessibilityHint(String(localized: "call.video.suspended.hint", defaultValue: "Connexion faible, la vidéo reprendra automatiquement", bundle: .main))
+        }
+    }
+
+    private var videoSuspendedTileBody: some View {
+        // Local user's initial (the suspended camera is OURS).
+        let localName = AuthManager.shared.currentUser?.displayName
+            ?? AuthManager.shared.currentUser?.username
+            ?? "?"
+        let initial = String(localName.prefix(1)).uppercased()
+        return ZStack {
+            Color.black.opacity(0.55)
+            // Avatar behind…
+            ZStack {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [MeeshyColors.indigo500, MeeshyColors.indigo400],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(width: 56, height: 56)
+                Text(initial)
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+            }
+            .opacity(0.45)
+            // …"video paused" affordance on top.
+            VStack(spacing: 6) {
+                Image(systemName: "video.slash.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(MeeshyColors.warning)
+                Text(String(localized: "call.video.suspended", defaultValue: "Vidéo en pause", bundle: .main))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white)
+                Text(String(localized: "call.video.suspended.short", defaultValue: "Reprise auto", bundle: .main))
+                    .font(.system(size: 9, weight: .regular))
+                    .foregroundColor(.white.opacity(0.7))
+            }
+        }
+    }
+
     // MARK: - Transcript Overlay
 
     private var transcriptOverlay: some View {
@@ -672,7 +743,7 @@ struct CallView: View {
             ForEach(transcriptionService.displayedSegments) { segment in
                 HStack(alignment: .top, spacing: 8) {
                     Circle()
-                        .fill(segment.speakerId == localUserId ? Color.blue : Color.green)
+                        .fill(segment.speakerId == localUserId ? MeeshyColors.indigo400 : MeeshyColors.success)
                         .frame(width: 8, height: 8)
                         .padding(.top, 6)
                     Text(segment.text)
@@ -802,14 +873,20 @@ struct CallView: View {
 
             // §5.4 — always visible so an AUDIO call can be upgraded to video
             // (FaceTime-style), not just toggled off/on once already in video.
-            // `video.badge.plus` when off reads as "turn on camera".
+            // `video.badge.plus` when off reads as "turn on camera". When the
+            // survival layer has auto-paused video on a weak link, the button
+            // turns amber and reads "paused (weak connection)".
             callControlButton(
-                icon: callManager.isVideoEnabled ? "video.fill" : "video.badge.plus",
-                color: MeeshyColors.indigo400,
-                bgColor: MeeshyColors.indigo400,
-                isActive: !callManager.isVideoEnabled,
-                caption: String(localized: "call.control.video.caption", defaultValue: "Vidéo", bundle: .main),
-                label: callManager.isVideoEnabled ? String(localized: "call.control.videoOff", defaultValue: "Désactiver la vidéo", bundle: .main) : String(localized: "call.control.videoOn", defaultValue: "Activer la vidéo", bundle: .main)
+                icon: videoAutoPaused ? "video.slash.fill" : (callManager.isVideoEnabled ? "video.fill" : "video.badge.plus"),
+                color: videoAutoPaused ? MeeshyColors.warning : MeeshyColors.indigo400,
+                bgColor: videoAutoPaused ? MeeshyColors.warning : MeeshyColors.indigo400,
+                isActive: videoAutoPaused ? true : !callManager.isVideoEnabled,
+                caption: videoAutoPaused
+                    ? String(localized: "call.control.video.paused.caption", defaultValue: "En pause", bundle: .main)
+                    : String(localized: "call.control.video.caption", defaultValue: "Vidéo", bundle: .main),
+                label: videoAutoPaused
+                    ? String(localized: "call.control.video.paused", defaultValue: "Vidéo en pause (connexion faible)", bundle: .main)
+                    : (callManager.isVideoEnabled ? String(localized: "call.control.videoOff", defaultValue: "Désactiver la vidéo", bundle: .main) : String(localized: "call.control.videoOn", defaultValue: "Activer la vidéo", bundle: .main))
             ) {
                 callManager.toggleVideo()
             }

@@ -110,7 +110,7 @@ struct ConversationPreferencesTab: View {
             if let error = viewModel.errorMessage {
                 Text(error)
                     .font(.system(size: 13))
-                    .foregroundColor(Color(hex: "F87171"))
+                    .foregroundColor(MeeshyColors.error)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 20)
             }
@@ -126,38 +126,38 @@ struct ConversationPreferencesTab: View {
         .adaptiveOnChange(of: viewModel.didDelete) { _, deleted in if deleted { dismiss() } }
         .adaptiveOnChange(of: viewModel.didLeave) { _, left in if left { dismiss() } }
         .confirmationDialog(
-            (viewModel.prefs.isArchived ?? false) ? String(localized: "conversation.prefs.unarchive.title", defaultValue: "Désarchiver la conversation ?", bundle: .main) : String(localized: "conversation.prefs.archive.title", defaultValue: "Archiver la conversation ?", bundle: .main),
+            (viewModel.prefs.isArchived ?? false) ? String(localized: "conversation.prefs.unarchive.title", defaultValue: "Unarchive conversation?", bundle: .main) : String(localized: "conversation.prefs.archive.title", defaultValue: "Archive conversation?", bundle: .main),
             isPresented: $showArchiveConfirm,
             titleVisibility: .visible
         ) {
-            Button((viewModel.prefs.isArchived ?? false) ? String(localized: "conversation.prefs.unarchive", defaultValue: "Désarchiver", bundle: .main) : String(localized: "conversation.prefs.archive", defaultValue: "Archiver", bundle: .main),
+            Button((viewModel.prefs.isArchived ?? false) ? String(localized: "conversation.prefs.unarchive", defaultValue: "Unarchive", bundle: .main) : String(localized: "conversation.prefs.archive", defaultValue: "Archive", bundle: .main),
                    role: (viewModel.prefs.isArchived ?? false) ? .none : .destructive) {
                 viewModel.toggleArchive()
             }
-            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
+            Button(String(localized: "common.cancel", defaultValue: "Cancel", bundle: .main), role: .cancel) {}
         }
-        .confirmationDialog(String(localized: "conversation.prefs.leave.title", defaultValue: "Quitter la conversation ?", bundle: .main), isPresented: $showLeaveConfirm, titleVisibility: .visible) {
-            Button(String(localized: "conversation.prefs.leave", defaultValue: "Quitter", bundle: .main), role: .destructive) {
+        .confirmationDialog(String(localized: "conversation.prefs.leave.title", defaultValue: "Leave conversation?", bundle: .main), isPresented: $showLeaveConfirm, titleVisibility: .visible) {
+            Button(String(localized: "conversation.prefs.leave", defaultValue: "Leave", bundle: .main), role: .destructive) {
                 Task { await viewModel.leave() }
             }
-            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
+            Button(String(localized: "common.cancel", defaultValue: "Cancel", bundle: .main), role: .cancel) {}
         } message: {
-            Text(String(localized: "conversation.prefs.leave.message", defaultValue: "Vous ne recevrez plus de messages. Votre historique restera lisible.", bundle: .main))
+            Text(String(localized: "conversation.prefs.leave.message", defaultValue: "You will no longer receive messages. Your history will remain readable.", bundle: .main))
         }
-        .confirmationDialog(String(localized: "conversation.prefs.delete.title", defaultValue: "Supprimer pour moi ?", bundle: .main), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
-            Button(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), role: .destructive) {
+        .confirmationDialog(String(localized: "conversation.prefs.delete.title", defaultValue: "Delete for me?", bundle: .main), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button(String(localized: "common.delete", defaultValue: "Delete", bundle: .main), role: .destructive) {
                 Task { await viewModel.deleteForMe() }
             }
-            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
+            Button(String(localized: "common.cancel", defaultValue: "Cancel", bundle: .main), role: .cancel) {}
         } message: {
-            Text(String(localized: "conversation.prefs.delete.message", defaultValue: "Cette conversation sera supprimée de votre liste. Les autres membres ne seront pas affectés.", bundle: .main))
+            Text(String(localized: "conversation.prefs.delete.message", defaultValue: "This conversation will be removed from your list. Other members will not be affected.", bundle: .main))
         }
     }
 
     // MARK: - Sections
 
     private var displaySection: some View {
-        settingsSection(title: String(localized: "conversation.prefs.section.display", defaultValue: "Mon affichage", bundle: .main), icon: "paintbrush.fill", color: "A855F7") {
+        settingsSection(title: String(localized: "conversation.prefs.section.display", defaultValue: "My display", bundle: .main), icon: "paintbrush.fill", color: "A855F7") {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Image(systemName: "pencil")
@@ -165,13 +165,13 @@ struct ConversationPreferencesTab: View {
                         .foregroundColor(Color(hex: "A855F7"))
                         .frame(width: 28, height: 28)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: "A855F7").opacity(0.12)))
-                    Text(String(localized: "conversation.prefs.custom-name", defaultValue: "Nom personnalisé", bundle: .main))
+                    Text(String(localized: "conversation.prefs.custom-name", defaultValue: "Custom name", bundle: .main))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(theme.textSecondary)
                 }
 
                 HStack(spacing: 6) {
-                    TextField(String(localized: "conversation.prefs.custom-name.placeholder", defaultValue: "Donner un surnom à cette conversation...", bundle: .main), text: $customNameLocal)
+                    TextField(String(localized: "conversation.prefs.custom-name.placeholder", defaultValue: "Give this conversation a nickname...", bundle: .main), text: $customNameLocal)
                         .textFieldStyle(.plain)
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(theme.textPrimary)
@@ -208,12 +208,12 @@ struct ConversationPreferencesTab: View {
             Button {
                 showEmojiPicker = true
             } label: {
-                settingsRow(icon: "heart.fill", iconColor: "A855F7", title: String(localized: "conversation.prefs.reaction", defaultValue: "Réaction", bundle: .main)) {
+                settingsRow(icon: "heart.fill", iconColor: "A855F7", title: String(localized: "conversation.prefs.reaction", defaultValue: "Reaction", bundle: .main)) {
                     HStack(spacing: 6) {
                         if let r = viewModel.prefs.reaction, !r.isEmpty {
                             Text(r).font(.system(size: 24))
                         } else {
-                            Text(String(localized: "conversation.prefs.reaction.none", defaultValue: "Aucune", bundle: .main))
+                            Text(String(localized: "conversation.prefs.reaction.none", defaultValue: "None", bundle: .main))
                                 .font(.system(size: 14))
                                 .foregroundColor(theme.textMuted)
                         }
@@ -240,13 +240,13 @@ struct ConversationPreferencesTab: View {
     private var organizationSection: some View {
         settingsSection(title: String(localized: "conversation.prefs.section.organization", defaultValue: "Organisation", bundle: .main), icon: "folder.fill", color: "3B82F6") {
             // Pin toggle
-            settingsRow(icon: "pin.fill", iconColor: "3B82F6", title: String(localized: "conversation.prefs.pin", defaultValue: "Épingler", bundle: .main)) {
+            settingsRow(icon: "pin.fill", iconColor: "3B82F6", title: String(localized: "conversation.prefs.pin", defaultValue: "Pin", bundle: .main)) {
                 Toggle("", isOn: Binding(
                     get: { viewModel.prefs.isPinned ?? false },
                     set: { val in viewModel.setPinned(val) }
                 ))
                 .labelsHidden()
-                .tint(Color(hex: "3B82F6"))
+                .tint(MeeshyColors.info)
             }
 
             Divider().padding(.leading, 54).opacity(0.3)
@@ -256,10 +256,10 @@ struct ConversationPreferencesTab: View {
                 HStack(spacing: 8) {
                     Image(systemName: "square.grid.2x2.fill")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(Color(hex: "3B82F6"))
+                        .foregroundColor(MeeshyColors.info)
                         .frame(width: 28, height: 28)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: "3B82F6").opacity(0.12)))
-                    Text(String(localized: "conversation.prefs.category", defaultValue: "Catégorie", bundle: .main))
+                        .background(RoundedRectangle(cornerRadius: 8).fill(MeeshyColors.info.opacity(0.12)))
+                    Text(String(localized: "conversation.prefs.category", defaultValue: "Category", bundle: .main))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(theme.textSecondary)
                 }
@@ -270,7 +270,7 @@ struct ConversationPreferencesTab: View {
                         get: { viewModel.prefs.categoryId },
                         set: { newId in viewModel.setCategory(newId) }
                     ),
-                    accentColor: Color(hex: "3B82F6"),
+                    accentColor: MeeshyColors.info,
                     onCreateCategory: { name in
                         await viewModel.createCategoryAndSelect(name: name)
                     }
@@ -286,9 +286,9 @@ struct ConversationPreferencesTab: View {
                 HStack(spacing: 8) {
                     Image(systemName: "tag.fill")
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(Color(hex: "3B82F6"))
+                        .foregroundColor(MeeshyColors.info)
                         .frame(width: 28, height: 28)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: "3B82F6").opacity(0.12)))
+                        .background(RoundedRectangle(cornerRadius: 8).fill(MeeshyColors.info.opacity(0.12)))
                     Text(String(localized: "conversation.prefs.tags", defaultValue: "Tags", bundle: .main))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(theme.textSecondary)
@@ -300,7 +300,7 @@ struct ConversationPreferencesTab: View {
                         set: { newTags in viewModel.setTags(newTags) }
                     ),
                     knownTags: viewModel.allTags,
-                    accentColor: Color(hex: "3B82F6")
+                    accentColor: MeeshyColors.info
                 )
             }
             .padding(.horizontal, 14)
@@ -316,7 +316,7 @@ struct ConversationPreferencesTab: View {
                     set: { val in viewModel.setMuted(val) }
                 ))
                 .labelsHidden()
-                .tint(Color(hex: "FF6B6B"))
+                .tint(MeeshyColors.error)
             }
             Divider().padding(.leading, 54).opacity(0.3)
             settingsRow(icon: "at", iconColor: "FF6B6B", title: String(localized: "conversation.prefs.mentions-only", defaultValue: "Mentions seulement", bundle: .main)) {
@@ -325,7 +325,7 @@ struct ConversationPreferencesTab: View {
                     set: { val in viewModel.setMentionsOnly(val) }
                 ))
                 .labelsHidden()
-                .tint(Color(hex: "FF6B6B"))
+                .tint(MeeshyColors.error)
                 .disabled(viewModel.prefs.isMuted ?? false)
             }
             .opacity((viewModel.prefs.isMuted ?? false) ? 0.4 : 1)
@@ -340,9 +340,9 @@ struct ConversationPreferencesTab: View {
                 settingsRow(
                     icon: (viewModel.prefs.isArchived ?? false) ? "archivebox.fill" : "archivebox",
                     iconColor: "F59E0B",
-                    title: (viewModel.prefs.isArchived ?? false) ? String(localized: "conversation.prefs.unarchive", defaultValue: "Désarchiver", bundle: .main) : String(localized: "conversation.prefs.archive", defaultValue: "Archiver", bundle: .main)
+                    title: (viewModel.prefs.isArchived ?? false) ? String(localized: "conversation.prefs.unarchive", defaultValue: "Unarchive", bundle: .main) : String(localized: "conversation.prefs.archive", defaultValue: "Archive", bundle: .main)
                 ) { EmptyView() }
-                .foregroundColor(Color(hex: "F59E0B"))
+                .foregroundColor(MeeshyColors.warning)
             }
             .buttonStyle(.plain)
 
@@ -354,7 +354,7 @@ struct ConversationPreferencesTab: View {
                     settingsRow(icon: "rectangle.portrait.and.arrow.right", iconColor: "F97316", title: String(localized: "conversation.prefs.leave-group", defaultValue: "Quitter le groupe", bundle: .main)) {
                         EmptyView()
                     }
-                    .foregroundColor(Color(hex: "F97316"))
+                    .foregroundColor(MeeshyColors.warning)
                 }
                 .buttonStyle(.plain)
             }
@@ -366,7 +366,7 @@ struct ConversationPreferencesTab: View {
                 settingsRow(icon: "trash.fill", iconColor: "F87171", title: String(localized: "conversation.prefs.delete-for-me", defaultValue: "Supprimer pour moi", bundle: .main)) {
                     EmptyView()
                 }
-                .foregroundColor(Color(hex: "F87171"))
+                .foregroundColor(MeeshyColors.error)
             }
             .buttonStyle(.plain)
         }

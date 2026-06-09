@@ -53,14 +53,14 @@ export function UserSelector({ users, onUserSelect, isLoading = false }: UserSel
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-950/30 dark:to-indigo-950/30 p-4">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">Meeshy</h1>
-          <p className="text-xl text-gray-600">
+          <h1 className="text-4xl font-bold text-foreground mb-2">Meeshy</h1>
+          <p className="text-xl text-muted-foreground">
             Messagerie avec traduction automatique côté client
           </p>
-          <p className="text-sm text-gray-500 mt-2">
+          <p className="text-sm text-muted-foreground mt-2">
             Sélectionnez un utilisateur pour commencer à discuter
           </p>
         </div>

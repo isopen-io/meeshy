@@ -13,8 +13,17 @@ final class StoryViewModelTests: XCTestCase {
     private var mockAPI: MockAPIClientForApp!
     private var cancellables: Set<AnyCancellable>!
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
+        // `publishStoryInBackground` branches on the LIVE `NetworkMonitor.shared.isOffline`
+        // (not injected). The simulator's real network state is non-deterministic, so when
+        // it reports offline these tests take the enqueue branch that never sets
+        // `activeUpload` and flake. Force the singleton online and flush the async state
+        // update onto the main queue before the test body runs.
+        NetworkMonitor.shared.simulateOnline()
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async { continuation.resume() }
+        }
         mockStoryService = MockStoryService()
         mockPostService = MockPostService()
         mockSocket = MockSocialSocket()

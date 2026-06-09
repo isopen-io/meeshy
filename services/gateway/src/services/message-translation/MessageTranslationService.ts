@@ -74,9 +74,10 @@ export class MessageTranslationService extends EventEmitter {
   private readonly stats: TranslationStats;
   private readonly encryptionHelper: EncryptionHelper;
 
-  // Déduplication
-  private readonly processedMessages = new Set<string>();
-  private readonly processedTasks = new Set<string>();
+  // Déduplication — Map<key, timestampMs> avec TTL 1h pour éviter la fuite mémoire
+  private readonly processedTasks = new Map<string, number>();
+  private readonly PROCESSED_TASK_TTL_MS = 3_600_000; // 1 heure
+  private readonly processedTasksCleanupInterval: ReturnType<typeof setInterval>;
 
   constructor(prisma: PrismaClient, jobMappingCache?: MultiLevelJobMappingCache) {
     super();
@@ -88,6 +89,15 @@ export class MessageTranslationService extends EventEmitter {
 
     // Utiliser le cache partagé si fourni, sinon en créer un (rétro-compatibilité)
     this.jobMappingService = jobMappingCache || new MultiLevelJobMappingCache();
+
+    // Periodic cleanup of processedTasks dedup cache (every 30 min)
+    this.processedTasksCleanupInterval = setInterval(() => {
+      const expiry = Date.now() - this.PROCESSED_TASK_TTL_MS;
+      for (const [key, ts] of this.processedTasks) {
+        if (ts < expiry) this.processedTasks.delete(key);
+      }
+    }, 30 * 60 * 1000);
+    this.processedTasksCleanupInterval.unref?.();
   }
 
   getZmqClient(): ZmqTranslationClient | null {
@@ -737,17 +747,21 @@ export class MessageTranslationService extends EventEmitter {
       const taskKey = `${data.taskId}_${data.targetLanguage}`;
       
       // Vérifier si ce taskId a déjà été traité (évite les doublons accidentels)
-      if (this.processedTasks.has(taskKey)) {
+      const now = Date.now();
+      const existingTs = this.processedTasks.get(taskKey);
+      if (existingTs !== undefined && now - existingTs < this.PROCESSED_TASK_TTL_MS) {
         return;
       }
-      
-      // Marquer ce task comme traité
-      this.processedTasks.add(taskKey);
-      
-      // Nettoyer les anciens tasks traités (garder seulement les 1000 derniers)
-      if (this.processedTasks.size > 1000) {
-        const firstKey = this.processedTasks.values().next().value;
-        this.processedTasks.delete(firstKey);
+
+      // Marquer ce task comme traité avec timestamp
+      this.processedTasks.set(taskKey, now);
+
+      // Nettoyage périodique des entrées expirées (évite la fuite mémoire)
+      if (this.processedTasks.size > 500) {
+        const expiry = now - this.PROCESSED_TASK_TTL_MS;
+        for (const [key, ts] of this.processedTasks) {
+          if (ts < expiry) this.processedTasks.delete(key);
+        }
       }
       
       

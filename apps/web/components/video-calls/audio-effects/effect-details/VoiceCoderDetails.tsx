@@ -169,7 +169,7 @@ export const VoiceCoderDetails = React.memo<VoiceCoderDetailsProps>(({
           </div>
 
           <div className="flex items-center justify-between p-2 bg-gray-800/50 rounded">
-            <Label className="text-white text-sm">Harmonisation</Label>
+            <Label className="text-white text-sm">{t('voiceCoder.harmonization.label')}</Label>
             <Switch
               checked={effect.params.harmonization}
               onCheckedChange={(checked) => onUpdateParams({ harmonization: checked })}

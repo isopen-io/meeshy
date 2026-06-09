@@ -7,6 +7,7 @@
 
 import type { MessageType } from './socketio-events.js';
 import type { Participant } from './participant.js';
+import type { CallSummaryMetadata } from '../utils/call-summary.js';
 
 // ===== 1. MESSAGES GATEWAY (API/Backend) =====
 
@@ -151,6 +152,15 @@ export interface GatewayMessage {
   // ===== CHIFFREMENT (E2EE) =====
   readonly isEncrypted?: boolean;
   readonly encryptionMode?: 'e2ee' | 'server' | 'hybrid';
+
+  // ===== MÉTADONNÉES STRUCTURÉES (par type de message) =====
+  /**
+   * Structured, type-specific payload. For call-summary system messages
+   * (`messageSource === 'system'`) this is a {@link CallSummaryMetadata} the
+   * client renders into a rich, actionable call bubble. Loosely typed so other
+   * structured-message kinds can reuse the field. @see utils/call-summary.ts
+   */
+  readonly metadata?: CallSummaryMetadata | Record<string, unknown>;
 
   // ===== TIMESTAMPS =====
   readonly createdAt: Date;

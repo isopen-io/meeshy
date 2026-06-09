@@ -9,6 +9,9 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import type { SearchQuery } from './types';
 import { sendSuccess, sendInternalError } from '../../utils/response';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'ConversationSearchRoutes' });
 
 /**
  * Enregistre les routes de recherche de conversations
@@ -143,15 +146,11 @@ export function registerSearchRoutes(
         take: 50,
       });
 
-      // Compute unread counts: resolve participantIds from conversations
+      // Compute unread counts — iter-4: appel direct par userId (2+N queries vs 4×N)
       const readStatusService = new MessageReadStatusService(prisma);
       const conversationIds = conversations.map(c => c.id);
-      const userParticipantIds = conversations
-        .flatMap(c => c.participants)
-        .filter((p: any) => p.userId === userId)
-        .map((p: any) => p.id);
-      const unreadCountMap = userParticipantIds.length > 0
-        ? await readStatusService.getUnreadCountsForConversations(userParticipantIds, conversationIds)
+      const unreadCountMap = conversationIds.length > 0
+        ? await readStatusService.getUnreadCountsForUser(userId, conversationIds)
         : new Map<string, number>();
 
       // Transformer les conversations pour un payload léger (search)
@@ -217,7 +216,7 @@ export function registerSearchRoutes(
 
       return sendSuccess(reply, results);
     } catch (error) {
-      console.error('Error searching conversations:', error);
+      logger.error('Error searching conversations', error as Error);
       sendInternalError(reply, 'Erreur lors de la recherche de conversations');
     }
   });

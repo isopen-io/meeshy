@@ -24,7 +24,7 @@ struct MessageDetailSentimentTab: View, Equatable {
                 .font(.system(size: 56))
 
             Text(Self.sentimentLabel(score))
-                .font(.system(size: 16, weight: .semibold))
+                .font(.callout.weight(.semibold))
                 .foregroundColor(theme.textPrimary)
 
             GeometryReader { geo in
@@ -32,7 +32,7 @@ struct MessageDetailSentimentTab: View, Equatable {
                     RoundedRectangle(cornerRadius: 6)
                         .fill(
                             LinearGradient(
-                                colors: [.red, .orange, .yellow, .green],
+                                colors: [MeeshyColors.error, MeeshyColors.warning, MeeshyColors.warning, MeeshyColors.success],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
@@ -53,7 +53,7 @@ struct MessageDetailSentimentTab: View, Equatable {
             .padding(.horizontal, 20)
 
             Text(String(format: "Score : %.2f", score))
-                .font(.system(size: 13, weight: .medium))
+                .font(.footnote.weight(.medium))
                 .foregroundColor(theme.textMuted)
         }
         .frame(maxWidth: .infinity)
@@ -78,10 +78,10 @@ struct MessageDetailSentimentTab: View, Equatable {
     }
 
     private static func sentimentLabel(_ score: Double) -> String {
-        if score < -0.6 { return String(localized: "sentiment.very-negative", defaultValue: "Tres negatif", bundle: .main) }
-        if score < -0.2 { return String(localized: "dashboard.sentiment.negative", defaultValue: "Negatif", bundle: .main) }
-        if score < 0.2 { return String(localized: "dashboard.sentiment.neutral", defaultValue: "Neutre", bundle: .main) }
-        if score < 0.6 { return String(localized: "dashboard.sentiment.positive", defaultValue: "Positif", bundle: .main) }
-        return String(localized: "sentiment.very-positive", defaultValue: "Tres positif", bundle: .main)
+        if score < -0.6 { return String(localized: "sentiment.very-negative", defaultValue: "Very negative", bundle: .main) }
+        if score < -0.2 { return String(localized: "dashboard.sentiment.negative", defaultValue: "Negative", bundle: .main) }
+        if score < 0.2 { return String(localized: "dashboard.sentiment.neutral", defaultValue: "Neutral", bundle: .main) }
+        if score < 0.6 { return String(localized: "dashboard.sentiment.positive", defaultValue: "Positive", bundle: .main) }
+        return String(localized: "sentiment.very-positive", defaultValue: "Very positive", bundle: .main)
     }
 }

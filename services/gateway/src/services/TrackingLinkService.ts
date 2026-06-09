@@ -1,5 +1,8 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { TrackingLink, TrackingLinkClick } from '@meeshy/shared/types/tracking-link';
+import { enhancedLogger } from '../utils/logger-enhanced';
+
+const logger = enhancedLogger.child({ module: 'TrackingLinkService' });
 
 /**
  * Service pour gérer les liens de tracking
@@ -620,7 +623,7 @@ export class TrackingLinkService {
         // Check if we already processed this URL in this message
         if (urlTokenMap.has(url)) {
           token = urlTokenMap.get(url)!;
-          console.log(`[TrackingLinkService] Reusing token ${token} for duplicate URL: ${url}`);
+          logger.debug('Reusing token for duplicate URL', { token, url });
         } else {
           // Find or create tracking link
           let trackingLink = await this.findExistingTrackingLink(url, conversationId);
@@ -642,7 +645,7 @@ export class TrackingLinkService {
         const meeshyShortLink = `m+${token}`;
         processedContent = processedContent.replace(fullMatch, meeshyShortLink);
       } catch (linkError) {
-        console.error(`[TrackingLinkService] Error processing [[url]]:`, linkError);
+        logger.error('Error processing [[url]]', { error: linkError });
         // On error, replace with URL without brackets
         processedContent = processedContent.replace(fullMatch, url);
       }
@@ -662,7 +665,7 @@ export class TrackingLinkService {
         // Check if we already processed this URL in this message
         if (urlTokenMap.has(url)) {
           token = urlTokenMap.get(url)!;
-          console.log(`[TrackingLinkService] Reusing token ${token} for duplicate URL: ${url}`);
+          logger.debug('Reusing token for duplicate URL', { token, url });
         } else {
           // Find or create tracking link
           let trackingLink = await this.findExistingTrackingLink(url, conversationId);
@@ -684,7 +687,7 @@ export class TrackingLinkService {
         const meeshyShortLink = `m+${token}`;
         processedContent = processedContent.replace(fullMatch, meeshyShortLink);
       } catch (linkError) {
-        console.error(`[TrackingLinkService] Error processing <url>:`, linkError);
+        logger.error('Error processing <url>', { error: linkError });
         // On error, replace with URL without angle brackets
         processedContent = processedContent.replace(fullMatch, url);
       }
@@ -757,7 +760,7 @@ export class TrackingLinkService {
         processedContent = processedContent.replace(url, replacement);
 
       } catch (error) {
-        console.error(`[TrackingLinkService] Error processing link ${url}:`, error);
+        logger.error('Error processing link', { url, error });
         // En cas d'erreur, on garde le lien original
       }
     }

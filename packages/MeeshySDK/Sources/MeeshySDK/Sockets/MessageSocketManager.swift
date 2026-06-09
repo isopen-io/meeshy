@@ -890,6 +890,7 @@ public protocol MessageSocketProviding: Sendable {
     func emitCallEnd(callId: String)
     func emitCallEndWithAck(callId: String) async -> Bool
     func emitCallHeartbeat(callId: String)
+    func emitCallQualityReport(callId: String, level: String, rtt: Double, packetLoss: Double, bytesSent: Int, bytesReceived: Int)
 }
 
 // MARK: - Protocol Default-Arg Convenience
@@ -901,6 +902,13 @@ public protocol MessageSocketProviding: Sendable {
 /// so the optimistic row, the ACK echo, and the `message:new` broadcast can
 /// be reconciled by the same end-to-end identifier.
 public extension MessageSocketProviding {
+    /// Default no-op so existing conformers (test mocks) need not implement the
+    /// quality-report emit added for call data/quality persistence.
+    func emitCallQualityReport(
+        callId: String, level: String, rtt: Double, packetLoss: Double,
+        bytesSent: Int, bytesReceived: Int
+    ) {}
+
     func sendWithAttachments(
         conversationId: String,
         content: String?,
@@ -1046,6 +1054,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     private var socket: SocketIOClient?
     private var joinedConversations: Set<String> = []
     private var reconnectAttempt: Int = 0
+    private var reconnectAttempts: Int = 0
+    private var reconnectDelay: TimeInterval = 1
+    private var reconnectTask: Task<Void, Never>?
     private var hadPreviousConnection = false
     private var heartbeatTimer: Timer?
     private var lifecycleCancellables = Set<AnyCancellable>()
@@ -1092,8 +1103,25 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     private func handleNetworkBackOnline() {
         guard !isConnected else { return }
         guard APIClient.shared.authToken != nil else { return }
-        Logger.socket.info("MessageSocket: network back online → forcing reconnect")
-        forceReconnect()
+        scheduleReconnectWithBackoff()
+    }
+
+    private func scheduleReconnectWithBackoff() {
+        reconnectTask?.cancel()
+        let jittered = reconnectDelay * (0.8 + Double.random(in: 0...0.4))
+        let delay = jittered
+        let attempt = reconnectAttempts
+        Logger.socket.info("MessageSocket: backoff reconnect attempt=\(attempt) delay=\(delay, format: .fixed(precision: 2))s")
+        reconnectDelay = min(reconnectDelay * 2, 60)
+        reconnectAttempts += 1
+        reconnectTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled else { return }
+            await MainActor.run { [weak self] in
+                guard let self, !self.isConnected else { return }
+                self.forceReconnect()
+            }
+        }
     }
 
     // MARK: - JWT Helpers
@@ -1198,6 +1226,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// Contrast `disconnect()`, the logout/cold reset, which additionally clears
     /// all of that so the next login is a genuine cold connect with no rooms.
     private func suspendTransport() {
+        reconnectTask?.cancel()
+        reconnectTask = nil
         stopHeartbeat()
         socket?.disconnect()
         socket = nil
@@ -1278,9 +1308,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// whether it was a reconnect for the caller's logging/re-join branch.
     @discardableResult
     func handleConnectionEstablished() -> Bool {
+        reconnectTask?.cancel()
+        reconnectTask = nil
         let wasReconnect = hadPreviousConnection
         hadPreviousConnection = true
         reconnectAttempt = 0
+        reconnectAttempts = 0
+        reconnectDelay = 1
         if wasReconnect {
             DispatchQueue.main.async { [weak self] in self?.didReconnect.send(()) }
         }
@@ -1889,6 +1923,27 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     public func emitCallHeartbeat(callId: String) {
         socket?.emit("call:heartbeat", ["callId": callId])
+    }
+
+    /// Report periodic call quality + cumulative data usage to the gateway. The
+    /// last report before teardown carries the call totals, which the gateway
+    /// persists on the CallSession so the call-summary message can surface
+    /// "data spent · network quality". Fire-and-forget. `bytesSent`/`bytesReceived`
+    /// are cumulative WebRTC counters; `level` is excellent|good|fair|poor.
+    public func emitCallQualityReport(
+        callId: String, level: String, rtt: Double, packetLoss: Double,
+        bytesSent: Int, bytesReceived: Int
+    ) {
+        socket?.emit("call:quality-report", [
+            "callId": callId,
+            "stats": [
+                "level": level,
+                "rtt": rtt,
+                "packetLoss": packetLoss,
+                "bytesSent": bytesSent,
+                "bytesReceived": bytesReceived
+            ]
+        ])
     }
 
     // MARK: - Event Handlers

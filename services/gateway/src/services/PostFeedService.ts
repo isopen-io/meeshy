@@ -2,6 +2,9 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
 import { authorSelect, postInclude } from './posts/postIncludes';
+import type { CacheStore } from './CacheStore';
+
+const FEED_SOCIAL_CACHE_TTL = 300; // 5 min — friend lists change infrequently
 
 // Feed payloads share the canonical postInclude — alias kept for callsite clarity.
 const feedPostInclude = postInclude;
@@ -31,7 +34,10 @@ function diversityScore(authorId: string, authorCounts: Map<string, number>): nu
 }
 
 export class PostFeedService {
-  constructor(private readonly prisma: PrismaClient) {}
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly cache?: CacheStore
+  ) {}
 
   /**
    * Main feed with recommendation scoring.
@@ -484,13 +490,21 @@ export class PostFeedService {
   }
 
   private async getDirectConversationContactIds(userId: string): Promise<string[]> {
+    const cacheKey = `feed:contacts:${userId}`;
+    if (this.cache) {
+      const cached = await this.cache.get(cacheKey).catch(() => null);
+      if (cached) return JSON.parse(cached) as string[];
+    }
     try {
       const myMemberships = await this.prisma.participant.findMany({
         where: { userId, isActive: true, conversation: { type: 'direct' } },
         select: { conversationId: true },
       });
       const conversationIds = myMemberships.map((m) => m.conversationId);
-      if (conversationIds.length === 0) return [];
+      if (conversationIds.length === 0) {
+        if (this.cache) await this.cache.set(cacheKey, '[]', FEED_SOCIAL_CACHE_TTL).catch(() => undefined);
+        return [];
+      }
 
       const otherMembers = await this.prisma.participant.findMany({
         where: {
@@ -500,13 +514,20 @@ export class PostFeedService {
         },
         select: { userId: true },
       });
-      return [...new Set(otherMembers.map((m) => m.userId).filter(Boolean) as string[])];
+      const result = [...new Set(otherMembers.map((m) => m.userId).filter(Boolean) as string[])];
+      if (this.cache) await this.cache.set(cacheKey, JSON.stringify(result), FEED_SOCIAL_CACHE_TTL).catch(() => undefined);
+      return result;
     } catch {
       return [];
     }
   }
 
   private async getFriendIds(userId: string): Promise<string[]> {
+    const cacheKey = `feed:friends:${userId}`;
+    if (this.cache) {
+      const cached = await this.cache.get(cacheKey).catch(() => null);
+      if (cached) return JSON.parse(cached) as string[];
+    }
     try {
       const friendRequests = await this.prisma.friendRequest.findMany({
         where: {
@@ -519,9 +540,11 @@ export class PostFeedService {
         select: { senderId: true, receiverId: true },
       });
 
-      return friendRequests.map((f) =>
+      const result = friendRequests.map((f) =>
         f.senderId === userId ? f.receiverId : f.senderId
       );
+      if (this.cache) await this.cache.set(cacheKey, JSON.stringify(result), FEED_SOCIAL_CACHE_TTL).catch(() => undefined);
+      return result;
     } catch {
       return [];
     }

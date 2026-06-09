@@ -115,6 +115,7 @@ export class OrphanMediaCleanupService {
         log.error('Reap cycle failed', { error: (err as Error).message });
       });
     }, intervalMs);
+    this.timer.unref?.();
     log.info('OrphanMediaCleanup worker started', { intervalMs });
   }
 

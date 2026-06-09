@@ -24,6 +24,7 @@ import {
   getQualityIcon,
   getQualityLabel,
 } from '@/hooks/use-call-quality';
+import { useI18n } from '@/hooks/useI18n';
 
 interface ConnectionQualityBadgeProps {
   stats: ConnectionQualityStats | null;
@@ -36,10 +37,9 @@ export function ConnectionQualityBadge({
   className,
   showAlways = false,
 }: ConnectionQualityBadgeProps) {
-  // Don't show if no stats
-  if (!stats) return null;
+  const { t } = useI18n('calls');
 
-  // Don't show if excellent (unless showAlways)
+  if (!stats) return null;
   if (!showAlways && stats.level === 'excellent') return null;
 
   const qualityColor = getQualityColor(stats.level);
@@ -69,30 +69,30 @@ export function ConnectionQualityBadge({
           className="bg-gray-900 border-gray-700 text-white p-4 max-w-xs"
         >
           <div className="space-y-2">
-            <div className="font-semibold mb-2">Connection Quality Details</div>
+            <div className="font-semibold mb-2">{t('calls.quality.details')}</div>
 
             <div className="grid grid-cols-2 gap-2 text-sm">
-              <div className="text-gray-400">Quality:</div>
+              <div className="text-gray-400">{t('calls.quality.quality')}</div>
               <div className={qualityColor}>{qualityLabel}</div>
 
-              <div className="text-gray-400">Packet Loss:</div>
+              <div className="text-gray-400">{t('calls.quality.packetLoss')}</div>
               <div>{stats.packetLoss.toFixed(2)}%</div>
 
-              <div className="text-gray-400">Latency (RTT):</div>
+              <div className="text-gray-400">{t('calls.quality.latency')}</div>
               <div>{stats.rtt}ms</div>
 
-              <div className="text-gray-400">Jitter:</div>
+              <div className="text-gray-400">{t('calls.quality.jitter')}</div>
               <div>{stats.jitter.toFixed(2)}ms</div>
 
-              <div className="text-gray-400">Audio Bitrate:</div>
+              <div className="text-gray-400">{t('calls.quality.audioBitrate')}</div>
               <div>{stats.bitrate.audio} kbps</div>
 
-              <div className="text-gray-400">Video Bitrate:</div>
+              <div className="text-gray-400">{t('calls.quality.videoBitrate')}</div>
               <div>{stats.bitrate.video} kbps</div>
             </div>
 
             <div className="pt-2 mt-2 border-t border-gray-700 text-xs text-gray-400">
-              Updated: {new Date(stats.timestamp).toLocaleTimeString()}
+              {t('calls.quality.updated')} {new Date(stats.timestamp).toLocaleTimeString()}
             </div>
           </div>
         </TooltipContent>

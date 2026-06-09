@@ -1,0 +1,222 @@
+{
+  "ranking": {
+    "users": "User Rankings",
+    "conversations": "Conversation Rankings",
+    "messages": "Message Rankings",
+    "links": "Link Rankings",
+    "default": "Rankings",
+    "resultsUnit": "results",
+    "retry": "Retry",
+    "empty": "No results found",
+    "selectEntity": "Select entity type",
+    "selectCriterion": "Select criterion",
+    "selectPeriod": "Select period",
+    "filterTitle": "Ranking filters",
+    "entityTypeLabel": "Entity type",
+    "entityUsers": "Users",
+    "entityConversations": "Conversations",
+    "entityMessages": "Messages",
+    "entityLinks": "Links",
+    "criterionLabel": "Criterion",
+    "filterCriteria": "Filter criteria...",
+    "noCriteriaFound": "No criteria found",
+    "periodLabel": "Period",
+    "resultCountLabel": "Result count",
+    "period1d": "Last day (24h)",
+    "period7d": "Last week (7d)",
+    "period30d": "Last month (30d)",
+    "period90d": "Last quarter (90d)",
+    "period180d": "Last semester (180d)",
+    "period365d": "Last year (365d)",
+    "periodAll": "All time"
+  },
+  "scanLog": {
+    "title": "Scan Logs",
+    "empty": "No scan logs"
+  },
+  "filter": {
+    "all": "All",
+    "sent": "Sent",
+    "skip": "Skip",
+    "error": "Error"
+  },
+  "trigger": {
+    "auto": "Auto",
+    "manual": "Manual",
+    "timeout": "Timeout",
+    "message": "Message",
+    "reply": "Reply"
+  },
+  "timeAgo": {
+    "now": "just now",
+    "minutes": "min",
+    "hours": "h",
+    "days": "d"
+  },
+  "regexTester": {
+    "title": "Test regex against sample text",
+    "placeholder": "Paste a conversation excerpt here to see which patterns match…",
+    "test": "Test",
+    "noPatterns": "No patterns defined for this topic.",
+    "match": "match",
+    "matches": "matches",
+    "invalidRegex": "invalid regex"
+  },
+  "agent": {
+    "overview": {
+      "kpi": {
+        "conversations": "Conversations",
+        "active": "Active",
+        "users": "Users",
+        "roles": "Roles",
+        "messages": "Messages",
+        "words": "Words",
+        "avgConfidence": "Avg. confidence",
+        "archetypes": "Archetypes"
+      },
+      "distribution": "Distribution",
+      "recentActivity": "Recent activity",
+      "noRecentActivity": "No recent activity",
+      "resetConversation": "Reset conversation",
+      "resetUser": "Reset user",
+      "dangerZone": "Danger zone",
+      "resetting": "Resetting...",
+      "resetAll": "Full reset",
+      "timeAgo": {
+        "never": "Never",
+        "justNow": "Just now",
+        "minutes": "{{count}}min ago",
+        "hours": "{{count}}h ago",
+        "days": "{{count}}d ago"
+      },
+      "conversationType": {
+        "direct": "Direct",
+        "group": "Group",
+        "public": "Public",
+        "global": "Global",
+        "broadcast": "Broadcast",
+        "channel": "Channel"
+      }
+    },
+    "toasts": {
+      "statsLoadError": "Unable to load statistics",
+      "connectionError": "Connection error to agent service",
+      "resetSuccess": "Full reset: {{configs}} configs, {{roles}} roles, {{analytics}} analytics, {{redisKeys}} Redis keys deleted",
+      "resetError": "Error during reset",
+      "resetAiConfigError": "Error resetting AI configurations",
+      "invalidConversationId": "Invalid conversation ID (24 hex characters)",
+      "confirmResetConversation": "Delete all agent data for conversation {{id}}?",
+      "conversationReset": "Conversation {{id}} reset",
+      "conversationResetError": "Error resetting conversation",
+      "invalidUserId": "Invalid user ID (24 hex characters)",
+      "confirmResetUser": "Delete all agent profiles for user {{id}} (all conversations)?",
+      "userReset": "User {{id}} reset",
+      "userResetError": "Error resetting user",
+      "confirmResetAll": "WARNING: This action will permanently delete ALL AI configurations, profiles, analytics and Redis cache. This action is irreversible. Continue?",
+      "globalConfigLoadError": "Error loading global configuration",
+      "globalConfigSavedPending": "Global config saved — propagation to agent service pending (cache stale possible for a few minutes)",
+      "globalConfigUpdated": "Global configuration updated",
+      "globalConfigUpdateError": "Error updating configuration",
+      "globalConfigConnectionError": "Server connection error",
+      "llmConfigLoadError": "Error loading LLM config",
+      "llmConfigSavedPending": "LLM config saved — agent service has not confirmed reload (may require a restart)",
+      "llmConfigUpdated": "LLM configuration updated",
+      "llmConfigSaveError": "Error saving configuration",
+      "rolesLoadError": "Error loading roles",
+      "archetypeAssigned": "Archetype assigned",
+      "archetypeAssignError": "Error assigning archetype",
+      "profileUnlocked": "Profile unlocked",
+      "profileUnlockError": "Error unlocking profile",
+      "triggerInterrupted": "Interruption requested",
+      "scanTriggered": "Scan triggered",
+      "scanTriggerError": "Error triggering scan",
+      "networkError": "Network error",
+      "triggerScheduled": "Trigger scheduled at {{time}}",
+      "triggerScheduledIn": "Trigger scheduled in {{delay}}",
+      "triggerCancelled": "Trigger cancelled",
+      "frequencyUpdated": "Frequency updated: {{minutes}}min",
+      "updateError": "Update error",
+      "intervalAdjusted": "Interval adjusted: {{minutes}}min",
+      "queueItemDeleted": "Message removed from queue",
+      "queueItemAlreadySent": "Message already sent",
+      "queueItemDeleteError": "Error removing message",
+      "queueItemEdited": "Message edited",
+      "queueItemEditError": "Error editing message",
+      "conversationConfigUpdated": "Conversation config updated",
+      "archetypesLoadError": "Error loading archetypes",
+      "configLoadError": "Error loading configurations",
+      "agentEnabled": "Agent enabled",
+      "agentDisabled": "Agent disabled",
+      "configDeleted": "Configuration deleted",
+      "deleteError": "Error deleting"
+    },
+    "scheduling": {
+      "fixedTime": "Fixed time",
+      "delay": "After X time",
+      "frequency": "Frequency",
+      "timerWarning": "This timer is lost if you close the page or browser.",
+      "dragToMove": "drag to move",
+      "notAvailable": "Schedule not available",
+      "triggerNow": "Trigger now",
+      "stop": "STOP!"
+    }
+  },
+  "agentLive": {
+    "selectConversation": "Select a conversation to monitor its real-time state",
+    "conversationsActive": "Active conversations",
+    "loading": "Loading...",
+    "monitoredUsers": "Monitored users",
+    "noMonitoredUsers": "No monitored users",
+    "toneProfiles": "Tone profiles",
+    "noToneProfiles": "No tone profiles",
+    "contextualSummary": "Contextual summary",
+    "topics": "Topics",
+    "tone": "Tone:",
+    "noSummary": "No summary available",
+    "metrics": "Metrics",
+    "messages": "Messages",
+    "words": "Words",
+    "confidence": "Confidence",
+    "cachedMessages": "cached messages",
+    "noAnalytics": "No analytics available",
+    "loadError": "Unable to load live state",
+    "connectionError": "Connection error or conversation not found",
+    "queue": "Queue"
+  },
+  "userDetail": {
+    "languagePreferences": "Language Preferences",
+    "languagePreferencesSaved": "Language preferences updated",
+    "languagePreferencesError": "Error updating preferences"
+  },
+  "translationMonitor": {
+    "loadingMetrics": "Loading metrics...",
+    "languageBreakdown": "Language breakdown"
+  },
+  "llm": {
+    "generationSettings": "Generation Settings",
+    "budgetManagement": "Budget Management"
+  },
+  "globalConfig": {
+    "defaultProvider": "Default Provider",
+    "globalScheduler": "Global Scheduler",
+    "active": "Active",
+    "disabled": "Disabled",
+    "none": "None"
+  },
+  "agentConfig": {
+    "titleNew": "New agent configuration",
+    "titleEdit": "Edit configuration",
+    "created": "Configuration created",
+    "updated": "Configuration updated",
+    "saveError": "Error saving configuration",
+    "pendingPropagation": "Config saved — propagation to agent service pending (cache may take a few minutes)"
+  },
+  "security": {
+    "enable2FA": "Enable 2FA",
+    "disable2FA": "Disable 2FA",
+    "accountUnlocked": "Account unlocked successfully",
+    "twoFactorEnabled": "2FA enabled successfully",
+    "twoFactorDisabled": "2FA disabled successfully",
+    "disabled": "Disabled"
+  }
+}

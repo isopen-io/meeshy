@@ -30,6 +30,7 @@ export function ConversationHeader({
   onLinkCreated,
   onStartCall,
   onOpenGallery,
+  onOpenSearch,
   t,
   showBackButton = false,
   otherUnreadCount = 0
@@ -182,6 +183,7 @@ export function ConversationHeader({
             isLoadingPreferences={preferences.isLoading}
             onStartCall={onStartCall}
             onOpenGallery={onOpenGallery}
+            onOpenSearch={onOpenSearch}
             onOpenSettings={() => setIsSettingsModalOpen(true)}
             onParticipantRemoved={onParticipantRemoved}
             onParticipantAdded={onParticipantAdded}

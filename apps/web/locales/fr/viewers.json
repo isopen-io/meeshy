@@ -1,0 +1,50 @@
+{
+  "pdf": {
+    "loadError": "Impossible de charger le PDF",
+    "openInNewTab": "Ouvrir dans un nouvel onglet",
+    "download": "Télécharger",
+    "downloadPdf": "Télécharger le PDF",
+    "delete": "Supprimer ce PDF",
+    "fullscreen": "Ouvrir en plein écran",
+    "previousPage": "Page précédente",
+    "nextPage": "Page suivante",
+    "zoomOut": "Réduire le zoom",
+    "zoomIn": "Agrandir le zoom",
+    "close": "Fermer",
+    "nativeControls": "Utilisez les contrôles natifs du PDF pour naviguer • Échap pour fermer"
+  },
+  "pptx": {
+    "loadError": "Impossible de charger la présentation",
+    "publicRequired": "Le fichier doit être accessible publiquement pour être visualisé",
+    "downloadFile": "Télécharger le fichier",
+    "delete": "Supprimer cette présentation",
+    "fullscreen": "Ouvrir en plein écran",
+    "download": "Télécharger"
+  },
+  "markdown": {
+    "loadError": "Impossible de charger le fichier",
+    "document": "Document Markdown",
+    "formattedView": "Vue formatée",
+    "rawView": "Vue brute",
+    "download": "Télécharger le fichier Markdown",
+    "delete": "Supprimer ce fichier Markdown",
+    "fullscreen": "Ouvrir en plein écran",
+    "close": "Fermer",
+    "escToClose": "Appuyez sur Échap pour fermer"
+  },
+  "video": {
+    "enterFullscreen": "Plein écran",
+    "exitFullscreen": "Quitter le plein écran",
+    "download": "Télécharger"
+  },
+  "text": {
+    "enableWordWrap": "Activer le retour à la ligne",
+    "disableWordWrap": "Désactiver le retour à la ligne",
+    "copy": "Copier le contenu",
+    "fullscreen": "Ouvrir en plein écran",
+    "download": "Télécharger",
+    "copied": "Copié dans le presse-papiers",
+    "copyError": "Impossible de copier",
+    "loadError": "Impossible de charger le fichier"
+  }
+}

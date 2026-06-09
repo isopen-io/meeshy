@@ -38,7 +38,7 @@ struct SettingsView: View {
     @State private var showMediaDownload = false
     @State private var scrollOffset: CGFloat = 0
 
-    private let accentColor = "08D9D6"
+    private let accentColor = "6366F1"
 
     var body: some View {
         ZStack {
@@ -255,7 +255,7 @@ struct SettingsView: View {
                 settingsRow(icon: "person.crop.circle.badge.minus", title: String(localized: "settings.delete_account", defaultValue: "Supprimer le compte", bundle: .main), color: "EF4444") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(Color(hex: "EF4444").opacity(0.6))
+                        .foregroundColor(MeeshyColors.error.opacity(0.6))
                 }
             }
             .accessibilityLabel(String(localized: "settings.delete_account", defaultValue: "Supprimer le compte", bundle: .main))
@@ -313,7 +313,7 @@ struct SettingsView: View {
                     }
                 }
                 .pickerStyle(.menu)
-                .tint(Color(hex: "4ECDC4"))
+                .tint(MeeshyColors.indigo400)
             }
         }
     }
@@ -619,15 +619,15 @@ struct SettingsView: View {
                 Text(String(localized: "settings.logout.title", defaultValue: "Déconnexion", bundle: .main))
                     .font(.system(size: 15, weight: .semibold))
             }
-            .foregroundColor(Color(hex: "EF4444"))
+            .foregroundColor(MeeshyColors.error)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(hex: "EF4444").opacity(0.1))
+                    .fill(MeeshyColors.error.opacity(0.1))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color(hex: "EF4444").opacity(0.3), lineWidth: 1)
+                            .stroke(MeeshyColors.error.opacity(0.3), lineWidth: 1)
                     )
             )
         }

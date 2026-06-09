@@ -85,7 +85,7 @@ struct StoryGestureOverlayView: View {
         Color.clear
             .contentShape(Rectangle())
             .accessibilityElement()
-            .accessibilityLabel("Lecteur de stories")
+            .accessibilityLabel(String(localized: "story.viewer.label", defaultValue: "Stories viewer", bundle: .main))
             .accessibilityHint("Toucher à gauche pour la story précédente, à droite pour la suivante, maintenir pour mettre en pause")
             // `DragGesture(minimumDistance: 0)` capture LE PREMIER touch-down
             // ainsi que le release. C'est le seul moyen fiable en SwiftUI de
@@ -1045,6 +1045,16 @@ struct StoryCardView: View {
             // long-press) through the overlay's transparent surface.
             if showCommentsOverlay {
                 makeCommentsOverlay()
+                    // Le UIViewRepresentable du canvas expanse le ZStack parent
+                    // au-delà du viewport (même cause que Layer 7 header et
+                    // Layer 8 sidebar, cf. note ligne ~1024). Sans contrainte de
+                    // largeur, l'overlay hérite de cette largeur trop grande et,
+                    // le ZStack étant centré, ses rows (padding leading 28)
+                    // démarrent à un x négatif → la ligne de commentaire sort du
+                    // viewport à gauche (bug user 2026-06-08). On le borne à
+                    // geometry.size.width + clipped comme ses voisins.
+                    .frame(width: geometry.size.width, height: geometry.size.height, alignment: .bottom)
+                    .clipped()
                     .transition(.opacity)
             }
 
@@ -1532,7 +1542,7 @@ struct StoryViewerContentView: View {
                                         .frame(width: 36, height: 36)
                                         .background(Circle().fill(Color.black.opacity(0.5)))
                                 }
-                                .accessibilityLabel("Fermer la story")
+                                .accessibilityLabel(String(localized: "story.viewer.close", defaultValue: "Close story", bundle: .main))
                                 .padding(.leading, 16)
                                 .padding(.top, max(geometry.safeAreaInsets.top, 59) + 4)
                                 Spacer()

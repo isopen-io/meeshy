@@ -50,6 +50,7 @@ export class MessagingService {
   private getMessageByIdCallback: GetMessageByIdCallback | null = null;
   private currentUserId: string | null = null;
   private markReceivedTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
+  private recentMessageIds: Map<string, number> = new Map();
 
   setCurrentUserId(userId: string | null): void {
     this.currentUserId = userId;
@@ -61,8 +62,30 @@ export class MessagingService {
     return senderId === this.currentUserId;
   }
 
+  private isDuplicateMessage(id: string): boolean {
+    if (this.recentMessageIds.has(id)) return true;
+
+    if (this.recentMessageIds.size >= 200) {
+      const oldest = [...this.recentMessageIds.entries()].sort((a, b) => a[1] - b[1]);
+      for (let i = 0; i < 50; i++) {
+        this.recentMessageIds.delete(oldest[i][0]);
+      }
+    }
+
+    const ts = Date.now();
+    this.recentMessageIds.set(id, ts);
+    setTimeout(() => {
+      if (this.recentMessageIds.get(id) === ts) {
+        this.recentMessageIds.delete(id);
+      }
+    }, 300_000);
+
+    return false;
+  }
+
   private markAsReceivedDebounced(conversationId: string): void {
     if (this.markReceivedTimers.has(conversationId)) return;
+    if (this.markReceivedTimers.size >= 100) return;
     const timer = setTimeout(async () => {
       this.markReceivedTimers.delete(conversationId);
       try {
@@ -119,6 +142,8 @@ export class MessagingService {
   setupEventListeners(socket: TypedSocket, convertMessageFn: (msg: SocketIOMessage) => Message): void {
     // New message
     socket.on(SERVER_EVENTS.MESSAGE_NEW, async (socketMessage) => {
+      if (socketMessage.id && this.isDuplicateMessage(socketMessage.id)) return;
+
       let message: Message = convertMessageFn(socketMessage);
 
       // E2EE: Decrypt message if encrypted
@@ -507,6 +532,7 @@ export class MessagingService {
     this.attachmentStatusListeners.clear();
     this.markReceivedTimers.forEach(timer => clearTimeout(timer));
     this.markReceivedTimers.clear();
+    this.recentMessageIds.clear();
     this.currentUserId = null;
   }
 

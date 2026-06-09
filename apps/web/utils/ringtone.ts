@@ -36,15 +36,18 @@ export class Ringtone {
    */
   private initHTMLAudio(): void {
     try {
-      // Create audio element with data URL (simple beep tone)
       this.htmlAudio = new Audio();
       this.htmlAudio.loop = true;
       this.htmlAudio.volume = 0.5;
       this.htmlAudio.preload = 'auto';
 
-      // Use a simple data URL for a beep sound (works offline)
-      // This is a base64 encoded WAV file with a simple tone
-      this.htmlAudio.src = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+      const audio = document.createElement('audio') as HTMLAudioElement;
+      audio.loop = true;
+      audio.volume = 0.5;
+      audio.preload = 'auto';
+      audio.setAttribute('playsinline', 'true');
+      audio.src = '/sounds/ringtone.opus';
+      this.htmlAudio = audio;
 
       // iOS requires playsinline
       this.htmlAudio.setAttribute('playsinline', 'true');

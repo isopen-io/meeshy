@@ -33,16 +33,12 @@ public final class DefaultSDKAudioRecorder: ObservableObject, AudioRecordingProv
             return
         }
 
-        let fileName = "voice_\(Int(Date().timeIntervalSince1970)).m4a"
+        let fileName = "voice_\(Int(Date().timeIntervalSince1970)).\(settings.codec.fileExtension)"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
 
-        let settingsDictionary: [String: Any] = [
-            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: settings.sampleRate,
-            AVNumberOfChannelsKey: settings.numberOfChannels,
-            AVEncoderBitRateKey: settings.bitRate,
-            AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue
-        ]
+        // Settings dictionary is derived from the codec (E4). Default `.aac`
+        // produces the historical AAC/M4A dictionary unchanged.
+        let settingsDictionary = settings.avRecorderSettings
 
         do {
             recorder = try AVAudioRecorder(url: url, settings: settingsDictionary)

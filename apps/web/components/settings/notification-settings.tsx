@@ -35,6 +35,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useReducedMotion } from '@/hooks/use-accessibility';
+import { useI18n } from '@/hooks/useI18n';
 import { usePreferences } from '@/hooks/use-preferences';
 import type { NotificationPreference } from '@meeshy/shared/types/preferences';
 import { NOTIFICATION_PREFERENCE_DEFAULTS } from '@meeshy/shared/types/preferences';
@@ -56,6 +57,7 @@ function validateDndTimes(startTime: string, endTime: string): boolean {
 
 export function NotificationSettings() {
   const reducedMotion = useReducedMotion();
+  const { t } = useI18n('notifications');
 
   // Debounce timer ref
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -99,7 +101,7 @@ export function NotificationSettings() {
     debounceTimerRef.current = setTimeout(async () => {
       try {
         await updatePreferences(updates);
-        toast.success('Préférences enregistrées');
+        toast.success(t('notifPrefs.saved'));
       } catch (_err) {
         // Error handled by onError callback
       }
@@ -126,7 +128,7 @@ export function NotificationSettings() {
     const endTime = field === 'dndEndTime' ? value : preferences.dndEndTime;
 
     if (!validateDndTimes(startTime, endTime)) {
-      toast.error('L\'heure de début doit être différente de l\'heure de fin');
+      toast.error(t('notifPrefs.dndTimeError'));
       return;
     }
 
@@ -137,13 +139,13 @@ export function NotificationSettings() {
    * Reset to defaults
    */
   const handleReset = useCallback(async () => {
-    if (!window.confirm('Voulez-vous vraiment réinitialiser toutes les préférences de notification ?')) {
+    if (!window.confirm(t('notifPrefs.resetConfirm'))) {
       return;
     }
 
     try {
       await updatePreferences(NOTIFICATION_PREFERENCE_DEFAULTS);
-      toast.success('Préférences réinitialisées');
+      toast.success(t('notifPrefs.reset'));
     } catch (_err) {
       // Error handled by onError callback
     }
@@ -171,9 +173,9 @@ export function NotificationSettings() {
       const permission = await Notification.requestPermission();
       setBrowserPermission(permission);
       if (permission === 'granted') {
-        toast.success('Notifications autorisées');
+        toast.success(t('notifPrefs.permissionGranted'));
       } else {
-        toast.error('Notifications refusées');
+        toast.error(t('notifPrefs.permissionDenied'));
       }
     }
   };
@@ -181,9 +183,9 @@ export function NotificationSettings() {
   // Loading state
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[200px]" role="status" aria-label="Chargement des préférences">
+      <div className="flex items-center justify-center min-h-[200px]" role="status" aria-label={t('notifPrefs.loading')}>
         <Loader2 className={`h-8 w-8 ${reducedMotion ? '' : 'animate-spin'} text-primary`} />
-        <span className="sr-only">Chargement des préférences de notification...</span>
+        <span className="sr-only">{t('notifPrefs.loading')}</span>
       </div>
     );
   }
@@ -203,7 +205,7 @@ export function NotificationSettings() {
     return (
       <Alert>
         <AlertCircle className="h-4 w-4" />
-        <AlertDescription>Aucune préférence disponible</AlertDescription>
+        <AlertDescription>{t('notifPrefs.noPreferences')}</AlertDescription>
       </Alert>
     );
   }
@@ -215,7 +217,7 @@ export function NotificationSettings() {
         <Alert className="bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800">
           <Loader2 className={`h-4 w-4 ${reducedMotion ? '' : 'animate-spin'} text-blue-600 dark:text-blue-400`} />
           <AlertDescription className="text-blue-800 dark:text-blue-200">
-            Sauvegarde en cours...
+            {t('notifPrefs.saving')}
           </AlertDescription>
         </Alert>
       )}
@@ -226,7 +228,7 @@ export function NotificationSettings() {
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
             <div className="space-y-1">
-              <p className="font-medium">Consentements requis manquants:</p>
+              <p className="font-medium">{t('notifPrefs.missingConsents')}</p>
               <ul className="list-disc list-inside">
                 {consentViolations.map((violation, index) => (
                   <li key={index}>{violation.message}</li>
@@ -242,10 +244,10 @@ export function NotificationSettings() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
             <Bell className="h-4 w-4 sm:h-5 sm:w-5" />
-            Canaux de notification
+            {t('notifPrefs.channels.title')}
           </CardTitle>
           <CardDescription className="text-sm sm:text-base">
-            Choisissez comment vous souhaitez recevoir les notifications
+            {t('notifPrefs.channels.description')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 sm:space-y-6">
@@ -254,9 +256,9 @@ export function NotificationSettings() {
             <div className="flex items-start gap-3 flex-1">
               <Bell className="h-4 w-4 text-muted-foreground mt-0.5" />
               <div className="space-y-1 flex-1">
-                <Label className="text-sm sm:text-base">Notifications push</Label>
+                <Label className="text-sm sm:text-base">{t('notifPrefs.channels.push.label')}</Label>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Recevoir des notifications dans le navigateur
+                  {t('notifPrefs.channels.push.description')}
                 </p>
               </div>
             </div>
@@ -271,7 +273,7 @@ export function NotificationSettings() {
                   onClick={requestNotificationPermission}
                   className="text-xs text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                 >
-                  Autoriser
+                  {t('notifPrefs.allowButton')}
                 </button>
               )}
             </div>
@@ -282,9 +284,9 @@ export function NotificationSettings() {
             <div className="flex items-start gap-3 flex-1">
               <Mail className="h-4 w-4 text-muted-foreground mt-0.5" />
               <div className="space-y-1 flex-1">
-                <Label className="text-sm sm:text-base">Notifications email</Label>
+                <Label className="text-sm sm:text-base">{t('notifPrefs.channels.email.label')}</Label>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Recevoir un récapitulatif par email
+                  {t('notifPrefs.channels.email.description')}
                 </p>
               </div>
             </div>
@@ -300,9 +302,9 @@ export function NotificationSettings() {
             <div className="flex items-start gap-3 flex-1">
               <Volume2 className="h-4 w-4 text-muted-foreground mt-0.5" />
               <div className="space-y-1 flex-1">
-                <Label className="text-sm sm:text-base">Sons de notification</Label>
+                <Label className="text-sm sm:text-base">{t('notifPrefs.channels.sound.label')}</Label>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Jouer un son pour les nouvelles notifications
+                  {t('notifPrefs.channels.sound.description')}
                 </p>
               </div>
             </div>
@@ -318,9 +320,9 @@ export function NotificationSettings() {
             <div className="flex items-start gap-3 flex-1">
               <Vibrate className="h-4 w-4 text-muted-foreground mt-0.5" />
               <div className="space-y-1 flex-1">
-                <Label className="text-sm sm:text-base">Vibration</Label>
+                <Label className="text-sm sm:text-base">{t('notifPrefs.channels.vibration.label')}</Label>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Faire vibrer pour les nouvelles notifications (mobile)
+                  {t('notifPrefs.channels.vibration.description')}
                 </p>
               </div>
             </div>
@@ -338,10 +340,10 @@ export function NotificationSettings() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
             <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5" />
-            Types de notifications
+            {t('notifPrefs.types.title')}
           </CardTitle>
           <CardDescription className="text-sm sm:text-base">
-            Choisissez les événements pour lesquels vous souhaitez être notifié
+            {t('notifPrefs.types.description')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 sm:space-y-6">
@@ -350,9 +352,9 @@ export function NotificationSettings() {
             <div className="flex items-start gap-3 flex-1">
               <MessageSquare className="h-4 w-4 text-muted-foreground mt-0.5" />
               <div className="space-y-1 flex-1">
-                <Label className="text-sm sm:text-base">Nouveaux messages</Label>
+                <Label className="text-sm sm:text-base">{t('notifPrefs.types.newMessage.label')}</Label>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Notifications pour les nouveaux messages reçus
+                  {t('notifPrefs.types.newMessage.description')}
                 </p>
               </div>
             </div>
@@ -368,9 +370,9 @@ export function NotificationSettings() {
             <div className="flex items-start gap-3 flex-1">
               <Reply className="h-4 w-4 text-muted-foreground mt-0.5" />
               <div className="space-y-1 flex-1">
-                <Label className="text-sm sm:text-base">Réponses</Label>
+                <Label className="text-sm sm:text-base">{t('notifPrefs.types.reply.label')}</Label>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Quand quelqu&apos;un répond à vos messages
+                  {t('notifPrefs.types.reply.description')}
                 </p>
               </div>
             </div>
@@ -386,9 +388,9 @@ export function NotificationSettings() {
             <div className="flex items-start gap-3 flex-1">
               <AtSign className="h-4 w-4 text-muted-foreground mt-0.5" />
               <div className="space-y-1 flex-1">
-                <Label className="text-sm sm:text-base">Mentions</Label>
+                <Label className="text-sm sm:text-base">{t('notifPrefs.types.mention.label')}</Label>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Quand vous êtes mentionné (@) dans un message
+                  {t('notifPrefs.types.mention.description')}
                 </p>
               </div>
             </div>
@@ -404,9 +406,9 @@ export function NotificationSettings() {
             <div className="flex items-start gap-3 flex-1">
               <Heart className="h-4 w-4 text-muted-foreground mt-0.5" />
               <div className="space-y-1 flex-1">
-                <Label className="text-sm sm:text-base">Réactions</Label>
+                <Label className="text-sm sm:text-base">{t('notifPrefs.types.reaction.label')}</Label>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Notifications pour les réactions à vos messages
+                  {t('notifPrefs.types.reaction.description')}
                 </p>
               </div>
             </div>
@@ -422,9 +424,9 @@ export function NotificationSettings() {
             <div className="flex items-start gap-3 flex-1">
               <UserPlus className="h-4 w-4 text-muted-foreground mt-0.5" />
               <div className="space-y-1 flex-1">
-                <Label className="text-sm sm:text-base">Demandes de contact</Label>
+                <Label className="text-sm sm:text-base">{t('notifPrefs.types.contactRequest.label')}</Label>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Notifications pour les nouvelles demandes de contact
+                  {t('notifPrefs.types.contactRequest.description')}
                 </p>
               </div>
             </div>
@@ -440,9 +442,9 @@ export function NotificationSettings() {
             <div className="flex items-start gap-3 flex-1">
               <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
               <div className="space-y-1 flex-1">
-                <Label className="text-sm sm:text-base">Invitations de groupe</Label>
+                <Label className="text-sm sm:text-base">{t('notifPrefs.types.groupInvite.label')}</Label>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Quand vous êtes invité à rejoindre un groupe
+                  {t('notifPrefs.types.groupInvite.description')}
                 </p>
               </div>
             </div>
@@ -458,9 +460,9 @@ export function NotificationSettings() {
             <div className="flex items-start gap-3 flex-1">
               <UserPlus className="h-4 w-4 text-muted-foreground mt-0.5" />
               <div className="space-y-1 flex-1">
-                <Label className="text-sm sm:text-base">Nouveaux membres</Label>
+                <Label className="text-sm sm:text-base">{t('notifPrefs.types.memberJoined.label')}</Label>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Quand un membre rejoint un groupe
+                  {t('notifPrefs.types.memberJoined.description')}
                 </p>
               </div>
             </div>
@@ -476,9 +478,9 @@ export function NotificationSettings() {
             <div className="flex items-start gap-3 flex-1">
               <LogOut className="h-4 w-4 text-muted-foreground mt-0.5" />
               <div className="space-y-1 flex-1">
-                <Label className="text-sm sm:text-base">Membres partis</Label>
+                <Label className="text-sm sm:text-base">{t('notifPrefs.types.memberLeft.label')}</Label>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Quand un membre quitte un groupe
+                  {t('notifPrefs.types.memberLeft.description')}
                 </p>
               </div>
             </div>
@@ -494,9 +496,9 @@ export function NotificationSettings() {
             <div className="flex items-start gap-3 flex-1">
               <Bell className="h-4 w-4 text-muted-foreground mt-0.5" />
               <div className="space-y-1 flex-1">
-                <Label className="text-sm sm:text-base">Activité de conversation</Label>
+                <Label className="text-sm sm:text-base">{t('notifPrefs.types.conversation.label')}</Label>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Mises à jour et changements dans les conversations
+                  {t('notifPrefs.types.conversation.description')}
                 </p>
               </div>
             </div>
@@ -512,9 +514,9 @@ export function NotificationSettings() {
             <div className="flex items-start gap-3 flex-1">
               <PhoneMissed className="h-4 w-4 text-muted-foreground mt-0.5" />
               <div className="space-y-1 flex-1">
-                <Label className="text-sm sm:text-base">Appels manqués</Label>
+                <Label className="text-sm sm:text-base">{t('notifPrefs.types.missedCall.label')}</Label>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Notifications pour les appels manqués
+                  {t('notifPrefs.types.missedCall.description')}
                 </p>
               </div>
             </div>
@@ -530,9 +532,9 @@ export function NotificationSettings() {
             <div className="flex items-start gap-3 flex-1">
               <Volume2 className="h-4 w-4 text-muted-foreground mt-0.5" />
               <div className="space-y-1 flex-1">
-                <Label className="text-sm sm:text-base">Messages vocaux</Label>
+                <Label className="text-sm sm:text-base">{t('notifPrefs.types.voicemail.label')}</Label>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Notifications pour les nouveaux messages vocaux
+                  {t('notifPrefs.types.voicemail.description')}
                 </p>
               </div>
             </div>
@@ -548,9 +550,9 @@ export function NotificationSettings() {
             <div className="flex items-start gap-3 flex-1">
               <Settings className="h-4 w-4 text-muted-foreground mt-0.5" />
               <div className="space-y-1 flex-1">
-                <Label className="text-sm sm:text-base">Notifications système</Label>
+                <Label className="text-sm sm:text-base">{t('notifPrefs.types.system.label')}</Label>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Mises à jour importantes et annonces
+                  {t('notifPrefs.types.system.description')}
                 </p>
               </div>
             </div>
@@ -568,10 +570,10 @@ export function NotificationSettings() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
             <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
-            Ne pas déranger
+            {t('notifPrefs.dnd.title')}
           </CardTitle>
           <CardDescription className="text-sm sm:text-base">
-            Définissez une plage horaire sans notifications
+            {t('notifPrefs.dnd.description')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -579,9 +581,9 @@ export function NotificationSettings() {
             <div className="flex items-start gap-3 flex-1">
               <Clock className="h-4 w-4 text-muted-foreground mt-0.5" />
               <div className="space-y-1 flex-1">
-                <Label className="text-sm sm:text-base">Activer &quot;Ne pas déranger&quot;</Label>
+                <Label className="text-sm sm:text-base">{t('notifPrefs.dnd.enableLabel')}</Label>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Suspendre les notifications pendant une période définie
+                  {t('notifPrefs.dnd.enableDescription')}
                 </p>
               </div>
             </div>
@@ -595,7 +597,7 @@ export function NotificationSettings() {
           {preferences.dndEnabled && (
             <div className="grid grid-cols-2 gap-4 p-4 bg-muted rounded-lg">
               <div>
-                <Label htmlFor="dndStart" className="text-sm font-medium">Heure de début</Label>
+                <Label htmlFor="dndStart" className="text-sm font-medium">{t('notifPrefs.dnd.startTime')}</Label>
                 <Input
                   id="dndStart"
                   type="time"
@@ -606,7 +608,7 @@ export function NotificationSettings() {
                 />
               </div>
               <div>
-                <Label htmlFor="dndEnd" className="text-sm font-medium">Heure de fin</Label>
+                <Label htmlFor="dndEnd" className="text-sm font-medium">{t('notifPrefs.dnd.endTime')}</Label>
                 <Input
                   id="dndEnd"
                   type="time"
@@ -617,7 +619,7 @@ export function NotificationSettings() {
                 />
               </div>
               <p className="col-span-2 text-xs text-muted-foreground mt-2">
-                Pendant cette période, vous ne recevrez aucune notification push ou sonore.
+                {t('notifPrefs.dnd.activePeriodNote')}
               </p>
             </div>
           )}
@@ -629,10 +631,10 @@ export function NotificationSettings() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
             <Eye className="h-4 w-4 sm:h-5 sm:w-5" />
-            Affichage des notifications
+            {t('notifPrefs.display.title')}
           </CardTitle>
           <CardDescription className="text-sm sm:text-base">
-            Contrôlez ce qui est affiché dans les notifications
+            {t('notifPrefs.display.description')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 sm:space-y-6">
@@ -641,9 +643,9 @@ export function NotificationSettings() {
             <div className="flex items-start gap-3 flex-1">
               <Eye className="h-4 w-4 text-muted-foreground mt-0.5" />
               <div className="space-y-1 flex-1">
-                <Label className="text-sm sm:text-base">Aperçu du message</Label>
+                <Label className="text-sm sm:text-base">{t('notifPrefs.display.preview.label')}</Label>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Afficher le contenu du message dans la notification
+                  {t('notifPrefs.display.preview.description')}
                 </p>
               </div>
             </div>
@@ -659,9 +661,9 @@ export function NotificationSettings() {
             <div className="flex items-start gap-3 flex-1">
               <UserPlus className="h-4 w-4 text-muted-foreground mt-0.5" />
               <div className="space-y-1 flex-1">
-                <Label className="text-sm sm:text-base">Nom de l&apos;expéditeur</Label>
+                <Label className="text-sm sm:text-base">{t('notifPrefs.display.senderName.label')}</Label>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Afficher le nom de l&apos;expéditeur dans la notification
+                  {t('notifPrefs.display.senderName.description')}
                 </p>
               </div>
             </div>
@@ -677,9 +679,9 @@ export function NotificationSettings() {
             <div className="flex items-start gap-3 flex-1">
               <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
               <div className="space-y-1 flex-1">
-                <Label className="text-sm sm:text-base">Grouper les notifications</Label>
+                <Label className="text-sm sm:text-base">{t('notifPrefs.display.group.label')}</Label>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Regrouper plusieurs notifications en une seule
+                  {t('notifPrefs.display.group.description')}
                 </p>
               </div>
             </div>
@@ -695,9 +697,9 @@ export function NotificationSettings() {
             <div className="flex items-start gap-3 flex-1">
               <BadgeIcon className="h-4 w-4 text-muted-foreground mt-0.5" />
               <div className="space-y-1 flex-1">
-                <Label className="text-sm sm:text-base">Badge de notification</Label>
+                <Label className="text-sm sm:text-base">{t('notifPrefs.display.badge.label')}</Label>
                 <p className="text-xs sm:text-sm text-muted-foreground">
-                  Afficher le nombre de notifications non lues
+                  {t('notifPrefs.display.badge.description')}
                 </p>
               </div>
             </div>
@@ -713,16 +715,16 @@ export function NotificationSettings() {
       {/* État des permissions */}
       <Card>
         <CardHeader>
-          <CardTitle>État des permissions</CardTitle>
+          <CardTitle>{t('notifPrefs.permissionsTitle')}</CardTitle>
           <CardDescription>
-            Statut actuel des autorisations de notification
+            {t('notifPrefs.permissionStatusTitle')}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {browserPermission !== 'unsupported' ? (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <span>Notifications navigateur</span>
+                <span>{t('notifPrefs.browserNotifications')}</span>
                 <span className={`text-sm ${
                   browserPermission === 'granted'
                     ? 'text-green-600 dark:text-green-400'
@@ -731,21 +733,21 @@ export function NotificationSettings() {
                     : 'text-orange-600 dark:text-orange-400'
                 }`}>
                   {browserPermission === 'granted'
-                    ? 'Autorisées'
+                    ? t('notifPrefs.permissionStatus.granted')
                     : browserPermission === 'denied'
-                    ? 'Refusées'
-                    : 'En attente'}
+                    ? t('notifPrefs.permissionStatus.denied')
+                    : t('notifPrefs.permissionStatus.pending')}
                 </span>
               </div>
               {browserPermission === 'denied' && (
                 <p className="text-sm text-muted-foreground">
-                  Les notifications ont été refusées. Vous pouvez les réactiver dans les paramètres de votre navigateur.
+                  {t('notifPrefs.permissionDeniedInstructions')}
                 </p>
               )}
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Les notifications ne sont pas supportées par votre navigateur.
+              {t('notifPrefs.unsupported')}
             </p>
           )}
         </CardContent>
@@ -758,7 +760,7 @@ export function NotificationSettings() {
           onClick={handleReset}
           disabled={isUpdating}
         >
-          Réinitialiser aux valeurs par défaut
+          {t('notifPrefs.resetButton')}
         </Button>
       </div>
     </div>

@@ -203,6 +203,84 @@ final class MessageStoreTests: XCTestCase {
         )
     }
 
+    // MARK: - Protective merge on real-time refresh (regression — received
+    // message vanishes when the NEXT one arrives, reappears on reopen — iOS)
+
+    /// The socket inbound path persists the message then posts a refresh that
+    /// drives `refreshFromDB(mergeInMemory: true)`. If a later write's window
+    /// read momentarily races the commit ordering and returns a window missing
+    /// an already-displayed message, the previous STRAIGHT REPLACE erased it
+    /// (the bubble flashed in then vanished, but came back on reopen because
+    /// GRDB held it). Contract: the real-time refresh preserves in-memory
+    /// messages absent from the fresh window, exactly like `apply()`.
+    func test_refreshFromDB_realtime_preservesInMemoryMessagesAbsentFromWindow() async throws {
+        let db = try makeInMemoryDatabase()
+        let persistence = MessagePersistenceActor(dbWriter: db)
+        let store = MessageStore(conversationId: "conv-rt", persistence: persistence)
+
+        let baseDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let r0 = MessageStoreObservationHelper.makeRecord(
+            localId: "msg-a", conversationId: "conv-rt",
+            content: "first", createdAt: baseDate
+        )
+        let r1 = MessageStoreObservationHelper.makeRecord(
+            localId: "msg-b", conversationId: "conv-rt",
+            content: "second", createdAt: baseDate.addingTimeInterval(10)
+        )
+        // GRDB holds only r0, r1.
+        try await MessageStoreObservationHelper.insertRecord(r0, into: persistence)
+        try await MessageStoreObservationHelper.insertRecord(r1, into: persistence)
+
+        // An already-displayed socket-recent message not yet in the window.
+        let socketRecent = MessageStoreObservationHelper.makeRecord(
+            localId: "msg-socket", conversationId: "conv-rt",
+            content: "received in real-time",
+            createdAt: baseDate.addingTimeInterval(20)
+        )
+        store.apply(records: [r0, r1, socketRecent])
+        XCTAssertEqual(store.messages.map(\.localId), ["msg-a", "msg-b", "msg-socket"])
+
+        // A real-time refresh reads the window (only r0, r1) — must NOT erase
+        // the already-displayed socket message.
+        await store.refreshFromDB(mergeInMemory: true)
+
+        XCTAssertEqual(
+            store.messages.map(\.localId),
+            ["msg-a", "msg-b", "msg-socket"],
+            "real-time refreshFromDB must preserve an already-displayed message absent from the fresh window"
+        )
+    }
+
+    /// Window transitions (jump / restore / paginate) call `refreshFromDB()`
+    /// with the default straight replace so a stale in-memory slice from a
+    /// previous window never pollutes the freshly-loaded one.
+    func test_refreshFromDB_default_replacesEntirely() async throws {
+        let db = try makeInMemoryDatabase()
+        let persistence = MessagePersistenceActor(dbWriter: db)
+        let store = MessageStore(conversationId: "conv-rt2", persistence: persistence)
+
+        let baseDate = Date(timeIntervalSince1970: 1_700_000_000)
+        let r0 = MessageStoreObservationHelper.makeRecord(
+            localId: "msg-a", conversationId: "conv-rt2",
+            content: "first", createdAt: baseDate
+        )
+        try await MessageStoreObservationHelper.insertRecord(r0, into: persistence)
+
+        let stale = MessageStoreObservationHelper.makeRecord(
+            localId: "msg-stale", conversationId: "conv-rt2",
+            content: "stale in-memory only", createdAt: baseDate.addingTimeInterval(5)
+        )
+        store.apply(records: [r0, stale])
+        XCTAssertEqual(store.messages.map(\.localId), ["msg-a", "msg-stale"])
+
+        await store.refreshFromDB()  // default mergeInMemory: false
+
+        XCTAssertEqual(
+            store.messages.map(\.localId), ["msg-a"],
+            "default refreshFromDB must replace entirely (window transitions)"
+        )
+    }
+
     // MARK: - Helpers
 
     private func makeInMemoryDatabase() throws -> DatabaseQueue {

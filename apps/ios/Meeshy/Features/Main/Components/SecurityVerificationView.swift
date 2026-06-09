@@ -15,14 +15,14 @@ struct SecurityVerificationView: View {
                 VStack(spacing: 24) {
                     Image(systemName: "lock.shield.fill")
                         .font(.system(size: 64))
-                        .foregroundColor(Color(hex: "4ECDC4"))
+                        .foregroundColor(MeeshyColors.indigo400)
                         .padding(.top, 40)
 
-                    Text(String(localized: "security.verify.title", defaultValue: "Chiffrement de bout en bout", bundle: .main))
+                    Text(String(localized: "security.verify.title", defaultValue: "End-to-End Encryption", bundle: .main))
                         .font(.title2.bold())
                         .foregroundColor(theme.textPrimary)
 
-                    Text(String(localized: "security.verify.description", defaultValue: "Les messages avec \(conversationName) sont chiffrés de bout en bout.", bundle: .main))
+                    Text(String(localized: "security.verify.description", defaultValue: "Messages with \(conversationName) are end-to-end encrypted.", bundle: .main))
                         .font(.subheadline)
                         .foregroundColor(theme.textSecondary)
                         .multilineTextAlignment(.center)
@@ -41,8 +41,8 @@ struct SecurityVerificationView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { dismiss() }) {
-                        Text(String(localized: "common.done", defaultValue: "Terminé", bundle: .main)).bold()
-                            .foregroundColor(Color(hex: "4ECDC4"))
+                        Text(String(localized: "common.done", defaultValue: "Done", bundle: .main)).bold()
+                            .foregroundColor(MeeshyColors.indigo400)
                     }
                 }
             }
@@ -66,7 +66,7 @@ struct SecurityVerificationView: View {
         }
 
         VStack(spacing: 8) {
-            Text(String(localized: "security.verify.safetyNumber.label", defaultValue: "Numéro de sécurité", bundle: .main))
+            Text(String(localized: "security.verify.safetyNumber.label", defaultValue: "Safety Number", bundle: .main))
                 .font(.caption.weight(.medium))
                 .foregroundColor(theme.textMuted)
                 .textCase(.uppercase)
@@ -78,7 +78,7 @@ struct SecurityVerificationView: View {
                 .padding(.horizontal, 24)
         }
 
-        Text(String(localized: "security.verify.howto", defaultValue: "Pour vérifier, comparez ce numéro avec celui affiché sur l'appareil de \(conversationName), ou scannez son code QR.", bundle: .main))
+        Text(String(localized: "security.verify.howto", defaultValue: "To verify, compare this number with the one shown on \(conversationName)'s device, or scan their QR code.", bundle: .main))
             .font(.caption)
             .foregroundColor(theme.textMuted)
             .multilineTextAlignment(.center)
@@ -94,11 +94,11 @@ struct SecurityVerificationView: View {
                 .font(.system(size: 40))
                 .foregroundColor(theme.textMuted)
 
-            Text(String(localized: "security.verify.unavailable.title", defaultValue: "Vérification non disponible", bundle: .main))
+            Text(String(localized: "security.verify.unavailable.title", defaultValue: "Verification Unavailable", bundle: .main))
                 .font(.headline)
                 .foregroundColor(theme.textSecondary)
 
-            Text(String(localized: "security.verify.unavailable.description", defaultValue: "La vérification du numéro de sécurité sera disponible une fois que les deux participants auront échangé leurs clés de chiffrement.", bundle: .main))
+            Text(String(localized: "security.verify.unavailable.description", defaultValue: "Safety number verification will be available once both participants have exchanged their encryption keys.", bundle: .main))
                 .font(.caption)
                 .foregroundColor(theme.textMuted)
                 .multilineTextAlignment(.center)

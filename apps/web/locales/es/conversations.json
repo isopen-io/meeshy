@@ -118,7 +118,7 @@
       "archive": "Archivar",
       "unarchive": "Desarchivar",
       "pinned": "Conversación fijada",
-      "unpinned": "Conversación desfijada",
+      "unpinned": "Conversación desanclada",
       "muted": "Notificaciones desactivadas",
       "unmuted": "Notificaciones activadas",
       "archived": "Conversación archivada",
@@ -300,7 +300,19 @@
       "configError": "Error al guardar la configuración",
       "saveConfig": "Guardar configuración",
       "selectedReaction": "Reacción seleccionada:",
-      "customReactionPlaceholder": "🎯 Personalizada"
+      "customReactionPlaceholder": "🎯 Personalizada",
+      "descriptionError": "Error al guardar la descripción",
+      "bannerUpdated": "Banner actualizado",
+      "bannerError": "Error al subir el banner",
+      "editTitle": "Editar título",
+      "confirm": "Confirmar",
+      "removeReaction": "Eliminar reacción",
+      "bannerAlt": "Banner",
+      "directConversationBadge": "Conversación directa",
+      "fallbackUser": "Usuario",
+      "reactionAdded": "Reacción {emoji} añadida",
+      "reactionRemoved": "Reacción eliminada",
+      "inviteSearchPlaceholder": "Buscar usuarios..."
     },
     "conversationImage": {
       "title": "Cambiar la imagen de la conversación",
@@ -415,6 +427,49 @@
       "single": "Este archivo ya está agregado",
       "multiple": "{count} archivos ya están agregados"
     },
-    "pasteTooLongTxtCreated": "Texto demasiado largo: se ha creado automáticamente un archivo .txt"
+    "pasteTooLongTxtCreated": "Texto demasiado largo: se ha creado automáticamente un archivo .txt",
+    "filter": {
+      "all": "Todas",
+      "public": "Público",
+      "group": "Grupo",
+      "global": "Global",
+      "direct": "Directo",
+      "unread": "No leídas",
+      "archived": "Archivadas"
+    },
+    "noContacts": "Sin contactos",
+    "noContactsDescription": "Aún no tiene contactos. Conéctese con otros usuarios.",
+    "noNotifications": "Sin notificaciones",
+    "noNotificationsDescription": "Está al día con todas sus notificaciones.",
+    "noArchivedConversations": "Sin conversaciones archivadas",
+    "noArchivedConversationsDescription": "Archive conversaciones para encontrarlas más tarde.",
+    "noSearchResults": "Sin resultados",
+    "noSearchResultsWithQuery": "No se encontraron resultados para \"{query}\". Intente otra búsqueda.",
+    "noSearchResultsDescription": "No se encontraron resultados.",
+    "errorTitle": "Algo salió mal",
+    "errorDescription": "No pudimos cargar los datos. Por favor, inténtelo de nuevo.",
+    "retry": "Reintentar",
+    "reconnecting": "Reconectando...",
+    "clickToReconnect": "Haga clic para reconectar",
+    "participants": {
+      "refreshed": "Estados actualizados",
+      "refreshError": "Error al actualizar",
+      "roleError": "Error al actualizar el rol",
+      "addError": "Error al añadir participante"
+    },
+    "createLinkButton": {
+      "notAuthenticated": "No se puede crear el enlace: usuario no conectado",
+      "noConversation": "No se puede crear el enlace: conversación no identificada",
+      "error": "Error al crear el enlace"
+    },
+    "messageSearch": {
+      "placeholder": "Buscar en la conversación…",
+      "close": "Cerrar búsqueda",
+      "error": "Ocurrió un error al buscar.",
+      "noResults": "Sin resultados"
+    },
+    "pinnedBanner": {
+      "close": "Cerrar mensaje fijado"
+    }
   }
 }

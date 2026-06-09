@@ -19,7 +19,7 @@ interface ConversationPickerProps {
   placeholder?: string;
 }
 
-export function ConversationPicker({ selectedId, onSelect, onClear, label, placeholder = "Chercher une conversation..." }: ConversationPickerProps) {
+export function ConversationPicker({ selectedId, onSelect, onClear, label, placeholder = "Search a conversation..." }: ConversationPickerProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch] = useDebounce(searchTerm, 500);
   const [results, setResults] = useState<Conversation[]>([]);
@@ -117,7 +117,7 @@ export function ConversationPicker({ selectedId, onSelect, onClear, label, place
                   </div>
                 </div>
                 {onClear && (
-                  <Button variant="ghost" size="sm" onClick={onClear} className="h-8 w-8 p-0 text-indigo-500 hover:bg-indigo-100 shrink-0">
+                  <Button variant="ghost" size="sm" onClick={onClear} className="h-8 w-8 p-0 text-indigo-500 hover:bg-indigo-100 shrink-0" aria-label="Clear selection">
                     <X className="h-4 w-4" />
                   </Button>
                 )}

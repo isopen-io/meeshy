@@ -52,6 +52,11 @@ export class MessageReadStatusService {
    */
   private static recentActionCache = new Map<string, number>();
   private static readonly DEDUP_TTL_MS = 2000;
+  private static readonly dedupCleanupInterval = (() => {
+    const handle = setInterval(() => MessageReadStatusService.cleanupDedupCache(), 30_000);
+    handle.unref?.();
+    return handle;
+  })();
 
   constructor(private readonly prisma: PrismaClient) {}
 
@@ -164,36 +169,126 @@ export class MessageReadStatusService {
   }
 
   /**
+   * Batched variant for multiple participants in the same conversation.
+   * Reduces N×3 DB queries to 1 cursor batch + 1 participant batch + N parallel counts.
+   * Returns a Map<participantId, unreadCount>. Accepts pre-resolved participant rows
+   * (id + joinedAt) to avoid redundant participant lookups.
+   */
+  async getUnreadCountsForParticipants(
+    participants: ReadonlyArray<{ id: string; joinedAt: Date | null }>,
+    conversationId: string,
+    senderId: string
+  ): Promise<Map<string, number>> {
+    if (participants.length === 0) return new Map();
+
+    try {
+      const participantIds = participants.map((p) => p.id);
+
+      // Batch fetch all cursors in a single query
+      const cursors = await this.prisma.conversationReadCursor.findMany({
+        where: { participantId: { in: participantIds }, conversationId },
+        select: { participantId: true, lastReadAt: true },
+      });
+      const cursorMap = new Map(cursors.map((c) => [c.participantId, c.lastReadAt]));
+
+      // Run message counts in parallel, one per participant
+      const results = await Promise.all(
+        participants.map(async (p) => {
+          const lastReadAt = cursorMap.get(p.id) ?? null;
+          const floor: Date | null = lastReadAt ?? p.joinedAt ?? null;
+          const count = await this.prisma.message.count({
+            where: {
+              conversationId,
+              deletedAt: null,
+              senderId: { not: senderId },
+              ...(floor ? { createdAt: { gt: floor } } : {}),
+            },
+          });
+          return [p.id, count] as const;
+        })
+      );
+
+      return new Map(results);
+    } catch (error) {
+      logger.error("[MessageReadStatus] Error batch-computing unread counts", error);
+      return new Map(participants.map((p) => [p.id, 0]));
+    }
+  }
+
+  /**
    * Calcule le unreadCount pour plusieurs conversations d'un utilisateur.
-   * Batched variant of `getUnreadCount` — same fresh-compute contract,
-   * same stale-cursor avoidance. Returns 0 for any conversation in which
-   * the participant cannot be resolved.
+   * Version optimisée iter-4 : 2 + N requêtes au lieu de 4 × N.
+   *   1. participant.findMany  — résout les Participants du user (1 query)
+   *   2. cursor.findMany       — batch tous les cursors (1 query)
+   *   3. message.count × N    — comptage en parallèle (N queries)
+   * Returns 0 for any conversation in which the participant cannot be resolved.
+   */
+  async getUnreadCountsForUser(
+    userId: string,
+    conversationIds: string[]
+  ): Promise<Map<string, number>> {
+    if (conversationIds.length === 0) return new Map();
+    try {
+      const unreadCounts = new Map<string, number>();
+      conversationIds.forEach((id) => unreadCounts.set(id, 0));
+
+      // 1. Batch participant lookup for this user across all conversations
+      const participants = await this.prisma.participant.findMany({
+        where: {
+          conversationId: { in: conversationIds },
+          isActive: true,
+          OR: [{ id: userId }, { userId }],
+        },
+        select: { id: true, conversationId: true, joinedAt: true },
+      });
+
+      if (participants.length === 0) return unreadCounts;
+
+      // 2. Batch cursor lookup for all resolved participants
+      const participantIds = participants.map((p) => p.id);
+      const cursors = await this.prisma.conversationReadCursor.findMany({
+        where: { participantId: { in: participantIds } },
+        select: { participantId: true, lastReadAt: true },
+      });
+      const cursorMap = new Map(cursors.map((c) => [c.participantId, c.lastReadAt]));
+
+      // 3. Parallel message counts — one per participant (= one per conversation)
+      await Promise.all(
+        participants.map(async (p) => {
+          const lastReadAt = cursorMap.get(p.id) ?? null;
+          const floor: Date | null = lastReadAt ?? p.joinedAt ?? null;
+          const count = await this.prisma.message.count({
+            where: {
+              conversationId: p.conversationId,
+              deletedAt: null,
+              senderId: { not: p.id },
+              ...(floor ? { createdAt: { gt: floor } } : {}),
+            },
+          });
+          unreadCounts.set(p.conversationId, count);
+        })
+      );
+
+      return unreadCounts;
+    } catch (error) {
+      logger.error("[MessageReadStatus] Error getting unread counts for user", error);
+      return new Map();
+    }
+  }
+
+  /**
+   * @deprecated Utiliser getUnreadCountsForUser(userId, conversationIds) — iter-4.
+   * Conservé pour la compatibilité des appelants qui passent participantIds.
    */
   async getUnreadCountsForConversations(
     participantIds: string[],
     conversationIds: string[]
   ): Promise<Map<string, number>> {
-    try {
-      const unreadCounts = new Map<string, number>();
-      conversationIds.forEach((id) => unreadCounts.set(id, 0));
-
-      // Compute per-conversation in parallel. Each call resolves the
-      // participant fresh and counts via `createdAt > floor`.
-      await Promise.all(conversationIds.map(async (convId) => {
-        for (const participantIdOrUserId of participantIds) {
-          const count = await this.getUnreadCount(participantIdOrUserId, convId);
-          if (count > 0) {
-            unreadCounts.set(convId, count);
-            return;
-          }
-        }
-      }));
-
-      return unreadCounts;
-    } catch (error) {
-      logger.error("[MessageReadStatus] Error getting unread counts", error);
-      return new Map();
-    }
+    // Délègue vers la nouvelle méthode en passant le premier participantId comme userId.
+    // En pratique l'appelant dans core.ts résout déjà un userId unique.
+    const userId = participantIds[0];
+    if (!userId) return new Map();
+    return this.getUnreadCountsForUser(userId, conversationIds);
   }
 
   /**

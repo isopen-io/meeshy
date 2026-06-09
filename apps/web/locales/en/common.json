@@ -2,7 +2,7 @@
   "common": {
     "languageNames": {
       "en": "English",
-      "fr": "French", 
+      "fr": "French",
       "pt": "Portuguese",
       "es": "Spanish",
       "de": "German",
@@ -195,6 +195,24 @@
       "addReaction": "Add reaction",
       "reportSuccess": "Report submitted successfully",
       "reportError": "Error submitting report"
-    }
-  }
+    },
+    "errorBoundary": {
+      "title": "Oops! Something went wrong",
+      "description": "An unexpected error occurred. Please try again.",
+      "details": "Error details",
+      "reload": "Reload page"
+    },
+    "download": "Download",
+    "play": "Play",
+    "pause": "Pause",
+    "mute": "Mute",
+    "unmute": "Unmute",
+    "enterFullscreen": "Enter fullscreen",
+    "exitFullscreen": "Exit fullscreen",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "rotate": "Rotate"
+  },
+  "copied": "Copied",
+  "never": "Never"
 }

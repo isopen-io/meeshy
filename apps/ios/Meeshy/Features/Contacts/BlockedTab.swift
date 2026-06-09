@@ -74,12 +74,12 @@ struct BlockedTab: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(user.name)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
 
                 Text("@\(user.username)")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.caption.weight(.medium))
                     .foregroundColor(theme.textMuted)
             }
 
@@ -89,7 +89,7 @@ struct BlockedTab: View {
                 unblockTarget = user
             } label: {
                 Text(String(localized: "contacts.blocked.unblock", defaultValue: "Debloquer", bundle: .main))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundColor(MeeshyColors.warning)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
@@ -115,7 +115,7 @@ struct BlockedTab: View {
                 .foregroundColor(theme.textMuted.opacity(0.4))
                 .accessibilityHidden(true)
             Text(String(localized: "contacts.blocked.empty", defaultValue: "Aucun utilisateur bloque", bundle: .main))
-                .font(.system(size: 16, weight: .semibold))
+                .font(.callout.weight(.semibold))
                 .foregroundColor(theme.textMuted)
             Spacer()
         }

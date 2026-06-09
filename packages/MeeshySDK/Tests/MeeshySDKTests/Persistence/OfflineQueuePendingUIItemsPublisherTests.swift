@@ -224,6 +224,53 @@ final class OfflineQueuePendingUIItemsPublisherTests: XCTestCase {
         XCTAssertEqual(last.first?.status, .exhausted)
     }
 
+    // MARK: - markAsRead is a background read-receipt, never a user-facing op
+
+    /// `markAsRead` rows (`countsTowardSyncIndicator == false`) MUST NOT surface
+    /// in the SyncPill snapshot. They are idempotent background read receipts:
+    /// surfacing them shows the user "Synchronisation des lus" for conversations
+    /// they merely opened, contradicting `pendingCountPublisher` (which already
+    /// excludes them) and polluting the rotation with phantom operations.
+    func test_publisher_excludes_markAsRead_kind() async throws {
+        let now = Date(timeIntervalSince1970: 1_750_000_000)
+        try await pool.write { db in
+            // A genuine user op that MUST stay visible.
+            try OutboxRecord(
+                id: "ofq_send_visible",
+                kind: .sendMessage,
+                conversationId: "conv-mix",
+                clientMessageId: "cid_send_visible",
+                payload: Self.encodedSendPayload(content: "real message", cmid: "cid_send_visible"),
+                status: .pending,
+                createdAt: now,
+                updatedAt: now,
+                nextAttemptAt: now
+            ).insert(db)
+            // A background read receipt that MUST be filtered out.
+            try OutboxRecord(
+                id: "ofqm_markread",
+                kind: .markAsRead,
+                conversationId: "conv-mix",
+                clientMessageId: "cmid_markread",
+                payload: Data(),
+                status: .pending,
+                createdAt: now.addingTimeInterval(1),
+                updatedAt: now.addingTimeInterval(1),
+                nextAttemptAt: now.addingTimeInterval(1)
+            ).insert(db)
+        }
+        await queue.refreshForTesting()
+
+        let recorder = Recorder<[OutboxUIItem]>()
+        let cancellable = queue.pendingUIItemsPublisher.sink { recorder.append($0) }
+        try await Task.sleep(nanoseconds: 200_000_000)
+        cancellable.cancel()
+
+        let last = recorder.snapshot().last ?? []
+        XCTAssertEqual(last.map(\.id), ["ofq_send_visible"],
+            "markAsRead rows MUST be excluded from the SyncPill snapshot; only the real sendMessage stays")
+    }
+
     // MARK: - Helpers
 
     private static func encodedSendPayload(content: String, cmid: String) -> Data {

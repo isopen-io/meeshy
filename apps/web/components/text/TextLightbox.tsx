@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useI18n } from '@/hooks/use-i18n';
 import { X, Download, Copy, Check, WrapText, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -25,6 +26,8 @@ export const TextLightbox: React.FC<TextLightboxProps> = ({
   isOpen,
   onClose
 }) => {
+  const { t } = useI18n('common');
+  const { t: tViewers } = useI18n('viewers');
   const [content, setContent] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
@@ -187,11 +190,11 @@ export const TextLightbox: React.FC<TextLightboxProps> = ({
     try {
       await navigator.clipboard.writeText(content);
       setIsCopied(true);
-      toast.success('Copié dans le presse-papiers');
+      toast.success(tViewers('text.copied'));
       setTimeout(() => setIsCopied(false), 2000);
     } catch (error) {
       console.error('Error copying:', error);
-      toast.error('Impossible de copier');
+      toast.error(tViewers('text.copyError'));
     }
   };
 
@@ -229,7 +232,7 @@ export const TextLightbox: React.FC<TextLightboxProps> = ({
                 toggleWordWrap();
               }}
               className={`text-white hover:bg-white/10 w-8 h-8 sm:w-10 sm:h-10 ${wordWrap ? 'bg-white/20' : ''}`}
-              aria-label={wordWrap ? 'Désactiver le retour à la ligne' : 'Activer le retour à la ligne'}
+              aria-label={wordWrap ? tViewers('text.disableWordWrap') : tViewers('text.enableWordWrap')}
               disabled={isLoading || hasError}
             >
               <WrapText className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -244,7 +247,7 @@ export const TextLightbox: React.FC<TextLightboxProps> = ({
                 handleCopy();
               }}
               className="text-white hover:bg-white/10 w-8 h-8 sm:w-10 sm:h-10"
-              aria-label="Copier le contenu"
+              aria-label={tViewers('text.copy')}
               disabled={isLoading || hasError}
             >
               {isCopied ? (
@@ -268,7 +271,7 @@ export const TextLightbox: React.FC<TextLightboxProps> = ({
                 document.body.removeChild(link);
               }}
               className="text-white hover:bg-white/10 w-8 h-8 sm:w-10 sm:h-10"
-              aria-label="Télécharger le fichier"
+              aria-label={tViewers('text.download')}
             >
               <Download className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
@@ -282,7 +285,7 @@ export const TextLightbox: React.FC<TextLightboxProps> = ({
                 onClose();
               }}
               className="text-white hover:bg-white/10 w-8 h-8 sm:w-10 sm:h-10"
-              aria-label="Fermer"
+              aria-label={t('common.close')}
             >
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
@@ -302,7 +305,7 @@ export const TextLightbox: React.FC<TextLightboxProps> = ({
             ) : hasError ? (
               <div className="flex flex-col items-center justify-center h-full gap-4 text-gray-400">
                 <FileText className="w-16 h-16" />
-                <span className="text-lg">Impossible de charger le fichier</span>
+                <span className="text-lg">{tViewers('text.loadError')}</span>
               </div>
             ) : (
               <SyntaxHighlighter

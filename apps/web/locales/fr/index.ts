@@ -17,6 +17,8 @@ import profile from './profile.json';
 import joinPage from './joinPage.json';
 import chat from './chat.json';
 import attachments from './attachments.json';
+import viewers from './viewers.json';
+import admin from './admin.json';
 
 export default {
   common,
@@ -38,6 +40,8 @@ export default {
   joinPage,
   chat,
   attachments,
+  viewers,
+  admin,
 };
 
 export {
@@ -60,5 +64,7 @@ export {
   joinPage,
   chat,
   attachments,
+  viewers,
+  admin,
 };
 

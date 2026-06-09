@@ -394,13 +394,13 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
               {isLoading ? (
                 <div className="p-4 text-center">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                  <p className="mt-2 text-sm text-muted-foreground">Chargement...</p>
+                  <p className="mt-2 text-sm text-muted-foreground">{tGroups('list.loadingInProgress')}</p>
                 </div>
               ) : groups.length === 0 ? (
                 <div className="p-4 text-center text-muted-foreground">
                   <Users className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>Aucune communauté</p>
-                  <p className="text-xs">Créez-en une pour commencer</p>
+                  <p>{tGroups('noGroups')}</p>
+                  <p className="text-xs">{tGroups('noGroupsDescription')}</p>
                 </div>
               ) : (
                 <div className="p-2">
@@ -511,12 +511,12 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
                       {selectedGroup.isPrivate ? (
                         <Badge variant="secondary" className="text-xs">
                           <Lock className="h-3 w-3 mr-1" />
-                          Privée
+                          {tGroups('visibility.private')}
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="text-xs">
                           <Globe className="h-3 w-3 mr-1" />
-                          Publique
+                          {tGroups('visibility.public')}
                         </Badge>
                       )}
                     </div>
@@ -540,7 +540,7 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="sm">
                     <UserPlus className="h-4 w-4 mr-1" />
-                    Inviter
+                    {tGroups('actions.invite')}
                   </Button>
                   <Button 
                     variant="outline" 
@@ -559,21 +559,21 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <MessageSquare className="h-5 w-5" />
-                    À propos
+                    {tGroups('details.about')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="text-muted-foreground">
-                    {selectedGroup.description || 'Aucune description disponible.'}
+                    {selectedGroup.description || tGroups('details.noDescription')}
                   </p>
                   
                   <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
                     <div className="flex items-center gap-1">
                       <Users className="h-4 w-4" />
-                      {selectedGroup._count?.members || 0} membres
+                      {selectedGroup._count?.members || 0} {tGroups('members')}
                     </div>
                     <div>
-                      Créée le {new Date(selectedGroup.createdAt).toLocaleDateString()}
+                      {tGroups('details.createdOn') + ' '}{new Date(selectedGroup.createdAt).toLocaleDateString()}
                     </div>
                   </div>
                 </CardContent>
@@ -587,9 +587,9 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center">
               <Users className="h-16 w-16 mx-auto mb-4 text-muted-foreground/50" />
-              <h3 className="text-lg font-medium mb-2">Sélectionnez une communauté</h3>
+              <h3 className="text-lg font-medium mb-2">{tGroups('list.selectCommunity')}</h3>
               <p className="text-muted-foreground">
-                Choisissez une communauté dans la liste pour voir ses détails
+                {tGroups('list.selectCommunityDescription')}
               </p>
             </div>
           </div>

@@ -16,6 +16,7 @@ import { vscDarkPlus, vs } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { useTheme } from 'next-themes';
 import type { UploadedAttachmentResponse } from '@meeshy/shared/types/attachment';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/useI18n';
 
 interface TextViewerProps {
   attachment: UploadedAttachmentResponse;
@@ -37,6 +38,7 @@ export const TextViewer: React.FC<TextViewerProps> = ({
   className = '',
   onOpenLightbox
 }) => {
+  const { t } = useI18n('viewers');
   const [content, setContent] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
@@ -64,7 +66,7 @@ export const TextViewer: React.FC<TextViewerProps> = ({
       } catch (error) {
         console.error('Erreur chargement fichier texte:', error);
         setHasError(true);
-        setErrorMessage('Impossible de charger le fichier');
+        setErrorMessage(t('text.loadError'));
       } finally {
         setIsLoading(false);
       }
@@ -77,11 +79,11 @@ export const TextViewer: React.FC<TextViewerProps> = ({
     try {
       await navigator.clipboard.writeText(content);
       setIsCopied(true);
-      toast.success('Copié dans le presse-papiers');
+      toast.success(t('text.copied'));
       setTimeout(() => setIsCopied(false), 2000);
     } catch (error) {
       console.error('Erreur copie:', error);
-      toast.error('Impossible de copier');
+      toast.error(t('text.copyError'));
     }
   };
 
@@ -270,7 +272,7 @@ export const TextViewer: React.FC<TextViewerProps> = ({
             size="sm"
             variant="ghost"
             className="w-8 h-8 p-0"
-            title={wordWrap ? 'Désactiver le retour à la ligne' : 'Activer le retour à la ligne'}
+            title={wordWrap ? t('text.disableWordWrap') : t('text.enableWordWrap')}
             disabled={isLoading || hasError}
           >
             <WrapText className={`w-4 h-4 ${wordWrap ? 'text-blue-600' : 'text-gray-400'}`} />
@@ -282,7 +284,7 @@ export const TextViewer: React.FC<TextViewerProps> = ({
             size="sm"
             variant="ghost"
             className="w-8 h-8 p-0"
-            title="Copier le contenu"
+            title={t('text.copy')}
             disabled={isLoading || hasError}
           >
             {isCopied ? (
@@ -299,7 +301,7 @@ export const TextViewer: React.FC<TextViewerProps> = ({
               size="sm"
               variant="ghost"
               className="w-8 h-8 p-0"
-              title="Ouvrir en plein écran"
+              title={t('text.fullscreen')}
             >
               <Maximize className="w-4 h-4" />
             </Button>
@@ -310,7 +312,7 @@ export const TextViewer: React.FC<TextViewerProps> = ({
             href={attachment.fileUrl}
             download={attachment.originalName}
             className="flex-shrink-0 p-1.5 hover:bg-white/50 dark:hover:bg-gray-700/50 rounded-full transition-colors duration-200"
-            title="Télécharger"
+            title={t('text.download')}
             onClick={(e) => e.stopPropagation()}
           >
             <Download className="w-4 h-4 text-gray-600 dark:text-gray-300" />

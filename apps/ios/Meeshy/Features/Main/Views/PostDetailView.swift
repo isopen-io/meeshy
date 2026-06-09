@@ -402,7 +402,7 @@ struct PostDetailView: View {
                 Task { await viewModel.loadMoreComments(postId) }
             } label: {
                 Text(String(localized: "feed.post.detail.load_more", defaultValue: "Charger plus", bundle: .main))
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundColor(MeeshyColors.indigo500)
             }
             .padding()
@@ -598,7 +598,7 @@ struct PostDetailView: View {
                 router.pop()
             } label: {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.callout.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(theme.inputBackground))
@@ -633,7 +633,7 @@ struct PostDetailView: View {
                 }
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.callout.weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(theme.inputBackground))
@@ -667,7 +667,7 @@ struct PostDetailView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(post.author)
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.subheadline.weight(.bold))
                         .foregroundColor(theme.textPrimary)
                         .onTapGesture {
                             selectedProfileUser = .from(feedPost: post)
@@ -675,19 +675,19 @@ struct PostDetailView: View {
 
                     HStack(spacing: 4) {
                         Text(post.timestamp, style: .relative)
-                            .font(.system(size: 12))
+                            .font(.caption)
                             .foregroundColor(theme.textMuted)
 
                         let flags = buildAvailableFlags()
                         if !flags.isEmpty || (post.translations != nil && !post.translations!.isEmpty) {
-                            Text("·").font(.system(size: 12)).foregroundColor(theme.textMuted)
+                            Text("·").font(.caption).foregroundColor(theme.textMuted)
 
                             ForEach(flags, id: \.self) { code in
                                 let display = LanguageDisplay.from(code: code)
                                 let isActive = code == secondaryLangCode
                                 VStack(spacing: 1) {
                                     Text(display?.flag ?? "?")
-                                        .font(.system(size: isActive ? 12 : 10))
+                                        .font(isActive ? .caption : .caption2)
                                         .scaleEffect(isActive ? 1.05 : 1.0)
                                     if isActive {
                                         RoundedRectangle(cornerRadius: 1)
@@ -701,7 +701,7 @@ struct PostDetailView: View {
 
                             if post.translations != nil, !post.translations!.isEmpty {
                                 Image(systemName: "translate")
-                                    .font(.system(size: 10, weight: .medium))
+                                    .font(.caption2.weight(.medium))
                                     .foregroundColor(MeeshyColors.indigo400)
                                     .onTapGesture {
                                         HapticFeedback.light()
@@ -722,21 +722,21 @@ struct PostDetailView: View {
             Group {
                 if truncation.isTruncated && !isTextExpanded {
                     Text(truncation.text + "... ")
-                        .font(.system(size: 16))
+                        .font(.callout)
                         .foregroundColor(theme.textPrimary)
                     + Text(String(localized: "feed.post.detail.see_more", defaultValue: "voir plus", bundle: .main))
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.callout.weight(.semibold))
                         .foregroundColor(Color(hex: accentColor))
                 } else if truncation.isTruncated && isTextExpanded {
                     Text(effectiveContent + " ")
-                        .font(.system(size: 16))
+                        .font(.callout)
                         .foregroundColor(theme.textPrimary)
                     + Text(String(localized: "feed.post.detail.see_less", defaultValue: "voir moins", bundle: .main))
-                        .font(.system(size: 16, weight: .semibold))
+                        .font(.callout.weight(.semibold))
                         .foregroundColor(Color(hex: accentColor))
                 } else {
                     Text(effectiveContent)
-                        .font(.system(size: 16))
+                        .font(.callout)
                         .foregroundColor(theme.textPrimary)
                 }
             }
@@ -767,14 +767,14 @@ struct PostDetailView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         if let display {
                             HStack(spacing: 4) {
-                                Text(display.flag).font(.system(size: 11))
+                                Text(display.flag).font(.caption)
                                 Text(display.name)
-                                    .font(.system(size: 10, weight: .semibold))
+                                    .font(.caption2.weight(.semibold))
                                     .foregroundColor(langColor)
                             }
                         }
                         Text(content)
-                            .font(.system(size: 14))
+                            .font(.subheadline)
                             .foregroundColor(theme.textPrimary.opacity(0.8))
                             .fixedSize(horizontal: false, vertical: true)
                     }
@@ -815,11 +815,11 @@ struct PostDetailView: View {
                     )
                     VStack(alignment: .leading, spacing: 2) {
                         Text(repost.author)
-                            .font(.system(size: 13, weight: .semibold))
+                            .font(.footnote.weight(.semibold))
                             .foregroundColor(theme.accentText(repost.authorColor))
                         HStack(spacing: 4) {
                             Text(repost.timestamp, style: .relative)
-                                .font(.system(size: 11))
+                                .font(.caption2)
                                 .foregroundColor(theme.textMuted)
                             // Language flags for repost translations
                             if let translations = repost.translations, !translations.isEmpty {
@@ -839,7 +839,7 @@ struct PostDetailView: View {
             if !repost.content.isEmpty {
                 let repostDisplayContent = repostEffectiveContent(repost)
                 Text(repostDisplayContent)
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(6)
                     .multilineTextAlignment(.leading)
@@ -861,14 +861,14 @@ struct PostDetailView: View {
                         VStack(alignment: .leading, spacing: 3) {
                             if let display {
                                 HStack(spacing: 3) {
-                                    Text(display.flag).font(.system(size: 10))
+                                    Text(display.flag).font(.caption2)
                                     Text(display.name)
-                                        .font(.system(size: 9, weight: .semibold))
+                                        .font(.caption2.weight(.semibold))
                                         .foregroundColor(langColor)
                                 }
                             }
                             Text(secondaryText)
-                                .font(.system(size: 13))
+                                .font(.footnote)
                                 .foregroundColor(theme.textPrimary.opacity(0.8))
                                 .fixedSize(horizontal: false, vertical: true)
                         }
@@ -935,9 +935,9 @@ struct PostDetailView: View {
                 if repost.likes > 0 {
                     HStack(spacing: 4) {
                         Image(systemName: "heart.fill")
-                            .font(.system(size: 10))
+                            .font(.caption2)
                         Text("\(repost.likes)")
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.caption2.weight(.medium))
                     }
                     .foregroundColor(theme.accentText(repost.authorColor).opacity(0.7))
                 }
@@ -995,13 +995,13 @@ struct PostDetailView: View {
         }()
 
         if !flags.isEmpty {
-            Text("·").font(.system(size: 10)).foregroundColor(theme.textMuted)
+            Text("·").font(.caption2).foregroundColor(theme.textMuted)
             ForEach(flags, id: \.self) { code in
                 let display = LanguageDisplay.from(code: code)
                 let isActive = code == repostSecondaryLangCode
                 VStack(spacing: 1) {
                     Text(display?.flag ?? "?")
-                        .font(.system(size: isActive ? 11 : 9))
+                        .font(isActive ? .caption : .caption2)
                         .scaleEffect(isActive ? 1.05 : 1.0)
                     if isActive {
                         RoundedRectangle(cornerRadius: 1)
@@ -1026,7 +1026,7 @@ struct PostDetailView: View {
                 }
             }
             Image(systemName: "translate")
-                .font(.system(size: 9, weight: .medium))
+                .font(.caption2.weight(.medium))
                 .foregroundColor(MeeshyColors.indigo400)
         }
     }
@@ -1053,12 +1053,12 @@ struct PostDetailView: View {
                 HStack(spacing: 5) {
                     let heartColor: Color = detailIsLiked ? MeeshyColors.error : (detailLikeCount > 0 ? Color(hex: accentColor) : theme.textSecondary)
                     Image(systemName: detailIsLiked || detailLikeCount > 0 ? "heart.fill" : "heart")
-                        .font(.system(size: 18))
+                        .font(.headline)
                         .foregroundColor(heartColor)
                         .scaleEffect(likeScale)
                         .opacity(postHeartInFlightIds.contains(postId) ? 0.5 : 1.0)
                     Text("\(detailLikeCount)")
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.caption.weight(.medium))
                         .foregroundColor(detailIsLiked ? MeeshyColors.error : (detailLikeCount > 0 ? Color(hex: accentColor) : theme.textMuted))
                         .contentTransition(.numericText())
                 }
@@ -1069,10 +1069,10 @@ struct PostDetailView: View {
 
             HStack(spacing: 5) {
                 Image(systemName: "bubble.right")
-                    .font(.system(size: 17))
+                    .font(.body)
                     .foregroundColor(Color(hex: accentColor))
                 Text("\(post.commentCount)")
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.caption.weight(.medium))
                     .foregroundColor(theme.textMuted)
             }
 
@@ -1084,7 +1084,7 @@ struct PostDetailView: View {
                 HapticFeedback.light()
             } label: {
                 Image(systemName: isPostReposted ? "arrow.2.squarepath.circle.fill" : "arrow.2.squarepath")
-                    .font(.system(size: 17))
+                    .font(.body)
                     .foregroundColor(isPostReposted ? MeeshyColors.success : theme.textSecondary)
                     .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
                     .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isPostReposted)
@@ -1109,7 +1109,7 @@ struct PostDetailView: View {
                 HapticFeedback.light()
             } label: {
                 Image(systemName: isPostBookmarked ? "bookmark.fill" : "bookmark")
-                    .font(.system(size: 17))
+                    .font(.body)
                     .foregroundColor(isPostBookmarked ? MeeshyColors.warning : theme.textSecondary)
                     .scaleEffect(isBookmarkInFlight ? 0.85 : 1.0)
                     .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isPostBookmarked)
@@ -1126,7 +1126,7 @@ struct PostDetailView: View {
             } label: {
                 ZStack {
                     Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 17))
+                        .font(.body)
                         .foregroundColor(theme.textSecondary)
                         .opacity(isShareInFlight ? 0 : 1)
                     if isShareInFlight {
@@ -1237,21 +1237,21 @@ struct PostDetailView: View {
                         .fill(Color(hex: media.thumbnailColor).opacity(0.2))
                         .frame(width: 48, height: 56)
                     Image(systemName: "doc.fill")
-                        .font(.system(size: 24))
+                        .font(.title3)
                         .foregroundColor(Color(hex: media.thumbnailColor))
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text(media.fileName ?? String(localized: "feed.post.detail.document", defaultValue: "Document", bundle: .main))
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
                     HStack(spacing: 8) {
                         if let size = media.fileSize {
-                            Text(size).font(.system(size: 12)).foregroundColor(theme.textMuted)
+                            Text(size).font(.caption).foregroundColor(theme.textMuted)
                         }
                         if let pages = media.pageCount {
                             Text("\u{2022}").foregroundColor(theme.textMuted)
-                            Text("\(pages) \(String(localized: "feed.post.detail.pages", defaultValue: "pages", bundle: .main))").font(.system(size: 12)).foregroundColor(theme.textMuted)
+                            Text("\(pages) \(String(localized: "feed.post.detail.pages", defaultValue: "pages", bundle: .main))").font(.caption).foregroundColor(theme.textMuted)
                         }
                     }
                 }
@@ -1271,16 +1271,16 @@ struct PostDetailView: View {
                         .fill(Color(hex: media.thumbnailColor).opacity(0.2))
                         .frame(width: 64, height: 64)
                     Image(systemName: "mappin.circle.fill")
-                        .font(.system(size: 28))
+                        .font(.title2)
                         .foregroundColor(Color(hex: media.thumbnailColor))
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text(media.locationName ?? String(localized: "feed.post.detail.location", defaultValue: "Location", bundle: .main))
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundColor(theme.textPrimary)
                     if let lat = media.latitude, let lon = media.longitude {
                         Text(String(format: "%.4f, %.4f", lat, lon))
-                            .font(.system(size: 11))
+                            .font(.caption2)
                             .foregroundColor(theme.textMuted)
                     }
                 }
@@ -1333,7 +1333,7 @@ struct PostDetailView: View {
                                 if count > 4 {
                                     Color.black.opacity(0.5)
                                     Text("+\(count - 4)")
-                                        .font(.system(size: 20, weight: .bold))
+                                        .font(.headline.weight(.bold))
                                         .foregroundColor(.white)
                                 }
                             }
@@ -1367,7 +1367,7 @@ struct PostDetailView: View {
                     Circle().fill(.ultraThinMaterial).frame(width: 36, height: 36)
                     Circle().fill(Color(hex: accentColor).opacity(0.85)).frame(width: 30, height: 30)
                     Image(systemName: "play.fill")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.caption.bold())
                         .foregroundColor(.white)
                         .offset(x: 1)
                 }
@@ -1390,12 +1390,12 @@ struct PostDetailView: View {
     private var commentsHeader: some View {
         HStack(spacing: 8) {
             Text(String(localized: "feed.post.detail.comments", defaultValue: "Commentaires", bundle: .main))
-                .font(.system(size: 14, weight: .bold))
+                .font(.subheadline.weight(.bold))
                 .foregroundColor(theme.textPrimary)
 
             if let post = displayPost, post.commentCount > 0 {
                 Text("\(post.commentCount)")
-                    .font(.system(size: 11, weight: .bold))
+                    .font(.caption2.weight(.bold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 2)
@@ -1420,11 +1420,11 @@ struct PostDetailView: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(reply.author)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.caption.weight(.semibold))
                         .foregroundColor(Color(hex: reply.authorColor))
 
                     Text(reply.displayContent)
-                        .font(.system(size: 12))
+                        .font(.caption)
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(1)
                 }
@@ -1437,7 +1437,7 @@ struct PostDetailView: View {
                     }
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .bold))
+                        .font(.caption2.bold())
                         .foregroundColor(theme.textMuted)
                         .frame(width: 24, height: 24)
                         .background(Circle().fill(theme.mode.isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))

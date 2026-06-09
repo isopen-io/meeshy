@@ -79,16 +79,24 @@ describe('POST mark-as-read / mark-as-received — numeric data.markedCount cont
     // Happy-path defaults — individual tests override as needed.
     mockResolveConversationId.mockResolvedValue(CONVERSATION_ID);
     mockShouldShowReadReceipts.mockResolvedValue(false); // suppress Socket.IO broadcast
-    mockPrisma.participant.findFirst.mockResolvedValue({ id: PARTICIPANT_ID });
+    // getUnreadCount() resolves the participant via findFirst, so it must carry
+    // both id and joinedAt (the read floor when no cursor lastReadAt is set).
+    mockPrisma.participant.findFirst.mockResolvedValue({
+      id: PARTICIPANT_ID,
+      joinedAt: new Date('2020-01-01T00:00:00Z')
+    });
     mockPrisma.participant.findUnique.mockResolvedValue(null); // skip notification sync
     mockPrisma.participant.findMany.mockResolvedValue([]);
     mockPrisma.message.findFirst.mockResolvedValue({ id: LATEST_MESSAGE_ID, createdAt: new Date() });
-    mockPrisma.message.count.mockResolvedValue(0);
+    // getUnreadCount() now derives markedCount from a message.count() over the
+    // read floor (cursor.lastReadAt ?? participant.joinedAt) — no longer a
+    // cached cursor.unreadCount field.
+    mockPrisma.message.count.mockResolvedValue(UNREAD_COUNT);
     mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
     mockPrisma.conversationReadCursor.update.mockResolvedValue({});
     mockPrisma.conversationReadCursor.findMany.mockResolvedValue([]);
-    // getUnreadCount() reads the cursor's cached unreadCount.
-    mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ unreadCount: UNREAD_COUNT });
+    // No cursor yet → read floor falls back to participant.joinedAt.
+    mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
   });
 
   it('mark-as-received returns a numeric data.markedCount, never a message string', async () => {

@@ -4,6 +4,7 @@ import * as React from 'react';
 import { Check, ChevronsUpDown, Search, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { useI18n } from '@/hooks/useI18n';
 import { Input } from '@/components/ui/input';
 import {
   Popover,
@@ -21,7 +22,7 @@ interface LanguageSelectProps {
   languages: Language[];
   value: string;
   onValueChange: (value: string) => void;
-  placeholder?: string;
+  placeholder?: string | undefined;
   disabled?: boolean;
   className?: string;
 }
@@ -30,10 +31,11 @@ export function LanguageSelect({
   languages,
   value,
   onValueChange,
-  placeholder = "Sélectionner une langue",
+  placeholder,
   disabled = false,
   className,
 }: LanguageSelectProps) {
+  const { t } = useI18n('components');
   const [open, setOpen] = React.useState(false);
   const [searchQuery, setSearchQuery] = React.useState('');
 
@@ -70,7 +72,7 @@ export function LanguageSelect({
               <span>{selectedLanguage.name}</span>
             </span>
           ) : (
-            placeholder
+            placeholder ?? t('languageSelect.selectPlaceholder')
           )}
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
@@ -81,7 +83,7 @@ export function LanguageSelect({
           <div className="flex items-center border-b px-3 py-2">
             <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
             <Input
-              placeholder="Rechercher une langue..."
+              placeholder={t('languageSelect.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="border-0 h-8 focus-visible:ring-0 focus-visible:ring-offset-0 px-0"
@@ -100,7 +102,7 @@ export function LanguageSelect({
           <div className="max-h-[200px] overflow-y-auto">
             {filteredLanguages.length === 0 ? (
               <div className="py-6 text-center text-sm text-muted-foreground">
-                Aucune langue trouvée
+                {t('languageSelect.notFound')}
               </div>
             ) : (
               <div className="p-1">

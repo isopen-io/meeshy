@@ -20,6 +20,7 @@ import { Loader2, Save, Key } from 'lucide-react';
 import { InfoIcon } from './InfoIcon';
 import { agentAdminService, type LlmConfigData, type LlmConfigUpdate } from '@/services/agent-admin.service';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/useI18n';
 
 const PROVIDERS = [
   { value: 'openai', label: 'OpenAI' },
@@ -40,6 +41,7 @@ const MODELS: Record<string, { value: string; label: string }[]> = {
 };
 
 export function AgentLlmTab() {
+  const { t } = useI18n('admin');
   const [config, setConfig] = useState<LlmConfigData | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -73,7 +75,7 @@ export function AgentLlmTab() {
           });
         }
       } catch {
-        toast.error('Erreur lors du chargement de la config LLM');
+        toast.error(t('agent.toasts.llmConfigLoadError'));
       } finally {
         setLoading(false);
       }
@@ -95,13 +97,13 @@ export function AgentLlmTab() {
         const invalidation = (response as unknown as { cacheInvalidation?: { anyChannelSucceeded?: boolean } })
           .cacheInvalidation;
         if (invalidation && invalidation.anyChannelSucceeded === false) {
-          toast.warning('Config LLM sauvegardée — le service agent n\'a pas confirmé le rechargement (peut nécessiter un redémarrage)');
+          toast.warning(t('agent.toasts.llmConfigSavedPending'));
         } else {
-          toast.success('Configuration LLM mise à jour');
+          toast.success(t('agent.toasts.llmConfigUpdated'));
         }
       }
     } catch {
-      toast.error('Erreur lors de la sauvegarde');
+      toast.error(t('agent.toasts.llmConfigSaveError'));
     } finally {
       setSaving(false);
     }
@@ -193,7 +195,7 @@ export function AgentLlmTab() {
 
         {/* Parameters */}
         <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
-          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Paramètres de génération</h3>
+          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">{t('llm.generationSettings')}</h3>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center">
@@ -229,7 +231,7 @@ export function AgentLlmTab() {
 
         {/* Budget */}
         <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
-          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Gestion du Budget</h3>
+          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">{t('llm.budgetManagement')}</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <div className="flex items-center">

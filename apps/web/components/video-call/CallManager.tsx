@@ -13,6 +13,7 @@ import { CallNotification } from './CallNotification';
 import { VideoCallInterface } from '@/components/video-calls/VideoCallInterface';
 import { logger } from '@/utils/logger';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
 import type {
   CallInitiatedEvent,
   CallParticipantJoinedEvent,
@@ -26,6 +27,7 @@ import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-even
 const CALL_TIMEOUT_MS = 30000; // 30 seconds
 
 export function CallManager() {
+  const { t } = useI18n('calls');
   const { user, isChecking } = useAuth();
   const {
     currentCall,
@@ -364,7 +366,7 @@ export function CallManager() {
       logger.info('[CallManager]', 'Call accepted - callId: ' + incomingCall.callId);
     } catch (error: unknown) {
       logger.error('[CallManager]', 'Failed to accept call: ' + (error?.message || 'Unknown error'));
-      toast.error('Failed to join call');
+      toast.error(t('calls.toasts.joinFailed'));
       setIncomingCall(null);
     }
   }, [incomingCall, setCurrentCall, setInCall, setIceServers, clearCallTimeout]);

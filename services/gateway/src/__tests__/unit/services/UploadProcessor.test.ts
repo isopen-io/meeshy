@@ -23,6 +23,7 @@ import path from 'path';
 const mockMetadataManager = {
   extractMetadata: jest.fn(),
   generateThumbnail: jest.fn(),
+  generateImageVariants: jest.fn(),
   generateThumbnailFromBuffer: jest.fn(),
   extractImageMetadataFromBuffer: jest.fn(),
 } as any;
@@ -116,7 +117,10 @@ describe('UploadProcessor', () => {
       height: 1080,
       thumbnailGenerated: false,
     });
-    mockMetadataManager.generateThumbnail.mockResolvedValue('2024/01/test/test_image_uuid_thumb.jpg');
+    mockMetadataManager.generateThumbnail.mockResolvedValue('2024/01/test/test_image_uuid_thumb.webp');
+    // D4: responsive WebP variants. Default to none (source small enough that no
+    // downscaled variant is worthwhile); a dedicated test exercises the populated path.
+    mockMetadataManager.generateImageVariants.mockResolvedValue([]);
     mockMetadataManager.generateThumbnailFromBuffer.mockResolvedValue(Buffer.from('thumbnail'));
     mockMetadataManager.extractImageMetadataFromBuffer.mockResolvedValue({
       width: 1920,
@@ -334,6 +338,70 @@ describe('UploadProcessor', () => {
       await processor.uploadFile(file, testUserId, false, testMessageId);
 
       expect(mockMetadataManager.generateThumbnail).not.toHaveBeenCalled();
+    });
+
+    it('should generate responsive WebP variants for image files (D4)', async () => {
+      const file = createTestFile({ mimeType: 'image/jpeg' });
+
+      await processor.uploadFile(file, testUserId, false, testMessageId);
+
+      expect(mockMetadataManager.generateImageVariants).toHaveBeenCalled();
+    });
+
+    it('should not generate responsive variants for non-image files', async () => {
+      const file = createTestFile({
+        mimeType: 'application/pdf',
+        filename: 'document.pdf',
+      });
+
+      await processor.uploadFile(file, testUserId, false, testMessageId);
+
+      expect(mockMetadataManager.generateImageVariants).not.toHaveBeenCalled();
+    });
+
+    it('should persist generated image variants on the attachment (D4 srcset)', async () => {
+      const file = createTestFile({ mimeType: 'image/jpeg' });
+
+      mockMetadataManager.generateImageVariants.mockResolvedValueOnce([
+        { path: '2024/01/test/test_image_uuid_640w.webp', width: 640, height: 360, size: 4096 },
+        { path: '2024/01/test/test_image_uuid_1080w.webp', width: 1080, height: 608, size: 9216 },
+      ]);
+
+      await processor.uploadFile(file, testUserId, false, testMessageId);
+
+      expect(mockPrismaClient.messageAttachment.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            imageVariants: [
+              {
+                width: 640,
+                height: 360,
+                url: processor.getAttachmentPath('2024/01/test/test_image_uuid_640w.webp'),
+                size: 4096,
+                format: 'webp',
+              },
+              {
+                width: 1080,
+                height: 608,
+                url: processor.getAttachmentPath('2024/01/test/test_image_uuid_1080w.webp'),
+                size: 9216,
+                format: 'webp',
+              },
+            ],
+          }),
+        })
+      );
+    });
+
+    it('should leave image variants undefined when the source is too small for variants', async () => {
+      const file = createTestFile({ mimeType: 'image/jpeg' });
+
+      mockMetadataManager.generateImageVariants.mockResolvedValueOnce([]);
+
+      await processor.uploadFile(file, testUserId, false, testMessageId);
+
+      const createCall = mockPrismaClient.messageAttachment.create.mock.calls[0][0] as any;
+      expect(createCall.data.imageVariants).toBeUndefined();
     });
 
     it('should handle anonymous upload', async () => {

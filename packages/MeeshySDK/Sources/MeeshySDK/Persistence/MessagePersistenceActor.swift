@@ -790,9 +790,19 @@ public actor MessagePersistenceActor {
 
     /// Append a reaction to a persisted message, deduplicating by emoji+participantId.
     /// The GRDB change triggers store observation so the view re-renders.
+    /// Appends a reaction row to a message.
+    ///
+    /// `maxCount` is an optional authoritative cap on the number of rows for
+    /// `emoji` (the server's `aggregation.count` from a `reaction:added`
+    /// broadcast). When set, the append is skipped if the message already holds
+    /// `maxCount` rows for that emoji — this stops a server echo of the user's
+    /// OWN reaction (keyed by the resolved `Participant.id`) from double-counting
+    /// on top of the optimistic row (keyed by the `currentUserId` sentinel),
+    /// which made a single tap render as "2". `nil` (the default) keeps the
+    /// legacy unbounded behaviour for the optimistic and rollback write paths.
     public func appendReaction(localId: String, reactionId: String,
                                 messageId: String, participantId: String?,
-                                emoji: String) throws {
+                                emoji: String, maxCount: Int? = nil) throws {
         var affectedConversationId: String?
         var didMutate = false
         try dbWriter.write { db in
@@ -806,6 +816,10 @@ public actor MessagePersistenceActor {
                 $0.emoji == emoji && $0.participantId == participantId
             }
             guard !alreadyExists else { return }
+            if let cap = maxCount {
+                let currentEmojiCount = reactions.filter { $0.emoji == emoji }.count
+                guard currentEmojiCount < cap else { return }
+            }
             let reaction = MeeshyReaction(id: reactionId, messageId: messageId,
                                           participantId: participantId, emoji: emoji)
             reactions.append(reaction)
@@ -1188,6 +1202,19 @@ public actor MessagePersistenceActor {
                     // On construit un ReplyReference riche pour BubbleStoryReplyPreview.
                     if let story = api.storyReplyTo {
                         let trimmed = story.previewText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        // Réponse à un mood : rendu dédié (emoji + contenu + date).
+                        if let emoji = story.moodEmoji {
+                            let ref = ReplyReference(
+                                messageId: story.id,
+                                authorName: "",
+                                previewText: trimmed,
+                                isMe: false,
+                                isStoryReply: true,
+                                storyPublishedAt: story.createdAt,
+                                moodEmoji: emoji
+                            )
+                            return try? encoder.encode(ref)
+                        }
                         let ref = ReplyReference(
                             messageId: story.id,
                             authorName: "",
@@ -1237,6 +1264,10 @@ public actor MessagePersistenceActor {
                 let mentionedUsersJson: Data? = api.mentionedUsers.flatMap {
                     $0.isEmpty ? nil : try? encoder.encode($0)
                 }
+
+                // Structured call-summary metadata for system call messages —
+                // persisted so the rich call bubble survives a cache reload.
+                let callSummaryJson: Data? = api.callSummary.flatMap { try? encoder.encode($0) }
 
                 var effectFlags: UInt32 = api.effectFlags ?? 0
                 if effectFlags == 0 {
@@ -1406,6 +1437,7 @@ public actor MessagePersistenceActor {
                     existing.replyToId = api.replyToId ?? existing.replyToId
                     existing.storyReplyToId = api.storyReplyToId ?? existing.storyReplyToId
                     existing.mentionedUsersJson = mentionedUsersJson
+                    existing.callSummaryJson = callSummaryJson ?? existing.callSummaryJson
                     existing.effectFlags = effectFlags
                     existing.updatedAt = api.updatedAt ?? Date()
                     existing.changeVersion += 1
@@ -1474,7 +1506,8 @@ public actor MessagePersistenceActor {
                         cachedTimestampInline: nil,
                         layoutVersion: 0, layoutMaxWidth: nil,
                         cachedTimeString: timeString,
-                        changeVersion: 0
+                        changeVersion: 0,
+                        callSummaryJson: callSummaryJson
                     )
                     try record.insert(db)
                     // `save` (upsert): a dangling PendingIdRecord from a

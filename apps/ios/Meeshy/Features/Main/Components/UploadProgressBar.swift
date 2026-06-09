@@ -23,14 +23,14 @@ struct UploadProgressBar: View {
         VStack(spacing: 6) {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.up.circle.fill")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundColor(Color(hex: accentColor))
                     .rotationEffect(.degrees(percentage >= 100 ? 360 : 0))
                     .animation(.easeInOut(duration: 0.5), value: percentage)
 
                 if let name = currentFileName {
                     Text(name)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.caption2.weight(.medium))
                         .foregroundColor(theme.textSecondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -39,7 +39,7 @@ struct UploadProgressBar: View {
                 Spacer()
 
                 Text("\(percentage)%")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .font(.system(.caption, design: .monospaced).weight(.bold))
                     .foregroundColor(Color(hex: accentColor))
                     .contentTransition(.numericText())
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: percentage)
@@ -67,11 +67,11 @@ struct UploadProgressBar: View {
 
             HStack {
                 Text("\(progress.completedFiles)/\(progress.totalFiles) fichiers")
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.caption2.weight(.medium))
                     .foregroundColor(theme.textMuted)
                 Spacer()
                 Text(formatBytes(progress.uploadedBytes) + " / " + formatBytes(progress.totalBytes))
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .font(.system(.caption2, design: .monospaced).weight(.medium))
                     .foregroundColor(theme.textMuted)
             }
         }

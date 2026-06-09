@@ -258,7 +258,7 @@ struct TrackingLinkDetailView: View {
             VStack(alignment: .trailing, spacing: 2) {
                 Text(click.clickedAt.formatted(.relative(presentation: .named)))
                     .font(.system(size: 11)).foregroundColor(theme.textMuted)
-                Circle().fill(click.redirectStatus == "confirmed" ? Color.green : Color.red)
+                Circle().fill(click.redirectStatus == "confirmed" ? MeeshyColors.success : MeeshyColors.error)
                     .frame(width: 6, height: 6)
             }
         }

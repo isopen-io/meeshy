@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback, useMemo, useEffect, memo } from 'react';
+import { useState, useCallback, useMemo, useEffect, useRef, memo } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import { toast } from 'sonner';
 import { MessageSquare } from 'lucide-react';
 import { BubbleMessage } from './BubbleMessage';
@@ -53,8 +54,8 @@ export const MessagesDisplay = memo(function MessagesDisplay({
   currentUser,
   userLanguage,
   usedLanguages,
-  emptyStateMessage = "Aucun message pour le moment",
-  emptyStateDescription = "Soyez le premier à publier !",
+  emptyStateMessage,
+  emptyStateDescription,
   reverseOrder = false,
   className = "",
   _onTranslation,
@@ -72,7 +73,7 @@ export const MessagesDisplay = memo(function MessagesDisplay({
   onCancelMessage,
   addTranslatingState,
   isTranslating,
-  _containerRef,
+  containerRef,
   onLoadMore,
   hasMore = false,
   isLoadingMore = false
@@ -310,10 +311,38 @@ export const MessagesDisplay = memo(function MessagesDisplay({
     });
   }, [displayMessages, userLanguage]);
 
+  const useVirtual = Boolean(containerRef);
+
+  const virtualizer = useVirtualizer({
+    count: useVirtual ? displayMessages.length : 0,
+    getScrollElement: () => containerRef?.current ?? null,
+    estimateSize: () => 80,
+    overscan: 5,
+    measureElement: (el) => el.getBoundingClientRect().height,
+  });
+
+  const virtualItems = virtualizer.getVirtualItems();
+
+  const loadMoreTriggeredRef = useRef(false);
+
+  useEffect(() => {
+    if (!useVirtual || !hasMore || !onLoadMore || isLoadingMore) {
+      loadMoreTriggeredRef.current = false;
+      return;
+    }
+    if (virtualItems.length === 0) return;
+    const firstVisible = virtualItems[0];
+    if (firstVisible && firstVisible.index === 0 && !loadMoreTriggeredRef.current) {
+      loadMoreTriggeredRef.current = true;
+      onLoadMore();
+    } else if (firstVisible && firstVisible.index > 0) {
+      loadMoreTriggeredRef.current = false;
+    }
+  }, [virtualItems, hasMore, onLoadMore, isLoadingMore, useVirtual]);
+
   if (isLoadingMessages && displayMessages.length === 0) {
     return (
       <div className="flex flex-col gap-4 p-6 animate-pulse">
-        {/* Skeleton message bubbles alternating sides */}
         {Array.from({ length: 5 }).map((_, i) => {
           const isRight = i % 3 === 0;
           return (
@@ -337,85 +366,147 @@ export const MessagesDisplay = memo(function MessagesDisplay({
     return (
       <div className="flex flex-col items-center justify-center p-8 text-center">
         <MessageSquare className="h-12 w-12 text-muted-foreground mb-4" />
-        <h3 className="text-lg font-medium mb-2">{emptyStateMessage}</h3>
-        <p className="text-sm text-muted-foreground">{emptyStateDescription}</p>
+        <h3 className="text-lg font-medium mb-2">{emptyStateMessage ?? t('emptyStateMessage')}</h3>
+        <p className="text-sm text-muted-foreground">{emptyStateDescription ?? t('emptyStateDescription')}</p>
+      </div>
+    );
+  }
+
+  if (!useVirtual) {
+    return (
+      <div className={`${className} bubble-message-container flex flex-col pb-6 max-w-full overflow-visible`}>
+        {displayMessages.map((message, index) => {
+          const state = messageDisplayStates[message.id] ?? {
+            currentDisplayLanguage: message.originalLanguage,
+            isTranslating: false,
+          };
+          const prevMsg = index > 0 ? displayMessages[index - 1] : null;
+          const nextMsg = index < displayMessages.length - 1 ? displayMessages[index + 1] : null;
+          const senderId = message.sender?.id;
+          const isFirstInGroup = !prevMsg || prevMsg.sender?.id !== senderId;
+          const isLastInGroup = !nextMsg || nextMsg.sender?.id !== senderId;
+          const localStatus = (message as unknown as Record<string, unknown>)._localStatus as string | undefined;
+          const tempId = (message as unknown as Record<string, unknown>)._tempId as string | undefined;
+          const isSending = localStatus === 'sending';
+          const isFailed = localStatus === 'failed';
+          return (
+            <div key={message.id} className={isSending || isFailed ? 'opacity-70' : undefined}>
+              <BubbleMessage
+                message={message as unknown}
+                currentUser={currentUser}
+                userLanguage={userLanguage}
+                usedLanguages={usedLanguages}
+                onForceTranslation={handleForceTranslation}
+                onEditMessage={onEditMessage}
+                onDeleteMessage={onDeleteMessage}
+                onReplyMessage={onReplyMessage}
+                onNavigateToMessage={onNavigateToMessage}
+                onImageClick={onImageClick}
+                onLanguageSwitch={handleLanguageSwitch}
+                currentDisplayLanguage={state.currentDisplayLanguage}
+                isTranslating={checkIsTranslating(message.id, state.currentDisplayLanguage)}
+                translationError={state.translationError}
+                conversationType={conversationType}
+                userRole={userRole}
+                conversationId={conversationId}
+                isAnonymous={isAnonymous}
+                currentAnonymousUserId={currentAnonymousUserId}
+                isFirstInGroup={isFirstInGroup}
+                isLastInGroup={isLastInGroup}
+              />
+              {isFailed && tempId && onRetryMessage && onCancelMessage && (
+                <FailedMessageBar
+                  tempId={tempId}
+                  content={message.content || (message as unknown as Record<string, unknown>).originalContent as string || ''}
+                  originalLanguage={message.originalLanguage || 'fr'}
+                  replyToId={(message as unknown as Record<string, unknown>).replyToId as string | undefined}
+                  onRetry={onRetryMessage}
+                  onCancel={onCancelMessage}
+                  t={t}
+                />
+              )}
+            </div>
+          );
+        })}
       </div>
     );
   }
 
   return (
-    <div className={`${className} bubble-message-container flex flex-col pb-6 max-w-full overflow-visible`}>
-      {displayMessages.map((message, index) => {
-        const state = messageDisplayStates[message.id] || {
-          currentDisplayLanguage: message.originalLanguage,
-          isTranslating: false
-        };
-
-        const prevMsg = index > 0 ? displayMessages[index - 1] : null;
-        const nextMsg = index < displayMessages.length - 1 ? displayMessages[index + 1] : null;
-        const senderId = message.sender?.id;
-        const prevSenderId = prevMsg ? prevMsg.sender?.id : null;
-        const nextSenderId = nextMsg ? nextMsg.sender?.id : null;
-        const isFirstInGroup = !prevSenderId || prevSenderId !== senderId;
-        const isLastInGroup = !nextSenderId || nextSenderId !== senderId;
-
-        const localStatus = (message as unknown)._localStatus as string | undefined;
-        const tempId = (message as unknown)._tempId as string | undefined;
-        const isSending = localStatus === 'sending';
-        const isFailed = localStatus === 'failed';
-
-        return (
-          <div key={message.id} className={isSending || isFailed ? 'opacity-70' : undefined}>
-            <BubbleMessage
-              message={message as unknown}
-              currentUser={currentUser}
-              userLanguage={userLanguage}
-              usedLanguages={usedLanguages}
-              onForceTranslation={handleForceTranslation}
-              onEditMessage={onEditMessage}
-              onDeleteMessage={onDeleteMessage}
-              onReplyMessage={onReplyMessage}
-              onNavigateToMessage={onNavigateToMessage}
-              onImageClick={onImageClick}
-              onLanguageSwitch={handleLanguageSwitch}
-              currentDisplayLanguage={state.currentDisplayLanguage}
-              isTranslating={checkIsTranslating(message.id, state.currentDisplayLanguage)}
-              translationError={state.translationError}
-              conversationType={conversationType}
-              userRole={userRole}
-              conversationId={conversationId}
-              isAnonymous={isAnonymous}
-              currentAnonymousUserId={currentAnonymousUserId}
-              isFirstInGroup={isFirstInGroup}
-              isLastInGroup={isLastInGroup}
-            />
-            {isFailed && tempId && onRetryMessage && onCancelMessage && (
-              <FailedMessageBar
-                tempId={tempId}
-                content={message.content || (message as unknown).originalContent || ''}
-                originalLanguage={message.originalLanguage || 'fr'}
-                replyToId={(message as unknown).replyToId}
-                onRetry={onRetryMessage}
-                onCancel={onCancelMessage}
-                t={t}
+    <div
+      className={`${className} bubble-message-container max-w-full overflow-visible`}
+      style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          transform: `translateY(${virtualItems[0]?.start ?? 0}px)`,
+        }}
+      >
+        {virtualItems.map((virtualRow) => {
+          const message = displayMessages[virtualRow.index];
+          if (!message) return null;
+          const state = messageDisplayStates[message.id] ?? {
+            currentDisplayLanguage: message.originalLanguage,
+            isTranslating: false,
+          };
+          const prevMsg = virtualRow.index > 0 ? displayMessages[virtualRow.index - 1] : null;
+          const nextMsg = virtualRow.index < displayMessages.length - 1 ? displayMessages[virtualRow.index + 1] : null;
+          const senderId = message.sender?.id;
+          const isFirstInGroup = !prevMsg || prevMsg.sender?.id !== senderId;
+          const isLastInGroup = !nextMsg || nextMsg.sender?.id !== senderId;
+          const localStatus = (message as unknown as Record<string, unknown>)._localStatus as string | undefined;
+          const tempId = (message as unknown as Record<string, unknown>)._tempId as string | undefined;
+          const isSending = localStatus === 'sending';
+          const isFailed = localStatus === 'failed';
+          return (
+            <div
+              key={message.id}
+              data-index={virtualRow.index}
+              ref={virtualizer.measureElement}
+              className={isSending || isFailed ? 'opacity-70' : undefined}
+            >
+              <BubbleMessage
+                message={message as unknown}
+                currentUser={currentUser}
+                userLanguage={userLanguage}
+                usedLanguages={usedLanguages}
+                onForceTranslation={handleForceTranslation}
+                onEditMessage={onEditMessage}
+                onDeleteMessage={onDeleteMessage}
+                onReplyMessage={onReplyMessage}
+                onNavigateToMessage={onNavigateToMessage}
+                onImageClick={onImageClick}
+                onLanguageSwitch={handleLanguageSwitch}
+                currentDisplayLanguage={state.currentDisplayLanguage}
+                isTranslating={checkIsTranslating(message.id, state.currentDisplayLanguage)}
+                translationError={state.translationError}
+                conversationType={conversationType}
+                userRole={userRole}
+                conversationId={conversationId}
+                isAnonymous={isAnonymous}
+                currentAnonymousUserId={currentAnonymousUserId}
+                isFirstInGroup={isFirstInGroup}
+                isLastInGroup={isLastInGroup}
               />
-            )}
-          </div>
-        );
-      })}
-
-      {/* Load more button for infinite scroll - EN BAS */}
-      {hasMore && onLoadMore && (
-        <div key="messages-load-more" className="flex justify-center py-6 mt-4">
-          <button
-            onClick={onLoadMore}
-            disabled={isLoadingMore}
-            className="px-6 py-2 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-border"
-          >
-            {isLoadingMore ? 'Chargement...' : 'Charger plus de messages'}
-          </button>
-        </div>
-      )}
+              {isFailed && tempId && onRetryMessage && onCancelMessage && (
+                <FailedMessageBar
+                  tempId={tempId}
+                  content={message.content || (message as unknown as Record<string, unknown>).originalContent as string || ''}
+                  originalLanguage={message.originalLanguage || 'fr'}
+                  replyToId={(message as unknown as Record<string, unknown>).replyToId as string | undefined}
+                  onRetry={onRetryMessage}
+                  onCancel={onCancelMessage}
+                  t={t}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 });

@@ -90,7 +90,7 @@ struct MiniAudioPlayerBar: View {
         // the coordinator itself swaps the active audio.
         .animation(.spring(response: 0.4, dampingFraction: 0.8),
                    value: displayedContext)
-        .onChange(of: coordinator.activeContext) { newValue in
+        .adaptiveOnChange(of: coordinator.activeContext) { _, newValue in
             handleContextChange(newValue)
         }
         .onAppear {
@@ -121,25 +121,25 @@ struct MiniAudioPlayerBar: View {
             // Avatar conv (fallback indigo gradient placeholder)
             Circle()
                 .fill(LinearGradient(
-                    colors: [Color(hex: "6366F1"), Color(hex: "4338CA")],
+                    colors: [MeeshyColors.indigo500, MeeshyColors.indigo700],
                     startPoint: .topLeading, endPoint: .bottomTrailing))
                 .frame(width: 36, height: 36)
                 .overlay(
                     Text(String(context.senderName.prefix(1)).uppercased())
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.footnote.weight(.bold))
                         .foregroundColor(.white))
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(context.senderName)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.subheadline.weight(.semibold))
                     .lineLimit(1)
                 Text(context.conversationName)
-                    .font(.system(size: 11))
+                    .font(.caption2)
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                 ProgressView(value: max(0, min(1, coordinator.progress)))
                     .progressViewStyle(.linear)
-                    .tint(Color(hex: "6366F1"))
+                    .tint(MeeshyColors.indigo500)
                     .frame(height: 2)
             }
 
@@ -147,7 +147,7 @@ struct MiniAudioPlayerBar: View {
 
             Button(action: { coordinator.togglePlayPause() }) {
                 Image(systemName: coordinator.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.body.weight(.bold))
                     .foregroundColor(.primary)
                     .frame(width: 32, height: 32)
             }
@@ -160,7 +160,7 @@ struct MiniAudioPlayerBar: View {
 
             Button(action: { coordinator.playNext() }) {
                 Image(systemName: "forward.fill")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundColor(.secondary)
                     .frame(width: 28, height: 28)
             }
@@ -169,7 +169,7 @@ struct MiniAudioPlayerBar: View {
 
             Button(action: { coordinator.close() }) {
                 Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .bold))
+                    .font(.caption.weight(.bold))
                     .foregroundColor(.secondary)
                     .frame(width: 24, height: 24)
             }

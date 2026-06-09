@@ -300,7 +300,19 @@
       "configError": "Erro ao salvar configuração",
       "saveConfig": "Salvar configuração",
       "selectedReaction": "Reação selecionada:",
-      "customReactionPlaceholder": "🎯 Personalizada"
+      "customReactionPlaceholder": "🎯 Personalizada",
+      "descriptionError": "Erro ao salvar a descrição",
+      "bannerUpdated": "Banner atualizado",
+      "bannerError": "Erro ao enviar o banner",
+      "editTitle": "Editar título",
+      "confirm": "Confirmar",
+      "removeReaction": "Remover reação",
+      "bannerAlt": "Banner",
+      "directConversationBadge": "Conversa direta",
+      "fallbackUser": "Usuário",
+      "reactionAdded": "Reação {emoji} adicionada",
+      "reactionRemoved": "Reação removida",
+      "inviteSearchPlaceholder": "Pesquisar usuários..."
     },
     "conversationImage": {
       "title": "Alterar imagem da conversa",
@@ -415,6 +427,49 @@
       "single": "Este arquivo já foi adicionado",
       "multiple": "{count} arquivos já foram adicionados"
     },
-    "pasteTooLongTxtCreated": "Texto muito longo: um arquivo .txt foi criado automaticamente"
+    "pasteTooLongTxtCreated": "Texto muito longo: um arquivo .txt foi criado automaticamente",
+    "filter": {
+      "all": "Todas",
+      "public": "Público",
+      "group": "Grupo",
+      "global": "Global",
+      "direct": "Direto",
+      "unread": "Não lidas",
+      "archived": "Arquivadas"
+    },
+    "noContacts": "Sem contatos",
+    "noContactsDescription": "Você ainda não tem contatos. Conecte-se com outros usuários.",
+    "noNotifications": "Sem notificações",
+    "noNotificationsDescription": "Você está em dia com todas as suas notificações.",
+    "noArchivedConversations": "Sem conversas arquivadas",
+    "noArchivedConversationsDescription": "Arquive conversas para encontrá-las mais tarde.",
+    "noSearchResults": "Sem resultados",
+    "noSearchResultsWithQuery": "Nenhum resultado para \"{query}\". Tente outra pesquisa.",
+    "noSearchResultsDescription": "Nenhum resultado encontrado.",
+    "errorTitle": "Algo deu errado",
+    "errorDescription": "Não conseguimos carregar os dados. Por favor, tente novamente.",
+    "retry": "Tentar novamente",
+    "reconnecting": "Reconectando...",
+    "clickToReconnect": "Clique para reconectar",
+    "participants": {
+      "refreshed": "Status atualizados",
+      "refreshError": "Erro ao atualizar",
+      "roleError": "Erro ao atualizar o cargo",
+      "addError": "Erro ao adicionar participante"
+    },
+    "createLinkButton": {
+      "notAuthenticated": "Não é possível criar o link: usuário não conectado",
+      "noConversation": "Não é possível criar o link: conversa não identificada",
+      "error": "Erro ao criar o link"
+    },
+    "messageSearch": {
+      "placeholder": "Pesquisar na conversa…",
+      "close": "Fechar pesquisa",
+      "error": "Ocorreu um erro na pesquisa.",
+      "noResults": "Sem resultados"
+    },
+    "pinnedBanner": {
+      "close": "Fechar mensagem fixada"
+    }
   }
 }

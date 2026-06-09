@@ -217,7 +217,12 @@
         "customDestinationLanguage": "Langue de destination personnalisée",
         "customDestinationLanguageDescription": "Langue spécifique pour la traduction automatique (optionnel)",
         "selectLanguage": "Sélectionner une langue",
-        "none": "Aucune"
+        "none": "Aucune",
+        "systemLanguagePlaceholder": "Sélectionnez votre langue système",
+        "regionalLanguagePlaceholder": "Sélectionnez votre langue régionale",
+        "customLanguagePlaceholder": "Sélectionnez une langue personnalisée (optionnel)",
+        "configurationTitle": "Configuration des langues",
+        "configurationDescription": "Définissez vos langues système et régionale"
       },
       "autoTranslation": {
         "title": "Options de traduction automatique",
@@ -233,7 +238,8 @@
         "translateToCustomDescription": "Traduit les messages vers {flag} {language} uniquement",
         "noCustomLanguage": "Aucune langue personnalisée définie - définissez-en une ci-dessus",
         "tip": "Astuce :",
-        "tipDescription": "Si aucune option n'est sélectionnée, les messages seront traduits dans toutes vos langues configurées (système + régionale + personnalisée)."
+        "tipDescription": "Si aucune option n'est sélectionnée, les messages seront traduits dans toutes vos langues configurées (système + régionale + personnalisée).",
+        "settingsTitle": "Paramètres de traduction"
       },
       "preview": {
         "title": "Aperçu de la configuration",
@@ -519,7 +525,8 @@
         "transcription": "Erreur de transcription",
         "creation": "Erreur lors de la création du profil",
         "consent": "Erreur lors de la mise à jour du consentement",
-        "delete": "Erreur lors de la suppression"
+        "delete": "Erreur lors de la suppression",
+        "noRecording": "Aucun enregistrement disponible"
       },
       "consentUpdated": "Consentement mis à jour",
       "transcriptionComplete": "Transcription terminée",
@@ -529,112 +536,8 @@
       "noConsent": "Activez le consentement d'enregistrement vocal ci-dessus pour créer votre profil."
     },
     "betaPlayground": {
-      "title": "Beta Playground - Modèles IA Edge",
-      "description": "Testez et expérimentez avec des modèles IA fonctionnant directement dans votre navigateur",
-      "enableEdgeModels": "Activer les modèles Edge",
-      "enableToTest": "Activez les modèles Edge pour commencer à tester les fonctionnalités IA du navigateur",
-      "tabs": {
-        "llm": "LLM Edge",
-        "llmShort": "LLM",
-        "translation": "Traduction",
-        "translationShort": "Trad.",
-        "transcription": "Transcription",
-        "transcriptionShort": "Audio",
-        "tts": "Synthèse vocale",
-        "ttsShort": "TTS"
-      },
-      "llm": {
-        "title": "LLM Edge - Génération de texte dans le navigateur",
-        "description": "Testez la génération de texte avec le modèle IA intégré de Chrome fonctionnant entièrement dans votre navigateur",
-        "inputLabel": "Votre prompt",
-        "inputPlaceholder": "Posez une question ou donnez une instruction...",
-        "outputLabel": "Réponse générée",
-        "notAvailableTitle": "LLM Edge non disponible",
-        "notAvailableMessage": "Cette fonctionnalité nécessite Chrome Canary avec le flag Built-in AI activé. Visitez chrome://flags/#optimization-guide-on-device-model pour l'activer."
-      },
-      "translation": {
-        "title": "Traduction navigateur",
-        "description": "Traduisez du texte en utilisant l'API de traduction native du navigateur",
-        "sourceLanguage": "Langue source",
-        "targetLanguage": "Langue cible",
-        "inputLabel": "Texte à traduire",
-        "inputPlaceholder": "Entrez le texte à traduire...",
-        "outputLabel": "Traduction",
-        "notAvailableTitle": "API de traduction non disponible",
-        "notAvailableMessage": "Cette fonctionnalité nécessite Chrome 125+ avec l'API de traduction activée. Elle peut encore être en développement."
-      },
-      "transcription": {
-        "title": "Reconnaissance vocale",
-        "description": "Convertissez la parole en texte en utilisant l'API Web Speech",
-        "recording": "Enregistrement en cours...",
-        "outputLabel": "Transcription",
-        "notAvailableTitle": "Reconnaissance vocale non disponible",
-        "notAvailableMessage": "Votre navigateur ne supporte pas l'API Web Speech. Essayez d'utiliser Chrome ou Edge."
-      },
-      "tts": {
-        "title": "Synthèse vocale",
-        "description": "Convertissez du texte en parole en utilisant la synthèse vocale du navigateur",
-        "voiceLabel": "Voix",
-        "selectVoice": "Sélectionner une voix",
-        "inputLabel": "Texte à prononcer",
-        "inputPlaceholder": "Entrez le texte à convertir en parole...",
-        "speaking": "En cours de lecture...",
-        "notAvailableTitle": "Synthèse vocale non disponible",
-        "notAvailableMessage": "Votre navigateur ne supporte pas l'API Speech Synthesis."
-      },
-      "actions": {
-        "test": "Tester",
-        "generating": "Génération...",
-        "translating": "Traduction...",
-        "startRecording": "Démarrer l'enregistrement",
-        "stopRecording": "Arrêter l'enregistrement",
-        "speak": "Lire",
-        "stopSpeaking": "Arrêter"
-      },
-      "metrics": {
-        "status": "État",
-        "statusValues": {
-          "idle": "Inactif",
-          "loading": "Chargement...",
-          "running": "En cours...",
-          "success": "Succès",
-          "error": "Erreur"
-        },
-        "latency": "Latence",
-        "tokensPerSecond": "Tokens/sec",
-        "charactersProcessed": "Caractères",
-        "error": "Erreur"
-      },
-      "capabilities": {
-        "available": "Disponible",
-        "notAvailable": "Non disponible"
-      },
-      "compatibility": {
-        "title": "Compatibilité navigateur",
-        "description": "Vérifiez quelles fonctionnalités IA Edge sont supportées par votre navigateur",
-        "webLLM": "Web LLM (IA intégrée Chrome)",
-        "translation": "API de traduction",
-        "speechRecognition": "Reconnaissance vocale",
-        "speechSynthesis": "Synthèse vocale",
-        "note": "Note : Certaines fonctionnalités peuvent nécessiter des versions spécifiques du navigateur ou des flags expérimentaux. Les modèles IA Edge fonctionnent entièrement dans votre navigateur pour une confidentialité et une vitesse maximales."
-      },
-      "errors": {
-        "emptyInput": "Veuillez d'abord saisir du texte",
-        "llmNotAvailable": "L'API Web LLM n'est pas disponible dans votre navigateur",
-        "llmFailed": "Échec de la génération de texte",
-        "translationNotAvailable": "L'API de traduction n'est pas disponible dans votre navigateur",
-        "translationFailed": "Échec de la traduction",
-        "transcriptionNotAvailable": "La reconnaissance vocale n'est pas disponible dans votre navigateur",
-        "transcriptionFailed": "Échec de la transcription audio",
-        "ttsNotAvailable": "La synthèse vocale n'est pas disponible dans votre navigateur",
-        "ttsFailed": "Échec de la lecture du texte"
-      },
-      "success": {
-        "llm": "Texte généré avec succès",
-        "translation": "Texte traduit avec succès",
-        "transcriptionStarted": "Enregistrement démarré",
-        "tts": "Lecture terminée"
-      }
+      "featureEnabled": "Fonctionnalité bêta activée",
+      "featureDisabled": "Fonctionnalité bêta désactivée"
     },
     "noUserConnected": "Aucun utilisateur connecté",
     "application": {

@@ -135,6 +135,11 @@
         "initializing": "Inicializando..."
       }
     },
+    "languageSelect": {
+      "notFound": "Nenhum idioma encontrado",
+      "selectPlaceholder": "Selecionar um idioma",
+      "searchPlaceholder": "Pesquisar um idioma..."
+    },
     "bubbleStream": {
       "title": "Fluxo de mensagens",
       "loading": "Carregando mensagens...",
@@ -190,6 +195,19 @@
           }
         }
       }
+    },
+    "post": {
+      "pinned": "Fixado",
+      "menu": "Menu da publicação",
+      "edit": "Editar",
+      "pin": "Fixar",
+      "unpin": "Desafixar",
+      "delete": "Excluir",
+      "like": "Curtir publicação",
+      "unlike": "Descurtir publicação",
+      "repost": "Repostar",
+      "bookmark": "Salvar",
+      "removeBookmark": "Remover dos salvos"
     }
   }
 }

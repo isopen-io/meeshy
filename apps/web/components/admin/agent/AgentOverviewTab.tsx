@@ -24,29 +24,34 @@ import { agentAdminService, type AgentStatsData } from '@/services/agent-admin.s
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
 
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/useI18n';
 
-function formatTimeAgo(dateStr: string | null): string {
-  if (!dateStr) return 'Jamais';
+function formatTimeAgo(dateStr: string | null, t: (key: string) => string): string {
+  if (!dateStr) return t('agent.overview.timeAgo.never');
   const diff = Date.now() - new Date(dateStr).getTime();
   const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return 'À l\'instant';
-  if (minutes < 60) return `il y a ${minutes}min`;
+  if (minutes < 1) return t('agent.overview.timeAgo.justNow');
+  if (minutes < 60) return t('agent.overview.timeAgo.minutes').replace('{{count}}', String(minutes));
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `il y a ${hours}h`;
+  if (hours < 24) return t('agent.overview.timeAgo.hours').replace('{{count}}', String(hours));
   const days = Math.floor(hours / 24);
-  return `il y a ${days}j`;
+  return t('agent.overview.timeAgo.days').replace('{{count}}', String(days));
 }
 
-const TYPE_LABELS: Record<string, string> = {
-  direct: 'Direct',
-  group: 'Groupe',
-  public: 'Public',
-  global: 'Globale',
-  broadcast: 'Communication',
-  channel: 'Canal',
-};
+function getTypeLabel(type: string, t: (key: string) => string): string {
+  const mapped: Record<string, string> = {
+    direct: t('agent.overview.conversationType.direct'),
+    group: t('agent.overview.conversationType.group'),
+    public: t('agent.overview.conversationType.public'),
+    global: t('agent.overview.conversationType.global'),
+    broadcast: t('agent.overview.conversationType.broadcast'),
+    channel: t('agent.overview.conversationType.channel'),
+  };
+  return mapped[type] ?? type;
+}
 
 export function AgentOverviewTab() {
+  const { t } = useI18n('admin');
   const [stats, setStats] = useState<AgentStatsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -64,10 +69,10 @@ export function AgentOverviewTab() {
         setStats(response.data);
         setError(null);
       } else {
-        setError('Impossible de charger les statistiques');
+        setError(t('agent.toasts.statsLoadError'));
       }
     } catch {
-      setError('Erreur de connexion au service agent');
+      setError(t('agent.toasts.connectionError'));
     } finally {
       setLoading(false);
     }
@@ -78,7 +83,7 @@ export function AgentOverviewTab() {
   }, [fetchStats]);
 
   const handleReset = useCallback(async () => {
-    if (!confirm('ATTENTION : Cette action va supprimer TOUTES les configurations IA, profils, analytics et cache Redis. Cette action est irréversible. Continuer ?')) {
+    if (!confirm(t('agent.toasts.confirmResetAll'))) {
       return;
     }
     try {
@@ -86,13 +91,13 @@ export function AgentOverviewTab() {
       const response = await agentAdminService.resetAll();
       if (response.success && response.data) {
         const counts = response.data.deleted;
-        toast.success(`Reset complet : ${counts.configs ?? 0} configs, ${counts.roles ?? 0} rôles, ${counts.analytics ?? 0} analytics, ${counts.redisKeys ?? 0} clés Redis supprimés`);
+        toast.success(t('agent.toasts.resetSuccess').replace('{{configs}}', String(counts.configs ?? 0)).replace('{{roles}}', String(counts.roles ?? 0)).replace('{{analytics}}', String(counts.analytics ?? 0)).replace('{{redisKeys}}', String(counts.redisKeys ?? 0)));
         fetchStats();
       } else {
-        toast.error('Erreur lors du reset');
+        toast.error(t('agent.toasts.resetError'));
       }
     } catch {
-      toast.error('Erreur lors du reset des configurations IA');
+      toast.error(t('agent.toasts.resetAiConfigError'));
     } finally {
       setResetting(false);
     }
@@ -101,20 +106,20 @@ export function AgentOverviewTab() {
   const handleResetConversation = useCallback(async () => {
     const id = conversationIdToReset.trim();
     if (!id || !/^[0-9a-fA-F]{24}$/.test(id)) {
-      toast.error('ID de conversation invalide (24 caractères hex)');
+      toast.error(t('agent.toasts.invalidConversationId'));
       return;
     }
-    if (!confirm(`Supprimer toutes les données agent pour la conversation ${id} ?`)) return;
+    if (!confirm(t('agent.toasts.confirmResetConversation').replace('{{id}}', id))) return;
     try {
       setResettingConversation(true);
       const response = await agentAdminService.resetConversation(id);
       if (response.success) {
-        toast.success(`Conversation ${id.slice(0, 8)}... réinitialisée`);
+        toast.success(t('agent.toasts.conversationReset').replace('{{id}}', id.slice(0, 8) + '...'));
         setConversationIdToReset('');
         fetchStats();
       }
     } catch {
-      toast.error('Erreur lors du reset conversation');
+      toast.error(t('agent.toasts.conversationResetError'));
     } finally {
       setResettingConversation(false);
     }
@@ -123,20 +128,20 @@ export function AgentOverviewTab() {
   const handleResetUser = useCallback(async () => {
     const id = userIdToReset.trim();
     if (!id || !/^[0-9a-fA-F]{24}$/.test(id)) {
-      toast.error('ID utilisateur invalide (24 caractères hex)');
+      toast.error(t('agent.toasts.invalidUserId'));
       return;
     }
-    if (!confirm(`Supprimer tous les profils agent pour l'utilisateur ${id} (toutes conversations) ?`)) return;
+    if (!confirm(t('agent.toasts.confirmResetUser').replace('{{id}}', id))) return;
     try {
       setResettingUser(true);
       const response = await agentAdminService.resetUser(id);
       if (response.success) {
-        toast.success(`Utilisateur ${id.slice(0, 8)}... réinitialisé`);
+        toast.success(t('agent.toasts.userReset').replace('{{id}}', id.slice(0, 8) + '...'));
         setUserIdToReset('');
         fetchStats();
       }
     } catch {
-      toast.error('Erreur lors du reset utilisateur');
+      toast.error(t('agent.toasts.userResetError'));
     } finally {
       setResettingUser(false);
     }
@@ -171,14 +176,14 @@ export function AgentOverviewTab() {
 
   const kpis = [
     {
-      title: 'Conversations',
+      title: t('agent.overview.kpi.conversations'),
       value: stats?.totalConfigs ?? 0,
       icon: MessageSquare,
       color: 'text-blue-600 dark:text-blue-400',
       bg: 'bg-blue-50 dark:bg-blue-950',
     },
     {
-      title: 'Actifs',
+      title: t('agent.overview.kpi.active'),
       value: stats?.activeConfigs ?? 0,
       icon: Zap,
       color: 'text-green-600 dark:text-green-400',
@@ -187,42 +192,42 @@ export function AgentOverviewTab() {
       badgeVariant: stats && stats.activeConfigs > 0 ? 'default' : 'secondary',
     },
     {
-      title: 'Utilisateurs',
+      title: t('agent.overview.kpi.users'),
       value: stats?.totalControlledUsers ?? 0,
       icon: UserCheck,
       color: 'text-cyan-600 dark:text-cyan-400',
       bg: 'bg-cyan-50 dark:bg-cyan-950',
     },
     {
-      title: 'Rôles',
+      title: t('agent.overview.kpi.roles'),
       value: stats?.totalRoles ?? 0,
       icon: Users,
       color: 'text-purple-600 dark:text-purple-400',
       bg: 'bg-purple-50 dark:bg-purple-950',
     },
     {
-      title: 'Messages',
+      title: t('agent.overview.kpi.messages'),
       value: stats?.totalMessagesSent ?? 0,
       icon: BarChart3,
       color: 'text-indigo-600 dark:text-indigo-400',
       bg: 'bg-indigo-50 dark:bg-indigo-950',
     },
     {
-      title: 'Mots',
+      title: t('agent.overview.kpi.words'),
       value: stats?.totalWordsSent ?? 0,
       icon: Type,
       color: 'text-pink-600 dark:text-pink-400',
       bg: 'bg-pink-50 dark:bg-pink-950',
     },
     {
-      title: 'Confiance moy.',
+      title: t('agent.overview.kpi.avgConfidence'),
       value: `${((stats?.avgConfidence ?? 0) * 100).toFixed(0)}%`,
       icon: TrendingUp,
       color: 'text-amber-600 dark:text-amber-400',
       bg: 'bg-amber-50 dark:bg-amber-950',
     },
     {
-      title: 'Archétypes',
+      title: t('agent.overview.kpi.archetypes'),
       value: stats?.totalArchetypes ?? 0,
       icon: Shapes,
       color: 'text-orange-600 dark:text-orange-400',
@@ -231,7 +236,7 @@ export function AgentOverviewTab() {
   ];
 
   const pieData = [
-    { name: 'Actifs', value: stats?.activeConfigs ?? 0, color: '#10b981' },
+    { name: t('agent.overview.kpi.active'), value: stats?.activeConfigs ?? 0, color: '#10b981' },
     { name: 'Inactifs', value: (stats?.totalConfigs ?? 0) - (stats?.activeConfigs ?? 0), color: '#94a3b8' },
   ];
 
@@ -274,7 +279,7 @@ export function AgentOverviewTab() {
         {/* Pie Chart */}
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Répartition</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('agent.overview.distribution')}</CardTitle>
           </CardHeader>
           <CardContent className="h-52">
             <ResponsiveContainer width="100%" height="100%">
@@ -304,12 +309,12 @@ export function AgentOverviewTab() {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <Clock className="h-4 w-4 text-indigo-500" />
-              Activité récente
+              {t('agent.overview.recentActivity')}
             </CardTitle>
           </CardHeader>
           <CardContent>
             {recentActivity.length === 0 ? (
-              <p className="text-sm text-gray-400 italic py-4 text-center">Aucune activité récente</p>
+              <p className="text-sm text-gray-400 italic py-4 text-center">{t('agent.overview.noRecentActivity')}</p>
             ) : (
               <div className="space-y-1.5 max-h-[240px] overflow-y-auto">
                 {recentActivity.map((entry) => (
@@ -324,7 +329,7 @@ export function AgentOverviewTab() {
                         </span>
                         {entry.conversation?.type && (
                           <Badge variant="outline" className="text-[10px] shrink-0">
-                            {TYPE_LABELS[entry.conversation.type] ?? entry.conversation.type}
+                            {getTypeLabel(entry.conversation.type, t)}
                           </Badge>
                         )}
                       </div>
@@ -343,7 +348,7 @@ export function AgentOverviewTab() {
                         </span>
                       </div>
                       <span className="text-[10px] text-gray-400 w-16 text-right tabular-nums">
-                        {formatTimeAgo(entry.lastResponseAt)}
+                        {formatTimeAgo(entry.lastResponseAt, t)}
                       </span>
                     </div>
                   </div>
@@ -359,7 +364,7 @@ export function AgentOverviewTab() {
         <Card className="border-amber-200 dark:border-amber-900">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-amber-600 dark:text-amber-400">
-              Reset conversation
+              {t('agent.overview.resetConversation')}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -385,7 +390,7 @@ export function AgentOverviewTab() {
         <Card className="border-amber-200 dark:border-amber-900">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-amber-600 dark:text-amber-400">
-              Reset utilisateur
+              {t('agent.overview.resetUser')}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -411,7 +416,7 @@ export function AgentOverviewTab() {
         <Card className="border-red-200 dark:border-red-900">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-red-600 dark:text-red-400">
-              Zone dangereuse
+              {t('agent.overview.dangerZone')}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -423,7 +428,7 @@ export function AgentOverviewTab() {
               className="w-full"
             >
               <RotateCcw className={`h-3 w-3 mr-1.5 ${resetting ? 'animate-spin' : ''}`} />
-              {resetting ? 'Reset en cours...' : 'Reset complet'}
+              {resetting ? t('agent.overview.resetting') : t('agent.overview.resetAll')}
             </Button>
           </CardContent>
         </Card>

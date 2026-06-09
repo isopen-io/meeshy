@@ -119,7 +119,12 @@
         "customDestinationLanguage": "Idioma de destino personalizado",
         "customDestinationLanguageDescription": "Idioma específico para la traducción automática (opcional)",
         "selectLanguage": "Seleccionar un idioma",
-        "none": "Ninguno"
+        "none": "Ninguno",
+        "systemLanguagePlaceholder": "Seleccione su idioma del sistema",
+        "regionalLanguagePlaceholder": "Seleccione su idioma regional",
+        "customLanguagePlaceholder": "Seleccione un idioma personalizado (opcional)",
+        "configurationTitle": "Configuración de idiomas",
+        "configurationDescription": "Define tus idiomas del sistema y regional"
       },
       "autoTranslation": {
         "title": "Opciones de traducción automática",
@@ -135,7 +140,8 @@
         "translateToCustomDescription": "Traduce los mensajes a {flag} {language} únicamente",
         "noCustomLanguage": "Ningún idioma personalizado definido - defina uno arriba",
         "tip": "Consejo:",
-        "tipDescription": "Si no se selecciona ninguna opción, los mensajes se traducirán a todos sus idiomas configurados (sistema + regional + personalizado)."
+        "tipDescription": "Si no se selecciona ninguna opción, los mensajes se traducirán a todos sus idiomas configurados (sistema + regional + personalizado).",
+        "settingsTitle": "Configuración de traducción"
       },
       "preview": {
         "title": "Vista previa de la configuración",
@@ -421,7 +427,8 @@
         "transcription": "Error de transcripción",
         "creation": "Error al crear el perfil",
         "consent": "Error al actualizar el consentimiento",
-        "delete": "Error al eliminar el perfil"
+        "delete": "Error al eliminar el perfil",
+        "noRecording": "No hay grabación disponible"
       },
       "consentUpdated": "Consentimiento actualizado",
       "transcriptionComplete": "Transcripción completa",
@@ -452,6 +459,10 @@
         "tryAgain": "Reintentar cambio de email",
         "backToHome": "Volver al inicio"
       }
+    },
+    "betaPlayground": {
+      "featureEnabled": "Función beta activada",
+      "featureDisabled": "Función beta desactivada"
     }
   }
 }

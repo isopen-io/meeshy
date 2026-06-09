@@ -54,7 +54,7 @@ struct SectionHeaderView: View {
                 // Section name
                 Text(section.name)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(isDropTarget ? Color(hex: section.color) : (isDark ? Color(hex: "EEF2FF") : Color(hex: "1E1B4B")))
+                    .foregroundColor(isDropTarget ? Color(hex: section.color) : (isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950))
 
                 // Count badge
                 Text("\(count)")
@@ -137,7 +137,7 @@ struct ConversationPreviewView: View {
                     HStack(spacing: 6) {
                         Text(conversation.name)
                             .font(.system(size: 16, weight: .bold))
-                            .foregroundColor(isDark ? Color(hex: "EEF2FF") : Color(hex: "1E1B4B"))
+                            .foregroundColor(isDark ? MeeshyColors.indigo50 : MeeshyColors.indigo950)
                             .lineLimit(1)
 
                         if conversation.userState.isPinned {
@@ -149,7 +149,7 @@ struct ConversationPreviewView: View {
                         if conversation.userState.isMuted {
                             Image(systemName: "bell.slash.fill")
                                 .font(.system(size: 9))
-                                .foregroundColor(isDark ? Color(hex: "818CF8").opacity(0.5) : Color(hex: "6366F1").opacity(0.4))
+                                .foregroundColor(isDark ? MeeshyColors.indigo400.opacity(0.5) : MeeshyColors.indigo500.opacity(0.4))
                         }
                     }
 
@@ -164,11 +164,11 @@ struct ConversationPreviewView: View {
                             .foregroundColor(Color(hex: accentColor))
                         } else {
                             Circle()
-                                .fill(Color(hex: "2ECC71"))
+                                .fill(MeeshyColors.success)
                                 .frame(width: 8, height: 8)
                             Text(String(localized: "status.online", defaultValue: "En ligne"))
                                 .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(Color(hex: "2ECC71"))
+                                .foregroundColor(MeeshyColors.success)
                         }
                     }
                 }

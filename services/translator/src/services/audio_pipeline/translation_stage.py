@@ -21,11 +21,12 @@ import os
 import logging
 import time
 import asyncio
-import base64
 from typing import Optional, List, Dict, Any, Tuple
 from dataclasses import dataclass
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from utils.audio_format import mime_type_for
 
 # Import services
 from ..tts_service import (
@@ -91,7 +92,8 @@ class TranslationStage:
         tts_service: Optional[TTSService] = None,
         voice_clone_service: Optional[VoiceCloneService] = None,
         audio_cache: Optional[AudioCacheService] = None,
-        translation_cache: Optional[TranslationCacheService] = None
+        translation_cache: Optional[TranslationCacheService] = None,
+        tts_output_format: Optional[str] = None
     ):
         """
         Initialize translation stage.
@@ -112,7 +114,13 @@ class TranslationStage:
         self._initialized = False
         self._init_lock = asyncio.Lock()
 
-        logger.info("[TRANSLATION_STAGE] Translation stage created")
+        # D1 bandwidth: message-audio translations are pushed to EVERY recipient,
+        # so the codec choice here is the single biggest audio-payload lever.
+        # libopus mono low-band (VoIP) is ~65% lighter than MP3 for speech with
+        # no perceptible loss. Opt out per-deploy via AUDIO_PIPELINE_TTS_FORMAT=mp3.
+        self.tts_output_format = tts_output_format or os.getenv("AUDIO_PIPELINE_TTS_FORMAT", "opus")
+
+        logger.info(f"[TRANSLATION_STAGE] Translation stage created (tts_output_format={self.tts_output_format})")
 
     async def initialize(self) -> bool:
         """Initialize translation stage services"""
@@ -246,8 +254,7 @@ class TranslationStage:
         2. If cache miss:
            a. Translate text (with cache)
            b. Generate TTS audio
-           c. Encode to base64
-           d. Store in cache
+           c. Store in cache
         3. Return results
 
         Args:
@@ -357,17 +364,13 @@ class TranslationStage:
                 )
                 return None
 
-            # Read and encode audio to base64
-            with open(cached_audio_path, 'rb') as f:
-                audio_bytes = f.read()
-
-            audio_data_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+            # D2: pas d'encodage base64 — on transmet le chemin, le handler ZMQ
+            # lit les octets depuis le fichier cache (multipart binaire).
             audio_format = cached_data.get("format", "mp3")
-            audio_mime_type = f"audio/{audio_format}"
+            audio_mime_type = mime_type_for(audio_format)
 
             logger.debug(
-                f"[TRANSLATION_STAGE] Cached audio loaded: "
-                f"{language} ({len(audio_bytes)} bytes)"
+                f"[TRANSLATION_STAGE] Cached audio loaded: {language} ({cached_audio_path})"
             )
 
             return TranslatedAudioVersion(
@@ -380,7 +383,7 @@ class TranslationStage:
                 voice_cloned=cached_data.get("voice_cloned", False),
                 voice_quality=cached_data.get("voice_quality", 0.0),
                 processing_time_ms=0,
-                audio_data_base64=audio_data_base64,
+                audio_data_base64=None,
                 audio_mime_type=audio_mime_type,
                 segments=cached_data.get("segments")  # Charger les segments depuis le cache
             )
@@ -536,8 +539,7 @@ class TranslationStage:
         Pipeline:
         1. Translate text (with cache)
         2. Generate TTS audio
-        3. Encode to base64
-        4. Store in cache
+        3. Store in cache
         """
         try:
             # 1. Translate text
@@ -562,7 +564,7 @@ class TranslationStage:
                         text=translated_text,
                         conditionals=voice_model.chatterbox_conditionals,
                         target_language=target_lang,
-                        output_format="mp3",
+                        output_format=self.tts_output_format,
                         message_id=f"{message_id}_{attachment_id}",
                         cloning_params=cloning_params
                     )
@@ -575,7 +577,7 @@ class TranslationStage:
                         text=translated_text,
                         speaker_audio_path=speaker_audio,
                         target_language=target_lang,
-                        output_format="mp3",
+                        output_format=self.tts_output_format,
                         message_id=f"{message_id}_{attachment_id}",
                         cloning_params=cloning_params
                     )
@@ -583,7 +585,7 @@ class TranslationStage:
                 tts_result = await self.tts_service.synthesize(
                     text=translated_text,
                     language=target_lang,
-                    output_format="mp3",
+                    output_format=self.tts_output_format,
                     cloning_params=cloning_params
                 )
 

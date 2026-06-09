@@ -219,6 +219,15 @@ extension ConversationView {
     }
 
     // MARK: - Composer Reply Banner
+    /// Titre du bandeau de réponse. Un mood échoé par le serveur peut avoir un
+    /// `authorName` vide → libellé localisé "Humeur".
+    func composerReplyTitle(_ reply: ReplyReference) -> String {
+        if reply.isMe { return String(localized: "bubble.reply.you", defaultValue: "Vous", bundle: .main) }
+        if !reply.authorName.isEmpty { return reply.authorName }
+        if reply.moodEmoji != nil { return String(localized: "bubble.reply.mood", defaultValue: "Humeur", bundle: .main) }
+        return reply.authorName
+    }
+
     func composerReplyBanner(_ reply: ReplyReference) -> some View {
         HStack(spacing: 8) {
             RoundedRectangle(cornerRadius: 2)
@@ -226,20 +235,37 @@ extension ConversationView {
                 .frame(width: 3, height: 36)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(reply.isMe ? "Vous" : reply.authorName)
+                Text(composerReplyTitle(reply))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(Color(hex: reply.isMe ? accentColor : reply.authorColor))
 
                 HStack(spacing: 4) {
-                    if let attType = reply.attachmentType {
-                        Image(systemName: composerReplyAttachmentIcon(attType))
-                            .font(.system(size: 10, weight: .medium))
+                    if let emoji = reply.moodEmoji {
+                        // Réponse à un mood : emoji + contenu entier + date.
+                        Text(emoji)
+                            .font(.system(size: 12))
+                        if let date = reply.storyPublishedAt {
+                            Text(date, style: .relative)
+                                .font(.system(size: 11))
+                                .foregroundColor(theme.textMuted)
+                        }
+                        if !reply.previewText.isEmpty {
+                            Text(reply.previewText)
+                                .font(.system(size: 12))
+                                .foregroundColor(theme.textSecondary)
+                                .lineLimit(1)
+                        }
+                    } else {
+                        if let attType = reply.attachmentType {
+                            Image(systemName: composerReplyAttachmentIcon(attType))
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundColor(theme.textSecondary)
+                        }
+                        Text(reply.previewText)
+                            .font(.system(size: 12))
                             .foregroundColor(theme.textSecondary)
+                            .lineLimit(1)
                     }
-                    Text(reply.previewText)
-                        .font(.system(size: 12))
-                        .foregroundColor(theme.textSecondary)
-                        .lineLimit(1)
                 }
             }
 
@@ -702,11 +728,11 @@ extension ConversationView {
 
     func labelForAttachment(_ attachment: MessageAttachment) -> String {
         switch attachment.type {
-        case .image: return "Photo"
-        case .video: return "Video"
-        case .audio: return attachment.durationFormatted ?? "Audio"
-        case .file: return attachment.originalName.isEmpty ? "Fichier" : attachment.originalName
-        case .location: return "Position"
+        case .image: return String(localized: "attachment.label.photo", defaultValue: "Photo", bundle: .main)
+        case .video: return String(localized: "attachment.label.video", defaultValue: "Video", bundle: .main)
+        case .audio: return attachment.durationFormatted ?? String(localized: "attachment.label.audio", defaultValue: "Audio", bundle: .main)
+        case .file: return attachment.originalName.isEmpty ? String(localized: "attachment.label.file", defaultValue: "File", bundle: .main) : attachment.originalName
+        case .location: return String(localized: "attachment.label.location", defaultValue: "Location", bundle: .main)
         }
     }
 

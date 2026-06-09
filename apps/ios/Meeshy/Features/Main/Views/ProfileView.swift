@@ -66,7 +66,7 @@ struct ProfileView: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 10)
-                        .background(Capsule().fill(Color.red.opacity(0.9)))
+                        .background(Capsule().fill(MeeshyColors.error.opacity(0.9)))
                         .padding(.bottom, 24)
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -311,20 +311,18 @@ struct ProfileView: View {
 
     @ViewBuilder
     private var bannerImage: some View {
-        if let bannerURL = user?.banner, let url = URL(string: bannerURL) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                case .failure:
-                    bannerPlaceholder
-                default:
-                    bannerPlaceholder
-                        .overlay(ProgressView().tint(Color(hex: accentColor)))
-                }
-            }
+        if let bannerURL = user?.banner, !bannerURL.isEmpty {
+            // CachedBannerImage : cache 3-tiers (NSCache -> disque -> reseau) avec
+            // warm-sync synchrone depuis le disque a l'init. Le banner reapparait
+            // instantanement a chaque retour sur le profil, sans refetch reseau ni
+            // re-decodage full-res (l'AsyncImage natif re-fetchait + re-decodait a
+            // chaque rendu). Le blur ThumbHash s'affiche en attendant le full image.
+            CachedBannerImage(
+                urlString: bannerURL,
+                thumbHash: user?.bannerThumbHash,
+                fallbackColor: accentColor,
+                height: 120
+            )
         } else {
             bannerPlaceholder
         }
@@ -713,7 +711,7 @@ struct ProfileView: View {
             .foregroundColor(.white)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(Capsule().fill(verified ? Color(hex: "4ADE80") : Color(hex: "F59E0B")))
+            .background(Capsule().fill(verified ? MeeshyColors.success : MeeshyColors.warning))
     }
 
     private func statCard(value: String, label: String, color: String) -> some View {

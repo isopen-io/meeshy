@@ -4,6 +4,9 @@
  */
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'CleanupExpiredTokens' });
 
 export class CleanupExpiredTokens {
   private intervalId: NodeJS.Timeout | null = null;
@@ -16,11 +19,11 @@ export class CleanupExpiredTokens {
    */
   start(): void {
     if (this.intervalId) {
-      console.warn('[CleanupExpiredTokens] Job already running');
+      logger.warn('Job already running');
       return;
     }
 
-    console.log(`[CleanupExpiredTokens] Starting cleanup job (interval: ${this.intervalMinutes} minutes)`);
+    logger.info(`Starting cleanup job (interval: ${this.intervalMinutes} minutes)`);
 
     // Run immediately on start
     this.cleanup();
@@ -29,6 +32,7 @@ export class CleanupExpiredTokens {
     this.intervalId = setInterval(() => {
       this.cleanup();
     }, this.intervalMinutes * 60 * 1000);
+    this.intervalId.unref?.();
   }
 
   /**
@@ -38,7 +42,7 @@ export class CleanupExpiredTokens {
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
-      console.log('[CleanupExpiredTokens] Cleanup job stopped');
+      logger.info('Cleanup job stopped');
     }
   }
 
@@ -74,13 +78,12 @@ export class CleanupExpiredTokens {
       });
 
       if (result.count > 0) {
-        console.log(`[CleanupExpiredTokens] ✅ Deleted ${result.count} expired/used/revoked tokens`);
         const stats = await this.getStats();
-        console.log('[CleanupExpiredTokens] Current stats:', stats);
+        logger.info(`Deleted ${result.count} expired/used/revoked tokens`, { stats });
       }
 
     } catch (error) {
-      console.error('[CleanupExpiredTokens] Error during cleanup:', error);
+      logger.error('Error during cleanup', error as Error);
     }
   }
 

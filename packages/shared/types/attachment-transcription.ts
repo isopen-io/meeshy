@@ -47,6 +47,62 @@ export interface TranscriptionSegment {
 }
 
 /**
+ * Caractéristiques vocales détaillées produites par le service translator (Python).
+ * Toutes les sous-structures sont optionnelles — le translator peut n'en remplir qu'une partie.
+ */
+export type VoiceCharacteristics = {
+  readonly pitch?: {
+    readonly mean_hz: number;
+    readonly std_hz: number;
+    readonly min_hz: number;
+    readonly max_hz: number;
+    readonly range_hz: number;
+  };
+  readonly classification?: {
+    readonly voice_type: string;
+    readonly estimated_gender?: string;
+    readonly estimated_age_range?: string;
+  };
+  readonly spectral?: {
+    readonly centroid_hz: number;
+    readonly bandwidth_hz: number;
+    readonly rolloff_hz: number;
+    readonly flatness: number;
+    readonly brightness: number;
+    readonly warmth: number;
+    readonly breathiness: number;
+    readonly nasality: number;
+  };
+  readonly energy?: {
+    readonly mean: number;
+    readonly std: number;
+    readonly dynamic_range_db: number;
+    readonly silence_ratio: number;
+  };
+  readonly quality?: {
+    readonly harmonics_to_noise: number;
+    readonly jitter: number;
+    readonly shimmer: number;
+  };
+  readonly prosody?: {
+    readonly speech_rate_wpm: number;
+  };
+  readonly mfcc?: {
+    readonly mean: readonly number[];
+    readonly std: readonly number[];
+  };
+  readonly metadata?: {
+    readonly sample_rate: number;
+    readonly bit_depth: number;
+    readonly channels: number;
+    readonly codec: string;
+    readonly duration_seconds: number;
+    readonly analysis_time_ms: number;
+    readonly confidence: number;
+  };
+};
+
+/**
  * Informations détaillées sur un locuteur détecté
  */
 export interface SpeakerInfo {
@@ -60,21 +116,8 @@ export interface SpeakerInfo {
   readonly speakingRatio: number;
   /** Score de similarité vocale avec le profil utilisateur (0-1 ou null) */
   readonly voiceSimilarityScore: number | null;
-  /**
-   * Caractéristiques vocales détaillées (pitch, fréquences, timbre, etc.)
-   * Structure:
-   * {
-   *   pitch: { mean_hz, std_hz, min_hz, max_hz, range_hz },
-   *   classification: { voice_type, estimated_gender, estimated_age_range },
-   *   spectral: { centroid_hz, bandwidth_hz, rolloff_hz, flatness, brightness, warmth, breathiness, nasality },
-   *   energy: { mean, std, dynamic_range_db, silence_ratio },
-   *   quality: { harmonics_to_noise, jitter, shimmer },
-   *   prosody: { speech_rate_wpm },
-   *   mfcc: { mean: number[], std: number[] },
-   *   metadata: { sample_rate, bit_depth, channels, codec, duration_seconds, analysis_time_ms, confidence }
-   * }
-   */
-  readonly voiceCharacteristics?: any;
+  /** Caractéristiques vocales détaillées (pitch, fréquences, timbre, etc.) */
+  readonly voiceCharacteristics?: VoiceCharacteristics;
   // NOTE: Les segments temporels sont dans transcription.segments avec speakerId, pas ici (évite duplication)
 }
 

@@ -793,6 +793,43 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(reactions.first(where: { $0.emoji == "thumbsup" })?.participantId, testUserId)
     }
 
+    /// End-to-end ownership lock: tapping a reaction must surface it as MINE in
+    /// the badge. The optimistic row is keyed by the `currentUserId` sentinel
+    /// (never the resolved `Participant.id`), so `summarizeReactions` — whose
+    /// ownership check is `participantId == currentUserId` — marks it
+    /// `includesMe`. Guards the regression where the 2nd+ reaction in a
+    /// conversation was keyed by `Participant.id` and lost its highlight.
+    @MainActor
+    func test_toggleReaction_ownReaction_isHighlightedAsMine() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+
+        let record = MessageStoreObservationHelper.makeRecord(
+            localId: "msg-mine", conversationId: testConversationId,
+            senderId: "other-user", content: "React to me"
+        )
+        try await persistence.insertOptimistic(record)
+        _ = await MessageStoreObservationHelper.awaitMessage(in: sut) { $0.id == "msg-mine" }
+
+        sut.toggleReaction(messageId: "msg-mine", emoji: "thumbsup")
+
+        let updated = await MessageStoreObservationHelper.awaitRecord(
+            localId: "msg-mine", from: pool
+        ) { record in
+            let reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
+                                                       from: record.reactionsJson ?? Data())) ?? []
+            return reactions.contains { $0.emoji == "thumbsup" }
+        }
+        let reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
+                                                   from: updated?.reactionsJson ?? Data())) ?? []
+
+        let summaries = BubbleContent.summarizeReactions(reactions, currentUserId: testUserId)
+        let thumbs = summaries.first { $0.emoji == "thumbsup" }
+        XCTAssertEqual(thumbs?.includesMe, true, "my own reaction must render highlighted as mine")
+        XCTAssertEqual(thumbs?.count, 1, "a single tap counts once")
+    }
+
     func test_toggleReaction_removesExistingReaction() async throws {
         let pool = try makeInMemoryPool()
         let persistence = MessagePersistenceActor(dbWriter: pool)

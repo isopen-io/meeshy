@@ -89,7 +89,7 @@ struct ContextActionButton: View {
 
     private var foregroundColor: Color {
         switch action.role {
-        case .destructive: return .red
+        case .destructive: return MeeshyColors.error
         case .primary, .standard: return accentColor
         }
     }

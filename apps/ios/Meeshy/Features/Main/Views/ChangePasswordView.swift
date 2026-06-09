@@ -17,7 +17,7 @@ struct ChangePasswordView: View {
     @State private var showSuccess = false
     @FocusState private var focusedField: Field?
 
-    private let accentColor = "08D9D6"
+    private let accentColor = "6366F1"
 
     private enum Field {
         case current, newPass, confirm
@@ -188,11 +188,11 @@ struct ChangePasswordView: View {
         HStack(spacing: 8) {
             Image(systemName: met ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: 14))
-                .foregroundColor(met ? Color(hex: "4ADE80") : theme.textMuted)
+                .foregroundColor(met ? MeeshyColors.success : theme.textMuted)
 
             Text(text)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(met ? Color(hex: "4ADE80") : theme.textMuted)
+                .foregroundColor(met ? MeeshyColors.success : theme.textMuted)
 
             Spacer()
         }
@@ -205,7 +205,7 @@ struct ChangePasswordView: View {
             if let errorMessage {
                 Text(errorMessage)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Color(hex: "EF4444"))
+                    .foregroundColor(MeeshyColors.error)
                     .multilineTextAlignment(.center)
                     .transition(.opacity)
             }
@@ -245,7 +245,7 @@ struct ChangePasswordView: View {
         VStack(spacing: 12) {
             Image(systemName: "checkmark.shield.fill")
                 .font(.system(size: 48))
-                .foregroundColor(Color(hex: "4ADE80"))
+                .foregroundColor(MeeshyColors.success)
 
             Text(String(localized: "auth.password.change.success", defaultValue: "Mot de passe modifie", bundle: .main))
                 .font(.system(size: 16, weight: .semibold))
@@ -257,7 +257,7 @@ struct ChangePasswordView: View {
                 .fill(.ultraThinMaterial)
                 .overlay(
                     RoundedRectangle(cornerRadius: 20)
-                        .stroke(Color(hex: "4ADE80").opacity(0.3), lineWidth: 1)
+                        .stroke(MeeshyColors.success.opacity(0.3), lineWidth: 1)
                 )
         )
         .transition(.scale.combined(with: .opacity))
@@ -340,7 +340,7 @@ struct ChangePasswordView: View {
                 HapticFeedback.error()
                 switch error {
                 case .serverError(400, _):
-                    errorMessage = String(localized: "auth.password.change.error.current", defaultValue: "Mot de passe actuel incorrect", bundle: .main)
+                    errorMessage = String(localized: "auth.password.change.error.current", defaultValue: "Incorrect current password", bundle: .main)
                 default:
                     errorMessage = error.errorDescription
                 }
@@ -353,7 +353,7 @@ struct ChangePasswordView: View {
                 }
             } catch {
                 HapticFeedback.error()
-                errorMessage = String(localized: "common.error.generic", defaultValue: "Une erreur est survenue", bundle: .main)
+                errorMessage = String(localized: "common.error.generic", defaultValue: "An error occurred", bundle: .main)
             }
             isSaving = false
         }

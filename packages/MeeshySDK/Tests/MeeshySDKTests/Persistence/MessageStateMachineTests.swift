@@ -35,6 +35,20 @@ final class MessageStateMachineTests: XCTestCase {
         XCTAssertEqual(sm.serverId, "srv_123")
     }
 
+    /// A send that fails once goes `.sending -> .queued` (retry budget intact) and is
+    /// mirrored into the outbox. When the OutboxFlusher later re-sends and succeeds, the
+    /// reconciliation delivers a `serverAck` while the record is still `.queued`. Without a
+    /// `(.queued, .serverAck)` transition the ack is rejected (returns nil) and the bubble
+    /// stays stuck on the "sending" clock for a message the server actually received. The
+    /// ack MUST lift `.queued -> .sent`, symmetric with the `.sending` case.
+    func test_apply_serverAck_fromQueued_transitionsToSent() {
+        var sm = MessageStateMachine(state: .queued, retryCount: 1)
+        let result = sm.apply(.serverAck(serverId: "srv_retry", at: Date()))
+        XCTAssertEqual(result, .sent)
+        XCTAssertEqual(sm.state, .sent)
+        XCTAssertEqual(sm.serverId, "srv_retry")
+    }
+
     func test_apply_delivered_fromSent_transitionsToDelivered() {
         var sm = MessageStateMachine(state: .sent)
         let result = sm.apply(.delivered(count: 1, at: Date()))

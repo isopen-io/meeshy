@@ -11,6 +11,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { VideoStream } from './VideoStream';
 import { Maximize2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/hooks/useI18n';
 
 interface DraggableParticipantOverlayProps {
   participantId: string;
@@ -35,6 +36,7 @@ export function DraggableParticipantOverlay({
   onDoubleClick,
   onRemove,
 }: DraggableParticipantOverlayProps) {
+  const { t } = useI18n('calls');
   const [position, setPosition] = useState(initialPosition);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -133,7 +135,7 @@ export function DraggableParticipantOverlay({
             e.stopPropagation();
             onDoubleClick?.();
           }}
-          title="Make fullscreen"
+          title={t('calls.stream.fullscreen')}
         >
           <Maximize2 className="w-4 h-4 text-white" />
         </div>
@@ -141,7 +143,7 @@ export function DraggableParticipantOverlay({
 
       {/* Drag indicator */}
       <div className="absolute top-2 left-2 bg-black/40 backdrop-blur-sm px-2 py-1 rounded text-xs text-white/60 opacity-0 group-hover:opacity-100 transition-opacity">
-        Drag to move
+        {t('calls.stream.dragToMove')}
       </div>
     </div>
   );

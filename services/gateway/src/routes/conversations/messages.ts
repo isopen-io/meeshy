@@ -108,10 +108,16 @@ const logger = enhancedLogger.child({ module: 'messages' });
  * Nettoie les attachments pour l'API en transformant les valeurs invalides
  * Fixe spécifiquement voiceSimilarityScore: false -> null pour compatibilité schéma
  */
-function cleanAttachmentsForApi(attachments: any[]): any[] {
+function cleanAttachmentsForApi(attachments: any[], languageFilter?: readonly string[]): any[] {
   if (!attachments || !Array.isArray(attachments)) {
     return attachments;
   }
+
+  // Bandwidth opt-in : restreindre les traductions audio (Prisme) aux langues
+  // demandées, miroir exact du filtre appliqué aux traductions texte.
+  const langSet = languageFilter && languageFilter.length > 0
+    ? new Set(languageFilter.map((l) => l.toLowerCase()))
+    : null;
 
   if (attachments.length > 0) {
     logger.debug(`🧹 [CLEAN] Nettoyage de ${attachments.length} attachment(s) pour l'API`);
@@ -162,6 +168,7 @@ function cleanAttachmentsForApi(attachments: any[]): any[] {
 
       const cleanedTranslations: any = {};
       for (const [lang, translation] of Object.entries(cleaned.translations)) {
+        if (langSet && !langSet.has(lang.toLowerCase())) continue;
         const trans = translation as any;
         cleanedTranslations[lang] = {
           ...trans,
@@ -312,7 +319,8 @@ export function registerMessagesRoutes(
           include_reactions: { type: 'string', enum: ['true', 'false'], description: 'Include detailed reactions list (default false). Note: reactionSummary and reactionCount are always included.' },
           include_translations: { type: 'string', enum: ['true', 'false'], description: 'Include translations (default true)' },
           include_status: { type: 'string', enum: ['true', 'false'], description: 'Include per-user read status entries (default false)' },
-          include_replies: { type: 'string', enum: ['true', 'false'], description: 'Include replyTo message details (default true)' }
+          include_replies: { type: 'string', enum: ['true', 'false'], description: 'Include replyTo message details (default true)' },
+          languages: { type: 'string', description: 'Comma-separated Prisme languages (e.g. "fr,en"). When set, only these languages are serialized in BOTH text and audio translations; absent = all languages. Bandwidth opt-in.' }
         }
       },
       response: {
@@ -365,7 +373,8 @@ export function registerMessagesRoutes(
         include_reactions: includeReactionsStr = 'false',
         include_translations: includeTranslationsStr = 'true',
         include_status: includeStatusStr = 'false',
-        include_replies: includeRepliesStr = 'true'
+        include_replies: includeRepliesStr = 'true',
+        languages: languagesStr
       } = request.query;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
@@ -375,6 +384,16 @@ export function registerMessagesRoutes(
       const includeTranslations = includeTranslationsStr === 'true';
       const includeStatus = includeStatusStr === 'true';
       const includeReplies = includeRepliesStr === 'true';
+
+      // Bandwidth opt-in : filtrage des traductions (texte + audio) aux seules
+      // langues du Prisme demandées par le client. Absent/vide = toutes les
+      // langues (comportement historique). Normalisé, dédupliqué, borné.
+      const languageFilter = languagesStr
+        ? Array.from(new Set(
+            languagesStr.split(',').map((l) => l.trim().toLowerCase()).filter(Boolean)
+          )).slice(0, 20)
+        : undefined;
+      const hasLanguageFilter = !!languageFilter && languageFilter.length > 0;
 
       // Forward watermark mode (local-first incremental gap backfill): fetch
       // messages created strictly after the client's high-water mark, oldest
@@ -538,6 +557,8 @@ export function registerMessagesRoutes(
         senderId: true,
         messageType: true,
         messageSource: true,
+        // Structured per-type payload (call-summary facts for system messages)
+        metadata: true,
 
         // ===== ÉDITION / SUPPRESSION =====
         isEdited: true,
@@ -841,16 +862,17 @@ export function registerMessagesRoutes(
       const readStatusMap = new Map<string, { deliveredCount: number; readCount: number }>();
       if (messages.length > 0 && authRequest.authContext?.userId) {
         try {
-          const activeParticipants = await prisma.participant.findMany({
-            where: { conversationId, isActive: true },
-            select: { id: true }
-          });
+          const [activeParticipants, cursors] = await Promise.all([
+            prisma.participant.findMany({
+              where: { conversationId, isActive: true },
+              select: { id: true }
+            }),
+            prisma.conversationReadCursor.findMany({
+              where: { conversationId },
+              select: { participantId: true, lastDeliveredAt: true, lastReadAt: true }
+            })
+          ]);
           const activeIds = new Set(activeParticipants.map((p: any) => p.id));
-
-          const cursors = await prisma.conversationReadCursor.findMany({
-            where: { conversationId },
-            select: { participantId: true, lastDeliveredAt: true, lastReadAt: true }
-          });
           const activeCursors = cursors.filter((c: any) => activeIds.has(c.participantId));
 
           for (const msg of (messages as any[])) {
@@ -891,6 +913,8 @@ export function registerMessagesRoutes(
           originalLanguage: message.originalLanguage || 'fr',
           messageType: message.messageType,
           messageSource: message.messageSource,
+          // Structured per-type payload (call-summary facts for system messages)
+          metadata: message.metadata ?? undefined,
 
           // Édition/Suppression
           isEdited: message.isEdited,
@@ -950,7 +974,7 @@ export function registerMessagesRoutes(
             isOnline: message.sender.user?.isOnline ?? message.sender.isOnline ?? null,
             lastActiveAt: message.sender.user?.lastActiveAt ?? message.sender.lastActiveAt ?? null,
           } : null,
-          attachments: cleanAttachmentsForApi(message.attachments),
+          attachments: cleanAttachmentsForApi(message.attachments, languageFilter),
           _count: message._count
         };
 
@@ -959,7 +983,8 @@ export function registerMessagesRoutes(
           // Transformer JSON vers array pour rétrocompatibilité frontend
           mappedMessage.translations = transformTranslationsToArray(
             message.id,
-            message.translations as Record<string, any>
+            message.translations as Record<string, any>,
+            hasLanguageFilter ? { languages: languageFilter } : undefined
           );
         }
         if (includeReactions && message.reactions) {
@@ -1083,6 +1108,9 @@ export function registerMessagesRoutes(
             reactionCount: true,
             commentCount: true,
             createdAt: true,
+            // `moodEmoji` non-null ⇒ le post cité est un mood/statut : le client
+            // affiche alors une citation dédiée (emoji + contenu + date).
+            moodEmoji: true,
             media: {
               select: { thumbnailUrl: true },
               orderBy: { order: 'asc' },
@@ -1102,7 +1130,8 @@ export function registerMessagesRoutes(
             commentCount: story.commentCount,
             createdAt: story.createdAt,
             thumbnailUrl: story.media[0]?.thumbnailUrl ?? null,
-            previewText: preview
+            previewText: preview,
+            moodEmoji: story.moodEmoji ?? null
           };
         }
       }
@@ -2241,7 +2270,21 @@ export function registerMessagesRoutes(
         createdAt: true,
         senderId: true,
         sender: {
-          select: { id: true, userId: true, username: true, displayName: true, avatar: true }
+          // `sender` is a `Participant`, which has no `username`/`isOnline` of
+          // its own — those live on the related `User`. Selecting `username`
+          // directly on Participant throws PrismaClientValidationError and
+          // 500s the whole search. Mirror the canonical message-sender select
+          // (cf. pinned-messages route) and pull username via the `user`
+          // relation; it is flattened back to the top level below so the
+          // userMinimalSchema response serializer keeps it.
+          select: {
+            id: true,
+            userId: true,
+            displayName: true,
+            avatar: true,
+            type: true,
+            user: { select: { id: true, username: true, displayName: true, avatar: true, isOnline: true } }
+          }
         }
       };
 
@@ -2292,13 +2335,26 @@ export function registerMessagesRoutes(
 
       const lastId = results.length > 0 ? results[results.length - 1].id : null;
 
-      // Transform translations JSON → array format for SDK compatibility
-      const mappedResults = results.map((msg: any) => ({
-        ...msg,
-        translations: msg.translations
-          ? transformTranslationsToArray(msg.id, msg.translations as Record<string, any>)
-          : undefined
-      }));
+      // Transform translations JSON → array format for SDK compatibility and
+      // flatten the participant `sender` (username/isOnline come from the nested
+      // `user` relation) so the userMinimalSchema serializer keeps them.
+      const mappedResults = results.map((msg: any) => {
+        const sender = msg.sender;
+        return {
+          ...msg,
+          sender: sender ? {
+            id: sender.id,
+            userId: sender.userId,
+            displayName: sender.displayName ?? sender.user?.displayName ?? null,
+            avatar: sender.avatar ?? sender.user?.avatar ?? null,
+            username: sender.user?.username ?? null,
+            isOnline: sender.user?.isOnline ?? false
+          } : null,
+          translations: msg.translations
+            ? transformTranslationsToArray(msg.id, msg.translations as Record<string, any>)
+            : undefined
+        };
+      });
 
       // NOTE: Cannot use sendSuccess() — response includes a top-level `cursorPagination`
       // field that iOS SDK (MessagesSearchResponse) and web (crud.service.ts) parse at

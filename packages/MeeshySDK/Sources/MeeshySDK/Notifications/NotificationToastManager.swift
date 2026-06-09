@@ -48,6 +48,9 @@ public final class NotificationToastManager: ObservableObject {
     private static let toastDuration: UInt64 = 7_000_000_000
     private static let refreshDelay: UInt64 = 500_000_000
 
+    // Dedup set: évite d'afficher 2x la même notification (APN foreground + socket simultanés)
+    private var recentNotificationIds = Set<String>()
+
     private init() {
         subscribeToCoordinator()
         subscribeToSocketEvents()
@@ -178,6 +181,20 @@ public final class NotificationToastManager: ObservableObject {
 
         // Keep FriendshipCache in sync with real-time friend request events
         updateFriendshipCacheIfNeeded(event)
+
+        // Dedup: APN foreground + socket `notification:new` can fire for the same
+        // event within milliseconds of each other. Guard here — after friendship
+        // cache update (which is idempotent and safe to run twice) but before the
+        // unread increment and toast, which must fire exactly once per notification.
+        guard !recentNotificationIds.contains(event.id) else {
+            Logger.socket.info("[RT-DIAG] notification deduped (already shown) id=\(event.id, privacy: .public)")
+            return
+        }
+        recentNotificationIds.insert(event.id)
+        Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
+            self?.recentNotificationIds.remove(event.id)
+        }
 
         // The unread counter reflects what the *server* thinks — increment it
         // regardless of local prefs so the coordinator stays aligned with the

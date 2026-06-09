@@ -6,6 +6,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useI18n } from '@/hooks/use-i18n';
 import { createPortal } from 'react-dom';
 import {
   X,
@@ -36,6 +37,7 @@ export function VideoLightbox({
   isOpen,
   onClose,
 }: VideoLightboxProps) {
+  const { t } = useI18n('common');
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -455,7 +457,7 @@ export function VideoLightbox({
                 handleDownload();
               }}
               className="text-white hover:bg-white/10"
-              aria-label="Télécharger la vidéo"
+              aria-label={t('common.download')}
             >
               <Download className="w-5 h-5" />
             </Button>
@@ -467,7 +469,7 @@ export function VideoLightbox({
                 onClose();
               }}
               className="text-white hover:bg-white/10"
-              aria-label="Fermer"
+              aria-label={t('common.close')}
             >
               <X className="w-5 h-5" />
             </Button>
@@ -514,7 +516,7 @@ export function VideoLightbox({
                   togglePlay();
                 }}
                 className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/30 transition-colors duration-200 group"
-                aria-label="Lire la vidéo"
+                aria-label={t('common.play')}
               >
                 <div className="w-20 h-20 rounded-full bg-purple-600 hover:bg-purple-700 flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform">
                   <Play className="w-10 h-10 text-white ml-1 fill-current" />
@@ -534,7 +536,7 @@ export function VideoLightbox({
               goToPrevious();
             }}
             className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 text-white hover:bg-white/10 bg-black/30 z-20"
-            aria-label="Vidéo précédente"
+            aria-label={t('common.previous')}
           >
             <ChevronLeft className="w-8 h-8" />
           </Button>
@@ -550,7 +552,7 @@ export function VideoLightbox({
               goToNext();
             }}
             className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 text-white hover:bg-white/10 bg-black/30 z-20"
-            aria-label="Vidéo suivante"
+            aria-label={t('common.next')}
           >
             <ChevronRight className="w-8 h-8" />
           </Button>
@@ -610,7 +612,7 @@ export function VideoLightbox({
                 onClick={togglePlay}
                 size="sm"
                 className="w-10 h-10 rounded-full bg-purple-600 hover:bg-purple-700 text-white p-0 flex items-center justify-center"
-                aria-label={isPlaying ? 'Mettre en pause' : 'Lire la vidéo'}
+                aria-label={isPlaying ? t('common.pause') : t('common.play')}
               >
                 {isPlaying ? (
                   <Pause className="w-5 h-5 fill-current" />
@@ -634,7 +636,7 @@ export function VideoLightbox({
                   size="sm"
                   variant="ghost"
                   className="w-9 h-9 p-0 text-white hover:bg-white/10"
-                  aria-label={isMuted || volume === 0 ? 'Activer le son' : 'Couper le son'}
+                  aria-label={isMuted || volume === 0 ? t('common.unmute') : t('common.mute')}
                 >
                   {isMuted || volume === 0 ? (
                     <VolumeX className="w-5 h-5" />
@@ -664,7 +666,7 @@ export function VideoLightbox({
                 variant="ghost"
                 className="w-9 h-9 p-0 text-white hover:bg-white/10"
                 title={isFullscreen ? "Quitter le plein écran (F)" : "Plein écran (F)"}
-                aria-label={isFullscreen ? "Quitter le plein écran" : "Plein écran"}
+                aria-label={isFullscreen ? t('common.exitFullscreen') : t('common.enterFullscreen')}
               >
                 {isFullscreen ? (
                   <Minimize className="w-5 h-5" />

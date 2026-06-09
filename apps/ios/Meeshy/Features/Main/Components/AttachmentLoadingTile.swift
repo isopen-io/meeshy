@@ -136,21 +136,21 @@ struct AttachmentLoadingTile: View {
         if case .failed(let msg) = prep.stage, !msg.isEmpty { return msg }
         switch prep.kind {
         case .image: return String(localized: "attachment.kind.photo", defaultValue: "Photo", bundle: .main)
-        case .video: return String(localized: "attachment.kind.video", defaultValue: "Vidéo", bundle: .main)
+        case .video: return String(localized: "attachment.kind.video", defaultValue: "Video", bundle: .main)
         case .audio: return String(localized: "attachment.kind.audio", defaultValue: "Audio", bundle: .main)
-        case .file:  return String(localized: "attachment.kind.file", defaultValue: "Fichier", bundle: .main)
-        case .location: return String(localized: "attachment.kind.location", defaultValue: "Position", bundle: .main)
+        case .file:  return String(localized: "attachment.kind.file", defaultValue: "File", bundle: .main)
+        case .location: return String(localized: "attachment.kind.location", defaultValue: "Location", bundle: .main)
         }
     }
 
     private var stageLabel: String {
         switch prep.stage {
-        case .loading:      return String(localized: "attachment.stage.loading", defaultValue: "Chargement", bundle: .main)
-        case .compressing:  return String(localized: "attachment.stage.compressing", defaultValue: "Compression", bundle: .main)
-        case .thumbnailing: return String(localized: "attachment.stage.thumbnailing", defaultValue: "Aperçu", bundle: .main)
+        case .loading:      return String(localized: "attachment.stage.loading", defaultValue: "Loading", bundle: .main)
+        case .compressing:  return String(localized: "attachment.stage.compressing", defaultValue: "Compressing", bundle: .main)
+        case .thumbnailing: return String(localized: "attachment.stage.thumbnailing", defaultValue: "Preview", bundle: .main)
         case .hashing:      return String(localized: "attachment.stage.hashing", defaultValue: "Hash", bundle: .main)
         case .ready:        return ""
-        case .failed:       return String(localized: "attachment.loading.error", defaultValue: "Erreur", bundle: .main)
+        case .failed:       return String(localized: "attachment.loading.error", defaultValue: "Error", bundle: .main)
         }
     }
 
