@@ -1342,6 +1342,11 @@ private class OverlayAudioPlayer: ObservableObject {
     nonisolated(unsafe) private var avPlayer: AVPlayer?
     nonisolated(unsafe) private var timeObserver: Any?
     nonisolated(unsafe) private var statusObservation: NSKeyValueObservation?
+    /// Token for the `.AVPlayerItemDidPlayToEndTime` block observer. Held so
+    /// `deinit` can remove it: `removeObserver(self)` does NOT remove block-based
+    /// observers (their "observer" is this returned token, not `self`), so
+    /// without it the observer leaked once per playback / per preview.
+    nonisolated(unsafe) private var endObserver: (any NSObjectProtocol)?
     private var currentURL: String?
 
     var percentInt: Int { Int(progress * 100) }
@@ -1454,7 +1459,8 @@ private class OverlayAudioPlayer: ObservableObject {
     }
 
     private func observeEnd(item: AVPlayerItem) {
-        NotificationCenter.default.addObserver(
+        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
+        endObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: item, queue: .main
         ) { [weak self] _ in
@@ -1469,6 +1475,7 @@ private class OverlayAudioPlayer: ObservableObject {
 
     deinit {
         if let obs = timeObserver { avPlayer?.removeTimeObserver(obs) }
+        if let endObserver { NotificationCenter.default.removeObserver(endObserver) }
         NotificationCenter.default.removeObserver(self)
     }
 }
