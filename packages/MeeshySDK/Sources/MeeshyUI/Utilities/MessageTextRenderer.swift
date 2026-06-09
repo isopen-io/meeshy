@@ -164,22 +164,53 @@ public enum MessageTextRenderer {
         options: []
     )
 
+    /// Thread-safe memo of compiled display-name mention rules, keyed by the
+    /// `username → displayName` map. `parse` rebuilds these on every render call,
+    /// and the map is constant for the lifetime of a conversation — so without
+    /// this cache every text-message render in a group recompiled one
+    /// `NSRegularExpression` per member (regex compilation is expensive, and the
+    /// renderer runs per message). The map is stable, so this hits on every
+    /// subsequent message/render. Lock-guarded: the renderer also runs off the
+    /// main thread (UIKit cell-diffing path).
+    private final class DisplayNameRulesCache: @unchecked Sendable {
+        private let lock = NSLock()
+        private var cache: [[String: String]: [(regex: NSRegularExpression, kind: RuleKind)]] = [:]
+        func rules(
+            for key: [String: String],
+            build: () -> [(regex: NSRegularExpression, kind: RuleKind)]
+        ) -> [(regex: NSRegularExpression, kind: RuleKind)] {
+            lock.lock()
+            defer { lock.unlock() }
+            if let cached = cache[key] { return cached }
+            // Bound growth across many distinct conversations; rebuilding on the
+            // rare miss is cheap next to a scroll's worth of cache hits.
+            if cache.count >= 32 { cache.removeAll(keepingCapacity: true) }
+            let built = build()
+            cache[key] = built
+            return built
+        }
+    }
+    private static let displayNameRulesCache = DisplayNameRulesCache()
+
     /// Build display-name mention rules for known `username → displayName` pairs.
     /// Sorted by display name length descending to avoid partial matches.
+    /// Memoized by `mentionDisplayNames` (see `DisplayNameRulesCache`).
     private static func displayNameRules(from mentionDisplayNames: [String: String]) -> [(regex: NSRegularExpression, kind: RuleKind)] {
-        mentionDisplayNames
-            .sorted { $0.value.count > $1.value.count }
-            .compactMap { (username, displayName) -> (NSRegularExpression, RuleKind)? in
-                guard displayName != username,
-                      !displayName.isEmpty,
-                      displayName.rangeOfCharacter(from: .whitespaces) != nil else { return nil }
-                let escaped = NSRegularExpression.escapedPattern(for: displayName)
-                guard let regex = try? NSRegularExpression(
-                    pattern: "(?<![a-zA-Z0-9])@\(escaped)",
-                    options: .caseInsensitive
-                ) else { return nil }
-                return (regex, .displayNameMention(username: username))
-            }
+        displayNameRulesCache.rules(for: mentionDisplayNames) {
+            mentionDisplayNames
+                .sorted { $0.value.count > $1.value.count }
+                .compactMap { (username, displayName) -> (NSRegularExpression, RuleKind)? in
+                    guard displayName != username,
+                          !displayName.isEmpty,
+                          displayName.rangeOfCharacter(from: .whitespaces) != nil else { return nil }
+                    let escaped = NSRegularExpression.escapedPattern(for: displayName)
+                    guard let regex = try? NSRegularExpression(
+                        pattern: "(?<![a-zA-Z0-9])@\(escaped)",
+                        options: .caseInsensitive
+                    ) else { return nil }
+                    return (regex, .displayNameMention(username: username))
+                }
+        }
     }
 
     // MARK: - Parser
