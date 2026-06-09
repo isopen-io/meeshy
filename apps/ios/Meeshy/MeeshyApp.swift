@@ -309,15 +309,20 @@ struct MeeshyApp: App {
                     // Splash gating : trois bornes temporelles concurrentes
                     //   floor   1.2s — l'animation logo/title/subtitle joue
                     //                    intégralement (sinon flash pénible).
-                    //   socket  3.0s — fenêtre pour que MessageSocket ET
-                    //                    SocialSocket aient échangé leur 1er
-                    //                    handshake auth + reçu leur snapshot.
+                    //   socket  1.5s — fenêtre BORNÉE pour que les sockets
+                    //                    échangent leur 1er handshake. Cache-first
+                    //                    (NON-NÉGOCIABLE) : on n'attend PAS le
+                    //                    réseau quand le cache est prêt. Sur une
+                    //                    connexion lente, la liste cachée s'affiche
+                    //                    à 1.5s puis se rafraîchit (présences /
+                    //                    unreads) dès que les sockets landent —
+                    //                    plutôt que de retenir le splash 3s.
                     //   ceiling 5.0s — hard cap : si le réseau est down,
                     //                    on dismiss quand même pour ne JAMAIS
                     //                    bloquer l'utilisateur derrière un
                     //                    splash infini.
                     let minSplashDuration: Duration = .milliseconds(1200)
-                    let socketTimeout: Duration = .seconds(3)
+                    let socketTimeout: Duration = .milliseconds(1500)
                     let maxSplashDuration: Duration = .seconds(5)
 
                     if authManager.isAuthenticated {
