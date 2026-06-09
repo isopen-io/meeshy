@@ -110,7 +110,14 @@ class AudioPlayerManager: NSObject, ObservableObject, StoppablePlayer, AVAudioPl
             await acquireSession()
             guard !Task.isCancelled else { return }
             do {
-                let data = try Data(contentsOf: url)
+                // Read off the main actor — the manager is @MainActor, so a
+                // synchronous `Data(contentsOf:)` here stalls the UI right as
+                // playback starts (worse the larger the clip). Mirrors the
+                // off-actor load `play(urlString:)` already does via the cache.
+                let data = try await Task.detached(priority: .userInitiated) {
+                    try Data(contentsOf: url)
+                }.value
+                guard !Task.isCancelled else { return }
                 playData(data)
             } catch {}
         }
