@@ -551,6 +551,25 @@
         "sharedLinks": "Shared links"
       },
       "delete": "Delete conversation"
+    },
+    "composer": {
+      "placeholder": "Write your message...",
+      "recording": "Recording...",
+      "removeAttachment": "Remove attachment",
+      "addAttachment": "Add attachment",
+      "addEmoji": "Add emoji",
+      "stopRecording": "Stop recording",
+      "voiceMessage": "Voice message",
+      "shareLocation": "Share my location",
+      "sendMessage": "Send message",
+      "tooltipAttachment": "Attachment",
+      "tooltipEmoji": "Emoji",
+      "tooltipStop": "Stop",
+      "tooltipVoice": "Voice message",
+      "tooltipLocation": "Location",
+      "tooltipSend": "Send",
+      "voiceAttachmentName": "Voice message ({duration})",
+      "locationAttachmentName": "Current location"
     }
   }
 }

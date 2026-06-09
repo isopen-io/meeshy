@@ -553,6 +553,25 @@
         "sharedLinks": "Links compartilhados"
       },
       "delete": "Excluir conversa"
+    },
+    "composer": {
+      "placeholder": "Escreva sua mensagem...",
+      "recording": "Gravando...",
+      "removeAttachment": "Remover anexo",
+      "addAttachment": "Adicionar anexo",
+      "addEmoji": "Adicionar emoji",
+      "stopRecording": "Parar",
+      "voiceMessage": "Mensagem de voz",
+      "shareLocation": "Compartilhar minha localização",
+      "sendMessage": "Enviar mensagem",
+      "tooltipAttachment": "Anexo",
+      "tooltipEmoji": "Emoji",
+      "tooltipStop": "Parar",
+      "tooltipVoice": "Mensagem de voz",
+      "tooltipLocation": "Localização",
+      "tooltipSend": "Enviar",
+      "voiceAttachmentName": "Mensagem de voz ({duration})",
+      "locationAttachmentName": "Localização atual"
     }
   }
 }

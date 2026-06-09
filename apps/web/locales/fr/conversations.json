@@ -561,6 +561,25 @@
         "sharedLinks": "Liens partagés"
       },
       "delete": "Supprimer la conversation"
+    },
+    "composer": {
+      "placeholder": "Écrivez votre message...",
+      "recording": "Enregistrement en cours...",
+      "removeAttachment": "Supprimer la pièce jointe",
+      "addAttachment": "Ajouter une pièce jointe",
+      "addEmoji": "Ajouter un emoji",
+      "stopRecording": "Arrêter",
+      "voiceMessage": "Message vocal",
+      "shareLocation": "Partager ma position",
+      "sendMessage": "Envoyer le message",
+      "tooltipAttachment": "Pièce jointe",
+      "tooltipEmoji": "Emoji",
+      "tooltipStop": "Arrêter",
+      "tooltipVoice": "Message vocal",
+      "tooltipLocation": "Position",
+      "tooltipSend": "Envoyer",
+      "voiceAttachmentName": "Message vocal ({duration})",
+      "locationAttachmentName": "Position actuelle"
     }
   }
 }
