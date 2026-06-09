@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
+import { sendPaginatedSuccess } from '../../utils/response.js';
 import { permissionsService } from './services/PermissionsService';
 import {
   validatePagination,
@@ -173,15 +174,11 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
         fastify.prisma.message.count({ where })
       ]);
 
-      return reply.send({
-        success: true,
-        data: messages,
-        pagination: {
-          total: totalCount,
-          limit: limitNum,
-          offset: offsetNum,
-          hasMore: offsetNum + messages.length < totalCount
-        }
+      return sendPaginatedSuccess(reply, messages, {
+        total: totalCount,
+        limit: limitNum,
+        offset: offsetNum,
+        hasMore: offsetNum + messages.length < totalCount
       });
 
     } catch (error) {
@@ -297,15 +294,11 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
         fastify.prisma.community.count({ where })
       ]);
 
-      return reply.send({
-        success: true,
-        data: communities,
-        pagination: {
-          total: totalCount,
-          limit: limitNum,
-          offset: offsetNum,
-          hasMore: offsetNum + communities.length < totalCount
-        }
+      return sendPaginatedSuccess(reply, communities, {
+        total: totalCount,
+        limit: limitNum,
+        offset: offsetNum,
+        hasMore: offsetNum + communities.length < totalCount
       });
 
     } catch (error) {
@@ -490,31 +483,27 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
       const totalCount = allTranslations.length;
       const paginatedTranslations = allTranslations.slice(offsetNum, offsetNum + limitNum);
 
-      return reply.send({
-        success: true,
-        data: paginatedTranslations.map(translation => ({
-          id: translation.id,
-          sourceLanguage: translation.sourceLanguage,
-          targetLanguage: translation.targetLanguage,
-          translatedContent: translation.translatedContent,
-          translationModel: translation.translationModel,
-          confidenceScore: translation.confidenceScore,
-          createdAt: translation.createdAt,
-          message: translation.message ? {
-            id: translation.message.id,
-            content: translation.message.content,
-            originalLanguage: translation.message.originalLanguage,
-            originalContent: translation.message.content,
-            sender: translation.message.sender,
-            conversation: translation.message.conversation
-          } : null
-        })),
-        pagination: {
-          total: totalCount,
-          limit: limitNum,
-          offset: offsetNum,
-          hasMore: offsetNum + paginatedTranslations.length < totalCount
-        }
+      return sendPaginatedSuccess(reply, paginatedTranslations.map(translation => ({
+        id: translation.id,
+        sourceLanguage: translation.sourceLanguage,
+        targetLanguage: translation.targetLanguage,
+        translatedContent: translation.translatedContent,
+        translationModel: translation.translationModel,
+        confidenceScore: translation.confidenceScore,
+        createdAt: translation.createdAt,
+        message: translation.message ? {
+          id: translation.message.id,
+          content: translation.message.content,
+          originalLanguage: translation.message.originalLanguage,
+          originalContent: translation.message.content,
+          sender: translation.message.sender,
+          conversation: translation.message.conversation
+        } : null
+      })), {
+        total: totalCount,
+        limit: limitNum,
+        offset: offsetNum,
+        hasMore: offsetNum + paginatedTranslations.length < totalCount
       });
 
     } catch (error) {
@@ -640,15 +629,11 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
         fastify.prisma.conversationShareLink.count({ where })
       ]);
 
-      return reply.send({
-        success: true,
-        data: shareLinks,
-        pagination: {
-          total: totalCount,
-          limit: limitNum,
-          offset: offsetNum,
-          hasMore: offsetNum + shareLinks.length < totalCount
-        }
+      return sendPaginatedSuccess(reply, shareLinks, {
+        total: totalCount,
+        limit: limitNum,
+        offset: offsetNum,
+        hasMore: offsetNum + shareLinks.length < totalCount
       });
 
     } catch (error) {

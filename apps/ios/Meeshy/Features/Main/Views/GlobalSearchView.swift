@@ -410,7 +410,7 @@ struct GlobalSearchView: View {
                     .foregroundColor(MeeshyColors.indigo300)
                     .lineLimit(1)
 
-                Text(highlightedText(result.content, query: viewModel.searchText))
+                Text(highlightedText(result.content, query: viewModel.resultsQuery))
                     .font(.system(size: 13))
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(2)
@@ -418,8 +418,12 @@ struct GlobalSearchView: View {
         }
         .padding(12)
         .background(
+            // Flat input-style surface instead of a per-row `.ultraThinMaterial`
+            // (a live blur composited each frame on every visible result row,
+            // while scrolling and on every search keystroke). Pairs with the
+            // same inputBorder; removes the blur passes from the results list.
             RoundedRectangle(cornerRadius: 14)
-                .fill(.ultraThinMaterial)
+                .fill(theme.inputBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
                         .stroke(theme.inputBorder, lineWidth: 0.5)
@@ -495,8 +499,12 @@ struct GlobalSearchView: View {
         }
         .padding(12)
         .background(
+            // Flat input-style surface instead of a per-row `.ultraThinMaterial`
+            // (a live blur composited each frame on every visible result row,
+            // while scrolling and on every search keystroke). Pairs with the
+            // same inputBorder; removes the blur passes from the results list.
             RoundedRectangle(cornerRadius: 14)
-                .fill(.ultraThinMaterial)
+                .fill(theme.inputBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
                         .stroke(theme.inputBorder, lineWidth: 0.5)
@@ -597,8 +605,12 @@ struct GlobalSearchView: View {
         }
         .padding(12)
         .background(
+            // Flat input-style surface instead of a per-row `.ultraThinMaterial`
+            // (a live blur composited each frame on every visible result row,
+            // while scrolling and on every search keystroke). Pairs with the
+            // same inputBorder; removes the blur passes from the results list.
             RoundedRectangle(cornerRadius: 14)
-                .fill(.ultraThinMaterial)
+                .fill(theme.inputBackground)
                 .overlay(
                     RoundedRectangle(cornerRadius: 14)
                         .stroke(theme.inputBorder, lineWidth: 0.5)

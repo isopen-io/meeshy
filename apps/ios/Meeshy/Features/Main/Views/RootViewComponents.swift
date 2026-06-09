@@ -94,6 +94,9 @@ struct ThemedActionButton: View {
 
     @State private var isPressed = false
     @State private var isGlowing = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+    private var reduceMotion: Bool { systemReduceMotion || userForcedReduceMotion }
 
     private var iconSize: CGFloat { round(size * 0.39) }
 
@@ -141,6 +144,8 @@ struct ThemedActionButton: View {
             .scaleEffect(isPressed ? 0.82 : 1)
         }
         .onAppear {
+            // Reduce Motion: keep the static base shadow, no breathing glow.
+            guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 2.0).repeatForever(autoreverses: true)) {
                 isGlowing = true
             }

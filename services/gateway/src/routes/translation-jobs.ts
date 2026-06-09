@@ -10,6 +10,7 @@ import { AttachmentTranslateService } from '../services/AttachmentTranslateServi
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest} from '../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { sendSuccess } from '../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'TranslationJobsRoutes' });
 
@@ -241,10 +242,7 @@ export async function translationJobsRoutes(fastify: FastifyInstance) {
           });
         }
 
-        return reply.send({
-          success: true,
-          data: result.data
-        });
+        return sendSuccess(reply, result.data);
       } catch (error: any) {
         logger.error('Error getting translation status', error as Error);
         return reply.status(500).send({
@@ -329,10 +327,7 @@ export async function translationJobsRoutes(fastify: FastifyInstance) {
           });
         }
 
-        return reply.send({
-          success: true,
-          data: result.data
-        });
+        return sendSuccess(reply, result.data);
       } catch (error: any) {
         logger.error('Error cancelling translation', error as Error);
         return reply.status(500).send({

@@ -10,6 +10,7 @@ import { StatusService } from '../services/StatusService';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { sendSuccess, sendInternalError } from '../utils/response.js';
 const logger = enhancedLogger.child({ module: 'MaintenanceRoutes' });
 
 export async function maintenanceRoutes(fastify: FastifyInstance) {
@@ -51,22 +52,13 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
       const stats = await maintenanceService.getMaintenanceStats();
 
       if (!stats) {
-        return reply.status(500).send({
-          success: false,
-          error: 'Erreur lors de la récupération des statistiques'
-        });
+        return sendInternalError(reply, 'Erreur lors de la récupération des statistiques');
       }
 
-      return reply.send({
-        success: true,
-        data: stats
-      });
+      return sendSuccess(reply, stats);
     } catch (error) {
       logger.error('Error in /maintenance/stats', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la récupération des statistiques de maintenance'
-      });
+      sendInternalError(reply, 'Erreur lors de la récupération des statistiques de maintenance');
     }
   });
 
@@ -98,16 +90,10 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
     try {
       await maintenanceService.cleanupExpiredData();
 
-      return reply.send({
-        success: true,
-        data: { message: 'Nettoyage des données expirées terminé' }
-      });
+      return sendSuccess(reply, { message: 'Nettoyage des données expirées terminé' });
     } catch (error) {
       logger.error('Error in /maintenance/cleanup', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Erreur lors du nettoyage des données expirées'
-      });
+      sendInternalError(reply, 'Erreur lors du nettoyage des données expirées');
     }
   });
 
@@ -151,16 +137,10 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
 
       await maintenanceService.updateUserOnlineStatus(userId, isOnline);
 
-      return reply.send({
-        success: true,
-        data: { message: `Statut utilisateur ${userId} mis à jour: ${isOnline ? 'en ligne' : 'hors ligne'}` }
-      });
+      return sendSuccess(reply, { message: `Statut utilisateur ${userId} mis à jour: ${isOnline ? 'en ligne' : 'hors ligne'}` });
     } catch (error) {
       logger.error('Error in /maintenance/user-status', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la mise à jour du statut utilisateur'
-      });
+      sendInternalError(reply, 'Erreur lors de la mise à jour du statut utilisateur');
     }
   });
 
@@ -200,19 +180,10 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
         ? (metrics.throttledRequests / metrics.totalRequests * 100).toFixed(2)
         : '0.00';
 
-      return reply.send({
-        success: true,
-        data: {
-          ...metrics,
-          throttleRate: parseFloat(throttleRate)
-        }
-      });
+      return sendSuccess(reply, { ...metrics, throttleRate: parseFloat(throttleRate) });
     } catch (error) {
       logger.error('Error in /maintenance/status-metrics', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la récupération des métriques de statut'
-      });
+      sendInternalError(reply, 'Erreur lors de la récupération des métriques de statut');
     }
   });
 
@@ -244,16 +215,10 @@ export async function maintenanceRoutes(fastify: FastifyInstance) {
     try {
       statusService.resetMetrics();
 
-      return reply.send({
-        success: true,
-        data: { message: 'Métriques de statut réinitialisées avec succès' }
-      });
+      return sendSuccess(reply, { message: 'Métriques de statut réinitialisées avec succès' });
     } catch (error) {
       logger.error('Error in /maintenance/status-metrics/reset', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la réinitialisation des métriques'
-      });
+      sendInternalError(reply, 'Erreur lors de la réinitialisation des métriques');
     }
   });
 }

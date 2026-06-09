@@ -185,6 +185,75 @@
       "delete": "Eliminar",
       "deleteConfirmTitle": "¿Eliminar este mensaje?",
       "deleteConfirmDescription": "Este mensaje no se enviará. Esta acción es irreversible."
+    },
+    "scanControl": {
+      "title": "Controles",
+      "scopePerCycle": "Alcance por ciclo",
+      "maxConvPerCycle": "Conv. máx/ciclo",
+      "maxConvPerCycleInfo": "0 = ilimitado. Número máx. de conversaciones escaneadas por ciclo global.",
+      "freshnessLabel": "Actualidad de mensajes ({hours}h)",
+      "freshnessInfo": "Ignora conversaciones sin mensaje reciente.",
+      "eligibleTypes": "Tipos elegibles",
+      "eligibleTypesInfo": "Tipos de conversaciones que el agente puede escanear.",
+      "cadence": "Cadencia",
+      "active": "Activo",
+      "activeInfo": "Activa/desactiva el agente para esta conversación.",
+      "scanIntervalLabel": "Intervalo de escaneo ({minutes}min)",
+      "scanIntervalInfo": "Frecuencia de escaneos automáticos.",
+      "burst": "Ráfaga",
+      "burstInfo": "Modo ráfaga: varios mensajes rápidos.",
+      "burstSize": "Tamaño",
+      "burstInterval": "Intervalo (min)",
+      "burstQuiet": "Silencio (min)",
+      "timeDistribution": "Distribución temporal",
+      "minDelay": "Demora mínima (minutos)",
+      "maxDelay": "Demora máxima (minutos)",
+      "spreadOverDay": "Distribuir acciones durante el día",
+      "maxMsgPer10Min": "Máx. mensajes por usuario / 10min",
+      "responsesPerCycle": "Respuestas por ciclo",
+      "minMsgs": "Mín. msgs",
+      "maxMsgs": "Máx. msgs",
+      "maxReactions": "Máx. reacciones",
+      "participants": "Participantes",
+      "maxControlledUsers": "Máx. usuarios controlados",
+      "autoPickup": "Auto-pickup",
+      "weekdayMsgs": "Msgs/día (entre semana)",
+      "weekendMsgs": "Msgs/día (fin de semana)",
+      "weekdayUsers": "Users/día (entre semana)",
+      "weekendUsers": "Users/día (fin de semana)",
+      "inactivityLabel": "Umbral de inactividad ({hours}h)",
+      "noConfig": "Sin configuración para esta conversación",
+      "selectConversation": "Selecciona una conversación",
+      "apply": "Aplicar"
+    },
+    "topicEditModal": {
+      "titleEdit": "Editar \"{label}\"",
+      "titleNew": "Nuevo topic",
+      "fieldSlug": "Slug",
+      "fieldLabel": "Etiqueta",
+      "fieldDescription": "Descripción (opcional)",
+      "fieldKeywordPatterns": "Patrones regex (uno por línea)",
+      "keywordPatternsHint": "El estratega puntúa cada topic por número de coincidencias en el contexto de conversación. Top 3 luego aleatorio.",
+      "fieldInstruction": "Plantilla de instrucción",
+      "instructionHint": "({{label}}, {{conversationTitle}}, {{conversationDescription}} disponibles)",
+      "fieldSearchHint": "Plantilla de pista de búsqueda",
+      "fieldCooldown": "Cooldown (minutos)",
+      "cooldownHint": "Tiempo antes de poder volver a seleccionar este topic en la misma conversación.",
+      "fieldActive": "Activo (usado por el estratega)",
+      "cancel": "Cancelar",
+      "saving": "Guardando...",
+      "save": "Guardar",
+      "errorSlugFormat": "Slug debe ser kebab_case (a-z, 0-9, _, -)",
+      "errorNoPatterns": "Se requiere al menos 1 patrón regex",
+      "errorInvalidRegex": "Regex inválida: {pattern}",
+      "errorTemplateTooShort": "Plantilla de instrucción demasiado corta (min 20 chars)",
+      "errorSave": "Error al guardar",
+      "errorUnknown": "Error desconocido",
+      "placeholderSlug": "astronomia",
+      "placeholderLabel": "Astronomía",
+      "placeholderDescription": "Debates sobre astronomía, espacio, NASA, misiones espaciales.",
+      "placeholderInstruction": "Inicia un NUEVO tema sobre {{label}} (descubrimiento, misión, debate científico reciente)...",
+      "placeholderSearchHint": "novedades {{label}} esta semana"
     }
   },
   "agentLive": {
@@ -308,6 +377,166 @@
         "title": "Servidor y red",
         "description": "Configuración del servidor y los servicios"
       }
+    }
+  },
+  "monitoring": {
+    "title": "Monitoreo",
+    "description": "Supervisión en tiempo real de la plataforma",
+    "refresh": "Actualizar",
+    "autoRefreshOn": "Auto-refresh ON",
+    "autoRefreshOff": "Auto-refresh OFF",
+    "errorRealtime": "Error al cargar datos en tiempo real",
+    "errorHealth": "Error al cargar datos de salud",
+    "errorMetrics": "Error al cargar métricas",
+    "tabs": {
+      "realtime": "Tiempo real",
+      "health": "Salud",
+      "metrics": "Métricas"
+    },
+    "realtime": {
+      "onlineUsers": "Usuarios en línea",
+      "onlineUsersDesc": "Conectados ahora",
+      "messagesLastHour": "Mensajes última hora",
+      "messagesLastHourDesc": "Últimos 60 minutos",
+      "activeConversations": "Conversaciones activas",
+      "activeConversationsDesc": "Con actividad reciente",
+      "socketConnections": "Conexiones Socket.IO",
+      "socketConnectionsDesc": "Conexiones WebSocket",
+      "chartTitle": "Actividad por hora",
+      "chartSubtitle": "Volumen de mensajes en las últimas 24h"
+    },
+    "health": {
+      "latency": "Latencia",
+      "pingStatus": "Estado ping",
+      "operational": "Operacional",
+      "error": "Error",
+      "excellent": "Excelente",
+      "acceptable": "Aceptable",
+      "slow": "Lento",
+      "allCircuitsOk": "Todos los circuitos están operacionales"
+    },
+    "metrics": {
+      "periodDescription": "KPIs y tendencias del período seleccionado",
+      "7d": "7 días",
+      "30d": "30 días",
+      "90d": "90 días",
+      "engagementRate": "Tasa de engagement",
+      "engagementRateDesc": "Mensajes leídos / enviados",
+      "growth": "Crecimiento",
+      "growthDesc": "Nuevos usuarios",
+      "messagesPerUser": "Mensajes/usuario",
+      "messagesPerUserDesc": "Promedio por usuario activo",
+      "activeUserRate": "Tasa usuarios activos",
+      "activeUserRateDesc": "Usuarios con actividad",
+      "volumeChartTitle": "Volumen en el tiempo",
+      "volumeChartSubtitle": "Mensajes y autores únicos",
+      "messagesLabel": "Mensajes",
+      "uniqueAuthorsLabel": "Autores únicos",
+      "languageDistTitle": "Distribución de idiomas",
+      "languageDistSubtitle": "Idiomas más usados",
+      "userDistTitle": "Distribución de usuarios",
+      "userDistSubtitle": "Por nivel de actividad",
+      "messageTypes": "Tipos de mensajes"
+    }
+  },
+  "analytics": {
+    "title": "Análisis y estadísticas",
+    "description": "Panel analítico avanzado",
+    "back": "Volver",
+    "export": "Exportar",
+    "period": "Período",
+    "period24h": "24 horas",
+    "period7d": "7 días",
+    "period30d": "30 días",
+    "period90d": "90 días",
+    "period1y": "1 año",
+    "stats": {
+      "dailyMessages": "Mensajes diarios",
+      "dailyMessagesDesc": "Últimas 24 horas",
+      "activeUsers": "Usuarios activos",
+      "activeUsersDesc": "Esta semana",
+      "autoTranslations": "Traducciones auto",
+      "autoTranslationsDesc": "Este mes",
+      "avgTime": "Tiempo promedio",
+      "avgTimeDesc": "Por usuario",
+      "engagementRate": "Tasa de engagement",
+      "engagementRateDesc": "Mensajes leídos",
+      "peakActivity": "Picos de actividad",
+      "peakActivityDesc": "Horas pico",
+      "growth": "Crecimiento",
+      "growthDesc": "Nuevos usuarios",
+      "activeCommunities": "Comunidades activas",
+      "activeCommunitiesDesc": "De {total} total"
+    },
+    "realtime": {
+      "title": "Métricas en tiempo real",
+      "online": "En línea ahora",
+      "messagesLastHour": "Mensajes (última hora)",
+      "activeConversations": "Conversaciones activas"
+    },
+    "volumeChart": {
+      "title": "Volumen de mensajes",
+      "subtitle": "Mensajes y usuarios activos en 7 días",
+      "messages": "Mensajes",
+      "users": "Usuarios"
+    },
+    "hourlyChart": {
+      "title": "Actividad por hora",
+      "today": "Hoy"
+    },
+    "messageTypes": {
+      "title": "Tipos de mensajes"
+    },
+    "insights": {
+      "title": "Insights y recomendaciones",
+      "positive": {
+        "title": "Crecimiento positivo",
+        "description": "El engagement de usuarios subió 15% esta semana. Las horas pico (18h-21h) muestran actividad récord."
+      },
+      "translation": {
+        "title": "Traducción eficaz",
+        "description": "Las traducciones automáticas representan el 45% de los mensajes, facilitando la comunicación multilingüe."
+      },
+      "session": {
+        "title": "Tiempo de sesión elevado",
+        "description": "El tiempo promedio por sesión (2h45m) indica un alto engagement. Considera funciones de descanso."
+      },
+      "diversity": {
+        "title": "Diversidad de contenido",
+        "description": "Los mensajes multimedia (imágenes, audio, video) representan el 34% del contenido total."
+      }
+    },
+    "performance": {
+      "title": "Rendimiento del sistema",
+      "availability": "Disponibilidad",
+      "latency": "Latencia promedio",
+      "storage": "Datos almacenados",
+      "throughput": "Mensajes/segundo (pico)",
+      "excellent": "Excelente",
+      "fast": "Rápido",
+      "normal": "Normal",
+      "stable": "Estable"
+    },
+    "userDist": {
+      "title": "Distribución de usuarios",
+      "subtitle": "Por nivel de actividad"
+    },
+    "langDist": {
+      "title": "Distribución de idiomas",
+      "subtitle": "Idiomas más usados"
+    },
+    "userActivity": {
+      "veryActive": "Muy activos",
+      "active": "Activos",
+      "occasional": "Ocasionales",
+      "inactive": "Inactivos"
+    },
+    "messageTypeNames": {
+      "text": "Texto",
+      "images": "Imágenes",
+      "audio": "Audio",
+      "videos": "Videos",
+      "documents": "Documentos"
     }
   }
 }

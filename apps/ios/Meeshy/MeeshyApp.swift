@@ -295,10 +295,16 @@ struct MeeshyApp: App {
                         await OutboxRetryScheduler.shared.startObservingNetworkReconnect()
                     }
 
-                    // Parallelize: friendship hydration + session check are independent
-                    async let friendshipHydration: () = FriendshipCache.shared.hydrate()
-                    async let sessionCheck: () = authManager.checkExistingSession()
-                    _ = await (friendshipHydration, sessionCheck)
+                    // Session check gates auth and MUST finish before the splash
+                    // dismisses. Friendship hydration only powers non-critical
+                    // friend-status badges, yet it fetches ALL sent + received
+                    // requests over the network (paginated) — keep it OFF the
+                    // cold-start critical path. `hydrate()` coalesces concurrent
+                    // callers and fast-paths when already hydrated, so firing it
+                    // here and letting it finish in the background is safe; the
+                    // badges fill in shortly after the list is already on screen.
+                    Task { await FriendshipCache.shared.hydrate() }
+                    await authManager.checkExistingSession()
                     hasCheckedSession = true
                     // Splash gating : trois bornes temporelles concurrentes
                     //   floor   1.2s — l'animation logo/title/subtitle joue

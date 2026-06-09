@@ -8,6 +8,7 @@ struct SecurityVerificationView: View {
     let theme = ThemeManager.shared
 
     @Environment(\.dismiss) private var dismiss
+    @State private var qrImage: UIImage?
 
     var body: some View {
         NavigationStack {
@@ -47,13 +48,20 @@ struct SecurityVerificationView: View {
                 }
             }
         }
+        // Generate the safety-number QR once, after appear — not on every body
+        // re-render (it is deterministic and was rebuilding a fresh CIContext
+        // each time).
+        .task {
+            guard let safetyNumber, qrImage == nil else { return }
+            qrImage = Self.generateQRCode(from: safetyNumber)
+        }
     }
 
     // MARK: - Verified (real Signal keys available)
 
     @ViewBuilder
     private func verifiedSection(safetyNumber: String) -> some View {
-        if let qrCode = generateQRCode(from: safetyNumber) {
+        if let qrCode = qrImage {
             Image(uiImage: qrCode)
                 .interpolation(.none)
                 .resizable()
@@ -117,12 +125,16 @@ struct SecurityVerificationView: View {
         return result.isEmpty ? number : result
     }
 
-    private func generateQRCode(from string: String) -> UIImage? {
-        let context = CIContext()
+    // CIContext is expensive to create (it sets up the Core Image / GPU
+    // pipeline) and is documented as safe to share — build one and reuse it
+    // instead of a fresh context on every QR generation.
+    nonisolated(unsafe) private static let qrContext = CIContext()
+
+    private static func generateQRCode(from string: String) -> UIImage? {
         let filter = CIFilter.qrCodeGenerator()
         filter.message = Data(string.utf8)
         guard let outputImage = filter.outputImage,
-              let cgimg = context.createCGImage(outputImage, from: outputImage.extent) else { return nil }
+              let cgimg = qrContext.createCGImage(outputImage, from: outputImage.extent) else { return nil }
         return UIImage(cgImage: cgimg)
     }
 }

@@ -10,6 +10,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { ConsentValidationService } from '../../../services/ConsentValidationService';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { withMutationLog } from '../../../utils/withMutationLog';
+import { sendSuccess } from '../../../utils/response.js';
 
 type PreferenceCategory =
   | 'privacy'
@@ -96,10 +97,7 @@ export function createPreferenceRouter<T>(
           // Si aucune préférence ou champ null/vide, retourner les defaults
           const data = isEmpty(prefs?.[category]) ? defaults : (prefs[category] as T);
 
-          return reply.send({
-            success: true,
-            data
-          });
+          return sendSuccess(reply, data);
         } catch (error: any) {
           fastify.log.error({ error, category }, 'Error fetching preferences');
           return reply.status(500).send({
@@ -210,10 +208,7 @@ export function createPreferenceRouter<T>(
 
           emitPreferencesUpdated(userId);
 
-          return reply.send({
-            success: true,
-            data: (updated as any)[category] as T
-          });
+          return sendSuccess(reply, (updated as any)[category] as T);
         } catch (error: any) {
           if (error.name === 'ZodError') {
             return reply.status(400).send({
@@ -340,10 +335,7 @@ export function createPreferenceRouter<T>(
 
           emitPreferencesUpdated(userId);
 
-          return reply.send({
-            success: true,
-            data: (updated as any)[category] as T
-          });
+          return sendSuccess(reply, (updated as any)[category] as T);
         } catch (error: any) {
           if (error.name === 'ZodError') {
             return reply.status(400).send({

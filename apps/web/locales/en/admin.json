@@ -185,6 +185,75 @@
       "delete": "Delete",
       "deleteConfirmTitle": "Delete this message?",
       "deleteConfirmDescription": "This message will not be sent. This action is irreversible."
+    },
+    "scanControl": {
+      "title": "Controls",
+      "scopePerCycle": "Scope per cycle",
+      "maxConvPerCycle": "Max conversations/cycle",
+      "maxConvPerCycleInfo": "0 = unlimited. Max number of conversations scanned per global cycle.",
+      "freshnessLabel": "Message freshness ({hours}h)",
+      "freshnessInfo": "Ignores conversations without a recent message.",
+      "eligibleTypes": "Eligible types",
+      "eligibleTypesInfo": "Conversation types the agent can scan.",
+      "cadence": "Cadence",
+      "active": "Active",
+      "activeInfo": "Enables/disables the agent for this conversation.",
+      "scanIntervalLabel": "Scan interval ({minutes}min)",
+      "scanIntervalInfo": "Automatic scan frequency.",
+      "burst": "Burst",
+      "burstInfo": "Burst mode: several rapid messages.",
+      "burstSize": "Size",
+      "burstInterval": "Interval (min)",
+      "burstQuiet": "Quiet (min)",
+      "timeDistribution": "Time distribution",
+      "minDelay": "Minimum delay (minutes)",
+      "maxDelay": "Maximum delay (minutes)",
+      "spreadOverDay": "Spread actions over the day",
+      "maxMsgPer10Min": "Max messages per user / 10min",
+      "responsesPerCycle": "Responses per cycle",
+      "minMsgs": "Min msgs",
+      "maxMsgs": "Max msgs",
+      "maxReactions": "Max reactions",
+      "participants": "Participants",
+      "maxControlledUsers": "Max controlled users",
+      "autoPickup": "Auto-pickup",
+      "weekdayMsgs": "Msgs/day (weekday)",
+      "weekendMsgs": "Msgs/day (weekend)",
+      "weekdayUsers": "Users/day (weekday)",
+      "weekendUsers": "Users/day (weekend)",
+      "inactivityLabel": "Inactivity threshold ({hours}h)",
+      "noConfig": "No config for this conversation",
+      "selectConversation": "Select a conversation",
+      "apply": "Apply"
+    },
+    "topicEditModal": {
+      "titleEdit": "Edit \"{label}\"",
+      "titleNew": "New topic",
+      "fieldSlug": "Slug",
+      "fieldLabel": "Label",
+      "fieldDescription": "Description (optional)",
+      "fieldKeywordPatterns": "Regex patterns (one per line)",
+      "keywordPatternsHint": "The strategist scores each eligible topic by match count on the conversation context. Top 3 then random.",
+      "fieldInstruction": "Instruction template",
+      "instructionHint": "({{label}}, {{conversationTitle}}, {{conversationDescription}} available)",
+      "fieldSearchHint": "Search hint template",
+      "fieldCooldown": "Cooldown (minutes)",
+      "cooldownHint": "Delay before re-selecting this topic for the same conversation.",
+      "fieldActive": "Active (used by strategist)",
+      "cancel": "Cancel",
+      "saving": "Saving...",
+      "save": "Save",
+      "errorSlugFormat": "Slug must be kebab_case (a-z, 0-9, _, -)",
+      "errorNoPatterns": "At least 1 regex pattern required",
+      "errorInvalidRegex": "Invalid regex: {pattern}",
+      "errorTemplateTooShort": "Instruction template too short (min 20 chars)",
+      "errorSave": "Save error",
+      "errorUnknown": "Unknown error",
+      "placeholderSlug": "astronomy",
+      "placeholderLabel": "Astronomy",
+      "placeholderDescription": "Discussions about astronomy, space, NASA, space missions.",
+      "placeholderInstruction": "Start a NEW topic on {{label}} (discovery, mission, recent scientific debate)...",
+      "placeholderSearchHint": "{{label}} news this week"
     }
   },
   "agentLive": {
@@ -308,6 +377,166 @@
         "title": "Server & Network",
         "description": "Server and services configuration"
       }
+    }
+  },
+  "monitoring": {
+    "title": "Monitoring",
+    "description": "Real-time platform supervision",
+    "refresh": "Refresh",
+    "autoRefreshOn": "Auto-refresh ON",
+    "autoRefreshOff": "Auto-refresh OFF",
+    "errorRealtime": "Error loading real-time data",
+    "errorHealth": "Error loading health data",
+    "errorMetrics": "Error loading metrics",
+    "tabs": {
+      "realtime": "Real-time",
+      "health": "Health",
+      "metrics": "Metrics"
+    },
+    "realtime": {
+      "onlineUsers": "Online users",
+      "onlineUsersDesc": "Connected now",
+      "messagesLastHour": "Messages last hour",
+      "messagesLastHourDesc": "Last 60 minutes",
+      "activeConversations": "Active conversations",
+      "activeConversationsDesc": "With recent activity",
+      "socketConnections": "Socket.IO connections",
+      "socketConnectionsDesc": "WebSocket connections",
+      "chartTitle": "Activity by hour",
+      "chartSubtitle": "Message volume over last 24h"
+    },
+    "health": {
+      "latency": "Latency",
+      "pingStatus": "Ping status",
+      "operational": "Operational",
+      "error": "Error",
+      "excellent": "Excellent",
+      "acceptable": "Acceptable",
+      "slow": "Slow",
+      "allCircuitsOk": "All circuits are operational"
+    },
+    "metrics": {
+      "periodDescription": "KPIs and trends for the selected period",
+      "7d": "7 days",
+      "30d": "30 days",
+      "90d": "90 days",
+      "engagementRate": "Engagement rate",
+      "engagementRateDesc": "Messages read / sent",
+      "growth": "Growth",
+      "growthDesc": "New users",
+      "messagesPerUser": "Messages/user",
+      "messagesPerUserDesc": "Average per active user",
+      "activeUserRate": "Active user rate",
+      "activeUserRateDesc": "Users with activity",
+      "volumeChartTitle": "Volume over time",
+      "volumeChartSubtitle": "Messages and unique authors",
+      "messagesLabel": "Messages",
+      "uniqueAuthorsLabel": "Unique authors",
+      "languageDistTitle": "Language distribution",
+      "languageDistSubtitle": "Most used languages",
+      "userDistTitle": "User distribution",
+      "userDistSubtitle": "By activity level",
+      "messageTypes": "Message types"
+    }
+  },
+  "analytics": {
+    "title": "Analytics & Statistics",
+    "description": "Advanced analytics dashboard",
+    "back": "Back",
+    "export": "Export",
+    "period": "Period",
+    "period24h": "24 hours",
+    "period7d": "7 days",
+    "period30d": "30 days",
+    "period90d": "90 days",
+    "period1y": "1 year",
+    "stats": {
+      "dailyMessages": "Daily messages",
+      "dailyMessagesDesc": "Last 24 hours",
+      "activeUsers": "Active users",
+      "activeUsersDesc": "This week",
+      "autoTranslations": "Auto translations",
+      "autoTranslationsDesc": "This month",
+      "avgTime": "Average time",
+      "avgTimeDesc": "Per user",
+      "engagementRate": "Engagement rate",
+      "engagementRateDesc": "Messages read",
+      "peakActivity": "Peak activity",
+      "peakActivityDesc": "Peak hours",
+      "growth": "Growth",
+      "growthDesc": "New users",
+      "activeCommunities": "Active communities",
+      "activeCommunitiesDesc": "Out of {total} total"
+    },
+    "realtime": {
+      "title": "Real-time metrics",
+      "online": "Online now",
+      "messagesLastHour": "Messages (last hour)",
+      "activeConversations": "Active conversations"
+    },
+    "volumeChart": {
+      "title": "Message volume",
+      "subtitle": "Messages and active users over 7 days",
+      "messages": "Messages",
+      "users": "Users"
+    },
+    "hourlyChart": {
+      "title": "Activity by hour",
+      "today": "Today"
+    },
+    "messageTypes": {
+      "title": "Message types"
+    },
+    "insights": {
+      "title": "Insights & recommendations",
+      "positive": {
+        "title": "Positive growth",
+        "description": "User engagement is up 15% this week. Peak hours (18h-21h) show record activity."
+      },
+      "translation": {
+        "title": "Effective translation",
+        "description": "Automatic translations account for 45% of messages, facilitating multilingual communication."
+      },
+      "session": {
+        "title": "High session time",
+        "description": "Average session time (2h45m) indicates strong engagement. Consider adding break features."
+      },
+      "diversity": {
+        "title": "Content diversity",
+        "description": "Multimedia messages (images, audio, video) account for 34% of total content, enriching exchanges."
+      }
+    },
+    "performance": {
+      "title": "System performance",
+      "availability": "Availability",
+      "latency": "Average latency",
+      "storage": "Stored data",
+      "throughput": "Messages/second (peak)",
+      "excellent": "Excellent",
+      "fast": "Fast",
+      "normal": "Normal",
+      "stable": "Stable"
+    },
+    "userDist": {
+      "title": "User distribution",
+      "subtitle": "By activity level"
+    },
+    "langDist": {
+      "title": "Language distribution",
+      "subtitle": "Most used languages"
+    },
+    "userActivity": {
+      "veryActive": "Very active",
+      "active": "Active",
+      "occasional": "Occasional",
+      "inactive": "Inactive"
+    },
+    "messageTypeNames": {
+      "text": "Text",
+      "images": "Images",
+      "audio": "Audio",
+      "videos": "Videos",
+      "documents": "Documents"
     }
   }
 }

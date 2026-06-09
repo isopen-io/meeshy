@@ -11,6 +11,7 @@ import { getRequestContext } from '../../services/GeoIPService';
 import { createRegisterRateLimiter, createAuthGlobalRateLimiter } from '../../utils/rate-limiter.js';
 import { AuthRouteContext, formatUserResponse } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { sendSuccess, sendBadRequest, sendInternalError } from '../../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'AuthRegisterRoute' });
 
@@ -77,11 +78,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
         const transferData = await phoneTransferService.getTransferDataByToken(validatedData.phoneTransferToken);
 
         if (!transferData.valid) {
-          return reply.status(400).send({
-            success: false,
-            error: 'Token de transfert invalide ou expiré',
-            code: 'INVALID_TRANSFER_TOKEN'
-          });
+          return sendBadRequest(reply, 'Token de transfert invalide ou expiré', { code: 'INVALID_TRANSFER_TOKEN' });
         }
 
         logger.info('Phone transfer token valid');
@@ -92,36 +89,30 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       const result = await authService.register(validatedData as RegisterData, requestContext);
 
       if (!result) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Erreur lors de la création du compte'
-        });
+        return sendBadRequest(reply, 'Erreur lors de la création du compte');
       }
 
       // Handle phone ownership conflict
       if (result.phoneOwnershipConflict && result.phoneOwnerInfo) {
         logger.warn('Phone ownership conflict — account NOT created');
-        return reply.send({
-          success: true,
-          data: {
-            phoneOwnershipConflict: true,
-            phoneOwnerInfo: {
-              maskedDisplayName: result.phoneOwnerInfo.maskedDisplayName,
-              maskedUsername: result.phoneOwnerInfo.maskedUsername,
-              maskedEmail: result.phoneOwnerInfo.maskedEmail,
-              avatar: result.phoneOwnerInfo.avatar,
-              phoneNumber: result.phoneOwnerInfo.phoneNumber,
-              phoneCountryCode: result.phoneOwnerInfo.phoneCountryCode
-            },
-            pendingRegistration: {
-              username: validatedData.username,
-              email: validatedData.email,
-              firstName: validatedData.firstName,
-              lastName: validatedData.lastName,
-              password: validatedData.password,
-              systemLanguage: validatedData.systemLanguage,
-              regionalLanguage: validatedData.regionalLanguage
-            }
+        return sendSuccess(reply, {
+          phoneOwnershipConflict: true,
+          phoneOwnerInfo: {
+            maskedDisplayName: result.phoneOwnerInfo.maskedDisplayName,
+            maskedUsername: result.phoneOwnerInfo.maskedUsername,
+            maskedEmail: result.phoneOwnerInfo.maskedEmail,
+            avatar: result.phoneOwnerInfo.avatar,
+            phoneNumber: result.phoneOwnerInfo.phoneNumber,
+            phoneCountryCode: result.phoneOwnerInfo.phoneCountryCode
+          },
+          pendingRegistration: {
+            username: validatedData.username,
+            email: validatedData.email,
+            firstName: validatedData.firstName,
+            lastName: validatedData.lastName,
+            password: validatedData.password,
+            systemLanguage: validatedData.systemLanguage,
+            regionalLanguage: validatedData.regionalLanguage
           }
         });
       }
@@ -129,10 +120,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       const { user } = result;
 
       if (!user) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Erreur lors de la création du compte'
-        });
+        return sendBadRequest(reply, 'Erreur lors de la création du compte');
       }
 
       // Execute phone transfer if validated
@@ -154,13 +142,10 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       const token = authService.generateToken(user);
       const permissions = authService.getUserPermissions(user as any);
 
-      reply.send({
-        success: true,
-        data: {
-          user: formatUserResponse(user, permissions),
-          token,
-          expiresIn: 24 * 60 * 60
-        }
+      return sendSuccess(reply, {
+        user: formatUserResponse(user, permissions),
+        token,
+        expiresIn: 24 * 60 * 60
       });
 
     } catch (error) {
@@ -171,35 +156,19 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
 
       // Erreurs de validation connues
       if (errorMessage.includes('déjà utilisé') || errorMessage.includes('already exists')) {
-        return reply.status(400).send({
-          success: false,
-          error: errorMessage,
-          code: 'DUPLICATE_FIELD'
-        });
+        return sendBadRequest(reply, errorMessage, { code: 'DUPLICATE_FIELD' });
       }
 
       if (errorMessage.includes('Email invalide') || errorMessage.includes('Format d\'email')) {
-        return reply.status(400).send({
-          success: false,
-          error: errorMessage,
-          code: 'INVALID_EMAIL'
-        });
+        return sendBadRequest(reply, errorMessage, { code: 'INVALID_EMAIL' });
       }
 
       if (errorMessage.includes('mot de passe') || errorMessage.includes('password')) {
-        return reply.status(400).send({
-          success: false,
-          error: errorMessage,
-          code: 'INVALID_PASSWORD'
-        });
+        return sendBadRequest(reply, errorMessage, { code: 'INVALID_PASSWORD' });
       }
 
       if (errorMessage.includes('username') || errorMessage.includes('utilisateur')) {
-        return reply.status(400).send({
-          success: false,
-          error: errorMessage,
-          code: 'INVALID_USERNAME'
-        });
+        return sendBadRequest(reply, errorMessage, { code: 'INVALID_USERNAME' });
       }
 
       // Erreur générique avec détails en dev
@@ -234,10 +203,7 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       };
 
       if (!username && !email && !phoneNumber) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Username, email ou numéro de téléphone requis'
-        });
+        return sendBadRequest(reply, 'Username, email ou numéro de téléphone requis');
       }
 
       const prisma = (fastify as any).prisma;
@@ -329,16 +295,10 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
         }
       }
 
-      return reply.send({
-        success: true,
-        data: result
-      });
+      return sendSuccess(reply, result);
     } catch (error) {
       logger.error('Error checking availability', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la vérification'
-      });
+      return sendInternalError(reply, 'Erreur lors de la vérification');
     }
   });
 
@@ -349,16 +309,10 @@ export function registerRegistrationRoutes(context: AuthRouteContext) {
       const initService = new InitService((fastify as any).prisma);
       await initService.initializeDatabase();
 
-      return reply.send({
-        success: true,
-        data: { message: 'Database initialized successfully' }
-      });
+      return sendSuccess(reply, { message: 'Database initialized successfully' });
     } catch (error) {
       logger.error('Error during forced initialization', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Failed to initialize database'
-      });
+      return sendInternalError(reply, 'Failed to initialize database');
     }
   });
 }

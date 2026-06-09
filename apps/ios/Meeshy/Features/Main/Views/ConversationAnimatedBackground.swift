@@ -115,6 +115,14 @@ struct ConversationAnimatedBackground: View {
     @State private var orbitPhase: CGFloat = 0
     @State private var groupColorPhase: Bool = false
 
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+    /// Honour both the OS Reduce Motion switch and the in-app override, exactly
+    /// as `SkeletonView` does. When set, the four continuous `repeatForever`
+    /// background animations never start — the conversation keeps a calm static
+    /// gradient, saving GPU/CPU/battery the whole time it is on screen.
+    private var reduceMotion: Bool { systemReduceMotion || userForcedReduceMotion }
+
     private var currentGroupColor: Color {
         groupColorPhase ? config.groupEndColor : config.groupStartColor
     }
@@ -171,6 +179,9 @@ struct ConversationAnimatedBackground: View {
     // MARK: - Animation Control
 
     private func startAnimations() {
+        // Reduce Motion (OS or in-app): never kick off the four continuous
+        // repeatForever animations — leave the static gradient/overlays as-is.
+        guard !reduceMotion else { return }
         animate = false
         wavePhase = 0
         orbitPhase = 0
