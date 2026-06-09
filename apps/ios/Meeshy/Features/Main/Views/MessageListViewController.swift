@@ -270,8 +270,11 @@ final class MessageListViewController: UIViewController {
             return
         case .message(let localId):
             if let record = store.message(for: localId) {
-                let msg = record.toMessage(currentUserId: currentUserId)
-                topDayStart = calendar.startOfDay(for: msg.createdAt)
+                // Read `createdAt` straight off the record — `toMessage` decodes
+                // five JSON blobs (attachments/reactions/reply/forward/call) and
+                // we only need the day. This path runs per top-cell change while
+                // scrolling; `toMessage().createdAt` is just `record.createdAt`.
+                topDayStart = calendar.startOfDay(for: record.createdAt)
             } else {
                 topDayStart = nil
             }
