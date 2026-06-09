@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { UserDisplay } from './UserDisplay';
 import type { DeliveryQueueItem } from '@/services/agent-admin.service';
+import { useI18n } from '@/hooks/use-i18n';
 
 type DeliveryQueueItemCardProps = {
   item: DeliveryQueueItem;
@@ -44,6 +45,7 @@ function formatCountdown(ms: number): string {
 }
 
 export default memo(function DeliveryQueueItemCard({ item, onDelete, onEdit }: DeliveryQueueItemCardProps) {
+  const { t } = useI18n('admin');
   const [remainingMs, setRemainingMs] = useState(Math.max(0, item.scheduledAt - Date.now()));
   const [editing, setEditing] = useState(false);
   const [editContent, setEditContent] = useState('');
@@ -125,7 +127,7 @@ export default memo(function DeliveryQueueItemCard({ item, onDelete, onEdit }: D
           {delivering ? (
             <Badge className="text-[10px] px-1.5 bg-amber-100 dark:bg-amber-900/50 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700" variant="outline">
               <Loader2 className="h-2.5 w-2.5 mr-0.5 animate-spin" />
-              Envoi...
+              {t('agent.deliveryQueue.sending')}
             </Badge>
           ) : (
             <Badge variant="outline" className="font-mono text-[10px] px-1.5 tabular-nums border-slate-200 dark:border-slate-700">
@@ -146,7 +148,7 @@ export default memo(function DeliveryQueueItemCard({ item, onDelete, onEdit }: D
       {/* Reaction target */}
       {!isMessage && (
         <p className="text-[10px] text-gray-400 mb-2">
-          Target: {item.action.type === 'reaction' ? item.action.targetMessageId.slice(0, 12) : ''}...
+          {t('agent.deliveryQueue.target')}{item.action.type === 'reaction' ? item.action.targetMessageId.slice(0, 12) : ''}...
         </p>
       )}
 
@@ -168,7 +170,7 @@ export default memo(function DeliveryQueueItemCard({ item, onDelete, onEdit }: D
               className="h-6 text-[10px] gap-1"
             >
               {saving ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Check className="h-2.5 w-2.5" />}
-              Sauvegarder
+              {t('agent.deliveryQueue.save')}
             </Button>
             <Button
               size="sm"
@@ -178,7 +180,7 @@ export default memo(function DeliveryQueueItemCard({ item, onDelete, onEdit }: D
               className="h-6 text-[10px] gap-1"
             >
               <X className="h-2.5 w-2.5" />
-              Annuler
+              {t('agent.deliveryQueue.cancel')}
             </Button>
           </div>
         </div>
@@ -196,7 +198,7 @@ export default memo(function DeliveryQueueItemCard({ item, onDelete, onEdit }: D
               className="h-6 text-[10px] gap-1 text-gray-400 hover:text-gray-600"
             >
               <Pencil className="h-2.5 w-2.5" />
-              Modifier
+              {t('agent.deliveryQueue.edit')}
             </Button>
           )}
           <AlertDialog>
@@ -208,20 +210,20 @@ export default memo(function DeliveryQueueItemCard({ item, onDelete, onEdit }: D
                 className="h-6 text-[10px] gap-1 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
               >
                 {deleting ? <Loader2 className="h-2.5 w-2.5 animate-spin" /> : <Trash2 className="h-2.5 w-2.5" />}
-                Supprimer
+                {t('agent.deliveryQueue.delete')}
               </Button>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Supprimer ce message ?</AlertDialogTitle>
+                <AlertDialogTitle>{t('agent.deliveryQueue.deleteConfirmTitle')}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Ce message ne sera pas envoyé. Cette action est irréversible.
+                  {t('agent.deliveryQueue.deleteConfirmDescription')}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                <AlertDialogCancel>{t('agent.deliveryQueue.cancel')}</AlertDialogCancel>
                 <AlertDialogAction onClick={handleDelete} className="bg-red-600 hover:bg-red-700">
-                  Supprimer
+                  {t('agent.deliveryQueue.delete')}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Server } from 'lucide-react';
 import { SettingField } from './SettingField';
+import { useI18n } from '@/hooks/use-i18n';
 import { ConfigSetting } from '@/types/admin-settings';
 
 interface ServerSettingsSectionProps {
@@ -16,6 +17,7 @@ export function ServerSettingsSection({
   settings,
   onUpdate,
 }: ServerSettingsSectionProps) {
+  const { t } = useI18n('admin');
   const implementedCount = settings.filter(s => s.implemented).length;
 
   return (
@@ -24,11 +26,11 @@ export function ServerSettingsSection({
         <div className="flex items-center space-x-3">
           <Server className="h-6 w-6 text-slate-600 dark:text-slate-400" />
           <div className="flex-1">
-            <CardTitle>Serveur et réseau</CardTitle>
-            <CardDescription>Configuration du serveur et des services</CardDescription>
+            <CardTitle>{t('adminSettings.sections.server.title')}</CardTitle>
+            <CardDescription>{t('adminSettings.sections.server.description')}</CardDescription>
           </div>
           <Badge variant="outline">
-            {implementedCount}/{settings.length} implémentés
+            {t('adminSettings.implemented', { count: implementedCount, total: settings.length })}
           </Badge>
         </div>
       </CardHeader>

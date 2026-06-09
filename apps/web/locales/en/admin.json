@@ -175,6 +175,16 @@
       "editTitle": "Edit",
       "disableTitle": "Disable (soft delete)",
       "deleteTitle": "Delete permanently"
+    },
+    "deliveryQueue": {
+      "sending": "Sending...",
+      "target": "Target: ",
+      "save": "Save",
+      "cancel": "Cancel",
+      "edit": "Edit",
+      "delete": "Delete",
+      "deleteConfirmTitle": "Delete this message?",
+      "deleteConfirmDescription": "This message will not be sent. This action is irreversible."
     }
   },
   "agentLive": {
@@ -236,5 +246,68 @@
     "disabled": "Disabled"
   },
   "logoutSuccess": "Logged out successfully",
-  "logoutError": "Error logging out"
+  "logoutError": "Error logging out",
+  "adminSettings": {
+    "implemented": "{count}/{total} implemented",
+    "header": {
+      "title": "System Configuration",
+      "description": "Global settings and environment variables",
+      "back": "Back",
+      "unsavedChanges": "Unsaved changes",
+      "reset": "Reset",
+      "saving": "Saving...",
+      "save": "Save"
+    },
+    "stats": {
+      "title": "Configuration Status",
+      "implemented": "Implemented settings",
+      "toImplement": "To implement",
+      "security": "Security settings",
+      "categories": "Categories"
+    },
+    "alerts": {
+      "sensitive": {
+        "title": "Sensitive configuration",
+        "description": "Some settings require a server restart to take effect."
+      },
+      "env": {
+        "title": "Environment variables",
+        "description": "Settings marked with an ENV badge are configured via .env file"
+      }
+    },
+    "sections": {
+      "general": {
+        "title": "General Configuration",
+        "description": "Global application settings"
+      },
+      "security": {
+        "title": "Security",
+        "description": "Security settings and authentication"
+      },
+      "features": {
+        "title": "Features",
+        "description": "Enable/disable features"
+      },
+      "uploads": {
+        "title": "Upload & Storage",
+        "description": "File and media configuration"
+      },
+      "database": {
+        "title": "Database",
+        "description": "PostgreSQL database configuration"
+      },
+      "messages": {
+        "title": "Messages & Content",
+        "description": "Message and translation configuration"
+      },
+      "rateLimiting": {
+        "title": "Rate Limiting",
+        "description": "Protection against abuse and overload"
+      },
+      "server": {
+        "title": "Server & Network",
+        "description": "Server and services configuration"
+      }
+    }
+  }
 }

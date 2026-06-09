@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Database } from 'lucide-react';
 import { SettingField } from './SettingField';
+import { useI18n } from '@/hooks/use-i18n';
 import { ConfigSetting } from '@/types/admin-settings';
 
 interface DatabaseSettingsSectionProps {
@@ -16,6 +17,7 @@ export function DatabaseSettingsSection({
   settings,
   onUpdate,
 }: DatabaseSettingsSectionProps) {
+  const { t } = useI18n('admin');
   const implementedCount = settings.filter(s => s.implemented).length;
 
   return (
@@ -24,11 +26,11 @@ export function DatabaseSettingsSection({
         <div className="flex items-center space-x-3">
           <Database className="h-6 w-6 text-slate-600 dark:text-slate-400" />
           <div className="flex-1">
-            <CardTitle>Base de données</CardTitle>
-            <CardDescription>Configuration de la base de données PostgreSQL</CardDescription>
+            <CardTitle>{t('adminSettings.sections.database.title')}</CardTitle>
+            <CardDescription>{t('adminSettings.sections.database.description')}</CardDescription>
           </div>
           <Badge variant="outline">
-            {implementedCount}/{settings.length} implémentés
+            {t('adminSettings.implemented', { count: implementedCount, total: settings.length })}
           </Badge>
         </div>
       </CardHeader>

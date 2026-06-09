@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { MessageSquare } from 'lucide-react';
 import { SettingField } from './SettingField';
+import { useI18n } from '@/hooks/use-i18n';
 import { ConfigSetting } from '@/types/admin-settings';
 
 interface MessagesSettingsSectionProps {
@@ -16,6 +17,7 @@ export function MessagesSettingsSection({
   settings,
   onUpdate,
 }: MessagesSettingsSectionProps) {
+  const { t } = useI18n('admin');
   const implementedCount = settings.filter(s => s.implemented).length;
 
   return (
@@ -24,11 +26,11 @@ export function MessagesSettingsSection({
         <div className="flex items-center space-x-3">
           <MessageSquare className="h-6 w-6 text-slate-600 dark:text-slate-400" />
           <div className="flex-1">
-            <CardTitle>Messages et contenus</CardTitle>
-            <CardDescription>Configuration des messages et traductions</CardDescription>
+            <CardTitle>{t('adminSettings.sections.messages.title')}</CardTitle>
+            <CardDescription>{t('adminSettings.sections.messages.description')}</CardDescription>
           </div>
           <Badge variant="outline">
-            {implementedCount}/{settings.length} implémentés
+            {t('adminSettings.implemented', { count: implementedCount, total: settings.length })}
           </Badge>
         </div>
       </CardHeader>
