@@ -16,6 +16,7 @@ import {
   createTrackingLinkSchema,
   enrichTrackingLink
 } from './types';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 
 /**
  * Routes de création et gestion des liens de tracking
@@ -153,10 +154,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       }
 
       if (body.customToken && body.customToken.length < 5 && !isPrivileged) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Le token personnalisé doit contenir au moins 5 caractères'
-        });
+        return sendBadRequest(reply, 'Le token personnalisé doit contenir au moins 5 caractères');
       }
 
       const existingLink = await trackingLinkService.findExistingTrackingLink(
@@ -165,12 +163,9 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       );
 
       if (existingLink) {
-        return reply.send({
-          success: true,
-          data: {
-            trackingLink: enrichTrackingLink(existingLink, request),
-            existed: true
-          }
+        return sendSuccess(reply, {
+          trackingLink: enrichTrackingLink(existingLink, request),
+          existed: true
         });
       }
 
@@ -187,12 +182,9 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         customToken: body.customToken
       });
 
-      return reply.status(201).send({
-        success: true,
-        data: {
-          trackingLink: enrichTrackingLink(trackingLink, request)
-        }
-      });
+      return sendSuccess(reply, {
+        trackingLink: enrichTrackingLink(trackingLink, request)
+      }, { statusCode: 201 });
 
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -203,16 +195,10 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         });
       }
       if (error instanceof Error && error.message === 'Token already exists') {
-        return reply.status(409).send({
-          success: false,
-          error: 'Ce token existe déjà'
-        });
+        return sendConflict(reply, 'Ce token existe déjà');
       }
       logError(fastify.log, 'Create tracking link error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 
@@ -272,35 +258,23 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       const trackingLink = await trackingLinkService.getTrackingLinkByToken(token);
 
       if (!trackingLink) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Lien de tracking non trouvé'
-        });
+        return sendNotFound(reply, 'Lien de tracking non trouvé');
       }
 
       if (trackingLink.createdBy) {
         if (!isRegisteredUser(request.authContext) ||
             request.authContext.registeredUser!.id !== trackingLink.createdBy) {
-          return reply.status(403).send({
-            success: false,
-            error: 'Accès non autorisé'
-          });
+          return sendForbidden(reply, 'Accès non autorisé');
         }
       }
 
-      return reply.send({
-        success: true,
-        data: {
-          trackingLink
-        }
+      return sendSuccess(reply, {
+        trackingLink
       });
 
     } catch (error) {
       logError(fastify.log, 'Get tracking link error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 
@@ -371,10 +345,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       if (!isRegisteredUser(request.authContext)) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Utilisateur enregistré requis'
-        });
+        return sendForbidden(reply, 'Utilisateur enregistré requis');
       }
 
       const limit = Math.min(parseInt((request.query as any).limit || '20', 10), 50);
@@ -394,25 +365,18 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
         })
       ]);
 
-      return reply.send({
-        success: true,
-        data: {
-          trackingLinks: links
-        },
-        pagination: {
-          limit,
-          offset,
-          total: totalCount,
-          hasMore: offset + links.length < totalCount
-        }
+      return sendPaginatedSuccess(reply, {
+        trackingLinks: links
+      }, {
+        limit,
+        offset,
+        total: totalCount,
+        hasMore: offset + links.length < totalCount
       });
 
     } catch (error) {
       logError(fastify.log, 'Get user tracking links error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 
@@ -468,10 +432,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       const { conversationId } = request.params as { conversationId: string };
 
       if (!isRegisteredUser(request.authContext)) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Utilisateur enregistré requis'
-        });
+        return sendForbidden(reply, 'Utilisateur enregistré requis');
       }
 
       const userId = request.authContext.registeredUser!.id;
@@ -485,27 +446,18 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       });
 
       if (!member) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Vous n\'êtes pas membre de cette conversation'
-        });
+        return sendForbidden(reply, 'Vous n\'êtes pas membre de cette conversation');
       }
 
       const links = await trackingLinkService.getConversationTrackingLinks(conversationId);
 
-      return reply.send({
-        success: true,
-        data: {
-          trackingLinks: links
-        }
+      return sendSuccess(reply, {
+        trackingLinks: links
       });
 
     } catch (error) {
       logError(fastify.log, 'Get conversation tracking links error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 
@@ -564,10 +516,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       const { token } = request.params as { token: string };
 
       if (!isRegisteredUser(request.authContext)) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Utilisateur enregistré requis'
-        });
+        return sendForbidden(reply, 'Utilisateur enregistré requis');
       }
 
       const userId = request.authContext.registeredUser!.id;
@@ -575,17 +524,11 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       const trackingLink = await trackingLinkService.getTrackingLinkByToken(token);
 
       if (!trackingLink) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Lien de tracking non trouvé'
-        });
+        return sendNotFound(reply, 'Lien de tracking non trouvé');
       }
 
       if (trackingLink.createdBy && trackingLink.createdBy !== userId) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Seul le créateur peut désactiver ce lien'
-        });
+        return sendForbidden(reply, 'Seul le créateur peut désactiver ce lien');
       }
 
       const updatedLink = await trackingLinkService.deactivateTrackingLink(token);
@@ -600,10 +543,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       logError(fastify.log, 'Deactivate tracking link error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 
@@ -661,10 +601,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       const { token } = request.params as { token: string };
 
       if (!isRegisteredUser(request.authContext)) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Utilisateur enregistré requis'
-        });
+        return sendForbidden(reply, 'Utilisateur enregistré requis');
       }
 
       const userId = request.authContext.registeredUser!.id;
@@ -672,32 +609,20 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       const trackingLink = await trackingLinkService.getTrackingLinkByToken(token);
 
       if (!trackingLink) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Lien de tracking non trouvé'
-        });
+        return sendNotFound(reply, 'Lien de tracking non trouvé');
       }
 
       if (trackingLink.createdBy && trackingLink.createdBy !== userId) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Seul le créateur peut supprimer ce lien'
-        });
+        return sendForbidden(reply, 'Seul le créateur peut supprimer ce lien');
       }
 
       await trackingLinkService.deleteTrackingLink(token);
 
-      return reply.send({
-        success: true,
-        data: { message: 'Lien supprimé avec succès' }
-      });
+      return sendSuccess(reply, { message: 'Lien supprimé avec succès' });
 
     } catch (error) {
       logError(fastify.log, 'Delete tracking link error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 
@@ -801,10 +726,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       };
 
       if (!isRegisteredUser(request.authContext)) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Utilisateur enregistré requis'
-        });
+        return sendForbidden(reply, 'Utilisateur enregistré requis');
       }
 
       const userId = request.authContext.registeredUser!.id;
@@ -812,44 +734,29 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       const trackingLink = await trackingLinkService.getTrackingLinkByToken(token);
 
       if (!trackingLink) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Lien de tracking non trouvé'
-        });
+        return sendNotFound(reply, 'Lien de tracking non trouvé');
       }
 
       if (trackingLink.createdBy && trackingLink.createdBy !== userId) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Seul le créateur peut modifier ce lien'
-        });
+        return sendForbidden(reply, 'Seul le créateur peut modifier ce lien');
       }
 
       if (body.newToken && !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,48}[a-zA-Z0-9]$/.test(body.newToken)) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Le token doit contenir 2-50 caractères alphanumériques et ne peut pas commencer ou finir par un tiret'
-        });
+        return sendBadRequest(reply, 'Le token doit contenir 2-50 caractères alphanumériques et ne peut pas commencer ou finir par un tiret');
       }
 
       const isPrivileged = ['BIGBOSS', 'ADMIN', 'MODERATOR'].includes(
         request.authContext.registeredUser!.role
       );
       if (body.newToken && body.newToken.length < 5 && !isPrivileged) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Le token doit contenir au moins 5 caractères'
-        });
+        return sendBadRequest(reply, 'Le token doit contenir au moins 5 caractères');
       }
 
       if (body.originalUrl) {
         try {
           new URL(body.originalUrl);
         } catch {
-          return reply.status(400).send({
-            success: false,
-            error: 'URL invalide'
-          });
+          return sendBadRequest(reply, 'URL invalide');
         }
       }
 
@@ -872,24 +779,15 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
     } catch (error) {
       if (error instanceof Error) {
         if (error.message === 'Tracking link not found') {
-          return reply.status(404).send({
-            success: false,
-            error: 'Lien de tracking non trouvé'
-          });
+          return sendNotFound(reply, 'Lien de tracking non trouvé');
         }
         if (error.message === 'Token already exists') {
-          return reply.status(409).send({
-            success: false,
-            error: 'Ce token existe déjà'
-          });
+          return sendConflict(reply, 'Ce token existe déjà');
         }
       }
 
       logError(fastify.log, 'Update tracking link error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 
@@ -948,35 +846,23 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
       const { token } = request.params as { token: string };
 
       if (!isRegisteredUser(request.authContext)) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Utilisateur enregistré requis'
-        });
+        return sendForbidden(reply, 'Utilisateur enregistré requis');
       }
 
       if (!/^[a-zA-Z0-9_-]{2,50}$/.test(token)) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Le token doit contenir entre 2 et 50 caractères alphanumériques, tirets ou underscores'
-        });
+        return sendBadRequest(reply, 'Le token doit contenir entre 2 et 50 caractères alphanumériques, tirets ou underscores');
       }
 
       const isAvailable = await trackingLinkService.isTokenAvailable(token);
 
-      return reply.send({
-        success: true,
-        data: {
-          token,
-          available: isAvailable
-        }
+      return sendSuccess(reply, {
+        token,
+        available: isAvailable
       });
 
     } catch (error) {
       logError(fastify.log, 'Check token availability error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 }
