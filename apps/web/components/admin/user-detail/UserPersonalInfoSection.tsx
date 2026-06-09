@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { User, Edit2, Save, X } from 'lucide-react';
 import { apiService } from '@/services/api.service';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface UserPersonalInfoProps {
   user: unknown;
@@ -24,6 +25,7 @@ export function UserPersonalInfoSection({
   userId,
   onUpdate
 }: UserPersonalInfoProps) {
+  const { t } = useI18n('admin');
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
@@ -61,12 +63,12 @@ export function UserPersonalInfoSection({
       });
 
       if (response.data?.success) {
-        toast.success('Informations personnelles mises à jour');
+        toast.success(t('usersDetail.roleUpdatedSuccess'));
         setEditing(false);
         onUpdate();
       }
     } catch (error: unknown) {
-      toast.error(error.message || 'Erreur lors de la mise à jour');
+      toast.error(error.message || t('usersDetail.roleUpdateError'));
     } finally {
       setSaving(false);
     }
@@ -78,7 +80,7 @@ export function UserPersonalInfoSection({
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center space-x-2 dark:text-gray-100">
             <User className="h-5 w-5" />
-            <span>Informations Personnelles</span>
+            <span>{t('usersDetail.personalInfoTitle')}</span>
           </CardTitle>
           {!editing ? (
             <Button
@@ -88,7 +90,7 @@ export function UserPersonalInfoSection({
               className="dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 dark:text-gray-200"
             >
               <Edit2 className="h-4 w-4 mr-1" />
-              Modifier
+              {t('usersDetail.editModifier')}
             </Button>
           ) : (
             <div className="flex space-x-2">
@@ -100,7 +102,7 @@ export function UserPersonalInfoSection({
                 className="dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 dark:text-gray-200"
               >
                 <X className="h-4 w-4 mr-1" />
-                Annuler
+                {t('usersDetail.cancelEdit')}
               </Button>
               <Button
                 size="sm"
@@ -109,7 +111,7 @@ export function UserPersonalInfoSection({
                 className="dark:bg-blue-700 dark:hover:bg-blue-800"
               >
                 <Save className="h-4 w-4 mr-1" />
-                {saving ? 'Sauvegarde...' : 'Sauvegarder'}
+                {saving ? t('usersDetail.saveChanges') : t('usersDetail.saveButton2')}
               </Button>
             </div>
           )}
@@ -120,7 +122,7 @@ export function UserPersonalInfoSection({
           <>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium dark:text-gray-200">Prénom</label>
+                <label className="text-sm font-medium dark:text-gray-200">{t('usersDetail.labelFirstName')}</label>
                 <Input
                   value={formData.firstName}
                   onChange={(e) => handleChange('firstName', e.target.value)}
@@ -128,7 +130,7 @@ export function UserPersonalInfoSection({
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium dark:text-gray-200">Nom</label>
+                <label className="text-sm font-medium dark:text-gray-200">{t('usersDetail.labelLastName')}</label>
                 <Input
                   value={formData.lastName}
                   onChange={(e) => handleChange('lastName', e.target.value)}
@@ -138,7 +140,7 @@ export function UserPersonalInfoSection({
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium dark:text-gray-200">Nom d&apos;affichage</label>
+              <label className="text-sm font-medium dark:text-gray-200">{t('usersDetail.labelDisplayNameField')}</label>
               <Input
                 value={formData.displayName || ''}
                 onChange={(e) => handleChange('displayName', e.target.value)}
@@ -148,7 +150,7 @@ export function UserPersonalInfoSection({
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium dark:text-gray-200">Nom d&apos;utilisateur (username)</label>
+              <label className="text-sm font-medium dark:text-gray-200">{t('usersDetail.labelUsernameField')}</label>
               <Input
                 value={formData.username}
                 onChange={(e) => {
@@ -159,12 +161,12 @@ export function UserPersonalInfoSection({
                 placeholder="nom-utilisateur"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Uniquement lettres, chiffres, tirets et underscores
+                {t('usersDetail.usernameHint')}
               </p>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm font-medium dark:text-gray-200">Biographie</label>
+              <label className="text-sm font-medium dark:text-gray-200">{t('usersDetail.labelBio')}</label>
               <textarea
                 className="w-full p-2 border dark:border-gray-700 rounded-md text-sm min-h-[80px] dark:bg-gray-800 dark:text-gray-100"
                 value={formData.bio}
@@ -172,26 +174,26 @@ export function UserPersonalInfoSection({
                 maxLength={500}
               />
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                {formData.bio?.length || 0}/500 caractères
+                {t('usersDetail.charCount', { count: String(formData.bio?.length || 0) })}
               </p>
             </div>
           </>
         ) : (
           <div className="space-y-3">
             <div className="flex items-center text-sm">
-              <span className="w-40 text-gray-600 dark:text-gray-400">Nom complet:</span>
+              <span className="w-40 text-gray-600 dark:text-gray-400">{t('usersDetail.labelFullName')}</span>
               <span className="font-medium dark:text-gray-200">
                 {user.firstName} {user.lastName}
               </span>
             </div>
             {user.displayName && (
               <div className="flex items-center text-sm">
-                <span className="w-40 text-gray-600 dark:text-gray-400">Nom d&apos;affichage:</span>
+                <span className="w-40 text-gray-600 dark:text-gray-400">{t('usersDetail.labelDisplayName')}</span>
                 <span className="font-medium dark:text-gray-200">{user.displayName}</span>
               </div>
             )}
             <div className="flex items-center text-sm">
-              <span className="w-40 text-gray-600 dark:text-gray-400">Username:</span>
+              <span className="w-40 text-gray-600 dark:text-gray-400">{t('usersDetail.labelUsername')}</span>
               <span className="font-medium font-mono flex items-center dark:text-gray-200">
                 <User className="h-4 w-4 mr-2 text-gray-400 dark:text-gray-500" />
                 @{user.username}
@@ -199,7 +201,7 @@ export function UserPersonalInfoSection({
             </div>
             {user.bio && (
               <div className="text-sm">
-                <span className="text-gray-600 dark:text-gray-400 block mb-1">Biographie:</span>
+                <span className="text-gray-600 dark:text-gray-400 block mb-1">{t('usersDetail.labelBio')}</span>
                 <p className="text-gray-900 dark:text-gray-200">{user.bio}</p>
               </div>
             )}

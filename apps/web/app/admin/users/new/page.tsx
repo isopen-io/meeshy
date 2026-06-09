@@ -306,7 +306,7 @@ export default function NewUserPage() {
                 <div className="space-y-2 md:col-span-2">
                   <label className="text-sm font-medium">{t('users.newUser.labelBio')}</label>
                   <textarea
-                    className="w-full p-2 border rounded-md text-sm min-h-[80px]"
+                    className="w-full p-2 border rounded-md text-sm min-h-[80px] dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
                     placeholder="À propos de cet utilisateur..."
                     value={formData.bio}
                     onChange={(e) => handleChange('bio', e.target.value)}
@@ -330,7 +330,7 @@ export default function NewUserPage() {
                     {t('users.newUser.labelRole')} <span className="text-red-500">*</span>
                   </label>
                   <select
-                    className="w-full p-2 border rounded-md text-sm bg-white"
+                    className="w-full p-2 border rounded-md text-sm bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
                     value={formData.role}
                     onChange={(e) => handleChange('role', e.target.value)}
                   >
@@ -346,7 +346,7 @@ export default function NewUserPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">{t('users.newUser.labelSystemLang')}</label>
                   <select
-                    className="w-full p-2 border rounded-md text-sm bg-white"
+                    className="w-full p-2 border rounded-md text-sm bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
                     value={formData.systemLanguage}
                     onChange={(e) => handleChange('systemLanguage', e.target.value)}
                   >
@@ -369,7 +369,7 @@ export default function NewUserPage() {
                 <div className="space-y-2">
                   <label className="text-sm font-medium">{t('users.newUser.labelRegionalLang')}</label>
                   <select
-                    className="w-full p-2 border rounded-md text-sm bg-white"
+                    className="w-full p-2 border rounded-md text-sm bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-gray-100"
                     value={formData.regionalLanguage}
                     onChange={(e) => handleChange('regionalLanguage', e.target.value)}
                   >
