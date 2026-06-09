@@ -320,7 +320,7 @@ class ConversationListViewModel: ObservableObject {
                     // Defensive dedup: a concurrent fullSync / socket event
                     // may have surfaced the conversation between the fetch
                     // start and this point.
-                    if let existing = self.conversations.firstIndex(where: { $0.id == domain.id }) {
+                    if let existing = self.convIndex(for: domain.id) {
                         self.conversations.remove(at: existing)
                     }
                     self.conversations.insert(domain, at: 0)
@@ -659,7 +659,7 @@ class ConversationListViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self, let convId = event.conversationId else { return }
-                if let idx = conversations.firstIndex(where: { $0.id == convId }) {
+                if let idx = convIndex(for: convId) {
                     var conv = conversations[idx]
                     if let isPinned = event.isPinned { conv.userState.isPinned = isPinned }
                     if let isMuted = event.isMuted { conv.userState.isMuted = isMuted }
