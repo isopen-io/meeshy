@@ -82,7 +82,7 @@ export async function userPreferencesRoutes(fastify: FastifyInstance) {
       }
     },
     async (request, reply) => {
-      const userId = (request as any).auth?.userId;
+      const userId = request.auth?.userId;
 
       if (!userId) {
         return reply.status(401).send({
@@ -143,7 +143,7 @@ export async function userPreferencesRoutes(fastify: FastifyInstance) {
       }
     },
     async (request, reply) => {
-      const userId = (request as any).auth?.userId;
+      const userId = request.auth?.userId;
 
       if (!userId) {
         return reply.status(401).send({

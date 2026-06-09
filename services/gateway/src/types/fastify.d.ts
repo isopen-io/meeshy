@@ -18,7 +18,17 @@ import { MultiLevelJobMappingCache } from '../services/MultiLevelJobMappingCache
 import { MeeshySocketIOHandler } from '../socketio/MeeshySocketIOHandler';
 import { FastifyRequest, FastifyReply } from 'fastify';
 
+declare module '@fastify/jwt' {
+  interface FastifyJWT {
+    user: { userId: string; username: string; role: string; isAnonymous?: boolean };
+  }
+}
+
 declare module 'fastify' {
+  interface FastifyRequest {
+    auth?: { userId?: string; isAuthenticated: boolean; isAnonymous: boolean };
+  }
+
   interface FastifyInstance {
     prisma: PrismaClient;
     redis: Redis | null;
