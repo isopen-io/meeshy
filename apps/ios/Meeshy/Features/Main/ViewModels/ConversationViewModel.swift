@@ -1209,9 +1209,15 @@ class ConversationViewModel: ObservableObject {
             // transcription / translated audios dictionaries.
             let freshSnapshot = await messageStore.loadInitialSnapshot()
             await translationsHydrated
+            // Merge the volatile (CacheCoordinator) translations for THESE exact
+            // messages into the dict BEFORE apply. `hydratePersistedTranslations`
+            // only pre-loads GRDB-persisted rows, so freshly-received translations
+            // that haven't been persisted yet would otherwise land only in the
+            // post-apply pass — popping the language flags in a frame AFTER the
+            // bubbles paint. Hydrating here makes the first paint carry the flags.
+            await hydrateTranslationsFromCache(messageIds: freshSnapshot.map(\.localId))
             messageStore.apply(records: freshSnapshot)
             hydrateMetadataFromGRDB(from: freshSnapshot)
-            await hydrateTranslationsFromCache()
             // Always revalidate from API in background — the GRDB local store may only
             // contain messages WE sent (optimistic inserts) while messages received from
             // other participants while the conversation was closed are absent because
@@ -1233,6 +1239,9 @@ class ConversationViewModel: ObservableObject {
             async let translationsHydrated: Void = hydratePersistedTranslations()
             let staleSnapshot = await messageStore.loadInitialSnapshot()
             await translationsHydrated
+            // Pre-apply volatile-cache merge (see .fresh) so the language flags
+            // paint with the bubbles instead of a frame later.
+            await hydrateTranslationsFromCache(messageIds: staleSnapshot.map(\.localId))
             messageStore.apply(records: staleSnapshot)
             hydrateMetadataFromGRDB(from: staleSnapshot)
             if messageStore.messages.isEmpty {
@@ -1240,7 +1249,6 @@ class ConversationViewModel: ObservableObject {
                 await refreshMessagesFromAPI()
                 await hydrateTranslationsFromCache()
             } else {
-                await hydrateTranslationsFromCache()
                 isRevalidating = true
                 Task { [weak self] in
                     guard let self else { return }
@@ -3157,8 +3165,8 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
-    private func hydrateTranslationsFromCache() async {
-        let msgIds = messages.map(\.id)
+    private func hydrateTranslationsFromCache(messageIds: [String]? = nil) async {
+        let msgIds = messageIds ?? messages.map(\.id)
         let prismeLangs = Set(preferredLanguages.map { $0.lowercased() })
 
         // 1. In-memory CacheCoordinator (fast, volatile)
