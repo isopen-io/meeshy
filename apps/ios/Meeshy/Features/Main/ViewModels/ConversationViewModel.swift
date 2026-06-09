@@ -138,6 +138,16 @@ class ConversationViewModel: ObservableObject {
     @Published var hasOlderMessages = true
     @Published var hasNewerMessages = false
     @Published var isSending = false
+    /// Number of sends currently awaiting their network round-trip. Backs
+    /// `isSending` (true ⇔ ≥1 in flight) WITHOUT gating new sends — DISTINCT
+    /// messages send concurrently (2026-06-09). See `sendMessage`'s dedup.
+    private var inFlightSendCount = 0
+    /// Last (dedupKey, timestamp) accepted by `sendMessage`. Guards against an
+    /// accidental double-tap of the SAME logical message within
+    /// `Self.duplicateSendDebounce`; DISTINCT messages are never blocked.
+    private var lastAcceptedSend: (key: String, at: Date)?
+    /// Window within which an identical re-send is treated as a double-tap.
+    private static let duplicateSendDebounce: TimeInterval = 0.6
     @Published var error: String?
 
     /// Set before prepend so the view can restore scroll position
@@ -1762,10 +1772,34 @@ class ConversationViewModel: ObservableObject {
     /// `TextAnalyzer` re-detects from the typed text.
     private func defaultComposeLanguage() -> String { "fr" }
 
+    /// Stable identity of a logical message, used to dedup an accidental
+    /// double-tap. Two taps producing the same key within
+    /// `duplicateSendDebounce` are the same message fired twice; distinct
+    /// messages produce distinct keys and never block each other.
+    private static func sendDedupKey(
+        content: String,
+        replyToId: String?,
+        storyReplyToId: String?,
+        forwardedFromId: String?,
+        attachmentIds: [String]?
+    ) -> String {
+        [
+            content,
+            replyToId ?? "",
+            storyReplyToId ?? "",
+            forwardedFromId ?? "",
+            (attachmentIds ?? []).sorted().joined(separator: ",")
+        ].joined(separator: "\u{1F}")
+    }
+
     @discardableResult
     func sendMessage(content: String, replyToId: String? = nil, storyReplyToId: String? = nil, storyReplyReference: ReplyReference? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, originalLanguage: String? = nil, existingTempId: String? = nil) async -> Bool {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty || !(attachmentIds ?? []).isEmpty else { return false }
+        Logger.messages.info("SendFlow enter convId=\(self.conversationId, privacy: .public) textLen=\(text.count, privacy: .public) attachmentIds=\((attachmentIds ?? []).count, privacy: .public) existingTempId=\(existingTempId ?? "nil", privacy: .public) isSending=\(self.isSending, privacy: .public)")
+        guard !text.isEmpty || !(attachmentIds ?? []).isEmpty else {
+            Logger.messages.error("SendFlow EARLY-RETURN guard=emptyContent convId=\(self.conversationId, privacy: .public)")
+            return false
+        }
         // Debounce: a fast double-tap on the send button used to trigger two
         // concurrent `sendMessage` runs, both inserting their own optimistic
         // record with a fresh `tempId`, both POSTing the request — the user
@@ -1781,9 +1815,40 @@ class ConversationViewModel: ObservableObject {
         // second one could be lost when the actor's pending-state machine
         // observed a duplicate `clientMessageId` mid-enqueue. The guard
         // now serializes both paths and the offline enqueue is awaited.
-        guard !isSending else { return false }
+        // Double-tap dedup — replaces the old global `isSending` mutex.
+        //
+        // The legacy `guard !isSending` serialized ALL sends: while one send
+        // held the lock (the whole REST POST `await`, up to ~30 s on a slow
+        // network), every subsequent tap returned false silently — the
+        // "impossible d'envoyer plusieurs messages à la suite quand le 1er est
+        // sur l'horloge" bug (root-caused 2026-06-09, trace in
+        // apps/ios/logs/sendflow-pending-lock-2026-06-09.log).
+        //
+        // A real messenger lets DISTINCT messages fly concurrently, each with
+        // its own optimistic bubble + clock. We keep the guard's original
+        // intent — kill accidental double-taps of the SAME message — by deduping
+        // on message identity within a short window instead of locking the whole
+        // send path. The check-and-set runs BEFORE the first `await`, so the
+        // @MainActor serialization of the synchronous prefix makes it atomic
+        // against a concurrent burst (no duplicate optimistic row). Retries
+        // (`existingTempId != nil`) are a deliberate re-send and bypass the
+        // debounce (the gateway dedups them by clientMessageId).
+        if existingTempId == nil {
+            let dedupKey = Self.sendDedupKey(content: text, replyToId: replyToId, storyReplyToId: storyReplyToId, forwardedFromId: forwardedFromId, attachmentIds: attachmentIds)
+            if let last = lastAcceptedSend, last.key == dedupKey, Date().timeIntervalSince(last.at) < Self.duplicateSendDebounce {
+                Logger.messages.error("SendFlow BLOCKED guard=duplicate-debounce convId=\(self.conversationId, privacy: .public) textLen=\(text.count, privacy: .public) — identical message re-fired within \(Self.duplicateSendDebounce, privacy: .public)s; deduped")
+                return false
+            }
+            lastAcceptedSend = (dedupKey, Date())
+        }
+        inFlightSendCount += 1
         isSending = true
-        defer { isSending = false }
+        Logger.messages.info("SendFlow LOCK inFlight=\(self.inFlightSendCount, privacy: .public) convId=\(self.conversationId, privacy: .public) textLen=\(text.count, privacy: .public)")
+        defer {
+            inFlightSendCount = max(0, inFlightSendCount - 1)
+            isSending = inFlightSendCount > 0
+            Logger.messages.info("SendFlow UNLOCK inFlight=\(self.inFlightSendCount, privacy: .public) convId=\(self.conversationId, privacy: .public)")
+        }
 
         // Stop typing emission on send
         socketHandler?.stopTypingEmission()
@@ -2002,6 +2067,7 @@ class ConversationViewModel: ObservableObject {
                 layoutVersion: 0, layoutMaxWidth: nil,
                 changeVersion: 0
             )
+            Logger.messages.info("SendFlow insertOptimistic START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public)")
             do {
                 try await persistence.insertOptimistic(optimisticRecord)
                 Logger.messages.debug("SendFlow insertOptimistic OK tempId=\(tempId, privacy: .public) state=.sending convId=\(self.conversationId, privacy: .public)")
@@ -2057,7 +2123,7 @@ class ConversationViewModel: ObservableObject {
             // investigation 2026-05-17). REST is direct (~25 ms server-side).
             // Re-enable the WebSocket-first path once the Socket.IO channel
             // is repaired and the `message:send` ACK round-trip is verified.
-            Logger.messages.debug("SendFlow POST /messages tempId=\(tempId, privacy: .public) — awaiting response")
+            Logger.messages.info("SendFlow POST /messages START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public) — awaiting response (isSending held)")
             let responseData = try await messageService.send(
                 conversationId: conversationId, request: body
             )
@@ -2079,7 +2145,7 @@ class ConversationViewModel: ObservableObject {
                 localId: tempId,
                 event: .serverAck(serverId: serverId, at: serverCreatedAt)
             )
-            Logger.messages.debug("SendFlow applyEvent serverAck tempId=\(tempId, privacy: .public) resultState=\(ackResult.map { String(describing: $0) } ?? "nil", privacy: .public)")
+            Logger.messages.info("SendFlow PENDING->SENT tempId=\(tempId, privacy: .public) serverId=\(serverId, privacy: .public) resultState=\(ackResult.map { String(describing: $0) } ?? "nil", privacy: .public) transport=rest")
             let ackElapsedMs = Int(Date().timeIntervalSince(sendStartedAt) * 1000)
             Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(serverId, privacy: .public) transport=rest durationMs=\(ackElapsedMs, privacy: .public)")
 
@@ -2132,6 +2198,7 @@ class ConversationViewModel: ObservableObject {
                 || resolvedBlur == true
                 || pendingEffects.hasAnyEffect
             if !hasSpecialProps {
+                Logger.messages.warning("SendFlow socket-fallback START tempId=\(tempId, privacy: .public) convId=\(self.conversationId, privacy: .public) — REST failed, awaiting socket ack up to ~30s (isSending held)")
                 let socketAck = await messageSocket.sendViaSocketFallback(
                     conversationId: conversationId,
                     content: finalContent,

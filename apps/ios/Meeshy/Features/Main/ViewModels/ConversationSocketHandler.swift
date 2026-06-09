@@ -313,6 +313,7 @@ final class ConversationSocketHandler {
                                 localId: tempId,
                                 event: .serverAck(serverId: apiMsg.id, at: serverMsg.updatedAt)
                             )
+                            Logger.messages.info("SendFlow PENDING->SENT (socket broadcast) tempId=\(tempId, privacy: .public) serverId=\(apiMsg.id, privacy: .public) transport=broadcast")
                             // Persist server-confirmed content/attachments/reactions
                             // so the store snapshot reflects ground-truth values.
                             // `nil` attachments/reactions are preserved by
