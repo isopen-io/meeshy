@@ -10,6 +10,7 @@ import { messageAttachmentSchema, errorResponseSchema } from '@meeshy/shared/typ
 import type { AttachmentParams, TranslateBody, TranscribeBody } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { sendSuccess, sendUnauthorized, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'AttachmentTranslationRoutes' });
 
@@ -156,11 +157,7 @@ export async function registerTranslationRoutes(
 
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext?.isAuthenticated) {
-          return reply.status(401).send({
-            success: false,
-            error: 'UNAUTHORIZED',
-            message: 'Authentication required'
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         const { attachmentId } = request.params as AttachmentParams;
@@ -173,11 +170,7 @@ export async function registerTranslationRoutes(
         });
 
         if (!attachment) {
-          return reply.status(404).send({
-            success: false,
-            error: 'ATTACHMENT_NOT_FOUND',
-            message: 'Attachment not found'
-          });
+          return sendNotFound(reply, 'ATTACHMENT_NOT_FOUND', { message: 'Attachment not found' });
         }
 
         const mimeType = attachment.mimeType || '';
@@ -250,17 +243,10 @@ export async function registerTranslationRoutes(
           });
         }
 
-        return reply.send({
-          success: true,
-          data: result.data
-        });
+        return sendSuccess(reply, result.data);
       } catch (error: any) {
         logger.error('Error translating attachment', error as Error);
-        return reply.status(500).send({
-          success: false,
-          error: 'TRANSLATION_FAILED',
-          message: error.message || 'Error translating attachment'
-        });
+        return sendInternalError(reply, 'TRANSLATION_FAILED', { message: error.message || 'Error translating attachment' });
       }
     }
   );
@@ -381,11 +367,7 @@ export async function registerTranslationRoutes(
 
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext?.isAuthenticated) {
-          return reply.status(401).send({
-            success: false,
-            error: 'UNAUTHORIZED',
-            message: 'Authentication required'
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         const { attachmentId } = request.params as AttachmentParams;
@@ -399,19 +381,11 @@ export async function registerTranslationRoutes(
         });
 
         if (!attachment) {
-          return reply.status(404).send({
-            success: false,
-            error: 'ATTACHMENT_NOT_FOUND',
-            message: 'Attachment not found'
-          });
+          return sendNotFound(reply, 'ATTACHMENT_NOT_FOUND', { message: 'Attachment not found' });
         }
 
         if (!attachment.mimeType?.startsWith('audio/')) {
-          return reply.status(400).send({
-            success: false,
-            error: 'INVALID_ATTACHMENT_TYPE',
-            message: 'Only audio attachments can be transcribed'
-          });
+          return sendBadRequest(reply, 'INVALID_ATTACHMENT_TYPE', { message: 'Only audio attachments can be transcribed' });
         }
 
         // Vérifier les consentements de l'utilisateur pour la transcription audio
@@ -434,56 +408,38 @@ export async function registerTranslationRoutes(
         const existingData = await translationService.getAttachmentWithTranscription(attachmentId);
 
         if (!existingData) {
-          return reply.status(404).send({
-            success: false,
-            error: 'ATTACHMENT_NOT_FOUND',
-            message: 'Attachment not found'
-          });
+          return sendNotFound(reply, 'ATTACHMENT_NOT_FOUND', { message: 'Attachment not found' });
         }
 
         if (shouldReturnExistingTranscription({
           hasTranscription: !!existingData.transcription,
           force
         })) {
-          return reply.send({
-            success: true,
-            data: {
-              taskId: null,
-              status: 'completed',
-              attachment: existingData.attachment,
-              transcription: existingData.transcription,
-              translatedAudios: existingData.translatedAudios
-            }
+          return sendSuccess(reply, {
+            taskId: null,
+            status: 'completed',
+            attachment: existingData.attachment,
+            transcription: existingData.transcription,
+            translatedAudios: existingData.translatedAudios
           });
         }
 
         const result = await translationService.transcribeAttachment(attachmentId);
 
         if (!result) {
-          return reply.status(500).send({
-            success: false,
-            error: 'TRANSCRIPTION_FAILED',
-            message: 'Failed to start transcription'
-          });
+          return sendInternalError(reply, 'TRANSCRIPTION_FAILED', { message: 'Failed to start transcription' });
         }
 
-        return reply.send({
-          success: true,
-          data: {
-            taskId: result.taskId,
-            status: 'processing',
-            attachment: result.attachment,
-            transcription: null,
-            translatedAudios: []
-          }
+        return sendSuccess(reply, {
+          taskId: result.taskId,
+          status: 'processing',
+          attachment: result.attachment,
+          transcription: null,
+          translatedAudios: []
         });
       } catch (error: any) {
         logger.error('Error transcribing attachment', error as Error);
-        return reply.status(500).send({
-          success: false,
-          error: 'TRANSCRIPTION_FAILED',
-          message: error.message || 'Error transcribing attachment'
-        });
+        return sendInternalError(reply, 'TRANSCRIPTION_FAILED', { message: error.message || 'Error transcribing attachment' });
       }
     }
   );

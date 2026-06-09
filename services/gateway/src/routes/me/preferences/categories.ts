@@ -15,6 +15,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../../utils/logger';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../../../utils/logger-enhanced.js';
+import { sendSuccess, sendUnauthorized, sendNotFound, sendBadRequest } from '../../../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'PreferenceCategoriesRoutes' });
 import { createUnifiedAuthMiddleware } from '../../../middleware/auth';
@@ -204,11 +205,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         const userId = (request as any).auth?.userId;
 
         if (!userId) {
-          return reply.status(401).send({
-            success: false,
-            error: 'UNAUTHORIZED',
-            message: 'Authentication required'
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         const { limit = 50, offset = 0 } = request.query;
@@ -282,11 +279,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         const userId = (request as any).auth?.userId;
 
         if (!userId) {
-          return reply.status(401).send({
-            success: false,
-            error: 'UNAUTHORIZED',
-            message: 'Authentication required'
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         const { categoryId } = request.params;
@@ -299,17 +292,10 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         });
 
         if (!category) {
-          return reply.status(404).send({
-            success: false,
-            error: 'NOT_FOUND',
-            message: 'Category not found'
-          });
+          return sendNotFound(reply, 'Category not found');
         }
 
-        return reply.send({
-          success: true,
-          data: category
-        });
+        return sendSuccess(reply, category);
       } catch (error: any) {
         logError('Error fetching category', error, { source: 'categories-routes' });
         return reply.status(500).send({
@@ -352,21 +338,13 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         const userId = (request as any).auth?.userId;
 
         if (!userId) {
-          return reply.status(401).send({
-            success: false,
-            error: 'UNAUTHORIZED',
-            message: 'Authentication required'
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         const { name, color, icon, order, isExpanded } = request.body;
 
         if (!name || name.trim().length === 0) {
-          return reply.status(400).send({
-            success: false,
-            error: 'VALIDATION_ERROR',
-            message: 'Category name is required'
-          });
+          return sendBadRequest(reply, 'Category name is required');
         }
 
         // Si order n'est pas spécifié, prendre le max + 1
@@ -397,10 +375,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         };
         broadcastToUser(fastify, userId, SERVER_EVENTS.CATEGORY_CREATED, createdPayload);
 
-        return reply.send({
-          success: true,
-          data: category
-        });
+        return sendSuccess(reply, category);
       } catch (error: any) {
         logError('Error creating category', error, { source: 'categories-routes' });
         return reply.status(500).send({
@@ -450,11 +425,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         const userId = (request as any).auth?.userId;
 
         if (!userId) {
-          return reply.status(401).send({
-            success: false,
-            error: 'UNAUTHORIZED',
-            message: 'Authentication required'
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         const { categoryId } = request.params;
@@ -468,11 +439,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         });
 
         if (!existing) {
-          return reply.status(404).send({
-            success: false,
-            error: 'NOT_FOUND',
-            message: 'Category not found'
-          });
+          return sendNotFound(reply, 'Category not found');
         }
 
         const updateData: any = {};
@@ -493,10 +460,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         };
         broadcastToUser(fastify, userId, SERVER_EVENTS.CATEGORY_UPDATED, updatedPayload);
 
-        return reply.send({
-          success: true,
-          data: updated
-        });
+        return sendSuccess(reply, updated);
       } catch (error: any) {
         logError('Error updating category', error, { source: 'categories-routes' });
         return reply.status(500).send({
@@ -539,11 +503,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         const userId = (request as any).auth?.userId;
 
         if (!userId) {
-          return reply.status(401).send({
-            success: false,
-            error: 'UNAUTHORIZED',
-            message: 'Authentication required'
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         const { categoryId } = request.params;
@@ -557,11 +517,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         });
 
         if (!existing) {
-          return reply.status(404).send({
-            success: false,
-            error: 'NOT_FOUND',
-            message: 'Category not found'
-          });
+          return sendNotFound(reply, 'Category not found');
         }
 
         // Transaction: détacher les conversations puis supprimer la catégorie
@@ -627,11 +583,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
         const userId = (request as any).auth?.userId;
 
         if (!userId) {
-          return reply.status(401).send({
-            success: false,
-            error: 'UNAUTHORIZED',
-            message: 'Authentication required'
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         const { updates } = request.body;
