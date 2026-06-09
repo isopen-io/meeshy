@@ -5,6 +5,18 @@ import MeeshySDK
 import MeeshyUI
 import os
 
+/// Signposts pour profiler les segments CHAUDS du rendu de la liste dans
+/// Instruments (track « Points of Interest ») ET via `XCTOSSignpostMetric` dans
+/// les tests. Deux intervalles : `applySnapshot` (prépa snapshot O(n) : reversed
+/// + map + groupByDay + diff) et `cellConfig` (config PAR cellule : domainMessage
+/// + build `BubbleContent` + `UIHostingConfiguration`). Permet de voir EXACTEMENT
+/// quel segment du rendu coûte, par device/iOS, sur un scroll réel.
+enum PerfSignpost {
+    static let signposter = OSSignposter(
+        logHandle: OSLog(subsystem: "me.meeshy.app", category: .pointsOfInterest)
+    )
+}
+
 final class MessageListViewController: UIViewController {
 
     private var collectionView: UICollectionView!
@@ -335,6 +347,8 @@ final class MessageListViewController: UIViewController {
                 cell.contentConfiguration = nil
                 return
             }
+            let _spState = PerfSignpost.signposter.beginInterval("cellConfig")
+            defer { PerfSignpost.signposter.endInterval("cellConfig", _spState) }
 
             // Typing indicator — vraie cellule (dernière du flux inversé,
             // donc bas visuel). Pas un overlay : un message reçu en direct
@@ -519,6 +533,8 @@ final class MessageListViewController: UIViewController {
     // MARK: - Snapshot
 
     private func applySnapshot(animated: Bool = true) {
+        let _spState = PerfSignpost.signposter.beginInterval("applySnapshot")
+        defer { PerfSignpost.signposter.endInterval("applySnapshot", _spState) }
         var snapshot = NSDiffableDataSourceSnapshot<MessageListSection, MessageListItem>()
         snapshot.appendSections([.main])
 
