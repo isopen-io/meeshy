@@ -285,6 +285,13 @@ struct BubbleStandardLayout: View {
         content.isMe && content.meta.deliveryStatus == .failed
     }
 
+    /// BUG3 — single retry affordance. When the failed-outgoing orange
+    /// `BubbleFailedRetryBar` is shown, it owns the resend action, so the footer
+    /// must suppress its own `arrow.clockwise` retry button (otherwise the bubble
+    /// exposes two competing affordances and the footer tap collides with the
+    /// status sheet). The footer keeps its retry handler in every other case.
+    static func footerShowsRetry(isFailedOutgoing: Bool) -> Bool { !isFailedOutgoing }
+
     private var deliveryStatusAccessibilityLabel: String {
         switch message.deliveryStatus {
         case .sending: return "en cours d'envoi"
@@ -914,7 +921,10 @@ struct BubbleStandardLayout: View {
         let actions = BubbleFooterActions(
             onFlagTap: showFlags ? { code in handleFlagTap(code) } : nil,
             onTranslate: showTranslation ? { onShowTranslationDetail?(content.messageId) } : nil,
-            onRetry: { performManualRetry() },
+            // BUG3 — suppress the footer's own retry button for failed outgoing
+            // messages: the orange `BubbleFailedRetryBar` owns the resend so the
+            // bubble never shows two competing retry affordances.
+            onRetry: Self.footerShowsRetry(isFailedOutgoing: isFailedOutgoing) ? { performManualRetry() } : nil,
             onSenderTap: { selectedProfileUser = .from(message: message) },
             onViewStory: onViewStory,
             onShowReadStatus: readStatusCallback

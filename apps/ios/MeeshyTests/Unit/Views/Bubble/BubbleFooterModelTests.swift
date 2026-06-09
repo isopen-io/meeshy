@@ -75,4 +75,19 @@ final class BubbleFooterModelTests: XCTestCase {
         XCTAssertTrue(makeModel(deliveryStatus: .failed).isFailed)
         XCTAssertFalse(makeModel(deliveryStatus: .sending).isFailed)
     }
+
+    // MARK: - BUG3 — single retry affordance (footer vs orange band)
+
+    // A failed outgoing message renders the orange `BubbleFailedRetryBar`, which
+    // owns the resend action. The footer must NOT also expose its own retry
+    // button (the historical `arrow.clockwise`) — otherwise the user sees two
+    // competing affordances and the footer tap conflicts with the status sheet.
+
+    func test_footerShowsRetry_falseWhenFailedOutgoing_bandOwnsRetry() {
+        XCTAssertFalse(BubbleStandardLayout.footerShowsRetry(isFailedOutgoing: true))
+    }
+
+    func test_footerShowsRetry_trueWhenNotFailedOutgoing() {
+        XCTAssertTrue(BubbleStandardLayout.footerShowsRetry(isFailedOutgoing: false))
+    }
 }
