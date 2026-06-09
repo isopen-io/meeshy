@@ -459,7 +459,7 @@ struct ConversationListView: View {
         actions.append(SwipeAction(
             icon: "eye.slash.fill",
             label: String(localized: "swipe.hide", defaultValue: "Masquer"),
-            color: Color(hex: "EF4444")
+            color: MeeshyColors.error
         ) {
             Task { await conversationViewModel.deleteConversation(conversationId: conversation.id) }
         })
