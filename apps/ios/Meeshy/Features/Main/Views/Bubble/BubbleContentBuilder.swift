@@ -90,7 +90,10 @@ extension BubbleContent {
         self.text = effective.isEmpty ? nil : Text(
             raw: effective,
             isEmojiOnly: isEmojiOnly,
-            emojiFontSize: emojiResult.fontSize
+            emojiFontSize: emojiResult.fontSize,
+            // Précalcul unique du lien (NSDataDetector) — réutilisé par
+            // `hasBubbleBodyContent` et le rendu du link preview sans re-scan.
+            firstLinkURL: LinkPreviewFetcher.firstURL(in: effective)
         )
 
         // --- Translation panel ---

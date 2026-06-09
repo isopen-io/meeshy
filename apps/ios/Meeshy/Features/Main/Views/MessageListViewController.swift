@@ -185,6 +185,10 @@ final class MessageListViewController: UIViewController {
     /// après `applySnapshot` pour que le label suive le message en haut visible.
     private let stickyDayState = MessageDayStickyState()
     private var stickyDayHost: UIHostingController<MessageDayStickyOverlay>?
+    /// Dernier item de tête pour lequel la sticky pill a été calculée. Permet
+    /// d'éviter le recalcul (résolution `store.message` + `toMessage`) à chaque
+    /// frame de `scrollViewDidScroll` tant que la cellule de tête ne change pas.
+    private var lastStickyTopItem: MessageListItem?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -227,20 +231,24 @@ final class MessageListViewController: UIViewController {
     /// déjà visible, on cache la sticky pour éviter le doublon visuel.
     private func updateStickyDayLabel() {
         guard let dataSource else { return }
-        let visibleIndices = collectionView.indexPathsForVisibleItems.map(\.item)
-        guard let topIndex = visibleIndices.max() else {
+        // O(1) : l'item du haut visible = plus grand IndexPath visible, résolu
+        // par `itemIdentifier(for:)`. AVANT : `dataSource.snapshot()` copiait
+        // TOUT le snapshot (O(n) item identifiers) à CHAQUE frame de scroll —
+        // coûteux sur les grandes conversations (jusqu'à 120 fps en ProMotion).
+        guard let topIndexPath = collectionView.indexPathsForVisibleItems.max(),
+              let topItem = dataSource.itemIdentifier(for: topIndexPath) else {
+            lastStickyTopItem = nil
             stickyDayState.label = nil
             return
         }
-        let items = dataSource.snapshot().itemIdentifiers
-        guard topIndex < items.count else {
-            stickyDayState.label = nil
-            return
-        }
+        // La cellule de tête n'a pas changé depuis le dernier calcul → le label
+        // est déjà à jour. Évite un `store.message(for:)` + `toMessage`
+        // (jusqu'à 5 décodages JSON) à chaque frame tant qu'on reste dessus.
+        guard topItem != lastStickyTopItem else { return }
+        lastStickyTopItem = topItem
 
         let calendar = Calendar.current
         let now = Date()
-        let topItem = items[topIndex]
         let topDayStart: Date?
         switch topItem {
         case .dayHeader:

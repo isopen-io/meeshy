@@ -550,7 +550,6 @@ struct ConversationListView: View {
                 withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }
             }
             .task {
-                Logger.messages.debug("[DIAG] ConversationListView.task ENTERED")
                 async let conversations: Void = conversationViewModel.loadConversations()
                 async let communities: Void = loadUserCommunities()
                 _ = await (conversations, communities)

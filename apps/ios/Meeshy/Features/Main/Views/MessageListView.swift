@@ -156,10 +156,14 @@ struct BubbleSwipeContainer<Content: View>: View {
             .onChanged { value in
                 let h = value.translation.width
                 let v = abs(value.translation.height)
-                // Horizontal-dominant only (2:1 ratio) so vertical scroll
-                // wins ties — keeps the parent UICollectionView scrolling
-                // smooth when the user drags diagonally.
-                guard abs(h) > v * 2 else { return }
+                // Horizontal-dominant only (3:1 ratio) so un scroll vertical —
+                // notamment un scroll vers le haut pour charger les anciens
+                // messages — ne peut JAMAIS franchir le seuil de swipe et
+                // déclencher le retour haptique par erreur. Un vrai
+                // swipe-pour-répondre (~60-100pt horizontal, quasi pas de
+                // vertical) passe toujours le gate. Avant : 2:1, qui laissait
+                // fuiter le haptic sur les scrolls diagonaux.
+                guard abs(h) > v * 3 else { return }
                 guard abs(h) > 12 else { return }
                 let zone: CGFloat = 72
                 let absH = abs(h)

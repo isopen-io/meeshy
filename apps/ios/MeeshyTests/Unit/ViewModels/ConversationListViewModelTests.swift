@@ -203,6 +203,22 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertFalse(sut.isLoading)
     }
 
+    func test_loadConversations_concurrentCallers_coalesceToSingleSync() async {
+        // Au lancement, le `.task` de RootView ET celui de ConversationListView
+        // appellent loadConversations() sur le MÊME VM partagé. Deux appelants
+        // concurrents ne doivent déclencher qu'UN seul fullSync (coalescing),
+        // pas deux — sinon thundering herd (double sync + double prefetch).
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        let syncEngine = MockConversationSyncEngine()
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+
+        async let first: Void = sut.loadConversations()
+        async let second: Void = sut.loadConversations()
+        _ = await (first, second)
+
+        XCTAssertEqual(syncEngine.fullSyncCallCount, 1)
+    }
+
     func test_loadConversations_setsIsLoadingToFalseWhenDone() async {
         await CacheCoordinator.shared.conversations.invalidate(for: "list")
         let syncEngine = MockConversationSyncEngine()
