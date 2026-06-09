@@ -185,16 +185,35 @@ struct ConversationMediaGalleryView: View {
 
     // MARK: - Image Page (pinch-to-zoom, vertical drag-to-dismiss)
 
+    /// 5.2 — URL d'image à charger en plein écran : la plus petite variante
+    /// `>=` la largeur écran (évite l'original multi-Mo quand une 1920 suffit).
+    /// Sans variante (image chiffrée) → l'original. Utilisée pour l'affichage ET
+    /// le préchauffage (cohérence : on warm ce qu'on affiche). Pas de `targetSize`
+    /// downsample côté plein écran : le pinch-zoom a besoin des pixels de la
+    /// variante. La sauvegarde Photos garde l'original (qualité maximale).
+    private func fullscreenImageURL(_ attachment: MessageAttachment) -> String {
+        let original = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
+        guard !original.isEmpty else { return "" }
+        let targetPx = Int((UIScreen.main.bounds.width * UIScreen.main.scale).rounded())
+        return ImageVariantSelector.bestImageURL(
+            variants: attachment.imageVariants ?? [],
+            originalURL: original,
+            originalWidth: attachment.width,
+            targetWidthPx: targetPx
+        )
+    }
+
     @ViewBuilder
     private func galleryImagePage(_ attachment: MessageAttachment) -> some View {
         let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
         let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
 
         if fullUrl != nil || thumbUrl != nil || attachment.thumbHash != nil {
+            let selected = fullscreenImageURL(attachment)
             ProgressiveCachedImage(
                 thumbHash: attachment.thumbHash,
                 thumbnailUrl: thumbUrl,
-                fullUrl: fullUrl ?? thumbUrl
+                fullUrl: !selected.isEmpty ? selected : (fullUrl ?? thumbUrl)
             ) {
                 ProgressView().tint(.white)
             }
@@ -411,7 +430,9 @@ struct ConversationMediaGalleryView: View {
         case .video:
             urlStr = attachment.thumbnailUrl ?? ""
         default:
-            urlStr = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
+            // 5.2 — préchauffer la MÊME variante que celle affichée, pas l'original,
+            // sinon on téléchargerait les deux.
+            urlStr = fullscreenImageURL(attachment)
         }
         guard !urlStr.isEmpty,
               let resolved = MeeshyConfig.resolveMediaURL(urlStr)?.absoluteString

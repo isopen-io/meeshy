@@ -468,10 +468,20 @@ struct BubbleStandardLayout: View {
         )) { attachment in
             switch attachment.type {
             case .image:
-                let urlStr = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
+                let original = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
+                // 5.2 — cible plein écran = largeur écran × scale. La variante la
+                // plus petite `>=` cette cible évite de charger l'original 4000px
+                // quand une 1920 suffit ; sans variante → original.
+                let targetPx = Int((UIScreen.main.bounds.width * UIScreen.main.scale).rounded())
+                let chosen = original.isEmpty ? "" : ImageVariantSelector.bestImageURL(
+                    variants: attachment.imageVariants ?? [],
+                    originalURL: original,
+                    originalWidth: attachment.width,
+                    targetWidthPx: targetPx
+                )
                 let caption = message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : message.content
                 ImageFullscreen(
-                    imageUrl: urlStr.isEmpty ? nil : MeeshyConfig.resolveMediaURL(urlStr),
+                    imageUrl: chosen.isEmpty ? nil : MeeshyConfig.resolveMediaURL(chosen),
                     accentColor: contactColor,
                     caption: caption,
                     mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames

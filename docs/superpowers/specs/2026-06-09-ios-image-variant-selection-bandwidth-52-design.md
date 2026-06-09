@@ -132,7 +132,7 @@ Validation build : `meeshy.sh build` (app + edits ProgressiveCachedImage + grill
 | `MeeshySDK/Tests/MeeshySDKTests/Networking/ImageVariantSelectorTests.swift` | nouveau (SPM) | tests (15 cas) | non |
 | `MeeshyUI/Primitives/CachedAsyncImage.swift` | edit | `targetSize` sur `ProgressiveCachedImage.init` (défaut nil) | non |
 | `apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout+Media.swift` | edit | `targetWidthPx` dans `visualMediaGrid` + thread `cellPointWidth` via `makeGridCell`/`BubbleGridCell`/`BubbleGridImageView` + sélection | non |
-| `apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift` | edit | sélection variante au `.fullScreenCover` (L471) | non |
-| `apps/ios/Meeshy/Features/Main/Views/ConversationView.swift` | edit | sélection variante au 2e call site plein écran (L694) | non |
+| `apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift` | edit | sélection variante au `.fullScreenCover` fallback (L471) | non |
+| `apps/ios/Meeshy/Features/Main/Views/ConversationMediaGalleryView.swift` | edit | sélection variante (helper `fullscreenImageURL`) pour l'affichage galerie + le préchauffage ; save Photos garde l'original | non |
 
-**Zéro édition pbxproj** : nouveaux fichiers dans le package SPM (auto-découverts) ; edits sur fichiers existants. **`ImageViewerView.swift` n'est PAS touché** (chemin inutilisé pour les images de conv — B1).
+**Zéro édition pbxproj** : nouveaux fichiers dans le package SPM (auto-découverts) ; edits sur fichiers existants. **`ImageViewerView.swift` n'est PAS touché** (chemin inutilisé pour les images de conv — B1). **`ConversationView.swift:694` n'est PAS touché** : c'est le preview composer de média LOCAL (`file://`, sans variantes) — la revue Opus l'avait visé par erreur ; le vrai chemin plein écran des images reçues est `ConversationMediaGalleryView` (galerie swipe, `viewModel.allVisualAttachments`). Plein écran zoomable = **pas** de `targetSize` (le pinch-zoom a besoin des pixels de la variante) ; le gain vient de l'URL plus petite.
