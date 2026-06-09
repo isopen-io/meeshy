@@ -16,11 +16,11 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | 31 (type-safety gateway) |
-| Last merged PR | #509 (refactor(gateway) iter-31 — expand FastifyInstance types, remove as any casts) |
-| Last Merged Base (commit) | 4abd54b3 |
-| Next iteration | **32** (UI/UX review — see analysis 2026-06-09-iteration-32) |
-| Next branch to create from | `main` (HEAD = 4abd54b3) |
+| Last completed iteration | 32 (admin i18n 180+ strings, iOS textSelection + Dynamic Type) |
+| Last merged PR | #539 (feat(uiux/iter-32): admin i18n 180+ strings, iOS textSelection + Dynamic Type) |
+| Last Merged Base (commit) | 1875e18a |
+| Next iteration | **33** (web: admin user-detail sections i18n, AgentLlmTab i18n, dark mode inputs; iOS: Dynamic Type SecurityVerificationView, BubbleReactionsOverlay a11y) |
+| Next branch to create from | `main` (HEAD = 1875e18a) |
 
 ---
 
@@ -50,3 +50,4 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 29 | (inline/iter-29) | — | ✅ |
 | 30 | claude/dazzling-hawking-b4tdnk | #507 | ✅ |
 | 31 | claude/iter31-type-safety | #509 | ✅ |
+| 32 | feat/uiux-iter32 | #539 | ✅ |
