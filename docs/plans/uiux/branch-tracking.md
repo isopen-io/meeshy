@@ -16,11 +16,11 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 
 | Field | Value |
 |-------|-------|
-| Last completed iteration | 15 |
-| Last merged PR | #419 (feat(uiux/iter15): color tokens, i18n defaults, Dynamic Type, PostCard i18n) |
-| Last Merged Base (commit) | a525a898 |
-| Next iteration | **16** |
-| Next branch to create from | `main` (HEAD = a525a898) |
+| Last completed iteration | 24 |
+| Last merged PR | #543 (feat(uiux/iter24): Web i18n + iOS Dynamic Type + Android first a11y pass) |
+| Last Merged Base (commit) | 60687dc4 |
+| Next iteration | **25** |
+| Next branch to create from | `dev` (HEAD = 60687dc4) |
 
 ---
 
@@ -34,3 +34,5 @@ Trace the base branch for each new UI/UX iteration, to avoid divergence.
 | 14 | feat/uiux-iter14 | #410 | ✅ |
 | 14b | claude/dazzling-hawking-* | #412, #416 | ✅ |
 | 15 | feat/uiux-iter15 | #419 | ✅ |
+| 16–23 | various | #421–#434 | ✅ |
+| 24 | claude/wizardly-hamilton-fpmwqf | #543 | ✅ |
