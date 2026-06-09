@@ -303,20 +303,17 @@ struct ConversationInfoSheet: View {
 
     @ViewBuilder
     private var heroBannerImage: some View {
-        if let bannerURL = conversation.banner, let url = URL(string: bannerURL) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                case .failure:
-                    heroBannerPlaceholder
-                default:
-                    heroBannerPlaceholder
-                        .overlay(ProgressView().tint(accent))
-                }
+        if let bannerURL = conversation.banner, !bannerURL.isEmpty {
+            // CachedAsyncImage (vs raw AsyncImage) caches the banner so reopening
+            // the info sheet doesn't re-download it, and decodes it at the 140-pt
+            // banner size rather than full resolution.
+            CachedAsyncImage(
+                url: bannerURL,
+                targetSize: CGSize(width: 400, height: 140)
+            ) {
+                heroBannerPlaceholder
             }
+            .aspectRatio(contentMode: .fill)
         } else {
             heroBannerPlaceholder
         }
