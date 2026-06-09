@@ -27,7 +27,10 @@
     "loading": "Loading...",
     "noImage": "No image",
     "by": "by",
-    "of": "of"
+    "of": "of",
+    "deleteSuccess": "File deleted successfully",
+    "deleteError": "Unable to delete file",
+    "delete": "Delete"
   },
   "textDetection": {
     "title": "Long text detected",
@@ -69,4 +72,3 @@
     "deleting": "Deleting..."
   }
 }
-

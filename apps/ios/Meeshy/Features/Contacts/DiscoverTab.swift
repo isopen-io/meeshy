@@ -170,7 +170,7 @@ struct DiscoverTab: View {
             } else if !viewModel.searchQuery.isEmpty && viewModel.searchQuery.count >= 2 {
                 VStack(spacing: 12) {
                     Image(systemName: "magnifyingglass")
-                        .font(.system(size: 32, weight: .light))
+                        .font(.system(.title).weight(.light))
                         .foregroundColor(theme.textMuted.opacity(0.4))
                     Text(String(localized: "contacts.discover.no-results", defaultValue: "Aucun utilisateur trouve", bundle: .main))
                         .font(.subheadline.weight(.medium))

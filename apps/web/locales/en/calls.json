@@ -79,7 +79,7 @@
       "videoSwitchFailed": "Failed to switch video",
       "cameraSwitched": "Camera switched",
       "cameraSwitchFailed": "Failed to switch camera",
-      "joinFailed": "Failed to join call"
+      "joinFailed": "Failed to join call",
       "videoSuspendedPoorConnection": "Weak connection — video paused to keep the call going",
       "videoResumed": "Connection recovered — video back on"
     },

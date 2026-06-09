@@ -111,7 +111,7 @@ struct BlockedTab: View {
         VStack(spacing: 16) {
             Spacer()
             Image(systemName: "hand.raised.slash")
-                .font(.system(size: 48, weight: .light))
+                .font(.system(.largeTitle).weight(.light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
                 .accessibilityHidden(true)
             Text(String(localized: "contacts.blocked.empty", defaultValue: "Aucun utilisateur bloque", bundle: .main))
