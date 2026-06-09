@@ -1,6 +1,13 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
 import {
+  sendSuccess,
+  sendPaginatedSuccess,
+  sendUnauthorized,
+  sendForbidden,
+  sendInternalError
+} from '../../utils/response.js';
+import {
   createUnifiedAuthMiddleware,
   UnifiedAuthRequest,
   isRegisteredUser
@@ -106,10 +113,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
     try {
       const authContext = request.authContext;
       if (!authContext || !isRegisteredUser(authContext)) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Utilisateur non autorisé'
-        });
+        return sendUnauthorized(reply, 'Utilisateur non autorisé');
       }
 
       const limit = Math.min(parseInt((request.query as any).limit || '20', 10), 50);
@@ -165,23 +169,16 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
         }
       }));
 
-      return reply.send({
-        success: true,
-        data: transformedLinks,
-        pagination: {
-          limit,
-          offset,
-          total: totalCount,
-          hasMore: offset + links.length < totalCount
-        }
+      return sendPaginatedSuccess(reply, transformedLinks, {
+        limit,
+        offset,
+        total: totalCount,
+        hasMore: offset + links.length < totalCount
       });
 
     } catch (error) {
       logError(fastify.log, 'Get user links error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la récupération des liens'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération des liens');
     }
   });
 
@@ -245,9 +242,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       if (!isRegisteredUser(request.authContext)) {
-        return reply.status(403).send({
-          error: 'Utilisateur enregistré requis'
-        });
+        return sendForbidden(reply, 'Utilisateur enregistré requis');
       }
 
       const userId = request.authContext.registeredUser!.id;
@@ -393,9 +388,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       if (!isRegisteredUser(request.authContext)) {
-        return reply.status(403).send({
-          error: 'Utilisateur enregistré requis'
-        });
+        return sendForbidden(reply, 'Utilisateur enregistré requis');
       }
 
       const userId = request.authContext.registeredUser!.id;
@@ -533,9 +526,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       if (!isRegisteredUser(request.authContext)) {
-        return reply.status(403).send({
-          error: 'Utilisateur enregistré requis'
-        });
+        return sendForbidden(reply, 'Utilisateur enregistré requis');
       }
 
       const userId = request.authContext.registeredUser!.id;
@@ -580,10 +571,7 @@ export async function registerAdminRoutes(fastify: FastifyInstance) {
         where: { id: link.id }
       });
 
-      return reply.send({
-        success: true,
-        data: { message: 'Lien supprimé avec succès' }
-      });
+      return sendSuccess(reply, { message: 'Lien supprimé avec succès' });
 
     } catch (error) {
       logError(fastify.log, 'Delete link error:', error);
