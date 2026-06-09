@@ -172,12 +172,16 @@
         "verificationSent": "Verification code sent by SMS",
         "error": "Error during change",
         "pending": "Change pending",
-        "pendingMessage": "Code sent to {phone}"
+        "pendingMessage": "Code sent to {phone}",
+        "newPhonePlaceholder": "+1 (555) 123-4567"
       },
       "username": {
         "available": "Username available",
         "alreadyUsed": "This username is already taken",
         "error": "Error during change"
+      },
+      "verification": {
+        "codePlaceholder": "000000"
       }
     },
     "translation": {
