@@ -5,6 +5,7 @@ import AVFoundation
 import CoreLocation
 import Combine
 import MeeshySDK
+import MeeshyUI
 import os
 
 // MARK: - Recording, Sending & Attachment Handlers
@@ -313,7 +314,7 @@ extension ConversationView {
                             if effectiveType != .audio,
                                let thumbUrl = result.thumbnailUrl,
                                let thumbImage = thumbnails[att.id],
-                               let thumbData = thumbImage.jpegData(compressionQuality: 0.8) {
+                               let thumbData = await ImageCompressor.jpegOffMain(thumbImage, quality: 0.8) {
                                 let thumbKey = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString ?? thumbUrl
                                 await CacheCoordinator.shared.thumbnails.store(thumbData, for: thumbKey)
                                 DiskCacheStore.cacheImageForPreview(thumbImage, key: thumbKey)

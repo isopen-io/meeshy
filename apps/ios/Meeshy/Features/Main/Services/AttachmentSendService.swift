@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import MeeshySDK
+import MeeshyUI
 import UIKit
 
 // MARK: - Attachment Send Result
@@ -198,7 +199,7 @@ final class AttachmentSendService: AttachmentSendServiceProviding {
             await CacheCoordinator.shared.images.store(fileData, for: result.fileUrl)
             if let thumbUrl = result.thumbnailUrl,
                let thumbnail,
-               let thumbData = thumbnail.jpegData(compressionQuality: 0.8) {
+               let thumbData = await ImageCompressor.jpegOffMain(thumbnail, quality: 0.8) {
                 await CacheCoordinator.shared.thumbnails.store(thumbData, for: thumbUrl)
             }
         }
