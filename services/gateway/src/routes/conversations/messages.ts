@@ -27,7 +27,7 @@ import type {
   MessagesQuery
 } from './types';
 import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
-import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response.js';
 import { sendWithETag } from '../../utils/etag';
 import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
@@ -1246,7 +1246,7 @@ export function registerMessagesRoutes(
     } catch (error) {
       const totalMs = Math.round(performance.now() - reqStart);
       logger.error(`Error fetching messages (after ${totalMs}ms)`, error);
-      sendInternalError(reply, 'Error retrieving messages');
+      return sendInternalError(reply, 'Error retrieving messages');
     }
   });
 
@@ -1729,7 +1729,7 @@ export function registerMessagesRoutes(
 
     } catch (error) {
       logger.error('Error marking conversation as unread', error);
-      sendInternalError(reply, 'Error marking conversation as unread');
+      return sendInternalError(reply, 'Error marking conversation as unread');
     }
   });
 
@@ -1817,7 +1817,7 @@ export function registerMessagesRoutes(
       return sendSuccess(reply, { pinnedAt: now.toISOString(), pinnedBy: userId });
     } catch (error) {
       logger.error('Error pinning message', error);
-      sendInternalError(reply, 'Error pinning message');
+      return sendInternalError(reply, 'Error pinning message');
     }
   });
 
@@ -1884,7 +1884,7 @@ export function registerMessagesRoutes(
       return sendSuccess(reply, null);
     } catch (error) {
       logger.error('Error unpinning message', error);
-      sendInternalError(reply, 'Error unpinning message');
+      return sendInternalError(reply, 'Error unpinning message');
     }
   });
 
@@ -2056,7 +2056,7 @@ export function registerMessagesRoutes(
       });
     } catch (error) {
       logger.error('Error listing pinned messages', error);
-      sendInternalError(reply, 'Error listing pinned messages');
+      return sendInternalError(reply, 'Error listing pinned messages');
     }
   });
 
@@ -2170,7 +2170,7 @@ export function registerMessagesRoutes(
       return sendSuccess(reply, { messageId, viewOnceCount: newViewOnceCount, maxViewOnceCount, isFullyConsumed });
     } catch (error) {
       logger.error('Error consuming view-once message', error);
-      sendInternalError(reply, 'Error consuming view-once message');
+      return sendInternalError(reply, 'Error consuming view-once message');
     }
   });
 
@@ -2372,7 +2372,7 @@ export function registerMessagesRoutes(
 
     } catch (error) {
       logger.error('Error searching messages', error);
-      sendInternalError(reply, 'Error searching messages');
+      return sendInternalError(reply, 'Error searching messages');
     }
   });
 
