@@ -932,7 +932,7 @@ class ConversationViewModel: ObservableObject {
                     self.storeRefreshGeneration &+= 1
                     let generation = self.storeRefreshGeneration
                     let userId = self.currentUserId
-                    let mapped = self.messageStore.messages.map { $0.toMessage(currentUserId: userId) }
+                    let mapped = self.messageStore.domainMessages(currentUserId: userId)
                     // E2EE: encrypted DMs are persisted as ciphertext — the
                     // socket and REST ingestion paths both store `api.content`
                     // verbatim, so cleartext never touches disk. Decrypt the

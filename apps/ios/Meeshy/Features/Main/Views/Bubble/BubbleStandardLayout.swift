@@ -671,11 +671,32 @@ struct BubbleStandardLayout: View {
             // lui-même — `textBubbleContent` est intentionnellement
             // suppressed pour eviter la chat bubble parasite.
         }
-        .blur(radius: shouldBlur ? 20 : 0)
-        .mask(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .blur(radius: shouldBlur ? 5 : 0)
-        )
+        // Le blur + mask ne s'appliquent qu'aux bulles RÉELLEMENT floutables.
+        // AVANT : appliqués à 100% des bulles (même à radius 0) → une passe de
+        // compositing offscreen (`.mask`) par bulle, gaspillée pour la grande
+        // majorité non floutée (coût GPU au scroll). `content.isBlurred` est
+        // statique par message → branche stable, pas de churn d'identité. Pour
+        // une bulle floutable on garde les modifiers pour animer la révélation.
+        .modifier(BlurRevealModifier(isBlurrable: content.isBlurred, shouldBlur: shouldBlur))
+    }
+
+    /// Gate le blur+mask sur le fait que la bulle soit floutable. Voir l'appel
+    /// dans `contentStack` pour le rationale (perf GPU au scroll).
+    private struct BlurRevealModifier: ViewModifier {
+        let isBlurrable: Bool
+        let shouldBlur: Bool
+        func body(content: Content) -> some View {
+            if isBlurrable {
+                content
+                    .blur(radius: shouldBlur ? 20 : 0)
+                    .mask(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .blur(radius: shouldBlur ? 5 : 0)
+                    )
+            } else {
+                content
+            }
+        }
     }
 
     // MARK: - Emoji-only path
