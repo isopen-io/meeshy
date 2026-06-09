@@ -27,7 +27,10 @@
     "loading": "Chargement...",
     "noImage": "Aucune image",
     "by": "par",
-    "of": "sur"
+    "of": "sur",
+    "deleteSuccess": "Fichier supprimé avec succès",
+    "deleteError": "Impossible de supprimer le fichier",
+    "delete": "Supprimer"
   },
   "textDetection": {
     "title": "Texte long détecté",
@@ -69,4 +72,3 @@
     "deleting": "Suppression..."
   }
 }
-

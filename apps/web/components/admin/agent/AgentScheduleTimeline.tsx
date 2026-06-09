@@ -15,6 +15,7 @@ import {
   type AgentScheduleData,
 } from '@/services/agent-admin.service';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
 
 type AgentScheduleTimelineProps = {
   conversationId: string;
@@ -46,6 +47,7 @@ function budgetGlow(ratio: number): string {
 }
 
 export default memo(function AgentScheduleTimeline({ conversationId, compact = false }: AgentScheduleTimelineProps) {
+  const { t } = useI18n('admin');
   const [schedule, setSchedule] = useState<AgentScheduleData | null>(null);
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
@@ -79,13 +81,13 @@ export default memo(function AgentScheduleTimeline({ conversationId, compact = f
     try {
       const res = await agentAdminService.triggerScan(conversationId);
       if (res.success) {
-        toast.success('Scan déclenché');
+        toast.success(t('agent.toasts.scanTriggered'));
         setTimeout(fetchSchedule, 2000);
       } else {
-        toast.error('Erreur lors du déclenchement');
+        toast.error(t('agent.toasts.scanTriggerError'));
       }
     } catch {
-      toast.error('Erreur réseau');
+      toast.error(t('agent.toasts.networkError'));
     } finally {
       setTriggering(false);
     }

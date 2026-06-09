@@ -199,7 +199,7 @@ struct ContactsListTab: View {
         VStack(spacing: 16) {
             Spacer()
             Image(systemName: "person.2.slash")
-                .font(.system(size: 48, weight: .light))
+                .font(.system(.largeTitle).weight(.light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
                 .accessibilityHidden(true)
             Text(viewModel.searchQuery.isEmpty ? String(localized: "contacts.list.empty", defaultValue: "Aucun contact", bundle: .main) : String(localized: "contacts.list.no-results", defaultValue: "Aucun resultat", bundle: .main))
