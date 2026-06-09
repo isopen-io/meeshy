@@ -660,11 +660,11 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
     // Request timing — log slow requests (>2s) as warnings
     this.server.addHook('onRequest', (request, _reply, done) => {
-      (request as any).__startTime = performance.now();
+      request.__startTime = performance.now();
       done();
     });
     this.server.addHook('onResponse', (request, reply, done) => {
-      const start = (request as any).__startTime;
+      const start = request.__startTime;
       if (start) {
         const durationMs = Math.round(performance.now() - start);
         const level = durationMs > 5000 ? 'warn' : durationMs > 2000 ? 'info' : 'debug';
