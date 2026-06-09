@@ -129,7 +129,8 @@
       "settings": "Settings",
       "encryptionE2EE": "End-to-end encryption",
       "encryptionHybrid": "Hybrid encryption",
-      "encryptionServer": "Server encryption"
+      "encryptionServer": "Server encryption",
+      "reactions": "Reactions"
     },
     "conversationUI": {
       "participants": "Participants",
@@ -587,7 +588,7 @@
       "tooltipSend": "Send",
       "voiceAttachmentName": "Voice message ({duration})",
       "locationAttachmentName": "Current location",
-      "replyTo": "Reply to {{sender}}",
+      "replyTo": "Reply to {sender}",
       "cancelReply": "Cancel reply",
       "messageInput": "Message input",
       "attachFiles": "Select files to attach",

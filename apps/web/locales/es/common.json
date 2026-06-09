@@ -211,18 +211,20 @@
     "exitFullscreen": "Salir de pantalla completa",
     "zoomIn": "Acercar",
     "zoomOut": "Alejar",
-    "rotate": "Rotar"
+    "rotate": "Rotar",
+    "clearSearch": "Borrar búsqueda",
+    "backToList": "Volver a la lista",
+    "backToConversations": "Volver a conversaciones",
+    "breadcrumb": "Migas de pan",
+    "home": "Inicio",
+    "anonymous": "Anónimo",
+    "user": "Usuario",
+    "reactWith": "Reaccionar con {emoji}",
+    "limitReached": "Límite alcanzado: {limit} {category}s máximo",
+    "filesAdded": "Solo {count} archivo(s) añadido(s)",
+    "send": "Enviar",
+    "noTrending": "No hay tendencias por el momento"
   },
   "copied": "Copiado",
-  "never": "Nunca",
-  "clearSearch": "Borrar búsqueda",
-  "backToList": "Volver a la lista",
-  "backToConversations": "Volver a conversaciones",
-  "breadcrumb": "Migas de pan",
-  "home": "Inicio",
-  "anonymous": "Anónimo",
-  "user": "Usuario",
-  "reactWith": "Reaccionar con {{emoji}}",
-  "limitReached": "Límite alcanzado: {{limit}} {{category}}s máximo",
-  "filesAdded": "Solo {{count}} archivo(s) añadido(s)"
+  "never": "Nunca"
 }

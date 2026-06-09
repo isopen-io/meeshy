@@ -785,63 +785,62 @@
         },
         "note": "Nota de segurança: Sempre tome cuidado ao baixar arquivos de fontes desconhecidas. Ative a verificação de vírus e bloqueie arquivos executáveis para máxima proteção."
       }
+    },
+    "v2settings": {
+      "translationLangUpdated": "Idioma de tradução atualizado",
+      "uiLangUpdated": "Idioma da interface atualizado",
+      "passwordChanged": "Senha alterada com sucesso",
+      "passwordChangeError": "Erro ao alterar a senha",
+      "accountDeleted": "Conta excluída",
+      "accountDeleteError": "Erro ao excluir a conta",
+      "deleteAccount": "Excluir minha conta",
+      "deleteAccountTitle": "Excluir sua conta?",
+      "delete": "Excluir"
+    },
+    "v2me": {
+      "logoutSuccess": "Logout realizado com sucesso",
+      "logoutError": "Erro ao fazer logout",
+      "profileUpdated": "Perfil atualizado com sucesso",
+      "profileUpdateError": "Erro ao atualizar o perfil",
+      "editProfile": "Editar perfil"
+    },
+    "chats": {
+      "loading": "Carregando...",
+      "loadMore": "Carregar mais mensagens",
+      "emptyState": "Nenhuma mensagem nesta conversa",
+      "emptyStateCta": "Envie a primeira mensagem!"
+    }
+  },
+  "consentDialog": {
+    "title": "Consentimento necessário",
+    "description": "Alguns recursos requerem seu consentimento explícito para processar dados sensíveis. Por favor, revise e aceite as permissões necessárias abaixo.",
+    "violationsTitle": "As seguintes ações requerem consentimento adicional:",
+    "labels": {
+      "voiceDataConsent": "Processamento de dados de voz",
+      "audioTranscription": "Transcrição de áudio",
+      "videoRecording": "Gravação de vídeo",
+      "biometricData": "Processamento de dados biométricos",
+      "locationSharing": "Compartilhamento de localização",
+      "analytics": "Dados de análise e uso"
+    },
+    "descriptions": {
+      "voiceDataConsent": "Permite o processamento de suas gravações de voz para serviços de transcrição e tradução.",
+      "audioTranscription": "Habilita a transcrição automática de mensagens de áudio.",
+      "videoRecording": "Permite a gravação e processamento de videochamadas.",
+      "biometricData": "Habilita o uso de autenticação biométrica para maior segurança.",
+      "locationSharing": "Permite compartilhar sua localização com os participantes da conversa.",
+      "analytics": "Nos ajuda a melhorar o Meeshy coletando estatísticas de uso anônimas.",
+      "default": "Este recurso requer seu consentimento para processar dados sensíveis."
+    },
+    "legalNote": "Você pode revogar esses consentimentos a qualquer momento nas suas configurações de privacidade.",
+    "buttons": {
+      "accept": "Aceitar e continuar",
+      "cancel": "Cancelar",
+      "submitting": "Processando..."
+    },
+    "errors": {
+      "allRequired": "Todos os consentimentos necessários devem ser aceitos para continuar",
+      "submitFailed": "Falha ao salvar as preferências de consentimento. Por favor, tente novamente."
     }
   }
-},
-"v2settings": {
-  "translationLangUpdated": "Idioma de tradução atualizado",
-  "uiLangUpdated": "Idioma da interface atualizado",
-  "passwordChanged": "Senha alterada com sucesso",
-  "passwordChangeError": "Erro ao alterar a senha",
-  "accountDeleted": "Conta excluída",
-  "accountDeleteError": "Erro ao excluir a conta",
-  "deleteAccount": "Excluir minha conta",
-  "deleteAccountTitle": "Excluir sua conta?",
-  "delete": "Excluir"
-},
-"v2me": {
-  "logoutSuccess": "Logout realizado com sucesso",
-  "logoutError": "Erro ao fazer logout",
-  "profileUpdated": "Perfil atualizado com sucesso",
-  "profileUpdateError": "Erro ao atualizar o perfil",
-  "editProfile": "Editar perfil"
-},
-"chats": {
-  "loading": "Carregando...",
-  "loadMore": "Carregar mais mensagens",
-  "emptyState": "Nenhuma mensagem nesta conversa",
-  "emptyStateCta": "Envie a primeira mensagem!"
-},
-"consentDialog": {
-  "title": "Consentimento necessário",
-  "description": "Alguns recursos requerem seu consentimento explícito para processar dados sensíveis. Por favor, revise e aceite as permissões necessárias abaixo.",
-  "violationsTitle": "As seguintes ações requerem consentimento adicional:",
-  "labels": {
-    "voiceDataConsent": "Processamento de dados de voz",
-    "audioTranscription": "Transcrição de áudio",
-    "videoRecording": "Gravação de vídeo",
-    "biometricData": "Processamento de dados biométricos",
-    "locationSharing": "Compartilhamento de localização",
-    "analytics": "Dados de análise e uso"
-  },
-  "descriptions": {
-    "voiceDataConsent": "Permite o processamento de suas gravações de voz para serviços de transcrição e tradução.",
-    "audioTranscription": "Habilita a transcrição automática de mensagens de áudio.",
-    "videoRecording": "Permite a gravação e processamento de videochamadas.",
-    "biometricData": "Habilita o uso de autenticação biométrica para maior segurança.",
-    "locationSharing": "Permite compartilhar sua localização com os participantes da conversa.",
-    "analytics": "Nos ajuda a melhorar o Meeshy coletando estatísticas de uso anônimas.",
-    "default": "Este recurso requer seu consentimento para processar dados sensíveis."
-  },
-  "legalNote": "Você pode revogar esses consentimentos a qualquer momento nas suas configurações de privacidade.",
-  "buttons": {
-    "accept": "Aceitar e continuar",
-    "cancel": "Cancelar",
-    "submitting": "Processando..."
-  },
-  "errors": {
-    "allRequired": "Todos os consentimentos necessários devem ser aceitos para continuar",
-    "submitFailed": "Falha ao salvar as preferências de consentimento. Por favor, tente novamente."
-  }
-}
 }

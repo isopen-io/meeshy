@@ -184,7 +184,8 @@
       "edit": "Editar",
       "delete": "Eliminar",
       "deleteConfirmTitle": "¿Eliminar este mensaje?",
-      "deleteConfirmDescription": "Este mensaje no se enviará. Esta acción es irreversible."
+      "deleteConfirmDescription": "Este mensaje no se enviará. Esta acción es irreversible.",
+      "empty": "No hay mensajes pendientes"
     },
     "scanControl": {
       "title": "Controles",

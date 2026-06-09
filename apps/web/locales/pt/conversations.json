@@ -131,7 +131,8 @@
       "settings": "Configurações",
       "encryptionE2EE": "Criptografia de ponta a ponta",
       "encryptionHybrid": "Criptografia híbrida",
-      "encryptionServer": "Criptografia no servidor"
+      "encryptionServer": "Criptografia no servidor",
+      "reactions": "Reações"
     },
     "conversationUI": {
       "participants": "Participantes",
@@ -456,9 +457,9 @@
       "refreshError": "Erro ao atualizar",
       "roleError": "Erro ao atualizar o cargo",
       "addError": "Erro ao adicionar participante",
-      "roleUpdated": "Cargo atualizado com sucesso: {{role}}",
-      "invited": "{{name}} foi convidado para a conversa",
-      "added": "{{name}} adicionado como {{role}}",
+      "roleUpdated": "Cargo atualizado com sucesso: {role}",
+      "invited": "{name} foi convidado para a conversa",
+      "added": "{name} adicionado como {role}",
       "promote": "Promover",
       "demote": "Rebaixar",
       "refreshStatuses": "Atualizar status",
@@ -589,7 +590,7 @@
       "tooltipSend": "Enviar",
       "voiceAttachmentName": "Mensagem de voz ({duration})",
       "locationAttachmentName": "Localização atual",
-      "replyTo": "Responder a {{sender}}",
+      "replyTo": "Responder a {sender}",
       "cancelReply": "Cancelar resposta",
       "messageInput": "Entrada de mensagem",
       "attachFiles": "Selecionar arquivos para anexar",

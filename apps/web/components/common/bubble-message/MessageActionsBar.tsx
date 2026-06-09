@@ -1,6 +1,7 @@
 'use client';
 
 import { memo, useCallback, useState, useMemo } from 'react';
+import { useI18n } from '@/hooks/use-i18n';
 import { Smile, Copy, Reply, Flag, Trash2, MoreVertical, Edit, Languages, CheckCircle2, AlertTriangle, HelpCircle, CheckCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -90,6 +91,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
   const router = useRouter();
   const [isTranslationMenuOpen, setIsTranslationMenuOpen] = useState(false);
   const [isReactionMenuOpen, setIsReactionMenuOpen] = useState(false);
+  const { t: tCommon } = useI18n('common');
 
   const handleLanguageSwitch = useCallback((langCode: string) => {
     // Close menu IMMEDIATELY before switching to prevent flickering from re-renders
@@ -395,7 +397,7 @@ export const MessageActionsBar = memo(function MessageActionsBar({
                   transition={{ duration: 0.1 }}
                   role="gridcell"
                   className="w-9 h-9 flex items-center justify-center rounded-md text-2xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
-                  aria-label={`Réagir avec ${emoji}`}
+                  aria-label={tCommon('reactWith', { emoji })}
                 >
                   {emoji}
                 </motion.button>

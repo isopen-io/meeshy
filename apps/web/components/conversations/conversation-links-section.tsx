@@ -17,6 +17,7 @@ import { Link2, Copy, Clock, Users, Eye, FileText, Image, MessageSquare, User, C
 import { copyToClipboard } from '@/lib/clipboard';
 import { buildApiUrl, API_ENDPOINTS } from '@/lib/config';
 import { authManager } from '@/services/auth-manager.service';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface ShareLink {
   id: string;
@@ -61,6 +62,7 @@ interface ConversationLinksSectionProps {
 }
 
 export function ConversationLinksSection({ conversationId }: ConversationLinksSectionProps) {
+  const { t } = useI18n('conversations');
   const [links, setLinks] = useState<ShareLink[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -219,7 +221,7 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
                       {link.name || 'Lien de partage'}
                     </h4>
                     <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
-                      {link.description || 'Aucune description'}
+                      {link.description || t('links.noDescription')}
                     </p>
                   </div>
 
@@ -322,12 +324,12 @@ export function ConversationLinksSection({ conversationId }: ConversationLinksSe
       {isLoading ? (
         <div className="text-center py-4">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mx-auto"></div>
-          <p className="text-xs text-gray-500 mt-2">Chargement des liens...</p>
+          <p className="text-xs text-gray-500 mt-2">{t('links.loading')}</p>
         </div>
       ) : links.length === 0 ? (
         <div className="text-center py-4">
           <Link2 className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-          <p className="text-xs text-gray-500">Aucun lien de partage</p>
+          <p className="text-xs text-gray-500">{t('links.empty')}</p>
         </div>
       ) : (
         <ScrollArea className="max-h-64">

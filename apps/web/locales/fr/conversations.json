@@ -131,7 +131,8 @@
       "settings": "Paramètres",
       "encryptionE2EE": "Chiffrement de bout en bout",
       "encryptionHybrid": "Chiffrement hybride",
-      "encryptionServer": "Chiffrement serveur"
+      "encryptionServer": "Chiffrement serveur",
+      "reactions": "Réactions"
     },
     "conversationUI": {
       "participants": "Participants",
@@ -464,9 +465,9 @@
       "refreshError": "Erreur lors du rafraîchissement",
       "roleError": "Erreur lors de la mise à jour du rôle",
       "addError": "Erreur lors de l'ajout du participant",
-      "roleUpdated": "Rôle mis à jour avec succès : {{role}}",
-      "invited": "{{name}} a été invité à la conversation",
-      "added": "{{name}} ajouté comme {{role}}",
+      "roleUpdated": "Rôle mis à jour avec succès : {role}",
+      "invited": "{name} a été invité à la conversation",
+      "added": "{name} ajouté comme {role}",
       "promote": "Promouvoir",
       "demote": "Rétrograder",
       "refreshStatuses": "Rafraîchir les statuts",
@@ -597,7 +598,7 @@
       "tooltipSend": "Envoyer",
       "voiceAttachmentName": "Message vocal ({duration})",
       "locationAttachmentName": "Position actuelle",
-      "replyTo": "Réponse à {{sender}}",
+      "replyTo": "Réponse à {sender}",
       "cancelReply": "Annuler la réponse",
       "messageInput": "Saisie du message",
       "attachFiles": "Sélectionner des fichiers à joindre",

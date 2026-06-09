@@ -211,18 +211,20 @@
     "exitFullscreen": "Quitter le plein écran",
     "zoomIn": "Zoomer",
     "zoomOut": "Dézoomer",
-    "rotate": "Pivoter"
+    "rotate": "Pivoter",
+    "clearSearch": "Effacer la recherche",
+    "backToList": "Retour à la liste",
+    "backToConversations": "Retour aux conversations",
+    "breadcrumb": "Fil d'Ariane",
+    "home": "Accueil",
+    "anonymous": "Anonyme",
+    "user": "Utilisateur",
+    "reactWith": "Réagir avec {emoji}",
+    "limitReached": "Limite atteinte : {limit} {category}s maximum",
+    "filesAdded": "Seuls {count} fichier(s) ajouté(s)",
+    "send": "Envoyer",
+    "noTrending": "Aucune tendance pour le moment"
   },
   "copied": "Copié",
-  "never": "Jamais",
-  "clearSearch": "Effacer la recherche",
-  "backToList": "Retour à la liste",
-  "backToConversations": "Retour aux conversations",
-  "breadcrumb": "Fil d'Ariane",
-  "home": "Accueil",
-  "anonymous": "Anonyme",
-  "user": "Utilisateur",
-  "reactWith": "Réagir avec {{emoji}}",
-  "limitReached": "Limite atteinte : {{limit}} {{category}}s maximum",
-  "filesAdded": "Seuls {{count}} fichier(s) ajouté(s)"
+  "never": "Jamais"
 }

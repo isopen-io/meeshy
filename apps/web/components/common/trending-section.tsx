@@ -2,6 +2,7 @@
 
 import { TrendingUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface TrendingSectionProps {
   hashtags: string[];
@@ -13,16 +14,18 @@ interface TrendingSectionProps {
  * Composant pour afficher les hashtags tendances
  * Affichage vertical pour les sidebars avec scroll après maxVisible
  */
-export function TrendingSection({ 
-  hashtags, 
+export function TrendingSection({
+  hashtags,
   maxVisible = 6,
-  className = "" 
+  className = ""
 }: TrendingSectionProps) {
+  const { t } = useI18n('common');
+
   if (hashtags.length === 0) {
     return (
       <div className={`text-center text-gray-500 ${className}`}>
         <TrendingUp className="h-8 w-8 mx-auto mb-2 opacity-50" />
-        <p className="text-sm">Aucune tendance pour le moment</p>
+        <p className="text-sm">{t('noTrending')}</p>
       </div>
     );
   }
