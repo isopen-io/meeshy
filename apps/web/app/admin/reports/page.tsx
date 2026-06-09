@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertTriangle, ArrowLeft, Search, Filter, Calendar, User, MessageSquare, Eye, CheckCircle, XCircle, Clock, Flag, RefreshCw, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
 import { StatsGrid, TimeSeriesChart, DonutChart, StatItem, TimeSeriesDataPoint, DonutDataPoint } from '@/components/admin/Charts';
 import { TableSkeleton, StatCardSkeleton } from '@/components/admin/TableSkeleton';
 
@@ -48,6 +49,7 @@ interface Report {
 
 export default function AdminReportsPage() {
   const router = useRouter();
+  const { t } = useI18n('admin');
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -176,7 +178,7 @@ export default function AdminReportsPage() {
 
     } catch (error) {
       console.error('Erreur lors du chargement des signalements:', error);
-      toast.error('Erreur lors du chargement des signalements');
+      toast.error(t('reports.loadError'));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -226,10 +228,10 @@ export default function AdminReportsPage() {
 
   const getStatusLabel = (status: string) => {
     const labels = {
-      pending: 'En attente',
-      reviewed: 'Examiné',
-      resolved: 'Résolu',
-      dismissed: 'Rejeté'
+      pending: t('reports.statusPending'),
+      reviewed: t('reports.statusReviewed'),
+      resolved: t('reports.statusResolved'),
+      dismissed: t('reports.statusDismissed')
     };
     return labels[status as keyof typeof labels] || status;
   };
@@ -246,24 +248,24 @@ export default function AdminReportsPage() {
 
   const getPriorityLabel = (priority: string) => {
     const labels = {
-      low: 'Faible',
-      medium: 'Moyenne',
-      high: 'Élevée',
-      urgent: 'Urgente'
+      low: t('reports.priorityLow'),
+      medium: t('reports.priorityMedium'),
+      high: t('reports.priorityHigh'),
+      urgent: t('reports.priorityUrgent')
     };
     return labels[priority as keyof typeof labels] || priority;
   };
 
   const getReasonLabel = (reason: string) => {
     const labels = {
-      spam: 'Spam',
-      inappropriate_content: 'Contenu inapproprié',
-      harassment: 'Harcèlement',
-      hate_speech: 'Discours de haine',
-      violence: 'Violence',
-      misinformation: 'Désinformation',
-      copyright: 'Violation de droits d\'auteur',
-      other: 'Autre'
+      spam: t('reports.reasonSpam'),
+      inappropriate_content: t('reports.reasonInappropriate'),
+      harassment: t('reports.reasonHarassment'),
+      hate_speech: t('reports.reasonHateSpeech'),
+      violence: t('reports.reasonViolence'),
+      misinformation: t('reports.reasonMisinformation'),
+      copyright: t('reports.reasonCopyright'),
+      other: t('reports.reasonOther')
     };
     return labels[reason as keyof typeof labels] || reason;
   };
@@ -276,36 +278,36 @@ export default function AdminReportsPage() {
   // Données pour StatsGrid
   const stats: StatItem[] = [
     {
-      title: 'Total Signalements',
+      title: t('reports.statTotal'),
       value: totalCount,
-      description: 'Signalements enregistrés',
+      description: t('reports.statTotalDesc'),
       icon: AlertTriangle,
       iconColor: 'text-red-600 dark:text-red-400',
       iconBgColor: 'bg-red-100 dark:bg-red-900/30',
       trend: { value: 12, isPositive: false }
     },
     {
-      title: 'En Attente',
+      title: t('reports.statPending'),
       value: pendingReports,
-      description: 'À traiter',
+      description: t('reports.statPendingDesc'),
       icon: Clock,
       iconColor: 'text-orange-600 dark:text-orange-400',
       iconBgColor: 'bg-orange-100 dark:bg-orange-900/30',
       trend: { value: 5, isPositive: false }
     },
     {
-      title: 'Résolus',
+      title: t('reports.statResolved'),
       value: resolvedReports,
-      description: 'Traités avec succès',
+      description: t('reports.statResolvedDesc'),
       icon: CheckCircle,
       iconColor: 'text-green-600 dark:text-green-400',
       iconBgColor: 'bg-green-100 dark:bg-green-900/30',
       trend: { value: 18, isPositive: true }
     },
     {
-      title: 'Urgents',
+      title: t('reports.statUrgent'),
       value: urgentReports,
-      description: 'Priorité urgente',
+      description: t('reports.statUrgentDesc'),
       icon: AlertCircle,
       iconColor: 'text-purple-600 dark:text-purple-400',
       iconBgColor: 'bg-purple-100 dark:bg-purple-900/30',
@@ -368,11 +370,11 @@ export default function AdminReportsPage() {
                 size="sm"
               >
                 <ArrowLeft className="h-4 w-4" />
-                <span>Retour</span>
+                <span>{t('reports.back')}</span>
               </Button>
               <div>
-                <h1 className="text-2xl font-bold">Gestion des Signalements</h1>
-                <p className="text-red-100 mt-1">Modération et traitement des signalements</p>
+                <h1 className="text-2xl font-bold">{t('reports.pageTitle')}</h1>
+                <p className="text-red-100 mt-1">{t('reports.pageSubtitle')}</p>
               </div>
             </div>
           </div>
@@ -385,16 +387,16 @@ export default function AdminReportsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <TimeSeriesChart
             data={timeSeriesData}
-            title="Signalements par jour"
-            description="Nombre de signalements reçus cette semaine"
+            title={t('reports.chartTitle')}
+            description={t('reports.chartDesc')}
             color="#ef4444"
             showArea={true}
           />
           {donutData.length > 0 && (
             <DonutChart
               data={donutData}
-              title="Répartition par statut"
-              description="Distribution des signalements par état"
+              title={t('reports.donutTitle')}
+              description={t('reports.donutDesc')}
               showLegend={false}
             />
           )}
@@ -405,7 +407,7 @@ export default function AdminReportsPage() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2 text-lg">
               <Filter className="h-5 w-5" />
-              <span>Filtres et recherche</span>
+              <span>{t('reports.filtersTitle')}</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -413,7 +415,7 @@ export default function AdminReportsPage() {
               <div className="relative md:col-span-2">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400 dark:text-gray-500" />
                 <Input
-                  placeholder="Contenu, raison, description..."
+                  placeholder={t('reports.searchPlaceholder')}
                   value={searchTerm}
                   onChange={(e) => handleSearch(e.target.value)}
                   className="pl-10"
@@ -425,11 +427,11 @@ export default function AdminReportsPage() {
                   <SelectValue placeholder="Statut" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tous les statuts</SelectItem>
-                  <SelectItem value="pending">En attente</SelectItem>
-                  <SelectItem value="reviewed">Examiné</SelectItem>
-                  <SelectItem value="resolved">Résolu</SelectItem>
-                  <SelectItem value="dismissed">Rejeté</SelectItem>
+                  <SelectItem value="all">{t('reports.statusAll')}</SelectItem>
+                  <SelectItem value="pending">{t('reports.statusPending')}</SelectItem>
+                  <SelectItem value="reviewed">{t('reports.statusReviewed')}</SelectItem>
+                  <SelectItem value="resolved">{t('reports.statusResolved')}</SelectItem>
+                  <SelectItem value="dismissed">{t('reports.statusDismissed')}</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -438,11 +440,11 @@ export default function AdminReportsPage() {
                   <SelectValue placeholder="Priorité" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes les priorités</SelectItem>
-                  <SelectItem value="low">Faible</SelectItem>
-                  <SelectItem value="medium">Moyenne</SelectItem>
-                  <SelectItem value="high">Élevée</SelectItem>
-                  <SelectItem value="urgent">Urgente</SelectItem>
+                  <SelectItem value="all">{t('reports.priorityAll')}</SelectItem>
+                  <SelectItem value="low">{t('reports.priorityLow')}</SelectItem>
+                  <SelectItem value="medium">{t('reports.priorityMedium')}</SelectItem>
+                  <SelectItem value="high">{t('reports.priorityHigh')}</SelectItem>
+                  <SelectItem value="urgent">{t('reports.priorityUrgent')}</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -451,9 +453,9 @@ export default function AdminReportsPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="20">20 par page</SelectItem>
-                  <SelectItem value="50">50 par page</SelectItem>
-                  <SelectItem value="100">100 par page</SelectItem>
+                  <SelectItem value="20">{t('reports.perPage20')}</SelectItem>
+                  <SelectItem value="50">{t('reports.perPage50')}</SelectItem>
+                  <SelectItem value="100">{t('reports.perPage100')}</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -464,7 +466,7 @@ export default function AdminReportsPage() {
                 className="w-full"
               >
                 <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
-                Actualiser
+                {t('reports.refresh')}
               </Button>
             </div>
           </CardContent>
@@ -475,7 +477,7 @@ export default function AdminReportsPage() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2 text-lg">
               <AlertTriangle className="h-5 w-5" />
-              <span>Signalements ({totalCount})</span>
+              <span>{t('reports.listTitle', { count: totalCount })}</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -483,10 +485,10 @@ export default function AdminReportsPage() {
               <div className="text-center py-12">
                 <AlertTriangle className="h-16 w-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-                  Aucun signalement trouvé
+                  {t('reports.emptyTitle')}
                 </h3>
                 <p className="text-gray-500 dark:text-gray-400">
-                  Aucun signalement ne correspond aux critères de recherche actuels.
+                  {t('reports.emptySubtitle')}
                 </p>
               </div>
             ) : (
@@ -519,7 +521,7 @@ export default function AdminReportsPage() {
                           <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400 flex-wrap">
                             <div className="flex items-center space-x-1">
                               <Flag className="h-4 w-4 text-red-600" />
-                              <span>Signalé par {report.reporter.displayName || report.reporter.username}</span>
+                              <span>{t('reports.reportedBy', { name: report.reporter.displayName || report.reporter.username })}</span>
                             </div>
                             <div className="flex items-center space-x-1">
                               <Calendar className="h-4 w-4" />
@@ -527,7 +529,7 @@ export default function AdminReportsPage() {
                             </div>
                             <div className="flex items-center space-x-1">
                               <Clock className="h-4 w-4" />
-                              <span>Màj {formatDate(report.updatedAt)}</span>
+                              <span>{t('reports.updatedAt', { date: formatDate(report.updatedAt) })}</span>
                             </div>
                           </div>
                         </div>
@@ -535,15 +537,15 @@ export default function AdminReportsPage() {
                         <div className="flex gap-2 flex-shrink-0">
                           <Button variant="outline" size="sm">
                             <Eye className="h-4 w-4 mr-1" />
-                            <span className="hidden sm:inline">Voir</span>
+                            <span className="hidden sm:inline">{t('reports.actionView')}</span>
                           </Button>
                           <Button variant="outline" size="sm" className="text-green-600 hover:text-green-700">
                             <CheckCircle className="h-4 w-4 mr-1" />
-                            <span className="hidden sm:inline">Résoudre</span>
+                            <span className="hidden sm:inline">{t('reports.actionResolve')}</span>
                           </Button>
                           <Button variant="outline" size="sm" className="text-red-600 hover:text-red-700">
                             <XCircle className="h-4 w-4 mr-1" />
-                            <span className="hidden sm:inline">Rejeter</span>
+                            <span className="hidden sm:inline">{t('reports.actionDismiss')}</span>
                           </Button>
                         </div>
                       </div>
@@ -552,7 +554,7 @@ export default function AdminReportsPage() {
                       <div className="bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
                         <div className="flex items-center space-x-2 mb-2">
                           <MessageSquare className="h-4 w-4 text-red-600" />
-                          <span className="font-medium text-red-900 dark:text-red-300">Message signalé</span>
+                          <span className="font-medium text-red-900 dark:text-red-300">{t('reports.reportedMessage')}</span>
                         </div>
                         <div className="text-sm text-gray-900 dark:text-gray-100 mb-2">
                           {report.message.content}
@@ -563,7 +565,7 @@ export default function AdminReportsPage() {
                             <span>
                               {report.message.sender
                                 ? (report.message.sender.displayName || report.message.sender.username)
-                                : 'Utilisateur anonyme'
+                                : t('reports.anonymousUser')
                               }
                             </span>
                           </div>
@@ -591,7 +593,7 @@ export default function AdminReportsPage() {
             {reports && reports.length > 0 && (
               <div className="flex flex-col sm:flex-row items-center justify-between mt-6 gap-4 border-t dark:border-gray-700 pt-4">
                 <div className="text-sm text-gray-600 dark:text-gray-400">
-                  Page {currentPage} sur {totalPages} • {reports.length} signalements affichés • {totalCount} au total
+                  {t('reports.paginationInfo', { page: currentPage, total: totalPages, count: reports.length, totalCount })}
                 </div>
                 <div className="flex space-x-2">
                   <Button
@@ -601,7 +603,7 @@ export default function AdminReportsPage() {
                     onClick={() => setCurrentPage(currentPage - 1)}
                   >
                     <ChevronLeft className="h-4 w-4" />
-                    <span className="hidden sm:inline ml-1">Précédent</span>
+                    <span className="hidden sm:inline ml-1">{t('reports.prevPage')}</span>
                   </Button>
                   <div className="flex items-center px-3 py-2 border dark:border-gray-700 rounded-md text-sm font-medium">
                     {currentPage} / {totalPages}
@@ -612,7 +614,7 @@ export default function AdminReportsPage() {
                     disabled={currentPage === totalPages}
                     onClick={() => setCurrentPage(currentPage + 1)}
                   >
-                    <span className="hidden sm:inline mr-1">Suivant</span>
+                    <span className="hidden sm:inline mr-1">{t('reports.nextPage')}</span>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
