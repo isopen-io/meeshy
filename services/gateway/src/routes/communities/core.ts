@@ -17,6 +17,7 @@ import {
 } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesCoreRoutes' });
 
@@ -73,19 +74,13 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         where: { identifier }
       });
 
-      return reply.send({
-        success: true,
-        data: {
-          available: !existingCommunity,
-          identifier
-        }
+      return sendSuccess(reply, {
+        available: !existingCommunity,
+        identifier
       });
     } catch (error) {
       logger.error('Error checking identifier availability', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Failed to check identifier availability'
-      });
+      return sendInternalError(reply, 'Failed to check identifier availability');
     }
   });
 
@@ -154,10 +149,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
       // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'User must be authenticated'
-        });
+        return sendUnauthorized(reply, 'User must be authenticated');
       }
 
       const userId = authContext.userId;
@@ -224,22 +216,15 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
         fastify.prisma.community.count({ where: whereClause })
       ]);
 
-      reply.send({
-        success: true,
-        data: communities,
-        pagination: {
-          total: totalCount,
-          limit: limitNum,
-          offset: offsetNum,
-          hasMore: offsetNum + communities.length < totalCount
-        }
+      sendPaginatedSuccess(reply, communities, {
+        total: totalCount,
+        limit: limitNum,
+        offset: offsetNum,
+        hasMore: offsetNum + communities.length < totalCount
       });
     } catch (error) {
       logger.error('Error fetching communities', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to fetch communities'
-      });
+      sendInternalError(reply, 'Failed to fetch communities');
     }
   });
 
@@ -294,10 +279,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
       // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'User must be authenticated'
-        });
+        return sendUnauthorized(reply, 'User must be authenticated');
       }
 
       const userId = authContext.userId;
@@ -373,10 +355,7 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
       }
 
       if (!community) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Community not found'
-        });
+        return sendNotFound(reply, 'Community not found');
       }
 
       // Verifier l'acces (createur ou membre)
@@ -384,22 +363,13 @@ export async function registerCoreRoutes(fastify: FastifyInstance) {
                        community.members.some(member => member.userId === userId);
 
       if (!hasAccess && community.isPrivate) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Access denied to this community'
-        });
+        return sendForbidden(reply, 'Access denied to this community');
       }
 
-      reply.send({
-        success: true,
-        data: community
-      });
+      sendSuccess(reply, community);
     } catch (error) {
       logger.error('Error fetching community', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to fetch community'
-      });
+      sendInternalError(reply, 'Failed to fetch community');
     }
   });
 

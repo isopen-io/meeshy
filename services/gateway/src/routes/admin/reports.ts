@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { getReportService } from '../../services/admin/report.service';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
 import type {
@@ -88,10 +89,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
       }
 
       logError(fastify.log, 'Create report error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la creation du signalement'
-      });
+      return sendInternalError(reply, 'Erreur lors de la creation du signalement');
     }
   });
 
@@ -142,10 +140,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
       });
     } catch (error) {
       logError(fastify.log, 'List reports error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la recuperation des signalements'
-      });
+      return sendInternalError(reply, 'Erreur lors de la recuperation des signalements');
     }
   });
 
@@ -159,16 +154,10 @@ export async function reportRoutes(fastify: FastifyInstance) {
     try {
       const stats = await reportService.getReportStats();
 
-      return reply.send({
-        success: true,
-        data: stats
-      });
+      return sendSuccess(reply, stats);
     } catch (error) {
       logError(fastify.log, 'Get report stats error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la recuperation des statistiques'
-      });
+      return sendInternalError(reply, 'Erreur lors de la recuperation des statistiques');
     }
   });
 
@@ -185,16 +174,10 @@ export async function reportRoutes(fastify: FastifyInstance) {
 
       const reports = await reportService.getRecentReports(limit);
 
-      return reply.send({
-        success: true,
-        data: reports
-      });
+      return sendSuccess(reply, reports);
     } catch (error) {
       logError(fastify.log, 'Get recent reports error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la recuperation des signalements recents'
-      });
+      return sendInternalError(reply, 'Erreur lors de la recuperation des signalements recents');
     }
   });
 
@@ -211,22 +194,13 @@ export async function reportRoutes(fastify: FastifyInstance) {
       const report = await reportService.getReportById(id);
 
       if (!report) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Signalement non trouve'
-        });
+        return sendNotFound(reply, 'Signalement non trouve');
       }
 
-      return reply.send({
-        success: true,
-        data: report
-      });
+      return sendSuccess(reply, report);
     } catch (error) {
       logError(fastify.log, 'Get report error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la recuperation du signalement'
-      });
+      return sendInternalError(reply, 'Erreur lors de la recuperation du signalement');
     }
   });
 
@@ -260,10 +234,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
       }
 
       logError(fastify.log, 'Update report error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la mise a jour du signalement'
-      });
+      return sendInternalError(reply, 'Erreur lors de la mise a jour du signalement');
     }
   });
 
@@ -279,16 +250,10 @@ export async function reportRoutes(fastify: FastifyInstance) {
 
       await reportService.deleteReport(id);
 
-      return reply.send({
-        success: true,
-        data: { message: 'Signalement supprime' }
-      });
+      return sendSuccess(reply, { message: 'Signalement supprime' });
     } catch (error) {
       logError(fastify.log, 'Delete report error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la suppression du signalement'
-      });
+      return sendInternalError(reply, 'Erreur lors de la suppression du signalement');
     }
   });
 
@@ -304,16 +269,10 @@ export async function reportRoutes(fastify: FastifyInstance) {
 
       const reports = await reportService.getReportsForEntity(type, id);
 
-      return reply.send({
-        success: true,
-        data: reports
-      });
+      return sendSuccess(reply, reports);
     } catch (error) {
       logError(fastify.log, 'Get entity reports error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la recuperation des signalements'
-      });
+      return sendInternalError(reply, 'Erreur lors de la recuperation des signalements');
     }
   });
 
@@ -338,10 +297,7 @@ export async function reportRoutes(fastify: FastifyInstance) {
       });
     } catch (error) {
       logError(fastify.log, 'Assign moderator error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de l\'assignation du moderateur'
-      });
+      return sendInternalError(reply, 'Erreur lors de l\'assignation du moderateur');
     }
   });
 
@@ -358,16 +314,10 @@ export async function reportRoutes(fastify: FastifyInstance) {
 
       const reports = await reportService.getModeratorReports(moderatorId);
 
-      return reply.send({
-        success: true,
-        data: reports
-      });
+      return sendSuccess(reply, reports);
     } catch (error) {
       logError(fastify.log, 'Get moderator reports error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la recuperation des signalements'
-      });
+      return sendInternalError(reply, 'Erreur lors de la recuperation des signalements');
     }
   });
 }
