@@ -211,6 +211,7 @@
 		BBLV0001000100010001BLD /* BubbleSystemViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLV0001000100010001REF /* BubbleSystemViews.swift */; };
 		BBLW0001000100010001BLD /* BubbleExpandableTextStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLW0001000100010001REF /* BubbleExpandableTextStateTests.swift */; };
 		BBLX0001000100010001BLD /* BubbleExpandableText.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLX0001000100010001REF /* BubbleExpandableText.swift */; };
+		BBLRETRY00010001BLD /* BubbleFailedRetryBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLRETRY00010001REF /* BubbleFailedRetryBar.swift */; };
 		BBLY0001000100010001BLD /* BubbleQuotedReply.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLY0001000100010001REF /* BubbleQuotedReply.swift */; };
 		BBLZ0001000100010001BLD /* BubbleAttachmentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLZ0001000100010001REF /* BubbleAttachmentView.swift */; };
 		BC20CA996A5E2D0E46BB3F06 /* MessageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 748FC5520967BD43D7FB9582 /* MessageStore.swift */; };
@@ -810,6 +811,7 @@
 		BBLV0001000100010001REF /* BubbleSystemViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleSystemViews.swift; sourceTree = SOURCE_ROOT; };
 		BBLW0001000100010001REF /* BubbleExpandableTextStateTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/BubbleExpandableTextStateTests.swift; sourceTree = SOURCE_ROOT; };
 		BBLX0001000100010001REF /* BubbleExpandableText.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleExpandableText.swift; sourceTree = SOURCE_ROOT; };
+		BBLRETRY00010001REF /* BubbleFailedRetryBar.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleFailedRetryBar.swift; sourceTree = SOURCE_ROOT; };
 		BBLY0001000100010001REF /* BubbleQuotedReply.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift; sourceTree = SOURCE_ROOT; };
 		BBLZ0001000100010001REF /* BubbleAttachmentView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleAttachmentView.swift; sourceTree = SOURCE_ROOT; };
 		BC091A1BD89E4244D04EAED9 /* MeeshyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyApp.swift; sourceTree = "<group>"; };
@@ -1698,6 +1700,7 @@
 				ABRT0001000100010001F001 /* AudioBubbleRouter.swift */,
 				ACRV0001000100010001F001 /* AudioCarouselView.swift */,
 				BBLX0001000100010001REF /* BubbleExpandableText.swift */,
+				BBLRETRY00010001REF /* BubbleFailedRetryBar.swift */,
 				BBLV0001000100010001REF /* BubbleSystemViews.swift */,
 				BBLD0001000100010001REF /* BubbleStandardLayout.swift */,
 				BCNV0001000100010001REF /* BubbleCallNoticeView.swift */,
@@ -2530,6 +2533,7 @@
 				BBLY0001000100010001BLD /* BubbleQuotedReply.swift in Sources */,
 				BBLZ0001000100010001BLD /* BubbleAttachmentView.swift in Sources */,
 				BBLX0001000100010001BLD /* BubbleExpandableText.swift in Sources */,
+				BBLRETRY00010001BLD /* BubbleFailedRetryBar.swift in Sources */,
 				BBLV0001000100010001BLD /* BubbleSystemViews.swift in Sources */,
 				BBLD0001000100010001BLD /* BubbleStandardLayout.swift in Sources */,
 				BCNV0001000100010001BLD /* BubbleCallNoticeView.swift in Sources */,

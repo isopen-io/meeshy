@@ -280,6 +280,11 @@ struct BubbleStandardLayout: View {
 
     private var timeString: String { content.meta.timeString }
 
+    /// BUG3 — an outgoing message whose send failed (drives the orange retry band).
+    private var isFailedOutgoing: Bool {
+        content.isMe && content.meta.deliveryStatus == .failed
+    }
+
     private var deliveryStatusAccessibilityLabel: String {
         switch message.deliveryStatus {
         case .sending: return "en cours d'envoi"
@@ -813,6 +818,15 @@ struct BubbleStandardLayout: View {
             }
         }
         .background(bubbleBackground)
+        // BUG3 — failed outgoing message: an orange left-edge band attached to
+        // the bubble; tapping it re-triggers the send (placed before clipShape so
+        // it follows the rounded corners). Gated so non-failed bubbles are
+        // untouched.
+        .overlay(alignment: .leading) {
+            if isFailedOutgoing {
+                BubbleFailedRetryBar(onRetry: { performManualRetry() })
+            }
+        }
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .shadow(
             color: (isMe ? MeeshyColors.brandPrimary : Color(hex: otherBubbleColor)).opacity(isMe ? 0.3 : 0.2),
