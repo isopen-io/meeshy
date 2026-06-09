@@ -59,10 +59,10 @@ struct BubbleContent: Equatable {
         let raw: String
         let isEmojiOnly: Bool
         let emojiFontSize: CGFloat?
-        /// Première URL détectée dans `raw`, précalculée UNE fois par le builder.
-        /// `LinkPreviewFetcher.firstURL` instancie un `NSDataDetector` à chaque
-        /// appel — le faire dans le body de chaque bulle texte (jusqu'à 2× par
-        /// rendu) coûtait cher au scroll. On le résout au build du value-model.
+        /// Première URL détectée dans `raw`, précalculée UNE fois par le builder
+        /// (plutôt que jusqu'à 2× dans le body de chaque bulle texte). Le
+        /// `NSDataDetector` sous-jacent est désormais partagé (static) côté
+        /// `LinkPreviewFetcher`, donc plus d'instanciation par cellule au scroll.
         let firstLinkURL: String?
     }
 
