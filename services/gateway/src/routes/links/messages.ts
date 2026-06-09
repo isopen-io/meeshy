@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
+import { sendSuccess } from '../../utils/response.js';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import {
   createUnifiedAuthMiddleware,
@@ -267,25 +268,22 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         });
       }
 
-      return reply.status(201).send({
-        success: true,
-        data: {
-          messageId: message.id,
-          message: {
-            id: message.id,
-            content: message.content,
-            originalLanguage: message.originalLanguage,
-            messageType: message.messageType,
-            isEdited: message.isEdited,
-            editedAt: message.editedAt,
-            deletedAt: message.deletedAt,
-            replyToId: message.replyToId,
-            createdAt: message.createdAt,
-            updatedAt: message.updatedAt,
-            sender: message.sender
-          }
+      return sendSuccess(reply, {
+        messageId: message.id,
+        message: {
+          id: message.id,
+          content: message.content,
+          originalLanguage: message.originalLanguage,
+          messageType: message.messageType,
+          isEdited: message.isEdited,
+          editedAt: message.editedAt,
+          deletedAt: message.deletedAt,
+          replyToId: message.replyToId,
+          createdAt: message.createdAt,
+          updatedAt: message.updatedAt,
+          sender: message.sender
         }
-      });
+      }, { statusCode: 201 });
 
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -541,25 +539,22 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         });
       }
 
-      return reply.status(201).send({
-        success: true,
-        data: {
-          messageId: message.id,
-          message: {
-            id: message.id,
-            content: message.content,
-            originalLanguage: message.originalLanguage,
-            messageType: message.messageType,
-            isEdited: message.isEdited,
-            editedAt: message.editedAt,
-            deletedAt: message.deletedAt,
-            replyToId: message.replyToId,
-            createdAt: message.createdAt,
-            updatedAt: message.updatedAt,
-            sender: message.sender
-          }
+      return sendSuccess(reply, {
+        messageId: message.id,
+        message: {
+          id: message.id,
+          content: message.content,
+          originalLanguage: message.originalLanguage,
+          messageType: message.messageType,
+          isEdited: message.isEdited,
+          editedAt: message.editedAt,
+          deletedAt: message.deletedAt,
+          replyToId: message.replyToId,
+          createdAt: message.createdAt,
+          updatedAt: message.updatedAt,
+          sender: message.sender
         }
-      });
+      }, { statusCode: 201 });
 
     } catch (error) {
       if (error instanceof z.ZodError) {

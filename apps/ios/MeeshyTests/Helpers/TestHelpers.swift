@@ -240,3 +240,90 @@ extension XCTestCase {
         return optional
     }
 }
+
+// MARK: - Performance Environment (device + iOS awareness)
+
+/// Décrit l'appareil et l'OS sur lesquels tournent les benchmarks. Les chiffres
+/// de perf ne sont comparables QU'À environnement égal : un iPhone 16 Pro Max
+/// (A18 Pro) est ~3-5× plus rapide qu'un iPhone XR (A12). XCTest stocke déjà ses
+/// baselines par destination ; ce helper rend l'environnement EXPLICITE dans la
+/// sortie pour interpréter/comparer correctement, et signale le simulateur (dont
+/// les timings ne sont PAS représentatifs — exécuter sur device réel).
+enum PerfEnvironment {
+    static var isSimulator: Bool {
+        #if targetEnvironment(simulator)
+        return true
+        #else
+        return false
+        #endif
+    }
+
+    /// Identifiant matériel : "iPhone17,2" (16 Pro Max), "iPhone11,8" (XR)… Sur
+    /// simulateur, le modèle simulé via `SIMULATOR_MODEL_IDENTIFIER`.
+    static var machineIdentifier: String {
+        #if targetEnvironment(simulator)
+        return ProcessInfo.processInfo.environment["SIMULATOR_MODEL_IDENTIFIER"] ?? "Simulator"
+        #else
+        var systemInfo = utsname()
+        uname(&systemInfo)
+        let mirror = Mirror(reflecting: systemInfo.machine)
+        return mirror.children.reduce(into: "") { id, element in
+            guard let value = element.value as? Int8, value != 0 else { return }
+            id.append(Character(UnicodeScalar(UInt8(value))))
+        }
+        #endif
+    }
+
+    static var osVersion: String {
+        let v = ProcessInfo.processInfo.operatingSystemVersion
+        return "\(v.majorVersion).\(v.minorVersion).\(v.patchVersion)"
+    }
+
+    /// Cœurs + RAM — proxys grossiers de la puissance pour pondérer
+    /// l'interprétation des chiffres entre devices.
+    static var coreCount: Int { ProcessInfo.processInfo.processorCount }
+    static var physicalMemoryGB: Double {
+        Double(ProcessInfo.processInfo.physicalMemory) / 1_073_741_824.0
+    }
+
+    static var summary: String {
+        let env = isSimulator ? "SIMULATOR" : "DEVICE"
+        return String(
+            format: "[%@] model=%@ iOS=%@ cores=%d ram=%.1fGB",
+            env, machineIdentifier, osVersion, coreCount, physicalMemoryGB
+        )
+    }
+
+    /// Logge l'environnement et avertit BRUYAMMENT si on tourne sur simulateur
+    /// (timings non représentatifs — les benchmarks doivent tourner sur device).
+    static func logAndWarn() {
+        print("[PERF] env: \(summary)")
+        if isSimulator {
+            print("[PERF] ⚠️ SIMULATEUR : timings NON représentatifs (CPU/GPU = la machine hôte). Lancer sur device réel — `./scripts/ios-perf-benchmark.sh` détecte et cible le device connecté.")
+        }
+    }
+}
+
+// MARK: - Memory Probe (RSS réel du process)
+
+/// Lit la mémoire résidente (RSS) du process via `mach_task_basic_info`. Permet
+/// de mesurer un DELTA mémoire ISOLÉ dans le MÊME test (ex : RSS après données
+/// vs RSS après rendu) — au lieu de soustraire deux pics `XCTMemoryMetric` de
+/// tests différents (non comparable). Approximation : le RSS inclut le slack de
+/// l'allocateur, donc à interpréter comme un ordre de grandeur, pas au Mo près.
+enum MemoryProbe {
+    static func residentBytes() -> UInt64 {
+        var info = mach_task_basic_info()
+        var count = mach_msg_type_number_t(
+            MemoryLayout<mach_task_basic_info>.stride / MemoryLayout<natural_t>.stride
+        )
+        let kr = withUnsafeMutablePointer(to: &info) { ptr -> kern_return_t in
+            ptr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { intPtr in
+                task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), intPtr, &count)
+            }
+        }
+        return kr == KERN_SUCCESS ? info.resident_size : 0
+    }
+
+    static func residentMB() -> Double { Double(residentBytes()) / 1_048_576.0 }
+}

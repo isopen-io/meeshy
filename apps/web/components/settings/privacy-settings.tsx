@@ -117,7 +117,7 @@ export function PrivacySettings() {
       SoundFeedback.playSuccess();
       toast.success(t('privacy.dataDeleted', 'Données supprimées'));
     } catch (_err) {
-      toast.error('Erreur lors de la suppression');
+      toast.error(t('privacy.deleteError'));
     }
   };
 
@@ -126,7 +126,7 @@ export function PrivacySettings() {
     return (
       <div className="flex items-center justify-center min-h-[400px]" role="status">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <span className="sr-only">Chargement des préférences de confidentialité...</span>
+        <span className="sr-only">{t('privacy.loading')}</span>
       </div>
     );
   }
@@ -137,7 +137,7 @@ export function PrivacySettings() {
       <div className="text-center py-8">
         <p className="text-destructive">{error.message}</p>
         <Button onClick={() => refetch()} className="mt-4">
-          Réessayer
+          {t('privacy.retry')}
         </Button>
       </div>
     );
@@ -154,7 +154,7 @@ export function PrivacySettings() {
       {consentViolations && consentViolations.length > 0 && (
         <Card className="border-destructive">
           <CardHeader>
-            <CardTitle className="text-destructive">Consentement requis</CardTitle>
+            <CardTitle className="text-destructive">{t('privacy.consentRequired')}</CardTitle>
           </CardHeader>
           <CardContent>
             <ul className="list-disc list-inside space-y-1">
@@ -173,18 +173,18 @@ export function PrivacySettings() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
             <Eye className="h-4 w-4 sm:h-5 sm:w-5" />
-            Visibilité et statut
+            {t('privacy.visibility.title')}
           </CardTitle>
           <CardDescription className="text-sm sm:text-base">
-            Contrôlez les informations que les autres utilisateurs peuvent voir
+            {t('privacy.visibility.description')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 sm:space-y-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1 flex-1">
-              <Label className="text-sm sm:text-base">Masquer le profil de la recherche</Label>
+              <Label className="text-sm sm:text-base">{t('privacy.visibility.hideProfile.label')}</Label>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Empêche votre profil d&apos;apparaître dans les résultats de recherche
+                {t('privacy.visibility.hideProfile.description')}
               </p>
             </div>
             <Switch
@@ -196,9 +196,9 @@ export function PrivacySettings() {
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1 flex-1">
-              <Label className="text-sm sm:text-base">Statut en ligne</Label>
+              <Label className="text-sm sm:text-base">{t('privacy.visibility.onlineStatus.label')}</Label>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Permet aux autres de voir si vous êtes connecté
+                {t('privacy.visibility.onlineStatus.description')}
               </p>
             </div>
             <Switch
@@ -210,9 +210,9 @@ export function PrivacySettings() {
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1 flex-1">
-              <Label className="text-sm sm:text-base">Dernière activité</Label>
+              <Label className="text-sm sm:text-base">{t('privacy.visibility.lastSeen.label')}</Label>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Partage la date de votre dernière connexion
+                {t('privacy.visibility.lastSeen.description')}
               </p>
             </div>
             <Switch
@@ -224,9 +224,9 @@ export function PrivacySettings() {
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1 flex-1">
-              <Label className="text-sm sm:text-base">Accusés de réception</Label>
+              <Label className="text-sm sm:text-base">{t('privacy.visibility.readReceipts.label')}</Label>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Informe les expéditeurs que vous avez lu leurs messages
+                {t('privacy.visibility.readReceipts.description')}
               </p>
             </div>
             <Switch
@@ -243,18 +243,18 @@ export function PrivacySettings() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
             <Phone className="h-4 w-4 sm:h-5 sm:w-5" />
-            Communications
+            {t('privacy.communications.title')}
           </CardTitle>
           <CardDescription className="text-sm sm:text-base">
-            Gérez qui peut vous contacter et comment
+            {t('privacy.communications.description')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 sm:space-y-6">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-1 flex-1">
-              <Label className="text-sm sm:text-base">Demandes de contact</Label>
+              <Label className="text-sm sm:text-base">{t('privacy.communications.contactRequests.label')}</Label>
               <p className="text-xs sm:text-sm text-muted-foreground">
-                Permet aux utilisateurs de vous envoyer des demandes de contact
+                {t('privacy.communications.contactRequests.description')}
               </p>
             </div>
             <Switch
@@ -271,17 +271,17 @@ export function PrivacySettings() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
             <Database className="h-4 w-4 sm:h-5 sm:w-5" />
-            Gestion des données
+            {t('privacy.data.title')}
           </CardTitle>
           <CardDescription className="text-sm sm:text-base">
-            Exportez ou supprimez vos données personnelles
+            {t('privacy.data.description')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label>Exporter mes données</Label>
+            <Label>{t('privacy.data.export.label')}</Label>
             <p className="text-sm text-muted-foreground">
-              Téléchargez une copie de toutes vos données (profil, messages, paramètres)
+              {t('privacy.data.export.description')}
             </p>
             <Button
               variant="outline"
@@ -289,7 +289,7 @@ export function PrivacySettings() {
               className="flex items-center gap-2"
             >
               <Download className="h-4 w-4" />
-              Exporter les données
+              {t('privacy.data.export.button')}
             </Button>
           </div>
 
@@ -340,19 +340,18 @@ export function PrivacySettings() {
       {/* Informations légales */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg sm:text-xl">Informations légales</CardTitle>
+          <CardTitle className="text-lg sm:text-xl">{t('privacy.legal.title')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-2">
           <p className="text-sm text-muted-foreground">
-            Vos données sont traitées conformément à notre politique de confidentialité.
-            Les traductions sont effectuées localement sur votre appareil pour protéger votre vie privée.
+            {t('privacy.legal.description')}
           </p>
           <div className="flex gap-2">
             <Button variant="link" size="sm" className="h-auto p-0">
-              Politique de confidentialité
+              {t('privacy.legal.privacyPolicy')}
             </Button>
             <Button variant="link" size="sm" className="h-auto p-0">
-              Conditions d&apos;utilisation
+              {t('privacy.legal.termsOfUse')}
             </Button>
           </div>
         </CardContent>

@@ -8,6 +8,11 @@ import {
 } from '../../utils/rate-limiter.js';
 import { AuthRouteContext } from './types';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import {
+  sendSuccess,
+  sendBadRequest,
+  sendInternalError
+} from '../../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'PhoneTransferRoutes' });
 
@@ -76,27 +81,18 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
       const normalized = normalizePhoneWithCountry(phoneNumber, countryCode || 'FR');
 
       if (!normalized || !normalized.isValid) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Numéro de téléphone invalide'
-        });
+        return sendBadRequest(reply, 'Numéro de téléphone invalide');
       }
 
       const result = await phoneTransferService.checkPhoneOwnership(normalized.phoneNumber);
 
-      return reply.send({
-        success: true,
-        data: {
-          exists: result.exists,
-          maskedInfo: result.maskedInfo
-        }
+      return sendSuccess(reply, {
+        exists: result.exists,
+        maskedInfo: result.maskedInfo
       });
     } catch (error) {
       logger.error('Erreur check phone', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la vérification du numéro'
-      });
+      return sendInternalError(reply, 'Erreur lors de la vérification du numéro');
     }
   });
 
@@ -161,10 +157,7 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
       const normalized = normalizePhoneWithCountry(phoneNumber, phoneCountryCode || 'FR');
 
       if (!normalized || !normalized.isValid) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Numéro de téléphone invalide'
-        });
+        return sendBadRequest(reply, 'Numéro de téléphone invalide');
       }
 
       const requestContext = await getRequestContext(request);
@@ -178,25 +171,16 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
       });
 
       if (!result.success) {
-        return reply.status(400).send({
-          success: false,
-          error: result.error
-        });
+        return sendBadRequest(reply, result.error ?? 'Transfer initiation failed');
       }
 
-      return reply.send({
-        success: true,
-        data: {
-          transferId: result.transferId,
-          maskedOwnerInfo: result.maskedOwnerInfo
-        }
+      return sendSuccess(reply, {
+        transferId: result.transferId,
+        maskedOwnerInfo: result.maskedOwnerInfo
       });
     } catch (error) {
       logger.error('Erreur initiate transfer', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de l\'initiation du transfert'
-      });
+      return sendInternalError(reply, 'Erreur lors de l\'initiation du transfert');
     }
   });
 
@@ -245,24 +229,15 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
       });
 
       if (!result.success) {
-        return reply.status(400).send({
-          success: false,
-          error: result.error
-        });
+        return sendBadRequest(reply, result.error ?? 'Transfer verification failed');
       }
 
-      return reply.send({
-        success: true,
-        data: {
-          transferred: result.transferred
-        }
+      return sendSuccess(reply, {
+        transferred: result.transferred
       });
     } catch (error) {
       logger.error('Erreur verify transfer', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la vérification du transfert'
-      });
+      return sendInternalError(reply, 'Erreur lors de la vérification du transfert');
     }
   });
 
@@ -300,21 +275,13 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
       const result = await phoneTransferService.resendCode(transferId, requestContext.ip);
 
       if (!result.success) {
-        return reply.status(400).send({
-          success: false,
-          error: result.error
-        });
+        return sendBadRequest(reply, result.error ?? 'Resend failed');
       }
 
-      return reply.send({
-        success: true
-      });
+      return sendSuccess(reply, undefined);
     } catch (error) {
       logger.error('Erreur resend transfer code', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors du renvoi du code'
-      });
+      return sendInternalError(reply, 'Erreur lors du renvoi du code');
     }
   });
 
@@ -345,10 +312,10 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
     try {
       const { transferId } = request.body as { transferId: string };
       await phoneTransferService.cancelTransfer(transferId);
-      return reply.send({ success: true });
+      return sendSuccess(reply, undefined);
     } catch (error) {
       logger.error('Erreur cancel transfer', error as Error);
-      return reply.send({ success: true });
+      return sendSuccess(reply, undefined);
     }
   });
 
@@ -407,10 +374,7 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
       const normalized = normalizePhoneWithCountry(phoneNumber, phoneCountryCode || 'FR');
 
       if (!normalized || !normalized.isValid) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Numéro de téléphone invalide'
-        });
+        return sendBadRequest(reply, 'Numéro de téléphone invalide');
       }
 
       const requestContext = await getRequestContext(request);
@@ -425,24 +389,15 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
       });
 
       if (!result.success) {
-        return reply.status(400).send({
-          success: false,
-          error: result.error
-        });
+        return sendBadRequest(reply, result.error ?? 'Registration transfer initiation failed');
       }
 
-      return reply.send({
-        success: true,
-        data: {
-          transferId: result.transferId
-        }
+      return sendSuccess(reply, {
+        transferId: result.transferId
       });
     } catch (error) {
       logger.error('Erreur initiate registration transfer', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de l\'initiation du transfert'
-      });
+      return sendInternalError(reply, 'Erreur lors de l\'initiation du transfert');
     }
   });
 
@@ -492,25 +447,16 @@ export function registerPhoneTransferRoutes(context: AuthRouteContext) {
       });
 
       if (!result.success) {
-        return reply.status(400).send({
-          success: false,
-          error: result.error
-        });
+        return sendBadRequest(reply, result.error ?? 'Registration transfer verification failed');
       }
 
-      return reply.send({
-        success: true,
-        data: {
-          verified: result.verified,
-          transferToken: result.transferToken
-        }
+      return sendSuccess(reply, {
+        verified: result.verified,
+        transferToken: result.transferToken
       });
     } catch (error) {
       logger.error('Erreur verify registration transfer', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la vérification'
-      });
+      return sendInternalError(reply, 'Erreur lors de la vérification');
     }
   });
 }

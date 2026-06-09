@@ -380,11 +380,10 @@ final class MessageListViewController: UIViewController {
             }
 
             guard case .message(let localId) = item,
-                  let record = self.store.message(for: localId) else {
+                  let message = self.store.domainMessage(for: localId, currentUserId: self.currentUserId) else {
                 cell.contentConfiguration = nil
                 return
             }
-            let message = record.toMessage(currentUserId: self.currentUserId)
             let accent = self.accentColor
             let dark = self.isDark
             let direct = self.isDirect

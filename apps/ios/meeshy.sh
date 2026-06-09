@@ -1152,6 +1152,9 @@ do_test() {
         -enableCodeCoverage "$([ "$COVERAGE" = true ] && echo YES || echo NO)" \
         -resultBundlePath "$TEST_OUTPUT_DIR/unit-tests.xcresult" \
         -only-testing:MeeshyTests \
+        -skip-testing:MeeshyTests/MessageListPerformanceTests \
+        -skip-testing:MeeshyTests/BubbleSimpleMessagePerfTests \
+        -skip-testing:MeeshyTests/SearchPerformanceTests \
         2>&1 | if command -v xcpretty &>/dev/null; then xcpretty --test --color; else cat; fi
 
     ok "Unit tests completed"
