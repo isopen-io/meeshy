@@ -108,6 +108,10 @@ public final class StoryTimelineEngine {
     #endif
 
     private func configureAudioSession() {
+        // Call-safety : ne PAS reconfigurer la session pendant un appel VoIP
+        // (sinon micro coupé) — l'aperçu éditeur cède sa session à l'appel.
+        // État d'appel = source unique MediaSessionCoordinator.isCallActive.
+        guard !MediaSessionCoordinator.shared.isCallActive else { return }
         do {
             let session = AVAudioSession.sharedInstance()
             // Preview is read-only — use .playback (not .playAndRecord) so we

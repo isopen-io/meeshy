@@ -460,7 +460,9 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         // physique. Forcer la catégorie ici est idempotent et coûte ~0 ms.
         if mode == .play {
             let session = AVAudioSession.sharedInstance()
-            if session.category != .playback {
+            // Call-safety : pendant un appel la catégorie est `.playAndRecord` (≠
+            // .playback) ; NE PAS la basculer sinon le micro de l'appel est coupé.
+            if session.category != .playback, !MediaSessionCoordinator.shared.isCallActive {
                 try? session.setCategory(.playback, mode: .default, options: [.mixWithOthers, .duckOthers])
                 try? session.setActive(true)
             }
