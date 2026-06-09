@@ -87,18 +87,37 @@ fun ChatScreen(
                 state.messages.isEmpty() ->
                     ChatNotice("No messages yet", onRetry = null)
 
-                else -> LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(vertical = MeeshySpacing.sm),
-                ) {
-                    items(state.messages, key = { it.messageId }) { bubble ->
-                        MessageBubble(bubble)
+                else -> Column(modifier = Modifier.fillMaxSize()) {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.weight(1f),
+                        contentPadding = PaddingValues(vertical = MeeshySpacing.sm),
+                    ) {
+                        items(state.messages, key = { it.messageId }) { bubble ->
+                            MessageBubble(bubble)
+                        }
                     }
+                    TypingIndicator(typingUsers = state.typingUsers)
                 }
             }
         }
     }
+}
+
+@Composable
+private fun TypingIndicator(typingUsers: List<String>, modifier: Modifier = Modifier) {
+    if (typingUsers.isEmpty()) return
+    val text = when (typingUsers.size) {
+        1 -> "${typingUsers[0]} is typing..."
+        2 -> "${typingUsers[0]} and ${typingUsers[1]} are typing..."
+        else -> "${typingUsers.size} people are typing..."
+    }
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MeeshyTheme.tokens.textSecondary,
+        modifier = modifier.padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.xs),
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

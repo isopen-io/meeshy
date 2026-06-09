@@ -50,6 +50,8 @@ dependencies {
     implementation(project(":feature:feed"))
     implementation(project(":feature:profile"))
     implementation(project(":feature:notifications"))
+    implementation(project(":feature:settings"))
+    implementation(project(":feature:contacts"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.ConversationRepository
 import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.socket.MessageSocketManager
 import javax.inject.Inject
 
 data class ConversationListUiState(
@@ -24,6 +25,7 @@ data class ConversationListUiState(
 @HiltViewModel
 class ConversationListViewModel @Inject constructor(
     private val repository: ConversationRepository,
+    private val messageSocketManager: MessageSocketManager,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ConversationListUiState())
@@ -39,6 +41,24 @@ class ConversationListViewModel @Inject constructor(
                 },
             ).collect { result ->
                 _state.update { it.applyResult(result) }
+            }
+        }
+
+        viewModelScope.launch {
+            launch {
+                messageSocketManager.unreadUpdated.collect {
+                    repository.refresh()
+                }
+            }
+            launch {
+                messageSocketManager.messageReceived.collect {
+                    repository.refresh()
+                }
+            }
+            launch {
+                messageSocketManager.conversationUpdated.collect {
+                    repository.refresh()
+                }
             }
         }
     }
