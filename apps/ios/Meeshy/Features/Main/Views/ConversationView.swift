@@ -221,8 +221,8 @@ struct ConversationView: View {
     @ObservedObject var typingObserver: ConversationStateStore
     @State var messageText = ""
     @StateObject var audioRecorder = AudioRecorderManager()
-    @StateObject var scrollButtonAudioPlayer = AudioPlayerManager()
-    @StateObject var pendingAudioPlayer = AudioPlayerManager()
+    @StateObject var scrollButtonAudioPlayer = AudioPlaybackManager()
+    @StateObject var pendingAudioPlayer = AudioPlaybackManager()
     
     @FocusState var isTyping: Bool
     @FocusState var isSearchFocused: Bool
