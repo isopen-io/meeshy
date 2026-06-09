@@ -2541,42 +2541,64 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // MARK: - Decode Helper
 
+    /// Shared, pre-configured decoder. Used ONLY on `decodeQueue` (serial), so a
+    /// single reused instance is race-free and avoids allocating a decoder plus
+    /// wiring its date strategy on every realtime event.
+    private nonisolated(unsafe) static let socketDecoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let dateStr = try container.decode(String.self)
+            if let date = MessageSocketManager.isoFormatterWithFractional.date(from: dateStr) { return date }
+            if let date = MessageSocketManager.isoFormatterBasic.date(from: dateStr) { return date }
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
+        }
+        return decoder
+    }()
+
+    /// Serial so payloads decode in arrival order, off the main thread.
+    private static let decodeQueue = DispatchQueue(label: "me.meeshy.socket.decode", qos: .userInitiated)
+
     private nonisolated func decode<T: Decodable & Sendable>(_ type: T.Type, from data: [Any], handler: @escaping @Sendable (T) -> Void) {
         guard let first = data.first else {
             Logger.socket.error("decode DROP type=\(String(describing: type), privacy: .public) reason=empty-payload")
             return
         }
 
-        do {
-            let jsonData: Data
-            if let dict = first as? [String: Any] {
-                jsonData = try JSONSerialization.data(withJSONObject: dict)
-            } else if let str = first as? String {
-                jsonData = Data(str.utf8)
-            } else {
-                Logger.socket.error("decode DROP type=\(String(describing: type), privacy: .public) reason=unexpected-payload-shape")
+        // Socket.IO's handle queue defaults to MAIN, so doing the JSONDecoder work
+        // inline parsed every realtime event (message / reaction / receipt …) on
+        // the main thread — visible CPU on busy conversations. Serialise the dict
+        // here (cheap), then decode off-main on a serial queue that preserves
+        // arrival order; the handler still lands on main.
+        let jsonData: Data
+        if let dict = first as? [String: Any] {
+            guard let serialized = try? JSONSerialization.data(withJSONObject: dict) else {
+                Logger.socket.error("decode DROP type=\(String(describing: type), privacy: .public) reason=reserialize-failed")
                 return
             }
+            jsonData = serialized
+        } else if let str = first as? String {
+            jsonData = Data(str.utf8)
+        } else {
+            Logger.socket.error("decode DROP type=\(String(describing: type), privacy: .public) reason=unexpected-payload-shape")
+            return
+        }
 
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .custom { decoder in
-                let container = try decoder.singleValueContainer()
-                let dateStr = try container.decode(String.self)
-                if let date = MessageSocketManager.isoFormatterWithFractional.date(from: dateStr) { return date }
-                if let date = MessageSocketManager.isoFormatterBasic.date(from: dateStr) { return date }
-                throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
-            }
-            let decoded = try decoder.decode(type, from: jsonData)
-            DispatchQueue.main.async {
-                handler(decoded)
-            }
-        } catch {
-            // Log raw JSON keys for debugging decode failures
-            if let dict = first as? [String: Any] {
-                let keys = dict.keys.sorted().joined(separator: ", ")
-                Logger.socket.error("decode FAILED type=\(String(describing: type)): \(error) — keys: [\(keys)]")
-            } else {
-                Logger.socket.error("decode FAILED type=\(String(describing: type)): \(error)")
+        // Capture only the (Sendable) key names so a decode failure can still log
+        // them off-main, without retaining the non-Sendable payload dictionary.
+        let payloadKeys: [String] = (first as? [String: Any]).map { Array($0.keys) } ?? []
+
+        Self.decodeQueue.async {
+            do {
+                let decoded = try Self.socketDecoder.decode(type, from: jsonData)
+                DispatchQueue.main.async { handler(decoded) }
+            } catch {
+                if payloadKeys.isEmpty {
+                    Logger.socket.error("decode FAILED type=\(String(describing: type)): \(error)")
+                } else {
+                    let keys = payloadKeys.sorted().joined(separator: ", ")
+                    Logger.socket.error("decode FAILED type=\(String(describing: type)): \(error) — keys: [\(keys)]")
+                }
             }
         }
     }
