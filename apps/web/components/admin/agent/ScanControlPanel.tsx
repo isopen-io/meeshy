@@ -150,7 +150,7 @@ export default memo(function ScanControlPanel() {
         <div className="flex items-center justify-between">
           <CardTitle className="text-sm flex items-center gap-2">
             <Settings className="h-4 w-4 text-indigo-500" />
-            Controles
+            {t('agent.scanControl.title')}
           </CardTitle>
           <div className="flex items-center gap-1">
             <Button
@@ -181,11 +181,11 @@ export default memo(function ScanControlPanel() {
           ) : (
             <div className="space-y-4">
               <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
-                <h4 className="text-xs font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">Scope par cycle</h4>
+                <h4 className="text-xs font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider">{t('agent.scanControl.scopePerCycle')}</h4>
                 <div className="space-y-2">
                   <div className="flex items-center">
-                    <Label>Conversations max/cycle</Label>
-                    <InfoIcon content="0 = illimite. Nombre max de conversations scannees par cycle global." />
+                    <Label>{t('agent.scanControl.maxConvPerCycle')}</Label>
+                    <InfoIcon content={t('agent.scanControl.maxConvPerCycleInfo')} />
                   </div>
                   <Input
                     type="number"
@@ -197,8 +197,8 @@ export default memo(function ScanControlPanel() {
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center">
-                    <Label>Fraicheur messages ({globalForm.messageFreshnessHours ?? 22}h)</Label>
-                    <InfoIcon content="Ignore les conversations sans message recent." />
+                    <Label>{t('agent.scanControl.freshnessLabel', { hours: globalForm.messageFreshnessHours ?? 22 })}</Label>
+                    <InfoIcon content={t('agent.scanControl.freshnessInfo')} />
                   </div>
                   <input
                     type="range"
@@ -215,25 +215,25 @@ export default memo(function ScanControlPanel() {
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center">
-                    <Label>Types eligibles</Label>
-                    <InfoIcon content="Types de conversations que l'agent peut scanner." />
+                    <Label>{t('agent.scanControl.eligibleTypes')}</Label>
+                    <InfoIcon content={t('agent.scanControl.eligibleTypesInfo')} />
                   </div>
                   <div className="flex flex-wrap gap-1.5">
-                    {CONV_TYPES.map(t => {
-                      const active = (globalForm.eligibleConversationTypes ?? []).includes(t);
+                    {CONV_TYPES.map(convType => {
+                      const active = (globalForm.eligibleConversationTypes ?? []).includes(convType);
                       return (
                         <button
-                          key={t}
+                          key={convType}
                           onClick={() => {
                             const current = globalForm.eligibleConversationTypes ?? [];
                             updateGlobal(
                               'eligibleConversationTypes',
-                              active ? current.filter(x => x !== t) : [...current, t],
+                              active ? current.filter(x => x !== convType) : [...current, convType],
                             );
                           }}
                           className={`px-2.5 py-1 rounded-full text-xs border transition-all ${active ? 'bg-indigo-50 dark:bg-indigo-900/30 border-indigo-300 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300' : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-gray-500'}`}
                         >
-                          {t}
+                          {convType}
                         </button>
                       );
                     })}
@@ -260,19 +260,19 @@ export default memo(function ScanControlPanel() {
                   {/* Cadence */}
                   <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
                     <h4 className="text-xs font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider flex items-center gap-1.5">
-                      <Clock className="h-3 w-3" /> Cadence
+                      <Clock className="h-3 w-3" /> {t('agent.scanControl.cadence')}
                     </h4>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
-                        <Label>Actif</Label>
-                        <InfoIcon content="Active/desactive l'agent pour cette conversation." />
+                        <Label>{t('agent.scanControl.active')}</Label>
+                        <InfoIcon content={t('agent.scanControl.activeInfo')} />
                       </div>
                       <Switch checked={convForm.enabled ?? true} onCheckedChange={v => updateConv('enabled', v)} />
                     </div>
                     <div className="space-y-2">
                       <div className="flex items-center">
-                        <Label>Intervalle de scan ({convForm.scanIntervalMinutes ?? 3}min)</Label>
-                        <InfoIcon content="Frequence des scans automatiques." />
+                        <Label>{t('agent.scanControl.scanIntervalLabel', { minutes: convForm.scanIntervalMinutes ?? 3 })}</Label>
+                        <InfoIcon content={t('agent.scanControl.scanIntervalInfo')} />
                       </div>
                       <input
                         type="range"
@@ -289,8 +289,8 @@ export default memo(function ScanControlPanel() {
                     </div>
                     <div className="flex items-center justify-between">
                       <div className="flex items-center">
-                        <Label>Burst</Label>
-                        <InfoIcon content="Mode rafale : plusieurs messages rapides." />
+                        <Label>{t('agent.scanControl.burst')}</Label>
+                        <InfoIcon content={t('agent.scanControl.burstInfo')} />
                       </div>
                       <Switch checked={convForm.burstEnabled ?? true} onCheckedChange={v => updateConv('burstEnabled', v)} />
                     </div>
@@ -298,7 +298,7 @@ export default memo(function ScanControlPanel() {
                       <div className="pl-4 border-l-2 border-indigo-100 dark:border-indigo-900 space-y-3">
                         <div className="grid grid-cols-3 gap-2">
                           <div className="space-y-1">
-                            <Label className="text-[10px]">Taille</Label>
+                            <Label className="text-[10px]">{t('agent.scanControl.burstSize')}</Label>
                             <Input
                               type="number"
                               value={convForm.burstSize ?? 4}
@@ -308,7 +308,7 @@ export default memo(function ScanControlPanel() {
                             />
                           </div>
                           <div className="space-y-1">
-                            <Label className="text-[10px]">Intervalle (min)</Label>
+                            <Label className="text-[10px]">{t('agent.scanControl.burstInterval')}</Label>
                             <Input
                               type="number"
                               value={convForm.burstIntervalMinutes ?? 5}
@@ -318,7 +318,7 @@ export default memo(function ScanControlPanel() {
                             />
                           </div>
                           <div className="space-y-1">
-                            <Label className="text-[10px]">Quiet (min)</Label>
+                            <Label className="text-[10px]">{t('agent.scanControl.burstQuiet')}</Label>
                             <Input
                               type="number"
                               value={convForm.quietIntervalMinutes ?? 90}
@@ -335,11 +335,11 @@ export default memo(function ScanControlPanel() {
                   {/* Distribution temporelle */}
                   <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
                     <h4 className="text-xs font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider flex items-center gap-1.5">
-                      <Clock className="h-3 w-3" /> Distribution temporelle
+                      <Clock className="h-3 w-3" /> {t('agent.scanControl.timeDistribution')}
                     </h4>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
-                        <Label className="text-[10px]">Delai minimum (minutes)</Label>
+                        <Label className="text-[10px]">{t('agent.scanControl.minDelay')}</Label>
                         <Input
                           type="number"
                           value={convForm.minDelayMinutes ?? 1}
@@ -349,7 +349,7 @@ export default memo(function ScanControlPanel() {
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-[10px]">Delai maximum (minutes)</Label>
+                        <Label className="text-[10px]">{t('agent.scanControl.maxDelay')}</Label>
                         <Input
                           type="number"
                           value={convForm.maxDelayMinutes ?? 360}
@@ -360,14 +360,14 @@ export default memo(function ScanControlPanel() {
                       </div>
                     </div>
                     <div className="flex items-center justify-between">
-                      <Label className="text-[10px]">Etaler les actions sur la journee</Label>
+                      <Label className="text-[10px]">{t('agent.scanControl.spreadOverDay')}</Label>
                       <Switch
                         checked={convForm.spreadOverDayEnabled ?? true}
                         onCheckedChange={v => updateConv('spreadOverDayEnabled', v)}
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-[10px]">Max messages par utilisateur / 10min</Label>
+                      <Label className="text-[10px]">{t('agent.scanControl.maxMsgPer10Min')}</Label>
                       <Input
                         type="number"
                         value={convForm.maxMessagesPerUserPer10Min ?? 4}
@@ -381,11 +381,11 @@ export default memo(function ScanControlPanel() {
                   {/* Scope par cycle */}
                   <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
                     <h4 className="text-xs font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider flex items-center gap-1.5">
-                      <Zap className="h-3 w-3" /> Reponses par cycle
+                      <Zap className="h-3 w-3" /> {t('agent.scanControl.responsesPerCycle')}
                     </h4>
                     <div className="grid grid-cols-3 gap-3">
                       <div className="space-y-1">
-                        <Label className="text-[10px]">Min msgs</Label>
+                        <Label className="text-[10px]">{t('agent.scanControl.minMsgs')}</Label>
                         <Input
                           type="number"
                           value={convForm.minResponsesPerCycle ?? 2}
@@ -395,7 +395,7 @@ export default memo(function ScanControlPanel() {
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-[10px]">Max msgs</Label>
+                        <Label className="text-[10px]">{t('agent.scanControl.maxMsgs')}</Label>
                         <Input
                           type="number"
                           value={convForm.maxResponsesPerCycle ?? 12}
@@ -405,7 +405,7 @@ export default memo(function ScanControlPanel() {
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-[10px]">Max reactions</Label>
+                        <Label className="text-[10px]">{t('agent.scanControl.maxReactions')}</Label>
                         <Input
                           type="number"
                           value={convForm.maxReactionsPerCycle ?? 4}
@@ -420,11 +420,11 @@ export default memo(function ScanControlPanel() {
                   {/* Participants */}
                   <div className="space-y-4 p-4 rounded-lg bg-slate-50/50 dark:bg-slate-900/50 border border-slate-100 dark:border-slate-800">
                     <h4 className="text-xs font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider flex items-center gap-1.5">
-                      <Users className="h-3 w-3" /> Participants
+                      <Users className="h-3 w-3" /> {t('agent.scanControl.participants')}
                     </h4>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
-                        <Label className="text-[10px]">Max users controles</Label>
+                        <Label className="text-[10px]">{t('agent.scanControl.maxControlledUsers')}</Label>
                         <Input
                           type="number"
                           value={convForm.maxControlledUsers ?? 5}
@@ -434,7 +434,7 @@ export default memo(function ScanControlPanel() {
                         />
                       </div>
                       <div className="flex items-center justify-between">
-                        <Label className="text-[10px]">Auto-pickup</Label>
+                        <Label className="text-[10px]">{t('agent.scanControl.autoPickup')}</Label>
                         <Switch
                           checked={convForm.autoPickupEnabled ?? true}
                           onCheckedChange={v => updateConv('autoPickupEnabled', v)}
@@ -443,7 +443,7 @@ export default memo(function ScanControlPanel() {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
-                        <Label className="text-[10px]">Msgs/jour (semaine)</Label>
+                        <Label className="text-[10px]">{t('agent.scanControl.weekdayMsgs')}</Label>
                         <Input
                           type="number"
                           value={convForm.weekdayMaxMessages ?? 10}
@@ -453,7 +453,7 @@ export default memo(function ScanControlPanel() {
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-[10px]">Msgs/jour (weekend)</Label>
+                        <Label className="text-[10px]">{t('agent.scanControl.weekendMsgs')}</Label>
                         <Input
                           type="number"
                           value={convForm.weekendMaxMessages ?? 25}
@@ -465,7 +465,7 @@ export default memo(function ScanControlPanel() {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
-                        <Label className="text-[10px]">Users/jour (semaine)</Label>
+                        <Label className="text-[10px]">{t('agent.scanControl.weekdayUsers')}</Label>
                         <Input
                           type="number"
                           value={convForm.weekdayMaxUsers ?? 4}
@@ -487,7 +487,7 @@ export default memo(function ScanControlPanel() {
                     </div>
                     <div className="space-y-2">
                       <div className="flex items-center">
-                        <Label>Seuil inactivite ({convForm.inactivityThresholdHours ?? 72}h)</Label>
+                        <Label>{t('agent.scanControl.inactivityLabel', { hours: convForm.inactivityThresholdHours ?? 72 })}</Label>
                       </div>
                       <input
                         type="range"
@@ -505,10 +505,10 @@ export default memo(function ScanControlPanel() {
                   </div>
                 </div>
               ) : (
-                <div className="text-sm text-gray-400 text-center py-8">Aucune config pour cette conversation</div>
+                <div className="text-sm text-gray-400 text-center py-8">{t('agent.scanControl.noConfig')}</div>
               )
             ) : (
-              <div className="text-sm text-gray-400 text-center py-8">Selectionnez une conversation</div>
+              <div className="text-sm text-gray-400 text-center py-8">{t('agent.scanControl.selectConversation')}</div>
             )}
           </div>
         )}
@@ -522,7 +522,7 @@ export default memo(function ScanControlPanel() {
             className="gap-1.5"
           >
             {saving ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
-            Appliquer
+            {t('agent.scanControl.apply')}
           </Button>
         </div>
       </CardContent>
