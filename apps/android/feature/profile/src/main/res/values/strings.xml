@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="profile_title">Profile</string>
+    <string name="profile_edit_title">Edit Profile</string>
+    <string name="profile_back">Back</string>
+    <string name="profile_edit">Edit</string>
+    <string name="profile_display_name_label">Display name</string>
+    <string name="profile_bio_label">Bio</string>
+    <string name="profile_cancel">Cancel</string>
+    <string name="profile_save">Save</string>
+    <string name="profile_unknown">Unknown</string>
+</resources>

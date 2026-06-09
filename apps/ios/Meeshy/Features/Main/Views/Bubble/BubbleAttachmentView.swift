@@ -128,15 +128,15 @@ struct BubbleAttachmentView: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(width: 200, height: 120)
+                    .frame(maxWidth: .infinity).aspectRatio(5/3, contentMode: .fit)
                     .overlay(
                         VStack(spacing: 8) {
                             Image(systemName: "mappin.circle.fill")
-                                .font(.system(size: 36))
+                                .font(.system(.largeTitle))
                                 .foregroundColor(.white)
 
                             Text(String(localized: "bubble.attachment.locationShared", defaultValue: "Position partagee", bundle: .main))
-                                .font(.system(size: 12, weight: .medium))
+                                .font(.caption.weight(.medium))
                                 .foregroundColor(.white.opacity(0.9))
                         }
                     )

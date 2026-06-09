@@ -3,6 +3,7 @@
 import { type ReactNode } from 'react';
 import { useSplitView } from './SplitViewContext';
 import { theme } from '@/components/v2';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface RightPanelHeaderProps {
   title: string;
@@ -24,6 +25,7 @@ export function RightPanelHeader({
   sticky = true,
 }: RightPanelHeaderProps) {
   const { goBackToList, isMobile, showRightPanel } = useSplitView();
+  const { t } = useI18n('common');
 
   return (
     <header
@@ -39,7 +41,7 @@ export function RightPanelHeader({
               <button
                 onClick={goBackToList}
                 className="p-2 -ml-2 rounded-lg hover:bg-[var(--gp-hover)] text-[var(--gp-text-primary)] transition-colors"
-                aria-label="Retour aux conversations"
+                aria-label={t('backToConversations')}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />

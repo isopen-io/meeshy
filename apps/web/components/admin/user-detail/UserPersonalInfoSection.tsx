@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { User, Edit2, Save, X } from 'lucide-react';
 import { apiService } from '@/services/api.service';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface UserPersonalInfoProps {
   user: unknown;
@@ -24,6 +25,7 @@ export function UserPersonalInfoSection({
   userId,
   onUpdate
 }: UserPersonalInfoProps) {
+  const { t } = useI18n('admin');
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
@@ -61,12 +63,12 @@ export function UserPersonalInfoSection({
       });
 
       if (response.data?.success) {
-        toast.success('Informations personnelles mises à jour');
+        toast.success(t('userDetail.personalInfoUpdated'));
         setEditing(false);
         onUpdate();
       }
     } catch (error: unknown) {
-      toast.error(error.message || 'Erreur lors de la mise à jour');
+      toast.error(error.message || t('userDetail.personalInfoUpdateError'));
     } finally {
       setSaving(false);
     }
