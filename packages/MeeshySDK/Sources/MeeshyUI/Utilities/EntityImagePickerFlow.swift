@@ -31,8 +31,10 @@ struct EntityImagePickerFlow: ViewModifier {
                     accentColor: accentColor,
                     onAccept: { edited in
                         imageForEditor = nil
-                        let compressed = ImageCompressor.compress(edited, maxSizeKB: maxSizeKB)
-                        onCompressed(compressed)
+                        Task {
+                            let compressed = await ImageCompressor.compressOffMain(edited, maxSizeKB: maxSizeKB)
+                            onCompressed(compressed)
+                        }
                     },
                     onCancel: {
                         imageForEditor = nil

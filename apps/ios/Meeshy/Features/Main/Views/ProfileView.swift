@@ -830,7 +830,7 @@ struct ProfileView: View {
         isUploadingAvatar = true
         Task {
             do {
-                let compressed = ImageCompressor.compress(image, maxSizeKB: 500)
+                let compressed = await ImageCompressor.compressOffMain(image, maxSizeKB: 500)
                 let uploadedURL = try await UserService.shared.uploadImage(compressed, filename: "avatar.jpg")
                 let updatedUser = try await UserService.shared.updateAvatar(url: uploadedURL)
                 authManager.currentUser = updatedUser
@@ -850,7 +850,7 @@ struct ProfileView: View {
         isUploadingBanner = true
         Task {
             do {
-                let compressed = ImageCompressor.compress(image, maxSizeKB: 800)
+                let compressed = await ImageCompressor.compressOffMain(image, maxSizeKB: 800)
                 let uploadedURL = try await UserService.shared.uploadImage(compressed, filename: "banner.jpg")
                 let updatedUser = try await UserService.shared.updateBanner(url: uploadedURL)
                 authManager.currentUser = updatedUser
