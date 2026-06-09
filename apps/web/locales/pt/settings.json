@@ -370,7 +370,10 @@
         "audioDesc": "Transcrever e traduzir mensagens de áudio",
         "generateAudio": "Gerar áudio traduzido",
         "generateAudioDesc": "Criar uma versão em áudio da tradução",
-        "format": "Formato de áudio"
+        "format": "Formato de áudio",
+        "formatMp3": "MP3 (recomendado)",
+        "formatOgg": "OGG (melhor qualidade)",
+        "formatWav": "WAV (não comprimido)"
       },
       "gdpr": {
         "title": "Sobre seus dados",
@@ -463,6 +466,191 @@
     "betaPlayground": {
       "featureEnabled": "Recurso beta ativado",
       "featureDisabled": "Recurso beta desativado"
+    },
+    "video": {
+      "title": "Configurações de videochamada",
+      "description": "Configure suas preferências de videochamada",
+      "enableVideo": {
+        "label": "Ativar vídeo",
+        "description": "Permitir videochamadas em conversas"
+      },
+      "autoStartVideo": {
+        "label": "Iniciar vídeo automaticamente",
+        "description": "Ativar câmera automaticamente ao entrar em chamadas"
+      },
+      "mirrorVideo": {
+        "label": "Espelhar meu vídeo",
+        "description": "Inverter o vídeo horizontalmente"
+      },
+      "virtualBackground": {
+        "label": "Fundo virtual",
+        "description": "Ativar efeitos de fundo virtual"
+      },
+      "quality": {
+        "title": "Qualidade de vídeo",
+        "description": "Ajuste a qualidade do vídeo e o uso de largura de banda",
+        "label": "Qualidade de vídeo",
+        "auto": "Auto (Recomendado)",
+        "low": "Baixa (240p) - Economizar largura de banda",
+        "medium": "Média (480p)",
+        "high": "Alta (720p)",
+        "hd": "HD (1080p) - Alta largura de banda"
+      },
+      "frameRate": {
+        "label": "Taxa de quadros",
+        "fps15": "15 FPS - Economizar largura de banda",
+        "fps24": "24 FPS",
+        "fps30": "30 FPS (Recomendado)",
+        "fps60": "60 FPS - Movimento suave"
+      },
+      "audioProcessing": {
+        "title": "Processamento de áudio",
+        "description": "Configurar recursos de aprimoramento de áudio",
+        "noiseSupression": {
+          "label": "Supressão de ruído",
+          "description": "Reduzir ruído de fundo durante chamadas"
+        },
+        "echoCancellation": {
+          "label": "Cancelamento de eco",
+          "description": "Evitar retorno de áudio e eco"
+        }
+      },
+      "screenSharing": {
+        "title": "Compartilhamento de tela",
+        "description": "Configurar preferências de compartilhamento de tela",
+        "qualityLabel": "Qualidade do compartilhamento de tela",
+        "qualityLow": "Baixa - Melhor desempenho",
+        "qualityMedium": "Média",
+        "qualityHigh": "Alta (Recomendado)",
+        "qualityUltra": "Ultra - Melhor qualidade",
+        "systemAudio": {
+          "label": "Compartilhar áudio do sistema",
+          "description": "Incluir áudio do sistema ao compartilhar a tela"
+        }
+      },
+      "devices": {
+        "title": "Seleção de dispositivos",
+        "description": "Escolha seus dispositivos de câmera e áudio preferidos",
+        "camera": "Câmera",
+        "cameraDefault": "Câmera padrão",
+        "microphone": "Microfone",
+        "microphoneDefault": "Microfone padrão",
+        "speaker": "Alto-falante",
+        "speakerDefault": "Alto-falante padrão"
+      }
+    },
+    "voiceQuality": {
+      "title": "Análise de voz",
+      "noAnalysis": "Nenhuma análise disponível. Grave uma amostra de voz para ver as métricas de qualidade.",
+      "levels": {
+        "excellent": "Excelente",
+        "good": "Bom",
+        "average": "Médio",
+        "low": "Baixo"
+      },
+      "overall": {
+        "title": "Qualidade de voz geral",
+        "description": "Avaliação de qualidade para clonagem de voz",
+        "score": "Pontuação geral",
+        "suitableForCloning": "Adequado para clonagem de voz",
+        "insufficientQuality": "Qualidade insuficiente para clonagem",
+        "clarity": {
+          "label": "Clareza",
+          "description": "Relação sinal-ruído e qualidade de áudio"
+        },
+        "consistency": {
+          "label": "Consistência",
+          "description": "Estabilidade das características vocais"
+        }
+      },
+      "pitch": {
+        "title": "Análise de pitch (frequência fundamental)",
+        "description": "Características de altura vocal",
+        "mean": {
+          "label": "Média",
+          "description": "Frequência fundamental média"
+        },
+        "std": {
+          "label": "Desvio padrão",
+          "description": "Variação do pitch"
+        },
+        "min": "Mínimo",
+        "max": "Máximo"
+      },
+      "timbre": {
+        "title": "Análise de timbre",
+        "description": "Cor e textura vocal",
+        "spectralCentroid": {
+          "label": "Centroide espectral",
+          "description": "Centro de gravidade do espectro de frequências"
+        },
+        "spectralBandwidth": {
+          "label": "Largura de banda espectral",
+          "description": "Extensão do espectro"
+        },
+        "spectralRolloff": {
+          "label": "Rolloff espectral",
+          "description": "Frequência de corte a 85% da energia"
+        },
+        "spectralFlatness": {
+          "label": "Planeza espectral",
+          "description": "Medida de ruído vs tonalidade (0=tonal, 1=ruído)"
+        }
+      },
+      "energy": {
+        "title": "Análise de energia",
+        "description": "Nível sonoro e dinâmica",
+        "rms": {
+          "label": "RMS (nível médio)",
+          "description": "Nível de energia médio"
+        },
+        "peak": {
+          "label": "Pico",
+          "description": "Nível máximo"
+        },
+        "dynamicRange": {
+          "label": "Faixa dinâmica",
+          "description": "Diferença entre pico e mínimo"
+        }
+      },
+      "classification": {
+        "title": "Classificação de voz",
+        "description": "Tipo e características",
+        "voiceType": "Tipo de voz",
+        "gender": "Gênero",
+        "ageRange": "Faixa etária",
+        "confidence": {
+          "label": "Confiança da classificação",
+          "description": "Confiabilidade da classificação automática"
+        }
+      },
+      "prosody": {
+        "title": "Análise prosódica",
+        "description": "Ritmo e modulação da fala",
+        "energyMean": {
+          "label": "Energia média",
+          "description": "Nível médio de intensidade vocal"
+        },
+        "energyStd": {
+          "label": "Variabilidade de energia",
+          "description": "Variação da intensidade"
+        },
+        "silenceRatio": {
+          "label": "Proporção de silêncio",
+          "description": "Proporção de pausas na fala"
+        },
+        "speechRate": {
+          "label": "Taxa de fala",
+          "description": "Velocidade de elocução"
+        }
+      },
+      "recommendedRange": "Intervalo recomendado: {min} - {max}{unit}"
+    },
+    "message": {
+      "draftDays7": "7 dias",
+      "draftDays30": "30 dias",
+      "draftDays60": "60 dias",
+      "draftDays90": "90 dias"
     }
   }
 }
