@@ -11,8 +11,8 @@ import { Users, ArrowLeft, UserPlus, Search, Filter, ChevronLeft, ChevronRight, 
 import { adminService } from '@/services/admin.service';
 import type { User } from '@/services/admin.service';
 import { toast } from 'sonner';
-import { TableSkeleton, StatCardSkeleton } from '@/components/admin/TableSkeleton';
 import { useI18n } from '@/hooks/use-i18n';
+import { TableSkeleton, StatCardSkeleton } from '@/components/admin/TableSkeleton';
 import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 
 export default function AdminUsersPage() {

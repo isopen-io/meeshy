@@ -13,10 +13,12 @@ import { ArrowLeft, Search, Users, UserCheck, Globe, MessageSquare, Calendar, Ma
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
 import { adminService, AnonymousUser } from '@/services/admin.service';
 
 export default function AdminAnonymousUsersPage() {
   const router = useRouter();
+  const { t } = useI18n('admin');
   const [anonymousUsers, setAnonymousUsers] = useState<AnonymousUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -50,7 +52,7 @@ export default function AdminAnonymousUsersPage() {
       }
     } catch (error) {
       console.error('Erreur lors du chargement des utilisateurs anonymes:', error);
-      toast.error('Erreur lors du chargement des utilisateurs anonymes');
+      toast.error(t('anonUsers.loadError'));
     } finally {
       setLoading(false);
     }
@@ -80,11 +82,11 @@ export default function AdminAnonymousUsersPage() {
 
   const getStatusBadge = (isActive: boolean, isOnline: boolean) => {
     if (isActive && isOnline) {
-      return <Badge className="bg-green-100 text-green-800">Actif</Badge>;
+      return <Badge className="bg-green-100 text-green-800">{t('anonUsers.statusActive')}</Badge>;
     } else if (isActive && !isOnline) {
-      return <Badge className="bg-yellow-100 text-yellow-800">Inactif</Badge>;
+      return <Badge className="bg-yellow-100 text-yellow-800">{t('anonUsers.statusInactive')}</Badge>;
     } else {
-      return <Badge className="bg-red-100 text-red-800">Désactivé</Badge>;
+      return <Badge className="bg-red-100 text-red-800">{t('anonUsers.statusDisabled')}</Badge>;
     }
   };
 
@@ -93,7 +95,7 @@ export default function AdminAnonymousUsersPage() {
       <AdminLayout currentPage="/admin/anonymous-users">
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-2">Chargement des utilisateurs anonymes...</span>
+          <span className="ml-2">{t('anonUsers.loading')}</span>
         </div>
       </AdminLayout>
     );
@@ -111,11 +113,11 @@ export default function AdminAnonymousUsersPage() {
               className="flex items-center space-x-2"
             >
               <ArrowLeft className="h-4 w-4" />
-              <span>Retour</span>
+              <span>{t('anonUsers.backButton')}</span>
             </Button>
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Utilisateurs anonymes</h1>
-              <p className="text-gray-600">Gestion des participants anonymes</p>
+              <h1 className="text-2xl font-bold text-gray-900">{t('anonUsers.pageTitle')}</h1>
+              <p className="text-gray-600">{t('anonUsers.pageSubtitle')}</p>
             </div>
           </div>
         </div>
@@ -124,20 +126,20 @@ export default function AdminAnonymousUsersPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('anonUsers.statTotal')}</CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{totalCount}</div>
               <p className="text-xs text-muted-foreground">
-                Utilisateurs anonymes
+{t('anonUsers.statTotalDesc')}
               </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Actifs</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('anonUsers.statActive')}</CardTitle>
               <UserCheck className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -145,14 +147,14 @@ export default function AdminAnonymousUsersPage() {
                 {anonymousUsers?.filter(u => u.isActive && u.isOnline).length || 0}
               </div>
               <p className="text-xs text-muted-foreground">
-                Actuellement en ligne
+{t('anonUsers.statActiveDesc')}
               </p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Messages</CardTitle>
+              <CardTitle className="text-sm font-medium">{t('anonUsers.statMessages')}</CardTitle>
               <MessageSquare className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -160,7 +162,7 @@ export default function AdminAnonymousUsersPage() {
                 {anonymousUsers?.reduce((sum, u) => sum + u._count.sentMessages, 0) || 0}
               </div>
               <p className="text-xs text-muted-foreground">
-                Messages envoyés
+{t('anonUsers.statMessagesDesc')}
               </p>
             </CardContent>
           </Card>
@@ -169,7 +171,7 @@ export default function AdminAnonymousUsersPage() {
         {/* Filtres et recherche */}
         <Card>
           <CardHeader>
-            <CardTitle>Filtres et recherche</CardTitle>
+            <CardTitle>{t('anonUsers.filtersTitle')}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col md:flex-row gap-4">
@@ -177,7 +179,7 @@ export default function AdminAnonymousUsersPage() {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                   <Input
-                    placeholder="Rechercher par nom, email..."
+                    placeholder={t('anonUsers.searchPlaceholder')}
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10"
@@ -191,21 +193,21 @@ export default function AdminAnonymousUsersPage() {
                   onClick={() => handleStatusFilter('')}
                   size="sm"
                 >
-                  Tous
+                  {t('anonUsers.filterAll')}
                 </Button>
                 <Button
                   variant={statusFilter === 'active' ? 'default' : 'outline'}
                   onClick={() => handleStatusFilter('active')}
                   size="sm"
                 >
-                  Actifs
+                  {t('anonUsers.filterActive')}
                 </Button>
                 <Button
                   variant={statusFilter === 'inactive' ? 'default' : 'outline'}
                   onClick={() => handleStatusFilter('inactive')}
                   size="sm"
                 >
-                  Inactifs
+                  {t('anonUsers.filterInactive')}
                 </Button>
               </div>
               <Select value={String(pageSize)} onValueChange={(val) => handlePageSizeChange(Number(val))}>
@@ -213,13 +215,13 @@ export default function AdminAnonymousUsersPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="20">20 par page</SelectItem>
-                  <SelectItem value="50">50 par page</SelectItem>
-                  <SelectItem value="100">100 par page</SelectItem>
+                  <SelectItem value="20">{t('anonUsers.perPage', { count: 20 })}</SelectItem>
+                  <SelectItem value="50">{t('anonUsers.perPage', { count: 50 })}</SelectItem>
+                  <SelectItem value="100">{t('anonUsers.perPage', { count: 100 })}</SelectItem>
                 </SelectContent>
               </Select>
               <Button onClick={handleSearch} size="sm">
-                Rechercher
+                {t('anonUsers.searchButton')}
               </Button>
             </div>
           </CardContent>
@@ -228,12 +230,12 @@ export default function AdminAnonymousUsersPage() {
         {/* Liste des utilisateurs anonymes */}
         <Card>
           <CardHeader>
-            <CardTitle>Liste des utilisateurs anonymes</CardTitle>
+            <CardTitle>{t('anonUsers.listTitle')}</CardTitle>
           </CardHeader>
           <CardContent>
             {!anonymousUsers || anonymousUsers.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
-                Aucun utilisateur anonyme trouvé
+{t('anonUsers.emptyTitle')}
               </div>
             ) : (
               <div className="space-y-4">
@@ -292,7 +294,7 @@ export default function AdminAnonymousUsersPage() {
                           className="flex items-center space-x-1"
                         >
                           <Eye className="h-3 w-3" />
-                          <span>Détails</span>
+                          <span>{t('anonUsers.actionDetails')}</span>
                         </Button>
                       </div>
                     </div>
@@ -301,13 +303,13 @@ export default function AdminAnonymousUsersPage() {
                     <div className="mt-3 pt-3 border-t border-gray-100">
                       <div className="flex items-center justify-between text-sm">
                         <div>
-                          <span className="text-gray-500">Conversation: </span>
+                          <span className="text-gray-500">{t('anonUsers.conversationLabel')} </span>
                           <span className="font-medium">
-                            {user.shareLink.conversation.title || user.shareLink.conversation.identifier || 'Sans titre'}
+{user.shareLink.conversation.title || user.shareLink.conversation.identifier || t('anonUsers.noTitle')}
                           </span>
                         </div>
                         <div className="flex items-center space-x-2">
-                          <span className="text-gray-500">Lien: </span>
+                          <span className="text-gray-500">{t('anonUsers.linkLabel')} </span>
                           <Badge variant="outline">{user.shareLink.identifier || user.shareLink.linkId}</Badge>
                         </div>
                       </div>
@@ -315,7 +317,7 @@ export default function AdminAnonymousUsersPage() {
 
                     {/* Permissions */}
                     <div className="mt-2 flex items-center space-x-2 text-xs">
-                      <span className="text-gray-500">Permissions:</span>
+                      <span className="text-gray-500">{t('anonUsers.permissionsLabel')}</span>
                       {user.canSendMessages && <Badge variant="outline" className="text-xs">Messages</Badge>}
                       {user.canSendFiles && <Badge variant="outline" className="text-xs">Fichiers</Badge>}
                       {user.canSendImages && <Badge variant="outline" className="text-xs">Images</Badge>}
@@ -329,7 +331,7 @@ export default function AdminAnonymousUsersPage() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-6">
                 <div className="text-sm text-gray-500">
-                  Page {currentPage} sur {totalPages} ({totalCount} utilisateurs)
+                  {t('anonUsers.paginationInfo', { page: currentPage, total: totalPages, count: totalCount })}
                 </div>
                 <div className="flex space-x-2">
                   <Button
@@ -338,7 +340,7 @@ export default function AdminAnonymousUsersPage() {
                     onClick={() => loadAnonymousUsers(currentPage - 1, searchTerm || undefined, statusFilter || undefined)}
                     disabled={currentPage === 1}
                   >
-                    Précédent
+                    {t('anonUsers.prevPage')}
                   </Button>
                   <Button
                     variant="outline"
@@ -346,7 +348,7 @@ export default function AdminAnonymousUsersPage() {
                     onClick={() => loadAnonymousUsers(currentPage + 1, searchTerm || undefined, statusFilter || undefined)}
                     disabled={!hasMore}
                   >
-                    Suivant
+                    {t('anonUsers.nextPage')}
                   </Button>
                 </div>
               </div>
@@ -360,7 +362,7 @@ export default function AdminAnonymousUsersPage() {
             <DialogHeader>
               <DialogTitle className="flex items-center space-x-2">
                 <Users className="h-5 w-5" />
-                <span>Détails de l&apos;utilisateur anonyme</span>
+                <span>{t('anonUsers.detailTitle')}</span>
               </DialogTitle>
             </DialogHeader>
 
@@ -372,53 +374,53 @@ export default function AdminAnonymousUsersPage() {
                     <CardHeader>
                       <CardTitle className="text-lg flex items-center space-x-2">
                         <Shield className="h-4 w-4" />
-                        <span>Informations générales</span>
+                        <span>{t('anonUsers.infoGeneral')}</span>
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-3">
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <p className="text-sm font-medium text-gray-500">Nom complet</p>
+                          <p className="text-sm font-medium text-gray-500">{t('anonUsers.labelFullName')}</p>
                           <p className="text-sm font-semibold">{selectedUser.firstName} {selectedUser.lastName}</p>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-500">Nom d&apos;utilisateur</p>
+                          <p className="text-sm font-medium text-gray-500">{t('anonUsers.labelUsername')}</p>
                           <p className="text-sm font-semibold">@{selectedUser.username}</p>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-500">Email</p>
-                          <p className="text-sm">{selectedUser.email || 'Non renseigné'}</p>
+                          <p className="text-sm font-medium text-gray-500">{t('anonUsers.labelEmail')}</p>
+                          <p className="text-sm">{selectedUser.email || t('anonUsers.notProvided')}</p>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-500">Statut</p>
+                          <p className="text-sm font-medium text-gray-500">{t('anonUsers.labelStatus')}</p>
                           <div>{getStatusBadge(selectedUser.isActive, selectedUser.isOnline)}</div>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-500">Pays</p>
+                          <p className="text-sm font-medium text-gray-500">{t('anonUsers.labelCountry')}</p>
                           <p className="text-sm flex items-center space-x-1">
                             <MapPin className="h-3 w-3" />
-                            <span>{selectedUser.country || 'Non renseigné'}</span>
+                            <span>{selectedUser.country || t('anonUsers.notProvided')}</span>
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-500">Langue</p>
+                          <p className="text-sm font-medium text-gray-500">{t('anonUsers.labelLanguage')}</p>
                           <p className="text-sm flex items-center space-x-1">
                             <Globe className="h-3 w-3" />
                             <span>{selectedUser.language}</span>
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-500">Date d&apos;inscription</p>
+                          <p className="text-sm font-medium text-gray-500">{t('anonUsers.labelJoinDate')}</p>
                           <p className="text-sm flex items-center space-x-1">
                             <Calendar className="h-3 w-3" />
                             <span>{formatDate(selectedUser.joinedAt)}</span>
                           </p>
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-500">Dernière activité</p>
+                          <p className="text-sm font-medium text-gray-500">{t('anonUsers.labelLastActivity')}</p>
                           <p className="text-sm flex items-center space-x-1">
                             <Clock className="h-3 w-3" />
-                            <span>{selectedUser.lastActiveAt ? formatDate(selectedUser.lastActiveAt) : 'Jamais'}</span>
+                            <span>{selectedUser.lastActiveAt ? formatDate(selectedUser.lastActiveAt) : t('anonUsers.never')}</span>
                           </p>
                         </div>
                       </div>
@@ -430,33 +432,33 @@ export default function AdminAnonymousUsersPage() {
                     <CardHeader>
                       <CardTitle className="text-lg flex items-center space-x-2">
                         <Shield className="h-4 w-4" />
-                        <span>Permissions et droits</span>
+                        <span>{t('anonUsers.permissionsTitle')}</span>
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="grid grid-cols-2 gap-3">
                         <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <span className="text-sm font-medium">Envoi de messages</span>
+                          <span className="text-sm font-medium">{t('anonUsers.permSendMessages')}</span>
                           <Badge variant={selectedUser.canSendMessages ? "default" : "secondary"}>
-                            {selectedUser.canSendMessages ? 'Autorisé' : 'Refusé'}
+{selectedUser.canSendMessages ? t('anonUsers.permAllowed') : t('anonUsers.permDenied')}
                           </Badge>
                         </div>
                         <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <span className="text-sm font-medium">Envoi de fichiers</span>
+                          <span className="text-sm font-medium">{t('anonUsers.permSendFiles')}</span>
                           <Badge variant={selectedUser.canSendFiles ? "default" : "secondary"}>
-                            {selectedUser.canSendFiles ? 'Autorisé' : 'Refusé'}
+{selectedUser.canSendFiles ? t('anonUsers.permAllowed') : t('anonUsers.permDenied')}
                           </Badge>
                         </div>
                         <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <span className="text-sm font-medium">Envoi d&apos;images</span>
+                          <span className="text-sm font-medium">{t('anonUsers.permSendImages')}</span>
                           <Badge variant={selectedUser.canSendImages ? "default" : "secondary"}>
-                            {selectedUser.canSendImages ? 'Autorisé' : 'Refusé'}
+{selectedUser.canSendImages ? t('anonUsers.permAllowed') : t('anonUsers.permDenied')}
                           </Badge>
                         </div>
                         <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <span className="text-sm font-medium">En ligne</span>
+                          <span className="text-sm font-medium">{t('anonUsers.permOnline')}</span>
                           <Badge variant={selectedUser.isOnline ? "default" : "secondary"}>
-                            {selectedUser.isOnline ? 'Oui' : 'Non'}
+{selectedUser.isOnline ? t('anonUsers.permYes') : t('anonUsers.permNo')}
                           </Badge>
                         </div>
                       </div>
@@ -468,26 +470,26 @@ export default function AdminAnonymousUsersPage() {
                     <CardHeader>
                       <CardTitle className="text-lg flex items-center space-x-2">
                         <MessageSquare className="h-4 w-4" />
-                        <span>Statistiques des messages</span>
+                        <span>{t('anonUsers.statsTitle')}</span>
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="grid grid-cols-3 gap-4">
                         <div className="text-center p-4 bg-blue-50 rounded-lg">
                           <p className="text-2xl font-bold text-blue-600">{selectedUser._count.sentMessages}</p>
-                          <p className="text-sm text-gray-600">Messages envoyés</p>
+                          <p className="text-sm text-gray-600">{t('anonUsers.statsMsgSent')}</p>
                         </div>
                         <div className="text-center p-4 bg-green-50 rounded-lg">
                           <p className="text-2xl font-bold text-green-600">
                             {(selectedUser._count as Record<string, number>).reactions ?? 0}
                           </p>
-                          <p className="text-sm text-gray-600">Réactions</p>
+                          <p className="text-sm text-gray-600">{t('anonUsers.statsReactions')}</p>
                         </div>
                         <div className="text-center p-4 bg-purple-50 rounded-lg">
                           <p className="text-2xl font-bold text-purple-600">
                             {Math.round((selectedUser._count.sentMessages / Math.max(1, Math.ceil((new Date().getTime() - new Date(selectedUser.joinedAt).getTime()) / (1000 * 60 * 60 * 24)))) * 10) / 10}
                           </p>
-                          <p className="text-sm text-gray-600">Messages/jour</p>
+                          <p className="text-sm text-gray-600">{t('anonUsers.statsMsgPerDay')}</p>
                         </div>
                       </div>
                     </CardContent>
@@ -498,33 +500,33 @@ export default function AdminAnonymousUsersPage() {
                     <CardHeader>
                       <CardTitle className="text-lg flex items-center space-x-2">
                         <Link2 className="h-4 w-4" />
-                        <span>Lien de partage et conversation</span>
+                        <span>{t('anonUsers.shareLinkTitle')}</span>
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div>
-                        <p className="text-sm font-medium text-gray-500 mb-2">Lien utilisé</p>
+                        <p className="text-sm font-medium text-gray-500 mb-2">{t('anonUsers.usedLink')}</p>
                         <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                           <div>
-                            <p className="font-medium">{selectedUser.shareLink.name || 'Sans nom'}</p>
+                            <p className="font-medium">{selectedUser.shareLink.name || t('anonUsers.noName')}</p>
                             <p className="text-sm text-gray-500">
                               ID: {selectedUser.shareLink.identifier || selectedUser.shareLink.linkId}
                             </p>
                           </div>
                           <Badge variant="outline">
-                            {(selectedUser.shareLink as Record<string, unknown>).isActive ? 'Actif' : 'Inactif'}
+{(selectedUser.shareLink as Record<string, unknown>).isActive ? t('anonUsers.statusActive') : t('anonUsers.statusInactive')}
                           </Badge>
                         </div>
                       </div>
 
                       <div>
-                        <p className="text-sm font-medium text-gray-500 mb-2">Conversation rejointe</p>
+                        <p className="text-sm font-medium text-gray-500 mb-2">{t('anonUsers.joinedConversation')}</p>
                         <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
                           <div className="flex-1">
                             <p className="font-medium">
-                              {selectedUser.shareLink.conversation.title ||
+{selectedUser.shareLink.conversation.title ||
                                selectedUser.shareLink.conversation.identifier ||
-                               'Sans titre'}
+                               t('anonUsers.noTitle')}
                             </p>
                             <p className="text-sm text-gray-500">
                               Type: {String((selectedUser.shareLink.conversation as Record<string, unknown>).type ?? 'Standard')}
@@ -540,7 +542,7 @@ export default function AdminAnonymousUsersPage() {
                             className="flex items-center space-x-1"
                           >
                             <ExternalLink className="h-3 w-3" />
-                            <span>Voir conversation</span>
+                            <span>{t('anonUsers.viewConversation')}</span>
                           </Button>
                         </div>
                       </div>
@@ -550,7 +552,7 @@ export default function AdminAnonymousUsersPage() {
                   {/* Actions admin */}
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-lg">Actions administrateur</CardTitle>
+                      <CardTitle className="text-lg">{t('anonUsers.adminActions')}</CardTitle>
                     </CardHeader>
                     <CardContent>
                       <div className="flex space-x-2">
@@ -559,12 +561,12 @@ export default function AdminAnonymousUsersPage() {
                           size="sm"
                           onClick={() => {
                             // TODO: Implémenter la visualisation des messages
-                            toast.info('Fonctionnalité à venir');
+                            toast.info(t('anonUsers.comingSoon'));
                           }}
                           className="flex items-center space-x-1"
                         >
                           <MessageSquare className="h-3 w-3" />
-                          <span>Voir les messages</span>
+                          <span>{t('anonUsers.viewMessages')}</span>
                         </Button>
                         <Button
                           variant="outline"
@@ -576,7 +578,7 @@ export default function AdminAnonymousUsersPage() {
                           className="flex items-center space-x-1"
                         >
                           <ExternalLink className="h-3 w-3" />
-                          <span>Accéder à la conversation</span>
+                          <span>{t('anonUsers.accessConversation')}</span>
                         </Button>
                       </div>
                     </CardContent>
