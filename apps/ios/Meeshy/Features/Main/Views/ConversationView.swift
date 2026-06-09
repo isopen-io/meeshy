@@ -193,7 +193,6 @@ struct ConversationHeaderState {
     var storyUserIdForHeader: String?
     var showSearch = false
     var searchQuery = ""
-    var typingDotPhase: Int = 0
 }
 
 struct ConversationView: View {
@@ -245,9 +244,6 @@ struct ConversationView: View {
     @State var composerHeight: CGFloat = 130
     @State private var keyboardHeight: CGFloat = 0
     @State private var initialScrollCompleted: Bool = false
-
-    @State var typingDotPublisher = Timer.publish(every: 0.5, on: .main, in: .common)
-    @State var typingDotConnection: Cancellable?
 
 
     let defaultReactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉", "💯", "😍", "👀", "🤣", "💪", "✨", "🥺"]
@@ -742,7 +738,6 @@ struct ConversationView: View {
         bodyContent
             .background(InteractivePopEnabler())
             .task {
-                Logger.messages.debug("[DIAG] ConversationView.task ENTERED conv=\(viewModel.conversationId)")
                 viewModel.observeSync()
                 await viewModel.loadMessages()
                 MessageSocketManager.shared.connect()
@@ -813,14 +808,6 @@ struct ConversationView: View {
                     }
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { overlayState.longPressEnabled = true }
-                if typingDotConnection == nil {
-                    typingDotConnection = typingDotPublisher.connect()
-                }
-            }
-            .onDisappear {
-                Logger.messages.debug("[DIAG] ConversationView.onDisappear conv=\(viewModel.conversationId)")
-                typingDotConnection?.cancel()
-                typingDotConnection = nil
             }
             .adaptiveOnChange(of: router.replyContextVersion) { _, _ in
                 // Réponse à un mood affiché dans la barre directe courante : la vue
@@ -856,7 +843,6 @@ struct ConversationView: View {
                 // ViewModel has already wiped per-conversation cache and
                 // local message state. We dismiss the screen here and
                 // surface a toast so the user knows why.
-                Logger.messages.debug("[DIAG] accessRevoked.onChange revoked=\(revoked)")
                 guard revoked else { return }
                 FeedbackToastManager.shared.showError(viewModel.error ?? String(localized: "conversation.accessRevoked", defaultValue: "You no longer have access to this conversation", bundle: .main))
                 dismiss()
@@ -1141,10 +1127,6 @@ struct ConversationView: View {
                     .transition(.asymmetric(insertion: .scale(scale: 0.8).combined(with: .opacity), removal: .scale(scale: 0.6).combined(with: .opacity)))
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: scrollState.isNearBottom)
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isSearchingQuotedMessage)
-                    .onReceive(typingDotPublisher) { _ in
-                        guard !typingObserver.typingUsernames.isEmpty else { return }
-                        headerState.typingDotPhase = (headerState.typingDotPhase + 1) % 3
-                    }
             }
 
             VStack {
