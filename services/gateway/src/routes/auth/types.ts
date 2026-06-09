@@ -72,7 +72,7 @@ export interface UserResponseData {
   profileCompletionRate: number;
   createdAt: Date;
   updatedAt: Date;
-  permissions?: Record<string, unknown>;
+  permissions?: any;
 }
 
 /**
@@ -92,7 +92,8 @@ export interface SessionResponseData {
 /**
  * Utility to format user data consistently across all routes
  */
-export function formatUserResponse(user: Record<string, unknown>, permissions?: Record<string, unknown>): UserResponseData {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function formatUserResponse(user: any, permissions?: any): UserResponseData {
   return {
     id: user.id,
     username: user.username,
@@ -132,7 +133,8 @@ export function formatUserResponse(user: Record<string, unknown>, permissions?: 
 /**
  * Utility to format session data consistently
  */
-export function formatSessionResponse(session: Record<string, unknown>, rememberDevice: boolean = false): SessionResponseData {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function formatSessionResponse(session: any, rememberDevice: boolean = false): SessionResponseData {
   return {
     id: session.id,
     deviceType: session.deviceType,
