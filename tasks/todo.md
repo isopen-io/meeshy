@@ -40,3 +40,30 @@ idempotent (1.1) + coalescing (1.2). Fluidité : suppression des passes offscree
 (ombre 3.2, double dégradé 3.3) + overlay réactions conditionnel (3.4) + NSDataDetector hors body (3.6).
 Démarrage : coalescing loadConversations (2.1) + dédup device-token (2.2) + stories cache-first (2.3).
 Abandons motivés : 3.1 (footgun @State prouvé sur cette vue), 3.5 (no-op vu l'invalidation grossière ObservableObject).
+
+---
+
+# Envois concurrents — supprimer le mutex `isSending` (2026-06-09)
+
+## Contexte (diagnostic prouvé)
+`ConversationViewModel.sendMessage` se sérialise via `@Published isSending` (guard l.1788, `defer`
+l.1795), tenu pendant tout l'`await` du POST REST — **30 s** sur réseau lent. Pendant ce temps, tout
+2ᵉ envoi tombe sur `SendFlow BLOCKED guard=isSending` et est déposé silencieusement (champ déjà vidé
+par le composer → texte perdu). Trace : `apps/ios/logs/sendflow-pending-lock-2026-06-09.log`.
+
+## Design
+Remplacer le mutex global par une **dédup par identité + fenêtre debounce courte** :
+- `dedupKey = f(content, replyToId, storyReplyToId, forwardedFromId, attachmentIds triés)`
+- `existingTempId == nil` ET même clé < `duplicateSendDebounce` (0,6 s) → rejet (double-tap) ; sinon continue.
+- check-and-set AVANT le 1ᵉʳ `await` → atomique via sérialisation @MainActor du préfixe (invariant « pas de double ligne optimiste »).
+- `isSending` adossé à `inFlightSendCount` (≥1 en vol), **sans gating**. Retry (`existingTempId != nil`) contourne le debounce.
+
+## Étapes (TDD)
+- [ ] RED : réécrire `ConversationViewModelOfflineQueueTests` (distinct→2, duplicate→1, A/B/C→3)
+- [ ] GREEN : implémenter dédup + compteur dans `ConversationViewModel.swift`
+- [ ] `./apps/ios/meeshy.sh test` (cible offline-queue) vert
+- [ ] Build + device-trace : 3 distincts rapides → 3 horloges ; double-tap → 1 + BLOCKED guard=duplicate-debounce
+- [ ] Décider sort instrumentation
+
+## Review
+(à compléter)
