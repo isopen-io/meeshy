@@ -215,10 +215,34 @@ public enum MessageTextRenderer {
 
     // MARK: - Parser
 
+    /// True when `text` could contain ANY inline-rule trigger: markdown
+    /// (`* ~ _`), `@mention` / display-name mention, `m+token`, or an `http` URL.
+    /// Conservative superset — every rule's pattern requires one of these — so
+    /// when it returns false no rule can match and `parse` can short-circuit to
+    /// plain text without running the regex pipeline.
+    private static func hasInlineSyntax(_ text: String) -> Bool {
+        for scalar in text.unicodeScalars {
+            switch scalar {
+            case "*", "~", "_", "@": return true
+            default: continue
+            }
+        }
+        return text.contains("http") || text.contains("m+")
+    }
+
     private static func parse(_ text: String, inherited: Styles = [], mentionDisplayNames: [String: String]? = nil) -> [Segment] {
         let ns = text as NSString
         let length = ns.length
         guard length > 0 else { return [] }
+
+        // Fast-path: most messages are plain text with no inline syntax. Every
+        // rule requires one of a small set of trigger chars/substrings, so a
+        // cheap scan lets us skip the whole regex pipeline (a `firstMatch` per
+        // rule at every cursor position) — the dominant case while scrolling.
+        // Returns exactly what the pipeline yields for a no-match string.
+        if !Self.hasInlineSyntax(text) {
+            return [.text(text, inherited)]
+        }
 
         // Build display-name rules once per render call (only when display names are available)
         let dnRules: [(regex: NSRegularExpression, kind: RuleKind)] = mentionDisplayNames.map { displayNameRules(from: $0) } ?? []
