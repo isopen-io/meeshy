@@ -44,7 +44,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import me.meeshy.sdk.model.ApiPost
-import me.meeshy.ui.component.MeeshySkeleton
+import me.meeshy.ui.component.MeeshySkeletonBox
+import me.meeshy.ui.theme.MeeshyTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -62,6 +63,7 @@ fun FeedScreen(
     Scaffold(
         topBar = { TopAppBar(title = { Text("Feed") }) },
         snackbarHost = { SnackbarHost(snackbar) },
+        containerColor = MeeshyTheme.tokens.backgroundPrimary,
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = state.isSyncing,
@@ -108,7 +110,7 @@ private fun PostCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AsyncImage(
                     model = post.author?.avatar,
-                    contentDescription = null,
+                    contentDescription = post.author?.displayName ?: post.author?.username ?: "Author",
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape),
@@ -153,7 +155,7 @@ private fun FeedSkeleton() {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(6) {
-            MeeshySkeleton(
+            MeeshySkeletonBox(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(120.dp),

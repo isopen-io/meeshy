@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Meeshy</string>
+
+    <!-- Navigation tabs -->
+    <string name="tab_messages">Messages</string>
+    <string name="tab_feed">Fil d\'actualité</string>
+    <string name="tab_activity">Activité</string>
+    <string name="tab_profile">Profil</string>
+
+    <!-- Login screen -->
+    <string name="login_welcome_back">Bon retour</string>
+    <string name="login_username_label">Nom d\'utilisateur</string>
+    <string name="login_password_label">Mot de passe</string>
+    <string name="login_button">Se connecter</string>
+
+    <!-- Chat screen -->
+    <string name="chat_title">Messages</string>
+    <string name="chat_back">Retour</string>
+    <string name="chat_message_placeholder">Message</string>
+    <string name="chat_send">Envoyer</string>
+    <string name="chat_no_messages">Aucun message pour l\'instant</string>
+    <string name="chat_retry">Réessayer</string>
+
+    <!-- Conversation list screen -->
+    <string name="conversations_title">Meeshy</string>
+    <string name="conversations_logout">Se déconnecter</string>
+    <string name="conversations_empty">Aucune conversation pour l\'instant</string>
+    <string name="conversations_retry">Réessayer</string>
+    <string name="conversations_no_messages">Aucun message pour l\'instant</string>
+
+    <!-- Notifications screen -->
+    <string name="notifications_title">Notifications</string>
+    <string name="notifications_mark_all_read">Tout marquer comme lu</string>
+    <string name="notifications_empty">Aucune notification</string>
+
+    <!-- Feed screen -->
+    <string name="feed_title">Fil d\'actualité</string>
+    <string name="feed_empty">Aucune publication pour l\'instant</string>
+    <string name="feed_like">J\'aime</string>
+
+    <!-- Profile screen -->
+    <string name="profile_title">Profil</string>
+    <string name="profile_edit_title">Modifier le profil</string>
+    <string name="profile_back">Retour</string>
+    <string name="profile_edit">Modifier</string>
+    <string name="profile_display_name_label">Nom affiché</string>
+    <string name="profile_bio_label">Bio</string>
+    <string name="profile_cancel">Annuler</string>
+    <string name="profile_save">Enregistrer</string>
+    <string name="profile_unknown">Inconnu</string>
+</resources>

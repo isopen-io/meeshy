@@ -1,4 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Meeshy</string>
+
+    <!-- Navigation tabs -->
+    <string name="tab_messages">Messages</string>
+    <string name="tab_feed">Feed</string>
+    <string name="tab_activity">Activity</string>
+    <string name="tab_profile">Profile</string>
+
+    <!-- Login screen -->
+    <string name="login_welcome_back">Welcome back</string>
+    <string name="login_username_label">Username</string>
+    <string name="login_password_label">Password</string>
+    <string name="login_button">Log in</string>
+
+    <!-- Chat screen -->
+    <string name="chat_title">Messages</string>
+    <string name="chat_back">Back</string>
+    <string name="chat_message_placeholder">Message</string>
+    <string name="chat_send">Send</string>
+    <string name="chat_no_messages">No messages yet</string>
+    <string name="chat_retry">Retry</string>
+
+    <!-- Conversation list screen -->
+    <string name="conversations_title">Meeshy</string>
+    <string name="conversations_logout">Log out</string>
+    <string name="conversations_empty">No conversations yet</string>
+    <string name="conversations_retry">Retry</string>
+    <string name="conversations_no_messages">No messages yet</string>
+
+    <!-- Notifications screen -->
+    <string name="notifications_title">Notifications</string>
+    <string name="notifications_mark_all_read">Mark all read</string>
+    <string name="notifications_empty">No notifications</string>
+
+    <!-- Feed screen -->
+    <string name="feed_title">Feed</string>
+    <string name="feed_empty">No posts yet</string>
+    <string name="feed_like">Like</string>
+
+    <!-- Profile screen -->
+    <string name="profile_title">Profile</string>
+    <string name="profile_edit_title">Edit Profile</string>
+    <string name="profile_back">Back</string>
+    <string name="profile_edit">Edit</string>
+    <string name="profile_display_name_label">Display name</string>
+    <string name="profile_bio_label">Bio</string>
+    <string name="profile_cancel">Cancel</string>
+    <string name="profile_save">Save</string>
+    <string name="profile_unknown">Unknown</string>
 </resources>

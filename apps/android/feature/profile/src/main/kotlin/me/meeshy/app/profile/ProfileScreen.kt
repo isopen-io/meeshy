@@ -1,6 +1,5 @@
 package me.meeshy.app.profile
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,6 +44,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.theme.MeeshyTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,6 +78,7 @@ fun ProfileScreen(
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },
+        containerColor = MeeshyTheme.tokens.backgroundPrimary,
     ) { padding ->
         if (state.isLoading) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
@@ -108,7 +109,7 @@ fun ProfileScreen(
                     )
                 } else {
                     MeeshyAvatar(
-                        displayName = user?.displayName ?: user?.username ?: "?",
+                        name = user?.displayName ?: user?.username ?: "?",
                         modifier = Modifier.size(96.dp),
                     )
                 }

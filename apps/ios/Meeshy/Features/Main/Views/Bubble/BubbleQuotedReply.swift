@@ -110,7 +110,7 @@ struct BubbleQuotedReply: View, Equatable {
             HStack(spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(quotedTitle)
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.caption.weight(.bold))
                         .foregroundColor(nameColor)
                         .lineLimit(1)
 
@@ -123,7 +123,7 @@ struct BubbleQuotedReply: View, Equatable {
                             let attachmentKind = BubbleQuotedReply.resolveAttachmentKind(reply.attachmentType)
                             if let kind = attachmentKind {
                                 Image(systemName: kind.sfSymbolName)
-                                    .font(.system(size: 10, weight: .medium))
+                                    .font(.caption2.weight(.medium))
                                     .foregroundColor(previewColor)
                             }
 
@@ -218,23 +218,23 @@ struct BubbleMoodReplyPreview: View, Equatable {
         HStack(spacing: 5) {
             if let emoji = reply.moodEmoji {
                 Text(emoji)
-                    .font(.system(size: 13))
+                    .font(.footnote)
             }
 
             if let date = reply.storyPublishedAt {
                 Text(date, style: .relative)
-                    .font(.system(size: 10))
+                    .font(.caption2)
                     .foregroundColor(previewColor.opacity(0.8))
             }
 
             if !reply.previewText.isEmpty {
                 if reply.storyPublishedAt != nil {
                     Text("\u{2022}")
-                        .font(.system(size: 8))
+                        .font(.caption2)
                         .foregroundColor(previewColor.opacity(0.6))
                 }
                 Text(reply.previewText)
-                    .font(.system(size: 11))
+                    .font(.caption)
                     .foregroundColor(previewColor)
                     .lineLimit(2)
             }

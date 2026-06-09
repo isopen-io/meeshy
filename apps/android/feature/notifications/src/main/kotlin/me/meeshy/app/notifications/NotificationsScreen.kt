@@ -41,6 +41,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.theme.MeeshyTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,6 +69,7 @@ fun NotificationsScreen(
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },
+        containerColor = MeeshyTheme.tokens.backgroundPrimary,
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = state.isSyncing,
@@ -118,7 +120,7 @@ private fun NotificationItem(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             MeeshyAvatar(
-                displayName = notification.actor?.displayName ?: notification.actor?.username ?: "?",
+                name = notification.actor?.displayName ?: notification.actor?.username ?: "?",
                 modifier = Modifier.size(44.dp),
             )
             Spacer(Modifier.width(12.dp))
