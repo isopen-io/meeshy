@@ -12,6 +12,7 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../utils/logger';
+import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendNotFound, sendInternalError, createPaginationMeta } from '../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { COMMUNITY_PREFERENCES_DEFAULTS } from '../config/user-preferences-defaults';
 import { UnifiedAuthRequest } from '../middleware/auth';
@@ -178,10 +179,7 @@ export default async function communityPreferencesRoutes(fastify: FastifyInstanc
       try {
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-          return reply.status(401).send({
-            success: false,
-            message: 'Authentication required'
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         const userId = authContext.userId;
@@ -198,34 +196,25 @@ export default async function communityPreferencesRoutes(fastify: FastifyInstanc
 
         // Return stored preferences or defaults
         if (preferences) {
-          reply.send({
-            success: true,
-            data: {
-              ...preferences,
-              isDefault: false
-            }
+          return sendSuccess(reply, {
+            ...preferences,
+            isDefault: false
           });
         } else {
           // Return default preferences for new communities
-          reply.send({
-            success: true,
-            data: {
-              id: null,
-              userId,
-              communityId,
-              ...COMMUNITY_PREFERENCES_DEFAULTS,
-              isDefault: true,
-              createdAt: null,
-              updatedAt: null
-            }
+          return sendSuccess(reply, {
+            id: null,
+            userId,
+            communityId,
+            ...COMMUNITY_PREFERENCES_DEFAULTS,
+            isDefault: true,
+            createdAt: null,
+            updatedAt: null
           });
         }
       } catch (error) {
         logError(fastify.log, 'Error fetching community preferences:', error);
-        reply.code(500).send({
-          success: false,
-          message: 'Error fetching preferences'
-        });
+        return sendInternalError(reply, 'Error fetching preferences');
       }
     }
   );
@@ -264,10 +253,7 @@ export default async function communityPreferencesRoutes(fastify: FastifyInstanc
       try {
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-          return reply.status(401).send({
-            success: false,
-            message: 'Authentication required'
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         const userId = authContext.userId;
@@ -293,22 +279,10 @@ export default async function communityPreferencesRoutes(fastify: FastifyInstanc
           isDefault: false
         }));
 
-        reply.send({
-          success: true,
-          data: preferencesWithDefault,
-          pagination: {
-            total: totalCount,
-            limit: limitNum,
-            offset: offsetNum,
-            hasMore: offsetNum + preferences.length < totalCount
-          }
-        });
+        return sendPaginatedSuccess(reply, preferencesWithDefault, createPaginationMeta(totalCount, offsetNum, limitNum, preferences.length));
       } catch (error) {
         logError(fastify.log, 'Error fetching all community preferences:', error);
-        reply.code(500).send({
-          success: false,
-          message: 'Error fetching preferences'
-        });
+        return sendInternalError(reply, 'Error fetching preferences');
       }
     }
   );
@@ -350,10 +324,7 @@ export default async function communityPreferencesRoutes(fastify: FastifyInstanc
       try {
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-          return reply.status(401).send({
-            success: false,
-            message: 'Authentication required'
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         const userId = authContext.userId;
@@ -386,19 +357,13 @@ export default async function communityPreferencesRoutes(fastify: FastifyInstanc
           update: updateData
         });
 
-        reply.send({
-          success: true,
-          data: {
-            ...preferences,
-            isDefault: false
-          }
+        return sendSuccess(reply, {
+          ...preferences,
+          isDefault: false
         });
       } catch (error) {
         logError(fastify.log, 'Error upserting community preferences:', error);
-        reply.code(500).send({
-          success: false,
-          message: 'Error updating preferences'
-        });
+        return sendInternalError(reply, 'Error updating preferences');
       }
     }
   );
@@ -434,10 +399,7 @@ export default async function communityPreferencesRoutes(fastify: FastifyInstanc
       try {
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-          return reply.status(401).send({
-            success: false,
-            message: 'Authentication required'
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         const userId = authContext.userId;
@@ -452,22 +414,13 @@ export default async function communityPreferencesRoutes(fastify: FastifyInstanc
           }
         });
 
-        reply.send({
-          success: true,
-          data: { message: 'Preferences deleted successfully' }
-        });
+        return sendSuccess(reply, { message: 'Preferences deleted successfully' });
       } catch (error: any) {
         if (error.code === 'P2025') {
-          return reply.status(404).send({
-            success: false,
-            message: 'Preferences not found'
-          });
+          return sendNotFound(reply, 'Preferences not found');
         }
         logError(fastify.log, 'Error deleting community preferences:', error);
-        reply.code(500).send({
-          success: false,
-          message: 'Error deleting preferences'
-        });
+        return sendInternalError(reply, 'Error deleting preferences');
       }
     }
   );
@@ -496,10 +449,7 @@ export default async function communityPreferencesRoutes(fastify: FastifyInstanc
       try {
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-          return reply.status(401).send({
-            success: false,
-            message: 'Authentication required'
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         const userId = authContext.userId;
@@ -520,16 +470,10 @@ export default async function communityPreferencesRoutes(fastify: FastifyInstanc
           )
         );
 
-        reply.send({
-          success: true,
-          data: { message: 'Communities reordered successfully' }
-        });
+        return sendSuccess(reply, { message: 'Communities reordered successfully' });
       } catch (error) {
         logError(fastify.log, 'Error reordering communities:', error);
-        reply.code(500).send({
-          success: false,
-          message: 'Error reordering communities'
-        });
+        return sendInternalError(reply, 'Error reordering communities');
       }
     }
   );
