@@ -6,6 +6,7 @@ import { EmailService } from '../services/EmailService';
 import { GeoIPService, getRequestContext } from '../services/GeoIPService';
 import { initSessionService, markSessionTrusted } from '../services/SessionService';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { sendSuccess, sendBadRequest, sendInternalError } from '../utils/response.js';
 const logger = enhancedLogger.child({ module: 'MagicLinkRoutes' });
 
 // Validation schemas
@@ -87,10 +88,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
       // Validate input
       const validationResult = requestMagicLinkSchema.safeParse(request.body);
       if (!validationResult.success) {
-        return reply.status(400).send({
-          success: false,
-          error: validationResult.error.errors[0]?.message || 'Invalid email address'
-        });
+        return sendBadRequest(reply, validationResult.error.errors[0]?.message || 'Invalid email address');
       }
 
       const { email, rememberDevice } = validationResult.data;
@@ -111,10 +109,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
 
     } catch (error) {
       logger.error('MagicLink error', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'An error occurred. Please try again.'
-      });
+      return sendInternalError(reply, 'An error occurred. Please try again.');
     }
   });
 
@@ -174,10 +169,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
       const validationResult = validateMagicLinkSchema.safeParse({ token: query.token });
 
       if (!validationResult.success) {
-        return reply.status(400).send({
-          success: false,
-          error: validationResult.error.errors[0]?.message || 'Token is required'
-        });
+        return sendBadRequest(reply, validationResult.error.errors[0]?.message || 'Token is required');
       }
 
       const { token } = validationResult.data;
@@ -192,30 +184,21 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
       });
 
       if (!result.success) {
-        return reply.status(400).send({
-          success: false,
-          error: result.error
-        });
+        return sendBadRequest(reply, result.error);
       }
 
       // Return success with user data
-      return reply.send({
-        success: true,
-        data: {
-          user: result.user,
-          token: result.token,
-          sessionToken: result.sessionToken,
-          session: result.session,
-          expiresIn: 86400 // 24 hours
-        }
+      return sendSuccess(reply, {
+        user: result.user,
+        token: result.token,
+        sessionToken: result.sessionToken,
+        session: result.session,
+        expiresIn: 86400 // 24 hours
       });
 
     } catch (error) {
       logger.error('MagicLink validation error', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'An error occurred. Please try again.'
-      });
+      return sendInternalError(reply, 'An error occurred. Please try again.');
     }
   });
 
@@ -274,10 +257,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
       const validationResult = validateMagicLinkSchema.safeParse(request.body);
 
       if (!validationResult.success) {
-        return reply.status(400).send({
-          success: false,
-          error: validationResult.error.errors[0]?.message || 'Token is required'
-        });
+        return sendBadRequest(reply, validationResult.error.errors[0]?.message || 'Token is required');
       }
 
       const { token } = validationResult.data;
@@ -292,10 +272,7 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
       });
 
       if (!result.success) {
-        return reply.status(400).send({
-          success: false,
-          error: result.error
-        });
+        return sendBadRequest(reply, result.error);
       }
 
       // Use rememberDevice from SERVER-SIDE storage (not from client request)
@@ -319,23 +296,17 @@ export async function magicLinkRoutes(fastify: FastifyInstance) {
       const expiresIn = rememberDevice ? 365 * 24 * 60 * 60 : 24 * 60 * 60; // 365 days or 24 hours
 
       // Return success with user data
-      return reply.send({
-        success: true,
-        data: {
-          user: result.user,
-          token: result.token,
-          sessionToken: result.sessionToken,
-          session: { ...result.session, isTrusted: rememberDevice },
-          expiresIn
-        }
+      return sendSuccess(reply, {
+        user: result.user,
+        token: result.token,
+        sessionToken: result.sessionToken,
+        session: { ...result.session, isTrusted: rememberDevice },
+        expiresIn
       });
 
     } catch (error) {
       logger.error('MagicLink validation error', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'An error occurred. Please try again.'
-      });
+      return sendInternalError(reply, 'An error occurred. Please try again.');
     }
   });
 }

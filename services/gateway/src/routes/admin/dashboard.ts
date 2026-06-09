@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
+import { sendSuccess } from '../../utils/response.js';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
 
@@ -51,10 +52,7 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
           canManageReports: ['BIGBOSS', 'ADMIN', 'MODERATOR'].includes(authContext.registeredUser.role)
         };
         reply.header('Cache-Control', 'private, max-age=600');
-        return reply.send({
-          success: true,
-          data: { ...JSON.parse(cached), userPermissions, timestamp: now.toISOString() }
-        });
+        return sendSuccess(reply, { ...JSON.parse(cached), userPermissions, timestamp: now.toISOString() });
       }
 
       const last24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
@@ -141,10 +139,7 @@ export async function dashboardRoutes(fastify: FastifyInstance) {
       };
 
       reply.header('Cache-Control', 'private, max-age=600');
-      return reply.send({
-        success: true,
-        data: { statistics, recentActivity, userPermissions, timestamp: now.toISOString() }
-      });
+      return sendSuccess(reply, { statistics, recentActivity, userPermissions, timestamp: now.toISOString() });
     } catch (error) {
       logError(fastify.log, 'Error fetching admin dashboard stats:', error);
       return reply.status(500).send({

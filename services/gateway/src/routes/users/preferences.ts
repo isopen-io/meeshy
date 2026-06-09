@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
 import { buildPaginationMeta } from '../../utils/pagination';
+import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response.js';
 import {
   userMinimalSchema,
   userStatsSchema,
@@ -106,10 +107,7 @@ export async function getDashboardStats(fastify: FastifyInstance) {
     try {
       const authContext = (request as AuthenticatedRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const userId = authContext.userId;
@@ -327,22 +325,16 @@ export async function getDashboardStats(fastify: FastifyInstance) {
         conversationCount: community._count?.Conversation ?? 0,
       }));
 
-      return reply.send({
-        success: true,
-        data: {
-          stats,
-          recentConversations: transformedConversations,
-          recentCommunities: transformedCommunities
-        }
+      return sendSuccess(reply, {
+        stats,
+        recentConversations: transformedConversations,
+        recentCommunities: transformedCommunities
       });
 
     } catch (error) {
       fastify.log.error(`[DASHBOARD] Error getting stats: ${error instanceof Error ? error.message : String(error)}`);
       logError(fastify.log, 'Get user dashboard stats error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      return sendInternalError(reply, error instanceof Error ? error.message : 'Unknown error');
     }
   });
 }
@@ -392,10 +384,7 @@ export async function getUserStats(fastify: FastifyInstance) {
     try {
       const authContext = (request as AuthenticatedRequest).authContext;
       if (!authContext || !authContext.isAuthenticated) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const { userId: userIdOrUsername } = request.params;
@@ -418,10 +407,7 @@ export async function getUserStats(fastify: FastifyInstance) {
       });
 
       if (!user) {
-        return reply.status(404).send({
-          success: false,
-          error: 'User not found'
-        });
+        return sendNotFound(reply, 'User not found');
       }
 
       const userId = user.id;
@@ -492,21 +478,15 @@ export async function getUserStats(fastify: FastifyInstance) {
       });
 
       reply.header('Cache-Control', 'private, max-age=300, stale-while-revalidate=3600');
-      return reply.send({
-        success: true,
-        data: {
-          totalMessages, totalConversations, totalTranslations,
-          friendRequestsReceived, languagesUsed, memberDays,
-          languages, achievements,
-        },
+      return sendSuccess(reply, {
+        totalMessages, totalConversations, totalTranslations,
+        friendRequestsReceived, languagesUsed, memberDays,
+        languages, achievements,
       });
 
     } catch (error) {
       fastify.log.error(`[USER_STATS] Error getting user stats: ${error instanceof Error ? error.message : String(error)}`);
-      return reply.status(500).send({
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      return sendInternalError(reply, error instanceof Error ? error.message : 'Unknown error');
     }
   });
 }
@@ -570,10 +550,7 @@ export async function searchUsers(fastify: FastifyInstance) {
     try {
       const authContext = (request as AuthenticatedRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const { q, offset = '0', limit = '20' } = request.query as SearchQuery;
@@ -581,11 +558,7 @@ export async function searchUsers(fastify: FastifyInstance) {
       const { offsetNum, limitNum } = validatePagination(offset, limit);
 
       if (!q || q.trim().length < 2) {
-        return reply.send({
-          success: true,
-          data: [],
-          pagination: buildPaginationMeta(0, offsetNum, limitNum, 0)
-        });
+        return sendPaginatedSuccess(reply, [], buildPaginationMeta(0, offsetNum, limitNum, 0));
       }
 
       const searchTerm = q.trim();
@@ -661,17 +634,10 @@ export async function searchUsers(fastify: FastifyInstance) {
         fastify.prisma.user.count({ where: whereClause })
       ]);
 
-      reply.send({
-        success: true,
-        data: users,
-        pagination: buildPaginationMeta(totalCount, offsetNum, limitNum, users.length)
-      });
+      return sendPaginatedSuccess(reply, users, buildPaginationMeta(totalCount, offsetNum, limitNum, users.length));
     } catch (error) {
       logError(fastify.log, 'Error searching users', error);
-      reply.status(500).send({
-        success: false,
-        error: 'Internal server error'
-      });
+      return sendInternalError(reply, 'Internal server error');
     }
   });
 }
