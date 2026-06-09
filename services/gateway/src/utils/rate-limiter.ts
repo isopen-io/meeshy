@@ -179,7 +179,7 @@ export class RateLimiter {
    * Default key generator: uses userId or IP address
    */
   private defaultKeyGenerator(request: FastifyRequest): string {
-    const user = (request as any).user;
+    const user = request.user;
     const userId = user?.userId;
 
     if (userId) {
@@ -281,7 +281,7 @@ export function createNotificationRateLimiter(redis?: Redis): RateLimiter {
       keyPrefix: 'notifications',
       message: 'Too many notification requests. Please wait before trying again.',
       keyGenerator: (request) => {
-        const user = (request as any).user;
+        const user = request.user;
         return `user:${user?.userId || 'anonymous'}`;
       }
     },
@@ -320,7 +320,7 @@ export function createStrictRateLimiter(redis?: Redis): RateLimiter {
       keyPrefix: 'strict',
       message: 'Too many requests for this operation. Please slow down.',
       keyGenerator: (request) => {
-        const user = (request as any).user;
+        const user = request.user;
         return `user:${user?.userId || 'anonymous'}`;
       }
     },
@@ -340,7 +340,7 @@ export function createBatchRateLimiter(redis?: Redis): RateLimiter {
       keyPrefix: 'batch',
       message: 'Too many batch operations. Please wait before trying again.',
       keyGenerator: (request) => {
-        const user = (request as any).user;
+        const user = request.user;
         return `user:${user?.userId || 'anonymous'}`;
       }
     },

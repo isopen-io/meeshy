@@ -443,7 +443,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
     preValidation: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const userId = (request as any).user.userId;
+      const userId = request.user?.userId;
       const currentToken = request.headers['x-session-token'] as string | undefined;
 
       logger.info('[AUTH] Récupération des sessions pour:', userId);
@@ -519,7 +519,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
     preValidation: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const userId = (request as any).user.userId;
+      const userId = request.user?.userId;
       const { sessionId } = request.params as { sessionId: string };
 
       logger.info(`[AUTH] Révocation session:', sessionId, 'pour user userId=${userId}`);
@@ -579,7 +579,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
     preValidation: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
-      const userId = (request as any).user.userId;
+      const userId = request.user?.userId;
       const currentToken = request.headers['x-session-token'] as string | undefined;
 
       logger.info(`Révocation de toutes les sessions pour userId=${userId} (sauf courante)`);

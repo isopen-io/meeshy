@@ -343,7 +343,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
         }
 
         // Vérifier l'accès (optionnel, selon vos besoins)
-        const userId = (request as any).user?.id;
+        const userId = request.user?.userId;
         if (userId) {
           const hasAccess = existingMessage.conversation.participants.some((member: any) => member.userId === userId);
           if (!hasAccess) {
@@ -429,7 +429,7 @@ export async function translationRoutes(fastify: FastifyInstance) {
           : (validatedData.model_type || 'basic');
 
         // Créer les données du message
-        const senderId = (request as any).user?.id;
+        const senderId = request.user?.userId;
         if (!senderId) {
           return reply.status(401).send({
             success: false,

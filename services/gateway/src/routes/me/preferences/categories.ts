@@ -202,7 +202,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest<{ Querystring: PaginationQuery }>, reply: FastifyReply) => {
       try {
-        const userId = (request as any).auth?.userId;
+        const userId = request.auth?.userId;
 
         if (!userId) {
           return sendUnauthorized(reply, 'Authentication required');
@@ -276,7 +276,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest<{ Params: CategoryIdParams }>, reply: FastifyReply) => {
       try {
-        const userId = (request as any).auth?.userId;
+        const userId = request.auth?.userId;
 
         if (!userId) {
           return sendUnauthorized(reply, 'Authentication required');
@@ -335,7 +335,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest<{ Body: CategoryBody }>, reply: FastifyReply) => {
       try {
-        const userId = (request as any).auth?.userId;
+        const userId = request.auth?.userId;
 
         if (!userId) {
           return sendUnauthorized(reply, 'Authentication required');
@@ -422,7 +422,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest<{ Params: CategoryIdParams; Body: Partial<CategoryBody> }>, reply: FastifyReply) => {
       try {
-        const userId = (request as any).auth?.userId;
+        const userId = request.auth?.userId;
 
         if (!userId) {
           return sendUnauthorized(reply, 'Authentication required');
@@ -500,7 +500,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest<{ Params: CategoryIdParams }>, reply: FastifyReply) => {
       try {
-        const userId = (request as any).auth?.userId;
+        const userId = request.auth?.userId;
 
         if (!userId) {
           return sendUnauthorized(reply, 'Authentication required');
@@ -580,7 +580,7 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest<{ Body: { updates: Array<{ categoryId: string; order: number }> } }>, reply: FastifyReply) => {
       try {
-        const userId = (request as any).auth?.userId;
+        const userId = request.auth?.userId;
 
         if (!userId) {
           return sendUnauthorized(reply, 'Authentication required');

@@ -270,8 +270,8 @@ export { errorResponseSchema };
 // ═══════════════════════════════════════════════════════════════════════════
 
 export function getUserId(request: FastifyRequest): string | null {
-  const user = (request as any).user;
-  if (user?.id) return user.id;
+  const user = request.user;
+  if (user?.userId) return user.userId;
 
   const session = (request as any).session;
   if (session?.userId) return session.userId;
@@ -283,6 +283,6 @@ export function getUserId(request: FastifyRequest): string | null {
 }
 
 export function isAdmin(request: FastifyRequest): boolean {
-  const user = (request as any).user;
-  return user?.role === 'admin' || user?.isAdmin === true;
+  const user = request.user;
+  return user?.role === 'admin';
 }

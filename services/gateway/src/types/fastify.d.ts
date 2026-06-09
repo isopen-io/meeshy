@@ -17,8 +17,14 @@ import { MentionService } from '../services/MentionService';
 import { MultiLevelJobMappingCache } from '../services/MultiLevelJobMappingCache';
 import { MeeshySocketIOHandler } from '../socketio/MeeshySocketIOHandler';
 import { FastifyRequest, FastifyReply } from 'fastify';
+import { TokenPayload } from '../services/AuthService';
 
 declare module 'fastify' {
+  interface FastifyRequest {
+    user?: TokenPayload & { isAnonymous?: boolean };
+    auth?: { userId?: string; isAuthenticated: boolean; isAnonymous: boolean };
+  }
+
   interface FastifyInstance {
     prisma: PrismaClient;
     redis: Redis | null;
