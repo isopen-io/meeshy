@@ -957,8 +957,12 @@ struct MessageOverlayMenu: View {
                     lineWidth: 0.75
                 )
             )
-            .shadow(color: overlayAccent.opacity(0.20), radius: 26, y: -6)
-            .shadow(color: .black.opacity(0.22), radius: 20, y: -4)
+            // One depth shadow instead of two. The decorative accent-glow shadow
+            // (radius 26) was a second full off-screen blur pass recomposited
+            // every frame while the panel springs in AND while the user drags it
+            // up/down — the depth shadow below already carries the "rising sheet"
+            // read. Slightly deepened to compensate for the dropped glow.
+            .shadow(color: .black.opacity(isDark ? 0.30 : 0.24), radius: 20, y: -4)
     }
 
     // MARK: - Quick Actions for Grid
