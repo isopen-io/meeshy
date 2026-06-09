@@ -2571,6 +2571,11 @@ class ConversationViewModel: ObservableObject {
                 await OutboxFlushTrigger.flushNow()
             }
         } else {
+            // Marque la reaction comme "nouvelle" AVANT l'ecriture async : quand
+            // le store observe l'ajout et re-rend la bulle, la nouvelle pill
+            // verra `shouldAnimate == true` et jouera la comete. Un scroll
+            // ulterieur (hors fenetre) ne la re-animera pas.
+            ReactionAnimationGate.markAdded(messageId: messageId, emoji: emoji)
             let reactionId = UUID().uuidString
             Task { [weak self] in
                 try? await self?.messagePersistence.appendReaction(
