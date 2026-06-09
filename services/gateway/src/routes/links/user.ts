@@ -10,7 +10,8 @@ import {
   sendSuccess,
   sendPaginatedSuccess,
   sendForbidden,
-  sendInternalError
+  sendInternalError,
+  createPaginationMeta
 } from '../../utils/response.js';
 
 /**
@@ -116,7 +117,7 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
         conversationTitle: l.conversation?.title ?? null,
       }));
 
-      return sendPaginatedSuccess(reply, mapped, { total, offset, limit });
+      return sendPaginatedSuccess(reply, mapped, createPaginationMeta(total, offset, limit, mapped.length));
     } catch (error) {
       logError(fastify.log, 'List user share links error:', error);
       return sendInternalError(reply, 'Erreur interne du serveur');
