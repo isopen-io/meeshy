@@ -43,12 +43,23 @@ describe('shouldApplyConditionalGet', () => {
     statusCode: 200,
     hasETag: false,
     cacheControl: undefined as string | string[] | undefined,
+    contentType: 'application/json; charset=utf-8' as string | string[] | undefined,
     payloadType: 'string' as const,
   };
 
   it('applies to a plain GET 200 JSON read', () => {
     expect(shouldApplyConditionalGet(base)).toBe(true);
     expect(shouldApplyConditionalGet({ ...base, payloadType: 'buffer' })).toBe(true);
+  });
+
+  it('skips non-JSON content types (file/media/text downloads)', () => {
+    for (const contentType of ['image/webp', 'video/mp4', 'application/octet-stream', 'text/plain', undefined]) {
+      expect(shouldApplyConditionalGet({ ...base, contentType })).toBe(false);
+    }
+  });
+
+  it('applies to JSON variants (e.g. application/problem+json)', () => {
+    expect(shouldApplyConditionalGet({ ...base, contentType: 'application/problem+json' })).toBe(true);
   });
 
   it('skips non-GET verbs', () => {

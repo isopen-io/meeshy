@@ -166,15 +166,21 @@ final class VideoSurvivalController: ObservableObject, VideoSurvivalControlling 
     /// At most one media transition (renegotiation) in flight at a time, to avoid
     /// SDP offer glare and Task pile-up on a flaky link.
     private var isTransitioning = false
+    /// Hard cap on a single suspend/resume. A renegotiation can hang on a dead
+    /// link; without this, `isTransitioning` would stay `true` forever and freeze
+    /// survival for the rest of a (potentially multi-hour) call.
+    private let transitionTimeout: TimeInterval
 
     init(
         actuator: VideoSurvivalActuating? = nil,
         policy: VideoSurvivalPolicy = VideoSurvivalPolicy(),
-        now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+        now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+        transitionTimeout: TimeInterval = 20
     ) {
         self.actuator = actuator
         self.policy = policy
         self.now = now
+        self.transitionTimeout = transitionTimeout
     }
 
     /// Wire the actuator after `self` exists (owner constructs the controller in
@@ -212,10 +218,28 @@ final class VideoSurvivalController: ObservableObject, VideoSurvivalControlling 
     private func performTransition(suspend: Bool) {
         guard let actuator else { return }
         isTransitioning = true
+        let timeoutSeconds = transitionTimeout
         Task { [weak self] in
-            let ok = suspend
-                ? await actuator.suspendOutboundVideo()
-                : await actuator.resumeOutboundVideo()
+            // Race the (possibly hanging) renegotiation against a timeout. A
+            // timeout is treated as a failure: we revert and let a later sustained
+            // streak retry, and crucially `isTransitioning` is always cleared.
+            let ok: Bool = await withTaskGroup(of: Bool?.self) { group in
+                group.addTask {
+                    suspend
+                        ? await actuator.suspendOutboundVideo()
+                        : await actuator.resumeOutboundVideo()
+                }
+                group.addTask {
+                    try? await Task.sleep(nanoseconds: UInt64(timeoutSeconds * 1_000_000_000))
+                    return nil // timeout sentinel
+                }
+                defer { group.cancelAll() }
+                for await result in group {
+                    if let value = result { return value } // actuator finished first
+                    return false                           // timeout won
+                }
+                return false
+            }
             guard let self else { return }
             if ok {
                 self.isVideoSuspended = suspend

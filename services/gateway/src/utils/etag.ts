@@ -71,18 +71,27 @@ export function sendWithETag(
  *   - skip when the route opted into shared/long-lived caching (`max-age`
  *     without `no-cache`) — that response is already cacheable as-is
  *   - skip non-serialized payloads (streams, etc.)
+ *   - JSON content-type only — never hash a binary/file/text download body
  */
 export function shouldApplyConditionalGet(opts: {
   method: string;
   statusCode: number;
   hasETag: boolean;
   cacheControl?: string | string[];
+  contentType?: string | string[];
   payloadType: 'string' | 'buffer' | 'other';
 }): boolean {
   if (opts.method !== 'GET') return false;
   if (opts.statusCode !== 200) return false;
   if (opts.hasETag) return false;
   if (opts.payloadType === 'other') return false;
+  // JSON API reads only. Excludes attachment/file downloads (image/*, video/*,
+  // application/octet-stream, …) which may arrive as a 200 Buffer — we must not
+  // hash a multi-MB media body on every request.
+  const ct = Array.isArray(opts.contentType)
+    ? opts.contentType.join(',')
+    : opts.contentType ?? '';
+  if (!/application\/(.*\+)?json/i.test(ct)) return false;
   const cc = Array.isArray(opts.cacheControl)
     ? opts.cacheControl.join(',')
     : opts.cacheControl ?? '';
@@ -112,6 +121,7 @@ export async function conditionalGetOnSend(
       statusCode: reply.statusCode,
       hasETag: reply.hasHeader('etag'),
       cacheControl: reply.getHeader('cache-control') as string | string[] | undefined,
+      contentType: reply.getHeader('content-type') as string | string[] | undefined,
       payloadType,
     })
   ) {

@@ -141,6 +141,9 @@ final class VideoSurvivalPolicyTests: XCTestCase {
 final class MockVideoSurvivalActuator: VideoSurvivalActuating {
     var suspendResult = true
     var resumeResult = true
+    /// When set, the actuator "hangs" this long before returning — simulates a
+    /// renegotiation stuck on a dead link (exercises the controller's timeout).
+    var hangSeconds: TimeInterval = 0
     private(set) var suspendCallCount = 0
     private(set) var resumeCallCount = 0
     var onTransition: (() -> Void)?
@@ -148,11 +151,13 @@ final class MockVideoSurvivalActuator: VideoSurvivalActuating {
     func suspendOutboundVideo() async -> Bool {
         suspendCallCount += 1
         onTransition?()
+        if hangSeconds > 0 { try? await Task.sleep(nanoseconds: UInt64(hangSeconds * 1_000_000_000)) }
         return suspendResult
     }
     func resumeOutboundVideo() async -> Bool {
         resumeCallCount += 1
         onTransition?()
+        if hangSeconds > 0 { try? await Task.sleep(nanoseconds: UInt64(hangSeconds * 1_000_000_000)) }
         return resumeResult
     }
     func reset() {
@@ -168,14 +173,16 @@ final class MockVideoSurvivalActuator: VideoSurvivalActuating {
 final class VideoSurvivalControllerTests: XCTestCase {
     private func makeSUT(
         suspendAfter: TimeInterval = 6,
-        resumeAfter: TimeInterval = 10
+        resumeAfter: TimeInterval = 10,
+        transitionTimeout: TimeInterval = 20
     ) -> (sut: VideoSurvivalController, mock: MockVideoSurvivalActuator, advance: (TimeInterval) -> Void) {
         let mock = MockVideoSurvivalActuator()
         var clock: TimeInterval = 0
         let sut = VideoSurvivalController(
             actuator: mock,
             policy: VideoSurvivalPolicy(suspendAfter: suspendAfter, resumeAfter: resumeAfter),
-            now: { clock }
+            now: { clock },
+            transitionTimeout: transitionTimeout
         )
         return (sut, mock, { clock += $0 })
     }
@@ -251,5 +258,34 @@ final class VideoSurvivalControllerTests: XCTestCase {
 
         sut.reset()
         XCTAssertFalse(sut.isVideoSuspended)
+    }
+
+    func test_handle_hungTransition_timesOutWithoutFreezing() async {
+        // A renegotiation that hangs must NOT pin the controller in the
+        // transitioning state for the rest of the call.
+        let (sut, mock, advance) = makeSUT(transitionTimeout: 0.05)
+        mock.hangSeconds = 10 // far longer than the 50ms timeout
+
+        let attempt = expectation(description: "suspend attempt")
+        mock.onTransition = { attempt.fulfill() }
+        feed(sut, .poor); advance(6); feed(sut, .poor) // trigger suspend
+        await fulfillment(of: [attempt], timeout: 1)
+
+        // After the timeout fires, the controller reverts (not suspended) and is
+        // free to act again — prove it by landing a second suspend on a fresh
+        // sustained streak.
+        mock.hangSeconds = 0
+        let retry = expectation(description: "retry suspend after timeout")
+        mock.onTransition = { retry.fulfill() }
+        // Re-feed until the controller is no longer transitioning (timeout cleared it).
+        for _ in 0..<40 {
+            advance(6)
+            feed(sut, .poor)
+            if mock.suspendCallCount >= 2 { break }
+            try? await Task.sleep(nanoseconds: 20_000_000) // 20ms, > the 50ms? loop budget covers it
+        }
+        await fulfillment(of: [retry], timeout: 1)
+        XCTAssertGreaterThanOrEqual(mock.suspendCallCount, 2)
+        XCTAssertTrue(sut.isVideoSuspended)
     }
 }
