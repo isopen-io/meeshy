@@ -9,6 +9,7 @@ import type {
   GetUserMentionsResponse
 } from '@meeshy/shared/types/index';
 import type { MentionSuggestion } from '../services/MentionService.js';
+import { sendSuccess, sendUnauthorized, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../utils/response.js';
 
 interface MessageParams {
   messageId: string;
@@ -56,10 +57,7 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
       const userId = authRequest.authContext.userId;
 
       if (!userId) {
-        return reply.code(401).send({
-          success: false,
-          error: 'Authentification requise'
-        });
+        return sendUnauthorized(reply, 'Authentification requise');
       }
 
       // Resolve unified params: prefer contextId+contextType, fallback to legacy conversationId
@@ -67,10 +65,7 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
       const resolvedContextId = contextId ?? conversationId;
 
       if (!resolvedContextId) {
-        return reply.code(400).send({
-          success: false,
-          error: 'Either (contextId + contextType) or conversationId is required'
-        });
+        return sendBadRequest(reply, 'Either (contextId + contextType) or conversationId is required');
       }
 
       let suggestions: MentionSuggestion[];
@@ -89,19 +84,11 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
         );
       }
 
-      const response: MentionSuggestionsResponse = {
-        success: true,
-        data: suggestions
-      };
-
-      return reply.send(response);
+      return sendSuccess(reply, suggestions);
     } catch (error) {
       // Post/conversation not found or access denied
       if (error instanceof Error && error.message.includes('non trouvé ou accès refusé')) {
-        return reply.code(403).send({
-          success: false,
-          error: error.message
-        });
+        return sendForbidden(reply, error.message);
       }
 
       // Log détaillé de l'erreur pour debug
@@ -116,10 +103,7 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
         message: error instanceof Error ? error.message : String(error)
       }, 'Error getting mention suggestions');
 
-      return reply.code(500).send({
-        success: false,
-        error: 'Erreur lors de la récupération des suggestions'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération des suggestions');
     }
   });
 
@@ -139,10 +123,7 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
       const userId = authRequest.authContext.userId;
 
       if (!userId) {
-        return reply.code(401).send({
-          success: false,
-          error: 'Authentification requise'
-        });
+        return sendUnauthorized(reply, 'Authentification requise');
       }
 
       // Vérifier que le message existe et que l'utilisateur y a accès
@@ -162,38 +143,27 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
       });
 
       if (!message) {
-        return reply.code(404).send({
-          success: false,
-          error: 'Message non trouvé ou accès refusé'
-        });
+        return sendNotFound(reply, 'Message non trouvé ou accès refusé');
       }
 
       // Récupérer les mentions
       const mentions = await mentionService.getMentionsForMessage(messageId);
 
-      const response: GetMessageMentionsResponse = {
-        success: true,
-        data: mentions.map(user => ({
+      return sendSuccess(reply, mentions.map(user => ({
+        id: user.id,
+        messageId,
+        mentionedUserId: user.id,
+        mentionedAt: new Date(),
+        mentionedUser: {
           id: user.id,
-          messageId,
-          mentionedUserId: user.id,
-          mentionedAt: new Date(),
-          mentionedUser: {
-            id: user.id,
-            username: user.username,
-            displayName: user.displayName,
-            avatar: user.avatar
-          }
-        }))
-      };
-
-      return reply.send(response);
+          username: user.username,
+          displayName: user.displayName,
+          avatar: user.avatar
+        }
+      })));
     } catch (error) {
       fastify.log.error({ err: error }, 'Error getting message mentions');
-      return reply.code(500).send({
-        success: false,
-        error: 'Erreur lors de la récupération des mentions'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération des mentions');
     }
   });
 
@@ -213,10 +183,7 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
       const userId = authRequest.authContext.userId;
 
       if (!userId) {
-        return reply.code(401).send({
-          success: false,
-          error: 'Authentification requise'
-        });
+        return sendUnauthorized(reply, 'Authentification requise');
       }
 
       const mentions = await mentionService.getRecentMentionsForUser(
@@ -224,40 +191,32 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
         limit || 50
       );
 
-      const response: GetUserMentionsResponse = {
-        success: true,
-        data: mentions.map(mention => ({
-          id: mention.id,
-          messageId: mention.messageId,
-          mentionedAt: mention.mentionedAt,
-          message: {
-            id: mention.message.id,
-            content: mention.message.content,
-            conversationId: mention.message.conversationId,
-            senderId: mention.message.senderId,
-            createdAt: mention.message.createdAt,
-            sender: mention.message.sender ? {
-              id: mention.message.sender.id,
-              username: mention.message.sender.user?.username,
-              displayName: mention.message.sender.displayName,
-              avatar: mention.message.sender.avatar
-            } : null,
-            conversation: {
-              id: mention.message.conversation.id,
-              title: mention.message.conversation.title,
-              type: mention.message.conversation.type
-            }
+      return sendSuccess(reply, mentions.map(mention => ({
+        id: mention.id,
+        messageId: mention.messageId,
+        mentionedAt: mention.mentionedAt,
+        message: {
+          id: mention.message.id,
+          content: mention.message.content,
+          conversationId: mention.message.conversationId,
+          senderId: mention.message.senderId,
+          createdAt: mention.message.createdAt,
+          sender: mention.message.sender ? {
+            id: mention.message.sender.id,
+            username: mention.message.sender.user?.username,
+            displayName: mention.message.sender.displayName,
+            avatar: mention.message.sender.avatar
+          } : null,
+          conversation: {
+            id: mention.message.conversation.id,
+            title: mention.message.conversation.title,
+            type: mention.message.conversation.type
           }
-        }))
-      };
-
-      return reply.send(response);
+        }
+      })));
     } catch (error) {
       fastify.log.error({ err: error }, 'Error getting user mentions');
-      return reply.code(500).send({
-        success: false,
-        error: 'Erreur lors de la récupération des mentions'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération des mentions');
     }
   });
 }

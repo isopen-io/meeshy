@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
+import { sendSuccess } from '../../utils/response.js';
 import { validatePagination, type AnonymousUserListQuery } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery } from '../../validation/helpers.js';
@@ -89,9 +90,7 @@ export async function anonymousUsersAdminRoutes(fastify: FastifyInstance) {
         fastify.prisma.participant.count({ where })
       ]);
 
-      return reply.send({
-        success: true,
-        data: {
+      return sendSuccess(reply, {
           anonymousUsers,
           pagination: {
             total: totalCount,
@@ -99,8 +98,7 @@ export async function anonymousUsersAdminRoutes(fastify: FastifyInstance) {
             offset: offsetNum,
             hasMore: offsetNum + anonymousUsers.length < totalCount
           }
-        }
-      });
+        });
     } catch (error) {
       logError(fastify.log, 'Get admin anonymous users error:', error);
       return reply.status(500).send({

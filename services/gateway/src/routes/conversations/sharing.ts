@@ -240,7 +240,7 @@ export function registerSharingRoutes(
 
     } catch (error) {
       logger.error('Error creating new conversation link', error as Error);
-      sendInternalError(reply, 'Error creating link');
+      return sendInternalError(reply, 'Error creating link');
     }
   });
 
@@ -386,7 +386,7 @@ export function registerSharingRoutes(
         return sendBadRequest(reply, 'Données de mise à jour invalides');
       }
 
-      sendInternalError(reply, 'Erreur lors de la mise à jour de la conversation');
+      return sendInternalError(reply, 'Erreur lors de la mise à jour de la conversation');
     }
   });
 

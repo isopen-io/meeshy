@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
+import { sendSuccess } from '../../utils/response.js';
 import {
   createUnifiedAuthMiddleware,
   UnifiedAuthRequest
@@ -217,9 +218,7 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
         hasMore: totalMessages > parseInt(offset) + messages.length
       };
 
-      return reply.send({
-        success: true,
-        data: {
+      return sendSuccess(reply, {
           conversation: {
             id: shareLink.conversation.id,
             title: shareLink.conversation.title,
@@ -277,8 +276,7 @@ export async function registerRetrievalRoutes(fastify: FastifyInstance) {
             canSendImages: participant.canSendImages
           })),
           currentUser
-        }
-      });
+        });
 
     } catch (error) {
       logError(fastify.log, 'Get link info error:', error);
