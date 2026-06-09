@@ -5,20 +5,37 @@
  * and properties that are available throughout the application.
  */
 
+import Redis from 'ioredis';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { TranslationService } from '../services/TranslationService';
 import { SocialEventsHandler } from '../socketio/handlers/SocialEventsHandler';
 import { NotificationService } from '../services/notifications/NotificationService';
 import { MutationLogService } from '../services/MutationLogService';
+import { EmailService } from '../services/EmailService';
+import { MessagingService } from '../services/messaging/MessagingService';
+import { MentionService } from '../services/MentionService';
+import { MultiLevelJobMappingCache } from '../services/MultiLevelJobMappingCache';
+import { MeeshySocketIOHandler } from '../socketio/MeeshySocketIOHandler';
 import { FastifyRequest, FastifyReply } from 'fastify';
 
 declare module 'fastify' {
   interface FastifyInstance {
     prisma: PrismaClient;
+    redis: Redis | null;
     translationService: TranslationService;
     socialEvents: SocialEventsHandler;
     notificationService: NotificationService;
     mutationLogService: MutationLogService;
+    emailService: EmailService;
+    messagingService: MessagingService;
+    mentionService: MentionService;
+    jobMappingCache: MultiLevelJobMappingCache;
+    socketIOHandler: MeeshySocketIOHandler;
+    presenceChecker: {
+      isOnline: (id: string) => boolean;
+      bulk: (ids: readonly string[]) => Map<string, boolean>;
+      listOnlineAmong: (ids: readonly string[]) => string[];
+    };
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 }

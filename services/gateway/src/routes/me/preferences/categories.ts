@@ -156,7 +156,7 @@ const successMessageResponseSchema = {
 } as const;
 
 export async function categoriesRoutes(fastify: FastifyInstance) {
-  const prisma = (fastify as any).prisma;
+  const prisma = fastify.prisma;
 
   if (!prisma) {
     logger.error('Missing required service: prisma');

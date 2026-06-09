@@ -121,7 +121,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
 
       // Notification login nouvel appareil (session non trustée = nouvel appareil)
       if (!session.isTrusted) {
-        const notificationService = (fastify as any).notificationService;
+        const notificationService = fastify.notificationService;
         if (notificationService) {
           const jwtSecret = process.env.JWT_SECRET || 'meeshy-secret-key-dev';
           const revokeToken = jwt.sign(
@@ -233,7 +233,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
 
       // Notification login nouvel appareil (session non trustée = nouvel appareil)
       if (!session.isTrusted) {
-        const notificationService = (fastify as any).notificationService;
+        const notificationService = fastify.notificationService;
         if (notificationService) {
           const jwtSecret = process.env.JWT_SECRET || 'meeshy-secret-key-dev';
           const revokeToken = jwt.sign(
@@ -314,7 +314,7 @@ export function registerLoginRoutes(context: AuthRouteContext) {
         }
       }
     },
-    preValidation: [(fastify as any).authenticate]
+    preValidation: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const userId = (request as any).user.userId;

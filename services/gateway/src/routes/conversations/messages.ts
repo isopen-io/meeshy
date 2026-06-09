@@ -215,7 +215,7 @@ export function registerMessagesRoutes(
 ) {
   const trackingLinkService = new TrackingLinkService(prisma);
   const attachmentService = new AttachmentService(prisma);
-  const socketIOHandler = (fastify as any).socketIOHandler;
+  const socketIOHandler = fastify.socketIOHandler;
   const privacyPreferencesService = new PrivacyPreferencesService(prisma);
 
   // `MessagingService` is stateless across requests, so it is built once and
@@ -231,7 +231,7 @@ export function registerMessagesRoutes(
       messagingService = new MessagingService(
         prisma,
         translationService,
-        (fastify as any).notificationService
+        fastify.notificationService
       );
     }
     return messagingService;
@@ -1806,7 +1806,7 @@ export function registerMessagesRoutes(
 
       // Broadcast pin event via Socket.IO
       if (socketIOHandler) {
-        socketIOHandler.io?.to(`conversation:${conversationId}`).emit('message:pinned', {
+        (socketIOHandler as any).io?.to(`conversation:${conversationId}`).emit('message:pinned', {
           messageId,
           conversationId,
           pinnedAt: now.toISOString(),
@@ -1875,7 +1875,7 @@ export function registerMessagesRoutes(
 
       // Broadcast unpin event via Socket.IO
       if (socketIOHandler) {
-        socketIOHandler.io?.to(`conversation:${conversationId}`).emit('message:unpinned', {
+        (socketIOHandler as any).io?.to(`conversation:${conversationId}`).emit('message:unpinned', {
           messageId,
           conversationId
         });
@@ -2157,7 +2157,7 @@ export function registerMessagesRoutes(
 
       // Broadcast consume event via Socket.IO
       if (socketIOHandler) {
-        socketIOHandler.io?.to(`conversation:${conversationId}`).emit('message:consumed', {
+        (socketIOHandler as any).io?.to(`conversation:${conversationId}`).emit('message:consumed', {
           messageId,
           conversationId,
           userId,

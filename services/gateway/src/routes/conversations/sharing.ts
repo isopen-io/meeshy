@@ -612,7 +612,7 @@ export function registerSharingRoutes(
       logger.info('Membre créé avec succès');
 
       // Envoyer des notifications
-      const notificationService = (fastify as any).notificationService;
+      const notificationService = fastify.notificationService;
       if (notificationService) {
         try {
           // Récupérer les informations de l'utilisateur qui rejoint
@@ -629,12 +629,11 @@ export function registerSharingRoutes(
             const userName = joiningUser.displayName || joiningUser.username;
 
             // 1. Notification de confirmation pour l'utilisateur qui rejoint
-            await notificationService.createConversationJoinNotification({
-              userId: userToken.userId,
+            await notificationService.createMemberJoinedNotification({
+              recipientUserId: userToken.userId,
+              newMemberUserId: userToken.userId,
               conversationId: shareLink.conversationId,
-              conversationTitle: shareLink.conversation.title,
-              conversationType: shareLink.conversation.type,
-              isJoiner: true // C'est l'utilisateur qui rejoint
+              joinMethod: 'via_link'
             });
 
             // 2. Notifier les admins et créateurs de la conversation
@@ -650,14 +649,11 @@ export function registerSharingRoutes(
 
             // Envoyer une notification à chaque admin/créateur
             for (const member of adminsAndCreators) {
-              await notificationService.createConversationJoinNotification({
-                userId: member.userId,
+              await notificationService.createMemberJoinedNotification({
+                recipientUserId: member.userId,
+                newMemberUserId: userToken.userId,
                 conversationId: shareLink.conversationId,
-                conversationTitle: shareLink.conversation.title,
-                conversationType: shareLink.conversation.type,
-                isJoiner: false, // C'est une notification pour un admin
-                joinerUsername: userName,
-                joinerAvatar: joiningUser.avatar || undefined
+                joinMethod: 'via_link'
               });
               logger.debug('Notification membre rejoint envoyée');
             }
@@ -833,7 +829,7 @@ export function registerSharingRoutes(
       });
 
       // Envoyer une notification à l'utilisateur invité
-      const notificationService = (fastify as any).notificationService;
+      const notificationService = fastify.notificationService;
       if (notificationService) {
         try {
           // Récupérer les informations de l'inviteur
@@ -865,7 +861,7 @@ export function registerSharingRoutes(
       }
 
       // PERFORMANCE: Invalider le cache d'autocomplete car la liste des membres a changé
-      const mentionService = (fastify as any).mentionService;
+      const mentionService = fastify.mentionService;
       if (mentionService) {
         try {
           await mentionService.invalidateCacheForConversation(conversationId);

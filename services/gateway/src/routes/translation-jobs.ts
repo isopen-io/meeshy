@@ -158,17 +158,17 @@ export async function translationJobsRoutes(fastify: FastifyInstance) {
   let translateService: AttachmentTranslateService | null = null;
   if ((fastify as any).zmqClient) {
     // Utiliser le cache multi-niveau partagé depuis le décorateur Fastify
-    const jobMappingCache = (fastify as any).jobMappingCache;
+    const jobMappingCache = fastify.jobMappingCache;
 
     translateService = new AttachmentTranslateService(
-      (fastify as any).prisma,
+      fastify.prisma,
       (fastify as any).zmqClient,
       jobMappingCache
     );
   }
 
   // Middleware d'authentification requise
-  const authRequired = createUnifiedAuthMiddleware((fastify as any).prisma, {
+  const authRequired = createUnifiedAuthMiddleware(fastify.prisma, {
     requireAuth: true,
     allowAnonymous: false
   });

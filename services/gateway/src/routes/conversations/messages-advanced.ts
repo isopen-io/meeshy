@@ -44,7 +44,7 @@ export function registerMessagesAdvancedRoutes(
   optionalAuth: any,
   requiredAuth: any
 ) {
-  const socketIOHandler = (fastify as any).socketIOHandler;
+  const socketIOHandler = fastify.socketIOHandler;
   const trackingLinkService = new TrackingLinkService(prisma);
   const attachmentService = new AttachmentService(prisma);
 
@@ -265,7 +265,7 @@ export function registerMessagesAdvancedRoutes(
       logger.info('===== STARTING MENTION PROCESSING BLOCK =====');
       try {
         logger.info('===== ENTERED TRY BLOCK FOR MENTIONS =====');
-        const mentionService = (fastify as any).mentionService;
+        const mentionService = fastify.mentionService;
         logger.info(`Edit - MentionService available !!mentionService=${!!mentionService}`);
 
         if (mentionService) {
@@ -280,12 +280,12 @@ export function registerMessagesAdvancedRoutes(
           const mentionedUsernames = mentionService.extractMentions(processedContent);
           logger.info(`Edit - Extracting mentions from processedContent=${processedContent}`);
           logger.info('Edit - Mentions extracted:', mentionedUsernames);
-          logger.info('Edit - Number of mentions:', mentionedUsernames.length);
+          logger.info(`Edit - Number of mentions: ${mentionedUsernames.length}`);
 
           if (mentionedUsernames.length > 0) {
             // Résoudre les usernames en utilisateurs réels
             const userMap = await mentionService.resolveUsernames(mentionedUsernames);
-            logger.info('UserMap size:', userMap.size);
+            logger.info(`UserMap size: ${userMap.size}`);
             const mentionedUserIds = Array.from(userMap.values()).map((user: any) => user.id);
 
             if (mentionedUserIds.length > 0) {
@@ -324,7 +324,7 @@ export function registerMessagesAdvancedRoutes(
                 logger.info(`updatedMessage.validatedMentions =`, updatedMessage.validatedMentions);
 
                 // Déclencher les notifications de mention pour les utilisateurs mentionnés
-                const notificationService = (fastify as any).notificationService;
+                const notificationService = fastify.notificationService;
                 if (notificationService) {
                   try {
                     const [sender, conversationInfo] = await Promise.all([
@@ -354,7 +354,6 @@ export function registerMessagesAdvancedRoutes(
                             senderAvatar: sender.avatar || undefined,
                             messageContent: processedContent,
                             conversationId,
-                            conversationTitle: conversationInfo.title,
                             messageId
                           },
                           memberIds
@@ -1035,7 +1034,7 @@ export function registerMessagesAdvancedRoutes(
 
         if (socketIOHandler) {
           const socketIOManager = socketIOHandler.getManager?.();
-          const io = socketIOManager?.io || (socketIOHandler as any).io;
+          const io = (socketIOManager as any)?.io || (socketIOHandler as any).io;
           if (io) {
             io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.REACTION_ADDED, updateEvent);
           }
@@ -1181,7 +1180,7 @@ export function registerMessagesAdvancedRoutes(
 
         if (socketIOHandler) {
           const socketIOManager = socketIOHandler.getManager?.();
-          const io = socketIOManager?.io || (socketIOHandler as any).io;
+          const io = (socketIOManager as any)?.io || (socketIOHandler as any).io;
           if (io) {
             io.to(ROOMS.conversation(conversationId)).emit(SERVER_EVENTS.REACTION_REMOVED, updateEvent);
           }

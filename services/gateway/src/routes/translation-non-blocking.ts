@@ -251,7 +251,7 @@ const conversationParamsSchema = {
 export async function translationRoutes(fastify: FastifyInstance, options: any) {
   // Recuperer les services depuis l'instance fastify (comme dans translation.ts)
   const translationService = (fastify as any).translationService;
-  const messagingService = (fastify as any).messagingService;
+  const messagingService = fastify.messagingService;
 
   if (!translationService) {
     throw new Error('MessageTranslationService not provided to translation routes');
@@ -364,10 +364,7 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
         // DECLENCHEMENT NON-BLOQUANT - pas d'await !
         messagingService.handleMessage(
           messageRequest,
-          'system', // TODO: Recuperer l'ID utilisateur depuis l'auth
-          true,
-          undefined, // JWT token
-          undefined  // Session token
+          'system' // TODO: Recuperer l'ID utilisateur depuis l'auth
         ).catch((error: any) => {
           logger.error(`[Translation] Async message processing error: ${error.message}`);
         });
