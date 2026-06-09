@@ -722,6 +722,71 @@ final class MessagePersistenceActorTests: XCTestCase {
             "PendingIdRecord must be coherent so backend ops resolve the server id")
     }
 
+    /// BUG1 — the "message duplicates after delivery" race. The optimistic row
+    /// is server-acked first (which sets `serverId` AND a PendingIdRecord), then
+    /// a background REST refresh (`GET /messages`) returns the SERVER-shaped
+    /// record keyed by the server id and WITHOUT the `clientMessageId` (a plain
+    /// snapshot does not echo the cid). The upsert must reconcile it onto the
+    /// existing optimistic row via the PendingIdRecord → serverId resolution,
+    /// never insert a second row. A duplicate here is exactly the user-visible
+    /// "two copies of my just-sent message" symptom the BUG1 diagnostics guard.
+    func test_upsertFromAPIMessages_afterServerAck_restRefreshWithoutCid_reconcilesNoDuplicate() async throws {
+        let cid = "cid_11111111111111111111111111111111"
+        let serverId = "srv_post_ack_1"
+        let conv = "conv_bug1_race"
+
+        let optimistic = MessageRecordFactory.make(
+            localId: cid, conversationId: conv, content: "mon message", state: .sending
+        )
+        try await actor.insertOptimistic(optimistic)
+
+        // Server ACK: backfills serverId onto the cid_ row + creates PendingIdRecord.
+        let acked = try await actor.applyEvent(
+            localId: cid, event: .serverAck(serverId: serverId, at: Date()))
+        XCTAssertEqual(acked, .sent)
+
+        // Background REST refresh: the server record, keyed by serverId, with NO
+        // clientMessageId — the upsert must resolve it via the PendingIdRecord.
+        let restRecord = makeAPIMessage(
+            id: serverId, conversationId: conv, content: "mon message", clientMessageId: nil)
+        try await actor.upsertFromAPIMessages([restRecord])
+
+        let rows = try actor.messages(for: conv, limit: 10)
+        XCTAssertEqual(rows.count, 1,
+            "a post-ACK REST refresh must reconcile onto the optimistic row, never duplicate it")
+        XCTAssertEqual(rows[0].localId, cid,
+            "the row keeps its optimistic localId (cid_*); the server id lives in the serverId column")
+        XCTAssertEqual(rows[0].serverId, serverId)
+        XCTAssertEqual(rows[0].state, .sent,
+            "a REST payload carrying no delivery signal must not regress the acked .sent state")
+    }
+
+    /// BUG1 robustness — even when the PendingIdRecord is absent (a row whose
+    /// serverId was backfilled from cache hydration rather than a live ack), a
+    /// REST/socket payload keyed by the server id must still reconcile via the
+    /// `serverId`-column OR-match in the upsert resolver and not duplicate.
+    func test_upsertFromAPIMessages_serverIdColumnMatch_reconcilesWithoutPendingIdRecord() async throws {
+        let cid = "cid_22222222222222222222222222222222"
+        let serverId = "srv_no_pending_1"
+        let conv = "conv_bug1_legacy"
+
+        var optimistic = MessageRecordFactory.make(
+            localId: cid, conversationId: conv, content: "Hello", state: .sent
+        )
+        optimistic.serverId = serverId    // serverId known, but NO PendingIdRecord written
+        try await actor.insertOptimistic(optimistic)
+
+        let restRecord = makeAPIMessage(
+            id: serverId, conversationId: conv, content: "Hello", clientMessageId: nil)
+        try await actor.upsertFromAPIMessages([restRecord])
+
+        let rows = try actor.messages(for: conv, limit: 10)
+        XCTAssertEqual(rows.count, 1,
+            "serverId-column match must reconcile even when no PendingIdRecord exists")
+        XCTAssertEqual(rows[0].localId, cid,
+            "the optimistic localId is preserved; no duplicate server-keyed row appears")
+    }
+
     /// The buffered entry point routes through the serial write stream.
     func test_bufferIncomingAPIMessages_writesThroughSerialStream() async throws {
         await actor.start()

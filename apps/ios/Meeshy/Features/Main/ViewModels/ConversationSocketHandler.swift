@@ -494,6 +494,18 @@ final class ConversationSocketHandler {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self, let persistence = self.persistence else { return }
+                // Reaction d'un AUTRE utilisateur arrivant en temps reel : on
+                // marque la cle pour que la nouvelle pill joue la comete au
+                // prochain rendu. La propre reaction de l'utilisateur a deja ete
+                // marquee+animee par le toggle optimiste (`toggleReaction`), donc
+                // on ne la re-anime pas ici.
+                if event.participantId != self.currentUserId {
+                    let animMessageId = event.messageId
+                    let animEmoji = event.emoji
+                    Task { @MainActor in
+                        ReactionAnimationGate.markAdded(messageId: animMessageId, emoji: animEmoji)
+                    }
+                }
                 // Write through persistence; store observation surfaces the reaction.
                 // Pass the server's authoritative `aggregation.count` as a cap so an
                 // echo of the user's OWN reaction (keyed by the resolved

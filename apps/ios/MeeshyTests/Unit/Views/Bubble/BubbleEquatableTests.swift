@@ -99,3 +99,46 @@ final class BubbleEquatableTests: XCTestCase {
         XCTAssertEqual(a, b)
     }
 }
+
+/// Garde de l'animation d'entree des reactions. La pile produit ne doit animer
+/// QUE les reactions reellement ajoutees (toggle local / socket temps reel),
+/// jamais celles qui scrollent simplement dans le viewport (cellule recyclee).
+@MainActor
+final class ReactionAnimationGateTests: XCTestCase {
+
+    override func setUp() {
+        super.setUp()
+        ReactionAnimationGate.resetForTesting()
+    }
+
+    override func tearDown() {
+        ReactionAnimationGate.resetForTesting()
+        super.tearDown()
+    }
+
+    /// LE cas du bug : une reaction existante, jamais marquee, ne doit pas
+    /// animer quand sa bulle (re)apparait au scroll.
+    func test_shouldAnimate_unmarked_isFalse() {
+        XCTAssertFalse(ReactionAnimationGate.shouldAnimate(messageId: "m1", emoji: "👍"))
+    }
+
+    /// Une reaction marquee (ajout reel) anime — et UNIQUEMENT cette cle.
+    func test_markAdded_thenShouldAnimate_isTrue_forThatKeyOnly() {
+        let t = Date()
+        ReactionAnimationGate.now = { t }
+        ReactionAnimationGate.markAdded(messageId: "m1", emoji: "👍")
+        XCTAssertTrue(ReactionAnimationGate.shouldAnimate(messageId: "m1", emoji: "👍"))
+        XCTAssertFalse(ReactionAnimationGate.shouldAnimate(messageId: "m1", emoji: "❤️"))
+        XCTAssertFalse(ReactionAnimationGate.shouldAnimate(messageId: "m2", emoji: "👍"))
+    }
+
+    /// Passe la fenetre d'animation, un scroll-in ulterieur rend la reaction
+    /// statiquement (plus d'animation).
+    func test_markAdded_expiresAfterWindow() {
+        var t = Date()
+        ReactionAnimationGate.now = { t }
+        ReactionAnimationGate.markAdded(messageId: "m1", emoji: "👍")
+        t = t.addingTimeInterval(ReactionAnimationGate.window + 0.1)
+        XCTAssertFalse(ReactionAnimationGate.shouldAnimate(messageId: "m1", emoji: "👍"))
+    }
+}

@@ -33,6 +33,10 @@ extension BubbleStandardLayout {
     var visualMediaGrid: some View {
         let items = visualAttachments
 
+        // Largeur en points d'une cellule moitié (cases 2 & 4) — sert à choisir
+        // la variante d'image adaptée (5.2).
+        let halfW = (gridMaxWidth - gridSpacing) / 2
+
         switch items.count {
         case 1:
             let item = items[0]
@@ -43,17 +47,17 @@ extension BubbleStandardLayout {
                 // becomes tall (≈ width × 1.78), landscape 16:9 becomes short
                 // (≈ width × 0.56). Replaces the legacy hardcoded `height: 200`
                 // that squashed portrait sources.
-                makeGridCell(item, solo: true)
+                makeGridCell(item, cellPointWidth: gridMaxWidth, solo: true)
                     .frame(width: gridMaxWidth)
             } else {
-                makeGridCell(item, solo: true)
+                makeGridCell(item, cellPointWidth: gridMaxWidth, solo: true)
                     .frame(width: gridMaxWidth, height: 240)
             }
 
         case 2:
             HStack(spacing: gridSpacing) {
-                makeGridCell(items[0])
-                makeGridCell(items[1])
+                makeGridCell(items[0], cellPointWidth: halfW)
+                makeGridCell(items[1], cellPointWidth: halfW)
             }
             .frame(width: gridMaxWidth, height: 180)
 
@@ -61,11 +65,11 @@ extension BubbleStandardLayout {
             let leftW = (gridMaxWidth - gridSpacing) * 0.6
             let rightW = (gridMaxWidth - gridSpacing) * 0.4
             HStack(spacing: gridSpacing) {
-                makeGridCell(items[0])
+                makeGridCell(items[0], cellPointWidth: leftW)
                     .frame(width: leftW)
                 VStack(spacing: gridSpacing) {
-                    makeGridCell(items[1])
-                    makeGridCell(items[2])
+                    makeGridCell(items[1], cellPointWidth: rightW)
+                    makeGridCell(items[2], cellPointWidth: rightW)
                 }
                 .frame(width: rightW)
             }
@@ -75,12 +79,12 @@ extension BubbleStandardLayout {
             let overflow = items.count - 4
             VStack(spacing: gridSpacing) {
                 HStack(spacing: gridSpacing) {
-                    makeGridCell(items[0])
-                    makeGridCell(items[1])
+                    makeGridCell(items[0], cellPointWidth: halfW)
+                    makeGridCell(items[1], cellPointWidth: halfW)
                 }
                 HStack(spacing: gridSpacing) {
-                    makeGridCell(items[2])
-                    makeGridCell(items[3], overflowCount: max(0, overflow))
+                    makeGridCell(items[2], cellPointWidth: halfW)
+                    makeGridCell(items[3], cellPointWidth: halfW, overflowCount: max(0, overflow))
                 }
             }
             .frame(width: gridMaxWidth, height: 240)
@@ -106,7 +110,7 @@ extension BubbleStandardLayout {
     /// is bounded; demangling a 4-deep `_ConditionalContent` tree per call
     /// site is not. This also lets SwiftUI cache the cell's structural
     /// identity across body re-evaluations.
-    fileprivate func makeGridCell(_ attachment: MessageAttachment, overflowCount: Int = 0, solo: Bool = false) -> BubbleGridCell {
+    fileprivate func makeGridCell(_ attachment: MessageAttachment, cellPointWidth: CGFloat, overflowCount: Int = 0, solo: Bool = false) -> BubbleGridCell {
         BubbleGridCell(
             attachment: attachment,
             overflowCount: overflowCount,
@@ -115,6 +119,7 @@ extension BubbleStandardLayout {
             allVisualAttachments: visualAttachments,
             messageId: message.id,
             messageDeliveryStatus: message.deliveryStatus,
+            cellPointWidth: cellPointWidth,
             revealedAttachmentIds: $revealedAttachmentIds,
             carouselIndex: $carouselIndex,
             showCarousel: $showCarousel,
@@ -246,6 +251,9 @@ fileprivate struct BubbleGridCell: View {
     let allVisualAttachments: [MessageAttachment]
     let messageId: String
     let messageDeliveryStatus: Message.DeliveryStatus
+    /// Largeur en points de cette cellule (par branche de `visualMediaGrid`),
+    /// threadée jusqu'à `BubbleGridImageView` pour la sélection de variante (5.2).
+    let cellPointWidth: CGFloat
 
     @Binding var revealedAttachmentIds: Set<String>
     @Binding var carouselIndex: Int
@@ -330,7 +338,7 @@ fileprivate struct BubbleGridCell: View {
     private var mediaLayer: some View {
         switch attachment.type {
         case .image:
-            BubbleGridImageView(attachment: attachment)
+            BubbleGridImageView(attachment: attachment, cellPointWidth: cellPointWidth)
         case .video:
             BubbleGridVideoThumbnailView(attachment: attachment, contactColor: contactColor, solo: solo)
         default:
@@ -438,17 +446,38 @@ fileprivate struct BubbleGridCell: View {
 
 fileprivate struct BubbleGridImageView: View {
     let attachment: MessageAttachment
+    /// Largeur en points de la cellule (décidée par `visualMediaGrid`). Sert à
+    /// choisir la variante d'image la plus légère suffisante (bande passante 5.2).
+    let cellPointWidth: CGFloat
 
     var body: some View {
-        let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
+        let originalFull = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
         let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
-        let urlStr = fullUrl ?? thumbUrl ?? ""
+
+        // 5.2 — choisir la plus petite variante `>= largeur d'affichage en px`
+        // (atome pur SDK). Sans variante (image chiffrée) → `originalFull`.
+        let targetWidthPx = Int((cellPointWidth * UIScreen.main.scale).rounded())
+        let selectedFull: String? = originalFull.map { orig in
+            ImageVariantSelector.bestImageURL(
+                variants: attachment.imageVariants ?? [],
+                originalURL: orig,
+                originalWidth: attachment.width,
+                targetWidthPx: targetWidthPx
+            )
+        }
+        // N6 — quand une variante allégée est choisie (≠ original), le thumbHash
+        // couvre déjà le remplissage instantané : on saute le tier thumbnail pour
+        // ne pas télécharger thumbnail + variante.
+        let pickedLighterVariant = selectedFull != nil && selectedFull != originalFull
+        let effectiveThumb = pickedLighterVariant ? nil : thumbUrl
+        let urlStr = selectedFull ?? thumbUrl ?? ""
 
         if !urlStr.isEmpty {
             ProgressiveCachedImage(
                 thumbHash: attachment.thumbHash,
-                thumbnailUrl: thumbUrl,
-                fullUrl: fullUrl
+                thumbnailUrl: effectiveThumb,
+                fullUrl: selectedFull,
+                targetSize: CGSize(width: cellPointWidth, height: cellPointWidth)
             ) {
                 Color(hex: attachment.thumbnailColor).shimmer()
             }

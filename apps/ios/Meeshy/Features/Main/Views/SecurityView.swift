@@ -154,9 +154,9 @@ struct SecurityView: View {
             } label: {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.subheadline.weight(.semibold))
                     Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
-                        .font(.system(size: 15, weight: .medium))
+                        .font(.callout.weight(.medium))
                 }
                 .foregroundColor(MeeshyColors.indigo500)
             }
@@ -164,7 +164,7 @@ struct SecurityView: View {
             Spacer()
 
             Text(String(localized: "settings.security.title", defaultValue: "Securite", bundle: .main))
-                .font(.system(size: 17, weight: .bold))
+                .font(.headline)
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
@@ -207,13 +207,13 @@ struct SecurityView: View {
                     fieldIcon("key.fill", color: "6366F1")
 
                     Text(String(localized: "settings.security.change_password", defaultValue: "Changer le mot de passe", bundle: .main))
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.subheadline.weight(.medium))
                         .foregroundColor(theme.textPrimary)
 
                     Spacer()
 
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.caption.weight(.semibold))
                         .foregroundColor(theme.textMuted)
                 }
                 .padding(.horizontal, 14)
@@ -235,11 +235,11 @@ struct SecurityView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(String(localized: "settings.security.email.current", defaultValue: "Email actuel", bundle: .main))
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.caption2.weight(.medium))
                             .foregroundColor(theme.textMuted)
 
                         Text(user?.email ?? String(localized: "settings.security.not_set", defaultValue: "Non defini", bundle: .main))
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.subheadline.weight(.medium))
                             .foregroundColor(user?.email != nil ? theme.textPrimary : theme.textMuted)
                     }
 
@@ -266,9 +266,9 @@ struct SecurityView: View {
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: "pencil")
-                                    .font(.system(size: 12, weight: .semibold))
+                                    .font(.caption.weight(.semibold))
                                 Text(String(localized: "common.edit", defaultValue: "Modifier", bundle: .main))
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.footnote.weight(.semibold))
                             }
                             .foregroundColor(MeeshyColors.indigo500)
                             .padding(.horizontal, 14)
@@ -283,9 +283,9 @@ struct SecurityView: View {
                             } label: {
                                 HStack(spacing: 8) {
                                     Image(systemName: "checkmark.seal.fill")
-                                        .font(.system(size: 12, weight: .semibold))
+                                        .font(.caption.weight(.semibold))
                                     Text(String(localized: "common.verify", defaultValue: "Vérifier", bundle: .main))
-                                        .font(.system(size: 13, weight: .semibold))
+                                        .font(.footnote.weight(.semibold))
                                 }
                                 .foregroundColor(MeeshyColors.success)
                                 .padding(.horizontal, 14)
@@ -301,7 +301,7 @@ struct SecurityView: View {
 
                 if let emailError {
                     Text(emailError)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.caption.weight(.medium))
                         .foregroundColor(MeeshyColors.error)
                         .padding(.horizontal, 14)
                         .padding(.bottom, 10)
@@ -317,7 +317,7 @@ struct SecurityView: View {
                 fieldIcon("at", color: accentColor)
 
                 TextField(String(localized: "settings.security.email.new", defaultValue: "Nouvel email", bundle: .main), text: $newEmail)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.subheadline.weight(.medium))
                     .foregroundColor(theme.textPrimary)
                     .textContentType(.emailAddress)
                     .keyboardType(.emailAddress)
@@ -333,7 +333,7 @@ struct SecurityView: View {
                     withAnimation { isEditingEmail = false; newEmail = ""; emailError = nil }
                 } label: {
                     Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.footnote.weight(.semibold))
                         .foregroundColor(theme.textMuted)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
@@ -349,7 +349,7 @@ struct SecurityView: View {
                             ProgressView().scaleEffect(0.7).tint(.white)
                         }
                         Text(String(localized: "common.send", defaultValue: "Envoyer", bundle: .main))
-                            .font(.system(size: 13, weight: .bold))
+                            .font(.footnote.weight(.bold))
                     }
                     .foregroundColor(.white)
                     .padding(.horizontal, 16)
@@ -373,10 +373,10 @@ struct SecurityView: View {
         VStack(spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: "envelope.badge.fill")
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                     .foregroundColor(MeeshyColors.success)
                 Text(String(localized: "settings.security.email.verification_sent", defaultValue: "Email de verification envoye", bundle: .main))
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.footnote.weight(.medium))
                     .foregroundColor(MeeshyColors.success)
             }
             .padding(.horizontal, 14)
@@ -388,7 +388,7 @@ struct SecurityView: View {
                 Text(resendCooldown > 0
                      ? "\(String(localized: "settings.security.email.resend", defaultValue: "Renvoyer", bundle: .main)) (\(resendCooldown)s)"
                      : String(localized: "settings.security.email.resend_email", defaultValue: "Renvoyer l'email", bundle: .main))
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundColor(resendCooldown > 0 ? theme.textMuted : MeeshyColors.indigo500)
             }
             .disabled(resendCooldown > 0)
@@ -408,7 +408,7 @@ struct SecurityView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(String(localized: "settings.security.phone.current", defaultValue: "Telephone actuel", bundle: .main))
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.caption2.weight(.medium))
                             .foregroundColor(theme.textMuted)
 
                         Text({
@@ -417,7 +417,7 @@ struct SecurityView: View {
                             }
                             return String(localized: "settings.security.not_set", defaultValue: "Non defini", bundle: .main)
                         }())
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.subheadline.weight(.medium))
                             .foregroundColor(user?.phoneNumber != nil ? theme.textPrimary : theme.textMuted)
                     }
 
@@ -444,9 +444,9 @@ struct SecurityView: View {
                         } label: {
                             HStack(spacing: 8) {
                                 Image(systemName: "pencil")
-                                    .font(.system(size: 12, weight: .semibold))
+                                    .font(.caption.weight(.semibold))
                                 Text(String(localized: "common.edit", defaultValue: "Modifier", bundle: .main))
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.footnote.weight(.semibold))
                             }
                             .foregroundColor(MeeshyColors.indigo400)
                             .padding(.horizontal, 14)
@@ -461,9 +461,9 @@ struct SecurityView: View {
                             } label: {
                                 HStack(spacing: 8) {
                                     Image(systemName: "checkmark.seal.fill")
-                                        .font(.system(size: 12, weight: .semibold))
+                                        .font(.caption.weight(.semibold))
                                     Text(String(localized: "common.verify", defaultValue: "Vérifier", bundle: .main))
-                                        .font(.system(size: 13, weight: .semibold))
+                                        .font(.footnote.weight(.semibold))
                                 }
                                 .foregroundColor(MeeshyColors.success)
                                 .padding(.horizontal, 14)
@@ -479,7 +479,7 @@ struct SecurityView: View {
 
                 if let phoneError {
                     Text(phoneError)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.caption.weight(.medium))
                         .foregroundColor(MeeshyColors.error)
                         .padding(.horizontal, 14)
                         .padding(.bottom, 10)
@@ -495,7 +495,7 @@ struct SecurityView: View {
                 fieldIcon("phone.badge.plus", color: "818CF8")
 
                 TextField("+33 6 12 34 56 78", text: $newPhone)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.subheadline.weight(.medium))
                     .foregroundColor(theme.textPrimary)
                     .textContentType(.telephoneNumber)
                     .keyboardType(.phonePad)
@@ -509,7 +509,7 @@ struct SecurityView: View {
                     withAnimation { isEditingPhone = false; newPhone = ""; phoneError = nil }
                 } label: {
                     Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.footnote.weight(.semibold))
                         .foregroundColor(theme.textMuted)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
@@ -525,7 +525,7 @@ struct SecurityView: View {
                             ProgressView().scaleEffect(0.7).tint(.white)
                         }
                         Text(String(localized: "settings.security.phone.send_code", defaultValue: "Envoyer le code", bundle: .main))
-                            .font(.system(size: 13, weight: .bold))
+                            .font(.footnote.weight(.bold))
                     }
                     .foregroundColor(.white)
                     .padding(.horizontal, 16)
@@ -549,10 +549,10 @@ struct SecurityView: View {
         VStack(spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "ellipsis.message.fill")
-                    .font(.system(size: 14))
+                    .font(.subheadline)
                     .foregroundColor(MeeshyColors.success)
                 Text(String(localized: "settings.security.phone.code_sent", defaultValue: "Code envoye par SMS", bundle: .main))
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.footnote.weight(.medium))
                     .foregroundColor(MeeshyColors.success)
             }
             .padding(.horizontal, 14)
@@ -561,7 +561,7 @@ struct SecurityView: View {
                 fieldIcon("number", color: "818CF8")
 
                 TextField(String(localized: "settings.security.phone.code_placeholder", defaultValue: "Code a 6 chiffres", bundle: .main), text: $phoneCode)
-                    .font(.system(size: 16, weight: .semibold, design: .monospaced))
+                    .font(.system(.callout, design: .monospaced).weight(.semibold))
                     .foregroundColor(theme.textPrimary)
                     .keyboardType(.numberPad)
                     .adaptiveOnChange(of: phoneCode) { _, newValue in
@@ -577,7 +577,7 @@ struct SecurityView: View {
                     withAnimation { phoneSent = false; isEditingPhone = false; phoneCode = ""; newPhone = ""; phoneError = nil }
                 } label: {
                     Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(.footnote.weight(.semibold))
                         .foregroundColor(theme.textMuted)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
@@ -593,7 +593,7 @@ struct SecurityView: View {
                             ProgressView().scaleEffect(0.7).tint(.white)
                         }
                         Text(String(localized: "common.verify", defaultValue: "Verifier", bundle: .main))
-                            .font(.system(size: 13, weight: .bold))
+                            .font(.footnote.weight(.bold))
                     }
                     .foregroundColor(.white)
                     .padding(.horizontal, 16)
@@ -629,12 +629,12 @@ struct SecurityView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(String(localized: "settings.security.master_pin", defaultValue: "Master PIN", bundle: .main))
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.caption2.weight(.medium))
                             .foregroundColor(theme.textMuted)
                         Text(hasMasterPIN
                              ? String(localized: "settings.security.configured", defaultValue: "Configuré", bundle: .main)
                              : String(localized: "settings.security.not_configured", defaultValue: "Non configuré", bundle: .main))
-                            .font(.system(size: 14, weight: .medium))
+                            .font(.subheadline.weight(.medium))
                             .foregroundColor(hasMasterPIN ? MeeshyColors.success : theme.textMuted)
                     }
 
@@ -644,14 +644,14 @@ struct SecurityView: View {
                         HStack(spacing: 8) {
                             if lockedCount > 0 {
                                 Text("\(lockedCount) \(String(localized: "settings.security.locks", defaultValue: "verrou(s)", bundle: .main))")
-                                    .font(.system(size: 11, weight: .semibold))
+                                    .font(.caption2.weight(.semibold))
                                     .foregroundColor(MeeshyColors.error)
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 3)
                                     .background(Capsule().fill(MeeshyColors.error.opacity(0.15)))
                             }
                             Image(systemName: "checkmark.shield.fill")
-                                .font(.system(size: 16))
+                                .font(.callout)
                                 .foregroundColor(MeeshyColors.success)
                         }
                     }
@@ -668,9 +668,9 @@ struct SecurityView: View {
                         } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: "plus.circle.fill")
-                                    .font(.system(size: 12))
+                                    .font(.caption)
                                 Text(String(localized: "settings.security.configure", defaultValue: "Configurer", bundle: .main))
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.footnote.weight(.semibold))
                             }
                             .foregroundColor(.white)
                             .padding(.horizontal, 14)
@@ -686,9 +686,9 @@ struct SecurityView: View {
                         } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: "pencil.circle.fill")
-                                    .font(.system(size: 12))
+                                    .font(.caption)
                                 Text(String(localized: "common.edit", defaultValue: "Modifier", bundle: .main))
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.footnote.weight(.semibold))
                             }
                             .foregroundColor(MeeshyColors.error)
                             .padding(.horizontal, 14)
@@ -703,9 +703,9 @@ struct SecurityView: View {
                             } label: {
                                 HStack(spacing: 6) {
                                     Image(systemName: "lock.open.fill")
-                                        .font(.system(size: 12))
+                                        .font(.caption)
                                     Text("\(String(localized: "settings.security.unlock_all", defaultValue: "Déverrouiller tout", bundle: .main)) (\(lockedCount))")
-                                        .font(.system(size: 13, weight: .semibold))
+                                        .font(.footnote.weight(.semibold))
                                 }
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 14)
@@ -721,9 +721,9 @@ struct SecurityView: View {
                             } label: {
                                 HStack(spacing: 6) {
                                     Image(systemName: "trash.circle.fill")
-                                        .font(.system(size: 12))
+                                        .font(.caption)
                                     Text(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main))
-                                        .font(.system(size: 13, weight: .semibold))
+                                        .font(.footnote.weight(.semibold))
                                 }
                                 .foregroundColor(MeeshyColors.error)
                                 .padding(.horizontal, 14)
@@ -757,7 +757,7 @@ struct SecurityView: View {
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text(String(localized: "2fa_status_label", defaultValue: "Statut 2FA"))
-                            .font(.system(size: 11, weight: .medium))
+                            .font(.caption2.weight(.medium))
                             .foregroundColor(theme.textMuted)
 
                         if twoFactorViewModel.isLoading {
@@ -767,7 +767,7 @@ struct SecurityView: View {
                             Text(twoFactorViewModel.isEnabled
                                  ? String(localized: "2fa_enabled", defaultValue: "Active")
                                  : String(localized: "2fa_disabled", defaultValue: "Desactive"))
-                                .font(.system(size: 14, weight: .medium))
+                                .font(.subheadline.weight(.medium))
                                 .foregroundColor(twoFactorViewModel.isEnabled ? MeeshyColors.success : theme.textMuted)
                         }
                     }
@@ -776,7 +776,7 @@ struct SecurityView: View {
 
                     if twoFactorViewModel.isEnabled {
                         Text(String(localized: "2fa_badge_active", defaultValue: "Active"))
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.caption2.weight(.semibold))
                             .foregroundColor(.white)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -794,9 +794,9 @@ struct SecurityView: View {
                         } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: "key.fill")
-                                    .font(.system(size: 12))
+                                    .font(.caption)
                                 Text(String(localized: "2fa_backup_codes_button", defaultValue: "Codes de secours"))
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.footnote.weight(.semibold))
                             }
                             .foregroundColor(MeeshyColors.indigo500)
                             .padding(.horizontal, 14)
@@ -810,9 +810,9 @@ struct SecurityView: View {
                         } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: "shield.slash.fill")
-                                    .font(.system(size: 12))
+                                    .font(.caption)
                                 Text(String(localized: "2fa_disable_button", defaultValue: "Desactiver"))
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.footnote.weight(.semibold))
                             }
                             .foregroundColor(MeeshyColors.error)
                             .padding(.horizontal, 14)
@@ -826,9 +826,9 @@ struct SecurityView: View {
                         } label: {
                             HStack(spacing: 6) {
                                 Image(systemName: "shield.lefthalf.filled.badge.checkmark")
-                                    .font(.system(size: 12))
+                                    .font(.caption)
                                 Text(String(localized: "2fa_enable_button", defaultValue: "Activer 2FA"))
-                                    .font(.system(size: 13, weight: .semibold))
+                                    .font(.footnote.weight(.semibold))
                             }
                             .foregroundColor(.white)
                             .padding(.horizontal, 14)
@@ -842,7 +842,7 @@ struct SecurityView: View {
 
                 if let twoFactorError = twoFactorViewModel.error {
                     Text(twoFactorError)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(.caption.weight(.medium))
                         .foregroundColor(MeeshyColors.error)
                         .padding(.horizontal, 14)
                         .padding(.bottom, 10)
@@ -866,13 +866,13 @@ struct SecurityView: View {
                     fieldIcon("laptopcomputer.and.iphone", color: "818CF8")
 
                     Text(String(localized: "security_sessions_manage", defaultValue: "Gerer les sessions actives"))
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.subheadline.weight(.medium))
                         .foregroundColor(theme.textPrimary)
 
                     Spacer()
 
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.caption.weight(.semibold))
                         .foregroundColor(theme.textMuted)
                 }
                 .padding(.horizontal, 14)
@@ -891,10 +891,10 @@ struct SecurityView: View {
     private func sectionHeader(title: String, icon: String, color: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon)
-                .font(.system(size: 12, weight: .semibold))
+                .font(.caption.weight(.semibold))
                 .foregroundColor(Color(hex: color))
             Text(title.uppercased())
-                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .font(.system(.caption2, design: .rounded).weight(.bold))
                 .foregroundColor(Color(hex: color))
                 .tracking(1.2)
         }
@@ -912,7 +912,7 @@ struct SecurityView: View {
 
     private func fieldIcon(_ name: String, color: String) -> some View {
         Image(systemName: name)
-            .font(.system(size: 14, weight: .medium))
+            .font(.subheadline.weight(.medium))
             .foregroundColor(Color(hex: color))
             .frame(width: 28, height: 28)
             .background(
@@ -925,7 +925,7 @@ struct SecurityView: View {
         Text(verified
              ? String(localized: "settings.security.verified", defaultValue: "Verifie", bundle: .main)
              : String(localized: "settings.security.not_verified", defaultValue: "Non verifie", bundle: .main))
-            .font(.system(size: 10, weight: .semibold))
+            .font(.caption2.weight(.semibold))
             .foregroundColor(.white)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)

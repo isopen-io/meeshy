@@ -28,13 +28,6 @@ struct BubbleReactionsOverlay: View, Equatable {
     var onOpenReactPicker: ((String) -> Void)? = nil
     var onShowReactions: ((String) -> Void)? = nil
 
-    /// Ensemble des emojis deja vus au rendu precedent. Une pill dont
-    /// l'emoji est ABSENT de ce set est consideree "nouvelle" et joue
-    /// l'animation comet. Les pills deja presentes (count qui change,
-    /// re-render de liste) ne rejouent JAMAIS l'animation.
-    /// Exclu de Equatable : c'est un etat de presentation interne.
-    @State private var seenEmojis: Set<String> = []
-
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.messageId == rhs.messageId &&
         lhs.isMe == rhs.isMe &&
@@ -83,19 +76,6 @@ struct BubbleReactionsOverlay: View, Equatable {
                     }
                 }
             }
-        }
-        // Synchronise l'ensemble des emojis connus a chaque changement de
-        // resume. Au montage initial (`onAppear`) on enregistre tout sans
-        // animer — les reactions deja chargees ne doivent pas crasher a
-        // l'ouverture de la conversation. Ensuite, chaque emoji absent du
-        // set est traite comme "nouveau" par `CometPillModifier`.
-        .onAppear {
-            if seenEmojis.isEmpty {
-                seenEmojis = Set(summaries.map(\.emoji))
-            }
-        }
-        .adaptiveOnChange(of: summaries.map(\.emoji)) { _, newEmojis in
-            seenEmojis = Set(newEmojis)
         }
     }
 
@@ -209,11 +189,12 @@ struct BubbleReactionsOverlay: View, Equatable {
         let shadowColor: Color = reaction.includesMe ? accent.opacity(0.40) : .clear
         let shadowRadius: CGFloat = reaction.includesMe ? 5 : 0
 
-        // Une pill est "nouvelle" si son emoji n'etait pas dans `seenEmojis`
-        // au rendu precedent. C'est vrai aussi bien quand le user local
-        // ajoute une reaction que lorsqu'une reaction distante arrive via
-        // socket : dans les deux cas `summaries` gagne un emoji inconnu.
-        let isNew = !seenEmojis.contains(reaction.emoji)
+        // Une pill ne joue son animation d'entree (comete) QUE si elle vient
+        // d'etre ajoutee — toggle local ou broadcast socket `reaction:added`,
+        // les deux marquent `ReactionAnimationGate`. Le simple recyclage d'une
+        // cellule au scroll (qui recreerait un `@State`) ne declenche RIEN : la
+        // "nouveaute" est un evenement modele, pas un evenement de vue.
+        let isNew = ReactionAnimationGate.shouldAnimate(messageId: messageId, emoji: reaction.emoji)
 
         return pillContent
             .background(
@@ -332,4 +313,55 @@ private struct CometPillModifier: ViewModifier {
             }
         }
     }
+}
+
+// MARK: - Reaction entrance-animation gate
+
+/// Marque les reactions qui doivent jouer l'animation d'entree (comete) a leur
+/// prochain rendu. Alimentee UNIQUEMENT par de vrais evenements "reaction
+/// ajoutee" — le toggle optimiste de l'utilisateur local ET le broadcast temps
+/// reel `reaction:added` — JAMAIS par un chargement de liste ou la recreation
+/// d'une cellule au scroll.
+///
+/// Pourquoi une table laterale plutot qu'un `@State` par cellule : SwiftUI
+/// detruit le `@State` d'une cellule hors-ecran et le recree au scroll-in
+/// (la liste est un `MessageListViewController` UIKit qui recycle ses cellules),
+/// ce qui faisait rejouer l'animation d'entree a CHAQUE reaction existante. Le
+/// signal "nouvellement ajoutee" doit vivre HORS de la cellule recyclee — c'est
+/// un evenement modele, pas un evenement de vue. Une cle expire apres `window`
+/// secondes (la duree de l'animation comete) pour qu'un scroll-in ulterieur la
+/// rende de maniere statique.
+@MainActor
+enum ReactionAnimationGate {
+    /// Source de temps injectable (tests).
+    static var now: () -> Date = { Date() }
+    /// Fenetre d'animabilite — doit couvrir la duree du `CometPillModifier`.
+    static let window: TimeInterval = 1.3
+    private static var expiries: [String: Date] = [:]
+
+    private static func key(_ messageId: String, _ emoji: String) -> String {
+        "\(messageId)\u{1F}\(emoji)"
+    }
+
+    /// Enregistre une reaction reellement nouvelle pour que son prochain rendu
+    /// l'anime. Purge au passage les entrees expirees (table bornee).
+    static func markAdded(messageId: String, emoji: String) {
+        let current = now()
+        expiries = expiries.filter { $0.value > current }
+        expiries[key(messageId, emoji)] = current.addingTimeInterval(window)
+    }
+
+    /// Vrai seulement dans la fenetre d'animation suivant un `markAdded`.
+    static func shouldAnimate(messageId: String, emoji: String) -> Bool {
+        guard let expiry = expiries[key(messageId, emoji)] else { return false }
+        return expiry > now()
+    }
+
+    #if DEBUG
+    /// Remet l'etat a zero entre les tests.
+    static func resetForTesting() {
+        expiries = [:]
+        now = { Date() }
+    }
+    #endif
 }

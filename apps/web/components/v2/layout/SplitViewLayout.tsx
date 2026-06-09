@@ -4,6 +4,7 @@ import { type ReactNode } from 'react';
 import { usePathname } from 'next/navigation';
 import { SplitViewProvider, useSplitView } from './SplitViewContext';
 import { ConversationSidebar } from './ConversationSidebar';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface SplitViewLayoutProps {
   children: ReactNode;
@@ -11,6 +12,7 @@ interface SplitViewLayoutProps {
 
 function BackButton() {
   const { goBackToList, isMobile, showRightPanel } = useSplitView();
+  const { t } = useI18n('common');
 
   // Only show on mobile when right panel is visible
   if (!isMobile || !showRightPanel) return null;
@@ -19,7 +21,7 @@ function BackButton() {
     <button
       onClick={goBackToList}
       className="p-2 -ml-2 rounded-lg hover:bg-[var(--gp-hover)] text-[var(--gp-text-primary)] transition-colors"
-      aria-label="Retour"
+      aria-label={t('back')}
     >
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />

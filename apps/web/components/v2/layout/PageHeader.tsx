@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Button } from '@/components/v2/Button';
 import { theme } from '@/components/v2/theme';
 import { useSplitView } from './SplitViewContext';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface PageHeaderProps {
   title: string;
@@ -25,6 +26,7 @@ export function PageHeader({
   children,
 }: PageHeaderProps) {
   const { goBackToList, isMobile, showRightPanel } = useSplitView();
+  const { t } = useI18n('common');
 
   return (
     <header className="sticky top-0 z-50 px-6 py-4 border-b border-[var(--gp-border)] bg-[var(--gp-surface)]/95 backdrop-blur-xl transition-colors duration-300">
@@ -35,7 +37,7 @@ export function PageHeader({
               <button
                 onClick={goBackToList}
                 className="p-2 -ml-2 rounded-lg hover:bg-[var(--gp-hover)] text-[var(--gp-text-primary)] transition-colors"
-                aria-label="Retour à la liste"
+                aria-label={t('backToList')}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />

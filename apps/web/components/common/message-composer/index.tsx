@@ -107,7 +107,7 @@ function formatReplyDate(date: Date | string, locale: string = 'fr-FR'): string 
 export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerProps>(
   (props, ref) => {
     // Récupérer la locale de l'utilisateur
-    const { locale } = useI18n('conversations');
+    const { locale, t } = useI18n('conversations');
 
     // Dark mode detection - utilise les classes appliquées par ThemeProvider
     const [isDarkMode, setIsDarkMode] = useState(false);
@@ -273,7 +273,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center space-x-2 mb-1">
                     <span className="text-xs font-medium text-blue-700 dark:text-blue-300">
-                      Réponse à {composerState.replyingTo.sender?.displayName || composerState.replyingTo.sender?.username || 'Utilisateur inconnu'}
+                      {t('composer.replyTo', { sender: composerState.replyingTo.sender?.displayName || composerState.replyingTo.sender?.username || t('composer.unknownUser', 'Unknown user') })}
                     </span>
                     <span className="text-xs text-blue-600/60 dark:text-blue-400/60">
                       {formatReplyDate(composerState.replyingTo.createdAt, locale)}
@@ -303,7 +303,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
                 size="sm"
                 onClick={composerState.clearReply}
                 className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 p-1 h-6 w-6"
-                aria-label="Annuler la réponse"
+                aria-label={t('composer.cancelReply')}
               >
                 <X className="h-4 w-4" aria-hidden="true" />
               </Button>
@@ -410,7 +410,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
           maxLength={composerState.maxMessageLength}
           disabled={props.isComposingEnabled === false}
           style={textareaStyle}
-          aria-label="Message input"
+          aria-label={t('composer.messageInput')}
         />
 
         {/* Mention autocomplete */}
@@ -528,7 +528,7 @@ export const MessageComposer = forwardRef<MessageComposerRef, MessageComposerPro
           onChange={composerState.handleFileInputChange}
           accept="image/*,video/*,audio/*,application/pdf,text/plain,.doc,.docx,.ppt,.pptx,.md,.sh,.js,.ts,.py,.zip"
           capture={undefined}
-          aria-label="Sélectionner des fichiers à joindre (images, vidéos, audio, PDF, documents)"
+          aria-label={t('composer.attachFiles')}
         />
       </div>
     );
