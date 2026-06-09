@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../../utils/logger';
+import { sendSuccess } from '../../utils/response.js';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import {
   createUnifiedAuthMiddleware,
@@ -146,12 +147,7 @@ export async function registerManagementRoutes(fastify: FastifyInstance) {
         }
       });
 
-      return reply.send({
-        success: true,
-        data: {
-          shareLink: updatedLink
-        }
-      });
+      return sendSuccess(reply, { shareLink: updatedLink });
 
     } catch (error) {
       if (error instanceof z.ZodError) {

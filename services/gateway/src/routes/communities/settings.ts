@@ -13,6 +13,7 @@ import {
 } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { sendSuccess, sendUnauthorized, sendNotFound, sendForbidden, sendConflict, sendInternalError } from '../../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'CommunitySettingsRoutes' });
 
@@ -74,10 +75,7 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
       // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'User must be authenticated'
-        });
+        return sendUnauthorized(reply, 'User must be authenticated');
       }
 
       const userId = authContext.userId;
@@ -89,17 +87,11 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
       });
 
       if (!community) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Community not found'
-        });
+        return sendNotFound(reply, 'Community not found');
       }
 
       if (community.createdBy !== userId) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Only community creator can update community'
-        });
+        return sendForbidden(reply, 'Only community creator can update community');
       }
 
       // Preparer les donnees de mise a jour
@@ -122,10 +114,7 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
           });
 
           if (existingCommunity) {
-            return reply.status(409).send({
-              success: false,
-              error: `A community with identifier "${newIdentifier}" already exists`
-            });
+            return sendConflict(reply, `A community with identifier "${newIdentifier}" already exists`);
           }
         }
 
@@ -153,16 +142,10 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
         }
       });
 
-      reply.send({
-        success: true,
-        data: updatedCommunity
-      });
+      return sendSuccess(reply, updatedCommunity);
     } catch (error) {
       logger.error('Error updating community', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to update community'
-      });
+      sendInternalError(reply, 'Failed to update community');
     }
   });
 
@@ -222,10 +205,7 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
       // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'User must be authenticated'
-        });
+        return sendUnauthorized(reply, 'User must be authenticated');
       }
 
       const userId = authContext.userId;
@@ -237,33 +217,21 @@ export async function registerSettingsRoutes(fastify: FastifyInstance) {
       });
 
       if (!community) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Community not found'
-        });
+        return sendNotFound(reply, 'Community not found');
       }
 
       if (community.createdBy !== userId) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Only community creator can delete community'
-        });
+        return sendForbidden(reply, 'Only community creator can delete community');
       }
 
       await fastify.prisma.community.delete({
         where: { id }
       });
 
-      reply.send({
-        success: true,
-        data: { message: 'Community deleted successfully' }
-      });
+      return sendSuccess(reply, { message: 'Community deleted successfully' });
     } catch (error) {
       logger.error('Error deleting community', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to delete community'
-      });
+      sendInternalError(reply, 'Failed to delete community');
     }
   });
 }

@@ -14,6 +14,7 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../utils/logger';
+import { sendSuccess, sendPaginatedSuccess, sendUnauthorized, sendNotFound, sendInternalError, createPaginationMeta } from '../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { CONVERSATION_PREFERENCES_DEFAULTS } from '../config/user-preferences-defaults';
 import { UnifiedAuthRequest } from '../middleware/auth';
@@ -286,10 +287,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
       try {
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-          return reply.status(401).send({
-            success: false,
-            message: 'Authentication required'
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         const userId = authContext.userId;
@@ -309,35 +307,26 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
 
         // Return stored preferences or defaults
         if (preferences) {
-          reply.send({
-            success: true,
-            data: {
-              ...preferences,
-              isDefault: false
-            }
+          return sendSuccess(reply, {
+            ...preferences,
+            isDefault: false
           });
         } else {
           // Return default preferences for new conversations
-          reply.send({
-            success: true,
-            data: {
-              id: null,
-              userId,
-              conversationId,
-              ...CONVERSATION_PREFERENCES_DEFAULTS,
-              isDefault: true,
-              createdAt: null,
-              updatedAt: null,
-              category: null
-            }
+          return sendSuccess(reply, {
+            id: null,
+            userId,
+            conversationId,
+            ...CONVERSATION_PREFERENCES_DEFAULTS,
+            isDefault: true,
+            createdAt: null,
+            updatedAt: null,
+            category: null
           });
         }
       } catch (error) {
         logError(fastify.log, 'Error fetching conversation preferences:', error);
-        reply.code(500).send({
-          success: false,
-          message: 'Error fetching preferences'
-        });
+        return sendInternalError(reply, 'Error fetching preferences');
       }
     }
   );
@@ -376,10 +365,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
       try {
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-          return reply.status(401).send({
-            success: false,
-            message: 'Authentication required'
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         const userId = authContext.userId;
@@ -408,22 +394,10 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
           isDefault: false
         }));
 
-        reply.send({
-          success: true,
-          data: preferencesWithDefault,
-          pagination: {
-            total: totalCount,
-            limit: limitNum,
-            offset: offsetNum,
-            hasMore: offsetNum + preferences.length < totalCount
-          }
-        });
+        return sendPaginatedSuccess(reply, preferencesWithDefault, createPaginationMeta(totalCount, offsetNum, limitNum, preferences.length));
       } catch (error) {
         logError(fastify.log, 'Error fetching all conversation preferences:', error);
-        reply.code(500).send({
-          success: false,
-          message: 'Error fetching preferences'
-        });
+        return sendInternalError(reply, 'Error fetching preferences');
       }
     }
   );
@@ -465,10 +439,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
       try {
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-          return reply.status(401).send({
-            success: false,
-            message: 'Authentication required'
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         const userId = authContext.userId;
@@ -523,19 +494,13 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         };
         broadcastToUser(fastify, userId, SERVER_EVENTS.USER_PREFERENCES_UPDATED, eventPayload);
 
-        reply.send({
-          success: true,
-          data: {
-            ...preferences,
-            isDefault: false
-          }
+        return sendSuccess(reply, {
+          ...preferences,
+          isDefault: false
         });
       } catch (error) {
         logError(fastify.log, 'Error upserting conversation preferences:', error);
-        reply.code(500).send({
-          success: false,
-          message: 'Error updating preferences'
-        });
+        return sendInternalError(reply, 'Error updating preferences');
       }
     }
   );
@@ -571,10 +536,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
       try {
         const authContext = (request as UnifiedAuthRequest).authContext;
         if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-          return reply.status(401).send({
-            success: false,
-            message: 'Authentication required'
-          });
+          return sendUnauthorized(reply, 'Authentication required');
         }
 
         const userId = authContext.userId;
@@ -608,22 +570,13 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         };
         broadcastToUser(fastify, userId, SERVER_EVENTS.USER_PREFERENCES_UPDATED, resetPayload);
 
-        reply.send({
-          success: true,
-          data: { message: 'Preferences deleted successfully' }
-        });
+        return sendSuccess(reply, { message: 'Preferences deleted successfully' });
       } catch (error: any) {
         if (error.code === 'P2025') {
-          return reply.status(404).send({
-            success: false,
-            message: 'Preferences not found'
-          });
+          return sendNotFound(reply, 'Preferences not found');
         }
         logError(fastify.log, 'Error deleting conversation preferences:', error);
-        reply.code(500).send({
-          success: false,
-          message: 'Error deleting preferences'
-        });
+        return sendInternalError(reply, 'Error deleting preferences');
       }
     }
   );

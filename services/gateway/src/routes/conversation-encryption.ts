@@ -18,6 +18,7 @@ import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/a
 import { validateParams, validateBody } from '../validation/helpers.js';
 import { ConversationIdParamSchema, SetEncryptionModeBodySchema } from '../validation/conversation-encryption-schemas.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { sendSuccess, sendBadRequest, sendForbidden, sendNotFound, sendInternalError } from '../utils/response.js';
 const logger = enhancedLogger.child({ module: 'ConversationEncryptionRoutes' });
 
 // EncryptionMode type - defined locally to avoid build order issues
@@ -98,20 +99,14 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         });
 
         if (!conversation) {
-          return reply.status(404).send({
-            success: false,
-            error: 'Conversation not found'
-          });
+          return sendNotFound(reply, 'Conversation not found');
         }
 
         // Check if user is a member
         if (!authContext.isAnonymous) {
           const isMember = conversation.participants.some(m => m.userId === authContext.userId);
           if (!isMember) {
-            return reply.status(403).send({
-              success: false,
-              error: 'Not a member of this conversation'
-            });
+            return sendForbidden(reply, 'Not a member of this conversation');
           }
         }
 
@@ -121,17 +116,11 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
           encryptionEnabledBy: conversation.encryptionEnabledBy,
         });
 
-        return reply.send({
-          success: true,
-          data: status
-        });
+        return sendSuccess(reply, status);
 
       } catch (error) {
         logger.error('Error getting encryption status', error as Error);
-        return reply.status(500).send({
-          success: false,
-          error: 'Internal server error'
-        });
+        return sendInternalError(reply, 'Internal server error');
       }
     }
   );
@@ -158,18 +147,12 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
 
         // Anonymous users cannot enable encryption
         if (authContext.isAnonymous) {
-          return reply.status(403).send({
-            success: false,
-            error: 'Anonymous users cannot enable encryption'
-          });
+          return sendForbidden(reply, 'Anonymous users cannot enable encryption');
         }
 
         // Validate mode
         if (!mode || !['e2ee', 'server', 'hybrid'].includes(mode)) {
-          return reply.status(400).send({
-            success: false,
-            error: 'Invalid encryption mode. Must be "e2ee", "server", or "hybrid"'
-          });
+          return sendBadRequest(reply, 'Invalid encryption mode. Must be "e2ee", "server", or "hybrid"');
         }
 
         // Get conversation with members and type
@@ -191,10 +174,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         });
 
         if (!conversation) {
-          return reply.status(404).send({
-            success: false,
-            error: 'Conversation not found'
-          });
+          return sendNotFound(reply, 'Conversation not found');
         }
 
         // Check if encryption is already enabled (immutable)
@@ -214,20 +194,14 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
         // - Group conversations: only moderator, admin, or owner can enable
         const member = conversation.participants.find(m => m.userId === authContext.userId);
         if (!member) {
-          return reply.status(403).send({
-            success: false,
-            error: 'Not a member of this conversation'
-          });
+          return sendForbidden(reply, 'Not a member of this conversation');
         }
 
         const isDirectConversation = conversation.type === 'direct';
         const hasModeratorRole = ['MODERATOR', 'ADMIN', 'OWNER', 'moderator', 'admin', 'owner'].includes(member.role);
 
         if (!isDirectConversation && !hasModeratorRole) {
-          return reply.status(403).send({
-            success: false,
-            error: 'Only moderators and above can enable encryption in group conversations'
-          });
+          return sendForbidden(reply, 'Only moderators and above can enable encryption in group conversations');
         }
 
         // Determine encryption protocol based on mode
@@ -307,10 +281,7 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
 
       } catch (error) {
         logger.error('Error enabling encryption', error as Error);
-        return reply.status(500).send({
-          success: false,
-          error: 'Internal server error'
-        });
+        return sendInternalError(reply, 'Internal server error');
       }
     }
   );
