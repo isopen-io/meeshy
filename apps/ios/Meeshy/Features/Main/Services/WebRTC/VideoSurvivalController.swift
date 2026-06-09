@@ -133,7 +133,12 @@ struct VideoSurvivalPolicy {
 /// Performs the actual media transition the controller decides on. Implemented
 /// by `CallManager` (WebRTC downgrade/upgrade + peer notification + renegotiation).
 /// `AnyObject` so the controller can hold it weakly (the actuator owns the controller).
-protocol VideoSurvivalActuating: AnyObject {
+/// `Sendable` so the existential can be captured into the timeout-race `Task` /
+/// `TaskGroup` in `performTransition` under Swift 6 strict concurrency. The sole
+/// conformer (`CallManager`) is a `@MainActor final class`, hence already
+/// Sendable, and its async methods keep running on the main actor — this only
+/// lifts the existential's Sendable bound; it does not change where work runs.
+protocol VideoSurvivalActuating: AnyObject, Sendable {
     /// Stop sending outbound video (audio-only) WITHOUT changing the user's
     /// camera intent. Returns true on success.
     func suspendOutboundVideo() async -> Bool
