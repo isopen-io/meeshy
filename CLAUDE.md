@@ -274,7 +274,6 @@ NEXT_PUBLIC_API_URL="https://gate.meeshy.me"
 - Window 0: translator (FastAPI, port 8000)
 - Window 1: gateway (Fastify, port 3000)
 - Window 2: web (Next.js, port 3100)
-- Window 3: web_v2
 
 ### Docker Environments
 | Environment | Compose File | SSL | Domains |
