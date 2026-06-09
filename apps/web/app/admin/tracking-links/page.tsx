@@ -28,6 +28,7 @@ import {
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { apiService } from '@/services/api.service';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface TrackingLinkAdmin {
   id: string;
@@ -99,6 +100,7 @@ export default function AdminTrackingLinksPage() {
   const [clicksPage, setClicksPage] = useState(1);
   const [clicksLoading, setClicksLoading] = useState(false);
   const clicksPageSize = 50;
+  const { t } = useI18n('admin');
 
   // -- Load links --
   const loadLinks = useCallback(async () => {
@@ -119,7 +121,7 @@ export default function AdminTrackingLinksPage() {
       }
     } catch (error) {
       console.error('Error loading tracking links:', error);
-      toast.error('Erreur lors du chargement des liens');
+      toast.error(t('trackingLinks.loadError'));
     } finally {
       setLinksLoading(false);
     }
@@ -177,7 +179,7 @@ export default function AdminTrackingLinksPage() {
       if (response.data?.trackingLink) {
         const frontendUrl = window.location.origin;
         setCreatedLink(`${frontendUrl}/l/${response.data.trackingLink.token}`);
-        toast.success('Lien cree avec succes');
+        toast.success(t('trackingLinks.createSuccess'));
         setFormUrl('');
         setFormToken('');
         setFormName('');
@@ -189,9 +191,9 @@ export default function AdminTrackingLinksPage() {
       }
     } catch (error: unknown) {
       if (error?.response?.status === 409) {
-        toast.error('Ce token existe deja');
+        toast.error(t('trackingLinks.createErrorDuplicate'));
       } else {
-        toast.error('Erreur lors de la creation du lien');
+        toast.error(t('trackingLinks.createError'));
       }
     } finally {
       setCreating(false);
@@ -213,7 +215,7 @@ export default function AdminTrackingLinksPage() {
       }
     } catch (error) {
       console.error('Error loading clicks:', error);
-      toast.error('Erreur lors du chargement des clics');
+      toast.error(t('trackingLinks.clicksLoadError'));
     } finally {
       setClicksLoading(false);
     }
@@ -244,7 +246,7 @@ export default function AdminTrackingLinksPage() {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
-    toast.success('Copie dans le presse-papiers');
+    toast.success(t('trackingLinks.copySuccess'));
   };
 
   const getDeviceIcon = (device?: string) => {
@@ -267,14 +269,14 @@ export default function AdminTrackingLinksPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Plus className="w-5 h-5" />
-              Creer un tracking link
+              {t('trackingLinks.createTitle')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Champs principaux */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
               <div className="space-y-1.5">
-                <Label htmlFor="formUrl">URL destination *</Label>
+                <Label htmlFor="formUrl">{t('trackingLinks.fieldUrl')}</Label>
                 <Input
                   id="formUrl"
                   placeholder="https://example.com/page"
@@ -284,10 +286,10 @@ export default function AdminTrackingLinksPage() {
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="formToken" className="flex items-center gap-1">
-                  Token custom
+                  {t('trackingLinks.fieldToken')}
                   <Tooltip>
                     <TooltipTrigger asChild><Info className="w-3.5 h-3.5 text-gray-400 cursor-help" /></TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-[260px]">Personnalise le slug du lien (/l/ton-token). Si vide, un token aleatoire sera genere.</TooltipContent>
+                    <TooltipContent side="top" className="max-w-[260px]">{t('trackingLinks.tooltipToken')}</TooltipContent>
                   </Tooltip>
                 </Label>
                 <div className="relative">
@@ -308,18 +310,18 @@ export default function AdminTrackingLinksPage() {
                   </div>
                 </div>
                 {formToken && tokenAvailable === false && (
-                  <p className="text-xs text-red-500 mt-1">Token indisponible ou format invalide</p>
+                  <p className="text-xs text-red-500 mt-1">{t('trackingLinks.tokenUnavailable')}</p>
                 )}
                 {formToken && tokenAvailable === true && (
-                  <p className="text-xs text-green-500 mt-1">Disponible → /l/{formToken}</p>
+                  <p className="text-xs text-green-500 mt-1">{t('trackingLinks.tokenAvailable', { token: formToken })}</p>
                 )}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="formName" className="flex items-center gap-1">
-                  Nom
+                  {t('trackingLinks.fieldName')}
                   <Tooltip>
                     <TooltipTrigger asChild><Info className="w-3.5 h-3.5 text-gray-400 cursor-help" /></TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-[260px]">Label interne pour retrouver ce lien rapidement dans la liste. Non visible par les visiteurs.</TooltipContent>
+                    <TooltipContent side="top" className="max-w-[260px]">{t('trackingLinks.tooltipName')}</TooltipContent>
                   </Tooltip>
                 </Label>
                 <Input
@@ -334,14 +336,14 @@ export default function AdminTrackingLinksPage() {
 
             {/* Parametres UTM */}
             <div>
-              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Parametres UTM</p>
+              <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">{t('trackingLinks.utmTitle')}</p>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
                 <div className="space-y-1.5">
                   <Label htmlFor="formCampaign" className="flex items-center gap-1">
-                    Campagne
+                    {t('trackingLinks.fieldCampaign')}
                     <Tooltip>
                       <TooltipTrigger asChild><Info className="w-3.5 h-3.5 text-gray-400 cursor-help" /></TooltipTrigger>
-                      <TooltipContent side="top" className="max-w-[260px]">Regroupe les clics sous une meme operation marketing. Permet de comparer les performances entre campagnes.</TooltipContent>
+                      <TooltipContent side="top" className="max-w-[260px]">{t('trackingLinks.tooltipCampaign')}</TooltipContent>
                     </Tooltip>
                   </Label>
                   <Input
@@ -353,10 +355,10 @@ export default function AdminTrackingLinksPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="formSource" className="flex items-center gap-1">
-                    Source
+                    {t('trackingLinks.fieldSource')}
                     <Tooltip>
                       <TooltipTrigger asChild><Info className="w-3.5 h-3.5 text-gray-400 cursor-help" /></TooltipTrigger>
-                      <TooltipContent side="top" className="max-w-[260px]">Identifie la plateforme d&apos;origine du visiteur. Sert a savoir quel canal genere le plus de trafic.</TooltipContent>
+                      <TooltipContent side="top" className="max-w-[260px]">{t('trackingLinks.tooltipSource')}</TooltipContent>
                     </Tooltip>
                   </Label>
                   <Input
@@ -368,10 +370,10 @@ export default function AdminTrackingLinksPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="formMedium" className="flex items-center gap-1">
-                    Medium
+                    {t('trackingLinks.fieldMedium')}
                     <Tooltip>
                       <TooltipTrigger asChild><Info className="w-3.5 h-3.5 text-gray-400 cursor-help" /></TooltipTrigger>
-                      <TooltipContent side="top" className="max-w-[260px]">Categorise le type de canal (social, email, bio, paid...). Permet d&apos;analyser quels types de diffusion convertissent le mieux.</TooltipContent>
+                      <TooltipContent side="top" className="max-w-[260px]">{t('trackingLinks.tooltipMedium')}</TooltipContent>
                     </Tooltip>
                   </Label>
                   <Input
@@ -390,7 +392,7 @@ export default function AdminTrackingLinksPage() {
                 disabled={!formUrl || (formToken.length > 0 && formToken.length < 2) || (formToken && tokenAvailable === false) || creating}
               >
                 {creating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Plus className="w-4 h-4 mr-2" />}
-                Creer le lien
+                {t('trackingLinks.createButton')}
               </Button>
 
               {createdLink && (
@@ -411,12 +413,12 @@ export default function AdminTrackingLinksPage() {
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2">
                 <MousePointerClick className="w-5 h-5" />
-                Tous les tracking links ({linksTotal})
+                {t('trackingLinks.listTitle', { count: linksTotal })}
               </CardTitle>
               <div className="relative w-64">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <Input
-                  placeholder="Rechercher..."
+                  placeholder={t('trackingLinks.searchPlaceholder')}
                   value={linksSearch}
                   onChange={(e) => {
                     setLinksSearch(e.target.value);
@@ -433,21 +435,21 @@ export default function AdminTrackingLinksPage() {
                 <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
               </div>
             ) : links.length === 0 ? (
-              <p className="text-center text-gray-500 py-8">Aucun tracking link</p>
+              <p className="text-center text-gray-500 py-8">{t('trackingLinks.noLinks')}</p>
             ) : (
               <>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b text-left text-gray-500">
-                        <th className="pb-2 pr-4">Token</th>
-                        <th className="pb-2 pr-4">URL</th>
-                        <th className="pb-2 pr-4">Nom</th>
-                        <th className="pb-2 pr-4 text-center">Clics</th>
-                        <th className="pb-2 pr-4 text-center">Uniques</th>
-                        <th className="pb-2 pr-4">Statut</th>
-                        <th className="pb-2 pr-4">Createur</th>
-                        <th className="pb-2">Date</th>
+                        <th className="pb-2 pr-4">{t('trackingLinks.colToken')}</th>
+                        <th className="pb-2 pr-4">{t('trackingLinks.colUrl')}</th>
+                        <th className="pb-2 pr-4">{t('trackingLinks.colName')}</th>
+                        <th className="pb-2 pr-4 text-center">{t('trackingLinks.colClicks')}</th>
+                        <th className="pb-2 pr-4 text-center">{t('trackingLinks.colUnique')}</th>
+                        <th className="pb-2 pr-4">{t('trackingLinks.colStatus')}</th>
+                        <th className="pb-2 pr-4">{t('trackingLinks.colCreator')}</th>
+                        <th className="pb-2">{t('trackingLinks.colDate')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -492,7 +494,7 @@ export default function AdminTrackingLinksPage() {
                           <td className="py-2 pr-4 text-center">{link.uniqueClicks}</td>
                           <td className="py-2 pr-4">
                             <Badge variant={link.isActive ? 'default' : 'secondary'} className="text-xs">
-                              {link.isActive ? 'Actif' : 'Inactif'}
+                              {link.isActive ? t('trackingLinks.statusActive') : t('trackingLinks.statusInactive')}
                             </Badge>
                           </td>
                           <td className="py-2 pr-4 text-xs">
@@ -509,7 +511,7 @@ export default function AdminTrackingLinksPage() {
                 {totalPages > 1 && (
                   <div className="flex items-center justify-between mt-4">
                     <span className="text-sm text-gray-500">
-                      {((linksPage - 1) * pageSize) + 1}-{Math.min(linksPage * pageSize, linksTotal)} sur {linksTotal}
+                      {t('trackingLinks.paginationRange', { from: ((linksPage - 1) * pageSize) + 1, to: Math.min(linksPage * pageSize, linksTotal), total: linksTotal })}
                     </span>
                     <div className="flex items-center gap-2">
                       <Button
@@ -558,19 +560,19 @@ export default function AdminTrackingLinksPage() {
                 <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 text-center">
                   <MousePointerClick className="w-5 h-5 mx-auto mb-1 text-blue-500" />
                   <div className="text-2xl font-bold">{selectedLink.totalClicks}</div>
-                  <div className="text-xs text-gray-500">Total clics</div>
+                  <div className="text-xs text-gray-500">{t('trackingLinks.detailTotalClicks')}</div>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 text-center">
                   <Users className="w-5 h-5 mx-auto mb-1 text-green-500" />
                   <div className="text-2xl font-bold">{selectedLink.uniqueClicks}</div>
-                  <div className="text-xs text-gray-500">Uniques</div>
+                  <div className="text-xs text-gray-500">{t('trackingLinks.detailUnique')}</div>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 text-center">
                   <CheckCircle className="w-5 h-5 mx-auto mb-1 text-purple-500" />
                   <div className="text-2xl font-bold">
                     {clicks.filter(c => c.redirectStatus === 'confirmed').length}
                   </div>
-                  <div className="text-xs text-gray-500">Confirmes</div>
+                  <div className="text-xs text-gray-500">{t('trackingLinks.detailConfirmed')}</div>
                 </div>
                 <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 text-center">
                   <CheckCircle className="w-5 h-5 mx-auto mb-1 text-orange-500" />
@@ -579,33 +581,33 @@ export default function AdminTrackingLinksPage() {
                       ? Math.round((selectedLink.uniqueClicks / selectedLink.totalClicks) * 100)
                       : 0}%
                   </div>
-                  <div className="text-xs text-gray-500">Taux unique</div>
+                  <div className="text-xs text-gray-500">{t('trackingLinks.detailUniqueRate')}</div>
                 </div>
               </div>
 
               {/* Clicks table */}
-              <h3 className="font-semibold mb-2 text-sm">Derniers clics</h3>
+              <h3 className="font-semibold mb-2 text-sm">{t('trackingLinks.detailRecentClicks')}</h3>
               {clicksLoading ? (
                 <div className="flex justify-center py-4">
                   <Loader2 className="w-5 h-5 animate-spin text-gray-400" />
                 </div>
               ) : clicks.length === 0 ? (
-                <p className="text-center text-gray-500 py-4 text-sm">Aucun clic enregistre</p>
+                <p className="text-center text-gray-500 py-4 text-sm">{t('trackingLinks.noClicks')}</p>
               ) : (
                 <>
                   <div className="overflow-x-auto">
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="border-b text-left text-gray-500">
-                          <th className="pb-2 pr-3">Date</th>
-                          <th className="pb-2 pr-3">Pays</th>
-                          <th className="pb-2 pr-3">Ville</th>
-                          <th className="pb-2 pr-3">Device</th>
-                          <th className="pb-2 pr-3">Browser</th>
-                          <th className="pb-2 pr-3">OS</th>
-                          <th className="pb-2 pr-3">Referrer</th>
-                          <th className="pb-2 pr-3">Source</th>
-                          <th className="pb-2">Status</th>
+                          <th className="pb-2 pr-3">{t('trackingLinks.clickColDate')}</th>
+                          <th className="pb-2 pr-3">{t('trackingLinks.clickColCountry')}</th>
+                          <th className="pb-2 pr-3">{t('trackingLinks.clickColCity')}</th>
+                          <th className="pb-2 pr-3">{t('trackingLinks.clickColDevice')}</th>
+                          <th className="pb-2 pr-3">{t('trackingLinks.clickColBrowser')}</th>
+                          <th className="pb-2 pr-3">{t('trackingLinks.clickColOs')}</th>
+                          <th className="pb-2 pr-3">{t('trackingLinks.clickColReferrer')}</th>
+                          <th className="pb-2 pr-3">{t('trackingLinks.clickColSource')}</th>
+                          <th className="pb-2">{t('trackingLinks.clickColStatus')}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -645,7 +647,7 @@ export default function AdminTrackingLinksPage() {
                   {clicksTotalPages > 1 && (
                     <div className="flex items-center justify-between mt-3">
                       <span className="text-xs text-gray-500">
-                        {((clicksPage - 1) * clicksPageSize) + 1}-{Math.min(clicksPage * clicksPageSize, clicksTotal)} sur {clicksTotal}
+                        {t('trackingLinks.paginationRange', { from: ((clicksPage - 1) * clicksPageSize) + 1, to: Math.min(clicksPage * clicksPageSize, clicksTotal), total: clicksTotal })}
                       </span>
                       <div className="flex items-center gap-2">
                         <Button
