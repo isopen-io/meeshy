@@ -274,7 +274,54 @@
     },
     "privacy": {
       "title": "Configuración de privacidad",
-      "description": "Controle su configuración de privacidad y datos"
+      "description": "Controle su configuración de privacidad y datos",
+      "consentRequired": "Consentimiento requerido",
+      "loading": "Cargando preferencias de privacidad...",
+      "retry": "Reintentar",
+      "deleteError": "Error al eliminar los datos",
+      "visibility": {
+        "title": "Visibilidad y estado",
+        "description": "Controla la información que otros usuarios pueden ver",
+        "hideProfile": {
+          "label": "Ocultar perfil de la búsqueda",
+          "description": "Evita que tu perfil aparezca en los resultados de búsqueda"
+        },
+        "onlineStatus": {
+          "label": "Estado en línea",
+          "description": "Permite a otros ver si estás conectado"
+        },
+        "lastSeen": {
+          "label": "Última actividad",
+          "description": "Comparte la fecha de tu última conexión"
+        },
+        "readReceipts": {
+          "label": "Confirmaciones de lectura",
+          "description": "Notifica a los remitentes que has leído sus mensajes"
+        }
+      },
+      "communications": {
+        "title": "Comunicaciones",
+        "description": "Gestiona quién puede contactarte y cómo",
+        "contactRequests": {
+          "label": "Solicitudes de contacto",
+          "description": "Permite a los usuarios enviarte solicitudes de contacto"
+        }
+      },
+      "data": {
+        "title": "Gestión de datos",
+        "description": "Exporta o elimina tus datos personales",
+        "export": {
+          "label": "Exportar mis datos",
+          "description": "Descarga una copia de todos tus datos (perfil, mensajes, configuración)",
+          "button": "Exportar datos"
+        }
+      },
+      "legal": {
+        "title": "Información legal",
+        "description": "Tus datos se procesan de acuerdo con nuestra política de privacidad. Las traducciones se realizan localmente en tu dispositivo para proteger tu privacidad.",
+        "privacyPolicy": "Política de privacidad",
+        "termsOfUse": "Términos de uso"
+      }
     },
     "encryption": {
       "title": "Configuración de cifrado",

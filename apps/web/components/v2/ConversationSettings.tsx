@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useI18n } from '@/hooks/use-i18n';
 import { Button } from './Button';
 import { Input } from './Input';
 import { Badge } from './Badge';
@@ -83,20 +84,21 @@ export function ConversationSettings({
   onDelete,
   className = '',
 }: ConversationSettingsProps) {
+  const { t } = useI18n('conversations');
   const [localTitle, setLocalTitle] = useState(title);
   const [localDescription, setLocalDescription] = useState(description);
 
   const roleLabels = {
-    admin: { label: 'Admin', icon: '👑', color: 'var(--gp-terracotta)' },
-    moderator: { label: 'Modo', icon: '🛡️', color: 'var(--gp-deep-teal)' },
-    member: { label: 'Membre', icon: '👤', color: 'var(--gp-text-muted)' },
+    admin: { label: t('conversations.settings.role.admin'), icon: '👑', color: 'var(--gp-terracotta)' },
+    moderator: { label: t('conversations.settings.role.moderator'), icon: '🛡️', color: 'var(--gp-deep-teal)' },
+    member: { label: t('conversations.settings.role.member'), icon: '👤', color: 'var(--gp-text-muted)' },
   };
 
   const typeOptions = [
-    { value: 'private', label: 'Privée', description: 'Sur invitation uniquement' },
-    { value: 'general', label: 'Générale', description: 'Conversation standard' },
-    { value: 'public', label: 'Publique', description: 'Visible par tous' },
-    { value: 'broadcast', label: 'Communication', description: 'Lecture seule pour les membres' },
+    { value: 'private', label: t('conversations.settings.type.private.label'), description: t('conversations.settings.type.private.description') },
+    { value: 'general', label: t('conversations.settings.type.general.label'), description: t('conversations.settings.type.general.description') },
+    { value: 'public', label: t('conversations.settings.type.public.label'), description: t('conversations.settings.type.public.description') },
+    { value: 'broadcast', label: t('conversations.settings.type.broadcast.label'), description: t('conversations.settings.type.broadcast.description') },
   ] as const;
 
   return (
@@ -110,7 +112,7 @@ export function ConversationSettings({
         <button
           onClick={onBack}
           className="p-2 rounded-lg hover:bg-[var(--gp-hover)] transition-colors duration-300"
-          aria-label="Retour"
+          aria-label={t('conversations.settings.back')}
         >
           <svg
             className="w-5 h-5 text-[var(--gp-text-primary)]"
@@ -125,7 +127,7 @@ export function ConversationSettings({
           className="text-lg font-semibold text-[var(--gp-text-primary)] transition-colors duration-300"
           style={{ fontFamily: 'var(--font-display, inherit)' }}
         >
-          Paramètres
+          {t('conversations.settings.title')}
         </h2>
       </div>
 
@@ -195,21 +197,21 @@ export function ConversationSettings({
           {/* Titre et Description */}
           <div className="space-y-4">
             <div>
-              <Label className="mb-2">Titre officiel</Label>
+              <Label className="mb-2">{t('conversations.settings.officialTitle.label')}</Label>
               <Input
                 value={localTitle}
                 onChange={(e) => setLocalTitle(e.target.value)}
                 onBlur={() => localTitle !== title && onTitleChange(localTitle)}
-                placeholder="Nom de la conversation"
+                placeholder={t('conversations.settings.officialTitle.placeholder')}
               />
             </div>
             <div>
-              <Label className="mb-2">Description</Label>
+              <Label className="mb-2">{t('conversations.settings.description.label')}</Label>
               <Textarea
                 value={localDescription}
                 onChange={(e) => setLocalDescription(e.target.value)}
                 onBlur={() => localDescription !== description && onDescriptionChange(localDescription)}
-                placeholder="Description de la conversation..."
+                placeholder={t('conversations.settings.description.placeholder')}
                 className="h-20 text-sm rounded-lg px-3 py-2"
               />
             </div>
@@ -217,7 +219,7 @@ export function ConversationSettings({
 
           {/* Type de conversation */}
           <div>
-            <Label className="mb-3">Type de conversation</Label>
+            <Label className="mb-3">{t('conversations.settings.type.label')}</Label>
             <RadioGroup value={conversationType} onValueChange={(v) => onTypeChange(v as typeof conversationType)}>
               {typeOptions.map((option) => (
                 <RadioGroupItem
@@ -232,7 +234,7 @@ export function ConversationSettings({
 
           {/* Options */}
           <div>
-            <Label className="mb-3">Options</Label>
+            <Label className="mb-3">{t('conversations.settings.options.label')}</Label>
             <div className="space-y-3">
               <button
                 onClick={() => onCommunityChange(communityId ? undefined : 'select')}
@@ -241,7 +243,7 @@ export function ConversationSettings({
                 <div className="flex items-center gap-3">
                   <span className="text-[var(--gp-text-muted)]">🏘️</span>
                   <span className="text-sm text-[var(--gp-text-primary)]">
-                    Associer à une communauté
+                    {t('conversations.settings.options.community')}
                   </span>
                 </div>
                 <svg className="w-5 h-5 text-[var(--gp-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -255,14 +257,14 @@ export function ConversationSettings({
                 <div className="flex items-center gap-3">
                   <span className="text-[var(--gp-text-muted)]">👻</span>
                   <span className="text-sm text-[var(--gp-text-primary)]">
-                    Autoriser les anonymes
+                    {t('conversations.settings.options.allowAnonymous')}
                   </span>
                 </div>
                 <Switch
                   checked={allowAnonymous}
                   onCheckedChange={onAllowAnonymousChange}
                   size="sm"
-                  aria-label="Autoriser les anonymes"
+                  aria-label={t('conversations.settings.options.allowAnonymous')}
                 />
               </div>
             </div>
@@ -271,12 +273,12 @@ export function ConversationSettings({
           {/* Participants */}
           <div>
             <div className="flex items-center justify-between mb-3">
-              <Label>Participants ({participants.length})</Label>
+              <Label>{t('conversations.settings.participants.label', { count: participants.length })}</Label>
               <Button variant="ghost" size="sm" onClick={onInvite}>
                 <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                Inviter
+                {t('conversations.settings.participants.invite')}
               </Button>
             </div>
             <div className="space-y-2">
@@ -303,7 +305,7 @@ export function ConversationSettings({
                     </div>
                     <button
                       className="p-2 rounded hover:bg-[var(--gp-hover)] text-[var(--gp-text-muted)] transition-colors duration-300"
-                      aria-label="Actions du participant"
+                      aria-label={t('conversations.settings.participants.actions')}
                     >
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
@@ -317,20 +319,20 @@ export function ConversationSettings({
 
           {/* Statistiques */}
           <div>
-            <Label className="mb-3">Statistiques</Label>
+            <Label className="mb-3">{t('conversations.settings.stats.title')}</Label>
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 rounded-lg bg-[var(--gp-surface)] transition-colors duration-300">
                 <p className="text-lg font-bold text-[var(--gp-text-primary)]">
                   {stats.messageCount.toLocaleString()}
                 </p>
-                <p className="text-xs text-[var(--gp-text-muted)]">Messages</p>
+                <p className="text-xs text-[var(--gp-text-muted)]">{t('conversations.settings.stats.messages')}</p>
               </div>
               <div className="p-3 rounded-lg bg-[var(--gp-surface)] transition-colors duration-300">
                 <p className="text-lg font-bold text-[var(--gp-text-primary)]">
                   {stats.languages.length}
                 </p>
                 <p className="text-xs text-[var(--gp-text-muted)]">
-                  Langues: {stats.languages.join(' ')}
+                  {t('conversations.settings.stats.languages', { languages: stats.languages.join(' ') })}
                 </p>
               </div>
             </div>
@@ -338,7 +340,7 @@ export function ConversationSettings({
 
           {/* Contenus */}
           <div>
-            <Label className="mb-3">Contenus</Label>
+            <Label className="mb-3">{t('conversations.settings.content.title')}</Label>
             <div className="space-y-2">
               <button
                 onClick={onMediaClick}
@@ -347,7 +349,7 @@ export function ConversationSettings({
                 <div className="flex items-center gap-3">
                   <span className="text-[var(--gp-text-muted)]">🖼️</span>
                   <span className="text-sm text-[var(--gp-text-primary)]">
-                    Médias partagés
+                    {t('conversations.settings.content.sharedMedia')}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -364,7 +366,7 @@ export function ConversationSettings({
                 <div className="flex items-center gap-3">
                   <span className="text-[var(--gp-text-muted)]">🔗</span>
                   <span className="text-sm text-[var(--gp-text-primary)]">
-                    Liens partagés
+                    {t('conversations.settings.content.sharedLinks')}
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -388,7 +390,7 @@ export function ConversationSettings({
             <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
-            Supprimer la conversation
+            {t('conversations.settings.delete')}
           </Button>
         </div>
       </div>

@@ -496,6 +496,63 @@
       "searchOrCreate": "Pesquisar ou criar...",
       "block": "Bloquear",
       "report": "Denunciar"
+    },
+    "settings": {
+      "title": "Configurações",
+      "back": "Voltar",
+      "officialTitle": {
+        "label": "Título oficial",
+        "placeholder": "Nome da conversa"
+      },
+      "description": {
+        "label": "Descrição",
+        "placeholder": "Descrição da conversa..."
+      },
+      "type": {
+        "label": "Tipo de conversa",
+        "private": {
+          "label": "Privada",
+          "description": "Somente por convite"
+        },
+        "general": {
+          "label": "Geral",
+          "description": "Conversa padrão"
+        },
+        "public": {
+          "label": "Pública",
+          "description": "Visível para todos"
+        },
+        "broadcast": {
+          "label": "Transmissão",
+          "description": "Somente leitura para os membros"
+        }
+      },
+      "options": {
+        "label": "Opções",
+        "community": "Associar a uma comunidade",
+        "allowAnonymous": "Permitir anônimos"
+      },
+      "participants": {
+        "label": "Participantes ({count})",
+        "invite": "Convidar",
+        "actions": "Ações do participante"
+      },
+      "role": {
+        "admin": "Admin",
+        "moderator": "Modo",
+        "member": "Membro"
+      },
+      "stats": {
+        "title": "Estatísticas",
+        "messages": "Mensagens",
+        "languages": "Idiomas: {languages}"
+      },
+      "content": {
+        "title": "Conteúdo",
+        "sharedMedia": "Mídias compartilhadas",
+        "sharedLinks": "Links compartilhados"
+      },
+      "delete": "Excluir conversa"
     }
   }
 }
