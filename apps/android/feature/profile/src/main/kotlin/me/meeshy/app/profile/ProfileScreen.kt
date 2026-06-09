@@ -37,13 +37,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import me.meeshy.app.R
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -62,16 +65,16 @@ fun ProfileScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (state.isEditing) "Edit Profile" else "Profile") },
+                title = { Text(if (state.isEditing) stringResource(R.string.profile_edit_title) else stringResource(R.string.profile_title)) },
                 navigationIcon = {
                     IconButton(onClick = if (state.isEditing) viewModel::cancelEditing else onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.profile_back))
                     }
                 },
                 actions = {
                     if (!state.isEditing) {
                         IconButton(onClick = viewModel::startEditing) {
-                            Icon(Icons.Default.Edit, contentDescription = "Edit")
+                            Icon(Icons.Default.Edit, contentDescription = stringResource(R.string.profile_edit))
                         }
                     }
                 },
@@ -92,9 +95,9 @@ fun ProfileScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(24.dp),
+                .padding(MeeshySpacing.xl),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(MeeshySpacing.lg),
         ) {
             // Avatar
             Box(contentAlignment = Alignment.Center) {
@@ -119,7 +122,7 @@ fun ProfileScreen(
                 OutlinedTextField(
                     value = state.displayName,
                     onValueChange = viewModel::onDisplayNameChange,
-                    label = { Text("Display name") },
+                    label = { Text(stringResource(R.string.profile_display_name_label)) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
                     modifier = Modifier.fillMaxWidth(),
@@ -127,17 +130,17 @@ fun ProfileScreen(
                 OutlinedTextField(
                     value = state.bio,
                     onValueChange = viewModel::onBioChange,
-                    label = { Text("Bio") },
+                    label = { Text(stringResource(R.string.profile_bio_label)) },
                     minLines = 3,
                     maxLines = 5,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
                 ) {
                     TextButton(onClick = viewModel::cancelEditing, modifier = Modifier.weight(1f)) {
-                        Text("Cancel")
+                        Text(stringResource(R.string.profile_cancel))
                     }
                     Button(
                         onClick = viewModel::saveProfile,
@@ -145,13 +148,13 @@ fun ProfileScreen(
                         modifier = Modifier.weight(1f),
                     ) {
                         if (state.isSaving) CircularProgressIndicator(Modifier.size(20.dp))
-                        else Text("Save")
+                        else Text(stringResource(R.string.profile_save))
                     }
                 }
             } else {
                 val user = state.user
                 Text(
-                    text = user?.displayName ?: user?.username ?: "Unknown",
+                    text = user?.displayName ?: user?.username ?: stringResource(R.string.profile_unknown),
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                 )

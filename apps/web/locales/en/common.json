@@ -214,5 +214,15 @@
     "rotate": "Rotate"
   },
   "copied": "Copied",
-  "never": "Never"
+  "never": "Never",
+  "clearSearch": "Clear search",
+  "backToList": "Back to list",
+  "backToConversations": "Back to conversations",
+  "breadcrumb": "Breadcrumb",
+  "home": "Home",
+  "anonymous": "Anonymous",
+  "user": "User",
+  "reactWith": "React with {{emoji}}",
+  "limitReached": "Limit reached: {{limit}} {{category}}s maximum",
+  "filesAdded": "Only {{count}} file(s) added"
 }

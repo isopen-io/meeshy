@@ -214,5 +214,15 @@
     "rotate": "Pivoter"
   },
   "copied": "Copié",
-  "never": "Jamais"
+  "never": "Jamais",
+  "clearSearch": "Effacer la recherche",
+  "backToList": "Retour à la liste",
+  "backToConversations": "Retour aux conversations",
+  "breadcrumb": "Fil d'Ariane",
+  "home": "Accueil",
+  "anonymous": "Anonyme",
+  "user": "Utilisateur",
+  "reactWith": "Réagir avec {{emoji}}",
+  "limitReached": "Limite atteinte : {{limit}} {{category}}s maximum",
+  "filesAdded": "Seuls {{count}} fichier(s) ajouté(s)"
 }

@@ -38,13 +38,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import me.meeshy.app.R
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.ui.component.MeeshySkeletonBox
+import me.meeshy.ui.theme.MeeshyRadius
+import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -61,7 +65,7 @@ fun FeedScreen(
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Feed") }) },
+        topBar = { TopAppBar(title = { Text(stringResource(R.string.feed_title)) }) },
         snackbarHost = { SnackbarHost(snackbar) },
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
     ) { padding ->
@@ -75,11 +79,11 @@ fun FeedScreen(
             when {
                 state.showSkeleton -> FeedSkeleton()
                 state.posts.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No posts yet", style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.feed_empty), style = MaterialTheme.typography.bodyLarge)
                 }
                 else -> LazyColumn(
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                    contentPadding = PaddingValues(MeeshySpacing.lg),
+                    verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
                 ) {
                     items(state.posts, key = { it.id }) { post ->
                         PostCard(
@@ -102,11 +106,11 @@ private fun PostCard(
 ) {
     Card(
         onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(MeeshyRadius.xl),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(MeeshySpacing.lg)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 AsyncImage(
                     model = post.author?.avatar,
@@ -115,7 +119,7 @@ private fun PostCard(
                         .size(40.dp)
                         .clip(CircleShape),
                 )
-                Spacer(Modifier.width(12.dp))
+                Spacer(Modifier.width(MeeshySpacing.md))
                 Column {
                     Text(
                         text = post.author?.displayName ?: post.author?.username ?: "Unknown",
@@ -127,14 +131,14 @@ private fun PostCard(
                     }
                 }
             }
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(MeeshySpacing.md))
             Text(text = post.content ?: "", style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(MeeshySpacing.sm))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onLike) {
                     Icon(
                         imageVector = if ((post.likeCount ?: 0) > 0) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = "Like",
+                        contentDescription = stringResource(R.string.feed_like),
                         tint = if ((post.likeCount ?: 0) > 0) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -151,15 +155,15 @@ private fun PostCard(
 @Composable
 private fun FeedSkeleton() {
     LazyColumn(
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(MeeshySpacing.lg),
+        verticalArrangement = Arrangement.spacedBy(MeeshySpacing.md),
     ) {
         items(6) {
             MeeshySkeletonBox(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(120.dp),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(MeeshyRadius.xl),
             )
         }
     }

@@ -27,14 +27,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.meeshy.app.R
 import me.meeshy.sdk.model.ApiConversation
 import me.meeshy.ui.component.MeeshyAvatar
 import me.meeshy.ui.component.MeeshySkeletonBox
+import me.meeshy.ui.theme.MeeshySpacing
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
 
@@ -51,10 +57,10 @@ fun ConversationListScreen(
         containerColor = MeeshyTheme.tokens.backgroundPrimary,
         topBar = {
             TopAppBar(
-                title = { Text("Meeshy", fontWeight = FontWeight.Bold) },
+                title = { Text(stringResource(R.string.conversations_title), fontWeight = FontWeight.Bold) },
                 actions = {
                     IconButton(onClick = onLogout) {
-                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = "Log out")
+                        Icon(Icons.AutoMirrored.Filled.Logout, contentDescription = stringResource(R.string.conversations_logout))
                     }
                 },
             )
@@ -69,10 +75,10 @@ fun ConversationListScreen(
                 state.showSkeleton -> SkeletonList()
 
                 state.conversations.isEmpty() && state.errorMessage != null ->
-                    CenteredMessage(state.errorMessage!!, "Retry", viewModel::refresh)
+                    CenteredMessage(state.errorMessage!!, stringResource(R.string.conversations_retry), viewModel::refresh)
 
                 state.conversations.isEmpty() ->
-                    CenteredMessage("No conversations yet", null, null)
+                    CenteredMessage(stringResource(R.string.conversations_empty), null, null)
 
                 else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                     items(state.conversations, key = { it.id }) { conversation ->
@@ -89,24 +95,26 @@ fun ConversationListScreen(
 
 @Composable
 private fun ConversationRow(conversation: ApiConversation, onClick: () -> Unit) {
+    val title = conversation.displayTitle()
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .semantics { role = Role.Button; contentDescription = title }
+            .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         MeeshyAvatar(
-            name = conversation.displayTitle(),
+            name = title,
             containerColor = hexColor(conversation.accentHex()),
         )
         Column(
             modifier = Modifier
                 .weight(1f)
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = MeeshySpacing.md),
         ) {
             Text(
-                text = conversation.displayTitle(),
+                text = title,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = MeeshyTheme.tokens.textPrimary,
@@ -114,7 +122,7 @@ private fun ConversationRow(conversation: ApiConversation, onClick: () -> Unit) 
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                text = conversation.lastMessage?.content ?: "No messages yet",
+                text = conversation.lastMessage?.content ?: stringResource(R.string.conversations_no_messages),
                 style = MaterialTheme.typography.bodySmall,
                 color = MeeshyTheme.tokens.textSecondary,
                 maxLines = 1,
@@ -134,13 +142,13 @@ private fun SkeletonList() {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                    .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 MeeshySkeletonBox(modifier = Modifier.size(48.dp), shape = CircleShape)
                 MeeshySkeletonBox(
                     modifier = Modifier
-                        .padding(start = 12.dp)
+                        .padding(start = MeeshySpacing.md)
                         .size(width = 160.dp, height = 14.dp),
                 )
             }
@@ -161,7 +169,7 @@ private fun CenteredMessage(message: String, actionLabel: String?, onAction: (()
             color = MeeshyTheme.tokens.textSecondary,
         )
         if (actionLabel != null && onAction != null) {
-            Button(onClick = onAction, modifier = Modifier.padding(top = 16.dp)) {
+            Button(onClick = onAction, modifier = Modifier.padding(top = MeeshySpacing.lg)) {
                 Text(actionLabel)
             }
         }

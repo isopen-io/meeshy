@@ -564,6 +564,11 @@
       },
       "delete": "Delete conversation"
     },
+    "links": {
+      "noDescription": "No description",
+      "loading": "Loading links...",
+      "empty": "No shared links"
+    },
     "composer": {
       "placeholder": "Write your message...",
       "recording": "Recording...",
@@ -581,7 +586,13 @@
       "tooltipLocation": "Location",
       "tooltipSend": "Send",
       "voiceAttachmentName": "Voice message ({duration})",
-      "locationAttachmentName": "Current location"
+      "locationAttachmentName": "Current location",
+      "replyTo": "Reply to {{sender}}",
+      "cancelReply": "Cancel reply",
+      "messageInput": "Message input",
+      "attachFiles": "Select files to attach",
+      "recordVoice": "Record voice message",
+      "attachFile": "Attach file"
     }
   }
 }

@@ -97,7 +97,7 @@ private fun rememberTabs(): List<TabItem> {
     }
 }
 
-private val tabRoutes = tabs.map { it.route }.toSet()
+private val tabRoutes = setOf(Routes.CONVERSATIONS, Routes.FEED, Routes.NOTIFICATIONS, Routes.PROFILE)
 
 @Composable
 fun MeeshyApp() {
@@ -110,6 +110,7 @@ fun MeeshyApp() {
     val showBottomBar = currentRoute in tabRoutes
 
     val startDestination = remember(authState.isAuthenticated) { if (authState.isAuthenticated) Routes.CONVERSATIONS else Routes.LOGIN }
+    val tabs = rememberTabs()
 
     Scaffold(
         containerColor = MeeshyTheme.tokens.backgroundPrimary,

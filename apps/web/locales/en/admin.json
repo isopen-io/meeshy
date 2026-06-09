@@ -281,7 +281,11 @@
   "userDetail": {
     "languagePreferences": "Language Preferences",
     "languagePreferencesSaved": "Language preferences updated",
-    "languagePreferencesError": "Error updating preferences"
+    "languagePreferencesError": "Error updating preferences",
+    "contactUpdated": "Contact information updated",
+    "contactUpdateError": "Error updating contact information",
+    "personalInfoUpdated": "Personal information updated",
+    "personalInfoUpdateError": "Error updating personal information"
   },
   "translationMonitor": {
     "loadingMetrics": "Loading metrics...",

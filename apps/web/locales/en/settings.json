@@ -959,6 +959,30 @@
       }
     }
   },
+  "v2settings": {
+    "translationLangUpdated": "Translation language updated",
+    "uiLangUpdated": "Interface language updated",
+    "passwordChanged": "Password changed successfully",
+    "passwordChangeError": "Error changing password",
+    "accountDeleted": "Account deleted",
+    "accountDeleteError": "Error deleting account",
+    "deleteAccount": "Delete my account",
+    "deleteAccountTitle": "Delete your account?",
+    "delete": "Delete"
+  },
+  "v2me": {
+    "logoutSuccess": "Logged out successfully",
+    "logoutError": "Error logging out",
+    "profileUpdated": "Profile updated successfully",
+    "profileUpdateError": "Error updating profile",
+    "editProfile": "Edit profile"
+  },
+  "chats": {
+    "loading": "Loading...",
+    "loadMore": "Load more messages",
+    "emptyState": "No messages in this conversation",
+    "emptyStateCta": "Send the first message!"
+  },
   "emailChange": {
     "verify": {
       "noToken": "Verification token missing",
