@@ -27,6 +27,7 @@ RESULTS_DIR="$REPO_ROOT/apps/ios/test-results/perf"
 if [[ "${1:-}" == "--list" ]]; then
     echo "Performance test targets:"
     echo "  MeeshyTests/MessageListPerformanceTests"
+    echo "  MeeshyTests/BubbleSimpleMessagePerfTests"
     echo "  MeeshyTests/SearchPerformanceTests"
     exit 0
 fi
@@ -44,15 +45,30 @@ run_benchmark() {
     local result_path="$RESULTS_DIR/${name}.xcresult"
 
     echo "--- Running: $name ---"
-    RUN_PERF_BENCHMARKS=1 xcodebuild test \
+    # xcodebuild refuse d'écraser un .xcresult existant (sort en code 64). On
+    # nettoie avant chaque run pour rendre le script ré-exécutable.
+    rm -rf "$result_path"
+    # Gating INVOCATIONNEL : on cible la classe perf via `-only-testing`. (Les
+    # variables d'environnement — host, build-setting ou SIMCTL_CHILD_ —
+    # n'atteignent PAS le process de test dans le simulateur sous
+    # `xcodebuild test`, d'où l'ancien "tout est skip". Le gate est donc géré
+    # par l'invocation : la suite régulière `meeshy.sh test` exclut ces classes
+    # via `-skip-testing`.)
+    # On PINNE la DerivedData sur `apps/ios/Build` (celle de meeshy.sh). Sans
+    # ça, xcodebuild utilise la DerivedData PAR DÉFAUT (~/Library/Developer/...)
+    # qui peut contenir un bundle de test PÉRIMÉ → des tests modifiés (ex.
+    # retrait d'un gate XCTSkip) apparaissent encore "skipped". Pin = on
+    # exécute toujours le code courant + cache SPM chaud.
+    xcodebuild test \
         -project "$PROJECT" \
         -scheme "$SCHEME" \
         -destination "$DESTINATION" \
         -configuration Debug \
+        -derivedDataPath "$REPO_ROOT/apps/ios/Build" \
+        -clonedSourcePackagesDirPath "$REPO_ROOT/apps/ios/SourcePackages" \
         -only-testing:"MeeshyTests/$target" \
         -resultBundlePath "$result_path" \
-        RUN_PERF_BENCHMARKS=1 \
-        2>&1 | grep -E "(Test Case|PASS|FAIL|seconds|ms|error:|warning:)" || true
+        2>&1 | grep -E "(Test Case|passed|failed|PASS|FAIL|seconds|measured|relative standard deviation|error:|warning:)" || true
 
     if [ $? -eq 0 ]; then
         echo "  PASS: $name"
@@ -63,6 +79,7 @@ run_benchmark() {
 }
 
 run_benchmark "MessageListPerformanceTests" "MessageListPerformanceTests"
+run_benchmark "BubbleSimpleMessagePerfTests" "BubbleSimpleMessagePerfTests"
 run_benchmark "SearchPerformanceTests" "SearchPerformanceTests"
 
 echo "=== Benchmark run complete ==="

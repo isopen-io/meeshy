@@ -138,6 +138,13 @@ public final class MessageStore: ObservableObject {
     private let persistence: MessagePersistenceActor
     private var windowAnchor: Date?
     private var _idIndex: [String: Int]?
+    /// Cache des conversions `MessageRecord → MeeshyMessage`, clé `localId`,
+    /// invalidé par `changeVersion` (la MÊME clé que l'Equatable O(1) du
+    /// record). Évite de refaire jusqu'à 5 décodages JSON par message à chaque
+    /// reconfigure de cellule et à chaque ré-émission du store (le ViewModel
+    /// re-mappait toute la fenêtre à chaque `messagesDidChange`). Borné à la
+    /// fenêtre chargée (pruné dans `publish`).
+    private var _domainCache: [String: (version: Int64, message: MeeshyMessage)] = [:]
     /// Stored as `let` so it is accessible from `nonisolated deinit` without
     /// crossing actor isolation boundaries. Mutation is via its own mutable properties,
     /// guarded by the `@MainActor` isolation of MessageStore.
@@ -311,6 +318,15 @@ public final class MessageStore: ObservableObject {
 
         messages = next
         _idIndex = nil
+        // Prune le cache domain aux messages encore chargés (les entrées
+        // périmées sont de toute façon contournées par la clé changeVersion ;
+        // ce prune ne sert qu'à borner la mémoire à la fenêtre courante).
+        if !_domainCache.isEmpty {
+            let liveIds = Set(next.map(\.localId))
+            if _domainCache.count > liveIds.count {
+                _domainCache = _domainCache.filter { liveIds.contains($0.key) }
+            }
+        }
         recomputeSections()
         messagesDidChange.send()
     }
@@ -445,6 +461,31 @@ public final class MessageStore: ObservableObject {
     func message(for localId: String) -> MessageRecord? {
         guard let i = index(of: localId) else { return nil }
         return messages[i]
+    }
+
+    /// Version MÉMOÏSÉE de `record.toMessage(currentUserId:)`. Retourne la
+    /// conversion cachée si `changeVersion` n'a pas bougé, sinon la recalcule
+    /// et la cache. `currentUserId` est constant pour la durée du store, donc
+    /// pas besoin de l'inclure dans la clé.
+    func domainMessage(for localId: String, currentUserId: String) -> MeeshyMessage? {
+        guard let i = index(of: localId) else { return nil }
+        return cachedDomain(for: messages[i], currentUserId: currentUserId)
+    }
+
+    /// Snapshot de toute la fenêtre en `MeeshyMessage`, mémoïsé par message.
+    /// Remplace le `messages.map { $0.toMessage(...) }` du ViewModel qui
+    /// re-décodait tout à chaque émission. Cache-hit ⇒ zéro décodage JSON.
+    func domainMessages(currentUserId: String) -> [MeeshyMessage] {
+        messages.map { cachedDomain(for: $0, currentUserId: currentUserId) }
+    }
+
+    private func cachedDomain(for record: MessageRecord, currentUserId: String) -> MeeshyMessage {
+        if let cached = _domainCache[record.localId], cached.version == record.changeVersion {
+            return cached.message
+        }
+        let msg = record.toMessage(currentUserId: currentUserId)
+        _domainCache[record.localId] = (record.changeVersion, msg)
+        return msg
     }
 
     func post(for id: String) -> MessageRecord? {
