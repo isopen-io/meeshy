@@ -410,7 +410,7 @@ struct GlobalSearchView: View {
                     .foregroundColor(MeeshyColors.indigo300)
                     .lineLimit(1)
 
-                Text(highlightedText(result.content, query: viewModel.searchText))
+                Text(highlightedText(result.content, query: viewModel.resultsQuery))
                     .font(.system(size: 13))
                     .foregroundColor(theme.textSecondary)
                     .lineLimit(2)

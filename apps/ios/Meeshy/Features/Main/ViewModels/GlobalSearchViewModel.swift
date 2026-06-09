@@ -82,6 +82,14 @@ final class GlobalSearchViewModel: ObservableObject {
     @Published private(set) var loadState: LoadState = .idle
     @Published var recentSearches: [String] = []
     @Published var hasSearched = false
+    /// The query that produced the current results. Result highlighting uses
+    /// THIS, not the live `searchText`: while typing, the rows still show the
+    /// previous (debounced) query's results, so highlighting them with the
+    /// in-flight keystrokes both mismatched the rows and rebuilt every visible
+    /// row's `AttributedString` (with a diacritic-insensitive search) on each
+    /// keystroke. Stable here ⇒ the highlighted `Text` stays Equatable-equal and
+    /// SwiftUI skips re-laying it out while the user types.
+    @Published private(set) var resultsQuery = ""
 
     /// Backwards-compatibility shim — earlier consumers (and `GlobalSearchView`)
     /// read `isSearching` directly. Derived from `loadState` so existing call
@@ -257,6 +265,7 @@ final class GlobalSearchViewModel: ObservableObject {
         conversationResults = convs
         userResults = users
         messageResults = msgs
+        resultsQuery = query
 
         if NetworkMonitor.shared.isOffline {
             loadState = .offline
@@ -582,6 +591,7 @@ final class GlobalSearchViewModel: ObservableObject {
         messageResults = []
         conversationResults = []
         userResults = []
+        resultsQuery = ""
         hasSearched = false
         loadState = .idle
     }

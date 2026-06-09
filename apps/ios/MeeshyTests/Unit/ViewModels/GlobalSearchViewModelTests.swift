@@ -140,6 +140,21 @@ final class GlobalSearchViewModelTests: XCTestCase {
         XCTAssertFalse(sut.userResults[1].isOnline)
     }
 
+    func test_performSearch_setsResultsQueryToSearchedQuery() async throws {
+        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT()
+        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
+        stubEmptyConversationSearch(on: mockAPI)
+        mockUserService.searchUsersResult = .success([
+            UserSearchResult.stub(id: "u1", username: "alice", displayName: "Alice", isOnline: true)
+        ])
+
+        await sut.performSearch(query: "alice")
+
+        // Result highlighting binds to the query that produced the results, not
+        // the live `searchText`, so it stays stable (and correct) while typing.
+        XCTAssertEqual(sut.resultsQuery, "alice")
+    }
+
     func test_performSearch_whenAPIFails_returnsEmptyResults() async throws {
         let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT()
         mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
