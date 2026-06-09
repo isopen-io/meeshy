@@ -17,6 +17,7 @@ import { createValidationMiddleware } from '../middleware/validation.js';
 import { ROUTE_RATE_LIMITS } from '../middleware/rate-limit.js';
 import { CallService } from '../services/CallService.js';
 import { logger } from '../utils/logger.js';
+import { sendSuccess } from '../utils/response.js';
 import {
   initiateCallSchema,
   getCallSchema,
@@ -195,10 +196,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         settings
       });
 
-      return reply.status(201).send({
-        success: true,
-        data: callSession
-      });
+      return sendSuccess(reply, callSession, { statusCode: 201 });
     } catch (error: any) {
       logger.error('❌ REST: Error initiating call', error);
 
@@ -313,10 +311,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       // CVE-003: Pass requesting user ID for authorization check
       const callSession = await callService.getCallSession(callId, userId);
 
-      return reply.send({
-        success: true,
-        data: callSession
-      });
+      return sendSuccess(reply, callSession);
     } catch (error: any) {
       logger.error('❌ REST: Error getting call', error);
 
@@ -478,10 +473,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
       const endParticipantId = authRequest.authContext.participantId || membership?.id;
       const callSession = await callService.endCall(callId, userId, endParticipantId);
 
-      return reply.send({
-        success: true,
-        data: callSession
-      });
+      return sendSuccess(reply, callSession);
     } catch (error: any) {
       logger.error('❌ REST: Error ending call', error);
 
@@ -633,10 +625,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         settings,
       });
 
-      return reply.send({
-        success: true,
-        data: callSession
-      });
+      return sendSuccess(reply, callSession);
     } catch (error: any) {
       logger.error('❌ REST: Error joining call', error);
 
@@ -795,10 +784,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         participantId: leaveParticipantId,
       });
 
-      return reply.send({
-        success: true,
-        data: callSession
-      });
+      return sendSuccess(reply, callSession);
     } catch (error: any) {
       logger.error('❌ REST: Error leaving call', error);
 
@@ -947,10 +933,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         conversationId
       );
 
-      return reply.send({
-        success: true,
-        data: callSession
-      });
+      return sendSuccess(reply, callSession);
     } catch (error: any) {
       logger.error('❌ REST: Error getting active call', error);
 
@@ -1083,10 +1066,7 @@ export default async function callRoutes(fastify: FastifyInstance) {
         });
       }
 
-      return reply.send({
-        success: true,
-        data: activeCall
-      });
+      return sendSuccess(reply, activeCall);
     } catch (error: any) {
       logger.error('❌ REST: Error getting active call for user', error);
 
