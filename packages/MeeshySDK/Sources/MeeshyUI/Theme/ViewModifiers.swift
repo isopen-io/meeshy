@@ -164,6 +164,9 @@ public struct StaggeredAppear: ViewModifier {
     public let index: Int
     public let baseDelay: Double
     @State private var isVisible = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+    private var reduceMotion: Bool { systemReduceMotion || userForcedReduceMotion }
 
     public init(index: Int, baseDelay: Double = 0.05) {
         self.index = index
@@ -172,11 +175,13 @@ public struct StaggeredAppear: ViewModifier {
 
     public func body(content: Content) -> some View {
         content
-            .opacity(isVisible ? 1 : 0)
-            .offset(y: isVisible ? 0 : 20)
-            .scaleEffect(isVisible ? 1 : 0.95)
+            // Reduce Motion: render in the final (visible) state immediately —
+            // no stagger fade/offset/scale, so content appears instantly.
+            .opacity(reduceMotion || isVisible ? 1 : 0)
+            .offset(y: reduceMotion ? 0 : (isVisible ? 0 : 20))
+            .scaleEffect(reduceMotion ? 1 : (isVisible ? 1 : 0.95))
             .animation(
-                .spring(response: 0.45, dampingFraction: 0.8)
+                reduceMotion ? nil : .spring(response: 0.45, dampingFraction: 0.8)
                     .delay(Double(index) * baseDelay),
                 value: isVisible
             )
@@ -189,6 +194,9 @@ public struct StaggeredAppear: ViewModifier {
 public struct BounceOnAppear: ViewModifier {
     @State private var isVisible = false
     public let delay: Double
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+    private var reduceMotion: Bool { systemReduceMotion || userForcedReduceMotion }
 
     public init(delay: Double = 0) {
         self.delay = delay
@@ -196,10 +204,11 @@ public struct BounceOnAppear: ViewModifier {
 
     public func body(content: Content) -> some View {
         content
-            .scaleEffect(isVisible ? 1 : 0.5)
-            .opacity(isVisible ? 1 : 0)
+            // Reduce Motion: appear instantly at full scale/opacity, no bounce.
+            .scaleEffect(reduceMotion ? 1 : (isVisible ? 1 : 0.5))
+            .opacity(reduceMotion || isVisible ? 1 : 0)
             .animation(
-                .spring(response: 0.4, dampingFraction: 0.6).delay(delay),
+                reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.6).delay(delay),
                 value: isVisible
             )
             .onAppear { isVisible = true }
