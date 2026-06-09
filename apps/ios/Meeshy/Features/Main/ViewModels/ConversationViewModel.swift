@@ -1168,7 +1168,15 @@ class ConversationViewModel: ObservableObject {
 
     private func processAPIMessages(_ apiMessages: [APIMessage]) async -> [Message] {
         let userId = currentUserId
-        var msgs = apiMessages.reversed().map { $0.toMessage(currentUserId: userId, currentUsername: self.currentUsername) }
+        let username = currentUsername
+        // Decode + map the API payload off the main actor. `toMessage` decodes
+        // each message's translations / attachments / reactions; for a
+        // multi-hundred-message conversation load that is real CPU that would
+        // otherwise stutter the UI. `[APIMessage]` in and `[MeeshyMessage]` out
+        // are both Sendable, so the hop is clean.
+        var msgs = await Task.detached(priority: .userInitiated) {
+            apiMessages.reversed().map { $0.toMessage(currentUserId: userId, currentUsername: username) }
+        }.value
         await decryptMessagesIfNeeded(&msgs)
         extractAttachmentTranscriptions(from: apiMessages)
         extractTextTranslations(from: apiMessages)
@@ -2926,8 +2934,12 @@ class ConversationViewModel: ObservableObject {
             extractTextTranslations(from: collected)
 
             let userId = currentUserId
+            let username = currentUsername
             // `listAfter` already returns ascending — no reversal needed (unlike the old DESC `list`).
-            let fetchedMessages = collected.map { $0.toMessage(currentUserId: userId, currentUsername: self.currentUsername) }
+            // Map off the main actor (see processAPIMessages) — `toMessage` decode is CPU-bound.
+            let fetchedMessages = await Task.detached(priority: .utility) {
+                collected.map { $0.toMessage(currentUserId: userId, currentUsername: username) }
+            }.value
             let newMessages = fetchedMessages.filter { !self.containsMessage(id: $0.id) }
 
             if !newMessages.isEmpty {
