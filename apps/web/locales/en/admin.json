@@ -438,5 +438,105 @@
       "userDistSubtitle": "By activity level",
       "messageTypes": "Message types"
     }
+  },
+  "analytics": {
+    "title": "Analytics & Statistics",
+    "description": "Advanced analytics dashboard",
+    "back": "Back",
+    "export": "Export",
+    "period": "Period",
+    "period24h": "24 hours",
+    "period7d": "7 days",
+    "period30d": "30 days",
+    "period90d": "90 days",
+    "period1y": "1 year",
+    "stats": {
+      "dailyMessages": "Daily messages",
+      "dailyMessagesDesc": "Last 24 hours",
+      "activeUsers": "Active users",
+      "activeUsersDesc": "This week",
+      "autoTranslations": "Auto translations",
+      "autoTranslationsDesc": "This month",
+      "avgTime": "Average time",
+      "avgTimeDesc": "Per user",
+      "engagementRate": "Engagement rate",
+      "engagementRateDesc": "Messages read",
+      "peakActivity": "Peak activity",
+      "peakActivityDesc": "Peak hours",
+      "growth": "Growth",
+      "growthDesc": "New users",
+      "activeCommunities": "Active communities",
+      "activeCommunitiesDesc": "Out of {total} total"
+    },
+    "realtime": {
+      "title": "Real-time metrics",
+      "online": "Online now",
+      "messagesLastHour": "Messages (last hour)",
+      "activeConversations": "Active conversations"
+    },
+    "volumeChart": {
+      "title": "Message volume",
+      "subtitle": "Messages and active users over 7 days",
+      "messages": "Messages",
+      "users": "Users"
+    },
+    "hourlyChart": {
+      "title": "Activity by hour",
+      "today": "Today"
+    },
+    "messageTypes": {
+      "title": "Message types"
+    },
+    "insights": {
+      "title": "Insights & recommendations",
+      "positive": {
+        "title": "Positive growth",
+        "description": "User engagement is up 15% this week. Peak hours (18h-21h) show record activity."
+      },
+      "translation": {
+        "title": "Effective translation",
+        "description": "Automatic translations account for 45% of messages, facilitating multilingual communication."
+      },
+      "session": {
+        "title": "High session time",
+        "description": "Average session time (2h45m) indicates strong engagement. Consider adding break features."
+      },
+      "diversity": {
+        "title": "Content diversity",
+        "description": "Multimedia messages (images, audio, video) account for 34% of total content, enriching exchanges."
+      }
+    },
+    "performance": {
+      "title": "System performance",
+      "availability": "Availability",
+      "latency": "Average latency",
+      "storage": "Stored data",
+      "throughput": "Messages/second (peak)",
+      "excellent": "Excellent",
+      "fast": "Fast",
+      "normal": "Normal",
+      "stable": "Stable"
+    },
+    "userDist": {
+      "title": "User distribution",
+      "subtitle": "By activity level"
+    },
+    "langDist": {
+      "title": "Language distribution",
+      "subtitle": "Most used languages"
+    },
+    "userActivity": {
+      "veryActive": "Very active",
+      "active": "Active",
+      "occasional": "Occasional",
+      "inactive": "Inactive"
+    },
+    "messageTypeNames": {
+      "text": "Text",
+      "images": "Images",
+      "audio": "Audio",
+      "videos": "Videos",
+      "documents": "Documents"
+    }
   }
 }

@@ -21,80 +21,82 @@ import {
 } from 'lucide-react';
 import { StatsGrid, TimeSeriesChart, DonutChart, type StatItem } from '@/components/admin/Charts';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { useI18n } from '@/hooks/use-i18n';
 
 export default function AdminAnalyticsPage() {
+  const { t } = useI18n('admin');
   const router = useRouter();
   const [timeRange, setTimeRange] = useState('7d');
 
   // Mock data pour les statistiques principales
   const stats: StatItem[] = [
     {
-      title: 'Messages quotidiens',
+      title: t('analytics.stats.dailyMessages'),
       value: 2847,
-      description: '24 dernières heures',
+      description: t('analytics.stats.dailyMessagesDesc'),
       icon: MessageSquare,
       iconColor: 'text-violet-600 dark:text-violet-400',
       iconBgColor: 'bg-violet-100 dark:bg-violet-900/30',
       trend: { value: 15, isPositive: true }
     },
     {
-      title: 'Utilisateurs actifs',
+      title: t('analytics.stats.activeUsers'),
       value: 456,
-      description: 'Cette semaine',
+      description: t('analytics.stats.activeUsersDesc'),
       icon: Users,
       iconColor: 'text-blue-600 dark:text-blue-400',
       iconBgColor: 'bg-blue-100 dark:bg-blue-900/30',
       trend: { value: 8, isPositive: true }
     },
     {
-      title: 'Traductions auto',
+      title: t('analytics.stats.autoTranslations'),
       value: 1234,
-      description: 'Ce mois',
+      description: t('analytics.stats.autoTranslationsDesc'),
       icon: Globe,
       iconColor: 'text-cyan-600 dark:text-cyan-400',
       iconBgColor: 'bg-cyan-100 dark:bg-cyan-900/30',
       trend: { value: 12, isPositive: true }
     },
     {
-      title: 'Temps moyen',
+      title: t('analytics.stats.avgTime'),
       value: '2h 45m',
-      description: 'Par utilisateur',
+      description: t('analytics.stats.avgTimeDesc'),
       icon: Clock,
       iconColor: 'text-orange-600 dark:text-orange-400',
       iconBgColor: 'bg-orange-100 dark:bg-orange-900/30',
       trend: { value: 5, isPositive: true }
     },
     {
-      title: 'Taux d\'engagement',
+      title: t('analytics.stats.engagementRate'),
       value: '87%',
-      description: 'Messages lus',
+      description: t('analytics.stats.engagementRateDesc'),
       icon: Activity,
       iconColor: 'text-green-600 dark:text-green-400',
       iconBgColor: 'bg-green-100 dark:bg-green-900/30',
       trend: { value: 3, isPositive: true }
     },
     {
-      title: 'Pics d\'activité',
+      title: t('analytics.stats.peakActivity'),
       value: '18h-21h',
-      description: 'Heures de pointe',
+      description: t('analytics.stats.peakActivityDesc'),
       icon: Zap,
       iconColor: 'text-yellow-600 dark:text-yellow-400',
       iconBgColor: 'bg-yellow-100 dark:bg-yellow-900/30',
       badge: { text: 'Peak', variant: 'default' }
     },
     {
-      title: 'Croissance',
+      title: t('analytics.stats.growth'),
       value: '+23%',
-      description: 'Nouveaux utilisateurs',
+      description: t('analytics.stats.growthDesc'),
       icon: TrendingUp,
       iconColor: 'text-emerald-600 dark:text-emerald-400',
       iconBgColor: 'bg-emerald-100 dark:bg-emerald-900/30',
       trend: { value: 23, isPositive: true }
     },
     {
-      title: 'Communautés actives',
+      title: t('analytics.stats.activeCommunities'),
       value: 42,
-      description: 'Sur 58 total',
+      description: t('analytics.stats.activeCommunitiesDesc', { total: 58 }),
       icon: Users,
       iconColor: 'text-indigo-600 dark:text-indigo-400',
       iconBgColor: 'bg-indigo-100 dark:bg-indigo-900/30',
@@ -127,19 +129,19 @@ export default function AdminAnalyticsPage() {
 
   // Mock data pour les types de messages
   const messageTypesData = [
-    { type: 'Texte', count: 15420, percentage: 62 },
-    { type: 'Images', count: 4890, percentage: 19 },
-    { type: 'Audio', count: 2340, percentage: 9 },
-    { type: 'Vidéos', count: 1560, percentage: 6 },
-    { type: 'Documents', count: 980, percentage: 4 }
+    { type: t('analytics.messageTypeNames.text'), count: 15420, percentage: 62 },
+    { type: t('analytics.messageTypeNames.images'), count: 4890, percentage: 19 },
+    { type: t('analytics.messageTypeNames.audio'), count: 2340, percentage: 9 },
+    { type: t('analytics.messageTypeNames.videos'), count: 1560, percentage: 6 },
+    { type: t('analytics.messageTypeNames.documents'), count: 980, percentage: 4 }
   ];
 
   // Mock data pour la distribution des utilisateurs
   const userDistributionData = [
-    { name: 'Très actifs', value: 156, color: '#10b981' },
-    { name: 'Actifs', value: 234, color: '#3b82f6' },
-    { name: 'Occasionnels', value: 189, color: '#f59e0b' },
-    { name: 'Inactifs', value: 67, color: '#ef4444' }
+    { name: t('analytics.userActivity.veryActive'), value: 156, color: '#10b981' },
+    { name: t('analytics.userActivity.active'), value: 234, color: '#3b82f6' },
+    { name: t('analytics.userActivity.occasional'), value: 189, color: '#f59e0b' },
+    { name: t('analytics.userActivity.inactive'), value: 67, color: '#ef4444' }
   ];
 
   // Mock data pour la distribution des langues
@@ -164,29 +166,29 @@ export default function AdminAnalyticsPage() {
                 className="text-white hover:bg-white/20"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
-                Retour
+                {t('analytics.back')}
               </Button>
               <div>
-                <h1 className="text-2xl font-bold">Analyses et statistiques</h1>
-                <p className="text-violet-100 mt-1">Tableau de bord analytique avancé</p>
+                <h1 className="text-2xl font-bold">{t('analytics.title')}</h1>
+                <p className="text-violet-100 mt-1">{t('analytics.description')}</p>
               </div>
             </div>
             <div className="flex items-center space-x-3">
               <Select value={timeRange} onValueChange={setTimeRange}>
                 <SelectTrigger className="w-[180px] bg-white/10 border-white/20 text-white">
-                  <SelectValue placeholder="Période" />
+                  <SelectValue placeholder={t('analytics.period')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="24h">24 heures</SelectItem>
-                  <SelectItem value="7d">7 jours</SelectItem>
-                  <SelectItem value="30d">30 jours</SelectItem>
-                  <SelectItem value="90d">90 jours</SelectItem>
-                  <SelectItem value="1y">1 an</SelectItem>
+                  <SelectItem value="24h">{t('analytics.period24h')}</SelectItem>
+                  <SelectItem value="7d">{t('analytics.period7d')}</SelectItem>
+                  <SelectItem value="30d">{t('analytics.period30d')}</SelectItem>
+                  <SelectItem value="90d">{t('analytics.period90d')}</SelectItem>
+                  <SelectItem value="1y">{t('analytics.period1y')}</SelectItem>
                 </SelectContent>
               </Select>
               <Button variant="ghost" className="text-white hover:bg-white/20">
                 <Download className="h-4 w-4 mr-2" />
-                Exporter
+                {t('analytics.export')}
               </Button>
             </div>
           </div>
@@ -200,7 +202,7 @@ export default function AdminAnalyticsPage() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Activity className="h-5 w-5 text-violet-600" />
-              <span>Métriques en temps réel</span>
+              <span>{t('analytics.realtime.title')}</span>
               <Badge variant="outline" className="ml-2 text-green-600 border-green-600">
                 <span className="relative flex h-2 w-2 mr-1">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -217,7 +219,7 @@ export default function AdminAnalyticsPage() {
                   <Users className="h-6 w-6 text-green-600 dark:text-green-400" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">En ligne maintenant</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{t('analytics.realtime.online')}</p>
                   <p className="text-2xl font-bold text-green-600 dark:text-green-400">127</p>
                 </div>
               </div>
@@ -226,7 +228,7 @@ export default function AdminAnalyticsPage() {
                   <MessageSquare className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Messages (dernière heure)</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{t('analytics.realtime.messagesLastHour')}</p>
                   <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">342</p>
                 </div>
               </div>
@@ -235,7 +237,7 @@ export default function AdminAnalyticsPage() {
                   <Activity className="h-6 w-6 text-purple-600 dark:text-purple-400" />
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Conversations actives</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{t('analytics.realtime.activeConversations')}</p>
                   <p className="text-2xl font-bold text-purple-600 dark:text-purple-400">89</p>
                 </div>
               </div>
@@ -247,12 +249,12 @@ export default function AdminAnalyticsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Volume de messages dans le temps */}
           <TimeSeriesChart
-            title="Volume de messages"
-            subtitle="Messages et utilisateurs actifs sur 7 jours"
+            title={t('analytics.volumeChart.title')}
+            subtitle={t('analytics.volumeChart.subtitle')}
             data={messageVolumeData}
             dataKeys={[
-              { key: 'messages', name: 'Messages', color: '#8b5cf6' },
-              { key: 'users', name: 'Utilisateurs', color: '#3b82f6' }
+              { key: 'messages', name: t('analytics.volumeChart.messages'), color: '#8b5cf6' },
+              { key: 'users', name: t('analytics.volumeChart.users'), color: '#3b82f6' }
             ]}
             xAxisKey="date"
           />
@@ -261,8 +263,8 @@ export default function AdminAnalyticsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
-                <span>Activité par heure</span>
-                <Badge variant="outline">Aujourd&apos;hui</Badge>
+                <span>{t('analytics.hourlyChart.title')}</span>
+                <Badge variant="outline">{t('analytics.hourlyChart.today')}</Badge>
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -288,7 +290,7 @@ export default function AdminAnalyticsPage() {
         {/* Types de messages */}
         <Card>
           <CardHeader>
-            <CardTitle>Types de messages</CardTitle>
+            <CardTitle>{t('analytics.messageTypes.title')}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -322,14 +324,14 @@ export default function AdminAnalyticsPage() {
         {/* Distribution utilisateurs et langues */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <DonutChart
-            title="Distribution des utilisateurs"
-            subtitle="Par niveau d'activité"
+            title={t('analytics.userDist.title')}
+            subtitle={t('analytics.userDist.subtitle')}
             data={userDistributionData}
           />
 
           <DonutChart
-            title="Distribution des langues"
-            subtitle="Langues les plus utilisées"
+            title={t('analytics.langDist.title')}
+            subtitle={t('analytics.langDist.subtitle')}
             data={languageDistributionData}
           />
         </div>
@@ -339,7 +341,7 @@ export default function AdminAnalyticsPage() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <TrendingUp className="h-5 w-5 text-violet-600" />
-              <span>Insights et recommandations</span>
+              <span>{t('analytics.insights.title')}</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -351,10 +353,10 @@ export default function AdminAnalyticsPage() {
                   </div>
                   <div>
                     <h4 className="font-semibold text-green-900 dark:text-green-100 mb-1">
-                      Croissance positive
+                      {t('analytics.insights.positive.title')}
                     </h4>
                     <p className="text-sm text-green-700 dark:text-green-300">
-                      L&apos;engagement utilisateur est en hausse de 15% cette semaine. Les heures de pointe (18h-21h) montrent une activité record.
+                      {t('analytics.insights.positive.description')}
                     </p>
                   </div>
                 </div>
@@ -367,10 +369,10 @@ export default function AdminAnalyticsPage() {
                   </div>
                   <div>
                     <h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">
-                      Traduction efficace
+                      {t('analytics.insights.translation.title')}
                     </h4>
                     <p className="text-sm text-blue-700 dark:text-blue-300">
-                      Les traductions automatiques représentent 45% des messages, facilitant la communication multilingue.
+                      {t('analytics.insights.translation.description')}
                     </p>
                   </div>
                 </div>
@@ -383,10 +385,10 @@ export default function AdminAnalyticsPage() {
                   </div>
                   <div>
                     <h4 className="font-semibold text-orange-900 dark:text-orange-100 mb-1">
-                      Temps de session élevé
+                      {t('analytics.insights.session.title')}
                     </h4>
                     <p className="text-sm text-orange-700 dark:text-orange-300">
-                      Le temps moyen par session (2h45m) indique un fort engagement. Considérez des fonctionnalités de pause.
+                      {t('analytics.insights.session.description')}
                     </p>
                   </div>
                 </div>
@@ -399,10 +401,10 @@ export default function AdminAnalyticsPage() {
                   </div>
                   <div>
                     <h4 className="font-semibold text-purple-900 dark:text-purple-100 mb-1">
-                      Diversité des contenus
+                      {t('analytics.insights.diversity.title')}
                     </h4>
                     <p className="text-sm text-purple-700 dark:text-purple-300">
-                      Les messages multimédias (images, audio, vidéo) représentent 34% du contenu total, enrichissant les échanges.
+                      {t('analytics.insights.diversity.description')}
                     </p>
                   </div>
                 </div>
@@ -416,7 +418,7 @@ export default function AdminAnalyticsPage() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Zap className="h-5 w-5 text-yellow-600" />
-              <span>Performance du système</span>
+              <span>{t('analytics.performance.title')}</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -425,29 +427,29 @@ export default function AdminAnalyticsPage() {
                 <div className="text-3xl font-bold text-green-600 dark:text-green-400 mb-1">
                   99.8%
                 </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Disponibilité</p>
-                <Badge variant="outline" className="mt-2 text-green-600">Excellent</Badge>
+                <p className="text-sm text-gray-600 dark:text-gray-400">{t('analytics.performance.availability')}</p>
+                <Badge variant="outline" className="mt-2 text-green-600">{t('analytics.performance.excellent')}</Badge>
               </div>
               <div className="text-center">
                 <div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-1">
                   45ms
                 </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Latence moyenne</p>
-                <Badge variant="outline" className="mt-2 text-blue-600">Rapide</Badge>
+                <p className="text-sm text-gray-600 dark:text-gray-400">{t('analytics.performance.latency')}</p>
+                <Badge variant="outline" className="mt-2 text-blue-600">{t('analytics.performance.fast')}</Badge>
               </div>
               <div className="text-center">
                 <div className="text-3xl font-bold text-purple-600 dark:text-purple-400 mb-1">
                   2.3TB
                 </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Données stockées</p>
-                <Badge variant="outline" className="mt-2 text-purple-600">Normal</Badge>
+                <p className="text-sm text-gray-600 dark:text-gray-400">{t('analytics.performance.storage')}</p>
+                <Badge variant="outline" className="mt-2 text-purple-600">{t('analytics.performance.normal')}</Badge>
               </div>
               <div className="text-center">
                 <div className="text-3xl font-bold text-orange-600 dark:text-orange-400 mb-1">
                   12K/s
                 </div>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Messages/seconde (pic)</p>
-                <Badge variant="outline" className="mt-2 text-orange-600">Stable</Badge>
+                <p className="text-sm text-gray-600 dark:text-gray-400">{t('analytics.performance.throughput')}</p>
+                <Badge variant="outline" className="mt-2 text-orange-600">{t('analytics.performance.stable')}</Badge>
               </div>
             </div>
           </CardContent>

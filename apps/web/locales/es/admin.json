@@ -438,5 +438,105 @@
       "userDistSubtitle": "Por nivel de actividad",
       "messageTypes": "Tipos de mensajes"
     }
+  },
+  "analytics": {
+    "title": "Análisis y estadísticas",
+    "description": "Panel analítico avanzado",
+    "back": "Volver",
+    "export": "Exportar",
+    "period": "Período",
+    "period24h": "24 horas",
+    "period7d": "7 días",
+    "period30d": "30 días",
+    "period90d": "90 días",
+    "period1y": "1 año",
+    "stats": {
+      "dailyMessages": "Mensajes diarios",
+      "dailyMessagesDesc": "Últimas 24 horas",
+      "activeUsers": "Usuarios activos",
+      "activeUsersDesc": "Esta semana",
+      "autoTranslations": "Traducciones auto",
+      "autoTranslationsDesc": "Este mes",
+      "avgTime": "Tiempo promedio",
+      "avgTimeDesc": "Por usuario",
+      "engagementRate": "Tasa de engagement",
+      "engagementRateDesc": "Mensajes leídos",
+      "peakActivity": "Picos de actividad",
+      "peakActivityDesc": "Horas pico",
+      "growth": "Crecimiento",
+      "growthDesc": "Nuevos usuarios",
+      "activeCommunities": "Comunidades activas",
+      "activeCommunitiesDesc": "De {total} total"
+    },
+    "realtime": {
+      "title": "Métricas en tiempo real",
+      "online": "En línea ahora",
+      "messagesLastHour": "Mensajes (última hora)",
+      "activeConversations": "Conversaciones activas"
+    },
+    "volumeChart": {
+      "title": "Volumen de mensajes",
+      "subtitle": "Mensajes y usuarios activos en 7 días",
+      "messages": "Mensajes",
+      "users": "Usuarios"
+    },
+    "hourlyChart": {
+      "title": "Actividad por hora",
+      "today": "Hoy"
+    },
+    "messageTypes": {
+      "title": "Tipos de mensajes"
+    },
+    "insights": {
+      "title": "Insights y recomendaciones",
+      "positive": {
+        "title": "Crecimiento positivo",
+        "description": "El engagement de usuarios subió 15% esta semana. Las horas pico (18h-21h) muestran actividad récord."
+      },
+      "translation": {
+        "title": "Traducción eficaz",
+        "description": "Las traducciones automáticas representan el 45% de los mensajes, facilitando la comunicación multilingüe."
+      },
+      "session": {
+        "title": "Tiempo de sesión elevado",
+        "description": "El tiempo promedio por sesión (2h45m) indica un alto engagement. Considera funciones de descanso."
+      },
+      "diversity": {
+        "title": "Diversidad de contenido",
+        "description": "Los mensajes multimedia (imágenes, audio, video) representan el 34% del contenido total."
+      }
+    },
+    "performance": {
+      "title": "Rendimiento del sistema",
+      "availability": "Disponibilidad",
+      "latency": "Latencia promedio",
+      "storage": "Datos almacenados",
+      "throughput": "Mensajes/segundo (pico)",
+      "excellent": "Excelente",
+      "fast": "Rápido",
+      "normal": "Normal",
+      "stable": "Estable"
+    },
+    "userDist": {
+      "title": "Distribución de usuarios",
+      "subtitle": "Por nivel de actividad"
+    },
+    "langDist": {
+      "title": "Distribución de idiomas",
+      "subtitle": "Idiomas más usados"
+    },
+    "userActivity": {
+      "veryActive": "Muy activos",
+      "active": "Activos",
+      "occasional": "Ocasionales",
+      "inactive": "Inactivos"
+    },
+    "messageTypeNames": {
+      "text": "Texto",
+      "images": "Imágenes",
+      "audio": "Audio",
+      "videos": "Videos",
+      "documents": "Documentos"
+    }
   }
 }
