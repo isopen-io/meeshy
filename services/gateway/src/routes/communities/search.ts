@@ -4,6 +4,9 @@
 import { FastifyInstance } from 'fastify';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { validatePagination } from './types';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'CommunitySearchRoutes' });
 
 export async function registerSearchRoutes(fastify: FastifyInstance) {
   // Route pour rechercher des communautes PUBLIQUES accessibles a tous
@@ -182,7 +185,7 @@ export async function registerSearchRoutes(fastify: FastifyInstance) {
         }
       });
     } catch (error) {
-      console.error('Error searching communities:', error);
+      logger.error('Error searching communities', error as Error);
       reply.status(500).send({
         success: false,
         error: 'Failed to search communities'

@@ -1,5 +1,14 @@
 package me.meeshy.sdk.post
 
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.transformLatest
+import me.meeshy.sdk.cache.CacheClock
+import me.meeshy.sdk.cache.CachePolicy
+import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.cache.SystemCacheClock
 import me.meeshy.sdk.model.ApiPost
 import me.meeshy.sdk.model.ApiPostComment
 import me.meeshy.sdk.model.PostType
@@ -24,7 +33,65 @@ import javax.inject.Singleton
 @Singleton
 class PostRepository @Inject constructor(
     private val postApi: PostApi,
+    private val clock: CacheClock = SystemCacheClock,
 ) {
+    // In-memory cache for Phase 1 — Room-backed FeedEntity added in Phase 3 (ARCHITECTURE.md §13).
+    private val _feedCache = MutableStateFlow<List<ApiPost>?>(null)
+    private val _feedSyncedAt = MutableStateFlow<Long?>(null)
+
+    /**
+     * Cache-first feed stream (ARCHITECTURE.md §4). An in-memory L1 cache serves
+     * stale data immediately; background revalidation is triggered on staleness.
+     */
+    fun feedStream(
+        policy: CachePolicy = CachePolicy.Feed,
+        onSyncError: (Throwable) -> Unit = {},
+    ): Flow<CacheResult<List<ApiPost>>> =
+        combine(_feedCache, _feedSyncedAt) { data, syncedAt -> data to syncedAt }
+            .distinctUntilChanged()
+            .transformLatest { (data, syncedAt) ->
+                if (data == null) {
+                    emit(CacheResult.Empty)
+                    revalidateFeed(onSyncError)
+                    return@transformLatest
+                }
+                val age = syncedAt?.let { clock.nowMillis() - it } ?: Long.MAX_VALUE
+                when {
+                    age <= policy.freshForMillis -> emit(CacheResult.Fresh(data, age))
+                    age <= policy.keepForMillis -> {
+                        emit(CacheResult.Stale(data, age))
+                        revalidateFeed(onSyncError)
+                    }
+                    else -> {
+                        emit(CacheResult.Syncing(data))
+                        revalidateFeed(onSyncError)
+                    }
+                }
+            }
+
+    suspend fun refresh() = revalidateFeed()
+
+    suspend fun likePost(postId: String) {
+        apiCall { postApi.like(postId) }
+        _feedCache.value = _feedCache.value?.map { if (it.id == postId) it.copy(likeCount = (it.likeCount ?: 0) + 1) else it }
+    }
+
+    private suspend fun revalidateFeed(onError: (Throwable) -> Unit = {}) {
+        try {
+            when (val result = apiCall { postApi.getFeed(null, 30) }) {
+                is NetworkResult.Success -> {
+                    _feedCache.value = result.data
+                    _feedSyncedAt.value = clock.nowMillis()
+                }
+                is NetworkResult.Failure -> onError(Exception(result.error.message))
+            }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            onError(e)
+        }
+    }
+
     suspend fun getFeed(cursor: String? = null, limit: Int = 20): NetworkResult<List<ApiPost>> =
         apiCall { postApi.getFeed(cursor, limit) }
 

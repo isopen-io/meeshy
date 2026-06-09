@@ -15,6 +15,14 @@ import {
   AttachmentStatusBodySchema,
 } from '../validation/messages-schemas.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import {
+  sendSuccess,
+  sendPaginatedSuccess,
+  sendBadRequest,
+  sendNotFound,
+  sendForbidden,
+  sendInternalError,
+} from '../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'MessagesRoutes' });
 
@@ -160,42 +168,30 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       });
 
       if (!message) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Message non trouvé'
-        });
+        return sendNotFound(reply, 'Message non trouvé');
       }
 
       // Vérifier que l'utilisateur a accès à cette conversation
       if (!(message as any).conversation.participants.length) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Accès non autorisé à ce message'
-        });
+        return sendForbidden(reply, 'Accès non autorisé à ce message');
       }
 
       // Retourner le message avec les champs dénormalisés (deliveredCount, readCount, etc.)
       // Les détails des statuts sont disponibles via GET /messages/:messageId/status-details
-      return reply.send({
-        success: true,
-        data: {
-          ...message,
-          // Les compteurs sont déjà dans message via les champs dénormalisés
-          statusSummary: {
-            deliveredCount: (message as any).deliveredCount || 0,
-            readCount: (message as any).readCount || 0,
-            deliveredToAllAt: (message as any).deliveredToAllAt,
-            readByAllAt: (message as any).readByAllAt
-          }
+      return sendSuccess(reply, {
+        ...message,
+        // Les compteurs sont déjà dans message via les champs dénormalisés
+        statusSummary: {
+          deliveredCount: (message as any).deliveredCount || 0,
+          readCount: (message as any).readCount || 0,
+          deliveredToAllAt: (message as any).deliveredToAllAt,
+          readByAllAt: (message as any).readByAllAt
         }
       });
 
     } catch (error) {
       logger.error('Error fetching message', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la récupération du message'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération du message');
     }
   });
 
@@ -235,19 +231,13 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       });
 
       if (!message) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Message not found or you are not authorized to modify it'
-        });
+        return sendNotFound(reply, 'Message not found or you are not authorized to modify it');
       }
 
       // Permettre l'édition de messages sans contenu si le message a des attachements
       const messageHasAttachments = message.attachments && message.attachments.length > 0;
       if ((!content || content.trim().length === 0) && !messageHasAttachments) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Message content cannot be empty (unless attachments are included)'
-        });
+        return sendBadRequest(reply, 'Message content cannot be empty (unless attachments are included)');
       }
 
       // Mettre à jour le message
@@ -330,20 +320,14 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         // Ne pas faire échouer l'édition si la diffusion échoue
       }
 
-      return reply.send({
-        success: true,
-        data: {
-          ...transformedMessage,
-          message: 'Message modifié avec succès'
-        }
+      return sendSuccess(reply, {
+        ...transformedMessage,
+        message: 'Message modifié avec succès'
       });
 
     } catch (error) {
       logger.error('Error updating message', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la modification du message'
-      });
+      return sendInternalError(reply, 'Erreur lors de la modification du message');
     }
   });
 
@@ -391,10 +375,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       });
 
       if (!message) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Message non trouvé'
-        });
+        return sendNotFound(reply, 'Message non trouvé');
       }
 
       // Vérifier les permissions de suppression
@@ -411,10 +392,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         authRequest.authContext.registeredUser?.role === 'CREATOR';
 
       if (!canDelete) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Vous n\'êtes pas autorisé à supprimer ce message'
-        });
+        return sendForbidden(reply, 'Vous n\'êtes pas autorisé à supprimer ce message');
       }
 
       // Supprimer les attachments et leurs fichiers physiques
@@ -475,17 +453,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         // Ne pas faire échouer la suppression si la diffusion échoue
       }
 
-      return reply.send({
-        success: true,
-        data: { message: 'Message supprimé avec succès' }
-      });
+      return sendSuccess(reply, { message: 'Message supprimé avec succès' });
 
     } catch (error) {
       logger.error('Error deleting message', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la suppression du message'
-      });
+      return sendInternalError(reply, 'Erreur lors de la suppression du message');
     }
   });
 
@@ -504,10 +476,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       const userId = authRequest.authContext.userId;
 
       if (!status || !['read', 'delivered'].includes(status)) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Statut invalide'
-        });
+        return sendBadRequest(reply, 'Statut invalide');
       }
 
       // Vérifier que le message existe et que l'utilisateur a accès
@@ -529,20 +498,14 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       });
 
       if (!message || !message.conversation.participants.length) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Message non trouvé ou accès non autorisé'
-        });
+        return sendNotFound(reply, 'Message non trouvé ou accès non autorisé');
       }
 
       const participant = message.conversation.participants[0];
 
       // Ne pas marquer ses propres messages comme lus
       if (message.senderId === participant.id) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Vous ne pouvez pas marquer vos propres messages comme lus'
-        });
+        return sendBadRequest(reply, 'Vous ne pouvez pas marquer vos propres messages comme lus');
       }
 
       if (status === 'read') {
@@ -600,18 +563,12 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);
         }
 
-        return reply.send({
-          success: true,
-          data: { message: 'Message marqué comme lu' }
-        });
+        return sendSuccess(reply, { message: 'Message marqué comme lu' });
       }
 
     } catch (error) {
       logger.error('Error updating message status', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la mise à jour du statut du message'
-      });
+      return sendInternalError(reply, 'Erreur lors de la mise à jour du statut du message');
     }
   });
 
@@ -648,10 +605,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       });
 
       if (!message || !message.conversation.participants.length) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Message non trouvé ou accès non autorisé'
-        });
+        return sendNotFound(reply, 'Message non trouvé ou accès non autorisé');
       }
 
       // Seuls les modérateurs/admins ou l'auteur peuvent voir l'historique
@@ -665,10 +619,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         authRequest.authContext.registeredUser?.role === 'MODERATOR';
 
       if (!canViewHistory) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Vous n\'êtes pas autorisé à voir l\'historique de ce message'
-        });
+        return sendForbidden(reply, 'Vous n\'êtes pas autorisé à voir l\'historique de ce message');
       }
 
       // Pour l'instant, retourner les informations de base
@@ -682,17 +633,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         deletedAt: message.deletedAt
       };
 
-      return reply.send({
-        success: true,
-        data: history
-      });
+      return sendSuccess(reply, history);
 
     } catch (error) {
       logger.error('Error fetching message history', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la récupération de l\'historique du message'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération de l\'historique du message');
     }
   });
 
@@ -724,10 +669,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       });
 
       if (!message) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Message non trouvé'
-        });
+        return sendNotFound(reply, 'Message non trouvé');
       }
 
       // Vérifier que l'utilisateur est membre de la conversation
@@ -740,31 +682,22 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       });
 
       if (!membership) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Accès non autorisé à cette conversation'
-        });
+        return sendForbidden(reply, 'Accès non autorisé à cette conversation');
       }
 
-      return reply.send({
-        success: true,
-        data: {
-          messageId: message.id,
-          originalContent: message.content,
-          originalLanguage: message.originalLanguage,
-          translations: transformTranslationsToArray(
-            message.id,
-            message.translations as Record<string, any>
-          )
-        }
+      return sendSuccess(reply, {
+        messageId: message.id,
+        originalContent: message.content,
+        originalLanguage: message.originalLanguage,
+        translations: transformTranslationsToArray(
+          message.id,
+          message.translations as Record<string, any>
+        )
       });
 
     } catch (error) {
       logger.error('Error fetching message translations', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la récupération des traductions du message'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération des traductions du message');
     }
   });
 
@@ -810,10 +743,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       });
 
       if (!message || !message.conversation.participants.length) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Message non trouvé ou accès non autorisé'
-        });
+        return sendNotFound(reply, 'Message non trouvé ou accès non autorisé');
       }
 
       // Utiliser le service pour récupérer les détails paginés
@@ -826,18 +756,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         filter
       });
 
-      return reply.send({
-        success: true,
-        data: statusDetails.statuses,
-        pagination: statusDetails.pagination
-      });
+      return sendPaginatedSuccess(reply, statusDetails.statuses, statusDetails.pagination);
 
     } catch (error) {
       logger.error('Error fetching message status details', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la récupération des détails de statut'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération des détails de statut');
     }
   });
 
@@ -880,10 +803,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       });
 
       if (!attachment || !attachment.message.conversation.participants.length) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Attachment non trouvé ou accès non autorisé'
-        });
+        return sendNotFound(reply, 'Attachment non trouvé ou accès non autorisé');
       }
 
       // Utiliser le service pour récupérer les détails paginés
@@ -896,18 +816,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         filter
       });
 
-      return reply.send({
-        success: true,
-        data: statusDetails.statuses,
-        pagination: statusDetails.pagination
-      });
+      return sendPaginatedSuccess(reply, statusDetails.statuses, statusDetails.pagination);
 
     } catch (error) {
       logger.error('Error fetching attachment status details', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la récupération des détails de statut de l\'attachment'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération des détails de statut de l\'attachment');
     }
   });
 
@@ -932,10 +845,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       const userId = authRequest.authContext.userId;
 
       if (!action || !['listened', 'watched', 'viewed', 'downloaded'].includes(action)) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Action invalide. Valeurs acceptées: listened, watched, viewed, downloaded'
-        });
+        return sendBadRequest(reply, 'Action invalide. Valeurs acceptées: listened, watched, viewed, downloaded');
       }
 
       // Vérifier que l'attachment existe et que l'utilisateur a accès
@@ -958,10 +868,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       });
 
       if (!attachment || !attachment.message.conversation.participants.length) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Attachment non trouvé ou accès non autorisé'
-        });
+        return sendNotFound(reply, 'Attachment non trouvé ou accès non autorisé');
       }
 
       // Utiliser le service pour mettre à jour le statut
@@ -1012,17 +919,11 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         logger.error('Erreur lors de la diffusion Socket.IO', socketError as Error);
       }
 
-      return reply.send({
-        success: true,
-        data: { message: `Attachment marqué comme ${action}` }
-      });
+      return sendSuccess(reply, { message: `Attachment marqué comme ${action}` });
 
     } catch (error) {
       logger.error('Error updating attachment status', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la mise à jour du statut de l\'attachment'
-      });
+      return sendInternalError(reply, 'Erreur lors de la mise à jour du statut de l\'attachment');
     }
   });
 }

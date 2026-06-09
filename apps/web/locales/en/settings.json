@@ -172,12 +172,16 @@
         "verificationSent": "Verification code sent by SMS",
         "error": "Error during change",
         "pending": "Change pending",
-        "pendingMessage": "Code sent to {phone}"
+        "pendingMessage": "Code sent to {phone}",
+        "newPhonePlaceholder": "+1 (555) 123-4567"
       },
       "username": {
         "available": "Username available",
         "alreadyUsed": "This username is already taken",
         "error": "Error during change"
+      },
+      "verification": {
+        "codePlaceholder": "000000"
       }
     },
     "translation": {
@@ -444,7 +448,10 @@
         "audioDesc": "Transcribe and translate audio messages",
         "generateAudio": "Generate translated audio",
         "generateAudioDesc": "Create an audio version of the translation",
-        "format": "Audio format"
+        "format": "Audio format",
+        "formatMp3": "MP3 (recommended)",
+        "formatOgg": "OGG (best quality)",
+        "formatWav": "WAV (uncompressed)"
       },
       "gdpr": {
         "title": "About your data",
@@ -635,6 +642,274 @@
     "betaPlayground": {
       "featureEnabled": "Beta feature enabled",
       "featureDisabled": "Beta feature disabled"
+    },
+    "video": {
+      "title": "Video Call Settings",
+      "description": "Configure your video call preferences",
+      "enableVideo": {
+        "label": "Enable video calls",
+        "description": "Allow video calls in conversations"
+      },
+      "autoStartVideo": {
+        "label": "Auto-start video",
+        "description": "Automatically turn on camera when joining calls"
+      },
+      "mirrorVideo": {
+        "label": "Mirror my video",
+        "description": "Flip your video horizontally"
+      },
+      "virtualBackground": {
+        "label": "Virtual background",
+        "description": "Enable virtual background effects"
+      },
+      "quality": {
+        "title": "Video Quality",
+        "description": "Adjust video quality and bandwidth usage",
+        "label": "Video quality",
+        "auto": "Auto (Recommended)",
+        "low": "Low (240p) - Save bandwidth",
+        "medium": "Medium (480p)",
+        "high": "High (720p)",
+        "hd": "HD (1080p) - High bandwidth"
+      },
+      "frameRate": {
+        "label": "Frame rate",
+        "fps15": "15 FPS - Save bandwidth",
+        "fps24": "24 FPS",
+        "fps30": "30 FPS (Recommended)",
+        "fps60": "60 FPS - Smooth motion"
+      },
+      "audioProcessing": {
+        "title": "Audio Processing",
+        "description": "Configure audio enhancement features",
+        "noiseSupression": {
+          "label": "Noise suppression",
+          "description": "Reduce background noise during calls"
+        },
+        "echoCancellation": {
+          "label": "Echo cancellation",
+          "description": "Prevent audio feedback and echo"
+        }
+      },
+      "screenSharing": {
+        "title": "Screen Sharing",
+        "description": "Configure screen sharing preferences",
+        "qualityLabel": "Screen share quality",
+        "qualityLow": "Low - Better performance",
+        "qualityMedium": "Medium",
+        "qualityHigh": "High (Recommended)",
+        "qualityUltra": "Ultra - Best quality",
+        "systemAudio": {
+          "label": "Share system audio",
+          "description": "Include system audio when sharing screen"
+        }
+      },
+      "devices": {
+        "title": "Device Selection",
+        "description": "Choose your preferred camera and audio devices",
+        "camera": "Camera",
+        "cameraDefault": "Default Camera",
+        "microphone": "Microphone",
+        "microphoneDefault": "Default Microphone",
+        "speaker": "Speaker",
+        "speakerDefault": "Default Speaker"
+      }
+    },
+    "voiceQuality": {
+      "title": "Voice Analysis",
+      "noAnalysis": "No analysis available. Record a voice sample to see quality metrics.",
+      "levels": {
+        "excellent": "Excellent",
+        "good": "Good",
+        "average": "Average",
+        "low": "Low"
+      },
+      "overall": {
+        "title": "Overall Voice Quality",
+        "description": "Quality assessment for voice cloning",
+        "score": "Overall score",
+        "suitableForCloning": "Suitable for voice cloning",
+        "insufficientQuality": "Insufficient quality for cloning",
+        "clarity": {
+          "label": "Clarity",
+          "description": "Signal-to-noise ratio and audio quality"
+        },
+        "consistency": {
+          "label": "Consistency",
+          "description": "Stability of vocal characteristics"
+        }
+      },
+      "pitch": {
+        "title": "Pitch Analysis (Fundamental Frequency)",
+        "description": "Vocal height characteristics",
+        "mean": {
+          "label": "Mean",
+          "description": "Average fundamental frequency"
+        },
+        "std": {
+          "label": "Std Dev",
+          "description": "Pitch variation"
+        },
+        "min": "Minimum",
+        "max": "Maximum"
+      },
+      "timbre": {
+        "title": "Timbre Analysis",
+        "description": "Vocal color and texture",
+        "spectralCentroid": {
+          "label": "Spectral Centroid",
+          "description": "Center of gravity of the frequency spectrum"
+        },
+        "spectralBandwidth": {
+          "label": "Spectral Bandwidth",
+          "description": "Spectrum width"
+        },
+        "spectralRolloff": {
+          "label": "Spectral Rolloff",
+          "description": "Cutoff frequency at 85% of energy"
+        },
+        "spectralFlatness": {
+          "label": "Spectral Flatness",
+          "description": "Noise vs tonality measure (0=tonal, 1=noise)"
+        }
+      },
+      "energy": {
+        "title": "Energy Analysis",
+        "description": "Sound level and dynamics",
+        "rms": {
+          "label": "RMS (mean level)",
+          "description": "Average energy level"
+        },
+        "peak": {
+          "label": "Peak",
+          "description": "Maximum level"
+        },
+        "dynamicRange": {
+          "label": "Dynamic Range",
+          "description": "Difference between peak and minimum"
+        }
+      },
+      "classification": {
+        "title": "Voice Classification",
+        "description": "Type and characteristics",
+        "voiceType": "Voice type",
+        "gender": "Gender",
+        "ageRange": "Age range",
+        "confidence": {
+          "label": "Classification confidence",
+          "description": "Reliability of automatic classification"
+        }
+      },
+      "prosody": {
+        "title": "Prosodic Analysis",
+        "description": "Speech rhythm and modulation",
+        "energyMean": {
+          "label": "Average energy",
+          "description": "Average vocal intensity level"
+        },
+        "energyStd": {
+          "label": "Energy variability",
+          "description": "Intensity variation"
+        },
+        "silenceRatio": {
+          "label": "Silence ratio",
+          "description": "Proportion of pauses in speech"
+        },
+        "speechRate": {
+          "label": "Speech rate",
+          "description": "Elocution speed"
+        }
+      },
+      "recommendedRange": "Recommended range: {min} - {max}{unit}"
+    },
+    "message": {
+      "draftDays7": "7 days",
+      "draftDays30": "30 days",
+      "draftDays60": "60 days",
+      "draftDays90": "90 days"
+    },
+    "document": {
+      "download": {
+        "title": "Download Settings",
+        "description": "Configure how documents are downloaded",
+        "autoDownload": {
+          "label": "Auto-download documents",
+          "description": "Automatically download documents sent in chats"
+        },
+        "preview": {
+          "label": "Preview documents",
+          "description": "Show document previews before downloading"
+        },
+        "maxSize": {
+          "label": "Maximum file size for auto-download",
+          "mb10": "10 MB",
+          "mb25": "25 MB",
+          "mb50": "50 MB (Recommended)",
+          "mb100": "100 MB",
+          "mb500": "500 MB"
+        },
+        "saveLocation": {
+          "label": "Default save location",
+          "downloads": "Downloads folder",
+          "documents": "Documents folder",
+          "desktop": "Desktop",
+          "custom": "Custom location"
+        }
+      },
+      "upload": {
+        "title": "Upload Settings",
+        "description": "Configure document upload preferences",
+        "compress": {
+          "label": "Compress uploads",
+          "description": "Compress documents before uploading to save bandwidth"
+        },
+        "keepOriginals": {
+          "label": "Keep originals",
+          "description": "Keep original files after uploading compressed versions"
+        },
+        "warnLarge": {
+          "label": "Warn for large files",
+          "description": "Show warning before uploading files over 50MB"
+        },
+        "fileTypes": {
+          "label": "Allowed file types",
+          "all": "All file types",
+          "documents": "Documents only (PDF, DOC, TXT)",
+          "images": "Images only (PNG, JPG, GIF)",
+          "media": "Media files (Images, Video, Audio)",
+          "archives": "Archives (ZIP, RAR, 7Z)"
+        }
+      },
+      "organization": {
+        "title": "Organization",
+        "description": "Keep your documents organized automatically",
+        "autoOrganize": {
+          "label": "Auto-organize by type",
+          "description": "Automatically organize files into folders by type"
+        },
+        "autoDelete": {
+          "label": "Auto-delete old downloads",
+          "description": "Automatically delete downloaded files after specified period",
+          "never": "Never",
+          "after7": "After 7 days",
+          "after30": "After 30 days",
+          "after90": "After 90 days",
+          "after6m": "After 6 months"
+        }
+      },
+      "security": {
+        "title": "Security",
+        "description": "Protect yourself from malicious files",
+        "scanViruses": {
+          "label": "Scan for viruses",
+          "description": "Automatically scan downloaded files for malware"
+        },
+        "blockExecutables": {
+          "label": "Block executable files",
+          "description": "Prevent downloading .exe, .bat, .sh and other executable files"
+        },
+        "note": "Security Note: Always be cautious when downloading files from unknown sources. Enable virus scanning and block executable files for maximum protection."
+      }
     }
   },
   "emailChange": {

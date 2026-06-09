@@ -13,6 +13,7 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../middleware/auth';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../utils/response';
 
 const logger = enhancedLogger.child({ module: 'AffiliateRoutes' });
 
@@ -123,10 +124,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          message: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const userId = authContext.userId;
@@ -163,25 +161,19 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
       const baseUrl = process.env.FRONTEND_URL || 'http://localhost:3100';
       const affiliateLink = `${baseUrl}/signup/affiliate/${token}`;
 
-      return reply.send({
-        success: true,
-        data: {
-          id: affiliateToken.id,
-          token: affiliateToken.token,
-          name: affiliateToken.name,
-          affiliateLink,
-          maxUses: affiliateToken.maxUses,
-          currentUses: affiliateToken.currentUses,
-          expiresAt: affiliateToken.expiresAt?.toISOString(),
-          createdAt: affiliateToken.createdAt.toISOString()
-        }
+      return sendSuccess(reply, {
+        id: affiliateToken.id,
+        token: affiliateToken.token,
+        name: affiliateToken.name,
+        affiliateLink,
+        maxUses: affiliateToken.maxUses,
+        currentUses: affiliateToken.currentUses,
+        expiresAt: affiliateToken.expiresAt?.toISOString(),
+        createdAt: affiliateToken.createdAt.toISOString()
       });
     } catch (error) {
       logger.error('Erreur création token affiliation', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la création du token d\'affiliation'
-      });
+      return sendInternalError(reply, 'Erreur lors de la création du token d\'affiliation');
     }
   });
 
@@ -267,10 +259,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          message: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const userId = authContext.userId;
@@ -326,22 +315,15 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
         expiresAt: token.expiresAt?.toISOString()
       }));
 
-      return reply.send({
-        success: true,
-        data: tokensWithLinks,
-        pagination: {
-          total: totalCount,
-          limit: pagination.limit,
-          offset: pagination.offset,
-          hasMore: pagination.offset + tokens.length < totalCount
-        }
+      return sendPaginatedSuccess(reply, tokensWithLinks, {
+        total: totalCount,
+        limit: pagination.limit,
+        offset: pagination.offset,
+        hasMore: pagination.offset + tokens.length < totalCount
       });
     } catch (error) {
       logger.error('Erreur récupération tokens', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la récupération des tokens'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération des tokens');
     }
   });
 
@@ -399,10 +381,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          message: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const userId = authContext.userId;
@@ -416,22 +395,13 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
       const result = await AffiliateTrackingService.getAffiliateStats(fastify.prisma, userId, filters);
 
       if (result.success) {
-        return reply.send({
-          success: true,
-          data: result.data
-        });
+        return sendSuccess(reply, result.data);
       } else {
-        return reply.status(400).send({
-          success: false,
-          error: result.error
-        });
+        return sendBadRequest(reply, result.error);
       }
     } catch (error) {
       logger.error('Erreur récupération stats', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la récupération des statistiques'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération des statistiques');
     }
   });
 
@@ -526,72 +496,46 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
       });
 
       if (!affiliateToken) {
-        return reply.send({
-          success: true,
-          data: {
-            isValid: false
-          }
-        });
+        return sendSuccess(reply, { isValid: false });
       }
 
       // Vérifier si le token est actif
       if (!affiliateToken.isActive) {
-        return reply.send({
-          success: true,
-          data: {
-            isValid: false
-          }
-        });
+        return sendSuccess(reply, { isValid: false });
       }
 
       // Vérifier si le token a expiré
       if (affiliateToken.expiresAt && new Date() > affiliateToken.expiresAt) {
-        return reply.send({
-          success: true,
-          data: {
-            isValid: false
-          }
-        });
+        return sendSuccess(reply, { isValid: false });
       }
 
       // Vérifier si le token a atteint sa limite d'utilisation
       if (affiliateToken.maxUses && affiliateToken.currentUses >= affiliateToken.maxUses) {
-        return reply.send({
-          success: true,
-          data: {
-            isValid: false
-          }
-        });
+        return sendSuccess(reply, { isValid: false });
       }
 
-      return reply.send({
-        success: true,
-        data: {
-          isValid: true,
-          token: {
-            id: affiliateToken.id,
-            name: affiliateToken.name,
-            token: affiliateToken.token,
-            maxUses: affiliateToken.maxUses,
-            currentUses: affiliateToken.currentUses,
-            expiresAt: affiliateToken.expiresAt?.toISOString()
-          },
-          affiliateUser: {
-            id: affiliateToken.creator.id,
-            username: affiliateToken.creator.username,
-            firstName: affiliateToken.creator.firstName,
-            lastName: affiliateToken.creator.lastName,
-            displayName: affiliateToken.creator.displayName,
-            avatar: affiliateToken.creator.avatar
-          }
+      return sendSuccess(reply, {
+        isValid: true,
+        token: {
+          id: affiliateToken.id,
+          name: affiliateToken.name,
+          token: affiliateToken.token,
+          maxUses: affiliateToken.maxUses,
+          currentUses: affiliateToken.currentUses,
+          expiresAt: affiliateToken.expiresAt?.toISOString()
+        },
+        affiliateUser: {
+          id: affiliateToken.creator.id,
+          username: affiliateToken.creator.username,
+          firstName: affiliateToken.creator.firstName,
+          lastName: affiliateToken.creator.lastName,
+          displayName: affiliateToken.creator.displayName,
+          avatar: affiliateToken.creator.avatar
         }
       });
     } catch (error) {
       logger.error('Erreur validation token', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la validation du token'
-      });
+      return sendInternalError(reply, 'Erreur lors de la validation du token');
     }
   });
 
@@ -660,24 +604,13 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
       const result = await AffiliateTrackingService.trackAffiliateVisit(fastify.prisma, token, visitorData || {});
 
       if (result.success) {
-        return reply.send({
-          success: true,
-          data: {
-            sessionKey: result.data.sessionKey
-          }
-        });
+        return sendSuccess(reply, { sessionKey: result.data.sessionKey });
       } else {
-        return reply.status(400).send({
-          success: false,
-          error: result.error
-        });
+        return sendBadRequest(reply, result.error);
       }
     } catch (error) {
       logger.error('Erreur tracking visite', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors du tracking de la visite'
-      });
+      return sendInternalError(reply, 'Erreur lors du tracking de la visite');
     }
   });
 
@@ -743,22 +676,13 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
       );
 
       if (result.success) {
-        return reply.send({
-          success: true,
-          data: result.data
-        });
+        return sendSuccess(reply, result.data);
       } else {
-        return reply.status(400).send({
-          success: false,
-          error: result.error
-        });
+        return sendBadRequest(reply, result.error);
       }
     } catch (error) {
       logger.error('Erreur enregistrement affiliation', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la création de la relation d\'affiliation'
-      });
+      return sendInternalError(reply, 'Erreur lors de la création de la relation d\'affiliation');
     }
   });
 
@@ -815,10 +739,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
       });
 
       if (!affiliateToken) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Token d\'affiliation non trouvé ou inactif'
-        });
+        return sendNotFound(reply, 'Token d\'affiliation non trouvé ou inactif');
       }
 
       await fastify.prisma.affiliateToken.update({
@@ -826,13 +747,10 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
         data: { clickCount: { increment: 1 } },
       });
 
-      return reply.send({ success: true, data: { tracked: true } });
+      return sendSuccess(reply, { tracked: true });
     } catch (error) {
       logger.error('Erreur tracking clic affiliation', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors du tracking du clic'
-      });
+      return sendInternalError(reply, 'Erreur lors du tracking du clic');
     }
   });
 
@@ -882,10 +800,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          message: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const userId = authContext.userId;
@@ -901,10 +816,7 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
       });
 
       if (!affiliateToken) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Token d\'affiliation non trouvé'
-        });
+        return sendNotFound(reply, 'Token d\'affiliation non trouvé');
       }
 
       // Supprimer le token
@@ -912,15 +824,10 @@ export default async function affiliateRoutes(fastify: FastifyInstance) {
         where: { id: id }
       });
 
-      return reply.send({
-        success: true
-      });
+      return sendSuccess(reply, null);
     } catch (error) {
       logger.error('Erreur suppression token', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la suppression du token'
-      });
+      return sendInternalError(reply, 'Erreur lors de la suppression du token');
     }
   });
 }

@@ -468,7 +468,8 @@
     "createLinkButton": {
       "notAuthenticated": "Impossible de créer le lien : utilisateur non connecté",
       "noConversation": "Impossible de créer le lien : conversation non identifiée",
-      "error": "Erreur lors de la création du lien"
+      "error": "Erreur lors de la création du lien",
+      "fetchError": "Erreur lors de la récupération de la conversation"
     },
     "messageSearch": {
       "placeholder": "Rechercher dans la conversation…",
@@ -478,6 +479,31 @@
     },
     "pinnedBanner": {
       "close": "Fermer le message épinglé"
+    },
+    "inviteModal": {
+      "searchError": "Erreur lors de la recherche d'utilisateurs",
+      "inviteSuccess": "{count} utilisateur(s) invité(s) avec succès",
+      "partialError": "{count} invitation(s) ont échoué",
+      "inviteError": "Erreur lors de l'invitation des utilisateurs"
+    },
+    "drawer": {
+      "title": "Options",
+      "displayName": "Nom affiché (pour vous)",
+      "namePlaceholder": "Nom de la conversation",
+      "notifications": "Notifications",
+      "notificationsAll": "Tous",
+      "notificationsMentions": "Mentions",
+      "notificationsNone": "Aucune",
+      "theme": "Thème",
+      "themeColorLabel": "Couleur de thème {color}",
+      "menuSettings": "Paramètres",
+      "menuProfile": "Voir le profil",
+      "menuSearch": "Rechercher",
+      "category": "Catégorie",
+      "tags": "Tags",
+      "searchOrCreate": "Rechercher ou créer...",
+      "block": "Bloquer",
+      "report": "Signaler"
     }
   }
 }

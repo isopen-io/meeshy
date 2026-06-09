@@ -3,6 +3,9 @@ import {
   createUnifiedAuthMiddleware
 } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'LinkValidationRoutes' });
 
 export async function registerValidationRoutes(fastify: FastifyInstance) {
   const authRequired = createUnifiedAuthMiddleware(fastify.prisma, {
@@ -74,7 +77,7 @@ export async function registerValidationRoutes(fastify: FastifyInstance) {
         }
       });
     } catch (error) {
-      console.error('[LINKS] Error checking identifier availability:', error);
+      logger.error('Error checking identifier availability', error as Error);
       return reply.status(500).send({
         success: false,
         error: 'Failed to check identifier availability'

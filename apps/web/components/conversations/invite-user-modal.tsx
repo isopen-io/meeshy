@@ -61,11 +61,11 @@ export function InviteUserModal({
         );
         setSearchResults(filteredUsers);
       } else {
-        toast.error('Erreur lors de la recherche d\'utilisateurs');
+        toast.error(t('conversations.inviteModal.searchError'));
       }
     } catch (error) {
       console.error('Erreur lors de la recherche:', error);
-      toast.error('Erreur lors de la recherche d\'utilisateurs');
+      toast.error(t('conversations.inviteModal.searchError'));
     } finally {
       setIsSearching(false);
     }
@@ -110,7 +110,7 @@ export function InviteUserModal({
       const failedInvites = results.filter(r => !(r.data as unknown)?.success);
 
       if (successfulInvites.length > 0) {
-        toast.success(`${successfulInvites.length} utilisateur(s) invité(s) avec succès`);
+        toast.success(t('conversations.inviteModal.inviteSuccess', { count: successfulInvites.length }));
         
         // Notifier le parent des utilisateurs invités
         selectedUsers.forEach(user => onUserInvited(user));
@@ -123,12 +123,12 @@ export function InviteUserModal({
       }
 
       if (failedInvites.length > 0) {
-        toast.error(`${failedInvites.length} invitation(s) ont échoué`);
+        toast.error(t('conversations.inviteModal.partialError', { count: failedInvites.length }));
       }
 
     } catch (error) {
       console.error('Erreur lors de l\'invitation:', error);
-      toast.error('Erreur lors de l\'invitation des utilisateurs');
+      toast.error(t('conversations.inviteModal.inviteError'));
     } finally {
       setIsInviting(false);
     }

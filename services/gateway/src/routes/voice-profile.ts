@@ -14,6 +14,10 @@ import { VoiceProfileService, ConsentRequest, RegisterProfileRequest, UpdateProf
 import { createUnifiedAuthMiddleware, UnifiedAuthContext, UnifiedAuthRequest} from '../middleware/auth';
 import { ZMQSingleton } from '../services/ZmqSingleton';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { sendSuccess, sendUnauthorized } from '../utils/response';
+
+const logger = enhancedLogger.child({ module: 'VoiceProfileRoutes' });
 
 // Extend FastifyRequest to include auth
 declare module 'fastify' {
@@ -27,7 +31,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
   const prisma = (fastify as any).prisma;
 
   if (!prisma) {
-    console.error('[VoiceProfile] Missing required service: prisma');
+    logger.error('Missing required service: prisma');
     return;
   }
 
@@ -116,7 +120,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const auth = (request as UnifiedAuthRequest).authContext;
     if (!auth?.isAuthenticated || !auth.registeredUser) {
-      return reply.status(401).send({ success: false, error: 'Authentication required' });
+      return sendUnauthorized(reply, 'Authentication required');
     }
 
     const consent = request.body as ConsentRequest;
@@ -186,7 +190,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const auth = (request as UnifiedAuthRequest).authContext;
     if (!auth?.isAuthenticated || !auth.registeredUser) {
-      return reply.status(401).send({ success: false, error: 'Authentication required' });
+      return sendUnauthorized(reply, 'Authentication required');
     }
 
     const result = await voiceProfileService.getConsentStatus(auth.registeredUser.id);
@@ -407,7 +411,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const auth = (request as UnifiedAuthRequest).authContext;
     if (!auth?.isAuthenticated || !auth.registeredUser) {
-      return reply.status(401).send({ success: false, error: 'Authentication required' });
+      return sendUnauthorized(reply, 'Authentication required');
     }
 
     let registerRequest: RegisterProfileRequest;
@@ -434,7 +438,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
           const filename = part.filename || '';
           const ext = filename.split('.').pop()?.toLowerCase();
           audioFormat = ext || part.mimetype?.split('/').pop() || 'wav';
-          console.log(`[VoiceProfile] File upload: ${filename}, format=${audioFormat}, size=${(buffer.length / 1024).toFixed(1)}KB`);
+          logger.debug('File upload', { filename, audioFormat, sizeKB: (buffer.length / 1024).toFixed(1) });
         } else if (part.type === 'field') {
           // Parse form fields
           const value = part.value as string;
@@ -593,7 +597,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest<{ Params: { profileId: string } }>, reply: FastifyReply) => {
     const auth = (request as UnifiedAuthRequest).authContext;
     if (!auth?.isAuthenticated || !auth.registeredUser) {
-      return reply.status(401).send({ success: false, error: 'Authentication required' });
+      return sendUnauthorized(reply, 'Authentication required');
     }
 
     const updateRequest = request.body as UpdateProfileRequest;
@@ -727,7 +731,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const auth = (request as UnifiedAuthRequest).authContext;
     if (!auth?.isAuthenticated || !auth.registeredUser) {
-      return reply.status(401).send({ success: false, error: 'Authentication required' });
+      return sendUnauthorized(reply, 'Authentication required');
     }
 
     const result = await voiceProfileService.getProfile(auth.registeredUser.id);
@@ -740,27 +744,24 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
       // Extraire les timestamps pour le format attendu par le frontend
       const consentData = consentResult.success ? consentResult.data : null;
 
-      return reply.send({
-        success: true,
-        data: {
-          profileId: null,
-          userId: auth.registeredUser.id,
-          qualityScore: 0,
-          audioDurationMs: 0,
-          audioCount: 0,
-          voiceCharacteristics: null,
-          signatureShort: null,
-          version: 0,
-          createdAt: null,
-          updatedAt: null,
-          expiresAt: null,
-          needsCalibration: false,
-          exists: false,
-          consentStatus: {
-            voiceRecordingConsentAt: consentData?.voiceRecordingConsentAt || null,
-            voiceCloningEnabledAt: consentData?.voiceCloningEnabledAt || null,
-            ageVerificationConsentAt: consentData?.ageVerificationConsentAt || null
-          }
+      return sendSuccess(reply, {
+        profileId: null,
+        userId: auth.registeredUser.id,
+        qualityScore: 0,
+        audioDurationMs: 0,
+        audioCount: 0,
+        voiceCharacteristics: null,
+        signatureShort: null,
+        version: 0,
+        createdAt: null,
+        updatedAt: null,
+        expiresAt: null,
+        needsCalibration: false,
+        exists: false,
+        consentStatus: {
+          voiceRecordingConsentAt: consentData?.voiceRecordingConsentAt || null,
+          voiceCloningEnabledAt: consentData?.voiceCloningEnabledAt || null,
+          ageVerificationConsentAt: consentData?.ageVerificationConsentAt || null
         }
       });
     }
@@ -830,7 +831,7 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const auth = (request as UnifiedAuthRequest).authContext;
     if (!auth?.isAuthenticated || !auth.registeredUser) {
-      return reply.status(401).send({ success: false, error: 'Authentication required' });
+      return sendUnauthorized(reply, 'Authentication required');
     }
 
     const result = await voiceProfileService.deleteProfile(auth.registeredUser.id);
@@ -842,5 +843,5 @@ export async function voiceProfileRoutes(fastify: FastifyInstance) {
     return reply.send(result);
   });
 
-  console.log('[VoiceProfile] Routes registered: /consent, /register, /:profileId, /, DELETE /');
+  logger.info('VoiceProfile routes registered');
 }

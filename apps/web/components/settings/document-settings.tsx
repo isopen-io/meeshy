@@ -7,6 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { User } from '@/types';
 import { Download, Upload, FolderOpen, HardDrive } from 'lucide-react';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface DocumentSettingsProps {
   user?: User | null;
@@ -14,6 +15,7 @@ interface DocumentSettingsProps {
 }
 
 export default function DocumentSettings({ _user }: DocumentSettingsProps) {
+  const { t } = useI18n('settings');
   const [settings, setSettings] = useState({
     autoDownloadDocs: false,
     maxFileSize: 50,
@@ -40,18 +42,18 @@ export default function DocumentSettings({ _user }: DocumentSettingsProps) {
         <CardHeader>
           <div className="flex items-center gap-2">
             <Download className="h-5 w-5 text-blue-600" />
-            <CardTitle>Download Settings</CardTitle>
+            <CardTitle>{t('document.download.title')}</CardTitle>
           </div>
           <CardDescription>
-            Configure how documents are downloaded
+            {t('document.download.description')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Auto-download documents</Label>
+              <Label>{t('document.download.autoDownload.label')}</Label>
               <p className="text-sm text-muted-foreground">
-                Automatically download documents sent in chats
+                {t('document.download.autoDownload.description')}
               </p>
             </div>
             <Switch
@@ -62,9 +64,9 @@ export default function DocumentSettings({ _user }: DocumentSettingsProps) {
 
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Preview documents</Label>
+              <Label>{t('document.download.preview.label')}</Label>
               <p className="text-sm text-muted-foreground">
-                Show document previews before downloading
+                {t('document.download.preview.description')}
               </p>
             </div>
             <Switch
@@ -74,7 +76,7 @@ export default function DocumentSettings({ _user }: DocumentSettingsProps) {
           </div>
 
           <div className="space-y-2">
-            <Label>Maximum file size for auto-download</Label>
+            <Label>{t('document.download.maxSize.label')}</Label>
             <Select
               value={settings.maxFileSize.toString()}
               onValueChange={(value) => updateSetting('maxFileSize', parseInt(value))}
@@ -83,17 +85,17 @@ export default function DocumentSettings({ _user }: DocumentSettingsProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="10">10 MB</SelectItem>
-                <SelectItem value="25">25 MB</SelectItem>
-                <SelectItem value="50">50 MB (Recommended)</SelectItem>
-                <SelectItem value="100">100 MB</SelectItem>
-                <SelectItem value="500">500 MB</SelectItem>
+                <SelectItem value="10">{t('document.download.maxSize.mb10')}</SelectItem>
+                <SelectItem value="25">{t('document.download.maxSize.mb25')}</SelectItem>
+                <SelectItem value="50">{t('document.download.maxSize.mb50')}</SelectItem>
+                <SelectItem value="100">{t('document.download.maxSize.mb100')}</SelectItem>
+                <SelectItem value="500">{t('document.download.maxSize.mb500')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
-            <Label>Default save location</Label>
+            <Label>{t('document.download.saveLocation.label')}</Label>
             <Select
               value={settings.defaultSaveLocation}
               onValueChange={(value) => updateSetting('defaultSaveLocation', value)}
@@ -102,10 +104,10 @@ export default function DocumentSettings({ _user }: DocumentSettingsProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="downloads">Downloads folder</SelectItem>
-                <SelectItem value="documents">Documents folder</SelectItem>
-                <SelectItem value="desktop">Desktop</SelectItem>
-                <SelectItem value="custom">Custom location</SelectItem>
+                <SelectItem value="downloads">{t('document.download.saveLocation.downloads')}</SelectItem>
+                <SelectItem value="documents">{t('document.download.saveLocation.documents')}</SelectItem>
+                <SelectItem value="desktop">{t('document.download.saveLocation.desktop')}</SelectItem>
+                <SelectItem value="custom">{t('document.download.saveLocation.custom')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -117,18 +119,18 @@ export default function DocumentSettings({ _user }: DocumentSettingsProps) {
         <CardHeader>
           <div className="flex items-center gap-2">
             <Upload className="h-5 w-5 text-green-600" />
-            <CardTitle>Upload Settings</CardTitle>
+            <CardTitle>{t('document.upload.title')}</CardTitle>
           </div>
           <CardDescription>
-            Configure document upload preferences
+            {t('document.upload.description')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Compress uploads</Label>
+              <Label>{t('document.upload.compress.label')}</Label>
               <p className="text-sm text-muted-foreground">
-                Compress documents before uploading to save bandwidth
+                {t('document.upload.compress.description')}
               </p>
             </div>
             <Switch
@@ -139,9 +141,9 @@ export default function DocumentSettings({ _user }: DocumentSettingsProps) {
 
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Keep originals</Label>
+              <Label>{t('document.upload.keepOriginals.label')}</Label>
               <p className="text-sm text-muted-foreground">
-                Keep original files after uploading compressed versions
+                {t('document.upload.keepOriginals.description')}
               </p>
             </div>
             <Switch
@@ -152,9 +154,9 @@ export default function DocumentSettings({ _user }: DocumentSettingsProps) {
 
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Warn for large files</Label>
+              <Label>{t('document.upload.warnLarge.label')}</Label>
               <p className="text-sm text-muted-foreground">
-                Show warning before uploading files over 50MB
+                {t('document.upload.warnLarge.description')}
               </p>
             </div>
             <Switch
@@ -164,7 +166,7 @@ export default function DocumentSettings({ _user }: DocumentSettingsProps) {
           </div>
 
           <div className="space-y-2">
-            <Label>Allowed file types</Label>
+            <Label>{t('document.upload.fileTypes.label')}</Label>
             <Select
               value={settings.allowedFileTypes}
               onValueChange={(value) => updateSetting('allowedFileTypes', value)}
@@ -173,11 +175,11 @@ export default function DocumentSettings({ _user }: DocumentSettingsProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All file types</SelectItem>
-                <SelectItem value="documents">Documents only (PDF, DOC, TXT)</SelectItem>
-                <SelectItem value="images">Images only (PNG, JPG, GIF)</SelectItem>
-                <SelectItem value="media">Media files (Images, Video, Audio)</SelectItem>
-                <SelectItem value="archives">Archives (ZIP, RAR, 7Z)</SelectItem>
+                <SelectItem value="all">{t('document.upload.fileTypes.all')}</SelectItem>
+                <SelectItem value="documents">{t('document.upload.fileTypes.documents')}</SelectItem>
+                <SelectItem value="images">{t('document.upload.fileTypes.images')}</SelectItem>
+                <SelectItem value="media">{t('document.upload.fileTypes.media')}</SelectItem>
+                <SelectItem value="archives">{t('document.upload.fileTypes.archives')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -189,18 +191,18 @@ export default function DocumentSettings({ _user }: DocumentSettingsProps) {
         <CardHeader>
           <div className="flex items-center gap-2">
             <FolderOpen className="h-5 w-5 text-purple-600" />
-            <CardTitle>Organization</CardTitle>
+            <CardTitle>{t('document.organization.title')}</CardTitle>
           </div>
           <CardDescription>
-            Keep your documents organized automatically
+            {t('document.organization.description')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Auto-organize by type</Label>
+              <Label>{t('document.organization.autoOrganize.label')}</Label>
               <p className="text-sm text-muted-foreground">
-                Automatically organize files into folders by type
+                {t('document.organization.autoOrganize.description')}
               </p>
             </div>
             <Switch
@@ -210,7 +212,7 @@ export default function DocumentSettings({ _user }: DocumentSettingsProps) {
           </div>
 
           <div className="space-y-2">
-            <Label>Auto-delete old downloads</Label>
+            <Label>{t('document.organization.autoDelete.label')}</Label>
             <Select
               value={settings.deleteAfterDays.toString()}
               onValueChange={(value) => updateSetting('deleteAfterDays', parseInt(value))}
@@ -219,15 +221,15 @@ export default function DocumentSettings({ _user }: DocumentSettingsProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="0">Never</SelectItem>
-                <SelectItem value="7">After 7 days</SelectItem>
-                <SelectItem value="30">After 30 days</SelectItem>
-                <SelectItem value="90">After 90 days</SelectItem>
-                <SelectItem value="180">After 6 months</SelectItem>
+                <SelectItem value="0">{t('document.organization.autoDelete.never')}</SelectItem>
+                <SelectItem value="7">{t('document.organization.autoDelete.after7')}</SelectItem>
+                <SelectItem value="30">{t('document.organization.autoDelete.after30')}</SelectItem>
+                <SelectItem value="90">{t('document.organization.autoDelete.after90')}</SelectItem>
+                <SelectItem value="180">{t('document.organization.autoDelete.after6m')}</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-sm text-muted-foreground">
-              Automatically delete downloaded files after specified period
+              {t('document.organization.autoDelete.description')}
             </p>
           </div>
         </CardContent>
@@ -238,18 +240,18 @@ export default function DocumentSettings({ _user }: DocumentSettingsProps) {
         <CardHeader>
           <div className="flex items-center gap-2">
             <HardDrive className="h-5 w-5 text-red-600" />
-            <CardTitle>Security</CardTitle>
+            <CardTitle>{t('document.security.title')}</CardTitle>
           </div>
           <CardDescription>
-            Protect yourself from malicious files
+            {t('document.security.description')}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Scan for viruses</Label>
+              <Label>{t('document.security.scanViruses.label')}</Label>
               <p className="text-sm text-muted-foreground">
-                Automatically scan downloaded files for malware
+                {t('document.security.scanViruses.description')}
               </p>
             </div>
             <Switch
@@ -260,9 +262,9 @@ export default function DocumentSettings({ _user }: DocumentSettingsProps) {
 
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Block executable files</Label>
+              <Label>{t('document.security.blockExecutables.label')}</Label>
               <p className="text-sm text-muted-foreground">
-                Prevent downloading .exe, .bat, .sh and other executable files
+                {t('document.security.blockExecutables.description')}
               </p>
             </div>
             <Switch
@@ -273,8 +275,7 @@ export default function DocumentSettings({ _user }: DocumentSettingsProps) {
 
           <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
             <p className="text-sm text-yellow-800 dark:text-yellow-200">
-              <strong>Security Note:</strong> Always be cautious when downloading files from unknown sources.
-              Enable virus scanning and block executable files for maximum protection.
+              {t('document.security.note')}
             </p>
           </div>
         </CardContent>

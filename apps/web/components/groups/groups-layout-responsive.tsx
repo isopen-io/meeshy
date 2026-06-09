@@ -139,7 +139,7 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
       }
     } catch (error) {
       console.error('Erreur chargement groupes:', error);
-      toast.error('Erreur lors du chargement des groupes');
+      toast.error(tGroups('groups.errors.loadError'));
     } finally {
       setIsLoading(false);
     }
@@ -166,11 +166,11 @@ export function GroupsLayoutResponsive({ selectedGroupIdentifier }: GroupsLayout
         }
       } else {
         console.error('Erreur chargement détails groupe');
-        toast.error('Erreur lors du chargement du groupe');
+        toast.error(tGroups('groups.errors.loadingGroupError'));
       }
     } catch (error) {
       console.error('Erreur:', error);
-      toast.error('Erreur lors du chargement du groupe');
+      toast.error(tGroups('groups.errors.loadingGroupError'));
     }
   }, [isMobile]);
 

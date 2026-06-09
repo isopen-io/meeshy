@@ -819,4 +819,39 @@ final class LastMessageSurvivorTests: XCTestCase {
         let messages = [msg("m1", at: 100, deleted: true), msg("m2", at: 200)]
         XCTAssertNil(ConversationSyncEngine.mostRecentSurvivor(in: messages, excluding: "m2"))
     }
+
+    // MARK: - mergeDeltaConversations (delta sync, O(existing + deltas))
+
+    private func conv(_ id: String, identifier: String? = nil, active: Bool = true) -> MeeshyConversation {
+        MeeshyConversation(id: id, identifier: identifier ?? id, isActive: active)
+    }
+
+    func test_mergeDeltaConversations_upsertsActive_removesInactive_addsNew() {
+        let existing = [conv("a"), conv("b"), conv("c")]
+        let deltas = [
+            conv("b", identifier: "b-updated"), // update in place
+            conv("c", active: false),           // remove
+            conv("d")                           // new
+        ]
+        let (merged, removedIds) = ConversationSyncEngine.mergeDeltaConversations(existing: existing, deltas: deltas)
+        XCTAssertEqual(Set(merged.map(\.id)), ["a", "b", "d"])
+        XCTAssertEqual(merged.first(where: { $0.id == "b" })?.identifier, "b-updated")
+        XCTAssertEqual(removedIds, ["c"])
+    }
+
+    func test_mergeDeltaConversations_inactiveNotInExisting_stillReportedForInvalidation() {
+        // The original loop invalidated the message cache for EVERY inactive
+        // delta, present or not — preserve that.
+        let (merged, removedIds) = ConversationSyncEngine.mergeDeltaConversations(
+            existing: [conv("a")], deltas: [conv("z", active: false)])
+        XCTAssertEqual(Set(merged.map(\.id)), ["a"])
+        XCTAssertEqual(removedIds, ["z"])
+    }
+
+    func test_mergeDeltaConversations_emptyDeltas_returnsExistingUntouched() {
+        let (merged, removedIds) = ConversationSyncEngine.mergeDeltaConversations(
+            existing: [conv("a"), conv("b")], deltas: [])
+        XCTAssertEqual(Set(merged.map(\.id)), ["a", "b"])
+        XCTAssertTrue(removedIds.isEmpty)
+    }
 }

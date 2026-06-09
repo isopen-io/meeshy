@@ -3,6 +3,9 @@
  */
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'AttachmentUploadRoutes' });
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AttachmentService } from '../../services/attachments';
 import {
@@ -101,25 +104,15 @@ export async function registerUploadRoutes(
             const metadataValue = await part.value;
             try {
               const metadata = JSON.parse(metadataValue as string);
-              console.log(`[AttachmentRoutes] Metadata received for file ${index}:`, {
-                hasDuration: !!metadata.duration,
-                duration: metadata.duration,
-                fullMetadata: metadata
-              });
+              logger.debug('Metadata received for file', { index, hasDuration: !!metadata.duration, duration: metadata.duration, fullMetadata: metadata });
               metadataMap.set(index, metadata);
             } catch (error) {
-              console.warn('[AttachmentRoutes] Impossible de parser les métadonnées:', error);
+              logger.warn('Impossible de parser les métadonnées', error as Error);
             }
           }
         }
 
-        console.log('[AttachmentRoutes] Files received:', files.map((f, i) => ({
-          index: i,
-          filename: f.filename,
-          mimeType: f.mimeType,
-          size: f.size,
-          bufferLength: f.buffer.length
-        })));
+        logger.debug('Files received', { count: files.length });
 
         if (files.length === 0) {
           return reply.status(400).send({
@@ -176,7 +169,7 @@ export async function registerUploadRoutes(
           data: { attachments: results },
         });
       } catch (error: any) {
-        console.error('[AttachmentRoutes] Error uploading files:', error);
+        logger.error('Error uploading files', error as Error);
         return reply.status(500).send({
           success: false,
           error: error.message || 'Error uploading files',
@@ -263,7 +256,7 @@ export async function registerUploadRoutes(
           data: { attachment: result },
         });
       } catch (error: any) {
-        console.error('[AttachmentRoutes] Error creating text attachment:', error);
+        logger.error('Error creating text attachment', error as Error);
         return reply.status(500).send({
           success: false,
           error: error.message || 'Error creating text attachment',

@@ -5,7 +5,7 @@ import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { isScanActive } from '@meeshy/shared/types/agent';
 import { logError } from '../../utils/logger';
 import { getCacheStore } from '../../services/CacheStore';
-import { sendSuccess, sendError, sendBadRequest, sendNotFound, sendInternalError } from '../../utils/response';
+import { sendSuccess, sendError, sendBadRequest, sendNotFound, sendInternalError, sendPaginatedSuccess } from '../../utils/response';
 import { AgentHttpClient, AgentUnavailableError } from '../../services/AgentHttpClient';
 import type { UnifiedAuthRequest } from '../../middleware/auth';
 
@@ -289,32 +289,29 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         },
       });
 
-      return reply.send({
-        success: true,
-        data: {
-          totalConfigs: configsCount,
-          activeConfigs: activeCount,
-          totalRoles: rolesCount,
-          totalArchetypes: listArchetypes().length,
-          totalControlledUsers: uniqueControlledUsers.length,
-          totalMessagesSent: analyticsAgg._sum.messagesSent ?? 0,
-          totalWordsSent: analyticsAgg._sum.totalWordsSent ?? 0,
-          avgConfidence: analyticsAgg._avg.avgConfidence ?? 0,
-          recentActivity: recentAnalytics.map((a) => ({
-            conversationId: a.conversationId,
-            conversation: a.conversation
-              ? { id: a.conversation.id, title: a.conversation.title, type: a.conversation.type }
-              : null,
-            messagesSent: a.messagesSent,
-            totalWordsSent: a.totalWordsSent,
-            avgConfidence: a.avgConfidence,
-            lastResponseAt: a.lastResponseAt?.toISOString() ?? null,
-          })),
-        },
+      return sendSuccess(reply, {
+        totalConfigs: configsCount,
+        activeConfigs: activeCount,
+        totalRoles: rolesCount,
+        totalArchetypes: listArchetypes().length,
+        totalControlledUsers: uniqueControlledUsers.length,
+        totalMessagesSent: analyticsAgg._sum.messagesSent ?? 0,
+        totalWordsSent: analyticsAgg._sum.totalWordsSent ?? 0,
+        avgConfidence: analyticsAgg._avg.avgConfidence ?? 0,
+        recentActivity: recentAnalytics.map((a) => ({
+          conversationId: a.conversationId,
+          conversation: a.conversation
+            ? { id: a.conversation.id, title: a.conversation.title, type: a.conversation.type }
+            : null,
+          messagesSent: a.messagesSent,
+          totalWordsSent: a.totalWordsSent,
+          avgConfidence: a.avgConfidence,
+          lastResponseAt: a.lastResponseAt?.toISOString() ?? null,
+        })),
       });
     } catch (error) {
       logError(fastify.log, 'Error fetching agent stats:', error);
-      return reply.status(500).send({ success: false, message: 'Erreur lors de la récupération des stats agent' });
+      return sendInternalError(reply, 'Erreur lors de la récupération des stats agent');
     }
   });
 
@@ -482,7 +479,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       });
     } catch (error) {
       logError(fastify.log, 'Error fetching agent configs:', error);
-      return reply.status(500).send({ success: false, message: 'Erreur lors de la récupération des configs' });
+      return sendInternalError(reply, 'Erreur lors de la récupération des configs');
     }
   });
 
@@ -503,7 +500,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       if (!validateObjectId(conversationId, 'conversationId', reply)) return;
       const config = await fastify.prisma.agentConfig.findUnique({ where: { conversationId } });
       if (!config) {
-        return reply.status(404).send({ success: false, message: 'Config non trouvée' });
+        return sendNotFound(reply, 'Config non trouvée');
       }
       const roles = await fastify.prisma.agentUserRole.findMany({
         where: { conversationId },
@@ -512,10 +509,10 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       const roleUserIds = roles.map((r) => r.userId);
       const manualIds = (config.manualUserIds ?? []) as string[];
       const mergedUserIds = [...new Set([...roleUserIds, ...manualIds])];
-      return reply.send({ success: true, data: { ...config, controlledUserIds: mergedUserIds } });
+      return sendSuccess(reply, { ...config, controlledUserIds: mergedUserIds });
     } catch (error) {
       logError(fastify.log, 'Error fetching agent config:', error);
-      return reply.status(500).send({ success: false, message: 'Erreur serveur' });
+      return sendInternalError(reply, 'Erreur serveur');
     }
   });
 
@@ -604,7 +601,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       return reply.send({ success: true, data: config, cacheInvalidation: invalidationStatus });
     } catch (error) {
       logError(fastify.log, 'Error upserting agent config:', error);
-      return reply.status(500).send({ success: false, message: 'Erreur serveur' });
+      return sendInternalError(reply, 'Erreur serveur');
     }
   });
 
@@ -628,10 +625,10 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       // the deleted conversation immediately (without it the agent could run
       // up to 5 more minutes on a config that no longer exists in Mongo).
       await broadcastInvalidation({ conversationId });
-      return reply.send({ success: true, message: 'Config supprimée' });
+      return sendSuccess(reply, null, { message: 'Config supprimée' });
     } catch (error) {
       logError(fastify.log, 'Error deleting agent config:', error);
-      return reply.status(500).send({ success: false, message: 'Erreur serveur' });
+      return sendInternalError(reply, 'Erreur serveur');
     }
   });
 
@@ -651,10 +648,10 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       const { conversationId } = request.params as { conversationId: string };
       if (!validateObjectId(conversationId, 'conversationId', reply)) return;
       const roles = await fastify.prisma.agentUserRole.findMany({ where: { conversationId } });
-      return reply.send({ success: true, data: roles });
+      return sendSuccess(reply, roles);
     } catch (error) {
       logError(fastify.log, 'Error fetching agent roles:', error);
-      return reply.status(500).send({ success: false, message: 'Erreur serveur' });
+      return sendInternalError(reply, 'Erreur serveur');
     }
   });
 
@@ -681,13 +678,13 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       if (!validateObjectId(userId, 'userId', reply)) return;
       const assignBody = z.object({ archetypeId: z.string().min(1) }).safeParse(request.body);
       if (!assignBody.success) {
-        return reply.status(400).send({ success: false, message: 'archetypeId requis' });
+        return sendBadRequest(reply, 'archetypeId requis');
       }
       const { archetypeId } = assignBody.data;
 
       const archetype = getArchetype(archetypeId);
       if (!archetype) {
-        return reply.status(404).send({ success: false, message: 'Archétype non trouvé' });
+        return sendNotFound(reply, 'Archétype non trouvé');
       }
 
       const role = await fastify.prisma.agentUserRole.upsert({
@@ -725,10 +722,10 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         },
       });
 
-      return reply.send({ success: true, data: role });
+      return sendSuccess(reply, role);
     } catch (error) {
       logError(fastify.log, 'Error assigning archetype:', error);
-      return reply.status(500).send({ success: false, message: 'Erreur serveur' });
+      return sendInternalError(reply, 'Erreur serveur');
     }
   });
 
@@ -752,10 +749,10 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         where: { userId_conversationId: { userId, conversationId } },
         data: { locked: false, confidence: 0 },
       });
-      return reply.send({ success: true, data: role });
+      return sendSuccess(reply, role);
     } catch (error) {
       logError(fastify.log, 'Error unlocking role:', error);
-      return reply.status(500).send({ success: false, message: 'Erreur serveur' });
+      return sendInternalError(reply, 'Erreur serveur');
     }
   });
 
@@ -770,7 +767,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       response: { 200: successArrayResponse, ...stdErrors },
     },
   }, async (_request: FastifyRequest, reply: FastifyReply) => {
-    return reply.send({ success: true, data: listArchetypes() });
+    return sendSuccess(reply, listArchetypes());
   });
 
   // GET /llm
@@ -787,20 +784,17 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
     try {
       const config = await fastify.prisma.agentLlmConfig.findFirst({ orderBy: { updatedAt: 'desc' } });
       if (!config) {
-        return reply.send({ success: true, data: null });
+        return sendSuccess(reply, null);
       }
       const { apiKeyEncrypted, fallbackApiKeyEncrypted, ...safeConfig } = config;
-      return reply.send({
-        success: true,
-        data: {
-          ...safeConfig,
-          hasApiKey: !!apiKeyEncrypted,
-          hasFallbackApiKey: !!fallbackApiKeyEncrypted,
-        },
+      return sendSuccess(reply, {
+        ...safeConfig,
+        hasApiKey: !!apiKeyEncrypted,
+        hasFallbackApiKey: !!fallbackApiKeyEncrypted,
       });
     } catch (error) {
       logError(fastify.log, 'Error fetching LLM config:', error);
-      return reply.status(500).send({ success: false, message: 'Erreur serveur' });
+      return sendInternalError(reply, 'Erreur serveur');
     }
   });
 
@@ -857,7 +851,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       });
     } catch (error) {
       logError(fastify.log, 'Error updating LLM config:', error);
-      return reply.status(500).send({ success: false, message: 'Erreur serveur' });
+      return sendInternalError(reply, 'Erreur serveur');
     }
   });
 
@@ -922,7 +916,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       });
     } catch (error) {
       logError(fastify.log, 'Error during conversation reset:', error);
-      return reply.status(500).send({ success: false, message: 'Erreur lors du reset conversation' });
+      return sendInternalError(reply, 'Erreur lors du reset conversation');
     }
   });
 
@@ -994,7 +988,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       });
     } catch (error) {
       logError(fastify.log, 'Error during user reset:', error);
-      return reply.status(500).send({ success: false, message: 'Erreur lors du reset utilisateur' });
+      return sendInternalError(reply, 'Erreur lors du reset utilisateur');
     }
   });
 
@@ -1048,7 +1042,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       });
     } catch (error) {
       logError(fastify.log, 'Error during agent reset:', error);
-      return reply.status(500).send({ success: false, message: 'Erreur lors du reset agent' });
+      return sendInternalError(reply, 'Erreur lors du reset agent');
     }
   });
 
@@ -1069,12 +1063,12 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       if (!validateObjectId(conversationId, 'conversationId', reply)) return;
       const summary = await fastify.prisma.agentConversationSummary.findUnique({ where: { conversationId } });
       if (!summary) {
-        return reply.status(404).send({ success: false, message: 'Résumé non trouvé' });
+        return sendNotFound(reply, 'Résumé non trouvé');
       }
-      return reply.send({ success: true, data: summary });
+      return sendSuccess(reply, summary);
     } catch (error) {
       logError(fastify.log, 'Error fetching agent summary:', error);
-      return reply.status(500).send({ success: false, message: 'Erreur serveur' });
+      return sendInternalError(reply, 'Erreur serveur');
     }
   });
 
@@ -1124,46 +1118,43 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         : [];
       const userMap = new Map(users.map((u) => [u.id, u]));
 
-      return reply.send({
-        success: true,
-        data: {
-          conversationId,
-          summary: summaryRaw ?? '',
-          toneProfiles,
-          cachedMessageCount: messages.length,
-          isScanning: isScanActive(agentConfig?.scanStartedAt),
-          currentNode: isScanActive(agentConfig?.scanStartedAt) ? (agentConfig?.currentNode ?? null) : null,
-          analytics: analytics
-            ? {
-                messagesSent: analytics.messagesSent,
-                totalWordsSent: analytics.totalWordsSent,
-                avgConfidence: analytics.avgConfidence,
-                lastResponseAt: analytics.lastResponseAt?.toISOString() ?? null,
-              }
-            : null,
-          summaryRecord: summaryRecord
-            ? {
-                summary: summaryRecord.summary,
-                currentTopics: summaryRecord.currentTopics,
-                overallTone: summaryRecord.overallTone,
-                messageCount: summaryRecord.messageCount,
-              }
-            : null,
-          controlledUsers: roles.map((r) => {
-            const user = userMap.get(r.userId);
-            return {
-              userId: r.userId,
-              displayName: user?.displayName ?? user?.username ?? r.userId,
-              systemLanguage: user?.systemLanguage ?? 'fr',
-              confidence: r.confidence,
-              locked: r.locked,
-            };
-          }),
-        },
+      return sendSuccess(reply, {
+        conversationId,
+        summary: summaryRaw ?? '',
+        toneProfiles,
+        cachedMessageCount: messages.length,
+        isScanning: isScanActive(agentConfig?.scanStartedAt),
+        currentNode: isScanActive(agentConfig?.scanStartedAt) ? (agentConfig?.currentNode ?? null) : null,
+        analytics: analytics
+          ? {
+              messagesSent: analytics.messagesSent,
+              totalWordsSent: analytics.totalWordsSent,
+              avgConfidence: analytics.avgConfidence,
+              lastResponseAt: analytics.lastResponseAt?.toISOString() ?? null,
+            }
+          : null,
+        summaryRecord: summaryRecord
+          ? {
+              summary: summaryRecord.summary,
+              currentTopics: summaryRecord.currentTopics,
+              overallTone: summaryRecord.overallTone,
+              messageCount: summaryRecord.messageCount,
+            }
+          : null,
+        controlledUsers: roles.map((r) => {
+          const user = userMap.get(r.userId);
+          return {
+            userId: r.userId,
+            displayName: user?.displayName ?? user?.username ?? r.userId,
+            systemLanguage: user?.systemLanguage ?? 'fr',
+            confidence: r.confidence,
+            locked: r.locked,
+          };
+        }),
       });
     } catch (error) {
       logError(fastify.log, 'Error fetching live analytics:', error);
-      return reply.status(500).send({ success: false, message: 'Erreur serveur' });
+      return sendInternalError(reply, 'Erreur serveur');
     }
   });
 
@@ -1249,10 +1240,10 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
         };
       });
 
-      return reply.send({ success: true, data: result });
+      return sendSuccess(reply, result);
     } catch (error) {
       logError(fastify.log, 'Error fetching recent activity:', error);
-      return reply.status(500).send({ success: false, message: 'Erreur serveur' });
+      return sendInternalError(reply, 'Erreur serveur');
     }
   });
 
@@ -1695,10 +1686,10 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       if (!config) {
         config = await fastify.prisma.agentGlobalConfig.create({ data: {} });
       }
-      return reply.send({ success: true, data: config });
+      return sendSuccess(reply, config);
     } catch (error) {
       logError(fastify.log, 'Error fetching global agent config:', error);
-      return reply.status(500).send({ success: false, message: 'Erreur serveur' });
+      return sendInternalError(reply, 'Erreur serveur');
     }
   });
 
@@ -1742,7 +1733,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       return reply.send({ success: true, data: config, cacheInvalidation: invalidationStatus });
     } catch (error) {
       logError(fastify.log, 'Error upserting global agent config:', error);
-      return reply.status(500).send({ success: false, message: 'Erreur serveur' });
+      return sendInternalError(reply, 'Erreur serveur');
     }
   });
 

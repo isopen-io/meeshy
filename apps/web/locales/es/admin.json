@@ -141,7 +141,40 @@
       "queueItemAlreadySent": "Mensaje ya enviado",
       "queueItemDeleteError": "Error al eliminar el mensaje",
       "queueItemEdited": "Mensaje editado",
-      "queueItemEditError": "Error al editar el mensaje"
+      "queueItemEditError": "Error al editar el mensaje",
+      "conversationConfigUpdated": "Configuración de conversación actualizada",
+      "archetypesLoadError": "Error al cargar arquetipos",
+      "configLoadError": "Error al cargar configuraciones",
+      "agentEnabled": "Agente activado",
+      "agentDisabled": "Agente desactivado",
+      "configDeleted": "Configuración eliminada",
+      "deleteError": "Error al eliminar"
+    },
+    "scheduling": {
+      "fixedTime": "Hora fija",
+      "delay": "En X tiempo",
+      "frequency": "Frecuencia",
+      "timerWarning": "Este temporizador se pierde si cierras la página o el navegador.",
+      "dragToMove": "arrastrar para mover",
+      "notAvailable": "Programación no disponible",
+      "triggerNow": "Disparar ahora",
+      "stop": "STOP!"
+    },
+    "topics": {
+      "title": "Catálogo de temas",
+      "description": "Temas dinámicos utilizados por el estratega para sugerir nuevos hilos de conversación. Los cambios aquí se propagan a los agentes en menos de 5 segundos.",
+      "newTopic": "Nuevo tema",
+      "reload": "Recargar",
+      "colActive": "Activo",
+      "colSlug": "Slug",
+      "colLabel": "Etiqueta",
+      "colCooldown": "Cooldown",
+      "colPatterns": "Patrones",
+      "colActions": "Acciones",
+      "emptyState": "No hay temas en el catálogo. El agente sembrará automáticamente 13 temas iniciales al próximo arranque.",
+      "editTitle": "Editar",
+      "disableTitle": "Desactivar (soft delete)",
+      "deleteTitle": "Eliminar definitivamente"
     }
   },
   "agentLive": {
@@ -196,6 +229,12 @@
   },
   "security": {
     "enable2FA": "Activar 2FA",
-    "disable2FA": "Desactivar 2FA"
-  }
+    "disable2FA": "Desactivar 2FA",
+    "accountUnlocked": "Cuenta desbloqueada con éxito",
+    "twoFactorEnabled": "2FA activado con éxito",
+    "twoFactorDisabled": "2FA desactivado con éxito",
+    "disabled": "Desactivado"
+  },
+  "logoutSuccess": "Sesión cerrada con éxito",
+  "logoutError": "Error al cerrar sesión"
 }

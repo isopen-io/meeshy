@@ -260,7 +260,7 @@ struct RequestsTab: View {
         VStack(spacing: 16) {
             Spacer()
             Image(systemName: icon)
-                .font(.system(size: 48, weight: .light))
+                .font(.system(.largeTitle).weight(.light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
                 .accessibilityHidden(true)
             Text(text)

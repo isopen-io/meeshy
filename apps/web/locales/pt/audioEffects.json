@@ -46,7 +46,8 @@
         "microphoneAccessDenied": "Acesso ao microfone negado.",
         "noMicrophoneFound": "Nenhum microfone encontrado.",
         "microphoneError": "Erro no microfone.",
-        "cannotAccessMicrophone": "Não é possível acessar o microfone."
+        "cannotAccessMicrophone": "Não é possível acessar o microfone.",
+        "playbackError": "Erro de reprodução"
       }
     },
     "voiceCoder": {
@@ -80,7 +81,21 @@
         "pentatonic": "Pentatônica"
       },
       "key": {
-        "label": "Tonalidade"
+        "label": "Tonalidade",
+        "notes": {
+          "C": "Dó (C)",
+          "Cs": "Dó# (C#)",
+          "D": "Ré (D)",
+          "Ds": "Ré# (D#)",
+          "E": "Mi (E)",
+          "F": "Fá (F)",
+          "Fs": "Fá# (F#)",
+          "G": "Sol (G)",
+          "Gs": "Sol# (G#)",
+          "A": "Lá (A)",
+          "As": "Lá# (A#)",
+          "B": "Si (B)"
+        }
       },
       "harmonization": {
         "label": "Harmonias vocais",
@@ -319,7 +334,8 @@
       "off": "Desativado",
       "active": "Ativo",
       "inactive": "Inativo"
-    }
+    },
+    "closePanel": "Fechar painel de efeitos de áudio"
   },
   "microphone": {
     "noMicDetected": "Nenhum microfone detectado.",

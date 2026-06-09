@@ -101,11 +101,11 @@ export function AttachmentGallery({
         onClose();
       }
 
-      toast.success('Fichier supprimé avec succès');
+      toast.success(t('gallery.deleteSuccess'));
       setShowDeleteConfirm(false);
     } catch (error) {
       console.error('Erreur suppression attachment:', error);
-      toast.error('Impossible de supprimer le fichier');
+      toast.error(t('gallery.deleteError'));
     } finally {
       setIsDeleting(false);
     }
@@ -297,7 +297,7 @@ export function AttachmentGallery({
                     size="sm"
                     onClick={handleOpenDeleteConfirm}
                     className="text-red-400 hover:bg-red-500/10 hover:text-red-300"
-                    title={t('contextMenu.delete')}
+                    title={t('gallery.delete')}
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>

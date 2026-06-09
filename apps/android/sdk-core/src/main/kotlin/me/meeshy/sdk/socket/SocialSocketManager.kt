@@ -1,0 +1,69 @@
+package me.meeshy.sdk.socket
+
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.serialization.json.Json
+import me.meeshy.sdk.model.SocketPostCreatedData
+import me.meeshy.sdk.model.SocketPostLikedData
+import me.meeshy.sdk.model.SocketPostUnlikedData
+import me.meeshy.sdk.model.SocketPostDeletedData
+import me.meeshy.sdk.model.SocketCommentAddedData
+import me.meeshy.sdk.model.SocketCommentLikedData
+import me.meeshy.sdk.model.SocketStoryCreatedData
+import me.meeshy.sdk.model.SocketStoryViewedData
+import org.json.JSONObject
+import timber.log.Timber
+import javax.inject.Inject
+import javax.inject.Singleton
+
+/**
+ * Subscribes to social-domain Socket.IO events (ARCHITECTURE.md §3).
+ * Mirrors iOS SocialSocketManager.
+ */
+@Singleton
+class SocialSocketManager @Inject constructor(
+    private val socketManager: SocketManager,
+    private val json: Json,
+) {
+    private val _postCreated = buf<SocketPostCreatedData>()
+    private val _postLiked = buf<SocketPostLikedData>()
+    private val _postUnliked = buf<SocketPostUnlikedData>()
+    private val _postDeleted = buf<SocketPostDeletedData>()
+    private val _commentAdded = buf<SocketCommentAddedData>()
+    private val _commentLiked = buf<SocketCommentLikedData>()
+    private val _storyCreated = buf<SocketStoryCreatedData>()
+    private val _storyViewed = buf<SocketStoryViewedData>()
+
+    val postCreated: SharedFlow<SocketPostCreatedData> = _postCreated.asSharedFlow()
+    val postLiked: SharedFlow<SocketPostLikedData> = _postLiked.asSharedFlow()
+    val postUnliked: SharedFlow<SocketPostUnlikedData> = _postUnliked.asSharedFlow()
+    val postDeleted: SharedFlow<SocketPostDeletedData> = _postDeleted.asSharedFlow()
+    val commentAdded: SharedFlow<SocketCommentAddedData> = _commentAdded.asSharedFlow()
+    val commentLiked: SharedFlow<SocketCommentLikedData> = _commentLiked.asSharedFlow()
+    val storyCreated: SharedFlow<SocketStoryCreatedData> = _storyCreated.asSharedFlow()
+    val storyViewed: SharedFlow<SocketStoryViewedData> = _storyViewed.asSharedFlow()
+
+    fun attach() {
+        listen("post:created") { _postCreated.tryEmit(it) }
+        listen("post:liked") { _postLiked.tryEmit(it) }
+        listen("post:unliked") { _postUnliked.tryEmit(it) }
+        listen("post:deleted") { _postDeleted.tryEmit(it) }
+        listen("comment:added") { _commentAdded.tryEmit(it) }
+        listen("comment:liked") { _commentLiked.tryEmit(it) }
+        listen("story:created") { _storyCreated.tryEmit(it) }
+        listen("story:viewed") { _storyViewed.tryEmit(it) }
+    }
+
+    private inline fun <reified T> listen(event: String, crossinline emit: (T) -> Unit) {
+        socketManager.on(event) { args ->
+            runCatching {
+                val raw = (args.firstOrNull() as? JSONObject)?.toString() ?: return@on
+                emit(json.decodeFromString<T>(raw))
+            }.onFailure { Timber.e(it, "Socket decode error [$event]: ${T::class.simpleName}") }
+        }
+    }
+
+    private fun <T> buf(): MutableSharedFlow<T> =
+        MutableSharedFlow(replay = 0, extraBufferCapacity = 64)
+}

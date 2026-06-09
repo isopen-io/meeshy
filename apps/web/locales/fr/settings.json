@@ -105,7 +105,8 @@
           "enterCode": "Code reçu par SMS"
         },
         "resend": "Renvoyer",
-        "sending": "Envoi..."
+        "sending": "Envoi...",
+        "codePlaceholder": "000000"
       },
       "email": {
         "available": "Email disponible",
@@ -128,7 +129,8 @@
         "verificationSent": "Code de vérification envoyé par SMS",
         "error": "Erreur lors du changement",
         "pending": "Changement en attente",
-        "pendingMessage": "Code envoyé à {phone}"
+        "pendingMessage": "Code envoyé à {phone}",
+        "newPhonePlaceholder": "6 12 34 56 78"
       },
       "username": {
         "available": "Nom d'utilisateur disponible",
@@ -468,7 +470,10 @@
         "audioDesc": "Transcrire et traduire les messages audio",
         "generateAudio": "Générer audio traduit",
         "generateAudioDesc": "Créer une version audio de la traduction",
-        "format": "Format audio"
+        "format": "Format audio",
+        "formatMp3": "MP3 (recommandé)",
+        "formatOgg": "OGG (meilleure qualité)",
+        "formatWav": "WAV (non compressé)"
       },
       "gdpr": {
         "title": "Informations sur vos données",
@@ -712,6 +717,274 @@
       "errors": {
         "allRequired": "Tous les consentements requis doivent être acceptés pour continuer",
         "submitFailed": "Échec de l'enregistrement des préférences de consentement. Veuillez réessayer."
+      }
+    },
+    "video": {
+      "title": "Paramètres d'appel vidéo",
+      "description": "Configurez vos préférences d'appel vidéo",
+      "enableVideo": {
+        "label": "Activer la vidéo",
+        "description": "Autoriser les appels vidéo dans les conversations"
+      },
+      "autoStartVideo": {
+        "label": "Démarrage automatique de la vidéo",
+        "description": "Activer automatiquement la caméra en rejoignant un appel"
+      },
+      "mirrorVideo": {
+        "label": "Miroir de ma vidéo",
+        "description": "Inverser la vidéo horizontalement"
+      },
+      "virtualBackground": {
+        "label": "Fond virtuel",
+        "description": "Activer les effets de fond virtuel"
+      },
+      "quality": {
+        "title": "Qualité vidéo",
+        "description": "Ajustez la qualité vidéo et l'utilisation de la bande passante",
+        "label": "Qualité vidéo",
+        "auto": "Auto (Recommandé)",
+        "low": "Faible (240p) - Économiser la bande passante",
+        "medium": "Moyen (480p)",
+        "high": "Élevé (720p)",
+        "hd": "HD (1080p) - Haute bande passante"
+      },
+      "frameRate": {
+        "label": "Fréquence d'images",
+        "fps15": "15 FPS - Économiser la bande passante",
+        "fps24": "24 FPS",
+        "fps30": "30 FPS (Recommandé)",
+        "fps60": "60 FPS - Mouvement fluide"
+      },
+      "audioProcessing": {
+        "title": "Traitement audio",
+        "description": "Configurer les fonctionnalités d'amélioration audio",
+        "noiseSupression": {
+          "label": "Suppression du bruit",
+          "description": "Réduire le bruit de fond pendant les appels"
+        },
+        "echoCancellation": {
+          "label": "Annulation d'écho",
+          "description": "Prévenir les retours audio et les échos"
+        }
+      },
+      "screenSharing": {
+        "title": "Partage d'écran",
+        "description": "Configurer les préférences de partage d'écran",
+        "qualityLabel": "Qualité du partage d'écran",
+        "qualityLow": "Faible - Meilleures performances",
+        "qualityMedium": "Moyen",
+        "qualityHigh": "Élevé (Recommandé)",
+        "qualityUltra": "Ultra - Meilleure qualité",
+        "systemAudio": {
+          "label": "Partager l'audio système",
+          "description": "Inclure l'audio système lors du partage d'écran"
+        }
+      },
+      "devices": {
+        "title": "Sélection des appareils",
+        "description": "Choisissez vos appareils préférés de caméra et audio",
+        "camera": "Caméra",
+        "cameraDefault": "Caméra par défaut",
+        "microphone": "Microphone",
+        "microphoneDefault": "Microphone par défaut",
+        "speaker": "Haut-parleur",
+        "speakerDefault": "Haut-parleur par défaut"
+      }
+    },
+    "voiceQuality": {
+      "title": "Analyse vocale",
+      "noAnalysis": "Aucune analyse disponible. Enregistrez un échantillon vocal pour voir les métriques de qualité.",
+      "levels": {
+        "excellent": "Excellent",
+        "good": "Bon",
+        "average": "Moyen",
+        "low": "Faible"
+      },
+      "overall": {
+        "title": "Qualité vocale globale",
+        "description": "Évaluation de la qualité pour le clonage vocal",
+        "score": "Score global",
+        "suitableForCloning": "Convient au clonage vocal",
+        "insufficientQuality": "Qualité insuffisante pour le clonage",
+        "clarity": {
+          "label": "Clarté",
+          "description": "Rapport signal/bruit et qualité audio"
+        },
+        "consistency": {
+          "label": "Consistance",
+          "description": "Stabilité des caractéristiques vocales"
+        }
+      },
+      "pitch": {
+        "title": "Analyse du pitch (fréquence fondamentale)",
+        "description": "Caractéristiques de hauteur vocale",
+        "mean": {
+          "label": "Moyenne",
+          "description": "Fréquence fondamentale moyenne"
+        },
+        "std": {
+          "label": "Écart-type",
+          "description": "Variation du pitch"
+        },
+        "min": "Minimum",
+        "max": "Maximum"
+      },
+      "timbre": {
+        "title": "Analyse du timbre",
+        "description": "Couleur et texture vocale",
+        "spectralCentroid": {
+          "label": "Centroïde spectral",
+          "description": "Centre de gravité du spectre fréquentiel"
+        },
+        "spectralBandwidth": {
+          "label": "Largeur de bande spectrale",
+          "description": "Étendue du spectre"
+        },
+        "spectralRolloff": {
+          "label": "Rolloff spectral",
+          "description": "Fréquence de coupure à 85% de l'énergie"
+        },
+        "spectralFlatness": {
+          "label": "Flatness spectrale",
+          "description": "Mesure du bruit vs tonalité (0=tonal, 1=bruit)"
+        }
+      },
+      "energy": {
+        "title": "Analyse d'énergie",
+        "description": "Niveau sonore et dynamique",
+        "rms": {
+          "label": "RMS (niveau moyen)",
+          "description": "Niveau d'énergie moyen"
+        },
+        "peak": {
+          "label": "Pic",
+          "description": "Niveau maximum"
+        },
+        "dynamicRange": {
+          "label": "Plage dynamique",
+          "description": "Différence entre pic et minimum"
+        }
+      },
+      "classification": {
+        "title": "Classification vocale",
+        "description": "Type et caractéristiques",
+        "voiceType": "Type de voix",
+        "gender": "Genre",
+        "ageRange": "Tranche d'âge",
+        "confidence": {
+          "label": "Confiance de classification",
+          "description": "Fiabilité de la classification automatique"
+        }
+      },
+      "prosody": {
+        "title": "Analyse prosodique",
+        "description": "Rythme et modulation de la parole",
+        "energyMean": {
+          "label": "Énergie moyenne",
+          "description": "Niveau d'intensité vocale moyen"
+        },
+        "energyStd": {
+          "label": "Variabilité de l'énergie",
+          "description": "Variation de l'intensité"
+        },
+        "silenceRatio": {
+          "label": "Ratio de silence",
+          "description": "Proportion de pauses dans la parole"
+        },
+        "speechRate": {
+          "label": "Débit de parole",
+          "description": "Vitesse d'élocution"
+        }
+      },
+      "recommendedRange": "Plage recommandée : {min} - {max}{unit}"
+    },
+    "message": {
+      "draftDays7": "7 jours",
+      "draftDays30": "30 jours",
+      "draftDays60": "60 jours",
+      "draftDays90": "90 jours"
+    },
+    "document": {
+      "download": {
+        "title": "Paramètres de téléchargement",
+        "description": "Configurez la façon dont les documents sont téléchargés",
+        "autoDownload": {
+          "label": "Téléchargement automatique",
+          "description": "Télécharger automatiquement les documents envoyés dans les conversations"
+        },
+        "preview": {
+          "label": "Aperçu des documents",
+          "description": "Afficher un aperçu avant le téléchargement"
+        },
+        "maxSize": {
+          "label": "Taille maximale pour le téléchargement automatique",
+          "mb10": "10 Mo",
+          "mb25": "25 Mo",
+          "mb50": "50 Mo (Recommandé)",
+          "mb100": "100 Mo",
+          "mb500": "500 Mo"
+        },
+        "saveLocation": {
+          "label": "Emplacement de sauvegarde par défaut",
+          "downloads": "Dossier Téléchargements",
+          "documents": "Dossier Documents",
+          "desktop": "Bureau",
+          "custom": "Emplacement personnalisé"
+        }
+      },
+      "upload": {
+        "title": "Paramètres d'envoi",
+        "description": "Configurez les préférences d'envoi de documents",
+        "compress": {
+          "label": "Compresser les envois",
+          "description": "Compresser les documents avant envoi pour économiser la bande passante"
+        },
+        "keepOriginals": {
+          "label": "Conserver les originaux",
+          "description": "Conserver les fichiers originaux après envoi des versions compressées"
+        },
+        "warnLarge": {
+          "label": "Avertir pour les grands fichiers",
+          "description": "Afficher un avertissement avant d'envoyer des fichiers de plus de 50 Mo"
+        },
+        "fileTypes": {
+          "label": "Types de fichiers autorisés",
+          "all": "Tous les types",
+          "documents": "Documents uniquement (PDF, DOC, TXT)",
+          "images": "Images uniquement (PNG, JPG, GIF)",
+          "media": "Fichiers multimédia (Images, Vidéo, Audio)",
+          "archives": "Archives (ZIP, RAR, 7Z)"
+        }
+      },
+      "organization": {
+        "title": "Organisation",
+        "description": "Gardez vos documents organisés automatiquement",
+        "autoOrganize": {
+          "label": "Organiser automatiquement par type",
+          "description": "Organiser automatiquement les fichiers dans des dossiers par type"
+        },
+        "autoDelete": {
+          "label": "Suppression automatique",
+          "description": "Supprimer automatiquement les fichiers téléchargés après la période spécifiée",
+          "never": "Jamais",
+          "after7": "Après 7 jours",
+          "after30": "Après 30 jours",
+          "after90": "Après 90 jours",
+          "after6m": "Après 6 mois"
+        }
+      },
+      "security": {
+        "title": "Sécurité",
+        "description": "Protégez-vous des fichiers malveillants",
+        "scanViruses": {
+          "label": "Analyser les virus",
+          "description": "Analyser automatiquement les fichiers téléchargés pour détecter les malwares"
+        },
+        "blockExecutables": {
+          "label": "Bloquer les exécutables",
+          "description": "Empêcher le téléchargement de fichiers .exe, .bat, .sh et autres exécutables"
+        },
+        "note": "Note de sécurité : Soyez toujours prudent lors du téléchargement de fichiers de sources inconnues. Activez l'analyse antivirus et bloquez les fichiers exécutables pour une protection maximale."
       }
     }
   }

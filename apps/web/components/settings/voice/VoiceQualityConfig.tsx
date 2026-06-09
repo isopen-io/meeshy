@@ -6,6 +6,7 @@ import { Progress } from '@/components/ui/progress';
 import { Loader2, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { VoiceQualityAnalysis } from '@meeshy/shared/types/voice-api';
+import { useI18n } from '@/hooks/use-i18n';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -33,18 +34,18 @@ interface QualityMetricProps {
  * Détermine le niveau de qualité basé sur le score
  */
 function getQualityLevel(score: number): {
-  label: string;
+  labelKey: 'voiceQuality.levels.excellent' | 'voiceQuality.levels.good' | 'voiceQuality.levels.average' | 'voiceQuality.levels.low';
   color: string;
   variant: 'default' | 'secondary' | 'destructive' | 'outline';
 } {
   if (score >= 0.8) {
-    return { label: 'Excellent', color: 'text-green-600', variant: 'default' };
+    return { labelKey: 'voiceQuality.levels.excellent', color: 'text-green-600', variant: 'default' };
   } else if (score >= 0.6) {
-    return { label: 'Bon', color: 'text-blue-600', variant: 'secondary' };
+    return { labelKey: 'voiceQuality.levels.good', color: 'text-blue-600', variant: 'secondary' };
   } else if (score >= 0.4) {
-    return { label: 'Moyen', color: 'text-yellow-600', variant: 'outline' };
+    return { labelKey: 'voiceQuality.levels.average', color: 'text-yellow-600', variant: 'outline' };
   } else {
-    return { label: 'Faible', color: 'text-red-600', variant: 'destructive' };
+    return { labelKey: 'voiceQuality.levels.low', color: 'text-red-600', variant: 'destructive' };
   }
 }
 
@@ -60,7 +61,7 @@ function isInGoodRange(value: number, range?: [number, number]): boolean {
 // METRIC COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════
 
-function QualityMetric({ label, value, unit = '', description, goodRange }: QualityMetricProps) {
+function QualityMetric({ label, value, unit = '', description, goodRange, recommendedRangeText }: QualityMetricProps & { recommendedRangeText?: string }) {
   const inRange = isInGoodRange(value, goodRange);
 
   return (
@@ -86,9 +87,9 @@ function QualityMetric({ label, value, unit = '', description, goodRange }: Qual
           )}
         </div>
       </div>
-      {goodRange && (
+      {goodRange && recommendedRangeText && (
         <div className="text-xs text-muted-foreground">
-          Plage recommandée: {goodRange[0]} - {goodRange[1]}{unit}
+          {recommendedRangeText}
         </div>
       )}
     </div>
@@ -100,6 +101,7 @@ function QualityMetric({ label, value, unit = '', description, goodRange }: Qual
 // ═══════════════════════════════════════════════════════════════════════════
 
 export function VoiceQualityConfig({ analysis, isLoading, className }: VoiceQualityConfigProps) {
+  const { t } = useI18n('settings');
 
   if (isLoading) {
     return (
@@ -115,9 +117,9 @@ export function VoiceQualityConfig({ analysis, isLoading, className }: VoiceQual
     return (
       <Card className={className}>
         <CardHeader>
-          <CardTitle>Analyse vocale</CardTitle>
+          <CardTitle>{t('voiceQuality.title')}</CardTitle>
           <CardDescription>
-            Aucune analyse disponible. Enregistrez un échantillon vocal pour voir les métriques de qualité.
+            {t('voiceQuality.noAnalysis')}
           </CardDescription>
         </CardHeader>
       </Card>
@@ -135,14 +137,14 @@ export function VoiceQualityConfig({ analysis, isLoading, className }: VoiceQual
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Qualité vocale globale</CardTitle>
+                <CardTitle>{t('voiceQuality.overall.title')}</CardTitle>
                 <CardDescription>
-                  Évaluation de la qualité pour le clonage vocal
+                  {t('voiceQuality.overall.description')}
                 </CardDescription>
               </div>
               {qualityLevel && (
                 <Badge variant={qualityLevel.variant}>
-                  {qualityLevel.label}
+                  {t(qualityLevel.labelKey)}
                 </Badge>
               )}
             </div>
@@ -150,7 +152,7 @@ export function VoiceQualityConfig({ analysis, isLoading, className }: VoiceQual
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span>Score global</span>
+                <span>{t('voiceQuality.overall.score')}</span>
                 <span className="font-mono tabular-nums font-medium">
                   {(qualityMetrics.overallScore * 100).toFixed(0)}%
                 </span>
@@ -160,16 +162,18 @@ export function VoiceQualityConfig({ analysis, isLoading, className }: VoiceQual
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <QualityMetric
-                label="Clarté"
+                label={t('voiceQuality.overall.clarity.label')}
                 value={qualityMetrics.clarity}
-                description="Rapport signal/bruit et qualité audio"
+                description={t('voiceQuality.overall.clarity.description')}
                 goodRange={[0.4, 1.0]}
+                recommendedRangeText={t('voiceQuality.recommendedRange', { min: '0.4', max: '1.0', unit: '' })}
               />
               <QualityMetric
-                label="Consistance"
+                label={t('voiceQuality.overall.consistency.label')}
                 value={qualityMetrics.consistency}
-                description="Stabilité des caractéristiques vocales"
+                description={t('voiceQuality.overall.consistency.description')}
                 goodRange={[0.5, 1.0]}
+                recommendedRangeText={t('voiceQuality.recommendedRange', { min: '0.5', max: '1.0', unit: '' })}
               />
             </div>
 
@@ -187,8 +191,8 @@ export function VoiceQualityConfig({ analysis, isLoading, className }: VoiceQual
                 )}
                 <span className="text-sm font-medium">
                   {qualityMetrics.suitableForCloning
-                    ? 'Convient au clonage vocal'
-                    : 'Qualité insuffisante pour le clonage'
+                    ? t('voiceQuality.overall.suitableForCloning')
+                    : t('voiceQuality.overall.insufficientQuality')
                   }
                 </span>
               </div>
@@ -200,31 +204,32 @@ export function VoiceQualityConfig({ analysis, isLoading, className }: VoiceQual
       {/* Pitch Analysis */}
       <Card>
         <CardHeader>
-          <CardTitle>Analyse du pitch (fréquence fondamentale)</CardTitle>
-          <CardDescription>Caractéristiques de hauteur vocale</CardDescription>
+          <CardTitle>{t('voiceQuality.pitch.title')}</CardTitle>
+          <CardDescription>{t('voiceQuality.pitch.description')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <QualityMetric
-            label="Moyenne"
+            label={t('voiceQuality.pitch.mean.label')}
             value={analysis.pitch.mean}
             unit=" Hz"
-            description="Fréquence fondamentale moyenne"
+            description={t('voiceQuality.pitch.mean.description')}
             goodRange={[80, 300]}
+            recommendedRangeText={t('voiceQuality.recommendedRange', { min: '80', max: '300', unit: ' Hz' })}
           />
           <QualityMetric
-            label="Écart-type"
+            label={t('voiceQuality.pitch.std.label')}
             value={analysis.pitch.std}
             unit=" Hz"
-            description="Variation du pitch"
+            description={t('voiceQuality.pitch.std.description')}
           />
           <div className="grid grid-cols-2 gap-4">
             <QualityMetric
-              label="Minimum"
+              label={t('voiceQuality.pitch.min')}
               value={analysis.pitch.min}
               unit=" Hz"
             />
             <QualityMetric
-              label="Maximum"
+              label={t('voiceQuality.pitch.max')}
               value={analysis.pitch.max}
               unit=" Hz"
             />
@@ -235,33 +240,34 @@ export function VoiceQualityConfig({ analysis, isLoading, className }: VoiceQual
       {/* Timbre Analysis */}
       <Card>
         <CardHeader>
-          <CardTitle>Analyse du timbre</CardTitle>
-          <CardDescription>Couleur et texture vocale</CardDescription>
+          <CardTitle>{t('voiceQuality.timbre.title')}</CardTitle>
+          <CardDescription>{t('voiceQuality.timbre.description')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <QualityMetric
-            label="Centroïde spectral"
+            label={t('voiceQuality.timbre.spectralCentroid.label')}
             value={analysis.timbre.spectralCentroid}
             unit=" Hz"
-            description="Centre de gravité du spectre fréquentiel"
+            description={t('voiceQuality.timbre.spectralCentroid.description')}
           />
           <QualityMetric
-            label="Largeur de bande spectrale"
+            label={t('voiceQuality.timbre.spectralBandwidth.label')}
             value={analysis.timbre.spectralBandwidth}
             unit=" Hz"
-            description="Étendue du spectre"
+            description={t('voiceQuality.timbre.spectralBandwidth.description')}
           />
           <QualityMetric
-            label="Rolloff spectral"
+            label={t('voiceQuality.timbre.spectralRolloff.label')}
             value={analysis.timbre.spectralRolloff}
             unit=" Hz"
-            description="Fréquence de coupure à 85% de l'énergie"
+            description={t('voiceQuality.timbre.spectralRolloff.description')}
           />
           <QualityMetric
-            label="Flatness spectrale"
+            label={t('voiceQuality.timbre.spectralFlatness.label')}
             value={analysis.timbre.spectralFlatness}
-            description="Mesure du bruit vs tonalité (0=tonal, 1=bruit)"
+            description={t('voiceQuality.timbre.spectralFlatness.description')}
             goodRange={[0, 0.3]}
+            recommendedRangeText={t('voiceQuality.recommendedRange', { min: '0', max: '0.3', unit: '' })}
           />
         </CardContent>
       </Card>
@@ -269,26 +275,27 @@ export function VoiceQualityConfig({ analysis, isLoading, className }: VoiceQual
       {/* Energy Analysis */}
       <Card>
         <CardHeader>
-          <CardTitle>Analyse d&apos;énergie</CardTitle>
-          <CardDescription>Niveau sonore et dynamique</CardDescription>
+          <CardTitle>{t('voiceQuality.energy.title')}</CardTitle>
+          <CardDescription>{t('voiceQuality.energy.description')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <QualityMetric
-            label="RMS (niveau moyen)"
+            label={t('voiceQuality.energy.rms.label')}
             value={analysis.energy.rms}
-            description="Niveau d'énergie moyen"
+            description={t('voiceQuality.energy.rms.description')}
           />
           <QualityMetric
-            label="Pic"
+            label={t('voiceQuality.energy.peak.label')}
             value={analysis.energy.peak}
-            description="Niveau maximum"
+            description={t('voiceQuality.energy.peak.description')}
           />
           <QualityMetric
-            label="Plage dynamique"
+            label={t('voiceQuality.energy.dynamicRange.label')}
             value={analysis.energy.dynamicRange}
             unit=" dB"
-            description="Différence entre pic et minimum"
+            description={t('voiceQuality.energy.dynamicRange.description')}
             goodRange={[30, 60]}
+            recommendedRangeText={t('voiceQuality.recommendedRange', { min: '30', max: '60', unit: ' dB' })}
           />
         </CardContent>
       </Card>
@@ -296,29 +303,30 @@ export function VoiceQualityConfig({ analysis, isLoading, className }: VoiceQual
       {/* Classification */}
       <Card>
         <CardHeader>
-          <CardTitle>Classification vocale</CardTitle>
-          <CardDescription>Type et caractéristiques</CardDescription>
+          <CardTitle>{t('voiceQuality.classification.title')}</CardTitle>
+          <CardDescription>{t('voiceQuality.classification.description')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <div className="text-sm text-muted-foreground mb-1">Type de voix</div>
+              <div className="text-sm text-muted-foreground mb-1">{t('voiceQuality.classification.voiceType')}</div>
               <Badge variant="secondary">{analysis.classification.voiceType}</Badge>
             </div>
             <div>
-              <div className="text-sm text-muted-foreground mb-1">Genre</div>
+              <div className="text-sm text-muted-foreground mb-1">{t('voiceQuality.classification.gender')}</div>
               <Badge variant="secondary">{analysis.classification.gender}</Badge>
             </div>
             <div>
-              <div className="text-sm text-muted-foreground mb-1">Tranche d&apos;âge</div>
+              <div className="text-sm text-muted-foreground mb-1">{t('voiceQuality.classification.ageRange')}</div>
               <Badge variant="secondary">{analysis.classification.ageRange}</Badge>
             </div>
           </div>
           <QualityMetric
-            label="Confiance de classification"
+            label={t('voiceQuality.classification.confidence.label')}
             value={analysis.classification.confidence}
-            description="Fiabilité de la classification automatique"
+            description={t('voiceQuality.classification.confidence.description')}
             goodRange={[0.7, 1.0]}
+            recommendedRangeText={t('voiceQuality.recommendedRange', { min: '0.7', max: '1.0', unit: '' })}
           />
         </CardContent>
       </Card>
@@ -327,32 +335,34 @@ export function VoiceQualityConfig({ analysis, isLoading, className }: VoiceQual
       {analysis.prosody && (
         <Card>
           <CardHeader>
-            <CardTitle>Analyse prosodique</CardTitle>
-            <CardDescription>Rythme et modulation de la parole</CardDescription>
+            <CardTitle>{t('voiceQuality.prosody.title')}</CardTitle>
+            <CardDescription>{t('voiceQuality.prosody.description')}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <QualityMetric
-              label="Énergie moyenne"
+              label={t('voiceQuality.prosody.energyMean.label')}
               value={analysis.prosody.energyMean}
-              description="Niveau d'intensité vocale moyen"
+              description={t('voiceQuality.prosody.energyMean.description')}
             />
             <QualityMetric
-              label="Variabilité de l'énergie"
+              label={t('voiceQuality.prosody.energyStd.label')}
               value={analysis.prosody.energyStd}
-              description="Variation de l'intensité"
+              description={t('voiceQuality.prosody.energyStd.description')}
             />
             <QualityMetric
-              label="Ratio de silence"
+              label={t('voiceQuality.prosody.silenceRatio.label')}
               value={analysis.prosody.silenceRatio}
-              description="Proportion de pauses dans la parole"
+              description={t('voiceQuality.prosody.silenceRatio.description')}
               goodRange={[0.1, 0.4]}
+              recommendedRangeText={t('voiceQuality.recommendedRange', { min: '0.1', max: '0.4', unit: '' })}
             />
             <QualityMetric
-              label="Débit de parole"
+              label={t('voiceQuality.prosody.speechRate.label')}
               value={analysis.prosody.speechRateWpm}
-              unit=" mots/min"
-              description="Vitesse d'élocution"
+              unit=" wpm"
+              description={t('voiceQuality.prosody.speechRate.description')}
               goodRange={[100, 160]}
+              recommendedRangeText={t('voiceQuality.recommendedRange', { min: '100', max: '160', unit: ' wpm' })}
             />
           </CardContent>
         </Card>

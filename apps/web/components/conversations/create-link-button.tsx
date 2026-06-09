@@ -245,7 +245,7 @@ export function CreateLinkButton({
         setIsQuickConfigModalOpen(true);
       } catch (error) {
         console.error('Erreur récupération conversation:', error);
-        toast.error('Erreur lors de la récupération de la conversation');
+        toast.error(t('conversations.createLinkButton.fetchError'));
       }
     } else {
       // Contexte : liste des conversations -> modale complète

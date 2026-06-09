@@ -6,7 +6,7 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateParams, validateQuery } from '../validation/helpers.js';
 import { MessageIdParamSchema, ConversationIdParamSchema, ReadStatusesQuerySchema, DeliveryReceiptParamsSchema } from '../validation/message-read-status-schemas.js';
 import { resolveConversationId } from '../utils/conversation-id-cache.js';
-import { sendSuccess } from '../utils/response.js';
+import { sendSuccess, sendNotFound, sendForbidden, sendBadRequest, sendInternalError } from '../utils/response.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
 const logger = enhancedLogger.child({ module: 'MessageReadStatusRoutes' });
 
@@ -71,18 +71,12 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       });
 
       if (!message) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Message non trouvé'
-        });
+        return sendNotFound(reply, 'Message non trouvé');
       }
 
       // Vérifier que l'utilisateur a accès à cette conversation
       if (!message.conversation.participants.length) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Accès non autorisé à ce message'
-        });
+        return sendForbidden(reply, 'Accès non autorisé à ce message');
       }
 
       // Récupérer le statut de lecture
@@ -91,17 +85,11 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
         message.conversationId
       );
 
-      return reply.send({
-        success: true,
-        data: status
-      });
+      return sendSuccess(reply, status);
 
     } catch (error) {
       logger.error('Error fetching message read status', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la récupération du statut de lecture'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération du statut de lecture');
     }
   });
 
@@ -126,10 +114,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       // Resolve identifier (e.g. "meeshy") → ObjectId
       const conversationId = await resolveConversationId(prisma, rawId);
       if (!conversationId) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Conversation non trouvée'
-        });
+        return sendNotFound(reply, 'Conversation non trouvée');
       }
 
       // Vérifier l'accès à la conversation
@@ -142,20 +127,14 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       });
 
       if (!membership) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Accès non autorisé à cette conversation'
-        });
+        return sendForbidden(reply, 'Accès non autorisé à cette conversation');
       }
 
       // Parser les messageIds
       const messageIdArray = messageIds ? messageIds.split(',') : [];
 
       if (messageIdArray.length === 0) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Au moins un messageId requis'
-        });
+        return sendBadRequest(reply, 'Au moins un messageId requis');
       }
 
       // Récupérer les statuts
@@ -167,17 +146,11 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       // Convertir Map en objet pour JSON
       const statusObject = Object.fromEntries(statusMap);
 
-      return reply.send({
-        success: true,
-        data: statusObject
-      });
+      return sendSuccess(reply, statusObject);
 
     } catch (error) {
       logger.error('Error fetching conversation read statuses', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la récupération des statuts de lecture'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération des statuts de lecture');
     }
   });
 
@@ -200,10 +173,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       // Resolve identifier (e.g. "meeshy") → ObjectId
       const conversationId = await resolveConversationId(prisma, rawId);
       if (!conversationId) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Conversation non trouvée'
-        });
+        return sendNotFound(reply, 'Conversation non trouvée');
       }
 
       // Vérifier l'accès à la conversation
@@ -217,10 +187,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       });
 
       if (!membership) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Accès non autorisé à cette conversation'
-        });
+        return sendForbidden(reply, 'Accès non autorisé à cette conversation');
       }
 
       // Compteur AVANT marquage — nombre de messages marqués comme lus,
@@ -255,10 +222,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
 
     } catch (error) {
       logger.error('Error marking messages as read', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la mise à jour du statut de lecture'
-      });
+      return sendInternalError(reply, 'Erreur lors de la mise à jour du statut de lecture');
     }
   });
 
@@ -281,10 +245,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       // Resolve identifier (e.g. "meeshy") → ObjectId
       const conversationId = await resolveConversationId(prisma, rawId);
       if (!conversationId) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Conversation non trouvée'
-        });
+        return sendNotFound(reply, 'Conversation non trouvée');
       }
 
       // Vérifier l'accès à la conversation
@@ -298,10 +259,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       });
 
       if (!membership) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Accès non autorisé à cette conversation'
-        });
+        return sendForbidden(reply, 'Accès non autorisé à cette conversation');
       }
 
       // Compteur AVANT marquage — uniforme avec POST /conversations/:id/mark-read.
@@ -335,10 +293,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
 
     } catch (error) {
       logger.error('Error marking messages as received', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la mise à jour du statut de réception'
-      });
+      return sendInternalError(reply, 'Erreur lors de la mise à jour du statut de réception');
     }
   });
 
@@ -373,10 +328,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       // Resolve identifier (e.g. "meeshy") → ObjectId
       const conversationId = await resolveConversationId(prisma, rawId);
       if (!conversationId) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Conversation non trouvée'
-        });
+        return sendNotFound(reply, 'Conversation non trouvée');
       }
 
       // Vérifier l'accès à la conversation
@@ -390,10 +342,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       });
 
       if (!membership) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Accès non autorisé à cette conversation'
-        });
+        return sendForbidden(reply, 'Accès non autorisé à cette conversation');
       }
 
       // The message must exist and actually belong to this conversation —
@@ -404,18 +353,12 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       });
 
       if (!message || message.deletedAt || message.conversationId !== conversationId) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Message non trouvé'
-        });
+        return sendNotFound(reply, 'Message non trouvé');
       }
 
       // A recipient never acknowledges delivery of their own message.
       if (message.senderId === membership.id) {
-        return reply.send({
-          success: true,
-          data: { message: 'Aucune action requise' }
-        });
+        return sendSuccess(reply, { message: 'Aucune action requise' });
       }
 
       // Marquer comme reçu (participantId, pas userId)
@@ -445,17 +388,11 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
         }
       }
 
-      return reply.send({
-        success: true,
-        data: { message: 'Message marqué comme livré' }
-      });
+      return sendSuccess(reply, { message: 'Message marqué comme livré' });
 
     } catch (error) {
       logger.error('Error processing delivery receipt', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la mise à jour du statut de livraison'
-      });
+      return sendInternalError(reply, 'Erreur lors de la mise à jour du statut de livraison');
     }
   });
 }

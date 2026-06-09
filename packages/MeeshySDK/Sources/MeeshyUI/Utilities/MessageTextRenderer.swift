@@ -164,30 +164,85 @@ public enum MessageTextRenderer {
         options: []
     )
 
+    /// Thread-safe memo of compiled display-name mention rules, keyed by the
+    /// `username → displayName` map. `parse` rebuilds these on every render call,
+    /// and the map is constant for the lifetime of a conversation — so without
+    /// this cache every text-message render in a group recompiled one
+    /// `NSRegularExpression` per member (regex compilation is expensive, and the
+    /// renderer runs per message). The map is stable, so this hits on every
+    /// subsequent message/render. Lock-guarded: the renderer also runs off the
+    /// main thread (UIKit cell-diffing path).
+    private final class DisplayNameRulesCache: @unchecked Sendable {
+        private let lock = NSLock()
+        private var cache: [[String: String]: [(regex: NSRegularExpression, kind: RuleKind)]] = [:]
+        func rules(
+            for key: [String: String],
+            build: () -> [(regex: NSRegularExpression, kind: RuleKind)]
+        ) -> [(regex: NSRegularExpression, kind: RuleKind)] {
+            lock.lock()
+            defer { lock.unlock() }
+            if let cached = cache[key] { return cached }
+            // Bound growth across many distinct conversations; rebuilding on the
+            // rare miss is cheap next to a scroll's worth of cache hits.
+            if cache.count >= 32 { cache.removeAll(keepingCapacity: true) }
+            let built = build()
+            cache[key] = built
+            return built
+        }
+    }
+    private static let displayNameRulesCache = DisplayNameRulesCache()
+
     /// Build display-name mention rules for known `username → displayName` pairs.
     /// Sorted by display name length descending to avoid partial matches.
+    /// Memoized by `mentionDisplayNames` (see `DisplayNameRulesCache`).
     private static func displayNameRules(from mentionDisplayNames: [String: String]) -> [(regex: NSRegularExpression, kind: RuleKind)] {
-        mentionDisplayNames
-            .sorted { $0.value.count > $1.value.count }
-            .compactMap { (username, displayName) -> (NSRegularExpression, RuleKind)? in
-                guard displayName != username,
-                      !displayName.isEmpty,
-                      displayName.rangeOfCharacter(from: .whitespaces) != nil else { return nil }
-                let escaped = NSRegularExpression.escapedPattern(for: displayName)
-                guard let regex = try? NSRegularExpression(
-                    pattern: "(?<![a-zA-Z0-9])@\(escaped)",
-                    options: .caseInsensitive
-                ) else { return nil }
-                return (regex, .displayNameMention(username: username))
-            }
+        displayNameRulesCache.rules(for: mentionDisplayNames) {
+            mentionDisplayNames
+                .sorted { $0.value.count > $1.value.count }
+                .compactMap { (username, displayName) -> (NSRegularExpression, RuleKind)? in
+                    guard displayName != username,
+                          !displayName.isEmpty,
+                          displayName.rangeOfCharacter(from: .whitespaces) != nil else { return nil }
+                    let escaped = NSRegularExpression.escapedPattern(for: displayName)
+                    guard let regex = try? NSRegularExpression(
+                        pattern: "(?<![a-zA-Z0-9])@\(escaped)",
+                        options: .caseInsensitive
+                    ) else { return nil }
+                    return (regex, .displayNameMention(username: username))
+                }
+        }
     }
 
     // MARK: - Parser
+
+    /// True when `text` could contain ANY inline-rule trigger: markdown
+    /// (`* ~ _`), `@mention` / display-name mention, `m+token`, or an `http` URL.
+    /// Conservative superset — every rule's pattern requires one of these — so
+    /// when it returns false no rule can match and `parse` can short-circuit to
+    /// plain text without running the regex pipeline.
+    private static func hasInlineSyntax(_ text: String) -> Bool {
+        for scalar in text.unicodeScalars {
+            switch scalar {
+            case "*", "~", "_", "@": return true
+            default: continue
+            }
+        }
+        return text.contains("http") || text.contains("m+")
+    }
 
     private static func parse(_ text: String, inherited: Styles = [], mentionDisplayNames: [String: String]? = nil) -> [Segment] {
         let ns = text as NSString
         let length = ns.length
         guard length > 0 else { return [] }
+
+        // Fast-path: most messages are plain text with no inline syntax. Every
+        // rule requires one of a small set of trigger chars/substrings, so a
+        // cheap scan lets us skip the whole regex pipeline (a `firstMatch` per
+        // rule at every cursor position) — the dominant case while scrolling.
+        // Returns exactly what the pipeline yields for a no-match string.
+        if !Self.hasInlineSyntax(text) {
+            return [.text(text, inherited)]
+        }
 
         // Build display-name rules once per render call (only when display names are available)
         let dnRules: [(regex: NSRegularExpression, kind: RuleKind)] = mentionDisplayNames.map { displayNameRules(from: $0) } ?? []

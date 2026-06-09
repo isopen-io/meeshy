@@ -5,6 +5,9 @@
 
 import { FastifyRequest } from 'fastify';
 import * as UAParserModule from 'ua-parser-js';
+import { enhancedLogger } from '../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'GeoIPService' });
 
 // UAParser v2 exports both as function and class
 const UAParser = UAParserModule.UAParser || (UAParserModule as any).default || UAParserModule;
@@ -123,7 +126,7 @@ export function parseUserAgent(userAgent: string | null): DeviceInfo | null {
       rawUserAgent: userAgent
     };
   } catch (error) {
-    console.warn('[GeoIP] User agent parse error:', error);
+    logger.warn('User agent parse error', error as Error);
     return {
       type: 'unknown',
       vendor: null,
@@ -173,14 +176,14 @@ export async function lookupGeoIp(ip: string): Promise<GeoIpData | null> {
     );
 
     if (!response.ok) {
-      console.warn('[GeoIP] API request failed:', response.status);
+      logger.warn('API request failed', { status: response.status });
       return null;
     }
 
     const data = await response.json();
 
     if (data.status !== 'success') {
-      console.warn('[GeoIP] Lookup failed for IP:', ip, data.message);
+      logger.warn('Lookup failed', { message: data.message });
       return null;
     }
 
@@ -202,7 +205,7 @@ export async function lookupGeoIp(ip: string): Promise<GeoIpData | null> {
     return geoData;
 
   } catch (error) {
-    console.warn('[GeoIP] Lookup error for IP:', ip, error instanceof Error ? error.message : error);
+    logger.warn('Lookup error', error instanceof Error ? error : { error });
     return null;
   }
 }

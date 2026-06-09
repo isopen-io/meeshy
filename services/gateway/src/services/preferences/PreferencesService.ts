@@ -42,6 +42,9 @@ import {
   NOTIFICATION_PREFERENCE_DEFAULTS,
   type NotificationPreference as NotifPrefs,
 } from '@meeshy/shared/types/preferences';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+
+const logger = enhancedLogger.child({ module: 'PreferencesService' });
 
 export class PreferencesService {
   constructor(private prisma: PrismaClient) {}
@@ -218,7 +221,7 @@ export class PreferencesService {
     }
 
     // TODO: Save encryptionPreference to UserPreferences.application when implemented
-    console.log('[PreferencesService] TODO: Save encryption preference:', data.encryptionPreference, 'for user:', userId);
+    logger.debug('TODO: Save encryption preference to UserPreferences.application', { encryptionPreference: data.encryptionPreference, userId });
 
     return {
       encryptionPreference: data.encryptionPreference

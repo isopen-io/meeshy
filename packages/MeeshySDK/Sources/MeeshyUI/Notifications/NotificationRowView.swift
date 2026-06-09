@@ -231,17 +231,31 @@ public struct NotificationRowView: View {
         }
     }
 
+    // ISO8601DateFormatters memoises : `relativeTime` est lu a chaque rendu de
+    // ligne dans une liste de notifications qui scrolle. Allouer (puis muter
+    // `formatOptions`) un ISO8601DateFormatter par rendu et par ligne etait du
+    // gaspillage (setup ICU couteux). Deux instances configurees une fois puis
+    // lues seulement -- `date(from:)` est thread-safe comme tout formatter
+    // configure une fois.
+    private static let isoWithFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    private static let isoNoFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime]
+        return f
+    }()
+
+    /// Parse an ISO-8601 timestamp, accepting either fractional or whole-second
+    /// `withInternetDateTime`. Mirrors the previous two-attempt fallback.
+    static func parseISODate(_ string: String) -> Date? {
+        isoWithFractional.date(from: string) ?? isoNoFractional.date(from: string)
+    }
+
     private var relativeTime: String {
-        let iso = ISO8601DateFormatter()
-        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        if let date = iso.date(from: notification.createdAt) {
-            return formatRelative(date)
-        }
-        iso.formatOptions = [.withInternetDateTime]
-        if let date = iso.date(from: notification.createdAt) {
-            return formatRelative(date)
-        }
-        return ""
+        Self.parseISODate(notification.createdAt).map(formatRelative) ?? ""
     }
 
     private func formatRelative(_ date: Date) -> String {

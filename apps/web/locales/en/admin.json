@@ -141,7 +141,40 @@
       "queueItemAlreadySent": "Message already sent",
       "queueItemDeleteError": "Error removing message",
       "queueItemEdited": "Message edited",
-      "queueItemEditError": "Error editing message"
+      "queueItemEditError": "Error editing message",
+      "conversationConfigUpdated": "Conversation config updated",
+      "archetypesLoadError": "Error loading archetypes",
+      "configLoadError": "Error loading configurations",
+      "agentEnabled": "Agent enabled",
+      "agentDisabled": "Agent disabled",
+      "configDeleted": "Configuration deleted",
+      "deleteError": "Error deleting"
+    },
+    "scheduling": {
+      "fixedTime": "Fixed time",
+      "delay": "After X time",
+      "frequency": "Frequency",
+      "timerWarning": "This timer is lost if you close the page or browser.",
+      "dragToMove": "drag to move",
+      "notAvailable": "Schedule not available",
+      "triggerNow": "Trigger now",
+      "stop": "STOP!"
+    },
+    "topics": {
+      "title": "Topic catalogue",
+      "description": "Dynamic topics used by the strategist to suggest new conversation threads. Changes here propagate to agents within 5 seconds.",
+      "newTopic": "New topic",
+      "reload": "Reload",
+      "colActive": "Active",
+      "colSlug": "Slug",
+      "colLabel": "Label",
+      "colCooldown": "Cooldown",
+      "colPatterns": "Patterns",
+      "colActions": "Actions",
+      "emptyState": "No topics in catalogue. The agent will auto-seed 13 initial topics on next boot.",
+      "editTitle": "Edit",
+      "disableTitle": "Disable (soft delete)",
+      "deleteTitle": "Delete permanently"
     }
   },
   "agentLive": {
@@ -196,6 +229,12 @@
   },
   "security": {
     "enable2FA": "Enable 2FA",
-    "disable2FA": "Disable 2FA"
-  }
+    "disable2FA": "Disable 2FA",
+    "accountUnlocked": "Account unlocked successfully",
+    "twoFactorEnabled": "2FA enabled successfully",
+    "twoFactorDisabled": "2FA disabled successfully",
+    "disabled": "Disabled"
+  },
+  "logoutSuccess": "Logged out successfully",
+  "logoutError": "Error logging out"
 }

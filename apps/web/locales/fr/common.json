@@ -212,5 +212,7 @@
     "zoomIn": "Zoomer",
     "zoomOut": "Dézoomer",
     "rotate": "Pivoter"
-  }
+  },
+  "copied": "Copié",
+  "never": "Jamais"
 }

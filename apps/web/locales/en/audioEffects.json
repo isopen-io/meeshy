@@ -46,7 +46,8 @@
         "microphoneAccessDenied": "Microphone access denied.",
         "noMicrophoneFound": "No microphone found.",
         "microphoneError": "Microphone error.",
-        "cannotAccessMicrophone": "Cannot access microphone."
+        "cannotAccessMicrophone": "Cannot access microphone.",
+        "playbackError": "Playback error"
       }
     },
     "voiceCoder": {
@@ -80,7 +81,21 @@
         "pentatonic": "Pentatonic"
       },
       "key": {
-        "label": "Key"
+        "label": "Key",
+        "notes": {
+          "C": "C (Do)",
+          "Cs": "C# (Do#)",
+          "D": "D (Re)",
+          "Ds": "D# (Re#)",
+          "E": "E (Mi)",
+          "F": "F (Fa)",
+          "Fs": "F# (Fa#)",
+          "G": "G (Sol)",
+          "Gs": "G# (Sol#)",
+          "A": "A (La)",
+          "As": "A# (La#)",
+          "B": "B (Si)"
+        }
       },
       "harmonization": {
         "label": "Vocal Harmonies",
@@ -319,7 +334,8 @@
       "off": "Off",
       "active": "Active",
       "inactive": "Inactive"
-    }
+    },
+    "closePanel": "Close audio effects panel"
   },
   "microphone": {
     "noMicDetected": "No microphone detected.",

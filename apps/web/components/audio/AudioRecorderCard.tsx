@@ -193,14 +193,14 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
     try {
       // Vérifier le contexte sécurisé
       if (!window.isSecureContext) {
-        toast.error('Audio recording requires HTTPS.');
+        toast.error(t('audioEffects.recorder.errors.httpsRequired'));
         setPermissionError('HTTPS required');
         setIsInitializing(false);
         return;
       }
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        toast.error('Your browser does not support audio recording.');
+        toast.error(t('audioEffects.recorder.errors.browserNotSupported'));
         setPermissionError('Browser not supported');
         setIsInitializing(false);
         return;
@@ -300,7 +300,7 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
       if (error instanceof DOMException) {
         if (error.name === 'NotAllowedError') {
           setPermissionError('Microphone access denied');
-          toast.error('Accès au microphone refusé.');
+          toast.error(t('audioEffects.recorder.errors.microphoneAccessDenied'));
         } else if (error.name === 'NotFoundError') {
           setPermissionError('No microphone found');
           toast.error(t('microphone.noMicDetected'));
@@ -333,7 +333,7 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
           audioRef.current.currentTime = 0;
         }
         audioRef.current.play().catch(_error => {
-          toast.error('Erreur lors de la lecture');
+          toast.error(t('audioEffects.recorder.errors.playbackError'));
           setIsPlaying(false);
         });
         setIsPlaying(true);
@@ -483,7 +483,7 @@ export const AudioRecorderCard = forwardRef<AudioRecorderCardRef, AudioRecorderC
             onEnded={() => setIsPlaying(false)}
             onError={(_e) => {
               setIsPlaying(false);
-              toast.error('Erreur de lecture audio');
+              toast.error(t('audioEffects.recorder.errors.playbackError'));
             }}
             onPause={() => setIsPlaying(false)}
             onPlay={() => setIsPlaying(true)}
