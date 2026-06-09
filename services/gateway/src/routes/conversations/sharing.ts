@@ -629,12 +629,11 @@ export function registerSharingRoutes(
             const userName = joiningUser.displayName || joiningUser.username;
 
             // 1. Notification de confirmation pour l'utilisateur qui rejoint
-            await notificationService.createConversationJoinNotification({
-              userId: userToken.userId,
+            await notificationService.createMemberJoinedNotification({
+              recipientUserId: userToken.userId,
+              newMemberUserId: userToken.userId,
               conversationId: shareLink.conversationId,
-              conversationTitle: shareLink.conversation.title,
-              conversationType: shareLink.conversation.type,
-              isJoiner: true // C'est l'utilisateur qui rejoint
+              joinMethod: 'via_link'
             });
 
             // 2. Notifier les admins et créateurs de la conversation
@@ -650,14 +649,11 @@ export function registerSharingRoutes(
 
             // Envoyer une notification à chaque admin/créateur
             for (const member of adminsAndCreators) {
-              await notificationService.createConversationJoinNotification({
-                userId: member.userId,
+              await notificationService.createMemberJoinedNotification({
+                recipientUserId: member.userId,
+                newMemberUserId: userToken.userId,
                 conversationId: shareLink.conversationId,
-                conversationTitle: shareLink.conversation.title,
-                conversationType: shareLink.conversation.type,
-                isJoiner: false, // C'est une notification pour un admin
-                joinerUsername: userName,
-                joinerAvatar: joiningUser.avatar || undefined
+                joinMethod: 'via_link'
               });
               logger.debug('Notification membre rejoint envoyée');
             }

@@ -33,7 +33,7 @@ declare module 'fastify' {
     socketIOHandler: MeeshySocketIOHandler;
     presenceChecker: {
       isOnline: (id: string) => boolean;
-      bulk: (ids: readonly string[]) => Promise<Record<string, boolean>>;
+      bulk: (ids: readonly string[]) => Map<string, boolean>;
       listOnlineAmong: (ids: readonly string[]) => string[];
     };
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;

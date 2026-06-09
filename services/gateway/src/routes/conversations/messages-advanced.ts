@@ -280,12 +280,12 @@ export function registerMessagesAdvancedRoutes(
           const mentionedUsernames = mentionService.extractMentions(processedContent);
           logger.info(`Edit - Extracting mentions from processedContent=${processedContent}`);
           logger.info('Edit - Mentions extracted:', mentionedUsernames);
-          logger.info('Edit - Number of mentions:', mentionedUsernames.length);
+          logger.info(`Edit - Number of mentions: ${mentionedUsernames.length}`);
 
           if (mentionedUsernames.length > 0) {
             // Résoudre les usernames en utilisateurs réels
             const userMap = await mentionService.resolveUsernames(mentionedUsernames);
-            logger.info('UserMap size:', userMap.size);
+            logger.info(`UserMap size: ${userMap.size}`);
             const mentionedUserIds = Array.from(userMap.values()).map((user: any) => user.id);
 
             if (mentionedUserIds.length > 0) {
@@ -354,7 +354,6 @@ export function registerMessagesAdvancedRoutes(
                             senderAvatar: sender.avatar || undefined,
                             messageContent: processedContent,
                             conversationId,
-                            conversationTitle: conversationInfo.title,
                             messageId
                           },
                           memberIds

@@ -364,10 +364,7 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
         // DECLENCHEMENT NON-BLOQUANT - pas d'await !
         messagingService.handleMessage(
           messageRequest,
-          'system', // TODO: Recuperer l'ID utilisateur depuis l'auth
-          true,
-          undefined, // JWT token
-          undefined  // Session token
+          'system' // TODO: Recuperer l'ID utilisateur depuis l'auth
         ).catch((error: any) => {
           logger.error(`[Translation] Async message processing error: ${error.message}`);
         });

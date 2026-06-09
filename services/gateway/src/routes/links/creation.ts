@@ -318,20 +318,10 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
           });
 
           for (const admin of admins) {
-            await notificationService.createNotification({
-              userId: admin.userId,
-              type: 'system',
-              title: 'Nouveau lien partagé',
+            await notificationService.createSystemNotification({
+              recipientUserId: admin.userId,
               content: `Un lien de partage a été créé pour ${conversation?.title || 'la conversation'}${shareLink.name ? ` : ${shareLink.name}` : ''}`,
               priority: 'normal',
-              senderId: userId,
-              conversationId: conversationId!,
-              data: {
-                shareLinkId: shareLink.id,
-                linkId: finalLinkId,
-                linkName: shareLink.name,
-                action: 'view_conversation'
-              }
             });
           }
         }
