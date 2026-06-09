@@ -412,7 +412,7 @@ export function registerMessagesAdvancedRoutes(
       try {
         logger.info('===== ENTERED TRY BLOCK FOR MENTIONS =====');
         // Utiliser les instances déjà disponibles dans le contexte Fastify
-        const translationService: MessageTranslationService = (fastify as any).translationService;
+        const translationService = fastify.translationService;
 
         // Invalider les traductions existantes (vider le JSON translations)
         await prisma.message.update({

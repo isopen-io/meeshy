@@ -6,7 +6,6 @@
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
-import { NotificationService } from '../services/notifications/NotificationService';
 import { NotificationFormatter } from '../services/notifications/NotificationFormatter';
 import { validatePagination } from '../utils/pagination';
 import {
@@ -20,7 +19,7 @@ const markAsReadSchema = z.object({
 });
 
 export async function notificationRoutes(fastify: FastifyInstance) {
-  const notificationService = new NotificationService(fastify.prisma, (fastify as any).io);
+  const notificationService = fastify.notificationService;
 
   // ============================================
   // GET /notifications - Liste paginée

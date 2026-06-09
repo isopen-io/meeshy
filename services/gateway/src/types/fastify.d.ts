@@ -7,7 +7,7 @@
 
 import Redis from 'ioredis';
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { TranslationService } from '../services/TranslationService';
+import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { SocialEventsHandler } from '../socketio/handlers/SocialEventsHandler';
 import { NotificationService } from '../services/notifications/NotificationService';
 import { MutationLogService } from '../services/MutationLogService';
@@ -22,7 +22,7 @@ declare module 'fastify' {
   interface FastifyInstance {
     prisma: PrismaClient;
     redis: Redis | null;
-    translationService: TranslationService;
+    translationService: MessageTranslationService;
     socialEvents: SocialEventsHandler;
     notificationService: NotificationService;
     mutationLogService: MutationLogService;
