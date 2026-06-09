@@ -581,7 +581,13 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         completion: @escaping (Data?) -> Void
     ) {
         nonisolated(unsafe) let completion = completion
-        let task = URLSession.shared.dataTask(with: url) { data, _, error in
+        // Bound the request. The NSE has a hard ~30 s budget and the rich
+        // attachment (media preview / avatar) is OPTIONAL — a slow download must
+        // not hold the whole notification hostage. The default 60 s timeout
+        // exceeds the budget, so the system would kill the extension and the
+        // notification would land late, possibly without any rich content.
+        let request = URLRequest(url: url, timeoutInterval: 12)
+        let task = URLSession.shared.dataTask(with: request) { data, _, error in
             guard let data, error == nil else {
                 completion(nil)
                 return

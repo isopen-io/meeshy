@@ -52,9 +52,16 @@ public final class SharedAVPlayerManager: ObservableObject {
         guard let url = MeeshyConfig.resolveMediaURL(urlString) else { return }
         let resolved = url.absoluteString
 
-        // Audio session for playback (unified .default mode across all components)
-        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.duckOthers])
-        try? AVAudioSession.sharedInstance().setActive(true)
+        // Audio session for playback (unified .default mode across all components).
+        // Call-safety : NE PAS reconfigurer la session pendant un appel VoIP —
+        // RTCAudioSession possède .playAndRecord/.voiceChat ; basculer en .playback
+        // couperait le micro (la vidéo écraserait la session de l'appel). L'état
+        // d'appel vient du MediaSessionCoordinator (source unique, alimentée par
+        // CallManager via l'Étape B). La vidéo joue alors sous la session de l'appel.
+        if !MediaSessionCoordinator.shared.isCallActive {
+            try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.duckOthers])
+            try? AVAudioSession.sharedInstance().setActive(true)
+        }
 
         activeURL = urlString
 
@@ -131,7 +138,12 @@ public final class SharedAVPlayerManager: ObservableObject {
         stopPip()
         cleanup()
         activeURL = ""
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        // Call-safety : ne PAS désactiver la session pendant un appel — elle
+        // appartient à l'appel (RTCAudioSession). La couper ici tuerait l'audio
+        // de l'appel jusqu'au prochain route-change.
+        if !MediaSessionCoordinator.shared.isCallActive {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
     }
 
     /// Libère le player POUR cette URL si elle est encore active. No-op si

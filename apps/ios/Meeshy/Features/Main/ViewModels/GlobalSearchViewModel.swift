@@ -511,8 +511,12 @@ final class GlobalSearchViewModel: ObservableObject {
                 queryItems: [URLQueryItem(name: "q", value: query)]
             )
             let userId = authManager.currentUser?.id ?? ""
-            let conversations = response.data.map { $0.toConversation(currentUserId: userId) }
-            let searchConvs = Array(conversations.prefix(10))
+            // Only the first 10 conversations feed the per-conversation message
+            // search below — decode just those, not the whole `/search` response.
+            // Decoding a conversation walks its nested last message + participants,
+            // so dropping the prefix BEFORE the map skips that work for every
+            // result past the 10th on each (per-keystroke) search.
+            let searchConvs = Array(response.data.prefix(10)).map { $0.toConversation(currentUserId: userId) }
 
             var allResults: [GlobalSearchMessageResult] = []
             await withTaskGroup(of: [GlobalSearchMessageResult].self) { group in

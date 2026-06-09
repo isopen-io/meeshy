@@ -201,6 +201,22 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         throw lastError ?? URLError(.unknown)
     }
 
+    /// Map an API conversation page off the main actor. The engine is
+    /// `@unchecked Sendable` (not an actor) and SE-0461 runs its nonisolated
+    /// async methods on the caller's actor — here the @MainActor list VM — so a
+    /// plain `.map { $0.toConversation }` would decode every conversation
+    /// (last message, preferences, participants) on the main thread during the
+    /// background sync. `[APIConversation]` and `[MeeshyConversation]` are both
+    /// Sendable and `toConversation` is a nonisolated pure function.
+    private static func mapConversationsOffMain(
+        _ apiConversations: [APIConversation],
+        userId: String
+    ) async -> [MeeshyConversation] {
+        await Task.detached(priority: .userInitiated) {
+            apiConversations.map { $0.toConversation(currentUserId: userId) }
+        }.value
+    }
+
     public func fullSync() async -> Bool {
         guard !isSyncing else { return true }
         isSyncing = true
@@ -221,7 +237,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         let firstPageReturnedCount: Int
         do {
             let response = try await Self.fetchPageWithRetry(via: service, offset: 0, limit: pageSize)
-            firstPage = response.data.map { $0.toConversation(currentUserId: userId) }
+            firstPage = (await Self.mapConversationsOffMain(response.data, userId: userId))
             firstPageReturnedCount = response.data.count
             totalCount = response.pagination?.total
             await saveSorted(firstPage, to: "list")
@@ -289,7 +305,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                     group.addTask {
                         do {
                             let response = try await Self.fetchPageWithRetry(via: service, offset: pageIndex * stride, limit: pageSize)
-                            let items = response.data.map { $0.toConversation(currentUserId: userId) }
+                            let items = (await Self.mapConversationsOffMain(response.data, userId: userId))
                             return (pageIndex, items)
                         } catch {
                             return (pageIndex, nil)
@@ -307,7 +323,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                         group.addTask {
                             do {
                                 let response = try await Self.fetchPageWithRetry(via: service, offset: pageIndex * stride, limit: pageSize)
-                                let items = response.data.map { $0.toConversation(currentUserId: userId) }
+                                let items = (await Self.mapConversationsOffMain(response.data, userId: userId))
                                 return (pageIndex, items)
                             } catch {
                                 return (pageIndex, nil)
@@ -343,7 +359,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 for pageIndex in droppedIndices {
                     do {
                         let response = try await Self.fetchPageWithRetry(via: service, offset: pageIndex * stride, limit: pageSize)
-                        let items = response.data.map { $0.toConversation(currentUserId: userId) }
+                        let items = (await Self.mapConversationsOffMain(response.data, userId: userId))
                         for item in items where !uniqueById.contains(item.id) {
                             uniqueById.insert(item.id)
                             merged.append(item)
@@ -384,7 +400,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             tailIterations += 1
             do {
                 let response = try await Self.fetchPageWithRetry(via: service, offset: offset, limit: pageSize)
-                let page = response.data.map { $0.toConversation(currentUserId: userId) }
+                let page = (await Self.mapConversationsOffMain(response.data, userId: userId))
                 let existingIds = Set(merged.map(\.id))
                 let newItems = page.filter { !existingIds.contains($0.id) }
                 merged.append(contentsOf: newItems)
@@ -470,7 +486,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             )
 
             let userId = await currentUserId()
-            let deltaConversations = response.data.map { $0.toConversation(currentUserId: userId) }
+            let deltaConversations = (await Self.mapConversationsOffMain(response.data, userId: userId))
 
             let existing = await cache.conversations.load(for: "list").snapshot() ?? []
 

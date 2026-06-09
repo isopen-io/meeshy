@@ -161,7 +161,15 @@ class FeedViewModel: ObservableObject {
             )
 
             if response.success {
-                let fetched = response.data.map { $0.toFeedPost(preferredLanguages: self.preferredLanguages) }
+                // Map the API payload off the main actor — `toFeedPost` decodes
+                // each post's media / comments / translations, real CPU for a
+                // full feed page (FeedViewModel is @MainActor + SE-0461). Both
+                // `[APIPost]` in and `[FeedPost]` out are Sendable, clean hop.
+                let preferred = self.preferredLanguages
+                let payload = response.data
+                let fetched = await Task.detached(priority: .userInitiated) {
+                    payload.map { $0.toFeedPost(preferredLanguages: preferred) }
+                }.value
                 // Protective merge — same class of fix as MessageStore.publish:
                 // a `.stale` cache load kicks off this background refresh, and a
                 // socket `post:created` / `post:reposted` can insert a post at
@@ -243,7 +251,12 @@ class FeedViewModel: ObservableObject {
             )
 
             if response.success {
-                let newPosts = response.data.map { $0.toFeedPost(preferredLanguages: self.preferredLanguages) }
+                // Map off the main actor (see loadFeed) — toFeedPost decode is CPU-bound.
+                let preferred = self.preferredLanguages
+                let payload = response.data
+                let newPosts = await Task.detached(priority: .userInitiated) {
+                    payload.map { $0.toFeedPost(preferredLanguages: preferred) }
+                }.value
                 // Deduplicate
                 let existingIds = Set(posts.map(\.id))
                 let uniqueNew = newPosts.filter { !existingIds.contains($0.id) }
@@ -300,21 +313,24 @@ class FeedViewModel: ObservableObject {
             do {
                 let response = try await self.postService.getComments(postId: postId, cursor: nil, limit: 20)
                 let langs = self.preferredLanguages
-                let comments = response.data.map { c -> FeedComment in
-                    let translatedContent = PostDetailViewModel.resolveCommentTranslation(
-                        translations: c.translations,
-                        originalLanguage: c.originalLanguage,
-                        preferredLanguages: langs
-                    )
-                    return FeedComment(
-                        id: c.id, author: c.author.name, authorId: c.author.id,
-                        authorAvatarURL: c.author.avatar,
-                        content: c.content, timestamp: c.createdAt,
-                        likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                        parentId: c.parentId,
-                        originalLanguage: c.originalLanguage, translatedContent: translatedContent
-                    )
-                }
+                let payload = response.data
+                let comments = await Task.detached(priority: .utility) {
+                    payload.map { c -> FeedComment in
+                        let translatedContent = PostDetailViewModel.resolveCommentTranslation(
+                            translations: c.translations,
+                            originalLanguage: c.originalLanguage,
+                            preferredLanguages: langs
+                        )
+                        return FeedComment(
+                            id: c.id, author: c.author.name, authorId: c.author.id,
+                            authorAvatarURL: c.author.avatar,
+                            content: c.content, timestamp: c.createdAt,
+                            likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                            parentId: c.parentId,
+                            originalLanguage: c.originalLanguage, translatedContent: translatedContent
+                        )
+                    }
+                }.value
                 try? await CacheCoordinator.shared.comments.save(comments, for: cacheKey)
             } catch {
                 // Silent fail on prefetch — user-triggered open will retry the network.

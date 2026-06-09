@@ -1,5 +1,6 @@
 import SwiftUI
 import AVFoundation
+import MeeshySDK
 
 /// Coordinates story audio/video with the rest of the app.
 ///
@@ -35,11 +36,16 @@ public final class StoryMediaCoordinator: StoppablePlayer {
         }
         PlaybackCoordinator.shared.willStartPlaying(external: self)
 
-        // Ensure audio plays through speakers (not just ringer) regardless of silent switch
-        do {
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers, .duckOthers])
-            try AVAudioSession.sharedInstance().setActive(true)
-        } catch {}
+        // Ensure audio plays through speakers (not just ringer) regardless of silent switch.
+        // Call-safety : ne PAS reconfigurer la session pendant un appel VoIP (sinon
+        // micro coupé) — la story céderait sa session à l'appel. État d'appel = source
+        // unique MediaSessionCoordinator.isCallActive (alimentée par CallManager).
+        if !MediaSessionCoordinator.shared.isCallActive {
+            do {
+                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers, .duckOthers])
+                try AVAudioSession.sharedInstance().setActive(true)
+            } catch {}
+        }
     }
 
     /// Release exclusive audio (story dismissed). Triggers stop handler for cleanup.

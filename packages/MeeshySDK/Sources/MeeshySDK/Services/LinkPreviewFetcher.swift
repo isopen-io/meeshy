@@ -87,9 +87,15 @@ public actor LinkPreviewFetcher {
 
     /// Pull the first HTTP(S) URL out of a message body. Returns `nil` when
     /// the text has no URL or only mailto/tel/mentions.
+    /// Shared link detector. `NSDataDetector` is documented as thread-safe, and
+    /// building one is expensive (it compiles the link-detection rules), so
+    /// creating one per `firstURL` call — i.e. per text bubble's `BubbleContent`
+    /// build, which runs per cell on scroll — was real CPU. Build it once.
+    private nonisolated(unsafe) static let linkDetector: NSDataDetector? =
+        try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue)
+
     public nonisolated static func firstURL(in text: String) -> String? {
-        guard !text.isEmpty,
-              let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else {
+        guard !text.isEmpty, let detector = Self.linkDetector else {
             return nil
         }
         let range = NSRange(text.startIndex..<text.endIndex, in: text)
@@ -211,9 +217,21 @@ public actor LinkPreviewFetcher {
         regexFirstCapture(in: html, pattern: #"<title[^>]*>([^<]+)</title>"#)
     }
 
+    /// Compiled HTML-metadata regexes, keyed by pattern. The set of patterns is
+    /// fixed (title / og:* tags) yet `regexFirstCapture` recompiled each one on
+    /// every link-preview fetch — wasted (off-main) CPU. Compile each once.
+    private nonisolated(unsafe) static let htmlMetaRegexCache = NSCache<NSString, NSRegularExpression>()
+
     private static func regexFirstCapture(in html: String, pattern: String) -> String? {
-        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) else {
-            return nil
+        let regex: NSRegularExpression
+        if let cached = htmlMetaRegexCache.object(forKey: pattern as NSString) {
+            regex = cached
+        } else {
+            guard let built = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive, .dotMatchesLineSeparators]) else {
+                return nil
+            }
+            htmlMetaRegexCache.setObject(built, forKey: pattern as NSString)
+            regex = built
         }
         let range = NSRange(html.startIndex..<html.endIndex, in: html)
         guard let match = regex.firstMatch(in: html, range: range),

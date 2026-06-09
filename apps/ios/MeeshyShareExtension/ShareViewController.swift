@@ -2,6 +2,7 @@ import UIKit
 import Social
 import MobileCoreServices
 import UniformTypeIdentifiers
+import ImageIO
 import SwiftUI
 
 /// Share Extension View Controller
@@ -134,16 +135,42 @@ class ShareViewController: UIViewController {
 
     private func extractImage(from attachment: NSItemProvider, completion: @escaping (UIImage?) -> Void) {
         attachment.loadItem(forTypeIdentifier: UTType.image.identifier, options: nil) { data, error in
-            if let url = data as? URL, let imageData = try? Data(contentsOf: url), let image = UIImage(data: imageData) {
-                completion(image)
-            } else if let data = data as? Data, let image = UIImage(data: data) {
-                completion(image)
+            // Downsample on load. A share extension has a ~120 MB memory ceiling,
+            // and decoding a full-resolution photo (e.g. a 50 MP camera shot) as a
+            // bitmap can blow past it and crash the share. ImageIO decodes a
+            // bounded thumbnail directly, never the full bitmap — quality is ample
+            // for a shared image and the main app re-compresses on send anyway.
+            if let url = data as? URL {
+                completion(Self.downsampledImage(at: url) ?? UIImage(contentsOfFile: url.path))
+            } else if let data = data as? Data {
+                completion(Self.downsampledImage(from: data) ?? UIImage(data: data))
             } else if let image = data as? UIImage {
                 completion(image)
             } else {
                 completion(nil)
             }
         }
+    }
+
+    private static func downsampledImage(at url: URL, maxPixelSize: CGFloat = 2048) -> UIImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        return downsampledImage(from: source, maxPixelSize: maxPixelSize)
+    }
+
+    private static func downsampledImage(from data: Data, maxPixelSize: CGFloat = 2048) -> UIImage? {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
+        return downsampledImage(from: source, maxPixelSize: maxPixelSize)
+    }
+
+    private static func downsampledImage(from source: CGImageSource, maxPixelSize: CGFloat) -> UIImage? {
+        let options: [CFString: Any] = [
+            kCGImageSourceShouldCacheImmediately: true,
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
+        ]
+        guard let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        return UIImage(cgImage: cg)
     }
 
     private func extractVideo(from attachment: NSItemProvider, completion: @escaping (URL?) -> Void) {

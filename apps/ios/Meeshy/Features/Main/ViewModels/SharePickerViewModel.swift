@@ -68,7 +68,13 @@ final class SharePickerViewModel: ObservableObject {
             )
             if response.success {
                 let userId = currentUserIdProvider() ?? ""
-                conversations = response.data.map { $0.toConversation(currentUserId: userId) }
+                let payload = response.data
+                // Decode 50 conversations (nested last message / participants /
+                // preferences) off the main actor so opening the share picker
+                // doesn't hitch. APIConversation + MeeshyConversation are Sendable.
+                conversations = await Task.detached(priority: .userInitiated) {
+                    payload.map { $0.toConversation(currentUserId: userId) }
+                }.value
             }
         } catch {
             Self.logger.error("Failed to load conversations for share: \(error.localizedDescription)")

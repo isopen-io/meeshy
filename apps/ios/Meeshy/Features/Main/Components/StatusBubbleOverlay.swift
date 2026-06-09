@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import MeeshySDK
+import MeeshyUI
 
 struct StatusBubbleOverlay: View {
     let status: StatusEntry
@@ -13,7 +14,7 @@ struct StatusBubbleOverlay: View {
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
-    @StateObject private var audioPlayer = AudioPlayerManager()
+    @StateObject private var audioPlayer = AudioPlaybackManager()
     @State private var appearAnimation = false
 
     private var screenHeight: CGFloat { UIScreen.main.bounds.height }

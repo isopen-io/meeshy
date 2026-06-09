@@ -168,12 +168,17 @@ struct ConversationProvider: TimelineProvider {
         var entries: [ConversationEntry] = []
 
         let currentDate = Date()
+        // The four entries (now, +15, +30, +45) all show the SAME snapshot — only
+        // their dates differ. Read the shared store + decode the JSON ONCE and
+        // reuse it, instead of paying the UserDefaults read + decode per entry.
+        let conversations = loadConversations()
+        let unreadCount = getUnreadCount()
         for minuteOffset in 0 ..< 60 where minuteOffset % 15 == 0 {
             let entryDate = Calendar.current.date(byAdding: .minute, value: minuteOffset, to: currentDate)!
             let entry = ConversationEntry(
                 date: entryDate,
-                conversations: loadConversations(),
-                unreadCount: getUnreadCount()
+                conversations: conversations,
+                unreadCount: unreadCount
             )
             entries.append(entry)
         }

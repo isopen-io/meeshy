@@ -11,6 +11,12 @@ import MeeshySDK
 /// Not pixel-perfect — sufficient for thumbHash blur placeholders (~28 bytes).
 public enum StorySlideRenderer {
 
+    /// Shared Core Image context for filter rasterisation. `CIContext` is the
+    /// most expensive Core Image object to build (it sets up the GPU render
+    /// context) and is documented thread-safe + reusable, yet a new one was
+    /// created per filtered slide composite. Build it once.
+    private nonisolated(unsafe) static let filterContext = CIContext()
+
     /// Render a complete slide composite: background (color/image) + text overlays + foreground images.
     /// Returns nil only if rendering fails (shouldn't happen).
     public static func renderComposite(
@@ -168,7 +174,7 @@ public enum StorySlideRenderer {
         }
 
         guard let out = output,
-              let cg = CIContext().createCGImage(out, from: input.extent) else { return image }
+              let cg = Self.filterContext.createCGImage(out, from: input.extent) else { return image }
         return UIImage(cgImage: cg, scale: image.scale, orientation: image.imageOrientation)
     }
 

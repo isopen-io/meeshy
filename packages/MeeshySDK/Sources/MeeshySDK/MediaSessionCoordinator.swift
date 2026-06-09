@@ -86,6 +86,13 @@ public actor MediaSessionCoordinator {
         callActive = active
     }
 
+    /// `true` tant qu'un appel VoIP possède la session audio (`.playAndRecord/
+    /// .voiceChat` via RTCAudioSession). Lu par les composants SDK qui posent la
+    /// session DIRECTEMENT (vidéo, story) afin de NE PAS la reconfigurer pendant
+    /// un appel (sinon micro coupé) — source UNIQUE de l'état d'appel côté SDK,
+    /// sans dépendance à la couche appel de l'app. `nonisolated` → lecture sync.
+    public nonisolated var isCallActive: Bool { callActive }
+
     /// Pure, testable decision: may the coordinator (re)configure or tear down
     /// the shared `AVAudioSession` right now? `false` while a VoIP call owns it
     /// — switching the category to `.playback` mid-call mutes the microphone.
