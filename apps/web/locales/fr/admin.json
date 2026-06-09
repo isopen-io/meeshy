@@ -281,7 +281,11 @@
   "userDetail": {
     "languagePreferences": "Préférences de Langue",
     "languagePreferencesSaved": "Préférences de langue mises à jour",
-    "languagePreferencesError": "Erreur lors de la mise à jour"
+    "languagePreferencesError": "Erreur lors de la mise à jour",
+    "contactUpdated": "Informations de contact mises à jour",
+    "contactUpdateError": "Erreur lors de la mise à jour des contacts",
+    "personalInfoUpdated": "Informations personnelles mises à jour",
+    "personalInfoUpdateError": "Erreur lors de la mise à jour des informations personnelles"
   },
   "translationMonitor": {
     "loadingMetrics": "Chargement des métriques...",

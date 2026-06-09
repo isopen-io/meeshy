@@ -1034,5 +1034,29 @@
         "note": "Note de sécurité : Soyez toujours prudent lors du téléchargement de fichiers de sources inconnues. Activez l'analyse antivirus et bloquez les fichiers exécutables pour une protection maximale."
       }
     }
+  },
+  "v2settings": {
+    "translationLangUpdated": "Langue de traduction mise à jour",
+    "uiLangUpdated": "Langue de l'interface mise à jour",
+    "passwordChanged": "Mot de passe modifié avec succès",
+    "passwordChangeError": "Erreur lors du changement de mot de passe",
+    "accountDeleted": "Compte supprimé",
+    "accountDeleteError": "Erreur lors de la suppression du compte",
+    "deleteAccount": "Supprimer mon compte",
+    "deleteAccountTitle": "Supprimer votre compte ?",
+    "delete": "Supprimer"
+  },
+  "v2me": {
+    "logoutSuccess": "Déconnexion réussie",
+    "logoutError": "Erreur lors de la déconnexion",
+    "profileUpdated": "Profil mis à jour avec succès",
+    "profileUpdateError": "Erreur lors de la mise à jour du profil",
+    "editProfile": "Modifier le profil"
+  },
+  "chats": {
+    "loading": "Chargement...",
+    "loadMore": "Charger plus de messages",
+    "emptyState": "Aucun message dans cette conversation",
+    "emptyStateCta": "Envoyez le premier message !"
   }
 }

@@ -455,7 +455,18 @@
       "refreshed": "Estados actualizados",
       "refreshError": "Error al actualizar",
       "roleError": "Error al actualizar el rol",
-      "addError": "Error al añadir participante"
+      "addError": "Error al añadir participante",
+      "roleUpdated": "Rol actualizado con éxito: {{role}}",
+      "invited": "{{name}} ha sido invitado a la conversación",
+      "added": "{{name}} añadido como {{role}}",
+      "promote": "Promover",
+      "demote": "Degradar",
+      "refreshStatuses": "Actualizar estados",
+      "roles": {
+        "MEMBER": "Miembro",
+        "MODERATOR": "Moderador",
+        "ADMIN": "Administrador"
+      }
     },
     "createLinkButton": {
       "notAuthenticated": "No se puede crear el enlace: usuario no conectado",
@@ -472,11 +483,17 @@
     "pinnedBanner": {
       "close": "Cerrar mensaje fijado"
     },
+    "links": {
+      "noDescription": "Sin descripción",
+      "loading": "Cargando enlaces...",
+      "empty": "No hay enlaces compartidos"
+    },
     "inviteModal": {
       "searchError": "Error al buscar usuarios",
       "inviteSuccess": "{count} usuario(s) invitado(s) con éxito",
       "partialError": "{count} invitación/invitaciones fallaron",
-      "inviteError": "Error al invitar usuarios"
+      "inviteError": "Error al invitar usuarios",
+      "noUsersFound": "No se encontraron usuarios"
     },
     "drawer": {
       "title": "Opciones",
