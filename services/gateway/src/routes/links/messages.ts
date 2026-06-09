@@ -249,9 +249,9 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       }
 
       // Émettre l'événement WebSocket
-      const socketManager = (fastify as any).socketManager;
-      if (socketManager) {
-        socketManager.emitToConversation(participantShareLink.conversationId, 'link:message:new', {
+      const socketIOManager = fastify.socketIOHandler.getManager();
+      if (socketIOManager) {
+        (socketIOManager as any).io?.to(`conversation:${participantShareLink.conversationId}`).emit('link:message:new', {
           message: {
             id: message.id,
             content: message.content,
@@ -520,9 +520,9 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
       }
 
       // Émettre l'événement WebSocket
-      const socketManager = (fastify as any).socketManager;
-      if (socketManager) {
-        socketManager.emitToConversation(shareLink.conversationId, 'link:message:new', {
+      const socketIOManager = fastify.socketIOHandler.getManager();
+      if (socketIOManager) {
+        (socketIOManager as any).io?.to(`conversation:${shareLink.conversationId}`).emit('link:message:new', {
           message: {
             id: message.id,
             content: message.content,

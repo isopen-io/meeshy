@@ -21,7 +21,7 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
 
   // Initialize translate service if ZMQ client is available via translationService
   let translateService: AttachmentTranslateService | null = null;
-  const translationService = (fastify as any).translationService;
+  const translationService = fastify.translationService;
   if (translationService) {
     const zmqClient = translationService.getZmqClient();
     if (zmqClient) {

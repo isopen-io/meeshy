@@ -1052,25 +1052,35 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     }
     #endif
 
+    /// Serial queue + dedicated decoder so social realtime payloads parse off the
+    /// main thread. Socket.IO's handle queue defaults to main, so decoding inline
+    /// ran every post / story / status event's JSON on the main thread. The serial
+    /// queue preserves arrival order; the handler still lands on main. (The small
+    /// reaction handlers keep using `decoder` on main — separate instance, no
+    /// cross-queue sharing.)
+    private nonisolated(unsafe) static let offMainDecoder = JSONDecoder()
+    private static let decodeQueue = DispatchQueue(label: "me.meeshy.social-socket.decode", qos: .userInitiated)
+
     private nonisolated func decode<T: Decodable & Sendable>(_ type: T.Type, from data: [Any], handler: @escaping @Sendable (T) -> Void) {
         guard let first = data.first else { return }
 
-        do {
-            let jsonData: Data
-            if let dict = first as? [String: Any] {
-                jsonData = try JSONSerialization.data(withJSONObject: dict)
-            } else if let str = first as? String {
-                jsonData = Data(str.utf8)
-            } else {
-                return
-            }
+        let jsonData: Data
+        if let dict = first as? [String: Any] {
+            guard let serialized = try? JSONSerialization.data(withJSONObject: dict) else { return }
+            jsonData = serialized
+        } else if let str = first as? String {
+            jsonData = Data(str.utf8)
+        } else {
+            return
+        }
 
-            let decoded = try decoder.decode(type, from: jsonData)
-            DispatchQueue.main.async {
-                handler(decoded)
+        Self.decodeQueue.async {
+            do {
+                let decoded = try Self.offMainDecoder.decode(type, from: jsonData)
+                DispatchQueue.main.async { handler(decoded) }
+            } catch {
+                Logger.socket.error("SocialSocket decode error for \(String(describing: type)): \(error)")
             }
-        } catch {
-            Logger.socket.error("SocialSocket decode error for \(String(describing: type)): \(error)")
         }
     }
 }

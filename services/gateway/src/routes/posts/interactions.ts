@@ -4,7 +4,6 @@ import { PostType } from '@meeshy/shared/prisma/client';
 import type { Post } from '@meeshy/shared/types/post';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
-import { NotificationService } from '../../services/notifications/NotificationService';
 import { MediaService } from '../../services/MediaService';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import type { OrphanMediaCleanupService } from '../../services/storage/OrphanMediaCleanupService';
@@ -246,8 +245,7 @@ export function registerInteractionRoutes(
       // éviter de rejouer la requête à chaque impression répétée du feed.
       // Fire-and-forget : ne bloque pas la réponse, émet `notification:counts`.
       if (isNewView) {
-        const notificationService = new NotificationService(prisma, (fastify as any).io);
-        notificationService.markPostNotificationsAsRead(viewerId, postId).catch(() => {});
+        fastify.notificationService.markPostNotificationsAsRead(viewerId, postId).catch(() => {});
       }
 
       // If this is a story, broadcast the view to the story author

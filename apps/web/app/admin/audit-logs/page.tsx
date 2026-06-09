@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useI18n } from '@/hooks/use-i18n';
 import { ArrowLeft, Shield, Activity, AlertCircle, CheckCircle, XCircle, User, Settings, Key, FileText, Search, Filter, Download, Clock } from 'lucide-react';
 import { useI18n } from '@/hooks/use-i18n';
 
@@ -100,7 +101,7 @@ export default function AuditLogsPage() {
       icon: AlertCircle,
       iconColor: 'text-red-600 dark:text-red-400',
       iconBgColor: 'bg-red-100 dark:bg-red-900/30',
-      badge: { text: t('auditLogs.severityCritical'), variant: 'destructive' }
+      badge: { text: t('auditLogs.statSecurityBadge'), variant: 'destructive' }
     },
     {
       title: t('auditLogs.statConfigChanges'),
@@ -289,10 +290,10 @@ export default function AuditLogsPage() {
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
 
-    if (diffMins < 1) return t('auditLogs.justNow');
-    if (diffMins < 60) return t('auditLogs.minutesAgo', { n: diffMins });
-    if (diffHours < 24) return t('auditLogs.hoursAgo', { n: diffHours });
-    return date.toLocaleString('en', {
+    if (diffMins < 1) return t('auditLogs.timestampJustNow');
+    if (diffMins < 60) return t('auditLogs.timestampMinutes', { min: diffMins });
+    if (diffHours < 24) return t('auditLogs.timestampHours', { hours: diffHours });
+    return date.toLocaleString('fr-FR', {
       day: '2-digit',
       month: 'short',
       hour: '2-digit',
@@ -316,8 +317,8 @@ export default function AuditLogsPage() {
                 {t('auditLogs.back')}
               </Button>
               <div>
-                <h1 className="text-2xl font-bold">{t('auditLogs.title')}</h1>
-                <p className="text-indigo-100 mt-1">{t('auditLogs.subtitle')}</p>
+                <h1 className="text-2xl font-bold">{t('auditLogs.pageTitle')}</h1>
+                <p className="text-indigo-100 mt-1">{t('auditLogs.pageSubtitle')}</p>
               </div>
             </div>
             <div className="flex items-center space-x-3">
@@ -334,7 +335,7 @@ export default function AuditLogsPage() {
               </Select>
               <Button variant="ghost" className="text-white hover:bg-white/20">
                 <Download className="h-4 w-4 mr-2" />
-                {t('auditLogs.exportButton')}
+                {t('auditLogs.export')}
               </Button>
             </div>
           </div>
@@ -368,12 +369,12 @@ export default function AuditLogsPage() {
                   <SelectValue placeholder={t('auditLogs.actionTypeLabel')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">{t('auditLogs.allActions')}</SelectItem>
+                  <SelectItem value="all">{t('auditLogs.actionAll')}</SelectItem>
                   <SelectItem value="user_login">{t('auditLogs.actionLogin')}</SelectItem>
                   <SelectItem value="user_logout">{t('auditLogs.actionLogout')}</SelectItem>
                   <SelectItem value="user_created">{t('auditLogs.actionUserCreated')}</SelectItem>
                   <SelectItem value="user_banned">{t('auditLogs.actionUserBanned')}</SelectItem>
-                  <SelectItem value="settings_changed">{t('auditLogs.actionConfigModified')}</SelectItem>
+                  <SelectItem value="settings_changed">{t('auditLogs.actionSettingsChanged')}</SelectItem>
                   <SelectItem value="security_alert">{t('auditLogs.actionSecurityAlert')}</SelectItem>
                 </SelectContent>
               </Select>
@@ -383,7 +384,7 @@ export default function AuditLogsPage() {
                   <SelectValue placeholder={t('auditLogs.allStatuses')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">{t('auditLogs.allStatuses')}</SelectItem>
+                  <SelectItem value="all">{t('auditLogs.statusAll')}</SelectItem>
                   <SelectItem value="success">{t('auditLogs.statusSuccess')}</SelectItem>
                   <SelectItem value="failure">{t('auditLogs.statusFailure')}</SelectItem>
                   <SelectItem value="warning">{t('auditLogs.statusWarning')}</SelectItem>
@@ -395,7 +396,7 @@ export default function AuditLogsPage() {
                   <SelectValue placeholder={t('auditLogs.allSeverities')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">{t('auditLogs.allSeverities')}</SelectItem>
+                  <SelectItem value="all">{t('auditLogs.severityAll')}</SelectItem>
                   <SelectItem value="critical">{t('auditLogs.severityCritical')}</SelectItem>
                   <SelectItem value="high">{t('auditLogs.severityHigh')}</SelectItem>
                   <SelectItem value="medium">{t('auditLogs.severityMedium')}</SelectItem>
@@ -410,7 +411,7 @@ export default function AuditLogsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <span>{t('auditLogs.eventLogsWithCount', { count: filteredLogs.length })}</span>
+              <span>{t('auditLogs.eventLogsTitle', { count: filteredLogs.length })}</span>
               <Badge variant="outline">{dateRange}</Badge>
             </CardTitle>
           </CardHeader>
@@ -497,7 +498,7 @@ export default function AuditLogsPage() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
                 <div className="text-sm text-gray-600 dark:text-gray-400">
-                  {t('auditLogs.paginationInfo', { page: currentPage, totalPages })}
+                  {t('auditLogs.paginationInfo', { page: currentPage, total: totalPages })}
                 </div>
                 <div className="flex items-center space-x-2">
                   <Button

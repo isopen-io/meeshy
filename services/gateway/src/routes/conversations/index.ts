@@ -20,7 +20,7 @@ import { MessageTranslationService } from '../../services/message-translation/Me
 export async function conversationRoutes(fastify: FastifyInstance) {
   // Récupérer prisma et les services décorés par le serveur
   const prisma = fastify.prisma;
-  const translationService: MessageTranslationService = (fastify as any).translationService;
+  const translationService = fastify.translationService;
 
   // Middleware d'authentification optionnel pour les conversations
   const optionalAuth = createUnifiedAuthMiddleware(prisma, {

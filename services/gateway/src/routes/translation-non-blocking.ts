@@ -250,7 +250,7 @@ const conversationParamsSchema = {
 // ===== ROUTE NON-BLOQUANTE =====
 export async function translationRoutes(fastify: FastifyInstance, options: any) {
   // Recuperer les services depuis l'instance fastify (comme dans translation.ts)
-  const translationService = (fastify as any).translationService;
+  const translationService = fastify.translationService;
   const messagingService = fastify.messagingService;
 
   if (!translationService) {

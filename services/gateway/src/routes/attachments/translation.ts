@@ -356,7 +356,7 @@ export async function registerTranslationRoutes(
     },
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        const translationService = (fastify as any).translationService;
+        const translationService = fastify.translationService;
         if (!translationService) {
           return reply.status(503).send({
             success: false,
