@@ -150,19 +150,24 @@ class PostDetailViewModel: ObservableObject {
         do {
             let response = try await postService.getComments(postId: postId, cursor: commentCursor, limit: 20)
             let langs = preferredLanguages
-            let newComments = response.data.map { c -> FeedComment in
-                let translatedContent: String? = Self.resolveCommentTranslation(
-                    translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
-                )
-                return FeedComment(
-                    id: c.id, author: c.author.name, authorId: c.author.id,
-                    authorAvatarURL: c.author.avatar,
-                    content: c.content, timestamp: c.createdAt,
-                    likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                    parentId: c.parentId,
-                    originalLanguage: c.originalLanguage, translatedContent: translatedContent
-                )
-            }
+            let payload = response.data
+            // Map off the main actor — for a popular post's comment page this
+            // decode + Prisme resolution would otherwise hitch the sheet.
+            let newComments = await Task.detached(priority: .userInitiated) {
+                payload.map { c -> FeedComment in
+                    let translatedContent: String? = PostDetailViewModel.resolveCommentTranslation(
+                        translations: c.translations, originalLanguage: c.originalLanguage, preferredLanguages: langs
+                    )
+                    return FeedComment(
+                        id: c.id, author: c.author.name, authorId: c.author.id,
+                        authorAvatarURL: c.author.avatar,
+                        content: c.content, timestamp: c.createdAt,
+                        likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                        parentId: c.parentId,
+                        originalLanguage: c.originalLanguage, translatedContent: translatedContent
+                    )
+                }
+            }.value
             let existingIds = Set(comments.map(\.id))
             let unique = newComments.filter { !existingIds.contains($0.id) }
             comments.append(contentsOf: unique)
@@ -211,20 +216,23 @@ class PostDetailViewModel: ObservableObject {
                 postId: postId, commentId: commentId, cursor: nil, limit: 20
             )
             let langs = preferredLanguages
-            let replies = response.data.map { c -> FeedComment in
-                let translated = Self.resolveCommentTranslation(
-                    translations: c.translations, originalLanguage: c.originalLanguage,
-                    preferredLanguages: langs
-                )
-                return FeedComment(
-                    id: c.id, author: c.author.name, authorId: c.author.id,
-                    authorAvatarURL: c.author.avatar,
-                    content: c.content, timestamp: c.createdAt,
-                    likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                    parentId: commentId,
-                    originalLanguage: c.originalLanguage, translatedContent: translated
-                )
-            }
+            let payload = response.data
+            let replies = await Task.detached(priority: .userInitiated) {
+                payload.map { c -> FeedComment in
+                    let translated = PostDetailViewModel.resolveCommentTranslation(
+                        translations: c.translations, originalLanguage: c.originalLanguage,
+                        preferredLanguages: langs
+                    )
+                    return FeedComment(
+                        id: c.id, author: c.author.name, authorId: c.author.id,
+                        authorAvatarURL: c.author.avatar,
+                        content: c.content, timestamp: c.createdAt,
+                        likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                        parentId: commentId,
+                        originalLanguage: c.originalLanguage, translatedContent: translated
+                    )
+                }
+            }.value
             repliesMap[commentId] = replies
         } catch {
             expandedThreads.remove(commentId)
@@ -486,7 +494,9 @@ class PostDetailViewModel: ObservableObject {
 
     // MARK: - Translation Resolution
 
-    static func resolveCommentTranslation(
+    // `nonisolated`: pure Prisme resolver (params in, String? out — no actor
+    // state). Lets the comment/reply maps run it from a detached task.
+    nonisolated static func resolveCommentTranslation(
         translations: [String: APIPostTranslationEntry]?,
         originalLanguage: String?,
         preferredLanguages: [String]
