@@ -57,6 +57,7 @@ import {
   requireUserDeleteAccess
 } from '../../middleware/admin-user-auth.middleware';
 import { validatePagination, buildPaginationMeta } from '../../utils/pagination';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 
 // Utilisation des schemas de validation renforces
 const createUserSchema = createUserValidationSchema;
@@ -131,17 +132,10 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         userAgent: request.headers['user-agent']
       });
 
-      reply.send({
-        success: true,
-        data: response
-      });
+      sendSuccess(reply, response);
     } catch (error) {
       fastify.log.error({ err: error }, 'Error fetching users');
-      reply.status(500).send({
-        success: false,
-        error: 'Internal server error',
-        message: 'Failed to fetch users'
-      });
+      sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch users' });
     }
   });
 
@@ -160,11 +154,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       const user = await userManagementService.getUserById(request.params.userId);
 
       if (!user) {
-        reply.status(404).send({
-          success: false,
-          error: 'User not found',
-          message: 'The requested user does not exist'
-        });
+        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
         return;
       }
 
@@ -179,17 +169,10 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         request.headers['user-agent']
       );
 
-      reply.send({
-        success: true,
-        data: sanitizedUser
-      });
+      sendSuccess(reply, sanitizedUser);
     } catch (error) {
       fastify.log.error({ err: error }, 'Error fetching user');
-      reply.status(500).send({
-        success: false,
-        error: 'Internal server error',
-        message: 'Failed to fetch user details'
-      });
+      sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch user details' });
     }
   });
 
@@ -212,11 +195,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       // Verifier si l'admin peut creer un utilisateur avec ce role
       if (validatedData.role) {
         if (!permissionsService.canManageUser(adminRole, validatedData.role as UserRoleEnum)) {
-          reply.status(403).send({
-            success: false,
-            error: 'Insufficient permissions to create user with this role',
-            message: 'Access denied'
-          });
+          sendForbidden(reply, 'Insufficient permissions to create user with this role', { message: 'Access denied' });
           return;
         }
       }
@@ -239,11 +218,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       // Sanitize la reponse
       const sanitizedUser = sanitizationService.sanitizeUser(newUser, adminRole);
 
-      reply.status(201).send({
-        success: true,
-        data: sanitizedUser,
-        message: 'User created successfully'
-      });
+      sendSuccess(reply, sanitizedUser, { statusCode: 201, message: 'User created successfully' });
     } catch (error) {
       if (error instanceof z.ZodError) {
         reply.status(400).send({
@@ -256,11 +231,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       fastify.log.error({ err: error }, 'Error creating user');
-      reply.status(500).send({
-        success: false,
-        error: 'Internal server error',
-        message: 'Failed to create user'
-      });
+      sendInternalError(reply, 'Internal server error', { message: 'Failed to create user' });
     }
   });
 
@@ -285,21 +256,13 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       const targetUser = await userManagementService.getUserById(request.params.userId);
 
       if (!targetUser) {
-        reply.status(404).send({
-          success: false,
-          error: 'User not found',
-          message: 'The requested user does not exist'
-        });
+        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
         return;
       }
 
       // Verifier si l'admin peut modifier cet utilisateur
       if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
-        reply.status(403).send({
-          success: false,
-          error: 'Insufficient permissions to modify this user',
-          message: 'Access denied'
-        });
+        sendForbidden(reply, 'Insufficient permissions to modify this user', { message: 'Access denied' });
         return;
       }
 
@@ -335,11 +298,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       // Sanitize la reponse
       const sanitizedUser = sanitizationService.sanitizeUser(updatedUser, adminRole);
 
-      reply.send({
-        success: true,
-        data: sanitizedUser,
-        message: 'User updated successfully'
-      });
+      sendSuccess(reply, sanitizedUser, { message: 'User updated successfully' });
     } catch (error) {
       if (error instanceof z.ZodError) {
         reply.status(400).send({
@@ -352,11 +311,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       fastify.log.error({ err: error }, 'Error updating user');
-      reply.status(500).send({
-        success: false,
-        error: 'Internal server error',
-        message: 'Failed to update user'
-      });
+      sendInternalError(reply, 'Internal server error', { message: 'Failed to update user' });
     }
   });
 
@@ -381,11 +336,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       const targetUser = await userManagementService.getUserById(request.params.userId);
 
       if (!targetUser) {
-        reply.status(404).send({
-          success: false,
-          error: 'User not found',
-          message: 'The requested user does not exist'
-        });
+        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
         return;
       }
 
@@ -395,11 +346,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         targetUser.role as UserRoleEnum,
         validatedData.role as UserRoleEnum
       )) {
-        reply.status(403).send({
-          success: false,
-          error: 'Insufficient permissions to change user role',
-          message: 'Access denied'
-        });
+        sendForbidden(reply, 'Insufficient permissions to change user role', { message: 'Access denied' });
         return;
       }
 
@@ -428,11 +375,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       // Sanitize la reponse
       const sanitizedUser = sanitizationService.sanitizeUser(updatedUser, adminRole);
 
-      reply.send({
-        success: true,
-        data: sanitizedUser,
-        message: `User role updated to ${validatedData.role}`
-      });
+      sendSuccess(reply, sanitizedUser, { message: `User role updated to ${validatedData.role}` });
     } catch (error) {
       if (error instanceof z.ZodError) {
         reply.status(400).send({
@@ -445,11 +388,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       fastify.log.error({ err: error }, 'Error updating user role');
-      reply.status(500).send({
-        success: false,
-        error: 'Internal server error',
-        message: 'Failed to update user role'
-      });
+      sendInternalError(reply, 'Internal server error', { message: 'Failed to update user role' });
     }
   });
 
@@ -474,21 +413,13 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       const targetUser = await userManagementService.getUserById(request.params.userId);
 
       if (!targetUser) {
-        reply.status(404).send({
-          success: false,
-          error: 'User not found',
-          message: 'The requested user does not exist'
-        });
+        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
         return;
       }
 
       // Verifier si l'admin peut modifier le statut
       if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
-        reply.status(403).send({
-          success: false,
-          error: 'Insufficient permissions to modify user status',
-          message: 'Access denied'
-        });
+        sendForbidden(reply, 'Insufficient permissions to modify user status', { message: 'Access denied' });
         return;
       }
 
@@ -517,11 +448,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       // Sanitize la reponse
       const sanitizedUser = sanitizationService.sanitizeUser(updatedUser, adminRole);
 
-      reply.send({
-        success: true,
-        data: sanitizedUser,
-        message: validatedData.isActive ? 'User activated' : 'User deactivated'
-      });
+      sendSuccess(reply, sanitizedUser, { message: validatedData.isActive ? 'User activated' : 'User deactivated' });
     } catch (error) {
       if (error instanceof z.ZodError) {
         reply.status(400).send({
@@ -534,11 +461,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       fastify.log.error({ err: error }, 'Error updating user status');
-      reply.status(500).send({
-        success: false,
-        error: 'Internal server error',
-        message: 'Failed to update user status'
-      });
+      sendInternalError(reply, 'Internal server error', { message: 'Failed to update user status' });
     }
   });
 
@@ -563,21 +486,13 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       const targetUser = await userManagementService.getUserById(request.params.userId);
 
       if (!targetUser) {
-        reply.status(404).send({
-          success: false,
-          error: 'User not found',
-          message: 'The requested user does not exist'
-        });
+        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
         return;
       }
 
       // Verifier les permissions
       if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
-        reply.status(403).send({
-          success: false,
-          error: 'Insufficient permissions to reset password',
-          message: 'Access denied'
-        });
+        sendForbidden(reply, 'Insufficient permissions to reset password', { message: 'Access denied' });
         return;
       }
 
@@ -596,10 +511,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         request.headers['user-agent']
       );
 
-      reply.send({
-        success: true,
-        data: { message: 'Password reset successfully' }
-      });
+      sendSuccess(reply, { message: 'Password reset successfully' });
     } catch (error) {
       if (error instanceof z.ZodError) {
         reply.status(400).send({
@@ -612,11 +524,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       fastify.log.error({ err: error }, 'Error resetting password');
-      reply.status(500).send({
-        success: false,
-        error: 'Internal server error',
-        message: 'Failed to reset password'
-      });
+      sendInternalError(reply, 'Internal server error', { message: 'Failed to reset password' });
     }
   });
 
@@ -637,21 +545,13 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       const targetUser = await userManagementService.getUserById(request.params.userId);
 
       if (!targetUser) {
-        reply.status(404).send({
-          success: false,
-          error: 'User not found',
-          message: 'The requested user does not exist'
-        });
+        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
         return;
       }
 
       // Verifier les permissions
       if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
-        reply.status(403).send({
-          success: false,
-          error: 'Insufficient permissions to delete this user',
-          message: 'Access denied'
-        });
+        sendForbidden(reply, 'Insufficient permissions to delete this user', { message: 'Access denied' });
         return;
       }
 
@@ -670,17 +570,10 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         request.headers['user-agent']
       );
 
-      reply.send({
-        success: true,
-        data: { message: 'User deleted successfully' }
-      });
+      sendSuccess(reply, { message: 'User deleted successfully' });
     } catch (error) {
       fastify.log.error({ err: error }, 'Error deleting user');
-      reply.status(500).send({
-        success: false,
-        error: 'Internal server error',
-        message: 'Failed to delete user'
-      });
+      sendInternalError(reply, 'Internal server error', { message: 'Failed to delete user' });
     }
   });
 
@@ -700,11 +593,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       const targetUser = await userManagementService.getUserById(request.params.userId);
 
       if (!targetUser) {
-        reply.status(404).send({
-          success: false,
-          error: 'User not found',
-          message: 'The requested user does not exist'
-        });
+        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
         return;
       }
 
@@ -724,17 +613,10 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         userAgent: request.headers['user-agent']
       });
 
-      reply.send({
-        success: true,
-        data: { message: 'Account unlocked successfully' }
-      });
+      sendSuccess(reply, { message: 'Account unlocked successfully' });
     } catch (error) {
       fastify.log.error({ err: error }, 'Error unlocking account');
-      reply.status(500).send({
-        success: false,
-        error: 'Internal server error',
-        message: 'Failed to unlock account'
-      });
+      sendInternalError(reply, 'Internal server error', { message: 'Failed to unlock account' });
     }
   });
 
@@ -754,11 +636,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       const targetUser = await userManagementService.getUserById(request.params.userId);
 
       if (!targetUser) {
-        reply.status(404).send({
-          success: false,
-          error: 'User not found',
-          message: 'The requested user does not exist'
-        });
+        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
         return;
       }
 
@@ -779,17 +657,10 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         userAgent: request.headers['user-agent']
       });
 
-      reply.send({
-        success: true,
-        data: { message: '2FA enabled successfully' }
-      });
+      sendSuccess(reply, { message: '2FA enabled successfully' });
     } catch (error) {
       fastify.log.error({ err: error }, 'Error enabling 2FA');
-      reply.status(500).send({
-        success: false,
-        error: 'Internal server error',
-        message: 'Failed to enable 2FA'
-      });
+      sendInternalError(reply, 'Internal server error', { message: 'Failed to enable 2FA' });
     }
   });
 
@@ -809,11 +680,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       const targetUser = await userManagementService.getUserById(request.params.userId);
 
       if (!targetUser) {
-        reply.status(404).send({
-          success: false,
-          error: 'User not found',
-          message: 'The requested user does not exist'
-        });
+        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
         return;
       }
 
@@ -833,17 +700,10 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         userAgent: request.headers['user-agent']
       });
 
-      reply.send({
-        success: true,
-        data: { message: '2FA disabled successfully' }
-      });
+      sendSuccess(reply, { message: '2FA disabled successfully' });
     } catch (error) {
       fastify.log.error({ err: error }, 'Error disabling 2FA');
-      reply.status(500).send({
-        success: false,
-        error: 'Internal server error',
-        message: 'Failed to disable 2FA'
-      });
+      sendInternalError(reply, 'Internal server error', { message: 'Failed to disable 2FA' });
     }
   });
 
@@ -868,21 +728,13 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       const targetUser = await userManagementService.getUserById(request.params.userId);
 
       if (!targetUser) {
-        reply.status(404).send({
-          success: false,
-          error: 'User not found',
-          message: 'The requested user does not exist'
-        });
+        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
         return;
       }
 
       // Vérifier les permissions
       if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
-        reply.status(403).send({
-          success: false,
-          error: 'Insufficient permissions',
-          message: 'Access denied'
-        });
+        sendForbidden(reply, 'Insufficient permissions', { message: 'Access denied' });
         return;
       }
 
@@ -924,11 +776,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       fastify.log.error({ err: error }, 'Error verifying email');
-      reply.status(500).send({
-        success: false,
-        error: 'Internal server error',
-        message: 'Failed to verify email'
-      });
+      sendInternalError(reply, 'Internal server error', { message: 'Failed to verify email' });
     }
   });
 
@@ -953,21 +801,13 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       const targetUser = await userManagementService.getUserById(request.params.userId);
 
       if (!targetUser) {
-        reply.status(404).send({
-          success: false,
-          error: 'User not found',
-          message: 'The requested user does not exist'
-        });
+        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
         return;
       }
 
       // Vérifier les permissions
       if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
-        reply.status(403).send({
-          success: false,
-          error: 'Insufficient permissions',
-          message: 'Access denied'
-        });
+        sendForbidden(reply, 'Insufficient permissions', { message: 'Access denied' });
         return;
       }
 
@@ -1009,11 +849,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       fastify.log.error({ err: error }, 'Error verifying phone');
-      reply.status(500).send({
-        success: false,
-        error: 'Internal server error',
-        message: 'Failed to verify phone'
-      });
+      sendInternalError(reply, 'Internal server error', { message: 'Failed to verify phone' });
     }
   });
 
@@ -1038,21 +874,13 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       const targetUser = await userManagementService.getUserById(request.params.userId);
 
       if (!targetUser) {
-        reply.status(404).send({
-          success: false,
-          error: 'User not found',
-          message: 'The requested user does not exist'
-        });
+        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
         return;
       }
 
       // Vérifier les permissions
       if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
-        reply.status(403).send({
-          success: false,
-          error: 'Insufficient permissions',
-          message: 'Access denied'
-        });
+        sendForbidden(reply, 'Insufficient permissions', { message: 'Access denied' });
         return;
       }
 
@@ -1099,11 +927,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       fastify.log.error({ err: error }, 'Error updating voice consent');
-      reply.status(500).send({
-        success: false,
-        error: 'Internal server error',
-        message: 'Failed to update voice consent'
-      });
+      sendInternalError(reply, 'Internal server error', { message: 'Failed to update voice consent' });
     }
   });
 
@@ -1128,21 +952,13 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       const targetUser = await userManagementService.getUserById(request.params.userId);
 
       if (!targetUser) {
-        reply.status(404).send({
-          success: false,
-          error: 'User not found',
-          message: 'The requested user does not exist'
-        });
+        sendNotFound(reply, 'User not found', { message: 'The requested user does not exist' });
         return;
       }
 
       // Vérifier les permissions
       if (!permissionsService.canModifyUser(adminRole, targetUser.role as UserRoleEnum)) {
-        reply.status(403).send({
-          success: false,
-          error: 'Insufficient permissions',
-          message: 'Access denied'
-        });
+        sendForbidden(reply, 'Insufficient permissions', { message: 'Access denied' });
         return;
       }
 
@@ -1184,11 +1000,7 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
       }
 
       fastify.log.error({ err: error }, 'Error verifying age');
-      reply.status(500).send({
-        success: false,
-        error: 'Internal server error',
-        message: 'Failed to verify age'
-      });
+      sendInternalError(reply, 'Internal server error', { message: 'Failed to verify age' });
     }
   });
 
@@ -1300,25 +1112,18 @@ export async function userAdminRoutes(fastify: FastifyInstance): Promise<void> {
         }),
       ]);
 
-      reply.send({
-        success: true,
-        data: {
-          shareLinks,
-          trackingLinks,
-          affiliateTokens,
-          contacts: {
-            sent: sentRequests,
-            received: receivedRequests,
-          },
+      sendSuccess(reply, {
+        shareLinks,
+        trackingLinks,
+        affiliateTokens,
+        contacts: {
+          sent: sentRequests,
+          received: receivedRequests,
         },
       });
     } catch (error) {
       fastify.log.error({ err: error }, 'Error fetching user activity');
-      reply.status(500).send({
-        success: false,
-        error: 'Internal server error',
-        message: 'Failed to fetch user activity'
-      });
+      sendInternalError(reply, 'Internal server error', { message: 'Failed to fetch user activity' });
     }
   });
 }
