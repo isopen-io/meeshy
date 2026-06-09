@@ -235,7 +235,7 @@ struct BubbleReactionsOverlay: View, Equatable {
                 onShowReactions?(messageId)
             }
             .accessibilityLabel(Self.pillAccessibilityLabel(reaction))
-            .accessibilityHint("Appuyer pour basculer la reaction")
+            .accessibilityHint("Appuyer pour basculer la reaction, maintenir pour voir toutes les reactions")
     }
 
     // MARK: - Accessibility helper (was: reactionPillAccessibilityLabel)
