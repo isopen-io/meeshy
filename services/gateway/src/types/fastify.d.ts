@@ -27,6 +27,8 @@ declare module '@fastify/jwt' {
 declare module 'fastify' {
   interface FastifyRequest {
     auth?: { userId?: string; isAuthenticated: boolean; isAnonymous: boolean };
+    __startTime?: number;
+    file: () => Promise<import('@fastify/multipart').MultipartFile | undefined>;
   }
 
   interface FastifyInstance {
