@@ -37,7 +37,7 @@ export async function dataExportRoutes(fastify: FastifyInstance) {
   fastify.get(
     '/export',
     {
-      preValidation: [(fastify as any).authenticate],
+      preValidation: [fastify.authenticate],
       schema: {
         description: 'Export user data (GDPR data portability)',
         tags: ['me', 'gdpr'],

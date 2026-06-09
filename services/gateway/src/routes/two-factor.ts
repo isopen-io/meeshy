@@ -39,7 +39,7 @@ interface RegenerateBackupCodesBody {
 }
 
 export async function twoFactorRoutes(fastify: FastifyInstance) {
-  const twoFactorService = new TwoFactorService((fastify as any).prisma);
+  const twoFactorService = new TwoFactorService(fastify.prisma);
 
   // ==================== GET /auth/2fa/status ====================
   fastify.get('/status', {
@@ -74,7 +74,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       },
       security: [{ bearerAuth: [] }]
     },
-    preValidation: [(fastify as any).authenticate]
+    preValidation: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const userId = (request as any).user.userId;
@@ -126,7 +126,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       },
       security: [{ bearerAuth: [] }]
     },
-    preValidation: [(fastify as any).authenticate]
+    preValidation: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const userId = (request as any).user.userId;
@@ -182,7 +182,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       },
       security: [{ bearerAuth: [] }]
     },
-    preValidation: [(fastify as any).authenticate],
+    preValidation: [fastify.authenticate],
     preHandler: [validateBody(EnableBodySchema)]
   }, async (request: FastifyRequest<{ Body: EnableBody }>, reply: FastifyReply) => {
     try {
@@ -196,7 +196,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       }
 
       // Notification sécurité
-      const notificationService = (fastify as any).notificationService;
+      const notificationService = fastify.notificationService;
       if (notificationService) {
         notificationService.createTwoFactorNotification({
           recipientUserId: userId,
@@ -244,7 +244,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       },
       security: [{ bearerAuth: [] }]
     },
-    preValidation: [(fastify as any).authenticate],
+    preValidation: [fastify.authenticate],
     preHandler: [validateBody(DisableBodySchema)]
   }, async (request: FastifyRequest<{ Body: DisableBody }>, reply: FastifyReply) => {
     try {
@@ -258,7 +258,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       }
 
       // Notification sécurité
-      const notificationService = (fastify as any).notificationService;
+      const notificationService = fastify.notificationService;
       if (notificationService) {
         notificationService.createTwoFactorNotification({
           recipientUserId: userId,
@@ -306,7 +306,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       },
       security: [{ bearerAuth: [] }]
     },
-    preValidation: [(fastify as any).authenticate],
+    preValidation: [fastify.authenticate],
     preHandler: [validateBody(VerifyBodySchema)]
   }, async (request: FastifyRequest<{ Body: VerifyBody }>, reply: FastifyReply) => {
     try {
@@ -364,7 +364,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       },
       security: [{ bearerAuth: [] }]
     },
-    preValidation: [(fastify as any).authenticate],
+    preValidation: [fastify.authenticate],
     preHandler: [validateBody(BackupCodesBodySchema)]
   }, async (request: FastifyRequest<{ Body: RegenerateBackupCodesBody }>, reply: FastifyReply) => {
     try {
@@ -410,7 +410,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       },
       security: [{ bearerAuth: [] }]
     },
-    preValidation: [(fastify as any).authenticate]
+    preValidation: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const userId = (request as any).user.userId;

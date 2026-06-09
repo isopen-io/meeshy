@@ -28,7 +28,7 @@ declare module 'fastify' {
 
 export async function voiceProfileRoutes(fastify: FastifyInstance) {
   // Get services from Fastify instance
-  const prisma = (fastify as any).prisma;
+  const prisma = fastify.prisma;
 
   if (!prisma) {
     logger.error('Missing required service: prisma');

@@ -310,7 +310,7 @@ export async function registerCreationRoutes(fastify: FastifyInstance) {
           select: { userId: true }
         });
 
-        const notificationService = (fastify as any).notificationService;
+        const notificationService = fastify.notificationService;
         if (notificationService && admins.length > 0) {
           const conversation = await fastify.prisma.conversation.findUnique({
             where: { id: conversationId! },

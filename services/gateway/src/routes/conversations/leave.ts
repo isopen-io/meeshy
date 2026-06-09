@@ -11,7 +11,7 @@ export function registerLeaveRoutes(
   _optionalAuth: any,
   requiredAuth: any
 ) {
-  const socketIOHandler = (fastify as any).socketIOHandler
+  const socketIOHandler = fastify.socketIOHandler
 
   fastify.post<{ Params: { id: string } }>(
     '/conversations/:id/leave',

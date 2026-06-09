@@ -612,7 +612,7 @@ export function registerSharingRoutes(
       logger.info('Membre créé avec succès');
 
       // Envoyer des notifications
-      const notificationService = (fastify as any).notificationService;
+      const notificationService = fastify.notificationService;
       if (notificationService) {
         try {
           // Récupérer les informations de l'utilisateur qui rejoint
@@ -833,7 +833,7 @@ export function registerSharingRoutes(
       });
 
       // Envoyer une notification à l'utilisateur invité
-      const notificationService = (fastify as any).notificationService;
+      const notificationService = fastify.notificationService;
       if (notificationService) {
         try {
           // Récupérer les informations de l'inviteur

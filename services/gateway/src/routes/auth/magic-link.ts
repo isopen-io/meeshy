@@ -54,7 +54,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       },
       security: [{ bearerAuth: [] }]
     },
-    preValidation: [createUnifiedAuthMiddleware((fastify as any).prisma, { requireAuth: true })]
+    preValidation: [createUnifiedAuthMiddleware(fastify.prisma, { requireAuth: true })]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -440,7 +440,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         401: errorResponseSchema
       }
     },
-    preValidation: [(fastify as any).authenticate]
+    preValidation: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const userId = (request as any).user.userId;
@@ -516,7 +516,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         }
       }
     },
-    preValidation: [(fastify as any).authenticate]
+    preValidation: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const userId = (request as any).user.userId;
@@ -576,7 +576,7 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
         }
       }
     },
-    preValidation: [(fastify as any).authenticate]
+    preValidation: [fastify.authenticate]
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const userId = (request as any).user.userId;

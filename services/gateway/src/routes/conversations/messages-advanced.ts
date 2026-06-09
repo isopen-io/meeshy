@@ -44,7 +44,7 @@ export function registerMessagesAdvancedRoutes(
   optionalAuth: any,
   requiredAuth: any
 ) {
-  const socketIOHandler = (fastify as any).socketIOHandler;
+  const socketIOHandler = fastify.socketIOHandler;
   const trackingLinkService = new TrackingLinkService(prisma);
   const attachmentService = new AttachmentService(prisma);
 
@@ -324,7 +324,7 @@ export function registerMessagesAdvancedRoutes(
                 logger.info(`updatedMessage.validatedMentions =`, updatedMessage.validatedMentions);
 
                 // Déclencher les notifications de mention pour les utilisateurs mentionnés
-                const notificationService = (fastify as any).notificationService;
+                const notificationService = fastify.notificationService;
                 if (notificationService) {
                   try {
                     const [sender, conversationInfo] = await Promise.all([

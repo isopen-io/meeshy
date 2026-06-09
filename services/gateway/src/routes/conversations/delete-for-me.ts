@@ -11,7 +11,7 @@ export function registerDeleteForMeRoutes(
   _optionalAuth: any,
   requiredAuth: any
 ) {
-  const socketIOHandler = (fastify as any).socketIOHandler
+  const socketIOHandler = fastify.socketIOHandler
 
   fastify.delete<{ Params: { id: string } }>(
     '/conversations/:id/delete-for-me',

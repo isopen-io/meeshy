@@ -66,7 +66,7 @@ interface AnalyzeVoiceProfileBody {
 // ═══════════════════════════════════════════════════════════════════════════
 
 export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
-  const prisma = (fastify as any).prisma;
+  const prisma = fastify.prisma;
 
   if (!prisma) {
     logger.error('missing required service: prisma');

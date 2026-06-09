@@ -30,7 +30,7 @@ import { enhancedLogger } from '../../../utils/logger-enhanced.js';
 const logger = enhancedLogger.child({ module: 'UserPreferencesRoutes' });
 
 export async function userPreferencesRoutes(fastify: FastifyInstance) {
-  const prisma = (fastify as any).prisma;
+  const prisma = fastify.prisma;
 
   if (!prisma) {
     logger.error('Missing required service: prisma');

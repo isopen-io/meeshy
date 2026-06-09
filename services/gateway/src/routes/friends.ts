@@ -154,7 +154,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       });
 
       // Creer une notification pour le destinataire avec actions
-      const notificationService = (fastify as any).notificationService as NotificationService;
+      const notificationService = fastify.notificationService;
       if (notificationService) {
         const senderName = friendRequest.sender.displayName ||
                           friendRequest.sender.username ||
@@ -502,7 +502,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
 
       // Marquer les notifications de requete d'amitie comme lues
       // Note: Filtre simplifié car Prisma MongoDB ne supporte pas les filtres JSON complexes
-      const notificationService = (fastify as any).notificationService as NotificationService;
+      const notificationService = fastify.notificationService;
       try {
         const notifications = await fastify.prisma.notification.findMany({
           where: {
@@ -555,7 +555,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       // Invalider le cache des amis pour les deux utilisateurs afin que les prochains
       // broadcasts incluent le nouvel ami sans attendre l'expiration du TTL (30s).
       if (body.status === 'accepted') {
-        const socialEvents = (fastify as any).socialEvents;
+        const socialEvents = fastify.socialEvents;
         if (socialEvents) {
           socialEvents.invalidateFriendsCache(friendRequest.senderId);
           socialEvents.invalidateFriendsCache(friendRequest.receiverId);

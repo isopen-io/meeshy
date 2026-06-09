@@ -18,7 +18,7 @@ export function registerBanRoutes(
   _optionalAuth: any,
   requiredAuth: any
 ) {
-  const socketIOHandler = (fastify as any).socketIOHandler
+  const socketIOHandler = fastify.socketIOHandler
 
   fastify.patch<{ Params: { id: string; userId: string } }>(
     '/conversations/:id/participants/:userId/ban',

@@ -927,7 +927,7 @@ export function registerCoreRoutes(
       // payload typé. La notification:new legacy reste émise en parallèle
       // pour compat avec les anciens clients pendant ~3 mois.
       try {
-        const socketIOHandler = (fastify as any).socketIOHandler;
+        const socketIOHandler = fastify.socketIOHandler;
         const socketIOManager = socketIOHandler?.getManager?.();
         const io = socketIOManager?.io || (socketIOHandler as any)?.io;
         if (io) {
@@ -956,7 +956,7 @@ export function registerCoreRoutes(
       }
 
       // Envoyer des notifications aux participants invités
-      const notificationService = (fastify as any).notificationService;
+      const notificationService = fastify.notificationService;
       if (notificationService && uniqueParticipantIds.length > 0) {
         try {
           // Récupérer les informations du créateur
@@ -1106,7 +1106,7 @@ export function registerCoreRoutes(
       if (slowModeSeconds !== undefined) changedFields.slowModeSeconds = slowModeSeconds
       if (autoTranslateEnabled !== undefined) changedFields.autoTranslateEnabled = autoTranslateEnabled
 
-      const socketIOHandler = (fastify as any).socketIOHandler
+      const socketIOHandler = fastify.socketIOHandler
       const socketIOManager = socketIOHandler?.getManager?.()
       const io = socketIOManager?.io || (socketIOHandler as any)?.io
       if (io) {
@@ -1199,8 +1199,8 @@ export function registerCoreRoutes(
       });
 
       // Broadcast closure to all members
-      const socketIOManager = (fastify as any).socketIOHandler?.getManager?.()
-      const io = socketIOManager?.io || ((fastify as any).socketIOHandler as any)?.io
+      const socketIOManager = fastify.socketIOHandler?.getManager?.()
+      const io = socketIOManager?.io || (fastify.socketIOHandler as any)?.io
       if (io) {
         io.to(ROOMS.conversation(conversationId)).emit(
           SERVER_EVENTS.CONVERSATION_CLOSED,

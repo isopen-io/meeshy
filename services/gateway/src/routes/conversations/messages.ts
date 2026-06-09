@@ -215,7 +215,7 @@ export function registerMessagesRoutes(
 ) {
   const trackingLinkService = new TrackingLinkService(prisma);
   const attachmentService = new AttachmentService(prisma);
-  const socketIOHandler = (fastify as any).socketIOHandler;
+  const socketIOHandler = fastify.socketIOHandler;
   const privacyPreferencesService = new PrivacyPreferencesService(prisma);
 
   // `MessagingService` is stateless across requests, so it is built once and
@@ -231,7 +231,7 @@ export function registerMessagesRoutes(
       messagingService = new MessagingService(
         prisma,
         translationService,
-        (fastify as any).notificationService
+        fastify.notificationService
       );
     }
     return messagingService;

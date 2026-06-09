@@ -12,7 +12,7 @@ import { registerMetadataRoutes } from './metadata';
 import { registerTranslationRoutes } from './translation';
 
 export async function attachmentRoutes(fastify: FastifyInstance) {
-  const prisma = (fastify as any).prisma;
+  const prisma = fastify.prisma;
 
   // Vérifier que prisma est bien défini
   if (!prisma) {
