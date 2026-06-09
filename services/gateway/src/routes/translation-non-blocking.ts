@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError, logger } from '../utils/logger';
+import { sendSuccess, sendBadRequest, sendNotFound } from '../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { resolveConversationId } from '../utils/conversation-id-cache';
 
@@ -327,14 +328,11 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
         });
 
         // REPONSE IMMEDIATE - pas d'attente
-        return reply.send({
-          success: true,
-          data: {
-            message: 'Translation request submitted successfully',
-            messageId: validatedData.message_id,
-            targetLanguage: validatedData.target_language,
-            status: 'processing'
-          }
+        return sendSuccess(reply, {
+          message: 'Translation request submitted successfully',
+          messageId: validatedData.message_id,
+          targetLanguage: validatedData.target_language,
+          status: 'processing'
         });
       }
 
@@ -342,19 +340,13 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
       else {
 
         if (!validatedData.conversation_id) {
-          return reply.status(400).send({
-            success: false,
-            error: 'conversation_id is required when message_id is not provided'
-          });
+          return sendBadRequest(reply, 'conversation_id is required when message_id is not provided');
         }
 
         // Resoudre l'ID de conversation reel
         const resolved = await resolveConversationId(fastify.prisma, validatedData.conversation_id);
         if (!resolved) {
-          return reply.status(404).send({
-            success: false,
-            error: `Conversation with identifier '${validatedData.conversation_id}' not found`
-          });
+          return sendNotFound(reply, `Conversation with identifier '${validatedData.conversation_id}' not found`);
         }
         const resolvedConversationId = resolved;
 
@@ -381,14 +373,11 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
         });
 
         // REPONSE IMMEDIATE - pas d'attente
-        return reply.send({
-          success: true,
-          data: {
-            message: 'New message submitted for processing',
-            conversationId: validatedData.conversation_id,
-            targetLanguage: validatedData.target_language,
-            status: 'processing'
-          }
+        return sendSuccess(reply, {
+          message: 'New message submitted for processing',
+          conversationId: validatedData.conversation_id,
+          targetLanguage: validatedData.target_language,
+          status: 'processing'
         });
       }
 
@@ -435,19 +424,13 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
       const result = await translationService.getTranslation(messageId, language);
 
       if (result) {
-        return reply.send({
-          success: true,
-          data: {
-            status: 'completed',
-            translation: result
-          }
+        return sendSuccess(reply, {
+          status: 'completed',
+          translation: result
         });
       } else {
-        return reply.send({
-          success: true,
-          data: {
-            status: 'processing'
-          }
+        return sendSuccess(reply, {
+          status: 'processing'
         });
       }
     } catch (error) {
@@ -511,18 +494,15 @@ export async function translationRoutes(fastify: FastifyInstance, options: any) 
         });
       }
 
-      return reply.send({
-        success: true,
-        data: {
-          id: conversation.id, // ObjectId MongoDB
-          identifier: conversation.identifier,
-          title: conversation.title,
-          type: conversation.type,
-          createdAt: conversation.createdAt,
-          lastMessageAt: conversation.lastMessageAt,
-          messageCount: conversation._count.messages,
-          memberCount: conversation._count.participants
-        }
+      return sendSuccess(reply, {
+        id: conversation.id, // ObjectId MongoDB
+        identifier: conversation.identifier,
+        title: conversation.title,
+        type: conversation.type,
+        createdAt: conversation.createdAt,
+        lastMessageAt: conversation.lastMessageAt,
+        messageCount: conversation._count.messages,
+        memberCount: conversation._count.participants
       });
 
     } catch (error) {

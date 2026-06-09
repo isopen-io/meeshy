@@ -16,6 +16,7 @@ import { getEncryptionService } from '../services/EncryptionService';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth';
 import { createSignalProtocolRateLimitConfig } from '../middleware/rate-limiter';
 import { enhancedLogger } from '../utils/logger-enhanced';
+import { sendSuccess, sendInternalError, sendNotFound, sendForbidden, sendBadRequest } from '../utils/response.js';
 import {
   errorResponseSchema,
   signalPreKeyBundleSchema,
@@ -138,22 +139,16 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
 
         logger.info('Saved pre-key bundle uploaded by client', { userId });
 
-        return reply.send({
-          success: true,
-          data: {
+        return sendSuccess(reply, {
             registrationId: bundle.registrationId,
             deviceId: bundle.deviceId,
             preKeyId: bundle.preKeyId,
             signedPreKeyId: bundle.signedPreKeyId,
             message: 'Pre-key bundle uploaded successfully',
-          },
-        });
+          });
       } catch (error) {
         logger.error('Error saving pre-key bundle', { err: error });
-        return reply.status(500).send({
-          success: false,
-          error: 'Failed to save pre-key bundle',
-        });
+        return sendInternalError(reply, 'Failed to save pre-key bundle');
       }
     }
   );
@@ -272,10 +267,7 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
             targetUserId,
             reason: 'No shared conversation or friendship'
           });
-          return reply.status(403).send({
-            success: false,
-            error: 'You are not authorized to access this user\'s encryption keys',
-          });
+          return sendForbidden(reply, 'You are not authorized to access this user\'s encryption keys');
         }
 
         // Fetch from database
@@ -297,10 +289,7 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
         });
 
         if (!bundle) {
-          return reply.status(404).send({
-            success: false,
-            error: 'User has not generated encryption keys',
-          });
+          return sendNotFound(reply, 'User has not generated encryption keys');
         }
 
         // Convert back to Uint8Array format
@@ -328,16 +317,10 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
 
         logger.debug('Fetched pre-key bundle', { userId: targetUserId });
 
-        return reply.send({
-          success: true,
-          data: preKeyBundle,
-        });
+        return sendSuccess(reply, preKeyBundle);
       } catch (error) {
         logger.error('Error fetching pre-key bundle', { err: error });
-        return reply.status(500).send({
-          success: false,
-          error: 'Failed to fetch pre-key bundle',
-        });
+        return sendInternalError(reply, 'Failed to fetch pre-key bundle');
       }
     }
   );
@@ -430,10 +413,7 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
             conversationId,
             reason: 'User is not a participant in the conversation'
           });
-          return reply.status(403).send({
-            success: false,
-            error: 'You are not a participant in this conversation',
-          });
+          return sendForbidden(reply, 'You are not a participant in this conversation');
         }
 
         // SECURITY: Verify recipient is also a participant
@@ -445,10 +425,7 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
         });
 
         if (!recipientIsParticipant) {
-          return reply.status(400).send({
-            success: false,
-            error: 'Recipient is not a participant in this conversation',
-          });
+          return sendBadRequest(reply, 'Recipient is not a participant in this conversation');
         }
 
         // Fetch recipient's pre-key bundle
@@ -457,10 +434,7 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
         });
 
         if (!bundle) {
-          return reply.status(404).send({
-            success: false,
-            error: 'Recipient has not generated encryption keys',
-          });
+          return sendNotFound(reply, 'Recipient has not generated encryption keys');
         }
 
         // Convert to PreKeyBundle format
@@ -518,16 +492,10 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
 
         logger.info('Established E2EE session', { userId, recipientUserId, conversationId });
 
-        return reply.send({
-          success: true,
-          data: { message: 'E2EE session established successfully' },
-        });
+        return sendSuccess(reply, { message: 'E2EE session established successfully' });
       } catch (error) {
         logger.error('Error establishing session', { err: error });
-        return reply.status(500).send({
-          success: false,
-          error: 'Failed to establish E2EE session',
-        });
+        return sendInternalError(reply, 'Failed to establish E2EE session');
       }
     }
   );
