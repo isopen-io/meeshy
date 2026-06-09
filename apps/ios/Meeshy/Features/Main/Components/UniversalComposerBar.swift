@@ -207,7 +207,6 @@ struct UniversalComposerBar: View {
     // Text analysis (sentiment + language detection from MessageComposer)
     @StateObject private var textAnalyzer = TextAnalyzer()
     @State var attachRotation: Double = 0
-    @State var typeWave: Bool = false
 
     @Environment(\.colorScheme) var colorScheme
     var isDark: Bool { colorScheme == .dark }
@@ -595,13 +594,6 @@ struct UniversalComposerBar: View {
             // Sync to external binding
             if let binding = textBinding, binding.wrappedValue != newValue {
                 binding.wrappedValue = newValue
-            }
-            // Ripple wave on each keystroke
-            if isFocused {
-                typeWave = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                    typeWave = false
-                }
             }
             // Close attach options when typing starts
             if !newValue.isEmpty && showAttachOptions {
