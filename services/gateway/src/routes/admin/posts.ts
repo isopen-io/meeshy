@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
+import { sendSuccess, sendPaginatedSuccess, sendForbidden, sendNotFound, sendBadRequest, sendInternalError } from '../../utils/response.js';
 import { permissionsService } from './services/PermissionsService';
 import { validatePagination, type UserRole } from './types';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
@@ -101,10 +102,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       const permissions = permissionsService.getUserPermissions(user.role as UserRole);
 
       if (!permissions.canViewAnalytics && !permissions.canModerateContent) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Permission insuffisante pour voir les statistiques des posts'
-        });
+        return sendForbidden(reply, 'Permission insuffisante pour voir les statistiques des posts');
       }
 
       const { period } = request.query as { period?: string };
@@ -188,26 +186,20 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
         byType[group.type] = group._count.id;
       }
 
-      return reply.send({
-        success: true,
-        data: {
-          total: totalPosts,
-          deleted: totalDeleted,
-          byType,
-          topAuthors: topAuthors.map((a) => ({
-            author: authorMap.get(a.authorId) ?? { id: a.authorId },
-            postCount: a._count.id
-          })),
-          trending
-        }
+      return sendSuccess(reply, {
+        total: totalPosts,
+        deleted: totalDeleted,
+        byType,
+        topAuthors: topAuthors.map((a) => ({
+          author: authorMap.get(a.authorId) ?? { id: a.authorId },
+          postCount: a._count.id
+        })),
+        trending
       });
 
     } catch (error) {
       logError(fastify.log, 'Get admin post stats error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 
@@ -265,10 +257,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       const permissions = permissionsService.getUserPermissions(user.role as UserRole);
 
       if (!permissions.canModerateContent) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Permission insuffisante pour gerer les posts'
-        });
+        return sendForbidden(reply, 'Permission insuffisante pour gerer les posts');
       }
 
       const {
@@ -363,23 +352,16 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
         fastify.prisma.post.count({ where })
       ]);
 
-      return reply.send({
-        success: true,
-        data: posts,
-        pagination: {
-          total: totalCount,
-          limit: limitNum,
-          offset: offsetNum,
-          hasMore: offsetNum + posts.length < totalCount
-        }
+      return sendPaginatedSuccess(reply, posts, {
+        total: totalCount,
+        limit: limitNum,
+        offset: offsetNum,
+        hasMore: offsetNum + posts.length < totalCount
       });
 
     } catch (error) {
       logError(fastify.log, 'Get admin posts error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 
@@ -422,10 +404,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       const permissions = permissionsService.getUserPermissions(user.role as UserRole);
 
       if (!permissions.canModerateContent) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Permission insuffisante pour voir les details du post'
-        });
+        return sendForbidden(reply, 'Permission insuffisante pour voir les details du post');
       }
 
       const { postId } = request.params;
@@ -494,23 +473,14 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       });
 
       if (!post) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Post non trouve'
-        });
+        return sendNotFound(reply, 'Post non trouve');
       }
 
-      return reply.send({
-        success: true,
-        data: post
-      });
+      return sendSuccess(reply, post);
 
     } catch (error) {
       logError(fastify.log, 'Get admin post detail error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 
@@ -559,10 +529,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       const permissions = permissionsService.getUserPermissions(user.role as UserRole);
 
       if (!permissions.canModerateContent) {
-        return reply.status(403).send({
-          success: false,
-          message: 'Permission insuffisante pour supprimer les posts'
-        });
+        return sendForbidden(reply, 'Permission insuffisante pour supprimer les posts');
       }
 
       const { postId } = request.params;
@@ -574,17 +541,11 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
       });
 
       if (!post) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Post non trouve'
-        });
+        return sendNotFound(reply, 'Post non trouve');
       }
 
       if (post.isDeleted) {
-        return reply.status(400).send({
-          success: false,
-          message: 'Le post est deja supprime'
-        });
+        return sendBadRequest(reply, 'Le post est deja supprime');
       }
 
       await fastify.prisma.post.update({
@@ -609,10 +570,7 @@ export async function adminPostRoutes(fastify: FastifyInstance): Promise<void> {
 
     } catch (error) {
       logError(fastify.log, 'Admin delete post error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 }

@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../utils/logger';
+import { sendSuccess, sendPaginatedSuccess, sendNotFound, sendConflict, sendInternalError } from '../utils/response.js';
 import type { NotificationService } from '../services/notifications/NotificationService';
 import { withMutationLog } from '../utils/withMutationLog';
 import {
@@ -88,10 +89,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       });
 
       if (!targetUser) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Utilisateur non trouve'
-        });
+        return sendNotFound(reply, 'Utilisateur non trouve');
       }
 
       // Verifier qu'il n'y a pas deja une demande
@@ -105,10 +103,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       });
 
       if (existingRequest) {
-        return reply.status(409).send({
-          success: false,
-          message: 'Une demande d\'ami existe deja entre vous'
-        });
+        return sendConflict(reply, 'Une demande d\'ami existe deja entre vous');
       }
 
       // Creer la demande d'ami (idempotent via clientMutationId when present)
@@ -173,10 +168,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         });
       }
 
-      return reply.status(201).send({
-        success: true,
-        data: friendRequest
-      });
+      return sendSuccess(reply, friendRequest, { statusCode: 201 });
 
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -188,10 +180,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       }
 
       logError(fastify.log, 'Create friend request error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 
@@ -281,23 +270,16 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         fastify.prisma.friendRequest.count({ where: whereClause })
       ]);
 
-      return reply.send({
-        success: true,
-        data: friendRequests,
-        pagination: {
-          total: totalCount,
-          limit: limitNum,
-          offset: offsetNum,
-          hasMore: offsetNum + friendRequests.length < totalCount
-        }
+      return sendPaginatedSuccess(reply, friendRequests, {
+        total: totalCount,
+        limit: limitNum,
+        offset: offsetNum,
+        hasMore: offsetNum + friendRequests.length < totalCount
       });
 
     } catch (error) {
       logError(fastify.log, 'Get received friend requests error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 
@@ -387,23 +369,16 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         fastify.prisma.friendRequest.count({ where: whereClause })
       ]);
 
-      return reply.send({
-        success: true,
-        data: friendRequests,
-        pagination: {
-          total: totalCount,
-          limit: limitNum,
-          offset: offsetNum,
-          hasMore: offsetNum + friendRequests.length < totalCount
-        }
+      return sendPaginatedSuccess(reply, friendRequests, {
+        total: totalCount,
+        limit: limitNum,
+        offset: offsetNum,
+        hasMore: offsetNum + friendRequests.length < totalCount
       });
 
     } catch (error) {
       logError(fastify.log, 'Get sent friend requests error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 
@@ -478,10 +453,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       });
 
       if (!friendRequest) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Demande d\'ami non trouvee ou deja traitee'
-        });
+        return sendNotFound(reply, 'Demande d\'ami non trouvee ou deja traitee');
       }
 
       // Mettre a jour le statut (idempotent via clientMutationId when present)
@@ -635,10 +607,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         }
       }
 
-      return reply.send({
-        success: true,
-        data: updatedRequest
-      });
+      return sendSuccess(reply, updatedRequest);
 
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -650,10 +619,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       }
 
       logError(fastify.log, 'Update friend request error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 
@@ -719,10 +685,7 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
       });
 
       if (!friendRequest) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Demande d\'ami non trouvee'
-        });
+        return sendNotFound(reply, 'Demande d\'ami non trouvee');
       }
 
       // Supprimer la demande
@@ -730,17 +693,11 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         where: { id }
       });
 
-      return reply.send({
-        success: true,
-        data: { message: 'Demande d\'ami supprimee' }
-      });
+      return sendSuccess(reply, { message: 'Demande d\'ami supprimee' });
 
     } catch (error) {
       logError(fastify.log, 'Delete friend request error:', error);
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur interne du serveur'
-      });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 }
