@@ -56,7 +56,7 @@ struct BubbleCallNoticeView: View, Equatable {
             leadingGlyph
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.subheadline.weight(.semibold))
                     .foregroundColor(ThemeManager.shared.textPrimary)
                     .lineLimit(2)
                 detailLine
@@ -79,7 +79,7 @@ struct BubbleCallNoticeView: View, Equatable {
                 .fill(tint.opacity(isDark ? 0.20 : 0.14))
                 .frame(width: 34, height: 34)
             Image(systemName: glyphName)
-                .font(.system(size: 14, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundColor(tint)
         }
         .accessibilityHidden(true)
@@ -92,29 +92,29 @@ struct BubbleCallNoticeView: View, Equatable {
             // Direction (emitted vs received) — always shown so the user knows
             // whether they placed or received the call.
             Image(systemName: isOutgoing ? "arrow.up.right" : "arrow.down.left")
-                .font(.system(size: 9, weight: .bold))
+                .font(.caption2.weight(.bold))
                 .foregroundColor(ThemeManager.shared.textMuted)
             Text(directionWord)
-                .font(.system(size: 11.5, weight: .medium))
+                .font(.caption.weight(.medium))
                 .foregroundColor(ThemeManager.shared.textMuted)
 
             if let duration = durationLabel {
                 dot
                 Image(systemName: "clock")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundColor(ThemeManager.shared.textMuted)
                 Text(duration)
-                    .font(.system(size: 11.5, weight: .medium))
+                    .font(.caption.weight(.medium))
                     .foregroundColor(ThemeManager.shared.textMuted)
             }
 
             if let data = summary.dataSpentLabel {
                 dot
                 Image(systemName: "arrow.up.arrow.down")
-                    .font(.system(size: 9, weight: .semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundColor(ThemeManager.shared.textMuted)
                 Text(data)
-                    .font(.system(size: 11.5, weight: .medium))
+                    .font(.caption.weight(.medium))
                     .foregroundColor(ThemeManager.shared.textMuted)
             }
 
@@ -124,7 +124,7 @@ struct BubbleCallNoticeView: View, Equatable {
                     .fill(qualityColor(quality))
                     .frame(width: 6, height: 6)
                 Text(qualityWord(quality))
-                    .font(.system(size: 11.5, weight: .medium))
+                    .font(.caption.weight(.medium))
                     .foregroundColor(ThemeManager.shared.textMuted)
             }
         }
@@ -133,7 +133,7 @@ struct BubbleCallNoticeView: View, Equatable {
 
     private var dot: some View {
         Text("·")
-            .font(.system(size: 11.5, weight: .bold))
+            .font(.caption.weight(.bold))
             .foregroundColor(ThemeManager.shared.textMuted.opacity(0.6))
     }
 
@@ -145,7 +145,7 @@ struct BubbleCallNoticeView: View, Equatable {
                 .fill(tint.opacity(isDark ? 0.22 : 0.16))
                 .frame(width: 34, height: 34)
             Image(systemName: "phone.arrow.up.right.fill")
-                .font(.system(size: 13, weight: .semibold))
+                .font(.footnote.weight(.semibold))
                 .foregroundColor(tint)
         }
         .accessibilityHidden(true)
