@@ -159,6 +159,22 @@
       "notAvailable": "Schedule non disponible",
       "triggerNow": "Déclencher maintenant",
       "stop": "STOP!"
+    },
+    "topics": {
+      "title": "Catalogue de topics",
+      "description": "Sujets dynamiques utilisés par le strategist pour proposer de nouveaux fils de conversation. Modifier ici se propage aux agents en moins de 5 secondes.",
+      "newTopic": "Nouveau topic",
+      "reload": "Recharger",
+      "colActive": "Actif",
+      "colSlug": "Slug",
+      "colLabel": "Label",
+      "colCooldown": "Cooldown",
+      "colPatterns": "Patterns",
+      "colActions": "Actions",
+      "emptyState": "Aucun topic dans le catalogue. L'agent va auto-seed les 13 thèmes initiaux au prochain boot.",
+      "editTitle": "Éditer",
+      "disableTitle": "Désactiver (soft delete)",
+      "deleteTitle": "Supprimer définitivement"
     }
   },
   "agentLive": {

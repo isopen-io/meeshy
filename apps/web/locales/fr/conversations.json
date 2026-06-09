@@ -485,6 +485,25 @@
       "inviteSuccess": "{count} utilisateur(s) invité(s) avec succès",
       "partialError": "{count} invitation(s) ont échoué",
       "inviteError": "Erreur lors de l'invitation des utilisateurs"
+    },
+    "drawer": {
+      "title": "Options",
+      "displayName": "Nom affiché (pour vous)",
+      "namePlaceholder": "Nom de la conversation",
+      "notifications": "Notifications",
+      "notificationsAll": "Tous",
+      "notificationsMentions": "Mentions",
+      "notificationsNone": "Aucune",
+      "theme": "Thème",
+      "themeColorLabel": "Couleur de thème {color}",
+      "menuSettings": "Paramètres",
+      "menuProfile": "Voir le profil",
+      "menuSearch": "Rechercher",
+      "category": "Catégorie",
+      "tags": "Tags",
+      "searchOrCreate": "Rechercher ou créer...",
+      "block": "Bloquer",
+      "report": "Signaler"
     }
   }
 }

@@ -901,6 +901,89 @@
       "draftDays30": "30 jours",
       "draftDays60": "60 jours",
       "draftDays90": "90 jours"
+    },
+    "document": {
+      "download": {
+        "title": "Paramètres de téléchargement",
+        "description": "Configurez la façon dont les documents sont téléchargés",
+        "autoDownload": {
+          "label": "Téléchargement automatique",
+          "description": "Télécharger automatiquement les documents envoyés dans les conversations"
+        },
+        "preview": {
+          "label": "Aperçu des documents",
+          "description": "Afficher un aperçu avant le téléchargement"
+        },
+        "maxSize": {
+          "label": "Taille maximale pour le téléchargement automatique",
+          "mb10": "10 Mo",
+          "mb25": "25 Mo",
+          "mb50": "50 Mo (Recommandé)",
+          "mb100": "100 Mo",
+          "mb500": "500 Mo"
+        },
+        "saveLocation": {
+          "label": "Emplacement de sauvegarde par défaut",
+          "downloads": "Dossier Téléchargements",
+          "documents": "Dossier Documents",
+          "desktop": "Bureau",
+          "custom": "Emplacement personnalisé"
+        }
+      },
+      "upload": {
+        "title": "Paramètres d'envoi",
+        "description": "Configurez les préférences d'envoi de documents",
+        "compress": {
+          "label": "Compresser les envois",
+          "description": "Compresser les documents avant envoi pour économiser la bande passante"
+        },
+        "keepOriginals": {
+          "label": "Conserver les originaux",
+          "description": "Conserver les fichiers originaux après envoi des versions compressées"
+        },
+        "warnLarge": {
+          "label": "Avertir pour les grands fichiers",
+          "description": "Afficher un avertissement avant d'envoyer des fichiers de plus de 50 Mo"
+        },
+        "fileTypes": {
+          "label": "Types de fichiers autorisés",
+          "all": "Tous les types",
+          "documents": "Documents uniquement (PDF, DOC, TXT)",
+          "images": "Images uniquement (PNG, JPG, GIF)",
+          "media": "Fichiers multimédia (Images, Vidéo, Audio)",
+          "archives": "Archives (ZIP, RAR, 7Z)"
+        }
+      },
+      "organization": {
+        "title": "Organisation",
+        "description": "Gardez vos documents organisés automatiquement",
+        "autoOrganize": {
+          "label": "Organiser automatiquement par type",
+          "description": "Organiser automatiquement les fichiers dans des dossiers par type"
+        },
+        "autoDelete": {
+          "label": "Suppression automatique",
+          "description": "Supprimer automatiquement les fichiers téléchargés après la période spécifiée",
+          "never": "Jamais",
+          "after7": "Après 7 jours",
+          "after30": "Après 30 jours",
+          "after90": "Après 90 jours",
+          "after6m": "Après 6 mois"
+        }
+      },
+      "security": {
+        "title": "Sécurité",
+        "description": "Protégez-vous des fichiers malveillants",
+        "scanViruses": {
+          "label": "Analyser les virus",
+          "description": "Analyser automatiquement les fichiers téléchargés pour détecter les malwares"
+        },
+        "blockExecutables": {
+          "label": "Bloquer les exécutables",
+          "description": "Empêcher le téléchargement de fichiers .exe, .bat, .sh et autres exécutables"
+        },
+        "note": "Note de sécurité : Soyez toujours prudent lors du téléchargement de fichiers de sources inconnues. Activez l'analyse antivirus et bloquez les fichiers exécutables pour une protection maximale."
+      }
     }
   }
 }

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Loader2, Plus, RefreshCw, Pencil, EyeOff, Trash2 } from 'lucide-react';
 import { agentAdminService, type TopicCatalogItem } from '@/services/agent-admin.service';
 import { AgentTopicEditModal } from './AgentTopicEditModal';
+import { useI18n } from '@/hooks/use-i18n';
 
 /**
  * Catalogue dynamique des topics utilisés par le strategist agent pour
@@ -18,6 +19,7 @@ import { AgentTopicEditModal } from './AgentTopicEditModal';
  */
 export function AgentTopicsTab() {
   const [topics, setTopics] = useState<TopicCatalogItem[]>([]);
+  const { t } = useI18n('admin');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<TopicCatalogItem | null>(null);
@@ -59,10 +61,9 @@ export function AgentTopicsTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-semibold">Catalogue de topics</h2>
+          <h2 className="text-xl font-semibold">{t('agent.topics.title')}</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Sujets dynamiques utilisés par le strategist pour proposer de nouveaux fils de conversation.
-            Modifier ici se propage aux agents en moins de 5 secondes.
+            {t('agent.topics.description')}
           </p>
         </div>
         <div className="flex gap-2">
@@ -70,14 +71,14 @@ export function AgentTopicsTab() {
             onClick={() => setCreating(true)}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-indigo-600 hover:bg-indigo-700 text-white rounded-md"
           >
-            <Plus className="h-4 w-4" /> Nouveau topic
+            <Plus className="h-4 w-4" /> {t('agent.topics.newTopic')}
           </button>
           <button
             onClick={reload}
             disabled={loading}
             className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-slate-300 dark:border-slate-700 rounded-md hover:bg-slate-50 dark:hover:bg-slate-800"
           >
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> Recharger
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} /> {t('agent.topics.reload')}
           </button>
         </div>
       </div>
@@ -97,19 +98,19 @@ export function AgentTopicsTab() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300">
               <tr>
-                <th className="text-left px-3 py-2 font-medium">Actif</th>
-                <th className="text-left px-3 py-2 font-medium">Slug</th>
-                <th className="text-left px-3 py-2 font-medium">Label</th>
-                <th className="text-left px-3 py-2 font-medium">Cooldown</th>
-                <th className="text-left px-3 py-2 font-medium">Patterns</th>
-                <th className="text-right px-3 py-2 font-medium">Actions</th>
+                <th className="text-left px-3 py-2 font-medium">{t('agent.topics.colActive')}</th>
+                <th className="text-left px-3 py-2 font-medium">{t('agent.topics.colSlug')}</th>
+                <th className="text-left px-3 py-2 font-medium">{t('agent.topics.colLabel')}</th>
+                <th className="text-left px-3 py-2 font-medium">{t('agent.topics.colCooldown')}</th>
+                <th className="text-left px-3 py-2 font-medium">{t('agent.topics.colPatterns')}</th>
+                <th className="text-right px-3 py-2 font-medium">{t('agent.topics.colActions')}</th>
               </tr>
             </thead>
             <tbody>
               {topics.length === 0 && !loading && (
                 <tr>
                   <td colSpan={6} className="text-center p-6 text-slate-500">
-                    Aucun topic dans le catalogue. L&apos;agent va auto-seed les 13 thèmes initiaux au prochain boot.
+                    {t('agent.topics.emptyState')}
                   </td>
                 </tr>
               )}
@@ -131,14 +132,14 @@ export function AgentTopicsTab() {
                     <div className="inline-flex items-center gap-1">
                       <button
                         onClick={() => setEditing(t)}
-                        title="Éditer"
+                        title={t('agent.topics.editTitle')}
                         className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-indigo-600 dark:text-indigo-400"
                       >
                         <Pencil className="h-4 w-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(t.id, false)}
-                        title="Désactiver (soft delete)"
+                        title={t('agent.topics.disableTitle')}
                         aria-label="Disable topic"
                         className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-orange-600 dark:text-orange-400"
                       >
@@ -146,7 +147,7 @@ export function AgentTopicsTab() {
                       </button>
                       <button
                         onClick={() => handleDelete(t.id, true)}
-                        title="Supprimer définitivement"
+                        title={t('agent.topics.deleteTitle')}
                         aria-label="Delete topic"
                         className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded text-red-600 dark:text-red-400"
                       >
