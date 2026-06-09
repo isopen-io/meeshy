@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useI18n } from '@/hooks/use-i18n';
 import { ArrowLeft, Shield, Activity, AlertCircle, CheckCircle, XCircle, User, Settings, Key, FileText, Search, Filter, Download, Clock } from 'lucide-react';
 
 import { StatsGrid, type StatItem } from '@/components/admin/Charts';
@@ -63,6 +64,7 @@ type AuditAction =
 
 export default function AuditLogsPage() {
   const router = useRouter();
+  const { t } = useI18n('admin');
   const [searchQuery, setSearchQuery] = useState('');
   const [actionFilter, setActionFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -74,54 +76,54 @@ export default function AuditLogsPage() {
   // Mock data pour les statistiques
   const stats: StatItem[] = [
     {
-      title: 'Logs totaux',
+      title: t('auditLogs.statTotalLogs'),
       value: 15847,
-      description: '30 derniers jours',
+      description: t('auditLogs.statTotalLogsDesc'),
       icon: FileText,
       iconColor: 'text-blue-600 dark:text-blue-400',
       iconBgColor: 'bg-blue-100 dark:bg-blue-900/30',
       trend: { value: 12, isPositive: true }
     },
     {
-      title: 'Connexions',
+      title: t('auditLogs.statConnections'),
       value: 3456,
-      description: 'Login/Logout',
+      description: t('auditLogs.statConnectionsDesc'),
       icon: User,
       iconColor: 'text-green-600 dark:text-green-400',
       iconBgColor: 'bg-green-100 dark:bg-green-900/30',
       trend: { value: 8, isPositive: true }
     },
     {
-      title: 'Alertes sécurité',
+      title: t('auditLogs.statSecurityAlerts'),
       value: 23,
-      description: 'Nécessitent attention',
+      description: t('auditLogs.statSecurityAlertsDesc'),
       icon: AlertCircle,
       iconColor: 'text-red-600 dark:text-red-400',
       iconBgColor: 'bg-red-100 dark:bg-red-900/30',
-      badge: { text: 'Critique', variant: 'destructive' }
+      badge: { text: t('auditLogs.statSecurityBadge'), variant: 'destructive' }
     },
     {
-      title: 'Modifications config',
+      title: t('auditLogs.statConfigChanges'),
       value: 156,
-      description: 'Changements système',
+      description: t('auditLogs.statConfigChangesDesc'),
       icon: Settings,
       iconColor: 'text-orange-600 dark:text-orange-400',
       iconBgColor: 'bg-orange-100 dark:bg-orange-900/30',
       trend: { value: 3, isPositive: false }
     },
     {
-      title: 'Actions admin',
+      title: t('auditLogs.statAdminActions'),
       value: 892,
-      description: 'Actions privilégiées',
+      description: t('auditLogs.statAdminActionsDesc'),
       icon: Shield,
       iconColor: 'text-purple-600 dark:text-purple-400',
       iconBgColor: 'bg-purple-100 dark:bg-purple-900/30',
       trend: { value: 15, isPositive: true }
     },
     {
-      title: 'Exports de données',
+      title: t('auditLogs.statDataExports'),
       value: 34,
-      description: 'Dernières 24h',
+      description: t('auditLogs.statDataExportsDesc'),
       icon: Download,
       iconColor: 'text-cyan-600 dark:text-cyan-400',
       iconBgColor: 'bg-cyan-100 dark:bg-cyan-900/30',
@@ -287,9 +289,9 @@ export default function AuditLogsPage() {
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
 
-    if (diffMins < 1) return 'À l\'instant';
-    if (diffMins < 60) return `Il y a ${diffMins} min`;
-    if (diffHours < 24) return `Il y a ${diffHours}h`;
+    if (diffMins < 1) return t('auditLogs.timestampJustNow');
+    if (diffMins < 60) return t('auditLogs.timestampMinutes', { min: diffMins });
+    if (diffHours < 24) return t('auditLogs.timestampHours', { hours: diffHours });
     return date.toLocaleString('fr-FR', {
       day: '2-digit',
       month: 'short',
@@ -311,11 +313,11 @@ export default function AuditLogsPage() {
                 className="text-white hover:bg-white/20"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
-                Retour
+                {t('auditLogs.back')}
               </Button>
               <div>
-                <h1 className="text-2xl font-bold">Journaux d&apos;audit</h1>
-                <p className="text-indigo-100 mt-1">Traçabilité complète des actions système</p>
+                <h1 className="text-2xl font-bold">{t('auditLogs.pageTitle')}</h1>
+                <p className="text-indigo-100 mt-1">{t('auditLogs.pageSubtitle')}</p>
               </div>
             </div>
             <div className="flex items-center space-x-3">
@@ -324,15 +326,15 @@ export default function AuditLogsPage() {
                   <SelectValue placeholder="Période" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="24h">24 heures</SelectItem>
-                  <SelectItem value="7d">7 jours</SelectItem>
-                  <SelectItem value="30d">30 jours</SelectItem>
-                  <SelectItem value="90d">90 jours</SelectItem>
+                  <SelectItem value="24h">{t('auditLogs.period24h')}</SelectItem>
+                  <SelectItem value="7d">{t('auditLogs.period7d')}</SelectItem>
+                  <SelectItem value="30d">{t('auditLogs.period30d')}</SelectItem>
+                  <SelectItem value="90d">{t('auditLogs.period90d')}</SelectItem>
                 </SelectContent>
               </Select>
               <Button variant="ghost" className="text-white hover:bg-white/20">
                 <Download className="h-4 w-4 mr-2" />
-                Exporter
+                {t('auditLogs.export')}
               </Button>
             </div>
           </div>
@@ -346,7 +348,7 @@ export default function AuditLogsPage() {
           <CardHeader>
             <CardTitle className="flex items-center space-x-2">
               <Filter className="h-5 w-5" />
-              <span>Filtres</span>
+              <span>{t('auditLogs.filtersTitle')}</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -354,7 +356,7 @@ export default function AuditLogsPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
-                  placeholder="Rechercher..."
+                  placeholder={t('auditLogs.searchPlaceholder')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
@@ -366,13 +368,13 @@ export default function AuditLogsPage() {
                   <SelectValue placeholder="Type d'action" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes les actions</SelectItem>
-                  <SelectItem value="user_login">Connexion</SelectItem>
-                  <SelectItem value="user_logout">Déconnexion</SelectItem>
-                  <SelectItem value="user_created">Utilisateur créé</SelectItem>
-                  <SelectItem value="user_banned">Utilisateur banni</SelectItem>
-                  <SelectItem value="settings_changed">Config modifiée</SelectItem>
-                  <SelectItem value="security_alert">Alerte sécurité</SelectItem>
+                  <SelectItem value="all">{t('auditLogs.actionAll')}</SelectItem>
+                  <SelectItem value="user_login">{t('auditLogs.actionLogin')}</SelectItem>
+                  <SelectItem value="user_logout">{t('auditLogs.actionLogout')}</SelectItem>
+                  <SelectItem value="user_created">{t('auditLogs.actionUserCreated')}</SelectItem>
+                  <SelectItem value="user_banned">{t('auditLogs.actionUserBanned')}</SelectItem>
+                  <SelectItem value="settings_changed">{t('auditLogs.actionSettingsChanged')}</SelectItem>
+                  <SelectItem value="security_alert">{t('auditLogs.actionSecurityAlert')}</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -381,10 +383,10 @@ export default function AuditLogsPage() {
                   <SelectValue placeholder="Statut" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tous les statuts</SelectItem>
-                  <SelectItem value="success">Succès</SelectItem>
-                  <SelectItem value="failure">Échec</SelectItem>
-                  <SelectItem value="warning">Avertissement</SelectItem>
+                  <SelectItem value="all">{t('auditLogs.statusAll')}</SelectItem>
+                  <SelectItem value="success">{t('auditLogs.statusSuccess')}</SelectItem>
+                  <SelectItem value="failure">{t('auditLogs.statusFailure')}</SelectItem>
+                  <SelectItem value="warning">{t('auditLogs.statusWarning')}</SelectItem>
                 </SelectContent>
               </Select>
 
@@ -393,11 +395,11 @@ export default function AuditLogsPage() {
                   <SelectValue placeholder="Sévérité" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes sévérités</SelectItem>
-                  <SelectItem value="critical">Critique</SelectItem>
-                  <SelectItem value="high">Haute</SelectItem>
-                  <SelectItem value="medium">Moyenne</SelectItem>
-                  <SelectItem value="low">Basse</SelectItem>
+                  <SelectItem value="all">{t('auditLogs.severityAll')}</SelectItem>
+                  <SelectItem value="critical">{t('auditLogs.severityCritical')}</SelectItem>
+                  <SelectItem value="high">{t('auditLogs.severityHigh')}</SelectItem>
+                  <SelectItem value="medium">{t('auditLogs.severityMedium')}</SelectItem>
+                  <SelectItem value="low">{t('auditLogs.severityLow')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -408,7 +410,7 @@ export default function AuditLogsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
-              <span>Journaux d&apos;événements ({filteredLogs.length})</span>
+              <span>{t('auditLogs.eventLogsTitle', { count: filteredLogs.length })}</span>
               <Badge variant="outline">{dateRange}</Badge>
             </CardTitle>
           </CardHeader>
@@ -466,7 +468,7 @@ export default function AuditLogsPage() {
 
                         {log.changes && log.changes.length > 0 && (
                           <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/10 rounded border border-blue-200 dark:border-blue-900/30">
-                            <strong className="text-xs text-blue-900 dark:text-blue-100">Modifications:</strong>
+                            <strong className="text-xs text-blue-900 dark:text-blue-100">{t('auditLogs.changesLabel')}</strong>
                             {log.changes.map((change, idx) => (
                               <div key={idx} className="text-xs text-blue-700 dark:text-blue-300 ml-2">
                                 {change.field}: <span className="line-through">{change.oldValue}</span> → <strong>{change.newValue}</strong>
@@ -495,7 +497,7 @@ export default function AuditLogsPage() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
                 <div className="text-sm text-gray-600 dark:text-gray-400">
-                  Page {currentPage} sur {totalPages}
+                  {t('auditLogs.paginationInfo', { page: currentPage, total: totalPages })}
                 </div>
                 <div className="flex items-center space-x-2">
                   <Button
@@ -504,7 +506,7 @@ export default function AuditLogsPage() {
                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
                   >
-                    Précédent
+                    {t('auditLogs.prevPage')}
                   </Button>
                   <Button
                     variant="outline"
@@ -512,7 +514,7 @@ export default function AuditLogsPage() {
                     onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                     disabled={currentPage === totalPages}
                   >
-                    Suivant
+                    {t('auditLogs.nextPage')}
                   </Button>
                 </div>
               </div>
