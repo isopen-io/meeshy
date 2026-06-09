@@ -26,6 +26,17 @@ final class ConversationMediaHandler {
         inFlightTask?.cancel()
         let snapshot = Array(state.messages.suffix(30).filter { !$0.attachments.isEmpty })
         guard !snapshot.isEmpty else { return }
+        // Respect the user's auto-download policy. The bubble views already gate
+        // their network fetch on it; prefetching the full media regardless was
+        // burning cellular data the user opted out of (and warming media the view
+        // won't display). Read the policy once on the main actor and gate each
+        // media kind below.
+        let condition = NetworkConditionMonitor.shared.condition
+        let prefs = MediaDownloadPreferencesStore.shared.preferences
+        let allowImage = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .image, condition: condition, prefs: prefs)
+        let allowVideo = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .video, condition: condition, prefs: prefs)
+        let allowAudio = MediaDownloadPolicyEngine.shouldAutoDownload(kind: .audio, condition: condition, prefs: prefs)
+        guard allowImage || allowVideo || allowAudio else { return }
         inFlightTask = Task(priority: .utility) {
             let imageStore = await CacheCoordinator.shared.images
 
@@ -36,6 +47,7 @@ final class ConversationMediaHandler {
                         guard !Task.isCancelled else { return }
                         switch attachment.type {
                         case .image:
+                            guard allowImage else { continue }
                             if let thumbUrl = attachment.thumbnailUrl, !thumbUrl.isEmpty,
                                let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
                                 group.addTask { _ = await imageStore.image(for: resolved) }
@@ -45,6 +57,7 @@ final class ConversationMediaHandler {
                                 group.addTask { _ = await imageStore.image(for: resolved) }
                             }
                         case .video:
+                            guard allowVideo else { continue }
                             if let thumbUrl = attachment.thumbnailUrl, !thumbUrl.isEmpty,
                                let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
                                 group.addTask { _ = await imageStore.image(for: resolved) }
@@ -53,6 +66,7 @@ final class ConversationMediaHandler {
                                 group.addTask { _ = await StoryMediaLoader.shared.videoThumbnail(url: resolved) }
                             }
                         case .audio:
+                            guard allowAudio else { continue }
                             if !attachment.fileUrl.isEmpty,
                                let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString {
                                 group.addTask { _ = try? await CacheCoordinator.shared.audio.data(for: resolved) }
@@ -67,7 +81,8 @@ final class ConversationMediaHandler {
             // Video preroll: fire-and-forget so the first video in the
             // current window starts as soon as the user taps play. Doesn't
             // delay this prefetch — runs in its own utility-priority Task.
-            if let firstVideoAtt = snapshot.flatMap(\.attachments).first(where: { $0.type == .video }),
+            if allowVideo,
+               let firstVideoAtt = snapshot.flatMap(\.attachments).first(where: { $0.type == .video }),
                !firstVideoAtt.fileUrl.isEmpty,
                let resolved = MeeshyConfig.resolveMediaURL(firstVideoAtt.fileUrl) {
                 Task(priority: .utility) {
