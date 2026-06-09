@@ -12,6 +12,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
 
 const logger = enhancedLogger.child({ module: 'UserDeletionsRoutes' });
 
@@ -87,10 +88,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
         });
 
         if (!membership) {
-          return reply.status(403).send({
-            success: false,
-            error: 'Not a member of this conversation',
-          });
+          return sendForbidden(reply, 'Not a member of this conversation');
         }
 
         // Upsert user conversation preferences with deletion flag
@@ -110,16 +108,10 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
 
         logger.info('Conversation deleted', { conversationId });
 
-        return reply.send({
-          success: true,
-          data: { message: 'Conversation deleted from your view' },
-        });
+        return sendSuccess(reply, { message: 'Conversation deleted from your view' });
       } catch (error) {
         logger.error('Error deleting conversation for user', error as Error);
-        return reply.status(500).send({
-          success: false,
-          error: 'Internal server error',
-        });
+        return sendInternalError(reply, 'Internal server error');
       }
     }
   );
@@ -175,10 +167,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
         });
 
         if (!prefs || !prefs.deletedForUserAt) {
-          return reply.status(400).send({
-            success: false,
-            error: 'Conversation is not deleted',
-          });
+          return sendBadRequest(reply, 'Conversation is not deleted');
         }
 
         await prisma.userConversationPreferences.update({
@@ -192,16 +181,10 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
 
         logger.info('Conversation restored', { conversationId });
 
-        return reply.send({
-          success: true,
-          data: { message: 'Conversation restored' },
-        });
+        return sendSuccess(reply, { message: 'Conversation restored' });
       } catch (error) {
         logger.error('Error restoring conversation for user', error as Error);
-        return reply.status(500).send({
-          success: false,
-          error: 'Internal server error',
-        });
+        return sendInternalError(reply, 'Internal server error');
       }
     }
   );
@@ -260,18 +243,12 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
         const userId = authRequest.authContext.userId;
 
         if (!beforeDate) {
-          return reply.status(400).send({
-            success: false,
-            error: 'beforeDate is required',
-          });
+          return sendBadRequest(reply, 'beforeDate is required');
         }
 
         const clearDate = new Date(beforeDate);
         if (isNaN(clearDate.getTime())) {
-          return reply.status(400).send({
-            success: false,
-            error: 'Invalid date format',
-          });
+          return sendBadRequest(reply, 'Invalid date format');
         }
 
         // Verify user is a member
@@ -284,10 +261,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
         });
 
         if (!membership) {
-          return reply.status(403).send({
-            success: false,
-            error: 'Not a member of this conversation',
-          });
+          return sendForbidden(reply, 'Not a member of this conversation');
         }
 
         // Upsert user conversation preferences with clear history date
@@ -307,19 +281,13 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
 
         logger.info('History cleared', { conversationId });
 
-        return reply.send({
-          success: true,
-          data: {
-            message: `Chat history cleared before ${clearDate.toISOString()}`,
-            clearHistoryBefore: clearDate,
-          },
+        return sendSuccess(reply, {
+          message: `Chat history cleared before ${clearDate.toISOString()}`,
+          clearHistoryBefore: clearDate,
         });
       } catch (error) {
         logger.error('Error clearing history', error as Error);
-        return reply.status(500).send({
-          success: false,
-          error: 'Internal server error',
-        });
+        return sendInternalError(reply, 'Internal server error');
       }
     }
   );
@@ -383,17 +351,11 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
         });
 
         if (!message) {
-          return reply.status(404).send({
-            success: false,
-            error: 'Message not found',
-          });
+          return sendNotFound(reply, 'Message not found');
         }
 
         if (message.conversation.participants.length === 0) {
-          return reply.status(403).send({
-            success: false,
-            error: 'Not a member of this conversation',
-          });
+          return sendForbidden(reply, 'Not a member of this conversation');
         }
 
         // Create user message deletion record
@@ -412,16 +374,10 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
 
         logger.info('Message deleted');
 
-        return reply.send({
-          success: true,
-          data: { message: 'Message deleted from your view' },
-        });
+        return sendSuccess(reply, { message: 'Message deleted from your view' });
       } catch (error) {
         logger.error('Error deleting message for user', error as Error);
-        return reply.status(500).send({
-          success: false,
-          error: 'Internal server error',
-        });
+        return sendInternalError(reply, 'Internal server error');
       }
     }
   );
@@ -477,10 +433,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
         });
 
         if (!deletion) {
-          return reply.status(400).send({
-            success: false,
-            error: 'Message is not deleted',
-          });
+          return sendBadRequest(reply, 'Message is not deleted');
         }
 
         // Remove the deletion record
@@ -492,16 +445,10 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
 
         logger.info('Message restored');
 
-        return reply.send({
-          success: true,
-          data: { message: 'Message restored' },
-        });
+        return sendSuccess(reply, { message: 'Message restored' });
       } catch (error) {
         logger.error('Error restoring message for user', error as Error);
-        return reply.status(500).send({
-          success: false,
-          error: 'Internal server error',
-        });
+        return sendInternalError(reply, 'Internal server error');
       }
     }
   );
@@ -559,17 +506,11 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
         const userId = authRequest.authContext.userId;
 
         if (!messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
-          return reply.status(400).send({
-            success: false,
-            error: 'messageIds array is required',
-          });
+          return sendBadRequest(reply, 'messageIds array is required');
         }
 
         if (messageIds.length > 100) {
-          return reply.status(400).send({
-            success: false,
-            error: 'Maximum 100 messages can be deleted at once',
-          });
+          return sendBadRequest(reply, 'Maximum 100 messages can be deleted at once');
         }
 
         // Verify user can access these messages (they belong to conversations user is member of)
@@ -588,10 +529,7 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
         const validMessageIds = messages.map((m) => m.id);
 
         if (validMessageIds.length === 0) {
-          return reply.status(403).send({
-            success: false,
-            error: 'No accessible messages found',
-          });
+          return sendForbidden(reply, 'No accessible messages found');
         }
 
         // Create deletion records for all valid messages (MongoDB doesn't support skipDuplicates)
@@ -608,20 +546,14 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
 
         logger.info('Messages bulk deleted', { count: validMessageIds.length });
 
-        return reply.send({
-          success: true,
-          data: {
-            message: `${validMessageIds.length} messages deleted from your view`,
-            deletedCount: validMessageIds.length,
-            requestedCount: messageIds.length,
-          },
+        return sendSuccess(reply, {
+          message: `${validMessageIds.length} messages deleted from your view`,
+          deletedCount: validMessageIds.length,
+          requestedCount: messageIds.length,
         });
       } catch (error) {
         logger.error('Error bulk deleting messages', error as Error);
-        return reply.status(500).send({
-          success: false,
-          error: 'Internal server error',
-        });
+        return sendInternalError(reply, 'Internal server error');
       }
     }
   );
@@ -695,20 +627,14 @@ export default async function userDeletionsRoutes(fastify: FastifyInstance) {
           orderBy: { deletedForUserAt: 'desc' },
         });
 
-        return reply.send({
-          success: true,
-          data: deletedPrefs.map((p) => ({
-            conversationId: p.conversationId,
-            conversation: p.conversation,
-            deletedAt: p.deletedForUserAt,
-          })),
-        });
+        return sendSuccess(reply, deletedPrefs.map((p) => ({
+          conversationId: p.conversationId,
+          conversation: p.conversation,
+          deletedAt: p.deletedForUserAt,
+        })));
       } catch (error) {
         logger.error('Error fetching deleted conversations', error as Error);
-        return reply.status(500).send({
-          success: false,
-          error: 'Internal server error',
-        });
+        return sendInternalError(reply, 'Internal server error');
       }
     }
   );

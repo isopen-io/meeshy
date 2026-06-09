@@ -22,6 +22,7 @@ import {
 } from '@meeshy/shared/types/api-schemas';
 import { UnifiedAuthRequest } from '../middleware/auth';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../utils/response';
 
 const logger = enhancedLogger.child({ module: 'CommunitiesRoutes' });
 
@@ -180,19 +181,13 @@ export async function communityRoutes(fastify: FastifyInstance) {
         where: { identifier }
       });
 
-      return reply.send({
-        success: true,
-        data: {
-          available: !existingCommunity,
-          identifier
-        }
+      return sendSuccess(reply, {
+        available: !existingCommunity,
+        identifier
       });
     } catch (error) {
       logger.error('Error checking identifier availability', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Failed to check identifier availability'
-      });
+      return sendInternalError(reply, 'Failed to check identifier availability');
     }
   });
 
@@ -261,10 +256,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'User must be authenticated'
-        });
+        return sendUnauthorized(reply, 'User must be authenticated');
       }
 
       const userId = authContext.userId;
@@ -331,22 +323,15 @@ export async function communityRoutes(fastify: FastifyInstance) {
         fastify.prisma.community.count({ where: whereClause })
       ]);
 
-      reply.send({
-        success: true,
-        data: communities.map(flattenCommunityCounts),
-        pagination: {
-          total: totalCount,
-          limit: limitNum,
-          offset: offsetNum,
-          hasMore: offsetNum + communities.length < totalCount
-        }
+      sendPaginatedSuccess(reply, communities.map(flattenCommunityCounts), {
+        total: totalCount,
+        limit: limitNum,
+        offset: offsetNum,
+        hasMore: offsetNum + communities.length < totalCount
       });
     } catch (error) {
       logger.error('Error fetching communities', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to fetch communities'
-      });
+      sendInternalError(reply, 'Failed to fetch communities');
     }
   });
 
@@ -430,7 +415,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       const { q, offset = '0', limit = '20' } = request.query as { q?: string; offset?: string; limit?: string };
 
       if (!q || q.trim().length === 0) {
-        return reply.send({ success: true, data: [], pagination: { total: 0, limit: 20, offset: 0, hasMore: false } });
+        return sendPaginatedSuccess(reply, [], { total: 0, limit: 20, offset: 0, hasMore: false });
       }
 
       const { offsetNum, limitNum } = validatePagination(offset, limit);
@@ -515,22 +500,15 @@ export async function communityRoutes(fastify: FastifyInstance) {
         members: community.members
       }));
 
-      reply.send({
-        success: true,
-        data: communitiesWithCount,
-        pagination: {
-          total: totalCount,
-          limit: limitNum,
-          offset: offsetNum,
-          hasMore: offsetNum + communities.length < totalCount
-        }
+      sendPaginatedSuccess(reply, communitiesWithCount, {
+        total: totalCount,
+        limit: limitNum,
+        offset: offsetNum,
+        hasMore: offsetNum + communities.length < totalCount
       });
     } catch (error) {
       logger.error('Error searching communities', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to search communities'
-      });
+      sendInternalError(reply, 'Failed to search communities');
     }
   });
 
@@ -579,7 +557,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
     try {
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext?.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'User must be authenticated' });
+        return sendUnauthorized(reply, 'User must be authenticated');
       }
 
       const userId = authContext.userId;
@@ -612,10 +590,10 @@ export async function communityRoutes(fastify: FastifyInstance) {
         role: m.role
       }));
 
-      return reply.send({ success: true, data });
+      return sendSuccess(reply, data);
     } catch (error) {
       logger.error('Error fetching community', error as Error);
-      return reply.status(500).send({ success: false, error: 'Failed to fetch user communities' });
+      return sendInternalError(reply, 'Failed to fetch user communities');
     }
   });
 
@@ -670,10 +648,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'User must be authenticated'
-        });
+        return sendUnauthorized(reply, 'User must be authenticated');
       }
 
       const userId = authContext.userId;
@@ -749,10 +724,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       }
 
       if (!community) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Community not found'
-        });
+        return sendNotFound(reply, 'Community not found');
       }
 
       // Verifier l'acces (createur ou membre)
@@ -760,22 +732,13 @@ export async function communityRoutes(fastify: FastifyInstance) {
                        community.members.some(member => member.userId === userId);
 
       if (!hasAccess && community.isPrivate) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Access denied to this community'
-        });
+        return sendForbidden(reply, 'Access denied to this community');
       }
 
-      reply.send({
-        success: true,
-        data: flattenCommunityCounts(community)
-      });
+      sendSuccess(reply, flattenCommunityCounts(community));
     } catch (error) {
       logger.error('Error fetching community', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to fetch community'
-      });
+      sendInternalError(reply, 'Failed to fetch community');
     }
   });
 
@@ -817,10 +780,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'User must be authenticated'
-        });
+        return sendUnauthorized(reply, 'User must be authenticated');
       }
 
       const userId = authContext.userId;
@@ -834,10 +794,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       });
 
       if (existingCommunity) {
-        return reply.status(409).send({
-          success: false,
-          error: `A community with identifier "${identifier}" already exists`
-        });
+        return sendConflict(reply, `A community with identifier "${identifier}" already exists`);
       }
 
       // Creer la communaute ET automatiquement ajouter le createur comme membre ADMIN
@@ -887,16 +844,10 @@ export async function communityRoutes(fastify: FastifyInstance) {
         }
       });
 
-      reply.status(201).send({
-        success: true,
-        data: flattenCommunityCounts(community)
-      });
+      sendSuccess(reply, flattenCommunityCounts(community), { statusCode: 201 });
     } catch (error) {
       logger.error('Error creating community', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to create community'
-      });
+      sendInternalError(reply, 'Failed to create community');
     }
   });
 
@@ -980,10 +931,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'User must be authenticated'
-        });
+        return sendUnauthorized(reply, 'User must be authenticated');
       }
 
       const userId = authContext.userId;
@@ -999,20 +947,14 @@ export async function communityRoutes(fastify: FastifyInstance) {
       });
 
       if (!community) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Community not found'
-        });
+        return sendNotFound(reply, 'Community not found');
       }
 
       const hasAccess = community.createdBy === userId ||
                        community.members.some(member => member.userId === userId);
 
       if (!hasAccess && community.isPrivate) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Access denied to this community'
-        });
+        return sendForbidden(reply, 'Access denied to this community');
       }
 
       const { offset = '0', limit = '20' } = request.query as { offset?: string; limit?: string };
@@ -1040,22 +982,15 @@ export async function communityRoutes(fastify: FastifyInstance) {
         fastify.prisma.communityMember.count({ where: { communityId: id } })
       ]);
 
-      reply.send({
-        success: true,
-        data: members,
-        pagination: {
-          total: totalCount,
-          limit: limitNum,
-          offset: offsetNum,
-          hasMore: offsetNum + members.length < totalCount
-        }
+      sendPaginatedSuccess(reply, members, {
+        total: totalCount,
+        limit: limitNum,
+        offset: offsetNum,
+        hasMore: offsetNum + members.length < totalCount
       });
     } catch (error) {
       logger.error('Error fetching community members', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to fetch community members'
-      });
+      sendInternalError(reply, 'Failed to fetch community members');
     }
   });
 
@@ -1127,10 +1062,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'User must be authenticated'
-        });
+        return sendUnauthorized(reply, 'User must be authenticated');
       }
 
       const userId = authContext.userId;
@@ -1148,10 +1080,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       });
 
       if (!community) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Community not found'
-        });
+        return sendNotFound(reply, 'Community not found');
       }
 
       // Verifier que l'utilisateur est admin (ou createur)
@@ -1159,10 +1088,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       const isAdmin = userMember && userMember.role === CommunityRole.ADMIN;
 
       if (!isAdmin) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Only community admins can add members'
-        });
+        return sendForbidden(reply, 'Only community admins can add members');
       }
 
       // Verifier que l'utilisateur a ajouter existe
@@ -1172,10 +1098,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       });
 
       if (!userToAdd) {
-        return reply.status(404).send({
-          success: false,
-          error: 'User to add not found'
-        });
+        return sendNotFound(reply, 'User to add not found');
       }
 
       // Verifier si le membre existe deja
@@ -1211,16 +1134,10 @@ export async function communityRoutes(fastify: FastifyInstance) {
         });
       }
 
-      reply.send({
-        success: true,
-        data: member
-      });
+      sendSuccess(reply, member);
     } catch (error) {
       logger.error('Error adding community member', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to add community member'
-      });
+      sendInternalError(reply, 'Failed to add community member');
     }
   });
 
@@ -1291,10 +1208,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'User must be authenticated'
-        });
+        return sendUnauthorized(reply, 'User must be authenticated');
       }
 
       const userId = authContext.userId;
@@ -1312,10 +1226,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       });
 
       if (!community) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Community not found'
-        });
+        return sendNotFound(reply, 'Community not found');
       }
 
       // Verifier que l'utilisateur est admin
@@ -1323,10 +1234,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       const isAdmin = userMember && userMember.role === CommunityRole.ADMIN;
 
       if (!isAdmin) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Only community admins can update member roles'
-        });
+        return sendForbidden(reply, 'Only community admins can update member roles');
       }
 
       // Mettre a jour le role du membre
@@ -1345,16 +1253,10 @@ export async function communityRoutes(fastify: FastifyInstance) {
         }
       });
 
-      reply.send({
-        success: true,
-        data: updatedMember
-      });
+      sendSuccess(reply, updatedMember);
     } catch (error) {
       logger.error('Error updating member role', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to update member role'
-      });
+      sendInternalError(reply, 'Failed to update member role');
     }
   });
 
@@ -1418,10 +1320,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'User must be authenticated'
-        });
+        return sendUnauthorized(reply, 'User must be authenticated');
       }
 
       const userId = authContext.userId;
@@ -1439,10 +1338,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       });
 
       if (!community) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Community not found'
-        });
+        return sendNotFound(reply, 'Community not found');
       }
 
       // Verifier que l'utilisateur est admin
@@ -1450,10 +1346,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       const isAdmin = userMember && userMember.role === CommunityRole.ADMIN;
 
       if (!isAdmin) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Only community admins can remove members'
-        });
+        return sendForbidden(reply, 'Only community admins can remove members');
       }
 
       // Supprimer le membre
@@ -1464,16 +1357,10 @@ export async function communityRoutes(fastify: FastifyInstance) {
         }
       });
 
-      reply.send({
-        success: true,
-        data: { message: 'Member removed successfully' }
-      });
+      sendSuccess(reply, { message: 'Member removed successfully' });
     } catch (error) {
       logger.error('Error removing community member', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to remove community member'
-      });
+      sendInternalError(reply, 'Failed to remove community member');
     }
   });
 
@@ -1534,10 +1421,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'User must be authenticated'
-        });
+        return sendUnauthorized(reply, 'User must be authenticated');
       }
 
       const userId = authContext.userId;
@@ -1549,17 +1433,11 @@ export async function communityRoutes(fastify: FastifyInstance) {
       });
 
       if (!community) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Community not found'
-        });
+        return sendNotFound(reply, 'Community not found');
       }
 
       if (community.createdBy !== userId) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Only community creator can update community'
-        });
+        return sendForbidden(reply, 'Only community creator can update community');
       }
 
       // Preparer les donnees de mise a jour
@@ -1581,10 +1459,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
           });
 
           if (existingCommunity) {
-            return reply.status(409).send({
-              success: false,
-              error: `A community with identifier "${newIdentifier}" already exists`
-            });
+            return sendConflict(reply, `A community with identifier "${newIdentifier}" already exists`);
           }
         }
 
@@ -1612,16 +1487,10 @@ export async function communityRoutes(fastify: FastifyInstance) {
         }
       });
 
-      reply.send({
-        success: true,
-        data: flattenCommunityCounts(updatedCommunity)
-      });
+      sendSuccess(reply, flattenCommunityCounts(updatedCommunity));
     } catch (error) {
       logger.error('Error updating community', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to update community'
-      });
+      sendInternalError(reply, 'Failed to update community');
     }
   });
 
@@ -1681,10 +1550,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'User must be authenticated'
-        });
+        return sendUnauthorized(reply, 'User must be authenticated');
       }
 
       const userId = authContext.userId;
@@ -1696,33 +1562,21 @@ export async function communityRoutes(fastify: FastifyInstance) {
       });
 
       if (!community) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Community not found'
-        });
+        return sendNotFound(reply, 'Community not found');
       }
 
       if (community.createdBy !== userId) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Only community creator can delete community'
-        });
+        return sendForbidden(reply, 'Only community creator can delete community');
       }
 
       await fastify.prisma.community.delete({
         where: { id }
       });
 
-      reply.send({
-        success: true,
-        data: { message: 'Community deleted successfully' }
-      });
+      sendSuccess(reply, { message: 'Community deleted successfully' });
     } catch (error) {
       logger.error('Error deleting community', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to delete community'
-      });
+      sendInternalError(reply, 'Failed to delete community');
     }
   });
 
@@ -1805,10 +1659,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       // Utiliser le nouveau systeme d'authentification unifie
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'User must be authenticated'
-        });
+        return sendUnauthorized(reply, 'User must be authenticated');
       }
 
       const userId = authContext.userId;
@@ -1824,20 +1675,14 @@ export async function communityRoutes(fastify: FastifyInstance) {
       });
 
       if (!community) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Community not found'
-        });
+        return sendNotFound(reply, 'Community not found');
       }
 
       const hasAccess = community.createdBy === userId ||
                        community.members.some(member => member.userId === userId);
 
       if (!hasAccess && community.isPrivate) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Access denied to this community'
-        });
+        return sendForbidden(reply, 'Access denied to this community');
       }
 
       // Recuperer les conversations de la communaute
@@ -1874,16 +1719,10 @@ export async function communityRoutes(fastify: FastifyInstance) {
         }
       });
 
-      reply.send({
-        success: true,
-        data: conversations
-      });
+      sendSuccess(reply, conversations);
     } catch (error) {
       logger.error('Error fetching community conversations', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to fetch community conversations'
-      });
+      sendInternalError(reply, 'Failed to fetch community conversations');
     }
   });
 
@@ -1941,10 +1780,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
 
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'User must be authenticated'
-        });
+        return sendUnauthorized(reply, 'User must be authenticated');
       }
 
       const userId = authContext.userId;
@@ -1955,17 +1791,11 @@ export async function communityRoutes(fastify: FastifyInstance) {
       });
 
       if (!community) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Community not found'
-        });
+        return sendNotFound(reply, 'Community not found');
       }
 
       if (community.isPrivate) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Cannot join a private community without an invite'
-        });
+        return sendForbidden(reply, 'Cannot join a private community without an invite');
       }
 
       const existingMember = await fastify.prisma.communityMember.findFirst({
@@ -1973,10 +1803,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       });
 
       if (existingMember) {
-        return reply.status(409).send({
-          success: false,
-          error: 'You are already a member of this community'
-        });
+        return sendConflict(reply, 'You are already a member of this community');
       }
 
       const member = await fastify.prisma.communityMember.create({
@@ -1998,16 +1825,10 @@ export async function communityRoutes(fastify: FastifyInstance) {
         }
       });
 
-      reply.send({
-        success: true,
-        data: member
-      });
+      sendSuccess(reply, member);
     } catch (error) {
       logger.error('Error joining community', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to join community'
-      });
+      sendInternalError(reply, 'Failed to join community');
     }
   });
 
@@ -2066,10 +1887,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
 
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'User must be authenticated'
-        });
+        return sendUnauthorized(reply, 'User must be authenticated');
       }
 
       const userId = authContext.userId;
@@ -2080,17 +1898,11 @@ export async function communityRoutes(fastify: FastifyInstance) {
       });
 
       if (!community) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Community not found'
-        });
+        return sendNotFound(reply, 'Community not found');
       }
 
       if (community.createdBy === userId) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Community creator cannot leave their own community. Transfer ownership or delete the community instead.'
-        });
+        return sendForbidden(reply, 'Community creator cannot leave their own community. Transfer ownership or delete the community instead.');
       }
 
       const deleted = await fastify.prisma.communityMember.deleteMany({
@@ -2098,22 +1910,13 @@ export async function communityRoutes(fastify: FastifyInstance) {
       });
 
       if (deleted.count === 0) {
-        return reply.status(404).send({
-          success: false,
-          error: 'You are not a member of this community'
-        });
+        return sendNotFound(reply, 'You are not a member of this community');
       }
 
-      reply.send({
-        success: true,
-        data: { message: 'Successfully left community' }
-      });
+      sendSuccess(reply, { message: 'Successfully left community' });
     } catch (error) {
       logger.error('Error leaving community', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to leave community'
-      });
+      sendInternalError(reply, 'Failed to leave community');
     }
   });
 
@@ -2182,10 +1985,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
 
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'User must be authenticated'
-        });
+        return sendUnauthorized(reply, 'User must be authenticated');
       }
 
       const userId = authContext.userId;
@@ -2204,27 +2004,18 @@ export async function communityRoutes(fastify: FastifyInstance) {
       });
 
       if (!community) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Community not found'
-        });
+        return sendNotFound(reply, 'Community not found');
       }
 
       const inviterMember = community.members[0];
       if (!inviterMember) {
-        return reply.status(403).send({
-          success: false,
-          error: 'You must be a member to invite others'
-        });
+        return sendForbidden(reply, 'You must be a member to invite others');
       }
 
       if (community.isPrivate) {
         const canInvite = inviterMember.role === CommunityRole.ADMIN || inviterMember.role === CommunityRole.MODERATOR;
         if (!canInvite) {
-          return reply.status(403).send({
-            success: false,
-            error: 'Only admins and moderators can invite to private communities'
-          });
+          return sendForbidden(reply, 'Only admins and moderators can invite to private communities');
         }
       }
 
@@ -2234,10 +2025,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       });
 
       if (!userToInvite) {
-        return reply.status(404).send({
-          success: false,
-          error: 'User to invite not found'
-        });
+        return sendNotFound(reply, 'User to invite not found');
       }
 
       const existingMember = await fastify.prisma.communityMember.findFirst({
@@ -2245,10 +2033,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
       });
 
       if (existingMember) {
-        return reply.status(409).send({
-          success: false,
-          error: 'User is already a member of this community'
-        });
+        return sendConflict(reply, 'User is already a member of this community');
       }
 
       const member = await fastify.prisma.communityMember.create({
@@ -2270,16 +2055,10 @@ export async function communityRoutes(fastify: FastifyInstance) {
         }
       });
 
-      reply.send({
-        success: true,
-        data: member
-      });
+      sendSuccess(reply, member);
     } catch (error) {
       logger.error('Error inviting to community', error as Error);
-      reply.status(500).send({
-        success: false,
-        error: 'Failed to invite user to community'
-      });
+      sendInternalError(reply, 'Failed to invite user to community');
     }
   });
 }
