@@ -50,7 +50,14 @@ class BookmarksViewModel: ObservableObject {
     private func fetchBookmarksFromNetwork() async {
         do {
             let response = try await postService.getBookmarks(cursor: nextCursor, limit: 20)
-            let newPosts = response.data.map { $0.toFeedPost(preferredLanguages: preferredLanguages) }
+            // Decode off the main actor — toFeedPost decodes each post's media /
+            // comments / translations (same heavy decode as the feed). Both
+            // [APIPost] and [FeedPost] are Sendable.
+            let preferred = preferredLanguages
+            let payload = response.data
+            let newPosts = await Task.detached(priority: .userInitiated) {
+                payload.map { $0.toFeedPost(preferredLanguages: preferred) }
+            }.value
             let existingIds = Set(posts.map(\.id))
             let unique = newPosts.filter { !existingIds.contains($0.id) }
             posts.append(contentsOf: unique)
