@@ -119,24 +119,25 @@ struct LinkPreviewCard: View {
     }
 
     private func thumbnail(_ urlString: String) -> some View {
-        AsyncImage(url: URL(string: urlString)) { phase in
-            switch phase {
-            case .success(let image):
-                image
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-            case .empty, .failure:
-                Rectangle()
-                    .fill(accent.opacity(0.1))
-                    .overlay(
-                        Image(systemName: "link")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(accent.opacity(0.6))
-                    )
-            @unknown default:
-                EmptyView()
-            }
+        // CachedAsyncImage (vs raw AsyncImage) caches the fetch and decodes the
+        // og:image at the displayed size instead of full resolution — a 1200×630
+        // preview image rendered into a 72-pt tile was decoding a multi-MB bitmap
+        // and re-downloading on every scroll-in. targetSize keeps the smaller
+        // dimension crisp for the .fill while capping the decode well under the
+        // pipeline's 1200 px default.
+        CachedAsyncImage(
+            url: urlString,
+            targetSize: CGSize(width: 150, height: 150)
+        ) {
+            Rectangle()
+                .fill(accent.opacity(0.1))
+                .overlay(
+                    Image(systemName: "link")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(accent.opacity(0.6))
+                )
         }
+        .aspectRatio(contentMode: .fill)
         .frame(width: 72, height: 72)
         .clipped()
     }
