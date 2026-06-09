@@ -422,9 +422,7 @@ export function registerCoreRoutes(
       // Override runtime de isOnline : la DB peut être obsolète (heartbeat manqué,
       // crash gateway, déconnexion non détectée). La source de vérité est `connectedUsers`
       // Map du SocketIOManager, exposée via le décorateur `presenceChecker`.
-      const presenceChecker = (fastify as any).presenceChecker as
-        | { isOnline: (id: string) => boolean; bulk: (ids: readonly string[]) => Map<string, boolean> }
-        | undefined;
+      const presenceChecker = fastify.presenceChecker;
 
       // Calculate hasMore. Two strategies:
       //   1. When we have a real `totalCount` (includeCount=true OR

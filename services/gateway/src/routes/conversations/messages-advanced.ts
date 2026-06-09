@@ -265,7 +265,7 @@ export function registerMessagesAdvancedRoutes(
       logger.info('===== STARTING MENTION PROCESSING BLOCK =====');
       try {
         logger.info('===== ENTERED TRY BLOCK FOR MENTIONS =====');
-        const mentionService = (fastify as any).mentionService;
+        const mentionService = fastify.mentionService;
         logger.info(`Edit - MentionService available !!mentionService=${!!mentionService}`);
 
         if (mentionService) {

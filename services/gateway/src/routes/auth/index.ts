@@ -39,7 +39,7 @@ export async function authRoutes(fastify: FastifyInstance) {
     phoneTransferService,
     smsService,
     cacheStore,
-    redis: (fastify as any).redis, // Keep for backward compatibility
+    redis: fastify.redis, // Keep for backward compatibility
     prisma: (fastify as any).prisma
   };
 

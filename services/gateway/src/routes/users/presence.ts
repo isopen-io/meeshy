@@ -72,9 +72,7 @@ export async function getUsersPresence(fastify: FastifyInstance) {
         return sendBadRequest(reply, 'Max 200 ids per request');
       }
 
-      const presenceChecker = (fastify as any).presenceChecker as
-        | { bulk: (ids: readonly string[]) => Map<string, boolean> }
-        | undefined;
+      const presenceChecker = fastify.presenceChecker;
 
       if (!presenceChecker) {
         // Service non encore monté (boot phase). Renvoyer tout false plutôt que 500.

@@ -251,7 +251,7 @@ const conversationParamsSchema = {
 export async function translationRoutes(fastify: FastifyInstance, options: any) {
   // Recuperer les services depuis l'instance fastify (comme dans translation.ts)
   const translationService = (fastify as any).translationService;
-  const messagingService = (fastify as any).messagingService;
+  const messagingService = fastify.messagingService;
 
   if (!translationService) {
     throw new Error('MessageTranslationService not provided to translation routes');

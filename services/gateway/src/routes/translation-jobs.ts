@@ -158,7 +158,7 @@ export async function translationJobsRoutes(fastify: FastifyInstance) {
   let translateService: AttachmentTranslateService | null = null;
   if ((fastify as any).zmqClient) {
     // Utiliser le cache multi-niveau partagé depuis le décorateur Fastify
-    const jobMappingCache = (fastify as any).jobMappingCache;
+    const jobMappingCache = fastify.jobMappingCache;
 
     translateService = new AttachmentTranslateService(
       (fastify as any).prisma,

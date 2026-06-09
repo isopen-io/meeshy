@@ -545,7 +545,7 @@ export async function updateUserPassword(fastify: FastifyInstance) {
       });
 
       // Notification sécurité
-      const notificationService = (fastify as any).notificationService;
+      const notificationService = fastify.notificationService;
       if (notificationService) {
         notificationService.createPasswordChangedNotification({
           recipientUserId: userId,

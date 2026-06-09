@@ -865,7 +865,7 @@ export function registerSharingRoutes(
       }
 
       // PERFORMANCE: Invalider le cache d'autocomplete car la liste des membres a changé
-      const mentionService = (fastify as any).mentionService;
+      const mentionService = fastify.mentionService;
       if (mentionService) {
         try {
           await mentionService.invalidateCacheForConversation(conversationId);

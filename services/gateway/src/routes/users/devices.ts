@@ -269,7 +269,7 @@ export async function sendFriendRequest(fastify: FastifyInstance) {
       });
 
       // Notification in-app au destinataire
-      const notificationService = (fastify as any).notificationService as NotificationService;
+      const notificationService = fastify.notificationService;
       if (notificationService) {
         await notificationService.createFriendRequestNotification({
           recipientUserId: receiverId,
@@ -279,7 +279,7 @@ export async function sendFriendRequest(fastify: FastifyInstance) {
       }
 
       // Email au destinataire (respect des preferences)
-      const emailService = (fastify as any).emailService as EmailService;
+      const emailService = fastify.emailService;
       if (emailService && receiver.email) {
         const userPrefs = await fastify.prisma.userPreferences.findUnique({
           where: { userId: receiverId },
@@ -477,7 +477,7 @@ export async function respondToFriendRequest(fastify: FastifyInstance) {
           }
 
           // Notification in-app a l'expediteur original
-          const notificationService = (fastify as any).notificationService as NotificationService;
+          const notificationService = fastify.notificationService;
           if (notificationService) {
             await notificationService.createFriendAcceptedNotification({
               recipientUserId: friendRequest.senderId,
@@ -487,7 +487,7 @@ export async function respondToFriendRequest(fastify: FastifyInstance) {
           }
 
           // Email a l'expediteur original (respect des preferences)
-          const emailService = (fastify as any).emailService as EmailService;
+          const emailService = fastify.emailService;
           if (emailService) {
             const sender = await fastify.prisma.user.findUnique({
               where: { id: friendRequest.senderId },
@@ -520,7 +520,7 @@ export async function respondToFriendRequest(fastify: FastifyInstance) {
 
         if (action === 'reject') {
           // Notification system a l'expediteur
-          const notificationService = (fastify as any).notificationService as NotificationService;
+          const notificationService = fastify.notificationService;
           if (notificationService) {
             const receiver = updatedRequest.receiver;
             const receiverName = receiver.displayName || receiver.username;

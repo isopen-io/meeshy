@@ -73,7 +73,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
   const smsService = new SmsService();
 
   // Initialize rate limiters
-  const redis = (fastify as any).redis;
+  const redis = fastify.redis;
   const passwordResetRateLimiter = createPasswordResetRateLimiter(redis);
   const passwordResetDailyRateLimiter = createPasswordResetDailyRateLimiter(redis);
   const authGlobalRateLimiter = createAuthGlobalRateLimiter(redis);

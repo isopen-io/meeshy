@@ -26,7 +26,7 @@ export async function attachmentRoutes(fastify: FastifyInstance) {
     const zmqClient = translationService.getZmqClient();
     if (zmqClient) {
       // Utiliser le cache multi-niveau partagé depuis le décorateur Fastify
-      const jobMappingCache = (fastify as any).jobMappingCache;
+      const jobMappingCache = fastify.jobMappingCache;
 
       translateService = new AttachmentTranslateService(
         prisma,
