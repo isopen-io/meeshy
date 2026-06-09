@@ -17,6 +17,26 @@ final class BubbleContentMatrixTests: XCTestCase {
         XCTAssertNotNil(content.meta)
     }
 
+    func test_textWithURL_precomputesFirstLinkURL() {
+        // Le lien est résolu UNE fois au build du value-model (plus de
+        // NSDataDetector dans le body de chaque bulle au scroll).
+        let msg = makeMessage(content: "Regarde https://meeshy.me/blog c'est cool")
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertNotNil(content.text?.firstLinkURL)
+        XCTAssertEqual(
+            content.text?.firstLinkURL,
+            LinkPreviewFetcher.firstURL(in: content.text?.raw ?? "")
+        )
+    }
+
+    func test_textWithoutURL_firstLinkURLIsNil() {
+        let msg = makeMessage(content: "Salut, ça va ?")
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertNil(content.text?.firstLinkURL)
+    }
+
     func test_emojiOnly_isFlagged() {
         let msg = makeMessage(content: "🔥🔥🔥")
         let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")

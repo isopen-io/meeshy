@@ -1341,4 +1341,47 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertTrue(merged.isEmpty, "an empty server response is authoritative — no merge from memory")
     }
 
+    // MARK: - FeedPostCard.availableFlags (Prisme flag strip, O(keys+langs))
+
+    func test_availableFlags_originalFirstThenPreferredWithTranslations() {
+        let flags = FeedPostCard.availableFlags(
+            originalLanguage: "EN",
+            translationKeys: ["FR", "ES"],
+            preferredLanguages: ["fr", "de", "es"], // `de` has no translation -> skipped
+            activeLanguage: "zz"
+        )
+        XCTAssertEqual(flags, ["en", "fr", "es"])
+    }
+
+    func test_availableFlags_excludesActiveLanguage() {
+        let flags = FeedPostCard.availableFlags(
+            originalLanguage: "en", translationKeys: ["fr"],
+            preferredLanguages: ["fr"], activeLanguage: "fr"
+        )
+        XCTAssertEqual(flags, ["en"])
+    }
+
+    func test_availableFlags_caseInsensitiveKeysAndPrefs() {
+        let flags = FeedPostCard.availableFlags(
+            originalLanguage: "en", translationKeys: ["FR"],
+            preferredLanguages: ["Fr"], activeLanguage: "zz"
+        )
+        XCTAssertEqual(flags, ["en", "fr"])
+    }
+
+    func test_availableFlags_dedupesOriginalAndSkipsUntranslatedPrefs() {
+        let flags = FeedPostCard.availableFlags(
+            originalLanguage: "en", translationKeys: ["en", "fr"],
+            preferredLanguages: ["en", "fr"], activeLanguage: "zz"
+        )
+        XCTAssertEqual(flags, ["en", "fr"])
+    }
+
+    func test_availableFlags_nilOriginal_returnsEmpty() {
+        XCTAssertTrue(FeedPostCard.availableFlags(
+            originalLanguage: nil, translationKeys: ["fr"],
+            preferredLanguages: ["fr"], activeLanguage: "zz"
+        ).isEmpty)
+    }
+
 }

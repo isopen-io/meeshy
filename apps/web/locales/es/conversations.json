@@ -477,6 +477,25 @@
       "inviteSuccess": "{count} usuario(s) invitado(s) con éxito",
       "partialError": "{count} invitación/invitaciones fallaron",
       "inviteError": "Error al invitar usuarios"
+    },
+    "drawer": {
+      "title": "Opciones",
+      "displayName": "Nombre mostrado (para ti)",
+      "namePlaceholder": "Nombre de la conversación",
+      "notifications": "Notificaciones",
+      "notificationsAll": "Todas",
+      "notificationsMentions": "Menciones",
+      "notificationsNone": "Ninguna",
+      "theme": "Tema",
+      "themeColorLabel": "Color de tema {color}",
+      "menuSettings": "Ajustes",
+      "menuProfile": "Ver perfil",
+      "menuSearch": "Buscar",
+      "category": "Categoría",
+      "tags": "Etiquetas",
+      "searchOrCreate": "Buscar o crear...",
+      "block": "Bloquear",
+      "report": "Reportar"
     }
   }
 }

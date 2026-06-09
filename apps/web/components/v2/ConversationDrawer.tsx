@@ -75,6 +75,7 @@ export function ConversationDrawer({
   className = '',
 }: ConversationDrawerProps) {
   const { t } = useI18n('common');
+  const { t: tConv } = useI18n('conversations');
   const [localName, setLocalName] = useState(conversationName);
   const [mounted, setMounted] = useState(false);
 
@@ -127,7 +128,7 @@ export function ConversationDrawer({
             className="text-lg font-semibold text-[var(--gp-text-primary)] transition-colors duration-300"
             style={{ fontFamily: 'var(--font-display, inherit)' }}
           >
-            Options
+            {tConv('conversations.drawer.title')}
           </h2>
           <button
             onClick={onClose}
@@ -150,13 +151,13 @@ export function ConversationDrawer({
           {/* Nom personnalisé */}
           <div>
             <Label className="mb-2">
-              Nom affiché (pour vous)
+              {tConv('conversations.drawer.displayName')}
             </Label>
             <Input
               value={localName}
               onChange={(e) => setLocalName(e.target.value)}
               onBlur={handleNameBlur}
-              placeholder="Nom de la conversation"
+              placeholder={tConv('conversations.drawer.namePlaceholder')}
               icon={
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -168,7 +169,7 @@ export function ConversationDrawer({
           {/* Notifications */}
           <div>
             <Label className="mb-2">
-              Notifications
+              {tConv('conversations.drawer.notifications')}
             </Label>
             <div className="flex gap-2">
               {(['all', 'mentions', 'none'] as const).map((level) => (
@@ -185,9 +186,9 @@ export function ConversationDrawer({
                     color: notificationLevel === level ? 'white' : 'var(--gp-text-secondary)',
                   }}
                 >
-                  {level === 'all' && 'Tous'}
-                  {level === 'mentions' && 'Mentions'}
-                  {level === 'none' && 'Aucune'}
+                  {level === 'all' && tConv('conversations.drawer.notificationsAll')}
+                  {level === 'mentions' && tConv('conversations.drawer.notificationsMentions')}
+                  {level === 'none' && tConv('conversations.drawer.notificationsNone')}
                 </button>
               ))}
             </div>
@@ -196,7 +197,7 @@ export function ConversationDrawer({
           {/* Thème */}
           <div>
             <Label className="mb-2">
-              Thème
+              {tConv('conversations.drawer.theme')}
             </Label>
             <div className="flex gap-3">
               {availableColors.map((color) => (
@@ -211,7 +212,7 @@ export function ConversationDrawer({
                     background: color,
                     '--tw-ring-color': color,
                   } as React.CSSProperties}
-                  aria-label={`Couleur de thème ${color}`}
+                  aria-label={tConv('conversations.drawer.themeColorLabel', { color })}
                 >
                   {themeColor === color && (
                     <svg className="w-4 h-4 mx-auto text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -235,7 +236,7 @@ export function ConversationDrawer({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
               }
-              label="Paramètres"
+              label={tConv('conversations.drawer.menuSettings')}
               onClick={onSettingsClick}
             />
             {showProfile && onProfileClick && (
@@ -245,7 +246,7 @@ export function ConversationDrawer({
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                   </svg>
                 }
-                label="Voir le profil"
+                label={tConv('conversations.drawer.menuProfile')}
                 onClick={onProfileClick}
               />
             )}
@@ -255,7 +256,7 @@ export function ConversationDrawer({
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               }
-              label="Rechercher"
+              label={tConv('conversations.drawer.menuSearch')}
               onClick={onSearchClick}
             />
           </div>
@@ -265,26 +266,26 @@ export function ConversationDrawer({
 
           {/* Catégorie */}
           <TagInput
-            label="Catégorie"
+            label={tConv('conversations.drawer.category')}
             items={categories}
             selectedIds={selectedCategoryId ? [selectedCategoryId] : []}
             onSelect={(id) => onCategorySelect(id)}
             onDeselect={() => onCategorySelect(undefined)}
             onCreate={onCategoryCreate}
             onDelete={onCategoryDelete}
-            placeholder="Rechercher ou créer..."
+            placeholder={tConv('conversations.drawer.searchOrCreate')}
           />
 
           {/* Tags */}
           <TagInput
-            label="Tags"
+            label={tConv('conversations.drawer.tags')}
             items={tags}
             selectedIds={selectedTagIds}
             onSelect={onTagSelect}
             onDeselect={onTagDeselect}
             onCreate={onTagCreate}
             onDelete={onTagDelete}
-            placeholder="Rechercher ou créer..."
+            placeholder={tConv('conversations.drawer.searchOrCreate')}
           />
         </div>
 
@@ -299,7 +300,7 @@ export function ConversationDrawer({
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
             </svg>
-            <span className="text-sm font-medium">Bloquer</span>
+            <span className="text-sm font-medium">{tConv('conversations.drawer.block')}</span>
           </button>
           <button
             onClick={onReportClick}
@@ -308,7 +309,7 @@ export function ConversationDrawer({
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
-            <span className="text-sm font-medium">Signaler</span>
+            <span className="text-sm font-medium">{tConv('conversations.drawer.report')}</span>
           </button>
         </div>
       </div>

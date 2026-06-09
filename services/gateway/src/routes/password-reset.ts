@@ -5,6 +5,7 @@
 
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
 import { PasswordResetService } from '../services/PasswordResetService';
 import { PhonePasswordResetService } from '../services/PhonePasswordResetService';
 import { getCacheStore } from '../services/CacheStore';
@@ -200,10 +201,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
 
       fastify.log.error({ err: error }, '[PasswordReset] Error in forgot-password');
       // Return generic success response even on error (security)
-      return reply.status(200).send({
-        success: true,
-        data: { message: 'If an account exists with this email, a password reset link has been sent.' }
-      });
+      return sendSuccess(reply, { message: 'If an account exists with this email, a password reset link has been sent.' });
     }
   });
 
@@ -307,15 +305,9 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
       });
 
       if (result.success) {
-        return reply.status(200).send({
-          success: true,
-          data: { message: result.message }
-        });
+        return sendSuccess(reply, { message: result.message });
       } else {
-        return reply.status(400).send({
-          success: false,
-          error: result.error
-        });
+        return sendBadRequest(reply, result.error);
       }
 
     } catch (error) {
@@ -328,10 +320,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
       }
 
       fastify.log.error({ err: error }, '[PasswordReset] Error in reset-password');
-      return reply.status(500).send({
-        success: false,
-        error: 'An error occurred while resetting your password. Please try again.'
-      });
+      return sendInternalError(reply, 'An error occurred while resetting your password. Please try again.');
     }
   });
 
@@ -565,7 +554,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         });
       }
       fastify.log.error({ err: error }, '[PhonePasswordReset] Error in phone lookup');
-      return reply.status(500).send({ success: false, error: 'internal_error' });
+      return sendInternalError(reply, 'internal_error');
     }
   });
 
@@ -651,7 +640,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         });
       }
       fastify.log.error({ err: error }, '[PhonePasswordReset] Error in identity verification');
-      return reply.status(500).send({ success: false, error: 'internal_error' });
+      return sendInternalError(reply, 'internal_error');
     }
   });
 
@@ -731,7 +720,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         });
       }
       fastify.log.error({ err: error }, '[PhonePasswordReset] Error in code verification');
-      return reply.status(500).send({ success: false, error: 'internal_error' });
+      return sendInternalError(reply, 'internal_error');
     }
   });
 
@@ -796,7 +785,7 @@ export async function passwordResetRoutes(fastify: FastifyInstance) {
         });
       }
       fastify.log.error({ err: error }, '[PhonePasswordReset] Error in code resend');
-      return reply.status(500).send({ success: false, error: 'internal_error' });
+      return sendInternalError(reply, 'internal_error');
     }
   });
 

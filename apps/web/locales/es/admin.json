@@ -159,6 +159,22 @@
       "notAvailable": "Programación no disponible",
       "triggerNow": "Disparar ahora",
       "stop": "STOP!"
+    },
+    "topics": {
+      "title": "Catálogo de temas",
+      "description": "Temas dinámicos utilizados por el estratega para sugerir nuevos hilos de conversación. Los cambios aquí se propagan a los agentes en menos de 5 segundos.",
+      "newTopic": "Nuevo tema",
+      "reload": "Recargar",
+      "colActive": "Activo",
+      "colSlug": "Slug",
+      "colLabel": "Etiqueta",
+      "colCooldown": "Cooldown",
+      "colPatterns": "Patrones",
+      "colActions": "Acciones",
+      "emptyState": "No hay temas en el catálogo. El agente sembrará automáticamente 13 temas iniciales al próximo arranque.",
+      "editTitle": "Editar",
+      "disableTitle": "Desactivar (soft delete)",
+      "deleteTitle": "Eliminar definitivamente"
     }
   },
   "agentLive": {

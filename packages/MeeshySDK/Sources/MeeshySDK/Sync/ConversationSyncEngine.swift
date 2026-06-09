@@ -452,7 +452,6 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         lastDeltaSyncAt = now
         isSyncing = true
         defer { isSyncing = false }
-        Self.logger.info("[RT-DIAG] deltaSync START — no delivery ACK is sent for synced messages (bug A)")
 
         do {
             let since = lastSyncTimestamp
@@ -474,30 +473,49 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             let deltaConversations = response.data.map { $0.toConversation(currentUserId: userId) }
 
             let existing = await cache.conversations.load(for: "list").snapshot() ?? []
-            var merged = existing
 
-            for delta in deltaConversations {
-                if !delta.isActive {
-                    merged.removeAll { $0.id == delta.id }
-                    await cache.messages.invalidate(for: delta.id)
-                } else if let idx = merged.firstIndex(where: { $0.id == delta.id }) {
-                    merged[idx] = delta
-                } else {
-                    merged.append(delta)
-                }
+            // O(existing + deltas) merge by id, instead of an O(deltas × convs)
+            // firstIndex / removeAll scan per delta — measurable on a foreground
+            // reconnect with hundreds of conversations. The merge order is
+            // irrelevant: `saveSorted` below re-sorts the result deterministically.
+            let (merged, removedIds) = Self.mergeDeltaConversations(existing: existing, deltas: deltaConversations)
+            for removedId in removedIds {
+                await cache.messages.invalidate(for: removedId)
             }
 
             await saveSorted(merged, to: "list")
             await SearchIndex.shared.indexConversations(deltaConversations.filter { $0.isActive })
             _conversationsDidChange.send()
 
-            Self.logger.info("[RT-DIAG] deltaSync END merged=\(merged.count, privacy: .public) conversations")
             lastSyncTimestamp = Date()
             return true
         } catch {
             Self.logger.error("[SyncEngine] deltaSync error: \(error.localizedDescription)")
             return false
         }
+    }
+
+    /// Merge a batch of delta conversations into `existing` by id. Active deltas
+    /// upsert (replace-or-insert); inactive deltas remove. Returns the merged
+    /// list plus every inactive delta id (so the caller can invalidate their
+    /// message caches, exactly as the previous per-delta loop did). The merged
+    /// order is intentionally unspecified — callers re-sort via `saveSorted`.
+    /// O(existing + deltas) instead of O(deltas × existing).
+    static func mergeDeltaConversations(
+        existing: [MeeshyConversation],
+        deltas: [MeeshyConversation]
+    ) -> (merged: [MeeshyConversation], removedIds: [String]) {
+        var byId = Dictionary(existing.map { ($0.id, $0) }, uniquingKeysWith: { _, new in new })
+        var removedIds: [String] = []
+        for delta in deltas {
+            if delta.isActive {
+                byId[delta.id] = delta
+            } else {
+                byId.removeValue(forKey: delta.id)
+                removedIds.append(delta.id)
+            }
+        }
+        return (Array(byId.values), removedIds)
     }
 
     // MARK: - Messages
@@ -593,7 +611,6 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     // MARK: - Socket Relay
 
     public func startSocketRelay() async {
-        Self.logger.info("[RT-DIAG] startSocketRelay() called — (re)subscribing to message socket events")
         socketSubscriptions.removeAll()
 
         // Message events
@@ -743,8 +760,6 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             }
             .store(in: &socketSubscriptions)
 
-        Self.logger.info("[RT-DIAG] startSocketRelay() done — \(self.socketSubscriptions.count, privacy: .public) subscriptions active")
-
         // Initial recompute so cold-start (cache already hydrated from disk
         // before any socket event arrives) publishes the correct aggregate
         // to subscribers. Without this, `totalConversationsUnreadValue`
@@ -766,7 +781,6 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         let username = await currentUsername()
         let isMe = apiMessage.senderId == userId
         let msg = apiMessage.toMessage(currentUserId: userId, currentUsername: username)
-        Self.logger.info("[RT-DIAG] handleNewMessage conv=\(msg.conversationId, privacy: .public) msg=\(msg.id, privacy: .public) isMe=\(isMe, privacy: .public)")
         await cache.messages.upsert(item: msg, for: msg.conversationId) { existing, new in
             existing.contains(where: { $0.id == new.id }) ? existing : existing + [new]
         }
@@ -827,7 +841,6 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 Self.logger.error("[SyncEngine] Failed to fetch missing conversation \(msg.conversationId): \(error.localizedDescription)")
             }
         }
-        Self.logger.info("[RT-DIAG] handleNewMessage -> conversationsDidChange.send conv=\(msg.conversationId, privacy: .public)")
         _conversationsDidChange.send()
 
         // Auto mark-as-received for messages from other users
@@ -842,7 +855,6 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         let userId = await currentUserId()
         let username = await currentUsername()
         let msg = apiMessage.toMessage(currentUserId: userId, currentUsername: username)
-        Self.logger.info("[RT-DIAG] handleEditedMessage conv=\(msg.conversationId, privacy: .public) msg=\(msg.id, privacy: .public)")
         await cache.messages.upsertPatch(for: msg.conversationId, itemId: msg.id) { existing in
             existing = msg
         }
@@ -854,7 +866,6 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     }
 
     private func handleDeletedMessage(_ event: MessageDeletedEvent) async {
-        Self.logger.info("[RT-DIAG] handleDeletedMessage conv=\(event.conversationId, privacy: .public) msg=\(event.messageId, privacy: .public)")
         await cache.messages.upsertPatch(for: event.conversationId, itemId: event.messageId) { msg in
             msg.deletedAt = Date()
             msg.content = ""
@@ -984,7 +995,6 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     }
 
     private func handleUnreadUpdated(_ event: UnreadUpdateEvent) async {
-        Self.logger.info("[RT-DIAG] handleUnreadUpdated conv=\(event.conversationId, privacy: .public) unread=\(event.unreadCount, privacy: .public)")
         // Gate the server-provided value on whether the user is currently
         // viewing this conversation. The gateway broadcasts the same
         // `unreadCount` to every recipient regardless of presence; the
@@ -1007,7 +1017,6 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     private func handleReadStatusUpdated(_ event: ReadStatusUpdateEvent) async {
         let userId = await currentUserId()
-        Self.logger.info("[RT-DIAG] handleReadStatusUpdated conv=\(event.conversationId, privacy: .public) type=\(event.type, privacy: .public)")
 
         // Update conversation unread count (userId is preferred, fallback to participantId)
         let eventUserId = event.userId ?? event.participantId
@@ -1047,7 +1056,6 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 frontier: event.updatedAt
             )
         }
-        Self.logger.info("[RT-DIAG] handleReadStatusUpdated -> messagesDidChange.send conv=\(event.conversationId, privacy: .public) newStatus=\(String(describing: newStatus), privacy: .public) delivered=\(summary.deliveredCount, privacy: .public) read=\(summary.readCount, privacy: .public)")
         _messagesDidChange.send(event.conversationId)
     }
 

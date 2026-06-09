@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 import { BroadcastTranslationService } from '../../services/admin/broadcast-translation.service';
 import { BroadcastSenderJob } from '../../jobs/broadcast-sender';
 import { EmailService } from '../../services/EmailService';
@@ -77,10 +78,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       });
     } catch (error: any) {
       logger.error('Error listing broadcasts');
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la recuperation des broadcasts',
-      });
+      return sendInternalError(reply, 'Erreur lors de la recuperation des broadcasts');
     }
   });
 
@@ -105,10 +103,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       };
 
       if (!name || !subject || !body || !sourceLanguage) {
-        return reply.status(400).send({
-          success: false,
-          message: 'Les champs name, subject, body et sourceLanguage sont requis',
-        });
+        return sendBadRequest(reply, 'Les champs name, subject, body et sourceLanguage sont requis');
       }
 
       const broadcast = await fastify.prisma.adminBroadcast.create({
@@ -137,16 +132,10 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         },
       });
 
-      return reply.status(201).send({
-        success: true,
-        data: broadcast,
-      });
+      return sendSuccess(reply, broadcast, { statusCode: 201 });
     } catch (error: any) {
       logger.error('Error creating broadcast');
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la creation du broadcast',
-      });
+      return sendInternalError(reply, 'Erreur lors de la creation du broadcast');
     }
   });
 
@@ -166,22 +155,13 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       });
 
       if (!broadcast) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Broadcast non trouve',
-        });
+        return sendNotFound(reply, 'Broadcast non trouve');
       }
 
-      return reply.send({
-        success: true,
-        data: broadcast,
-      });
+      return sendSuccess(reply, broadcast);
     } catch (error: any) {
       logger.error('Error fetching broadcast');
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la recuperation du broadcast',
-      });
+      return sendInternalError(reply, 'Erreur lors de la recuperation du broadcast');
     }
   });
 
@@ -201,17 +181,11 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       });
 
       if (!existing) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Broadcast non trouve',
-        });
+        return sendNotFound(reply, 'Broadcast non trouve');
       }
 
       if (existing.status !== 'DRAFT') {
-        return reply.status(400).send({
-          success: false,
-          message: 'Seuls les broadcasts en statut DRAFT peuvent etre modifies',
-        });
+        return sendBadRequest(reply, 'Seuls les broadcasts en statut DRAFT peuvent etre modifies');
       }
 
       const { name, subject, body, sourceLanguage, targeting } = request.body as {
@@ -234,16 +208,10 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         data: updateData,
       });
 
-      return reply.send({
-        success: true,
-        data: broadcast,
-      });
+      return sendSuccess(reply, broadcast);
     } catch (error: any) {
       logger.error('Error updating broadcast');
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la mise a jour du broadcast',
-      });
+      return sendInternalError(reply, 'Erreur lors de la mise a jour du broadcast');
     }
   });
 
@@ -263,10 +231,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       });
 
       if (!broadcast) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Broadcast non trouve',
-        });
+        return sendNotFound(reply, 'Broadcast non trouve');
       }
 
       // Build recipient filter (same logic as BroadcastSenderJob)
@@ -357,28 +322,22 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
         },
       });
 
-      return reply.send({
-        success: true,
-        data: {
-          recipientCount,
-          recipientsByLanguage: recipientsByLanguage.map((g: any) => ({
-            language: g.systemLanguage,
-            count: g._count,
-          })),
-          recipientsByCountry: recipientsByCountry.map((g: any) => ({
-            country: g.registrationCountry,
-            count: g._count,
-          })),
-          translations,
-          broadcast: updatedBroadcast,
-        },
+      return sendSuccess(reply, {
+        recipientCount,
+        recipientsByLanguage: recipientsByLanguage.map((g: any) => ({
+          language: g.systemLanguage,
+          count: g._count,
+        })),
+        recipientsByCountry: recipientsByCountry.map((g: any) => ({
+          country: g.registrationCountry,
+          count: g._count,
+        })),
+        translations,
+        broadcast: updatedBroadcast,
       });
     } catch (error: any) {
       logger.error('Error previewing broadcast');
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors de la preview du broadcast',
-      });
+      return sendInternalError(reply, 'Erreur lors de la preview du broadcast');
     }
   });
 
@@ -400,17 +359,11 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       });
 
       if (!broadcast) {
-        return reply.status(404).send({
-          success: false,
-          message: 'Broadcast non trouve',
-        });
+        return sendNotFound(reply, 'Broadcast non trouve');
       }
 
       if (broadcast.status !== 'READY') {
-        return reply.status(400).send({
-          success: false,
-          message: 'Le broadcast doit etre en statut READY pour etre envoye. Lancez d\'abord la preview.',
-        });
+        return sendBadRequest(reply, 'Le broadcast doit etre en statut READY pour etre envoye. Lancez d\'abord la preview.');
       }
 
       // Update status to SENDING
@@ -450,10 +403,7 @@ export async function broadcastRoutes(fastify: FastifyInstance) {
       });
     } catch (error: any) {
       logger.error('Error sending broadcast');
-      return reply.status(500).send({
-        success: false,
-        message: 'Erreur lors du lancement de l\'envoi du broadcast',
-      });
+      return sendInternalError(reply, 'Erreur lors du lancement de l\'envoi du broadcast');
     }
   });
 

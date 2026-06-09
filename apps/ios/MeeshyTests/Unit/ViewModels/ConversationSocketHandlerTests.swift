@@ -825,7 +825,11 @@ final class ConversationSocketHandlerTests: XCTestCase {
 
     func test_init_joinsConversationRoom() async throws {
         let socket = MockMessageSocket()
-        let _ = ConversationSocketHandler(
+        // Retenir le handler au-delà de l'activation différée : seule une
+        // instance VIVANTE (réelle, installée par @StateObject) rejoint la
+        // room. Un jetable désalloué avant l'activation ne doit PAS — cf.
+        // test_init_discardedBeforeActivation_doesNotJoin.
+        let sut = ConversationSocketHandler(
             conversationId: conversationId,
             currentUserId: currentUserId,
             messageSocket: socket
@@ -836,6 +840,32 @@ final class ConversationSocketHandlerTests: XCTestCase {
         try await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertTrue(socket.joinConversationIds.contains(conversationId))
+        withExtendedLifetime(sut) {}
+    }
+
+    /// SwiftUI's `@StateObject` alloue EAGER un `ConversationViewModel` jetable
+    /// (donc un handler jetable) à chaque ré-évaluation d'un parent montant
+    /// `ConversationView`, puis le jette. Un tel handler est désalloué AVANT
+    /// que son activation différée ne s'exécute : il ne doit donc PAS émettre
+    /// `conversation:join` — sinon le churn join/leave fait spiker le CPU et
+    /// sature `/read` (429). Garde de non-régression de la boucle.
+    func test_init_discardedBeforeActivation_doesNotJoin() async throws {
+        let socket = MockMessageSocket()
+        do {
+            _ = ConversationSocketHandler(
+                conversationId: conversationId,
+                currentUserId: currentUserId,
+                messageSocket: socket
+            )
+        }
+        // Laisser passer l'activation différée : le handler jetable est déjà
+        // désalloué → `[weak self]` est nil → aucun join émis.
+        try await Task.sleep(nanoseconds: 150_000_000)
+
+        XCTAssertFalse(
+            socket.joinConversationIds.contains(conversationId),
+            "Un handler jetable désalloué avant activation ne doit pas rejoindre la room"
+        )
     }
 
     // MARK: - Typing Emission

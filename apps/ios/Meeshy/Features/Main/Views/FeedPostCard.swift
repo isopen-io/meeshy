@@ -107,20 +107,38 @@ struct FeedPostCard: View {
     }
 
     private func buildAvailableFlags() -> [String] {
-        guard let origLang = post.originalLanguage?.lowercased() else { return [] }
-        let activeLang = currentDisplayLangCode
-        let user = AuthManager.shared.currentUser
+        Self.availableFlags(
+            originalLanguage: post.originalLanguage,
+            translationKeys: post.translations.map { Array($0.keys) } ?? [],
+            preferredLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
+            activeLanguage: currentDisplayLangCode
+        )
+    }
+
+    /// Drapeaux de langue disponibles : original d'abord, puis les langues
+    /// préférées de l'utilisateur (dans l'ordre de préférence) qui ont une
+    /// traduction, dédupliquées, en excluant la langue actuellement affichée.
+    /// Toutes en lowercase. Pré-calcule l'ensemble lowercase des clés traduites
+    /// (O(keys)) pour des tests d'appartenance O(1) au lieu d'un `contains(where:)`
+    /// par langue préférée — l'ancien code était O(langs × keys) par rendu.
+    static func availableFlags(
+        originalLanguage: String?,
+        translationKeys: [String],
+        preferredLanguages: [String],
+        activeLanguage: String
+    ) -> [String] {
+        guard let origLang = originalLanguage?.lowercased() else { return [] }
+        let translated = Set(translationKeys.map { $0.lowercased() })
         var all: [String] = [origLang]
         var seen: Set<String> = [origLang]
-
-        let langs = user?.preferredContentLanguages ?? []
-        for lang in langs {
+        for lang in preferredLanguages {
             let l = lang.lowercased()
-            if !seen.contains(l), post.translations?.keys.contains(where: { $0.lowercased() == l }) == true {
-                all.append(l); seen.insert(l)
+            if !seen.contains(l), translated.contains(l) {
+                all.append(l)
+                seen.insert(l)
             }
         }
-        return all.filter { $0 != activeLang }
+        return all.filter { $0 != activeLanguage }
     }
 
     private func handleFlagTap(_ code: String) {

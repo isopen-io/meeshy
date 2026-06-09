@@ -51,6 +51,14 @@ public final class NotificationToastManager: ObservableObject {
     // Dedup set: évite d'afficher 2x la même notification (APN foreground + socket simultanés)
     private var recentNotificationIds = Set<String>()
 
+    // Coalescing du compteur non-lu : `refreshUnreadCount` a 8 appelants (boot app,
+    // login, RootView, iPadRootView, NotificationListView…) qui se déclenchent quasi
+    // simultanément au démarrage → ~11 `GET /notifications/unread-count` en rafale.
+    // On partage la Task en vol et on limite à 1 refresh par `unreadRefreshMinInterval`.
+    private var unreadRefreshTask: Task<Void, Never>?
+    private var lastUnreadRefreshAt: Date?
+    private static let unreadRefreshMinInterval: TimeInterval = 1.5
+
     private init() {
         subscribeToCoordinator()
         subscribeToSocketEvents()
@@ -59,15 +67,46 @@ public final class NotificationToastManager: ObservableObject {
     // MARK: - Public API
 
     public func refreshUnreadCount() async {
-        do {
-            let count = try await NotificationService.shared.unreadCount()
-            NotificationCoordinator.shared.setInAppNotificationUnread(count)
-        } catch {
-            logger.error("Failed to refresh unread count: \(error.localizedDescription)")
+        // Coalesce les appelants concurrents : si un refresh est déjà en vol, on
+        // l'attend au lieu d'émettre un second GET. Si un refresh vient d'aboutir
+        // (< unreadRefreshMinInterval), on no-op — la valeur autoritative arrive
+        // aussi via le socket `notification:counts`, donc sauter un GET redondant
+        // n'introduit pas de dérive durable.
+        if let task = unreadRefreshTask {
+            await task.value
+            return
         }
+        if let last = lastUnreadRefreshAt,
+           Date().timeIntervalSince(last) < Self.unreadRefreshMinInterval {
+            return
+        }
+
+        let task = Task { [weak self] in
+            do {
+                let count = try await NotificationService.shared.unreadCount()
+                NotificationCoordinator.shared.setInAppNotificationUnread(count)
+            } catch {
+                logger.error("Failed to refresh unread count: \(error.localizedDescription)")
+            }
+            self?.lastUnreadRefreshAt = Date()
+            self?.unreadRefreshTask = nil
+        }
+        unreadRefreshTask = task
+        await task.value
     }
 
     public func onConversationOpened(_ conversationId: String) {
+        // Gate idempotent : un parent qui observe ce manager (RootView / iPadRootView)
+        // se re-render à chaque mutation `@Published`, ce qui fait re-construire à
+        // SwiftUI un `ConversationViewModel` jetable → un `ConversationSocketHandler`
+        // jetable → un nouvel appel à `onConversationOpened` pour la conversation DÉJÀ
+        // ouverte. Sans ce gate, chaque tour relance `markConversationRead` +
+        // `refreshUnreadCount` ET re-publie `activeConversationId`/`unreadCount`, ce
+        // qui re-render le parent → boucle auto-entretenue (storm 429 sur `/read`).
+        // Re-ouvrir réellement une autre conversation, ou la même après
+        // `onConversationClosed()` (→ nil), passe normalement.
+        guard conversationId != activeConversationId else { return }
+
         activeConversationId = conversationId
         MessageSocketManager.shared.activeConversationId = conversationId
 
@@ -157,15 +196,12 @@ public final class NotificationToastManager: ObservableObject {
     // MARK: - Event Handlers
 
     private func handleNewNotification(_ event: SocketNotificationEvent) {
-        Logger.socket.info("[RT-DIAG] in-app notification received via SOCKET notification:new conv=\(event.conversationId ?? "none", privacy: .public) type=\(String(describing: event.notificationType), privacy: .public)")
-
         // Muting logic: suppress the in-app toast if the user is already
         // viewing the relevant content. Le contenu étant consommé en direct,
         // la notification ne doit pas rester non lue : on la marque lue côté
         // serveur (qui ré-émet `notification:counts`). On NE l'incrémente pas
         // localement (on sort avant `incrementInAppNotificationUnread`).
         if let convId = event.conversationId, convId == activeConversationId {
-            Logger.socket.info("[RT-DIAG] in-app notification suppressed (conversation is active) conv=\(convId, privacy: .public)")
             let notificationId = event.id
             Task {
                 try? await NotificationService.shared.markAsRead(notificationId: notificationId)
@@ -175,7 +211,6 @@ public final class NotificationToastManager: ObservableObject {
         }
 
         if let postId = event.postId, postId == activePostId {
-            Logger.socket.info("[RT-DIAG] in-app notification suppressed (post is active) postId=\(postId, privacy: .public)")
             return
         }
 
@@ -187,7 +222,6 @@ public final class NotificationToastManager: ObservableObject {
         // cache update (which is idempotent and safe to run twice) but before the
         // unread increment and toast, which must fire exactly once per notification.
         guard !recentNotificationIds.contains(event.id) else {
-            Logger.socket.info("[RT-DIAG] notification deduped (already shown) id=\(event.id, privacy: .public)")
             return
         }
         recentNotificationIds.insert(event.id)
@@ -210,10 +244,7 @@ public final class NotificationToastManager: ObservableObject {
             isDirectConversation: isDirect,
             focus: focus
         ) {
-            Logger.socket.info("[RT-DIAG] in-app toast SHOWN conv=\(event.conversationId ?? "none", privacy: .public)")
             showToast(event)
-        } else {
-            Logger.socket.info("[RT-DIAG] in-app toast SUPPRESSED by prefs/focus conv=\(event.conversationId ?? "none", privacy: .public)")
         }
     }
 

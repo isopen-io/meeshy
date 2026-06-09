@@ -141,7 +141,7 @@ export function AudioEffectsPanel({
             size="sm"
             onClick={onClose}
             className="h-7 w-7 p-0 rounded-full hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
-            aria-label="Close audio effects panel"
+            aria-label={t('closePanel')}
           >
             <X className="h-4 w-4" />
           </Button>
@@ -364,18 +364,18 @@ export function AudioEffectsPanel({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="C">Do (C)</SelectItem>
-                    <SelectItem value="C#">Do# (C#)</SelectItem>
-                    <SelectItem value="D">Ré (D)</SelectItem>
-                    <SelectItem value="D#">Ré# (D#)</SelectItem>
-                    <SelectItem value="E">Mi (E)</SelectItem>
-                    <SelectItem value="F">Fa (F)</SelectItem>
-                    <SelectItem value="F#">Fa# (F#)</SelectItem>
-                    <SelectItem value="G">Sol (G)</SelectItem>
-                    <SelectItem value="G#">Sol# (G#)</SelectItem>
-                    <SelectItem value="A">La (A)</SelectItem>
-                    <SelectItem value="A#">La# (A#)</SelectItem>
-                    <SelectItem value="B">Si (B)</SelectItem>
+                    <SelectItem value="C">{t('voiceCoder.key.notes.C')}</SelectItem>
+                    <SelectItem value="C#">{t('voiceCoder.key.notes.Cs')}</SelectItem>
+                    <SelectItem value="D">{t('voiceCoder.key.notes.D')}</SelectItem>
+                    <SelectItem value="D#">{t('voiceCoder.key.notes.Ds')}</SelectItem>
+                    <SelectItem value="E">{t('voiceCoder.key.notes.E')}</SelectItem>
+                    <SelectItem value="F">{t('voiceCoder.key.notes.F')}</SelectItem>
+                    <SelectItem value="F#">{t('voiceCoder.key.notes.Fs')}</SelectItem>
+                    <SelectItem value="G">{t('voiceCoder.key.notes.G')}</SelectItem>
+                    <SelectItem value="G#">{t('voiceCoder.key.notes.Gs')}</SelectItem>
+                    <SelectItem value="A">{t('voiceCoder.key.notes.A')}</SelectItem>
+                    <SelectItem value="A#">{t('voiceCoder.key.notes.As')}</SelectItem>
+                    <SelectItem value="B">{t('voiceCoder.key.notes.B')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

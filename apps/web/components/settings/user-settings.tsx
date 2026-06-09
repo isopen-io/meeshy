@@ -1017,7 +1017,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
                     type="email"
                     value={newEmail}
                     onChange={(e) => setNewEmail(e.target.value)}
-                    placeholder="nouveau@email.com"
+                    placeholder={t('profile.account.email.newEmailPlaceholder')}
                     className={`w-full pl-10 pr-24 ${
                       emailValidation.status === 'valid' ? 'border-green-500' :
                       emailValidation.status === 'taken' ? 'border-red-500' : ''
@@ -1205,7 +1205,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
                           phoneValidation.validate();
                         }
                       }}
-                      placeholder="6 12 34 56 78"
+                      placeholder={t('profile.phone.newPhonePlaceholder')}
                       className={`w-full pl-10 pr-24 ${
                         phoneValidation.status === 'valid' ? 'border-green-500' :
                         phoneValidation.status === 'exists' ? 'border-red-500' :
@@ -1363,7 +1363,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
                                 maxLength={6}
                                 value={phoneVerificationCode}
                                 onChange={(e) => setPhoneVerificationCode(e.target.value.replace(/\D/g, ''))}
-                                placeholder="000000"
+                                placeholder={t('profile.verification.codePlaceholder')}
                                 className="w-32 text-center text-lg font-mono"
                               />
                               <Button
@@ -1412,7 +1412,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
                               maxLength={6}
                               value={pendingPhoneCode}
                               onChange={(e) => setPendingPhoneCode(e.target.value.replace(/\D/g, ''))}
-                              placeholder="000000"
+                              placeholder={t('profile.verification.codePlaceholder')}
                               className="w-32 text-center text-lg font-mono"
                             />
                             <Button
@@ -1470,7 +1470,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
                     id="settings-username"
                     value={newUsername}
                     onChange={(e) => setNewUsername(e.target.value)}
-                    placeholder="nouveau_username"
+                    placeholder={t('profile.account.username.newUsernamePlaceholder')}
                     className={`w-full pl-10 pr-24 ${
                       usernameValidation.status === 'available' ? 'border-green-500' :
                       usernameValidation.status === 'taken' ? 'border-red-500' : ''
@@ -1601,7 +1601,7 @@ export function UserSettings({ user, onUserUpdate }: UserSettingsProps) {
                     type="password"
                     value={usernamePassword}
                     onChange={(e) => setUsernamePassword(e.target.value)}
-                    placeholder="••••••••"
+                    placeholder={t('security.password.currentPasswordPlaceholder')}
                   />
                 </div>
               </div>

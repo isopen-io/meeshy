@@ -19,7 +19,7 @@ struct BubbleExpandableText: View, Equatable {
         let isExpanded: Bool
 
         func needsTruncation(limit: Int = BubbleExpandableText.truncateLimit) -> Bool {
-            content.count > limit && !isExpanded
+            !isExpanded && BubbleExpandableText.exceeds(content, limit)
         }
     }
 
@@ -44,7 +44,7 @@ struct BubbleExpandableText: View, Equatable {
     }
 
     var body: some View {
-        let needsTruncation = content.count > Self.truncateLimit && !isExpanded
+        let needsTruncation = !isExpanded && Self.exceeds(content, Self.truncateLimit)
         let textColor = isMe ? Color.white : ThemeManager.shared.textPrimary
 
         if needsTruncation {
@@ -108,8 +108,15 @@ struct BubbleExpandableText: View, Equatable {
         }
     }
 
+    /// `true` iff `s` has MORE than `limit` characters, scanning at most
+    /// `limit + 1` of them. Avoids an O(n) full `count` of long messages on
+    /// every render — we only need the threshold, not the exact length.
+    static func exceeds(_ s: String, _ limit: Int) -> Bool {
+        s.index(s.startIndex, offsetBy: limit + 1, limitedBy: s.endIndex) != nil
+    }
+
     static func truncateAtWord(_ text: String, limit: Int) -> String {
-        guard text.count > limit else { return text }
+        guard exceeds(text, limit) else { return text }
         let prefix = String(text.prefix(limit))
         guard let lastSpace = prefix.lastIndex(of: " ") else { return prefix }
         return String(prefix[prefix.startIndex..<lastSpace])

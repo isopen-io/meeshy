@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 import { logError } from '../../utils/logger';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery } from '../../validation/helpers.js';
@@ -78,7 +79,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       };
 
       getCacheStore().set(cacheKey, JSON.stringify(responseBody), CACHE_TTL.realtime).catch(() => {});
-      return reply.send(responseBody);
+      return sendSuccess(reply, responseBody.data);
     } catch (error) {
       logError(fastify.log, 'Get realtime analytics error:', error);
       return reply.status(500).send({
@@ -121,7 +122,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
 
       const responseBody = { success: true, data: sampledActivity };
       getCacheStore().set(cacheKey, JSON.stringify(responseBody), CACHE_TTL.hourly).catch(() => {});
-      return reply.send(responseBody);
+      return sendSuccess(reply, responseBody.data);
     } catch (error) {
       logError(fastify.log, 'Get hourly activity error:', error);
       return reply.status(500).send({
@@ -173,7 +174,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
 
       const responseBody = { success: true, data: distribution };
       getCacheStore().set(cacheKey, JSON.stringify(responseBody), CACHE_TTL.distribution).catch(() => {});
-      return reply.send(responseBody);
+      return sendSuccess(reply, responseBody.data);
     } catch (error) {
       logError(fastify.log, 'Get message types error:', error);
       return reply.status(500).send({
@@ -230,7 +231,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       };
 
       getCacheStore().set(cacheKey, JSON.stringify(responseBody), CACHE_TTL.distribution).catch(() => {});
-      return reply.send(responseBody);
+      return sendSuccess(reply, responseBody.data);
     } catch (error) {
       logError(fastify.log, 'Get user distribution error:', error);
       return reply.status(500).send({
@@ -275,7 +276,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
 
       const responseBody = { success: true, data: distribution };
       getCacheStore().set(cacheKey, JSON.stringify(responseBody), CACHE_TTL.distribution).catch(() => {});
-      return reply.send(responseBody);
+      return sendSuccess(reply, responseBody.data);
     } catch (error) {
       logError(fastify.log, 'Get language distribution error:', error);
       return reply.status(500).send({
@@ -335,7 +336,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
       };
 
       getCacheStore().set(cacheKey, JSON.stringify(responseBody), CACHE_TTL.kpis).catch(() => {});
-      return reply.send(responseBody);
+      return sendSuccess(reply, responseBody.data);
     } catch (error) {
       logError(fastify.log, 'Get KPIs error:', error);
       return reply.status(500).send({
@@ -379,7 +380,7 @@ export async function analyticsRoutes(fastify: FastifyInstance) {
 
       const responseBody = { success: true, data: timeline };
       getCacheStore().set(cacheKey, JSON.stringify(responseBody), CACHE_TTL.daily).catch(() => {});
-      return reply.send(responseBody);
+      return sendSuccess(reply, responseBody.data);
     } catch (error) {
       logError(fastify.log, 'Get volume timeline error:', error);
       return reply.status(500).send({

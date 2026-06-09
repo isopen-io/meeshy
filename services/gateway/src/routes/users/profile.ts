@@ -24,6 +24,7 @@ import { authUserCacheKey } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
 import { withMutationLog } from '../../utils/withMutationLog';
 import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendConflict, sendPaginatedSuccess } from '../../utils/response';
 
 const logger = enhancedLogger.child({ module: 'UserProfileRoutes' });
 
@@ -74,29 +75,20 @@ export async function getUserTest(fastify: FastifyInstance) {
     try {
       const authContext = (request as AuthenticatedRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const userId = authContext.userId;
       fastify.log.info(`[TEST] Getting test data for user ${userId}`);
 
-      return reply.send({
-        success: true,
-        data: {
-          userId,
-          message: "Test endpoint working",
-          timestamp: new Date()
-        }
+      return sendSuccess(reply, {
+        userId,
+        message: "Test endpoint working",
+        timestamp: new Date()
       });
     } catch (error) {
       fastify.log.error(`[TEST] Error: ${error instanceof Error ? error.message : String(error)}`);
-      return reply.status(500).send({
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      });
+      return sendInternalError(reply, error instanceof Error ? error.message : 'Unknown error');
     }
   });
 }
@@ -143,10 +135,7 @@ export async function updateUserProfile(fastify: FastifyInstance) {
 
     try {
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const userId = authContext.userId;
@@ -187,10 +176,7 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         });
 
         if (existingUser) {
-          return reply.status(400).send({
-            success: false,
-            error: 'This email address is already in use'
-          });
+          return sendBadRequest(reply, 'This email address is already in use');
         }
       }
 
@@ -204,10 +190,7 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         });
 
         if (existingUser) {
-          return reply.status(400).send({
-            success: false,
-            error: 'This phone number is already in use'
-          });
+          return sendBadRequest(reply, 'This phone number is already in use');
         }
       }
 
@@ -240,12 +223,9 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         canManageTranslations: isAdmin,
       };
 
-      return reply.send({
-        success: true,
-        data: {
-          user: formatUserResponse(updatedUser, permissions),
-          message: 'Profile updated successfully'
-        }
+      return sendSuccess(reply, {
+        user: formatUserResponse(updatedUser, permissions),
+        message: 'Profile updated successfully'
       });
 
     } catch (error: unknown) {
@@ -260,10 +240,7 @@ export async function updateUserProfile(fastify: FastifyInstance) {
       }
 
       logError(fastify.log, 'Update user profile error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Internal server error'
-      });
+      return sendInternalError(reply, 'Internal server error');
     }
   });
 }
@@ -315,20 +292,14 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
     try {
       const authContext = (request as AuthenticatedRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const userId = authContext.userId;
 
       const rawBody = request.body as { avatar?: unknown };
       if (typeof rawBody.avatar === 'string' && rawBody.avatar.startsWith('data:')) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Avatar must be a file URL. Data URI (base64) avatars are not accepted.'
-        });
+        return sendBadRequest(reply, 'Avatar must be a file URL. Data URI (base64) avatars are not accepted.');
       }
 
       fastify.log.info(`[AVATAR_UPDATE] User ${userId} updating avatar. Body: ${JSON.stringify(request.body)}`);
@@ -367,12 +338,9 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
 
       fastify.log.info(`[AVATAR_UPDATE] Avatar updated successfully for user ${userId}`);
 
-      return reply.send({
-        success: true,
-        data: {
-          user: updatedUser,
-          message: 'Avatar updated successfully'
-        }
+      return sendSuccess(reply, {
+        user: updatedUser,
+        message: 'Avatar updated successfully'
       });
 
     } catch (error: unknown) {
@@ -386,10 +354,7 @@ export async function updateUserAvatar(fastify: FastifyInstance) {
       }
 
       logError(fastify.log, 'Update user avatar error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Internal server error'
-      });
+      return sendInternalError(reply, 'Internal server error');
     }
   });
 }
@@ -441,10 +406,7 @@ export async function updateUserBanner(fastify: FastifyInstance) {
     try {
       const authContext = (request as AuthenticatedRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const userId = authContext.userId;
@@ -483,12 +445,9 @@ export async function updateUserBanner(fastify: FastifyInstance) {
 
       fastify.log.info(`[BANNER_UPDATE] Banner updated successfully for user ${userId}`);
 
-      return reply.send({
-        success: true,
-        data: {
-          user: updatedUser,
-          message: 'Banner updated successfully'
-        }
+      return sendSuccess(reply, {
+        user: updatedUser,
+        message: 'Banner updated successfully'
       });
 
     } catch (error: unknown) {
@@ -502,10 +461,7 @@ export async function updateUserBanner(fastify: FastifyInstance) {
       }
 
       logError(fastify.log, 'Update user banner error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Internal server error'
-      });
+      return sendInternalError(reply, 'Internal server error');
     }
   });
 }
@@ -558,10 +514,7 @@ export async function updateUserPassword(fastify: FastifyInstance) {
     try {
       const authContext = (request as AuthenticatedRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const userId = authContext.userId;
@@ -574,19 +527,13 @@ export async function updateUserPassword(fastify: FastifyInstance) {
       });
 
       if (!user) {
-        return reply.status(404).send({
-          success: false,
-          error: 'User not found'
-        });
+        return sendNotFound(reply, 'User not found');
       }
 
       const isPasswordValid = await bcrypt.compare(body.currentPassword, user.password);
 
       if (!isPasswordValid) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Current password is incorrect'
-        });
+        return sendBadRequest(reply, 'Current password is incorrect');
       }
 
       const BCRYPT_COST = 12;
@@ -605,10 +552,7 @@ export async function updateUserPassword(fastify: FastifyInstance) {
         }).catch((err: unknown) => logger.error('Notification error password_changed', err as Error));
       }
 
-      return reply.send({
-        success: true,
-        data: { message: 'Password updated successfully' }
-      });
+      return sendSuccess(reply, { message: 'Password updated successfully' });
 
     } catch (error: unknown) {
       if (error instanceof z.ZodError) {
@@ -620,10 +564,7 @@ export async function updateUserPassword(fastify: FastifyInstance) {
       }
 
       logError(fastify.log, 'Update password error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Internal server error'
-      });
+      return sendInternalError(reply, 'Internal server error');
     }
   });
 }
@@ -685,10 +626,7 @@ export async function updateUsername(fastify: FastifyInstance) {
     try {
       const authContext = (request as AuthenticatedRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const userId = authContext.userId;
@@ -706,27 +644,18 @@ export async function updateUsername(fastify: FastifyInstance) {
       });
 
       if (!user) {
-        return reply.status(404).send({
-          success: false,
-          error: 'User not found'
-        });
+        return sendNotFound(reply, 'User not found');
       }
 
       // Verify password
       const isPasswordValid = await bcrypt.compare(body.currentPassword, user.password);
       if (!isPasswordValid) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Current password is incorrect'
-        });
+        return sendBadRequest(reply, 'Current password is incorrect');
       }
 
       // Check if new username is the same as current
       if (body.newUsername.toLowerCase() === user.username.toLowerCase()) {
-        return reply.status(400).send({
-          success: false,
-          error: 'New username must be different from current username'
-        });
+        return sendBadRequest(reply, 'New username must be different from current username');
       }
 
       // Check if username is already taken
@@ -741,10 +670,7 @@ export async function updateUsername(fastify: FastifyInstance) {
       });
 
       if (existingUser) {
-        return reply.status(400).send({
-          success: false,
-          error: 'This username is already taken'
-        });
+        return sendBadRequest(reply, 'This username is already taken');
       }
 
       // Check rate limit (30 days between changes)
@@ -795,12 +721,9 @@ export async function updateUsername(fastify: FastifyInstance) {
 
       fastify.log.info(`[USERNAME_CHANGE] User ${userId} changed username from "${user.username}" to "${body.newUsername}"`);
 
-      return reply.send({
-        success: true,
-        data: {
-          username: updatedUser.username,
-          message: 'Username updated successfully'
-        }
+      return sendSuccess(reply, {
+        username: updatedUser.username,
+        message: 'Username updated successfully'
       });
 
     } catch (error: unknown) {
@@ -813,10 +736,7 @@ export async function updateUsername(fastify: FastifyInstance) {
       }
 
       logError(fastify.log, 'Update username error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Internal server error'
-      });
+      return sendInternalError(reply, 'Internal server error');
     }
   });
 }
@@ -895,25 +815,16 @@ export async function getUserByUsername(fastify: FastifyInstance) {
 
       if (!user) {
         fastify.log.warn(`[USER_PROFILE_U] User not found: ${username}`);
-        return reply.status(404).send({
-          success: false,
-          error: 'User not found'
-        });
+        return sendNotFound(reply, 'User not found');
       }
 
       fastify.log.info(`[USER_PROFILE_U] User found: ${user.username} (${user.id})`);
 
-      return reply.status(200).send({
-        success: true,
-        data: user
-      });
+      return sendSuccess(reply, user);
 
     } catch (error) {
       logError(fastify.log, 'Get user profile error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Internal server error'
-      });
+      return sendInternalError(reply, 'Internal server error');
     }
   });
 }
@@ -1014,10 +925,7 @@ export async function getUserById(fastify: FastifyInstance) {
 
       if (!user) {
         fastify.log.warn(`[USER_PROFILE] User not found: ${id}`);
-        return reply.status(404).send({
-          success: false,
-          error: 'User not found'
-        });
+        return sendNotFound(reply, 'User not found');
       }
 
       fastify.log.info(`[USER_PROFILE] User found: ${user.username} (${user.id})`);
@@ -1033,17 +941,11 @@ export async function getUserById(fastify: FastifyInstance) {
         isMeeshyer: true,
       };
 
-      return reply.status(200).send({
-        success: true,
-        data: publicUserProfile
-      });
+      return sendSuccess(reply, publicUserProfile);
 
     } catch (error) {
       logError(fastify.log, 'Get user profile error:', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Internal server error'
-      });
+      return sendInternalError(reply, 'Internal server error');
     }
   });
 }
@@ -1119,13 +1021,13 @@ export async function getUserByEmail(fastify: FastifyInstance) {
       });
 
       if (!user) {
-        return reply.status(404).send({ success: false, error: 'User not found' });
+        return sendNotFound(reply, 'User not found');
       }
 
-      return reply.status(200).send({ success: true, data: buildPublicProfile(user) });
+      return sendSuccess(reply, buildPublicProfile(user));
     } catch (error) {
       logError(fastify.log, 'Get user by email error:', error);
-      return reply.status(500).send({ success: false, error: 'Internal server error' });
+      return sendInternalError(reply, 'Internal server error');
     }
   });
 }
@@ -1161,7 +1063,7 @@ export async function getUserByIdDedicated(fastify: FastifyInstance) {
       const { id } = request.params;
 
       if (!/^[a-f\d]{24}$/i.test(id)) {
-        return reply.status(400).send({ success: false, error: 'Invalid ObjectId format' });
+        return sendBadRequest(reply, 'Invalid ObjectId format');
       }
 
       fastify.log.info(`[USER_PROFILE] Fetching user profile by ObjectId: ${id}`);
@@ -1172,13 +1074,13 @@ export async function getUserByIdDedicated(fastify: FastifyInstance) {
       });
 
       if (!user) {
-        return reply.status(404).send({ success: false, error: 'User not found' });
+        return sendNotFound(reply, 'User not found');
       }
 
-      return reply.status(200).send({ success: true, data: buildPublicProfile(user) });
+      return sendSuccess(reply, buildPublicProfile(user));
     } catch (error) {
       logError(fastify.log, 'Get user by ID error:', error);
-      return reply.status(500).send({ success: false, error: 'Internal server error' });
+      return sendInternalError(reply, 'Internal server error');
     }
   });
 }
@@ -1217,7 +1119,7 @@ export async function getUserByPhone(fastify: FastifyInstance) {
       const normalized = normalizePhoneWithCountry(phoneInput);
 
       if (!normalized || !normalized.isValid) {
-        return reply.status(400).send({ success: false, error: 'Invalid phone number format' });
+        return sendBadRequest(reply, 'Invalid phone number format');
       }
 
       fastify.log.info(`[USER_PROFILE] Fetching user profile by phone: ${normalized.countryCode}`);
@@ -1228,13 +1130,13 @@ export async function getUserByPhone(fastify: FastifyInstance) {
       });
 
       if (!user) {
-        return reply.status(404).send({ success: false, error: 'User not found' });
+        return sendNotFound(reply, 'User not found');
       }
 
-      return reply.status(200).send({ success: true, data: buildPublicProfile(user) });
+      return sendSuccess(reply, buildPublicProfile(user));
     } catch (error) {
       logError(fastify.log, 'Get user by phone error:', error);
-      return reply.status(500).send({ success: false, error: 'Internal server error' });
+      return sendInternalError(reply, 'Internal server error');
     }
   });
 }

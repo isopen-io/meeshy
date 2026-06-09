@@ -159,6 +159,22 @@
       "notAvailable": "Agendamento não disponível",
       "triggerNow": "Acionar agora",
       "stop": "STOP!"
+    },
+    "topics": {
+      "title": "Catálogo de tópicos",
+      "description": "Tópicos dinâmicos usados pelo estrategista para sugerir novos tópicos de conversa. Alterações aqui se propagam aos agentes em menos de 5 segundos.",
+      "newTopic": "Novo tópico",
+      "reload": "Recarregar",
+      "colActive": "Ativo",
+      "colSlug": "Slug",
+      "colLabel": "Label",
+      "colCooldown": "Cooldown",
+      "colPatterns": "Padrões",
+      "colActions": "Ações",
+      "emptyState": "Nenhum tópico no catálogo. O agente irá gerar automaticamente 13 tópicos iniciais no próximo boot.",
+      "editTitle": "Editar",
+      "disableTitle": "Desativar (soft delete)",
+      "deleteTitle": "Excluir definitivamente"
     }
   },
   "agentLive": {
