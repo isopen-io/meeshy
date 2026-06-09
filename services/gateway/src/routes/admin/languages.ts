@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { sendSuccess } from '../../utils/response.js';
 import { validateQuery } from '../../validation/helpers.js';
 import { LanguageStatsQuerySchema, LanguageTimelineQuerySchema, TranslationAccuracyQuerySchema } from '../../validation/admin-schemas.js';
 
@@ -235,9 +236,7 @@ export async function languagesRoutes(fastify: FastifyInstance) {
         return acc;
       }, {} as Record<string, number>);
 
-      return reply.send({
-        success: true,
-        data: {
+      return sendSuccess(reply, {
           topLanguages,
           languagePairs: formattedPairs,
           usersByLanguage: usersLanguageMap,
@@ -245,8 +244,7 @@ export async function languagesRoutes(fastify: FastifyInstance) {
           period,
           totalMessages,
           totalLanguages: topLanguagesByMessages.length
-        }
-      });
+        });
     } catch (error) {
       logError(fastify.log, 'Get language stats error:', error);
       return reply.status(500).send({
@@ -330,10 +328,7 @@ export async function languagesRoutes(fastify: FastifyInstance) {
         ...languages
       }));
 
-      return reply.send({
-        success: true,
-        data: timeline
-      });
+      return sendSuccess(reply, timeline);
     } catch (error) {
       logError(fastify.log, 'Get language timeline error:', error);
       return reply.status(500).send({
@@ -415,10 +410,7 @@ export async function languagesRoutes(fastify: FastifyInstance) {
         .sort((a, b) => b.translationCount - a.translationCount)
         .slice(0, limit);
 
-      return reply.send({
-        success: true,
-        data: accuracy
-      });
+      return sendSuccess(reply, accuracy);
     } catch (error) {
       logError(fastify.log, 'Get translation accuracy error:', error);
       return reply.status(500).send({

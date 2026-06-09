@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { logError } from '../utils/logger';
+import { sendSuccess, sendBadRequest, sendNotFound, sendConflict, sendInternalError } from '../utils/response.js';
 
 const sendEmailInvitationSchema = z.object({
   email: z.string().email(),
@@ -31,7 +32,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
       });
 
       if (!user) {
-        return reply.status(404).send({ success: false, error: { code: 'USER_NOT_FOUND', message: 'Utilisateur non trouve' } });
+        return sendNotFound(reply, 'Utilisateur non trouve', { code: 'USER_NOT_FOUND' });
       }
 
       const existingUser = await fastify.prisma.user.findFirst({
@@ -40,10 +41,7 @@ export async function invitationRoutes(fastify: FastifyInstance) {
       });
 
       if (existingUser) {
-        return reply.status(409).send({
-          success: false,
-          error: { code: 'USER_ALREADY_EXISTS', message: 'Cet utilisateur est deja sur Meeshy' },
-        });
+        return sendConflict(reply, 'Cet utilisateur est deja sur Meeshy', { code: 'USER_ALREADY_EXISTS' });
       }
 
       const senderName = user.displayName ?? user.username;
@@ -61,25 +59,13 @@ export async function invitationRoutes(fastify: FastifyInstance) {
         fastify.log.warn('EmailService not available, invitation not sent');
       }
 
-      return reply.status(201).send({
-        success: true,
-        data: {
-          email,
-          sentAt: new Date().toISOString(),
-        },
-      });
+      return sendSuccess(reply, { email, sentAt: new Date().toISOString() }, { statusCode: 201 });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return reply.status(400).send({
-          success: false,
-          error: { code: 'VALIDATION_ERROR', message: 'Adresse email invalide' },
-        });
+        return sendBadRequest(reply, 'Adresse email invalide', { code: 'VALIDATION_ERROR' });
       }
       logError(fastify.log, 'Failed to send email invitation', error);
-      return reply.status(500).send({
-        success: false,
-        error: { code: 'INTERNAL_ERROR', message: 'Erreur lors de l\'envoi de l\'invitation' },
-      });
+      return sendInternalError(reply, 'Erreur lors de l\'envoi de l\'invitation', { code: 'INTERNAL_ERROR' });
     }
   });
 }

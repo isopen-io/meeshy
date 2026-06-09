@@ -5,6 +5,7 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateBody, validateQuery } from '../../validation/helpers.js';
 import { DeleteAccountBodySchema, TokenQuerySchema } from '../../validation/delete-account-schemas.js';
+import { sendSuccess, sendBadRequest, sendUnauthorized, sendConflict, sendInternalError } from '../../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'DeleteAccount' });
 
@@ -85,19 +86,13 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
       const authContext = (request as unknown as UnifiedAuthRequest).authContext;
 
       if (!authContext?.isAuthenticated || !authContext?.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: { code: 'UNAUTHORIZED', message: 'Authentication required' }
-        });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const { confirmationPhrase } = request.body as { confirmationPhrase: string };
 
       if (confirmationPhrase !== 'SUPPRIMER MON COMPTE') {
-        return reply.status(400).send({
-          success: false,
-          error: { code: 'INVALID_CONFIRMATION', message: 'Phrase de confirmation incorrecte' }
-        });
+        return sendBadRequest(reply, 'Phrase de confirmation incorrecte', { code: 'INVALID_CONFIRMATION' });
       }
 
       try {
@@ -111,10 +106,7 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
         });
 
         if (activeRequest) {
-          return reply.status(409).send({
-            success: false,
-            error: { code: 'ALREADY_PENDING', message: 'Une demande de suppression est deja en cours' }
-          });
+          return sendConflict(reply, 'Une demande de suppression est deja en cours', { code: 'ALREADY_PENDING' });
         }
 
         const expiredRequests = await fastify.prisma.accountDeletionRequest.count({
@@ -169,16 +161,10 @@ export async function deleteAccountRoutes(fastify: FastifyInstance) {
           logger.info(`[DeleteAccount] Confirmation email sent to user=${userId}`);
         }
 
-        return reply.send({
-          success: true,
-          data: { message: 'Un email de confirmation a ete envoye a votre adresse' }
-        });
+        return sendSuccess(reply, { message: 'Un email de confirmation a ete envoye a votre adresse' });
       } catch (error) {
         logger.error('[DeleteAccount] Failed to initiate deletion:', error);
-        return reply.status(500).send({
-          success: false,
-          error: { code: 'INTERNAL_ERROR', message: 'Erreur lors de la demande de suppression' }
-        });
+        return sendInternalError(reply, 'Erreur lors de la demande de suppression', { code: 'INTERNAL_ERROR' });
       }
     }
   );
