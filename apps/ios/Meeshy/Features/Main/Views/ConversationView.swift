@@ -219,7 +219,13 @@ struct ConversationView: View {
     /// `internal` (not `private`): accessed by the `ConversationView+ScrollIndicators`
     /// extension, which lives in a separate file (private is file-scoped).
     @ObservedObject var typingObserver: ConversationStateStore
-    @State var messageText = ""
+    /// Texte du composer, ISOLÉ de l'arbre racine : tenu via `@State` (stockage
+    /// stable) mais JAMAIS lu dans ce body ni observé ici — seul
+    /// `ComposerTextHost` (+Composer) s'y abonne, donc la frappe ne ré-évalue
+    /// que le sous-arbre composer au lieu des ~1500 lignes de la racine.
+    /// Lecture/écriture depuis les handlers (send, mention, edit) via
+    /// `composerText.text` — hors body, donc sans créer de dépendance.
+    @State var composerText = ConversationComposerTextModel()
     @StateObject var audioRecorder = AudioRecorderManager()
     @StateObject var scrollButtonAudioPlayer = AudioPlaybackManager()
     @StateObject var pendingAudioPlayer = AudioPlaybackManager()
@@ -244,11 +250,6 @@ struct ConversationView: View {
     @State var composerHeight: CGFloat = 130
     @State private var keyboardHeight: CGFloat = 0
     @State private var initialScrollCompleted: Bool = false
-    /// Débounce de la persistance du brouillon : encoder + écrire dans
-    /// UserDefaults à CHAQUE frappe (et notifier la liste de conversations,
-    /// qui se re-trie sur `DraftStore.changed`) coûtait un travail main-thread
-    /// par caractère. On coalesce à 400 ms et on flush au disappear.
-    @State private var draftPersistTask: Task<Void, Never>?
 
 
     let defaultReactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉", "💯", "😍", "👀", "🤣", "💪", "✨", "🥺"]
@@ -273,28 +274,6 @@ struct ConversationView: View {
             ephemeralDurationRawValue: viewModel.ephemeralDuration?.rawValue
         )
         DraftStore.shared.save(draft, for: viewModel.conversationId)
-    }
-
-    /// Frappe → persistance différée (400 ms). Chaque caractère annule la
-    /// fenêtre précédente ; seul le dernier état est écrit. Les changements
-    /// non-texte (reply, langue, effets) restent persistés immédiatement —
-    /// ils sont rares et doivent survivre à un kill instantané.
-    private func scheduleDraftPersist(text: String) {
-        draftPersistTask?.cancel()
-        draftPersistTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 400_000_000)
-            guard !Task.isCancelled else { return }
-            persistDraft(text: text)
-        }
-    }
-
-    /// Écrit immédiatement le brouillon courant et annule toute persistance
-    /// différée en vol. Appelé au disappear pour que quitter la conversation
-    /// dans la fenêtre de débounce ne perde jamais la fin de frappe.
-    private func flushPendingDraft() {
-        draftPersistTask?.cancel()
-        draftPersistTask = nil
-        persistDraft(text: messageText)
     }
 
     private func updateComposerHeight(_ contentHeight: CGFloat) {
@@ -806,8 +785,16 @@ struct ConversationView: View {
                           LanguageOption.defaults.contains(where: { $0.code == userLang }) {
                     composerState.selectedLanguage = userLang
                 }
-                if messageText.isEmpty, let draft = DraftStore.shared.load(for: viewModel.conversationId) {
-                    messageText = draft.text
+                // Brancher la persistance différée du brouillon (400 ms après
+                // la dernière frappe). Vit sur le modèle isolé : la racine ne
+                // se ré-évalue plus à la frappe, donc un `onChange` ici ne
+                // fonctionnerait plus. La closure capture une copie de la vue
+                // mais lit les @State/@StateObject via leur stockage LIVE.
+                composerText.onDebouncedChange = { text in
+                    persistDraft(text: text)
+                }
+                if composerText.text.isEmpty, let draft = DraftStore.shared.load(for: viewModel.conversationId) {
+                    composerText.text = draft.text
                     // Restore inline reply context from the draft so the user
                     // sees the same compose chip they left — no hidden state
                     // transitions on app reopen.
@@ -846,14 +833,11 @@ struct ConversationView: View {
                 composerState.pendingReplyReference = ctx.toReplyReference
                 router.pendingReplyContext = nil
             }
-            .adaptiveOnChange(of: messageText) { _, newValue in
-                scheduleDraftPersist(text: newValue)
-            }
-            .adaptiveOnChange(of: composerState.pendingReplyReference?.messageId) { _, _ in persistDraft(text: messageText) }
-            .adaptiveOnChange(of: composerState.selectedLanguage) { _, _ in persistDraft(text: messageText) }
-            .adaptiveOnChange(of: viewModel.pendingEffects.flags.rawValue) { _, _ in persistDraft(text: messageText) }
-            .adaptiveOnChange(of: viewModel.isBlurEnabled) { _, _ in persistDraft(text: messageText) }
-            .adaptiveOnChange(of: viewModel.ephemeralDuration?.rawValue) { _, _ in persistDraft(text: messageText) }
+            .adaptiveOnChange(of: composerState.pendingReplyReference?.messageId) { _, _ in persistDraft(text: composerText.text) }
+            .adaptiveOnChange(of: composerState.selectedLanguage) { _, _ in persistDraft(text: composerText.text) }
+            .adaptiveOnChange(of: viewModel.pendingEffects.flags.rawValue) { _, _ in persistDraft(text: composerText.text) }
+            .adaptiveOnChange(of: viewModel.isBlurEnabled) { _, _ in persistDraft(text: composerText.text) }
+            .adaptiveOnChange(of: viewModel.ephemeralDuration?.rawValue) { _, _ in persistDraft(text: composerText.text) }
             .adaptiveOnChange(of: scrollState.isNearBottom) { _, _ in
                 if composerState.showTextEmojiPicker {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { composerState.showTextEmojiPicker = false }
@@ -886,10 +870,10 @@ struct ConversationView: View {
                 // sans ce flush, backgrounder l'app (ou la tuer depuis
                 // l'app-switcher) dans la fenêtre de debounce perdrait la fin
                 // de la saisie — onDisappear ne couvre que la navigation.
-                flushPendingDraft()
+                composerText.flushPendingChange()
             }
             .onDisappear {
-                flushPendingDraft()
+                composerText.flushPendingChange()
             }
     }
 
@@ -1216,7 +1200,7 @@ struct ConversationView: View {
             VStack(spacing: 0) {
                 ForEach(viewModel.mentionSuggestions) { candidate in
                     Button {
-                        messageText = viewModel.insertMention(candidate, into: messageText)
+                        composerText.text = viewModel.insertMention(candidate, into: composerText.text)
                     } label: {
                         HStack(spacing: 10) {
                             MeeshyAvatar(
@@ -1476,7 +1460,7 @@ struct ConversationView: View {
                 onEdit: {
                     composerState.editingMessageId = msg.id
                     composerState.editingOriginalContent = msg.content
-                    messageText = msg.content
+                    composerText.text = msg.content
                 },
                 onPin: { Task { await viewModel.togglePin(messageId: msg.id) }; HapticFeedback.medium() },
                 onToggleStar: {

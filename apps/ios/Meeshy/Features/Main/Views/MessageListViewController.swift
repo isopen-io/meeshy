@@ -423,17 +423,17 @@ final class MessageListViewController: UIViewController {
             let mentionDisplayNames = vm?.mentionDisplayNames ?? [:]
             let isLastReceived = (vm?.lastReceivedMessageId == message.id)
             let isLastSent = (vm?.lastSentMessageId == message.id)
+            let messageId = message.id
             // Flag-strip language selection — VM-owned (lifted out of the
             // bubble's @State so it flows through the Equatable gate). A tap
             // writes back to the VM, whose publisher triggers a targeted
             // reconfigure of this cell with the fresh snapped values.
-            let languageSelection = vm?.bubbleLanguageSelections[message.id]
-            let languageMessageId = message.id
+            let languageSelection = vm?.bubbleLanguageSelections[messageId]
             let setActiveDisplayLanguage: ((String?) -> Void) = { [weak self] code in
-                self?.conversationViewModel?.setBubbleActiveDisplayLanguage(code, for: languageMessageId)
+                self?.conversationViewModel?.setBubbleActiveDisplayLanguage(code, for: messageId)
             }
             let setSecondaryLanguage: ((String?) -> Void) = { [weak self] code in
-                self?.conversationViewModel?.setBubbleSecondaryLanguage(code, for: languageMessageId)
+                self?.conversationViewModel?.setBubbleSecondaryLanguage(code, for: messageId)
             }
             // Avatar/name tap → profile deep link. Routed through the
             // controller-held Router so the bubble no longer needs the
@@ -474,7 +474,6 @@ final class MessageListViewController: UIViewController {
             let mediaTapHandler = self.onMediaTap
             let consumeViewOnceHandler = self.onConsumeViewOnce
             let requestTranslationHandler = self.onRequestTranslation
-            let messageId = message.id
             let isMine = message.isMe
 
             // No UIContextMenuInteraction here — the user wants a custom

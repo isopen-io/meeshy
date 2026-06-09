@@ -42,13 +42,13 @@ extension ConversationView {
     }
 
     func sendMessageWithAttachments() {
-        let composerTrimmed = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let composerTrimmed = composerText.text.trimmingCharacters(in: .whitespacesAndNewlines)
         Logger.messages.info("SendTap composer tap convId=\(viewModel.conversationId, privacy: .public) isUploading=\(composerState.isUploading, privacy: .public) textLen=\(composerTrimmed.count, privacy: .public) pendingAttachments=\(composerState.pendingAttachments.count, privacy: .public) vmIsSending=\(viewModel.isSending, privacy: .public)")
         guard !composerState.isUploading else {
             Logger.messages.error("SendTap BLOCKED guard=isUploading convId=\(viewModel.conversationId, privacy: .public)")
             return
         }
-        let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let text = composerText.text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !composerState.pendingAttachments.isEmpty else {
             Logger.messages.error("SendTap BLOCKED guard=emptyContent convId=\(viewModel.conversationId, privacy: .public)")
             return
@@ -76,7 +76,7 @@ extension ConversationView {
             composerState.pendingAttachments.removeAll()
             composerState.pendingMediaFiles.removeAll()
             composerState.pendingThumbnails.removeAll()
-            messageText = ""
+            composerText.text = ""
             ReplyContextCleaner(conversationId: viewModel.conversationId)
                 .clear(pendingReplyReference: &composerState.pendingReplyReference)
             viewModel.stopTypingEmission()
@@ -87,7 +87,7 @@ extension ConversationView {
         }
 
         // File upload flow: keep attachments visible, show progress
-        messageText = ""
+        composerText.text = ""
         ReplyContextCleaner(conversationId: viewModel.conversationId)
             .clear(pendingReplyReference: &composerState.pendingReplyReference)
         viewModel.stopTypingEmission()
@@ -524,10 +524,10 @@ extension ConversationView {
     }
 
     func sendMessage() {
-        guard !messageText.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        let text = messageText
+        guard !composerText.text.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        let text = composerText.text
         let lang = composerState.selectedLanguage
-        messageText = ""
+        composerText.text = ""
         viewModel.stopTypingEmission()
         HapticFeedback.light()
         Task {

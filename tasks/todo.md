@@ -170,10 +170,55 @@ delivery) pendant que l'utilisateur tape → frappe qui freeze.
   (inverted expectation + changeVersion/updatedAt stables)
 - `test_upsertFromAPIMessages_changedContent_bumpsVersionAndPostsRefresh`
 
-## Restes connus pour la frappe (non traités ici, hors scope/collision)
-- `messageText` @State à la racine de ConversationView : chaque caractère
-  ré-évalue l'arbre racine (option 3 « isoler le composer », non retenue).
+## Restes connus pour la frappe
+- ~~`messageText` @State à la racine~~ → FAIT (finalisation ci-dessous).
 - `typeWave` squish par frappe (assumé par l'utilisateur).
+
+---
+
+# Finalisation (2026-06-09, séparation SDK/App + zéro résidu)
+
+## Option 3 — composer isolé (le fix frappe)
+- [x] `ConversationComposerTextModel` (ObservableObject, app-side,
+      ConversationView+Composer.swift) : porte le texte + la persistance
+      différée 400 ms (l'ancien `.onChange(of: messageText)` racine ne peut
+      plus exister — la racine ne se ré-évalue plus à la frappe).
+- [x] `ComposerTextHost` : UNIQUE `@ObservedObject` du modèle — la frappe ne
+      re-rend que le sous-arbre composer, plus les ~1500 lignes de la racine
+      ni `updateUIViewController` du bridge (19 closures).
+- [x] Racine : `@State var composerText = ConversationComposerTextModel()`
+      (stockage stable, AUCUNE lecture dans le body → aucune dépendance) ;
+      handlers (send, mention, edit, drafts) lisent/écrivent
+      `composerText.text` hors body. 23 références migrées (racine,
+      +Composer, +AttachmentHandlers). Flush au disappear + willResignActive.
+- [x] Tests : `ConversationComposerTextModelTests` (rafale → 1 émission avec
+      le dernier texte ; flush immédiat + annulation de la fenêtre ; valeur
+      initiale silencieuse) — dans DraftStoreTests.swift (même domaine).
+
+## Zéro résidu
+- [x] Code mort supprimé : `TextBubbleCell`, `MediaBubbleCell`,
+      `AudioBubbleCell`, `SystemMessageCell`, `DeliveryIndicatorView`
+      (0 utilisateur externe chacun, vérifié) + leurs 20 entrées pbxproj.
+      Les cellules vivantes (ReplyCell, TextPostCell, MediaPostCell,
+      TopLevelCommentCell, LoadMoreRepliesCell) sont intactes.
+- [x] `languageMessageId` (doublon de `messageId`) résorbé dans
+      MessageListViewController.
+- [x] Anciens helpers de débounce racine (scheduleDraftPersist,
+      flushPendingDraft, draftPersistTask) supprimés — remplacés par le modèle.
+
+## Séparation SDK / App (auditée, zéro croisement)
+| Côté | Changements |
+|---|---|
+| **SDK** (`packages/MeeshySDK`) | `MessageSocketManager` (timeout transport), `MessagePersistenceActor` (upsert no-op-skip, réconciliation orphelins), `MessageStateMachine` (.failed→serverAck), `ConversationSyncEngine` (hook générique `apiMessagePersistor` — closure opaque, aucune connaissance produit) |
+| **App** (`apps/ios`) | Câblage du hook (DependencyContainer), NSE consumer GRDB, VM (`bubbleLanguageSelections`), bulle + gate Equatable, contrôleur de liste, composer isolé, overlay profil |
+Aucun type app référencé par le SDK (vérifié — seules des mentions en
+commentaires pré-existantes).
+
+## Vérification requise sur machine de dev (toolchain absente ici)
+- [ ] `./apps/ios/meeshy.sh build` puis `meeshy.sh test`
+- [ ] `xcodebuild test -scheme MeeshySDK-Package` (tests SDK)
+- [ ] Device : frappe fluide (Instruments : la racine ne doit plus apparaître
+      dans les body evaluations par frappe), signposts applySnapshot ↓
 
 Autres sources d'optimisation identifiées, NON traitées (collision routine / scope) :
 1. `APIClient.swift:427` pose `Accept-Encoding: br, gzip, deflate` manuellement alors
