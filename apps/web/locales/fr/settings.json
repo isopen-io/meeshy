@@ -370,7 +370,54 @@
     },
     "privacy": {
       "title": "Paramètres de confidentialité",
-      "description": "Contrôlez vos paramètres de confidentialité et de données"
+      "description": "Contrôlez vos paramètres de confidentialité et de données",
+      "consentRequired": "Consentement requis",
+      "loading": "Chargement des préférences de confidentialité...",
+      "retry": "Réessayer",
+      "deleteError": "Erreur lors de la suppression",
+      "visibility": {
+        "title": "Visibilité et statut",
+        "description": "Contrôlez les informations que les autres utilisateurs peuvent voir",
+        "hideProfile": {
+          "label": "Masquer le profil de la recherche",
+          "description": "Empêche votre profil d'apparaître dans les résultats de recherche"
+        },
+        "onlineStatus": {
+          "label": "Statut en ligne",
+          "description": "Permet aux autres de voir si vous êtes connecté"
+        },
+        "lastSeen": {
+          "label": "Dernière activité",
+          "description": "Partage la date de votre dernière connexion"
+        },
+        "readReceipts": {
+          "label": "Accusés de réception",
+          "description": "Informe les expéditeurs que vous avez lu leurs messages"
+        }
+      },
+      "communications": {
+        "title": "Communications",
+        "description": "Gérez qui peut vous contacter et comment",
+        "contactRequests": {
+          "label": "Demandes de contact",
+          "description": "Permet aux utilisateurs de vous envoyer des demandes de contact"
+        }
+      },
+      "data": {
+        "title": "Gestion des données",
+        "description": "Exportez ou supprimez vos données personnelles",
+        "export": {
+          "label": "Exporter mes données",
+          "description": "Téléchargez une copie de toutes vos données (profil, messages, paramètres)",
+          "button": "Exporter les données"
+        }
+      },
+      "legal": {
+        "title": "Informations légales",
+        "description": "Vos données sont traitées conformément à notre politique de confidentialité. Les traductions sont effectuées localement sur votre appareil pour protéger votre vie privée.",
+        "privacyPolicy": "Politique de confidentialité",
+        "termsOfUse": "Conditions d'utilisation"
+      }
     },
     "encryption": {
       "title": "Paramètres de chiffrement",

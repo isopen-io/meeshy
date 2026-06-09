@@ -494,6 +494,63 @@
       "searchOrCreate": "Search or create...",
       "block": "Block",
       "report": "Report"
+    },
+    "settings": {
+      "title": "Settings",
+      "back": "Back",
+      "officialTitle": {
+        "label": "Official title",
+        "placeholder": "Conversation name"
+      },
+      "description": {
+        "label": "Description",
+        "placeholder": "Conversation description..."
+      },
+      "type": {
+        "label": "Conversation type",
+        "private": {
+          "label": "Private",
+          "description": "Invitation only"
+        },
+        "general": {
+          "label": "General",
+          "description": "Standard conversation"
+        },
+        "public": {
+          "label": "Public",
+          "description": "Visible to everyone"
+        },
+        "broadcast": {
+          "label": "Broadcast",
+          "description": "Read-only for members"
+        }
+      },
+      "options": {
+        "label": "Options",
+        "community": "Associate with a community",
+        "allowAnonymous": "Allow anonymous users"
+      },
+      "participants": {
+        "label": "Participants ({count})",
+        "invite": "Invite",
+        "actions": "Participant actions"
+      },
+      "role": {
+        "admin": "Admin",
+        "moderator": "Modo",
+        "member": "Member"
+      },
+      "stats": {
+        "title": "Statistics",
+        "messages": "Messages",
+        "languages": "Languages: {languages}"
+      },
+      "content": {
+        "title": "Content",
+        "sharedMedia": "Shared media",
+        "sharedLinks": "Shared links"
+      },
+      "delete": "Delete conversation"
     }
   }
 }

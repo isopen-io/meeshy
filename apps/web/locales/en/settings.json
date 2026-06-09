@@ -348,7 +348,54 @@
     },
     "privacy": {
       "title": "Privacy Settings",
-      "description": "Control your privacy and data settings"
+      "description": "Control your privacy and data settings",
+      "consentRequired": "Consent required",
+      "loading": "Loading privacy preferences...",
+      "retry": "Retry",
+      "deleteError": "Error deleting data",
+      "visibility": {
+        "title": "Visibility & Status",
+        "description": "Control what information other users can see",
+        "hideProfile": {
+          "label": "Hide profile from search",
+          "description": "Prevents your profile from appearing in search results"
+        },
+        "onlineStatus": {
+          "label": "Online status",
+          "description": "Allows others to see if you are connected"
+        },
+        "lastSeen": {
+          "label": "Last activity",
+          "description": "Shares the date of your last login"
+        },
+        "readReceipts": {
+          "label": "Read receipts",
+          "description": "Notifies senders that you have read their messages"
+        }
+      },
+      "communications": {
+        "title": "Communications",
+        "description": "Manage who can contact you and how",
+        "contactRequests": {
+          "label": "Contact requests",
+          "description": "Allows users to send you contact requests"
+        }
+      },
+      "data": {
+        "title": "Data Management",
+        "description": "Export or delete your personal data",
+        "export": {
+          "label": "Export my data",
+          "description": "Download a copy of all your data (profile, messages, settings)",
+          "button": "Export data"
+        }
+      },
+      "legal": {
+        "title": "Legal Information",
+        "description": "Your data is processed in accordance with our privacy policy. Translations are performed locally on your device to protect your privacy.",
+        "privacyPolicy": "Privacy Policy",
+        "termsOfUse": "Terms of Use"
+      }
     },
     "encryption": {
       "title": "Encryption Settings",
