@@ -595,16 +595,29 @@ struct MessageOverlayMenu: View {
         }
     }
 
+    private static let timeOnlyFormatter = MessageOverlayMenu.frFormatter("HH:mm")
+    private static let yesterdayFormatter = MessageOverlayMenu.frFormatter("'Hier' HH:mm")
+    private static let fullDateFormatter = MessageOverlayMenu.frFormatter("dd MMM yyyy HH:mm")
+
+    private static func frFormatter(_ format: String) -> DateFormatter {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "fr_FR")
+        f.dateFormat = format
+        return f
+    }
+
     private func formatExactDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
+        // Three configured-once formatters instead of allocating + mutating a
+        // DateFormatter on every menu render (expensive ICU setup on the path
+        // that builds the preview as the overlay opens).
         let calendar = Calendar.current
+        let formatter: DateFormatter
         if calendar.isDateInToday(date) {
-            formatter.dateFormat = "HH:mm"
+            formatter = Self.timeOnlyFormatter
         } else if calendar.isDateInYesterday(date) {
-            formatter.dateFormat = "'Hier' HH:mm"
+            formatter = Self.yesterdayFormatter
         } else {
-            formatter.dateFormat = "dd MMM yyyy HH:mm"
+            formatter = Self.fullDateFormatter
         }
         return formatter.string(from: date)
     }

@@ -160,7 +160,10 @@ extension FeedPostCard {
                     fullUrl: media.url,
                     autoLoad: true
                 ) {
-                    Color(hex: media.thumbnailColor).shimmer()
+                    // Static dominant-colour placeholder (no shimmer): a
+                    // `repeatForever` animation on every loading thumbnail kept
+                    // visible cards bound to the render loop during feed scroll.
+                    Color(hex: media.thumbnailColor)
                 }
                 .aspectRatio(contentMode: .fill)
                 .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
@@ -260,7 +263,8 @@ extension FeedPostCard {
             fullUrl: media.url,
             autoLoad: true
         ) {
-            Color(hex: media.thumbnailColor).shimmer()
+            // Static dominant-colour placeholder (no shimmer): see galleryImageView.
+            Color(hex: media.thumbnailColor)
         }
         .aspectRatio(aspectRatio, contentMode: .fill)
         .frame(maxWidth: .infinity, minHeight: 160, maxHeight: 280)
