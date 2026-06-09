@@ -211,6 +211,7 @@
 		BBLV0001000100010001BLD /* BubbleSystemViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLV0001000100010001REF /* BubbleSystemViews.swift */; };
 		BBLW0001000100010001BLD /* BubbleExpandableTextStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLW0001000100010001REF /* BubbleExpandableTextStateTests.swift */; };
 		BBLX0001000100010001BLD /* BubbleExpandableText.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLX0001000100010001REF /* BubbleExpandableText.swift */; };
+		BBLRETRY00010001BLD /* BubbleFailedRetryBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLRETRY00010001REF /* BubbleFailedRetryBar.swift */; };
 		BBLY0001000100010001BLD /* BubbleQuotedReply.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLY0001000100010001REF /* BubbleQuotedReply.swift */; };
 		BBLZ0001000100010001BLD /* BubbleAttachmentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLZ0001000100010001REF /* BubbleAttachmentView.swift */; };
 		BC20CA996A5E2D0E46BB3F06 /* MessageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 748FC5520967BD43D7FB9582 /* MessageStore.swift */; };
@@ -543,6 +544,8 @@
 		WR3700000000002F37 /* WebRTCService.swift in Sources */ = {isa = PBXBuildFile; fileRef = WR3700000000001F37 /* WebRTCService.swift */; };
 		WRET000000002F01 /* WebRTCErrorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = WRET000000001F01 /* WebRTCErrorTests.swift */; };
 		WRTYPES000000002F01 /* WebRTCTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = WRTYPES000000001F01 /* WebRTCTypes.swift */; };
+		VSURVCTRL0000002F01 /* VideoSurvivalController.swift in Sources */ = {isa = PBXBuildFile; fileRef = VSURVCTRL0000001F01 /* VideoSurvivalController.swift */; };
+		VSURVTEST0000002F01 /* VideoSurvivalControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = VSURVTEST0000001F01 /* VideoSurvivalControllerTests.swift */; };
 		WT86A001000100010001B001 /* WebRTCServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = WT86A001000100010001F001 /* WebRTCServiceTests.swift */; };
 		WTTT000000002F01 /* WebRTCTypesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = WTTT000000001F01 /* WebRTCTypesTests.swift */; };
 		WV4400000000002F44 /* WebRTCVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = WV4400000000001F44 /* WebRTCVideoView.swift */; };
@@ -808,6 +811,7 @@
 		BBLV0001000100010001REF /* BubbleSystemViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleSystemViews.swift; sourceTree = SOURCE_ROOT; };
 		BBLW0001000100010001REF /* BubbleExpandableTextStateTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/BubbleExpandableTextStateTests.swift; sourceTree = SOURCE_ROOT; };
 		BBLX0001000100010001REF /* BubbleExpandableText.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleExpandableText.swift; sourceTree = SOURCE_ROOT; };
+		BBLRETRY00010001REF /* BubbleFailedRetryBar.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleFailedRetryBar.swift; sourceTree = SOURCE_ROOT; };
 		BBLY0001000100010001REF /* BubbleQuotedReply.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift; sourceTree = SOURCE_ROOT; };
 		BBLZ0001000100010001REF /* BubbleAttachmentView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleAttachmentView.swift; sourceTree = SOURCE_ROOT; };
 		BC091A1BD89E4244D04EAED9 /* MeeshyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyApp.swift; sourceTree = "<group>"; };
@@ -1127,6 +1131,8 @@
 		WR3700000000001F37 /* WebRTCService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCService.swift; sourceTree = "<group>"; };
 		WRET000000001F01 /* WebRTCErrorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCErrorTests.swift; sourceTree = "<group>"; };
 		WRTYPES000000001F01 /* WebRTCTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCTypes.swift; sourceTree = "<group>"; };
+		VSURVCTRL0000001F01 /* VideoSurvivalController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoSurvivalController.swift; sourceTree = "<group>"; };
+		VSURVTEST0000001F01 /* VideoSurvivalControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoSurvivalControllerTests.swift; sourceTree = "<group>"; };
 		WT86A001000100010001F001 /* WebRTCServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCServiceTests.swift; sourceTree = "<group>"; };
 		WTTT000000001F01 /* WebRTCTypesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCTypesTests.swift; sourceTree = "<group>"; };
 		WV4400000000001F44 /* WebRTCVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCVideoView.swift; sourceTree = "<group>"; };
@@ -1694,6 +1700,7 @@
 				ABRT0001000100010001F001 /* AudioBubbleRouter.swift */,
 				ACRV0001000100010001F001 /* AudioCarouselView.swift */,
 				BBLX0001000100010001REF /* BubbleExpandableText.swift */,
+				BBLRETRY00010001REF /* BubbleFailedRetryBar.swift */,
 				BBLV0001000100010001REF /* BubbleSystemViews.swift */,
 				BBLD0001000100010001REF /* BubbleStandardLayout.swift */,
 				BCNV0001000100010001REF /* BubbleCallNoticeView.swift */,
@@ -2127,6 +2134,7 @@
 				CMAS000000001F01 /* CallManagerAudioSessionTests.swift */,
 				WRET000000001F01 /* WebRTCErrorTests.swift */,
 				WTTT000000001F01 /* WebRTCTypesTests.swift */,
+				VSURVTEST0000001F01 /* VideoSurvivalControllerTests.swift */,
 				CDPF000000001F01 /* CodecPreferencesTests.swift */,
 				ATUT00100000000001F00 /* AttachmentUploaderTests.swift */,
 				APREPT01000000000000F001 /* AttachmentPreparationServiceTests.swift */,
@@ -2160,6 +2168,7 @@
 				CAES000100010001000100F0 /* CallAudioEffectsService.swift */,
 				MAPM000100010001000100F0 /* MeeshyAudioProcessingModule.swift */,
 				WRTYPES000000001F01 /* WebRTCTypes.swift */,
+				VSURVCTRL0000001F01 /* VideoSurvivalController.swift */,
 				P2PWRTC000000001F01 /* P2PWebRTCClient.swift */,
 				CMCFG000000001F01 /* CallMediaConfig.swift */,
 				MPHK000000001F01 /* MediaPipelineHook.swift */,
@@ -2524,6 +2533,7 @@
 				BBLY0001000100010001BLD /* BubbleQuotedReply.swift in Sources */,
 				BBLZ0001000100010001BLD /* BubbleAttachmentView.swift in Sources */,
 				BBLX0001000100010001BLD /* BubbleExpandableText.swift in Sources */,
+				BBLRETRY00010001BLD /* BubbleFailedRetryBar.swift in Sources */,
 				BBLV0001000100010001BLD /* BubbleSystemViews.swift in Sources */,
 				BBLD0001000100010001BLD /* BubbleStandardLayout.swift in Sources */,
 				BCNV0001000100010001BLD /* BubbleCallNoticeView.swift in Sources */,
@@ -2574,6 +2584,7 @@
 				VP3600000000002F36 /* VoIPPushManager.swift in Sources */,
 				WR3700000000002F37 /* WebRTCService.swift in Sources */,
 				WRTYPES000000002F01 /* WebRTCTypes.swift in Sources */,
+				VSURVCTRL0000002F01 /* VideoSurvivalController.swift in Sources */,
 				P2PWRTC000000002F01 /* P2PWebRTCClient.swift in Sources */,
 				CMCFG000000002F01 /* CallMediaConfig.swift in Sources */,
 				MPHK000000002F01 /* MediaPipelineHook.swift in Sources */,
@@ -2786,6 +2797,7 @@
 				CMAS000000002F01 /* CallManagerAudioSessionTests.swift in Sources */,
 				WRET000000002F01 /* WebRTCErrorTests.swift in Sources */,
 				WTTT000000002F01 /* WebRTCTypesTests.swift in Sources */,
+				VSURVTEST0000002F01 /* VideoSurvivalControllerTests.swift in Sources */,
 				CDPF000000002F01 /* CodecPreferencesTests.swift in Sources */,
 				MCAE000100010001000100B0 /* MockCallAudioEffectsService.swift in Sources */,
 				CAET000100010001000100B0 /* CallAudioEffectsServiceTests.swift in Sources */,

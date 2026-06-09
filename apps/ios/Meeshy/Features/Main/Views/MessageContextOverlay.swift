@@ -89,16 +89,19 @@ struct MessageContextOverlay: View {
 
     private var menuOpacity: Double {
         guard isVisible else { return 0.0 }
+        // BUG4: reveal the action menu DURING the opening spring (not only once it
+        // has fully settled at `.open`) so it appears together with the lifted
+        // bubble — removes the perceptible post-spring lag before the menu shows.
         let dragFade = max(0, 1 - dragOffset / 120)
-        return phase == .open ? Double(dragFade) : 0.0
+        return Double(dragFade)
     }
 
     private var menuOffset: CGFloat {
-        isVisible && phase == .open ? 0 : 8
+        isVisible ? 0 : 8
     }
 
     private var menuScale: CGFloat {
-        isVisible && phase == .open ? 1.0 : 0.85
+        isVisible ? 1.0 : 0.85
     }
 
     var body: some View {

@@ -82,6 +82,8 @@ public struct APIMessageAttachment: Decodable, Sendable {
     public let thumbHash: String?
     public let width: Int?
     public let height: Int?
+    /// D4 — responsive downscaled WebP variants for `srcset`-style selection.
+    public let imageVariants: [MeeshyImageVariant]?
 
     // ── Audio / video ──
     public let duration: Int?
@@ -152,7 +154,7 @@ public struct APIMessageAttachment: Decodable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case id, messageId
         case fileName, originalName, mimeType, fileSize, fileUrl
-        case thumbnailUrl, thumbHash, width, height
+        case thumbnailUrl, thumbHash, width, height, imageVariants
         case duration, bitrate, sampleRate, codec, channels, fps, videoCodec
         case pageCount, lineCount
         case latitude, longitude
@@ -189,6 +191,7 @@ public struct APIMessageAttachment: Decodable, Sendable {
         self.thumbHash = try c.decodeIfPresent(String.self, forKey: .thumbHash)
         self.width = try c.decodeIfPresent(Int.self, forKey: .width)
         self.height = try c.decodeIfPresent(Int.self, forKey: .height)
+        self.imageVariants = try c.decodeIfPresent([MeeshyImageVariant].self, forKey: .imageVariants)
         self.duration = try c.decodeIfPresent(Int.self, forKey: .duration)
         self.bitrate = try c.decodeIfPresent(Int.self, forKey: .bitrate)
         self.sampleRate = try c.decodeIfPresent(Int.self, forKey: .sampleRate)
@@ -547,7 +550,8 @@ extension APIMessage {
                 fileUrl: apiAtt.fileUrl ?? "", width: apiAtt.width, height: apiAtt.height,
                 thumbnailUrl: apiAtt.thumbnailUrl, thumbHash: apiAtt.thumbHash, duration: apiAtt.duration, uploadedBy: senderId,
                 latitude: apiAtt.latitude, longitude: apiAtt.longitude,
-                thumbnailColor: thumbnailColor
+                thumbnailColor: thumbnailColor,
+                imageVariants: apiAtt.imageVariants
             )
         }
 

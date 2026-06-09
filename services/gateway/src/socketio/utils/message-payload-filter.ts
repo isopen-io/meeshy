@@ -51,3 +51,60 @@ export function filterMessagePayloadForLanguages<T extends object>(
 
   return next;
 }
+
+export interface SocketLanguageGroup {
+  /** Room socket ids that share the same resolved language set. */
+  readonly socketIds: string[];
+  /** Languages to keep for this group (recipient langs + original, deduped). */
+  readonly languages: string[];
+}
+
+export interface GroupSocketsByLanguageOptions {
+  readonly socketIds: Iterable<string>;
+  /** The message's original language — always kept so the source stays readable. */
+  readonly originalLanguage: string;
+  readonly socketToUser: (socketId: string) => string | undefined;
+  readonly resolveLanguages: (userId: string) => readonly string[] | undefined;
+  readonly userLanguage: (userId: string) => string | undefined;
+  /** Skip the sender's own user (their devices receive the cid-aware payload). */
+  readonly excludeUserId?: string;
+  /** Skip specific sockets (e.g. an anonymous sender's own socket). */
+  readonly excludeSocketIds?: ReadonlySet<string>;
+}
+
+/**
+ * Group a room's sockets by their recipient's resolved language set so the
+ * trimmed `message:new` payload is emitted once per distinct language group
+ * instead of carrying every translation to every socket.
+ *
+ * PURE: takes lookups, returns groups (no Socket.IO, no I/O) so the grouping is
+ * unit-testable in isolation. The message's `originalLanguage` is always added
+ * to each group (Prisme: a recipient can always fall back to the source).
+ */
+export function groupSocketsByLanguage(
+  opts: GroupSocketsByLanguageOptions
+): SocketLanguageGroup[] {
+  const original = opts.originalLanguage.toLowerCase();
+  const groups = new Map<string, { socketIds: string[]; languages: string[] }>();
+
+  for (const socketId of opts.socketIds) {
+    if (opts.excludeSocketIds?.has(socketId)) continue;
+    const userId = opts.socketToUser(socketId);
+    if (opts.excludeUserId && userId === opts.excludeUserId) continue;
+
+    const resolved = userId ? opts.resolveLanguages(userId) : undefined;
+    const base =
+      resolved && resolved.length > 0
+        ? resolved.map((l) => l.toLowerCase())
+        : [String((userId ? opts.userLanguage(userId) : undefined) || original).toLowerCase()];
+
+    const languages = Array.from(new Set([...base, original]));
+    const key = languages.slice().sort().join(',');
+
+    const bucket = groups.get(key);
+    if (bucket) bucket.socketIds.push(socketId);
+    else groups.set(key, { socketIds: [socketId], languages });
+  }
+
+  return Array.from(groups.values());
+}

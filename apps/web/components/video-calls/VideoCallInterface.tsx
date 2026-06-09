@@ -5,24 +5,31 @@
 
 'use client';
 
-import React, { useEffect, useCallback, useState } from 'react';
+import React, { useEffect, useCallback, useMemo, useState } from 'react';
 import { useCallStore } from '@/stores/call-store';
 import { useAuth } from '@/hooks/use-auth';
 import { useWebRTCP2P } from '@/hooks/use-webrtc-p2p';
 import { useAudioEffects } from '@/hooks/use-audio-effects';
 import { useCallQuality } from '@/hooks/use-call-quality';
 import { useActivePeerConnection } from '@/hooks/use-active-peer-connection';
+import {
+  useAdaptiveDegradation,
+  type AdaptiveDegradationActions,
+} from '@/hooks/use-adaptive-degradation';
+import { useCallDuration } from '@/hooks/use-call-duration';
+import { useDraggable } from '@/hooks/use-draggable';
 import { VideoStream } from './VideoStream';
 import { CallControls } from './CallControls';
 import { CallStatusIndicator } from './CallStatusIndicator';
 import { AudioEffectsCarousel } from './AudioEffectsCarousel';
-import { ConnectionQualityBadge } from './ConnectionQualityBadge';
+import { CallQualityOverlay } from './CallQualityOverlay';
+import { CallInfoOverlay } from './CallInfoOverlay';
+import { LocalVideoTile } from './LocalVideoTile';
 import { DraggableParticipantOverlay } from './DraggableParticipantOverlay';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import { logger } from '@/utils/logger';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
 import { useI18n } from '@/hooks/useI18n';
 
 interface VideoCallInterfaceProps {
@@ -42,12 +49,16 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     reset,
   } = useCallStore();
 
-  const [localVideoPosition, setLocalVideoPosition] = useState({ x: 20, y: 20 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [callDuration, setCallDuration] = useState(0);
   const [showAudioEffects, setShowAudioEffects] = useState(false);
   const [showStats, setShowStats] = useState(false);
+
+  // Local self-view dragging + ticking call duration (extracted hooks).
+  const { position: localVideoPosition, isDragging, onDragStart } = useDraggable({
+    initial: { x: 20, y: 20 },
+  });
+  const { seconds: callDuration, label: callDurationLabel } = useCallDuration(
+    currentCall?.startedAt
+  );
 
   // New state for fullscreen mode and disconnected participants
   const [fullscreenParticipantId, setFullscreenParticipantId] = useState<string | null>(null);
@@ -101,20 +112,42 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
   // Check if any audio effect is active
   const audioEffectsActive = Object.values(effectsState).some(effect => effect.enabled);
 
-  // Adaptive compression control loop: feed observed connection quality back
-  // into the encoder so outbound video sheds bitrate/resolution under
-  // congestion (degradationPreference 'maintain-framerate') rather than
-  // freezing. Only acts while we are actually sending video.
-  useEffect(() => {
-    const level = qualityStats?.level;
-    if (!level || !controls.videoEnabled) return;
-    const tier = level === 'excellent' || level === 'good'
-      ? 'high'
-      : level === 'fair'
-        ? 'medium'
-        : 'low';
-    applyQualityTier(tier).catch(() => { /* best effort, never throw in render effect */ });
-  }, [qualityStats?.level, controls.videoEnabled, applyQualityTier]);
+  // Emit a media-toggle to the peer (drives the remote avatar placeholder),
+  // mirroring the manual camera button. Used by the survival controller when it
+  // auto-suspends/resumes outbound video.
+  const emitVideoToggle = useCallback((enabled: boolean) => {
+    const socket = meeshySocketIOService.getSocket();
+    if (socket) {
+      (socket as unknown).emit(CLIENT_EVENTS.CALL_TOGGLE_VIDEO, { callId, enabled });
+    }
+  }, [callId]);
+
+  // Adaptive compression + graceful-degradation control loop. Feeds observed
+  // connection quality into a hysteresis state machine that (1) sheds the
+  // encoder down the bitrate ladder under congestion, (2) DROPS outbound video
+  // to audio-only after sustained 'poor' quality so the call survives a link
+  // that can't carry even minimal video, and (3) brings video back once the
+  // link has clearly recovered. The user's camera intent (controls.videoEnabled)
+  // is authoritative — the controller never re-enables video the user turned off.
+  const degradationActions = useMemo<AdaptiveDegradationActions>(() => ({
+    applyTier: (tier) => { applyQualityTier(tier).catch(() => { /* best effort */ }); },
+    suspend: async () => {
+      await disableVideo();
+      emitVideoToggle(false);
+      toast.warning(t('calls.toasts.videoSuspendedPoorConnection'));
+    },
+    resume: async () => {
+      await enableVideo();
+      emitVideoToggle(true);
+      toast.success(t('calls.toasts.videoResumed'));
+    },
+  }), [applyQualityTier, disableVideo, enableVideo, emitVideoToggle, t]);
+
+  const { videoSuspended } = useAdaptiveDegradation({
+    qualityStats,
+    userWantsVideo: controls.videoEnabled,
+    actions: degradationActions,
+  });
 
   // Initialize local stream on mount
   useEffect(() => {
@@ -151,18 +184,6 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       mounted = false;
     };
   }, [initializeLocalStream]);
-
-  // Track call duration
-  useEffect(() => {
-    if (!currentCall?.startedAt) return;
-
-    const interval = setInterval(() => {
-      const elapsed = Math.floor((Date.now() - new Date(currentCall.startedAt).getTime()) / 1000);
-      setCallDuration(elapsed);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [currentCall?.startedAt]);
 
   // Handle creating offers for participants
   const offersCreatedFor = React.useRef<Set<string>>(new Set());
@@ -393,65 +414,6 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
     reset();
   }, [callId, reset]);
 
-  // Draggable local video handlers
-  const handleDragStart = (e: React.MouseEvent | React.TouchEvent) => {
-    setIsDragging(true);
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-    setDragStart({ x: clientX - localVideoPosition.x, y: clientY - localVideoPosition.y });
-  };
-
-  const handleDragMove = useCallback((e: MouseEvent | TouchEvent) => {
-    if (!isDragging) return;
-
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
-    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-
-    const newX = clientX - dragStart.x;
-    const newY = clientY - dragStart.y;
-
-    // Constrain to viewport
-    const maxX = window.innerWidth - 160;
-    const maxY = window.innerHeight - 240;
-
-    setLocalVideoPosition({
-      x: Math.max(0, Math.min(newX, maxX)),
-      y: Math.max(0, Math.min(newY, maxY)),
-    });
-  }, [isDragging, dragStart]);
-
-  const handleDragEnd = () => {
-    setIsDragging(false);
-  };
-
-  useEffect(() => {
-    if (isDragging) {
-      window.addEventListener('mousemove', handleDragMove);
-      window.addEventListener('mouseup', handleDragEnd);
-      window.addEventListener('touchmove', handleDragMove);
-      window.addEventListener('touchend', handleDragEnd);
-    }
-
-    return () => {
-      window.removeEventListener('mousemove', handleDragMove);
-      window.removeEventListener('mouseup', handleDragEnd);
-      window.removeEventListener('touchmove', handleDragMove);
-      window.removeEventListener('touchend', handleDragEnd);
-    };
-  }, [isDragging, handleDragMove]);
-
-  // Format call duration
-  const formatDuration = (seconds: number): string => {
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-
-    if (hrs > 0) {
-      return `${hrs}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    }
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
   // Listen for participant left events to show disconnected state
   useEffect(() => {
     const socket = meeshySocketIOService.getSocket();
@@ -523,10 +485,13 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
         participantName={remoteParticipant?.username || 'Unknown'}
       />
 
-      {/* Connection Quality Badge */}
-      <div className="absolute top-4 right-4">
-        <ConnectionQualityBadge stats={qualityStats} showAlways={showStats} />
-      </div>
+      {/* Connection quality + discreet survival pill */}
+      <CallQualityOverlay
+        stats={qualityStats}
+        showStats={showStats}
+        videoSuspended={videoSuspended}
+        userWantsVideo={controls.videoEnabled}
+      />
 
       {/* Audio Effects Panel (Sliding from bottom) */}
       {showAudioEffects && (
@@ -625,36 +590,22 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
           );
         })}
 
-      {/* Local Video - Draggable Overlay */}
-      <div
-        className={cn(
-          'absolute rounded-lg overflow-hidden shadow-2xl cursor-move',
-          'w-32 h-40 md:w-40 md:h-52',
-          'transition-shadow hover:shadow-3xl',
-          isDragging && 'cursor-grabbing'
-        )}
-        style={{
-          left: `${localVideoPosition.x}px`,
-          top: `${localVideoPosition.y}px`,
-        }}
-        onMouseDown={handleDragStart}
-        onTouchStart={handleDragStart}
-      >
-        <VideoStream
-          stream={localStream}
-          muted={true}
-          isLocal={true}
-          className="w-full h-full object-cover transform -scale-x-100"
-          participantName="You"
-          isAudioEnabled={controls.audioEnabled}
-          isVideoEnabled={controls.videoEnabled}
-        />
-      </div>
+      {/* Local Video - Draggable Overlay (with weak-link "paused" state) */}
+      <LocalVideoTile
+        stream={localStream}
+        audioEnabled={controls.audioEnabled}
+        videoEnabled={controls.videoEnabled}
+        videoSuspended={videoSuspended}
+        position={localVideoPosition}
+        isDragging={isDragging}
+        onDragStart={onDragStart}
+      />
 
       {/* Call Controls */}
       <CallControls
         audioEnabled={controls.audioEnabled}
         videoEnabled={controls.videoEnabled}
+        videoSuspended={videoSuspended}
         onToggleAudio={handleToggleAudio}
         onToggleVideo={handleToggleVideo}
         onSwitchCamera={handleSwitchCamera}
@@ -666,18 +617,10 @@ export function VideoCallInterface({ callId }: VideoCallInterfaceProps) {
       />
 
       {/* Call Duration & Participant Count */}
-      <div className="absolute top-4 left-4 flex flex-col gap-2">
-        <div className="bg-black/60 backdrop-blur-sm px-4 py-2 rounded-lg">
-          <p className="text-white text-sm font-medium">
-            {formatDuration(callDuration)}
-          </p>
-        </div>
-        <div className="bg-black/60 backdrop-blur-sm px-4 py-2 rounded-lg">
-          <p className="text-white text-sm">
-            {currentCall?.participants.filter(p => !p.leftAt).length || 0} participant(s)
-          </p>
-        </div>
-      </div>
+      <CallInfoOverlay
+        durationLabel={callDurationLabel}
+        participantCount={currentCall?.participants.filter(p => !p.leftAt).length || 0}
+      />
     </div>
   );
 }

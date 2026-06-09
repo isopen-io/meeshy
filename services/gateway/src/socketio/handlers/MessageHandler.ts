@@ -25,6 +25,10 @@ import {
   normalizeConversationId,
   type SocketUser
 } from '../utils/socket-helpers';
+import {
+  filterMessagePayloadForLanguages,
+  groupSocketsByLanguage,
+} from '../utils/message-payload-filter.js';
 import { resolveParticipant } from '../utils/participant-resolver.js';
 import type {
   MessageRequest,
@@ -556,28 +560,52 @@ export class MessageHandler {
       const senderParticipant = (message as unknown as { sender?: { userId?: string | null } }).sender;
       const senderUserId = senderParticipant?.userId ?? null;
 
+      // Bandwidth sprint Phase B1 — per-recipient language filtering of the
+      // `message:new` broadcast. The payload carries every translation; each
+      // recipient under the Prisme reads ONE language, so room-wide emission
+      // wastes ~75% of the translation weight for the majority of users. When
+      // SOCKET_LANG_FILTER=true we group the room's peer sockets by their
+      // resolved languages (zero DB query — from the in-memory connectedUsers
+      // map) and emit a trimmed payload once per distinct language set. The
+      // original language is always kept (Prisme source fallback). The sender's
+      // own devices still receive the full, cid-aware `senderPayload`.
+      // Opt-in (OFF by default) — flip per-deploy after staging measurement.
+      const langFilterOn = process.env.SOCKET_LANG_FILTER === 'true';
+
       if (senderUserId) {
         // Multi-device : send the cid-aware payload to the sender's
         // user room (catches every iOS / web session of this user)
         // and the cid-stripped payload to the conversation room
         // EXCEPT the sender's user room so peers do not receive a
         // duplicate.
-        this.io
-          .to(room)
-          .except(ROOMS.user(senderUserId))
-          .emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
+        if (langFilterOn) {
+          this._emitMessageNewByLanguage(room, broadcastPayload, { excludeUserId: senderUserId });
+        } else {
+          this.io
+            .to(room)
+            .except(ROOMS.user(senderUserId))
+            .emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
+        }
         this.io.to(ROOMS.user(senderUserId)).emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
       } else if (senderSocket) {
         // Anonymous sender with an active socket : same single-session
         // split as before. Multi-device anonymous is undefined.
-        senderSocket.broadcast.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
+        if (langFilterOn) {
+          this._emitMessageNewByLanguage(room, broadcastPayload, { excludeSocketId: senderSocket.id });
+        } else {
+          senderSocket.broadcast.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
+        }
         senderSocket.emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
       } else {
         // No senderSocket context (REST path or background flush) and
         // no resolvable user id : fall back to the cid-stripped payload
         // for the whole room. The sender's other sessions still
         // reconcile via the REST / socket ACK path which carries the cid.
-        this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
+        if (langFilterOn) {
+          this._emitMessageNewByLanguage(room, broadcastPayload, {});
+        } else {
+          this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
+        }
       }
       handlerLogger.debug('message:new emitted', { conversationId: normalizedId, messageId: message.id, senderUserId: senderUserId ?? 'anon' });
 
@@ -628,6 +656,43 @@ export class MessageHandler {
       });
     } catch (error) {
       handlerLogger.error('broadcastNewMessage failed', { error });
+    }
+  }
+
+  /**
+   * Phase B1 — emit `message:new` to a conversation room grouped by each peer's
+   * preferred language, sending a translation-trimmed payload once per distinct
+   * language set (delegating the pure grouping/trimming to unit-tested helpers).
+   * The sender's own sockets are excluded here; their cid-aware payload is sent
+   * separately by the caller.
+   */
+  private _emitMessageNewByLanguage(
+    room: string,
+    payload: Record<string, unknown>,
+    opts: { excludeUserId?: string; excludeSocketId?: string }
+  ): void {
+    const socketIds = this.io.sockets.adapter.rooms.get(room);
+    if (!socketIds || socketIds.size === 0) return;
+
+    const originalLanguage = String((payload as { originalLanguage?: unknown }).originalLanguage || 'fr');
+    const groups = groupSocketsByLanguage({
+      socketIds,
+      originalLanguage,
+      excludeUserId: opts.excludeUserId,
+      excludeSocketIds: opts.excludeSocketId ? new Set([opts.excludeSocketId]) : undefined,
+      socketToUser: (sid) => this.socketToUser.get(sid),
+      resolveLanguages: (uid) => this.connectedUsers.get(uid)?.resolvedLanguages,
+      userLanguage: (uid) => this.connectedUsers.get(uid)?.language,
+    });
+
+    for (const group of groups) {
+      if (group.socketIds.length === 0) continue;
+      const filtered = filterMessagePayloadForLanguages(payload, group.languages);
+      // Chain `.to(socketId)` so a single emit fans out to exactly this group's
+      // sockets (mirrors the manager's per-language emit).
+      let emitter: any = this.io;
+      for (const sid of group.socketIds) emitter = emitter.to(sid);
+      emitter.emit(SERVER_EVENTS.MESSAGE_NEW, filtered);
     }
   }
 
