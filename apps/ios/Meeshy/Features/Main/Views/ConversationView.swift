@@ -244,6 +244,11 @@ struct ConversationView: View {
     @State var composerHeight: CGFloat = 130
     @State private var keyboardHeight: CGFloat = 0
     @State private var initialScrollCompleted: Bool = false
+    /// Débounce de la persistance du brouillon : encoder + écrire dans
+    /// UserDefaults à CHAQUE frappe (et notifier la liste de conversations,
+    /// qui se re-trie sur `DraftStore.changed`) coûtait un travail main-thread
+    /// par caractère. On coalesce à 400 ms et on flush au disappear.
+    @State private var draftPersistTask: Task<Void, Never>?
 
 
     let defaultReactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉", "💯", "😍", "👀", "🤣", "💪", "✨", "🥺"]
@@ -268,6 +273,28 @@ struct ConversationView: View {
             ephemeralDurationRawValue: viewModel.ephemeralDuration?.rawValue
         )
         DraftStore.shared.save(draft, for: viewModel.conversationId)
+    }
+
+    /// Frappe → persistance différée (400 ms). Chaque caractère annule la
+    /// fenêtre précédente ; seul le dernier état est écrit. Les changements
+    /// non-texte (reply, langue, effets) restent persistés immédiatement —
+    /// ils sont rares et doivent survivre à un kill instantané.
+    private func scheduleDraftPersist(text: String) {
+        draftPersistTask?.cancel()
+        draftPersistTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled else { return }
+            persistDraft(text: text)
+        }
+    }
+
+    /// Écrit immédiatement le brouillon courant et annule toute persistance
+    /// différée en vol. Appelé au disappear pour que quitter la conversation
+    /// dans la fenêtre de débounce ne perde jamais la fin de frappe.
+    private func flushPendingDraft() {
+        draftPersistTask?.cancel()
+        draftPersistTask = nil
+        persistDraft(text: messageText)
     }
 
     private func updateComposerHeight(_ contentHeight: CGFloat) {
@@ -820,7 +847,7 @@ struct ConversationView: View {
                 router.pendingReplyContext = nil
             }
             .adaptiveOnChange(of: messageText) { _, newValue in
-                persistDraft(text: newValue)
+                scheduleDraftPersist(text: newValue)
             }
             .adaptiveOnChange(of: composerState.pendingReplyReference?.messageId) { _, _ in persistDraft(text: messageText) }
             .adaptiveOnChange(of: composerState.selectedLanguage) { _, _ in persistDraft(text: messageText) }
@@ -853,6 +880,9 @@ struct ConversationView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
                 keyboardHeight = 0
+            }
+            .onDisappear {
+                flushPendingDraft()
             }
     }
 

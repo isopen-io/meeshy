@@ -67,3 +67,75 @@ Remplacer le mutex global par une **dédup par identité + fenêtre debounce cou
 
 ## Review
 (à compléter)
+
+---
+
+# Latence envoi/réception + perf frappe/scroll (2026-06-09, session web)
+
+## Contexte (vérifié avec preuves, fichiers:lignes)
+- **Réception** : `ConversationSyncEngine.ensureMessages/handleNewMessage` et
+  `NSEPendingMessageConsumer.consumeAll` écrivent UNIQUEMENT dans CacheCoordinator
+  (liste) — jamais en GRDB, la source lue par ConversationView/MessageStore. D'où :
+  notif reçue + préview à jour, mais message absent à l'ouverture jusqu'au refresh REST.
+- **Envoi** : socket fallback 30 s hardcodé (`MessageSocketManager.sendViaSocketFallback`),
+  et lignes GRDB `.sending` orphelines (task tuée/app killée) jamais réconciliées —
+  `reconcileFailedFromOutbox` ne couvre que les outbox `exhausted`.
+- **Frappe** : `persistDraft` à CHAQUE caractère (`ConversationView.swift:822`) =
+  encode JSON + UserDefaults + `changed.send()` → re-tri de la liste de conversations.
+- **Scroll** : `@EnvironmentObject router` dans la bulle (`ThemedMessageBubble.swift:119`)
+  re-rend toutes les bulles à chaque publish Router ; chaque `applySnapshot` reconfigure
+  TOUTES les cellules sans barrière Equatable (revert b9a39c2c).
+
+## Plan
+### Réception
+- [x] SDK `ConversationSyncEngine` : hook `apiMessagePersistor` (handleNewMessage,
+      ensureMessages, fetchOlderMessages) ; câblé app-side dans `DependencyContainer`
+      → `messagePersistence.bufferIncomingAPIMessages`
+- [x] `NSEPendingMessageConsumer` : persister aussi en GRDB
+### Envoi
+- [x] SDK : timeout socket fallback attachments 30 s → 10 s (le texte était déjà
+      à 10 s via `sendAsync`) ; l'outbox reste le filet de sécurité
+- [x] SDK `MessagePersistenceActor.reconcileOrphanedSendingRows` (`.sending`/`.queued`
+      sans serverId ni outbox vivant, > 2 min → `.failed`) + appel dans `loadMessages`
+### Frappe (fix 1 choisi)
+- [x] Débouncer `persistDraft` (400 ms) + flush onDisappear
+### Scroll (fixes 1+2 choisis)
+- [x] Bulle : retirer `@EnvironmentObject router` → callback `onOpenProfile`
+- [x] Lever `@State` langue → VM `bubbleLanguageSelections[messageId]` (fallback @State
+      local pour call sites non câblés : overlay, onboarding, previews) ; `==` étendu
+- [x] Wrapper stateless `EquatableMessageBubble` + `.equatable()` au cell-config —
+      le contenu de l'EquatableView ne porte AUCUN @State : le footgun iOS 18+
+      (prouvé sur cette vue, cf. TIER 3.1) ne s'applique qu'au contenu stateful
+- [x] `MessageListViewController` : observer `$bubbleLanguageSelections` → reconfigure
+      ciblé (+ fallback localId dans `reconfigureMessages`)
+
+## Tests ajoutés
+- `MessagePersistenceActorTests` : 4 tests `reconcileOrphanedSendingRows`
+  (orphelin ancien → failed ; récent → intact ; outbox vivant → intact ;
+  outbox exhausted → failed)
+- `ConversationSyncEngineTests` : persistor invoqué par `ensureMessages` et
+  par le relay `message:new`
+- `ThemedMessageBubbleEquatableTests` : invalidation sur les inputs langue +
+  délégation du wrapper `EquatableMessageBubble`
+
+## Review
+Session exécutée depuis l'environnement web (Linux, AUCUNE toolchain Swift) :
+`./apps/ios/meeshy.sh build` et `meeshy.sh test` n'ont PAS pu être lancés ici —
+à exécuter sur machine de dev avant merge. Relecture statique complète faite.
+
+Autres sources d'optimisation identifiées, NON traitées (collision routine / scope) :
+1. `APIClient.swift:427` pose `Accept-Encoding: br, gzip, deflate` manuellement alors
+   que le commentaire l.389-397 l'interdit explicitement (« Never add Accept-Encoding
+   here ») — contradiction documentaire à arbitrer ; si URLSession ne décompresse pas
+   le brotli posé manuellement, certains POST/GET peuvent échouer au decode.
+2. POST send REST sous timeout global 60 s (`timeoutIntervalForRequest`) — un envoi
+   texte mériterait un timeout dédié ~15 s ; lié au chantier « mutex isSending »
+   en cours (section précédente de ce fichier).
+3. Self-sizing `.estimated(80)` sans cache de hauteur : `cachedBubbleHeight` (GRDB)
+   n'alimente que `TextBubbleCell`/`MediaBubbleCell` — code mort confirmé (auto-
+   références uniquement). Câbler un height-cache sur le chemin UIHostingConfiguration
+   ou supprimer les cells mortes (suppression = toucher project.pbxproj).
+4. Composer non isolé : `messageText` reste un @State à la racine de ConversationView
+   (~1500 l.) — chaque frappe ré-évalue l'arbre + `updateUIViewController` (19 closures
+   réassignées). C'est l'option 3 (non retenue aujourd'hui).
+5. `typeWave` squish par frappe (UniversalComposerBar) — assumé par l'utilisateur.

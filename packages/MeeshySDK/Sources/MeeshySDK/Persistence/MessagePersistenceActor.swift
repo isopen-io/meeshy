@@ -342,6 +342,58 @@ public actor MessagePersistenceActor {
         }
     }
 
+    /// Réconcilie les lignes optimistes ORPHELINES — `.sending`/`.queued` sans
+    /// `serverId` ET sans record outbox vivant (pending/inflight/failed) qui
+    /// les rejouerait. Ces lignes naissent quand le process est tué (ou la
+    /// Task d'envoi annulée) entre l'insert optimiste et la transition
+    /// `serverAck`/`sendFailed` : aucun chemin ne les fera jamais évoluer, et
+    /// l'utilisateur revoyait l'horloge `.sending` à CHAQUE réouverture de la
+    /// conversation, indéfiniment. Passées `.failed`, elles exposent enfin
+    /// l'affordance de retry manuel. La fenêtre de grâce évite de faucher un
+    /// envoi légitimement en vol pendant que l'écran se rouvre.
+    ///
+    /// Complète `reconcileFailedFromOutbox` (qui ne couvre que les outbox
+    /// `.exhausted`) ; appelé au même point du chargement de conversation.
+    public func reconcileOrphanedSendingRows(
+        conversationId: String,
+        olderThan age: TimeInterval = 120
+    ) {
+        let cutoff = Date().addingTimeInterval(-age)
+        let didChange = (try? dbWriter.write { db -> Bool in
+            let stuckStates = [MessageState.sending.rawValue, MessageState.queued.rawValue]
+            let stuckIds = try MessageRecord
+                .filter(Column("conversationId") == conversationId)
+                .filter(stuckStates.contains(Column("state")))
+                .filter(Column("serverId") == nil)
+                .filter(Column("createdAt") < cutoff)
+                .fetchAll(db)
+                .map(\.localId)
+            guard !stuckIds.isEmpty else { return false }
+
+            let liveStatuses = [
+                OutboxStatus.pending.rawValue,
+                OutboxStatus.inflight.rawValue,
+                OutboxStatus.failed.rawValue
+            ]
+            let liveOutboxLocalIds = Set(try OutboxRecord
+                .filter(Column("conversationId") == conversationId)
+                .filter(Column("kind") == OutboxKind.sendMessage.rawValue)
+                .filter(liveStatuses.contains(Column("status")))
+                .fetchAll(db)
+                .compactMap(\.messageLocalId))
+
+            let orphanIds = stuckIds.filter { !liveOutboxLocalIds.contains($0) }
+            guard !orphanIds.isEmpty else { return false }
+            let updated = try MessageRecord
+                .filter(orphanIds.contains(Column("localId")))
+                .updateAll(db, Column("state").set(to: MessageState.failed.rawValue))
+            return updated > 0
+        }) ?? false
+        if didChange {
+            postMessageStoreRefresh(conversationIds: [conversationId])
+        }
+    }
+
     // MARK: - Buffered Writes
 
     public func bufferIncoming(_ messages: [IncomingMessageData]) {
