@@ -6,6 +6,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { AudioTranslateService, AudioTranslateError } from '../../services/AudioTranslateService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { logger } from '../../utils/logger';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../../utils/response';
 import {
   voiceTranslationResultSchema,
   translationJobSchema,
@@ -153,21 +154,18 @@ export function registerTranslationRoutes(
           generateVoiceClone: generateVoiceClone ?? true
         });
 
-        return reply.status(200).send({
-          success: true,
-          data: {
-            taskId: null,
-            status: 'completed',
-            attachment: null,
-            transcription: result.originalAudio ? {
-              text: result.originalAudio.transcription,
-              language: result.originalAudio.language,
-              confidence: result.originalAudio.confidence,
-              durationMs: result.originalAudio.durationMs
-            } : null,
-            translatedAudios: result.translations || [],
-            result
-          }
+        return sendSuccess(reply, {
+          taskId: null,
+          status: 'completed',
+          attachment: null,
+          transcription: result.originalAudio ? {
+            text: result.originalAudio.transcription,
+            language: result.originalAudio.language,
+            confidence: result.originalAudio.confidence,
+            durationMs: result.originalAudio.durationMs
+          } : null,
+          translatedAudios: result.translations || [],
+          result
         });
       }
 
@@ -190,15 +188,12 @@ export function registerTranslationRoutes(
       }
 
       if (existingData.translatedAudios?.length > 0) {
-        return reply.status(200).send({
-          success: true,
-          data: {
-            taskId: null,
-            status: 'completed',
-            attachment: existingData.attachment,
-            transcription: existingData.transcription,
-            translatedAudios: existingData.translatedAudios
-          }
+        return sendSuccess(reply, {
+          taskId: null,
+          status: 'completed',
+          attachment: existingData.attachment,
+          transcription: existingData.transcription,
+          translatedAudios: existingData.translatedAudios
         });
       }
 
@@ -215,15 +210,12 @@ export function registerTranslationRoutes(
         });
       }
 
-      return reply.status(200).send({
-        success: true,
-        data: {
-          taskId: result.taskId,
-          status: 'processing',
-          attachment: result.attachment,
-          transcription: null,
-          translatedAudios: []
-        }
+      return sendSuccess(reply, {
+        taskId: result.taskId,
+        status: 'processing',
+        attachment: result.attachment,
+        transcription: null,
+        translatedAudios: []
       });
     } catch (error) {
       logger.error('[VoiceRoutes] Translate error:', error);
@@ -377,15 +369,12 @@ export function registerTranslationRoutes(
           callbackMetadata
         });
 
-        return reply.status(202).send({
-          success: true,
-          data: {
-            jobId: result.jobId,
-            taskId: result.jobId,
-            status: result.status,
-            attachment: null
-          }
-        });
+        return sendSuccess(reply, {
+          jobId: result.jobId,
+          taskId: result.jobId,
+          status: result.status,
+          attachment: null
+        }, { statusCode: 202 });
       }
 
       if (!translationService) {
@@ -409,15 +398,12 @@ export function registerTranslationRoutes(
         });
       }
 
-      return reply.status(202).send({
-        success: true,
-        data: {
-          jobId: result.taskId,
-          taskId: result.taskId,
-          status: 'processing',
-          attachment: result.attachment
-        }
-      });
+      return sendSuccess(reply, {
+        jobId: result.taskId,
+        taskId: result.taskId,
+        status: 'processing',
+        attachment: result.attachment
+      }, { statusCode: 202 });
     } catch (error) {
       logger.error('[VoiceRoutes] Translate async error:', error);
       return errorResponse(reply, error);
@@ -475,7 +461,7 @@ export function registerTranslationRoutes(
     try {
       const { jobId } = request.params;
       const result = await audioTranslateService.getJobStatus(userId, jobId);
-      return reply.status(200).send({ success: true, data: result });
+      return sendSuccess(reply, result);
     } catch (error) {
       logger.error('[VoiceRoutes] Get job status error:', error);
       return errorResponse(reply, error);
@@ -543,7 +529,7 @@ export function registerTranslationRoutes(
     try {
       const { jobId } = request.params;
       const result = await audioTranslateService.cancelJob(userId, jobId);
-      return reply.status(200).send({ success: true, data: result });
+      return sendSuccess(reply, result);
     } catch (error) {
       logger.error('[VoiceRoutes] Cancel job error:', error);
       return errorResponse(reply, error);
@@ -719,22 +705,19 @@ export function registerTranslationRoutes(
           saveToDatabase: false
         });
 
-        return reply.status(200).send({
-          success: true,
-          data: {
-            taskId: null,
-            status: 'completed',
-            attachment: null,
-            transcription: {
-              text: result.text,
-              language: result.language,
-              confidence: result.confidence,
-              source: result.source,
-              segments: result.segments,
-              durationMs: result.durationMs
-            },
-            translatedAudios: []
-          }
+        return sendSuccess(reply, {
+          taskId: null,
+          status: 'completed',
+          attachment: null,
+          transcription: {
+            text: result.text,
+            language: result.language,
+            confidence: result.confidence,
+            source: result.source,
+            segments: result.segments,
+            durationMs: result.durationMs
+          },
+          translatedAudios: []
         });
       }
 
@@ -757,15 +740,12 @@ export function registerTranslationRoutes(
       }
 
       if (existingData.transcription) {
-        return reply.status(200).send({
-          success: true,
-          data: {
-            taskId: null,
-            status: 'completed',
-            attachment: existingData.attachment,
-            transcription: existingData.transcription,
-            translatedAudios: existingData.translatedAudios
-          }
+        return sendSuccess(reply, {
+          taskId: null,
+          status: 'completed',
+          attachment: existingData.attachment,
+          transcription: existingData.transcription,
+          translatedAudios: existingData.translatedAudios
         });
       }
 
@@ -779,15 +759,12 @@ export function registerTranslationRoutes(
         });
       }
 
-      return reply.status(200).send({
-        success: true,
-        data: {
-          taskId: result.taskId,
-          status: 'processing',
-          attachment: result.attachment,
-          transcription: null,
-          translatedAudios: []
-        }
+      return sendSuccess(reply, {
+        taskId: result.taskId,
+        status: 'processing',
+        attachment: result.attachment,
+        transcription: null,
+        translatedAudios: []
       });
     } catch (error) {
       logger.error('[VoiceRoutes] Transcribe error:', error);

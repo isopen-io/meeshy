@@ -3,6 +3,7 @@
  */
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest, sendPaginatedSuccess } from '../../utils/response';
 import { AudioTranslateService, AudioTranslateError } from '../../services/AudioTranslateService';
 import { logger } from '../../utils/logger';
 import {
@@ -119,7 +120,7 @@ export function registerAnalysisRoutes(
         analysisTypes
       });
 
-      return reply.status(200).send({ success: true, data: result });
+      return sendSuccess(reply, result);
     } catch (error) {
       logger.error('[VoiceRoutes] Analyze voice error:', error);
       return errorResponse(reply, error);
@@ -196,7 +197,7 @@ export function registerAnalysisRoutes(
         audioBase64_2
       });
 
-      return reply.status(200).send({ success: true, data: result });
+      return sendSuccess(reply, result);
     } catch (error) {
       logger.error('[VoiceRoutes] Compare voices error:', error);
       return errorResponse(reply, error);
@@ -310,7 +311,7 @@ export function registerAnalysisRoutes(
         metadata
       });
 
-      return reply.status(201).send({ success: true, data: result });
+      return sendSuccess(reply, result, { statusCode: 201 });
     } catch (error) {
       logger.error('[VoiceRoutes] Submit feedback error:', error);
       return errorResponse(reply, error);
@@ -402,7 +403,7 @@ export function registerAnalysisRoutes(
         endDate
       });
 
-      return reply.status(200).send({ success: true, data: result });
+      return sendSuccess(reply, result);
     } catch (error) {
       logger.error('[VoiceRoutes] Get history error:', error);
       return errorResponse(reply, error);
@@ -457,7 +458,7 @@ export function registerAnalysisRoutes(
     try {
       const { period } = request.query;
       const result = await audioTranslateService.getUserStats(userId, period);
-      return reply.status(200).send({ success: true, data: result });
+      return sendSuccess(reply, result);
     } catch (error) {
       logger.error('[VoiceRoutes] Get stats error:', error);
       return errorResponse(reply, error);
@@ -508,7 +509,7 @@ export function registerAnalysisRoutes(
 
     try {
       const result = await audioTranslateService.getSystemMetrics(userId);
-      return reply.status(200).send({ success: true, data: result });
+      return sendSuccess(reply, result);
     } catch (error) {
       logger.error('[VoiceRoutes] Get metrics error:', error);
       return errorResponse(reply, error);
@@ -595,7 +596,7 @@ export function registerAnalysisRoutes(
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const result = await audioTranslateService.getSupportedLanguages();
-      return reply.status(200).send({ success: true, data: result });
+      return sendSuccess(reply, result);
     } catch (error) {
       logger.error('[VoiceRoutes] Get languages error:', error);
       return errorResponse(reply, error);
