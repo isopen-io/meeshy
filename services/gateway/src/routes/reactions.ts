@@ -10,6 +10,13 @@
 
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth.js';
+import {
+  sendSuccess,
+  sendBadRequest,
+  sendForbidden,
+  sendNotFound,
+  sendInternalError,
+} from '../utils/response.js';
 import { ReactionService } from '../services/ReactionService.js';
 import type {
   ReactionAddData,
@@ -124,10 +131,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
 
       // Validation
       if (!messageId || !emoji) {
-        return reply.status(400).send({
-          success: false,
-          error: 'messageId and emoji are required'
-        });
+        return sendBadRequest(reply, 'messageId and emoji are required');
       }
 
       // Déterminer l'ID utilisateur (authentifié ou anonyme)
@@ -152,10 +156,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       }
 
       if (!participantId) {
-        return reply.status(403).send({
-          success: false,
-          error: 'You are not a participant of this conversation',
-        });
+        return sendForbidden(reply, 'You are not a participant of this conversation');
       }
 
       const reaction = await reactionService.addReaction({
@@ -165,10 +166,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       });
 
       if (!reaction) {
-        return reply.status(500).send({
-          success: false,
-          error: 'Failed to add reaction'
-        });
+        return sendInternalError(reply, 'Failed to add reaction');
       }
 
       // Récupérer la conversation pour savoir à qui broadcaster
@@ -199,39 +197,24 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         }
       }
 
-      return reply.status(201).send({
-        success: true,
-        data: reaction
-      });
+      return sendSuccess(reply, reaction, { statusCode: 201 });
     } catch (error) {
       fastify.log.error({ error }, 'Error adding reaction');
 
       // Gestion des erreurs spécifiques
       if (error.message === 'Invalid emoji format') {
-        return reply.status(400).send({
-          success: false,
-          error: 'Invalid emoji format'
-        });
+        return sendBadRequest(reply, 'Invalid emoji format');
       }
 
       if (error.message === 'Message not found') {
-        return reply.status(404).send({
-          success: false,
-          error: 'Message not found'
-        });
+        return sendNotFound(reply, 'Message not found');
       }
 
       if (error.message.includes('not a member') || error.message.includes('not a participant')) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Access denied to this conversation'
-        });
+        return sendForbidden(reply, 'Access denied to this conversation');
       }
 
-      return reply.status(500).send({
-        success: false,
-        error: 'Failed to add reaction'
-      });
+      return sendInternalError(reply, 'Failed to add reaction');
     }
   });
 
@@ -319,10 +302,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       }
 
       if (!removeParticipantId) {
-        return reply.status(403).send({
-          success: false,
-          error: 'You are not a participant of this conversation',
-        });
+        return sendForbidden(reply, 'You are not a participant of this conversation');
       }
 
       const removed = await reactionService.removeReaction({
@@ -332,10 +312,7 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       });
 
       if (!removed) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Reaction not found'
-        });
+        return sendNotFound(reply, 'Reaction not found');
       }
 
       // Récupérer la conversation pour broadcaster
@@ -364,24 +341,15 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         }
       }
 
-      return reply.send({
-        success: true,
-        data: { message: 'Reaction removed successfully' }
-      });
+      return sendSuccess(reply, { message: 'Reaction removed successfully' });
     } catch (error) {
       fastify.log.error({ error }, 'Error removing reaction');
 
       if (error.message === 'Invalid emoji format') {
-        return reply.status(400).send({
-          success: false,
-          error: 'Invalid emoji format'
-        });
+        return sendBadRequest(reply, 'Invalid emoji format');
       }
 
-      return reply.status(500).send({
-        success: false,
-        error: 'Failed to remove reaction'
-      });
+      return sendInternalError(reply, 'Failed to remove reaction');
     }
   });
 
@@ -465,30 +433,21 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
       });
 
       if (!message) {
-        return reply.status(404).send({
-          success: false,
-          error: 'Message not found'
-        });
+        return sendNotFound(reply, 'Message not found');
       }
 
       // Vérifier les permissions
       if (!isAnonymous) {
         const isMember = message.conversation.participants.some(m => m.userId === userId);
         if (!isMember) {
-          return reply.status(403).send({
-            success: false,
-            error: 'Access denied to this conversation'
-          });
+          return sendForbidden(reply, 'Access denied to this conversation');
         }
       } else {
         const isParticipant = message.conversation.participants.some(
           p => p.id === anonymousUserId
         );
         if (!isParticipant) {
-          return reply.status(403).send({
-            success: false,
-            error: 'Access denied to this conversation'
-          });
+          return sendForbidden(reply, 'Access denied to this conversation');
         }
       }
 
@@ -508,17 +467,11 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
         currentParticipantId,
       });
 
-      return reply.send({
-        success: true,
-        data: reactions
-      });
+      return sendSuccess(reply, reactions);
     } catch (error) {
       fastify.log.error({ error }, 'Error getting reactions');
 
-      return reply.status(500).send({
-        success: false,
-        error: 'Failed to get reactions'
-      });
+      return sendInternalError(reply, 'Failed to get reactions');
     }
   });
 
@@ -576,35 +529,23 @@ export default async function reactionRoutes(fastify: FastifyInstance) {
 
       // Les utilisateurs anonymes ne peuvent pas accéder à cette route
       if (isAnonymous) {
-        return reply.status(403).send({
-          success: false,
-          error: 'Anonymous users cannot access user reactions'
-        });
+        return sendForbidden(reply, 'Anonymous users cannot access user reactions');
       }
 
       // Les utilisateurs ne peuvent voir que leurs propres réactions
       // (sauf admins - à implémenter si nécessaire)
       if (currentUserId !== targetUserId) {
-        return reply.status(403).send({
-          success: false,
-          error: 'You can only view your own reactions'
-        });
+        return sendForbidden(reply, 'You can only view your own reactions');
       }
 
       // Récupérer les réactions de l'utilisateur
       const reactions = await reactionService.getParticipantReactions(targetUserId);
 
-      return reply.send({
-        success: true,
-        data: reactions
-      });
+      return sendSuccess(reply, reactions);
     } catch (error) {
       fastify.log.error({ error }, 'Error getting user reactions');
 
-      return reply.status(500).send({
-        success: false,
-        error: 'Failed to get user reactions'
-      });
+      return sendInternalError(reply, 'Failed to get user reactions');
     }
   });
 }

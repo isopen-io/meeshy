@@ -16,6 +16,7 @@ import { TwoFactorService } from '../services/TwoFactorService';
 import { validateBody } from '../validation/helpers.js';
 import { EnableBodySchema, DisableBodySchema, VerifyBodySchema, BackupCodesBodySchema } from '../validation/two-factor-schemas.js';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { sendSuccess, sendInternalError, sendNotFound, sendUnauthorized, sendForbidden, sendBadRequest } from '../utils/response';
 
 const logger = enhancedLogger.child({ module: 'TwoFactorRoutes' });
 
@@ -79,16 +80,10 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       const userId = (request as any).user.userId;
       const status = await twoFactorService.getStatus(userId);
 
-      return reply.send({
-        success: true,
-        data: status
-      });
+      return sendSuccess(reply, status);
     } catch (error) {
       logger.error('2FA status error', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la récupération du statut 2FA'
-      });
+      return sendInternalError(reply, 'Erreur lors de la récupération du statut 2FA');
     }
   });
 
@@ -138,26 +133,17 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       const result = await twoFactorService.setup(userId);
 
       if (!result.success) {
-        return reply.status(400).send({
-          success: false,
-          error: result.error
-        });
+        return sendBadRequest(reply, result.error);
       }
 
-      return reply.send({
-        success: true,
-        data: {
-          secret: result.secret,
-          qrCodeDataUrl: result.qrCodeDataUrl,
-          otpauthUrl: result.otpauthUrl
-        }
+      return sendSuccess(reply, {
+        secret: result.secret,
+        qrCodeDataUrl: result.qrCodeDataUrl,
+        otpauthUrl: result.otpauthUrl
       });
     } catch (error) {
       logger.error('2FA setup error', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la configuration du 2FA'
-      });
+      return sendInternalError(reply, 'Erreur lors de la configuration du 2FA');
     }
   });
 
@@ -206,10 +192,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       const result = await twoFactorService.enable(userId, code);
 
       if (!result.success) {
-        return reply.status(400).send({
-          success: false,
-          error: result.error
-        });
+        return sendBadRequest(reply, result.error);
       }
 
       // Notification sécurité
@@ -221,19 +204,13 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
         }).catch((err: unknown) => logger.error('2FA notification error enabled', err as Error));
       }
 
-      return reply.send({
-        success: true,
-        data: {
-          message: 'Authentification à deux facteurs activée avec succès',
-          backupCodes: result.backupCodes
-        }
+      return sendSuccess(reply, {
+        message: 'Authentification à deux facteurs activée avec succès',
+        backupCodes: result.backupCodes
       });
     } catch (error) {
       logger.error('2FA enable error', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de l\'activation du 2FA'
-      });
+      return sendInternalError(reply, 'Erreur lors de l\'activation du 2FA');
     }
   });
 
@@ -277,10 +254,7 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       const result = await twoFactorService.disable(userId, password, code);
 
       if (!result.success) {
-        return reply.status(400).send({
-          success: false,
-          error: result.error
-        });
+        return sendBadRequest(reply, result.error);
       }
 
       // Notification sécurité
@@ -292,18 +266,12 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
         }).catch((err: unknown) => logger.error('2FA notification error disabled', err as Error));
       }
 
-      return reply.send({
-        success: true,
-        data: {
-          message: 'Authentification à deux facteurs désactivée'
-        }
+      return sendSuccess(reply, {
+        message: 'Authentification à deux facteurs désactivée'
       });
     } catch (error) {
       logger.error('2FA disable error', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la désactivation du 2FA'
-      });
+      return sendInternalError(reply, 'Erreur lors de la désactivation du 2FA');
     }
   });
 
@@ -348,25 +316,16 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       const result = await twoFactorService.verify(userId, code);
 
       if (!result.success) {
-        return reply.status(400).send({
-          success: false,
-          error: result.error
-        });
+        return sendBadRequest(reply, result.error);
       }
 
-      return reply.send({
-        success: true,
-        data: {
-          valid: true,
-          usedBackupCode: result.usedBackupCode || false
-        }
+      return sendSuccess(reply, {
+        valid: true,
+        usedBackupCode: result.usedBackupCode || false
       });
     } catch (error) {
       logger.error('2FA verify error', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la vérification du code'
-      });
+      return sendInternalError(reply, 'Erreur lors de la vérification du code');
     }
   });
 
@@ -415,25 +374,16 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       const result = await twoFactorService.regenerateBackupCodes(userId, code);
 
       if (!result.success) {
-        return reply.status(400).send({
-          success: false,
-          error: result.error
-        });
+        return sendBadRequest(reply, result.error);
       }
 
-      return reply.send({
-        success: true,
-        data: {
-          message: 'Codes de secours régénérés. Les anciens codes sont maintenant invalides.',
-          backupCodes: result.backupCodes
-        }
+      return sendSuccess(reply, {
+        message: 'Codes de secours régénérés. Les anciens codes sont maintenant invalides.',
+        backupCodes: result.backupCodes
       });
     } catch (error) {
       logger.error('2FA regenerate backup codes error', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de la régénération des codes de secours'
-      });
+      return sendInternalError(reply, 'Erreur lors de la régénération des codes de secours');
     }
   });
 
@@ -467,24 +417,15 @@ export async function twoFactorRoutes(fastify: FastifyInstance) {
       const result = await twoFactorService.cancelSetup(userId);
 
       if (!result.success) {
-        return reply.status(400).send({
-          success: false,
-          error: result.error
-        });
+        return sendBadRequest(reply, result.error);
       }
 
-      return reply.send({
-        success: true,
-        data: {
-          message: 'Configuration 2FA annulée'
-        }
+      return sendSuccess(reply, {
+        message: 'Configuration 2FA annulée'
       });
     } catch (error) {
       logger.error('2FA cancel setup error', error as Error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Erreur lors de l\'annulation'
-      });
+      return sendInternalError(reply, 'Erreur lors de l\'annulation');
     }
   });
 }
