@@ -133,7 +133,12 @@ struct VideoSurvivalPolicy {
 /// Performs the actual media transition the controller decides on. Implemented
 /// by `CallManager` (WebRTC downgrade/upgrade + peer notification + renegotiation).
 /// `AnyObject` so the controller can hold it weakly (the actuator owns the controller).
-protocol VideoSurvivalActuating: AnyObject {
+/// `Sendable` : l'existential `any VideoSurvivalActuating` est capturé dans le
+/// `group.addTask` concurrent de `performTransition` (course renégociation vs
+/// timeout). Sous SWIFT_VERSION=6.0 + défaut MainActor, capturer un type non-Sendable
+/// dans une closure @Sendable est une erreur de data-race. Les deux conformeurs
+/// (`CallManager`, `MockVideoSurvivalActuator`) sont `@MainActor` donc déjà Sendable.
+protocol VideoSurvivalActuating: AnyObject, Sendable {
     /// Stop sending outbound video (audio-only) WITHOUT changing the user's
     /// camera intent. Returns true on success.
     func suspendOutboundVideo() async -> Bool
