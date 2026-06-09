@@ -124,26 +124,18 @@ export function registerTranslationRoutes(
   }>, reply: FastifyReply) => {
     const userId = getUserId(request);
     if (!userId) {
-      return reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
+      return sendUnauthorized(reply, 'UNAUTHORIZED', { message: 'Authentication required' });
     }
 
     try {
       const { audioBase64, attachmentId, targetLanguages, sourceLanguage, generateVoiceClone } = request.body;
 
       if (!audioBase64 && !attachmentId) {
-        return reply.status(400).send({
-          success: false,
-          error: 'INVALID_REQUEST',
-          message: 'Must provide either audioBase64 or attachmentId'
-        });
+        return sendBadRequest(reply, 'INVALID_REQUEST', { message: 'Must provide either audioBase64 or attachmentId' });
       }
 
       if (!targetLanguages || targetLanguages.length === 0) {
-        return reply.status(400).send({
-          success: false,
-          error: 'INVALID_REQUEST',
-          message: 'targetLanguages is required'
-        });
+        return sendBadRequest(reply, 'INVALID_REQUEST', { message: 'targetLanguages is required' });
       }
 
       if (audioBase64) {
@@ -170,21 +162,13 @@ export function registerTranslationRoutes(
       }
 
       if (!translationService) {
-        return reply.status(500).send({
-          success: false,
-          error: 'SERVICE_UNAVAILABLE',
-          message: 'Translation service not available'
-        });
+        return sendInternalError(reply, 'SERVICE_UNAVAILABLE', { message: 'Translation service not available' });
       }
 
       const existingData = await translationService.getAttachmentWithTranscription(attachmentId!);
 
       if (!existingData) {
-        return reply.status(404).send({
-          success: false,
-          error: 'NOT_FOUND',
-          message: 'Attachment not found'
-        });
+        return sendNotFound(reply, 'NOT_FOUND', { message: 'Attachment not found' });
       }
 
       if (existingData.translatedAudios?.length > 0) {
@@ -203,11 +187,7 @@ export function registerTranslationRoutes(
       });
 
       if (!result) {
-        return reply.status(500).send({
-          success: false,
-          error: 'TRANSLATION_FAILED',
-          message: 'Failed to start translation'
-        });
+        return sendInternalError(reply, 'TRANSLATION_FAILED', { message: 'Failed to start translation' });
       }
 
       return sendSuccess(reply, {
@@ -327,7 +307,7 @@ export function registerTranslationRoutes(
   }>, reply: FastifyReply) => {
     const userId = getUserId(request);
     if (!userId) {
-      return reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
+      return sendUnauthorized(reply, 'UNAUTHORIZED', { message: 'Authentication required' });
     }
 
     try {
@@ -343,19 +323,11 @@ export function registerTranslationRoutes(
       } = request.body;
 
       if (!audioBase64 && !attachmentId) {
-        return reply.status(400).send({
-          success: false,
-          error: 'INVALID_REQUEST',
-          message: 'Must provide either audioBase64 or attachmentId'
-        });
+        return sendBadRequest(reply, 'INVALID_REQUEST', { message: 'Must provide either audioBase64 or attachmentId' });
       }
 
       if (!targetLanguages || targetLanguages.length === 0) {
-        return reply.status(400).send({
-          success: false,
-          error: 'INVALID_REQUEST',
-          message: 'targetLanguages is required'
-        });
+        return sendBadRequest(reply, 'INVALID_REQUEST', { message: 'targetLanguages is required' });
       }
 
       if (audioBase64) {
@@ -378,11 +350,7 @@ export function registerTranslationRoutes(
       }
 
       if (!translationService) {
-        return reply.status(500).send({
-          success: false,
-          error: 'SERVICE_UNAVAILABLE',
-          message: 'Translation service not available'
-        });
+        return sendInternalError(reply, 'SERVICE_UNAVAILABLE', { message: 'Translation service not available' });
       }
 
       const result = await translationService.translateAttachment(attachmentId!, {
@@ -391,11 +359,7 @@ export function registerTranslationRoutes(
       });
 
       if (!result) {
-        return reply.status(500).send({
-          success: false,
-          error: 'TRANSLATION_FAILED',
-          message: 'Failed to start translation'
-        });
+        return sendInternalError(reply, 'TRANSLATION_FAILED', { message: 'Failed to start translation' });
       }
 
       return sendSuccess(reply, {
@@ -455,7 +419,7 @@ export function registerTranslationRoutes(
   }, async (request: FastifyRequest<{ Params: { jobId: string } }>, reply: FastifyReply) => {
     const userId = getUserId(request);
     if (!userId) {
-      return reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
+      return sendUnauthorized(reply, 'UNAUTHORIZED', { message: 'Authentication required' });
     }
 
     try {
@@ -523,7 +487,7 @@ export function registerTranslationRoutes(
   }, async (request: FastifyRequest<{ Params: { jobId: string } }>, reply: FastifyReply) => {
     const userId = getUserId(request);
     if (!userId) {
-      return reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
+      return sendUnauthorized(reply, 'UNAUTHORIZED', { message: 'Authentication required' });
     }
 
     try {
@@ -636,7 +600,7 @@ export function registerTranslationRoutes(
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const userId = getUserId(request);
     if (!userId) {
-      return reply.status(401).send({ success: false, error: 'UNAUTHORIZED', message: 'Authentication required' });
+      return sendUnauthorized(reply, 'UNAUTHORIZED', { message: 'Authentication required' });
     }
 
     try {
@@ -678,20 +642,12 @@ export function registerTranslationRoutes(
       }
 
       if (!audioBase64 && !attachmentId) {
-        return reply.status(400).send({
-          success: false,
-          error: 'INVALID_REQUEST',
-          message: 'Must provide file, audioBase64, or attachmentId'
-        });
+        return sendBadRequest(reply, 'INVALID_REQUEST', { message: 'Must provide file, audioBase64, or attachmentId' });
       }
 
       if (audioBase64) {
         if (!audioFormat) {
-          return reply.status(400).send({
-            success: false,
-            error: 'INVALID_REQUEST',
-            message: 'audioFormat is required when using audioBase64'
-          });
+          return sendBadRequest(reply, 'INVALID_REQUEST', { message: 'audioFormat is required when using audioBase64' });
         }
 
         if (!isMultipart) {
@@ -722,21 +678,13 @@ export function registerTranslationRoutes(
       }
 
       if (!translationService) {
-        return reply.status(500).send({
-          success: false,
-          error: 'SERVICE_UNAVAILABLE',
-          message: 'Translation service not available'
-        });
+        return sendInternalError(reply, 'SERVICE_UNAVAILABLE', { message: 'Translation service not available' });
       }
 
       const existingData = await translationService.getAttachmentWithTranscription(attachmentId!);
 
       if (!existingData) {
-        return reply.status(404).send({
-          success: false,
-          error: 'NOT_FOUND',
-          message: 'Attachment not found'
-        });
+        return sendNotFound(reply, 'NOT_FOUND', { message: 'Attachment not found' });
       }
 
       if (existingData.transcription) {
@@ -752,11 +700,7 @@ export function registerTranslationRoutes(
       const result = await translationService.transcribeAttachment(attachmentId!);
 
       if (!result) {
-        return reply.status(500).send({
-          success: false,
-          error: 'TRANSCRIPTION_FAILED',
-          message: 'Failed to start transcription'
-        });
+        return sendInternalError(reply, 'TRANSCRIPTION_FAILED', { message: 'Failed to start transcription' });
       }
 
       return sendSuccess(reply, {
