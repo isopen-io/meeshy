@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHand
 import { Tooltip } from './Tooltip';
 import { useMentions } from '@/hooks/composer/useMentions';
 import { MentionAutocomplete } from '@/components/common/MentionAutocomplete';
+import { useI18n } from '@/hooks/use-i18n';
 
 export interface Attachment {
   id: string;
@@ -150,7 +151,7 @@ export const MessageComposer = forwardRef<
   value = '',
   onChange,
   onSend,
-  placeholder = 'Écrivez votre message...',
+  placeholder = '',
   disabled = false,
   showVoice = true,
   showLocation = true,
@@ -165,6 +166,7 @@ export const MessageComposer = forwardRef<
   conversationId,
   className = '',
 }: MessageComposerProps, ref) {
+  const { t } = useI18n('conversations');
   const [message, setMessage] = useState(value);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isRecording, setIsRecording] = useState(false);
@@ -274,7 +276,7 @@ export const MessageComposer = forwardRef<
         const voiceAttachment: Attachment = {
           id: `voice-${Date.now()}`,
           type: 'voice',
-          name: `Message vocal (${formatDuration(duration)})`,
+          name: t('composer.voiceAttachmentName', { duration: formatDuration(duration) }),
           duration,
           url: URL.createObjectURL(audioBlob),
         };
@@ -319,7 +321,7 @@ export const MessageComposer = forwardRef<
         const locationAttachment: Attachment = {
           id: `location-${Date.now()}`,
           type: 'location',
-          name: 'Position actuelle',
+          name: t('composer.locationAttachmentName'),
           coordinates: {
             lat: position.coords.latitude,
             lng: position.coords.longitude,
@@ -394,7 +396,7 @@ export const MessageComposer = forwardRef<
               <button
                 onClick={() => removeAttachment(attachment.id)}
                 className="ml-1 p-0.5 rounded-full hover:bg-black/10 transition-colors"
-                aria-label="Supprimer la pièce jointe"
+                aria-label={t('composer.removeAttachment')}
               >
                 <CloseIcon className="w-3.5 h-3.5" />
               </button>
@@ -478,25 +480,25 @@ export const MessageComposer = forwardRef<
 
             {/* Icônes d'action à droite du sélecteur de langue */}
             {showAttachment && (
-              <Tooltip content="Piece jointe">
+              <Tooltip content={t('composer.tooltipAttachment')}>
                 <button
                   onClick={onAttachmentClick}
                   disabled={disabled || isRecording}
                   className="p-2 md:p-1.5 rounded-full hover:bg-[var(--gp-hover)] transition-colors duration-300 disabled:opacity-40"
                   style={{ color: 'var(--gp-text-muted)' }}
-                  aria-label="Ajouter une piece jointe"
+                  aria-label={t('composer.addAttachment')}
                 >
                   <AttachmentIcon className="w-5 h-5 md:w-4 md:h-4" />
                 </button>
               </Tooltip>
             )}
 
-            <Tooltip content="Emoji">
+            <Tooltip content={t('composer.tooltipEmoji')}>
               <button
                 disabled={disabled || isRecording}
                 className="p-2 md:p-1.5 rounded-full hover:bg-[var(--gp-hover)] transition-colors duration-300 disabled:opacity-40"
                 style={{ color: 'var(--gp-text-muted)' }}
-                aria-label="Ajouter un emoji"
+                aria-label={t('composer.addEmoji')}
               >
                 <EmojiIcon className="w-5 h-5 md:w-4 md:h-4" />
               </button>
@@ -504,24 +506,24 @@ export const MessageComposer = forwardRef<
 
             {showVoice && (
               isRecording ? (
-                <Tooltip content="Arreter">
+                <Tooltip content={t('composer.tooltipStop')}>
                   <button
                     onClick={stopRecording}
                     className="p-2 md:p-1.5 rounded-full transition-colors duration-300 animate-pulse"
                     style={{ background: '#EF4444', color: 'white' }}
-                    aria-label="Arreter l'enregistrement"
+                    aria-label={t('composer.stopRecording')}
                   >
                     <StopIcon className="w-5 h-5 md:w-4 md:h-4" />
                   </button>
                 </Tooltip>
               ) : (
-                <Tooltip content="Message vocal">
+                <Tooltip content={t('composer.tooltipVoice')}>
                   <button
                     onClick={startRecording}
                     disabled={disabled}
                     className="p-2 md:p-1.5 rounded-full hover:bg-[var(--gp-hover)] transition-colors duration-300 disabled:opacity-40"
                     style={{ color: 'var(--gp-text-muted)' }}
-                    aria-label="Enregistrer un message vocal"
+                    aria-label={t('composer.voiceMessage')}
                   >
                     <MicIcon className="w-5 h-5 md:w-4 md:h-4" />
                   </button>
@@ -530,13 +532,13 @@ export const MessageComposer = forwardRef<
             )}
 
             {showLocation && !isRecording && (
-              <Tooltip content="Position">
+              <Tooltip content={t('composer.tooltipLocation')}>
                 <button
                   onClick={requestLocation}
                   disabled={disabled}
                   className="p-2 md:p-1.5 rounded-full hover:bg-[var(--gp-hover)] transition-colors duration-300 disabled:opacity-40"
                   style={{ color: 'var(--gp-text-muted)' }}
-                  aria-label="Partager ma position"
+                  aria-label={t('composer.shareLocation')}
                 >
                   <LocationIcon className="w-5 h-5 md:w-4 md:h-4" />
                 </button>
@@ -557,7 +559,7 @@ export const MessageComposer = forwardRef<
             onKeyDown={handleKeyDown}
             onFocus={() => setIsFocused(true)}
             onBlur={() => setIsFocused(false)}
-            placeholder={isRecording ? 'Enregistrement en cours...' : placeholder}
+            placeholder={isRecording ? t('composer.recording') : (placeholder || t('composer.placeholder'))}
             disabled={disabled || isRecording}
             rows={1}
             className="w-full pl-4 pr-12 pt-10 pb-3 bg-transparent resize-none outline-none text-[15px] leading-relaxed placeholder:text-[var(--gp-text-muted)] disabled:opacity-50 transition-colors duration-300"
@@ -570,7 +572,7 @@ export const MessageComposer = forwardRef<
 
           {/* Bouton envoyer - à droite dans le textarea (visible seulement s'il y a du contenu) */}
           {hasContent && (
-            <Tooltip content="Envoyer" side="left">
+            <Tooltip content={t('composer.tooltipSend')} side="left">
               <button
                 onClick={handleSend}
                 disabled={disabled}
@@ -579,7 +581,7 @@ export const MessageComposer = forwardRef<
                   background: 'var(--gp-terracotta)',
                   color: 'white',
                 }}
-                aria-label="Envoyer le message"
+                aria-label={t('composer.sendMessage')}
               >
                 <SendIcon className="w-5 h-5" />
               </button>
