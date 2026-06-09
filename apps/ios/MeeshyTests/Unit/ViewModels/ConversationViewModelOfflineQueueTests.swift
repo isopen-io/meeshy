@@ -4,10 +4,13 @@ import GRDB
 import MeeshySDK
 
 /// Covers Bug 1 (lost second offline send) fix in
-/// `ConversationViewModel.sendMessage`. The legacy code fire-and-forgot the
-/// outbox enqueue and didn't gate the offline branch with the `isSending`
-/// debounce, so two rapid taps while offline could silently drop the second
-/// message. Tests exercise the new awaited-enqueue + lifted-guard flow.
+/// `ConversationViewModel.sendMessage`, plus the 2026-06-09 concurrent-sends
+/// change. The legacy code fire-and-forgot the outbox enqueue, AND a global
+/// `isSending` mutex serialized ALL sends — silently dropping the second while
+/// the first was still in-flight (the "can't send several in a row while the
+/// clock shows" bug). The path now AWAITS the enqueue and lets DISTINCT
+/// messages fly concurrently, deduping only an accidental double-tap of the
+/// SAME message. Tests exercise both invariants.
 ///
 /// All state lives inside `makeFixture(...)` factory — no shared mutable
 /// `setUp`/`tearDown` properties (CLAUDE.md: "factory functions for test
@@ -154,10 +157,12 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
         XCTAssertEqual(contents, ["First", "Second"])
     }
 
-    /// Concurrent send attempts (two `Task`s racing for the awaited path)
-    /// must be serialized by the `isSending` guard. The expected outcome:
-    /// exactly one of them succeeds + enqueues, the other returns `false`.
-    func test_concurrent_taps_are_serialized_by_isSending_guard() async throws {
+    /// Concurrent sends of DISTINCT messages must BOTH proceed — a real
+    /// messenger lets several messages fly at once, each with its own optimistic
+    /// bubble + clock. Replaces the legacy `isSending` mutex which serialized
+    /// ALL sends and silently dropped the second while the first was in-flight
+    /// (the "can't send several in a row while the clock shows" bug, 2026-06-09).
+    func test_concurrent_distinct_sends_both_proceed() async throws {
         let fx = try await makeFixture(offlineQueueDelay: .milliseconds(150))
 
         async let a = fx.sut.sendMessage(content: "Tap A")
@@ -165,37 +170,48 @@ final class ConversationViewModelOfflineQueueTests: XCTestCase {
         let results = await [a, b]
 
         let succeeded = results.filter { $0 }.count
+        XCTAssertEqual(succeeded, 2, "Two DISTINCT concurrent sends must both succeed")
+        let enqueueCount = await fx.offlineQueue.enqueueCount
+        XCTAssertEqual(enqueueCount, 2, "Both distinct messages must reach the outbox")
+        let contents = await fx.offlineQueue.enqueuedContents
+        XCTAssertEqual(Set(contents), ["Tap A", "Tap B"])
+    }
+
+    /// Double-tap protection survives the mutex removal: the SAME logical
+    /// message fired twice within the debounce window dedups to a single send
+    /// (no duplicate optimistic row, no duplicate outbox item). The check-and-set
+    /// runs before the first `await`, so the @MainActor serialization of the
+    /// synchronous prefix makes it atomic against the concurrent burst.
+    func test_duplicate_rapid_tap_is_deduped() async throws {
+        let fx = try await makeFixture(offlineQueueDelay: .milliseconds(150))
+
+        async let a = fx.sut.sendMessage(content: "Same text")
+        async let b = fx.sut.sendMessage(content: "Same text")
+        let results = await [a, b]
+
+        let succeeded = results.filter { $0 }.count
         let rejected = results.filter { !$0 }.count
-        XCTAssertEqual(succeeded, 1, "Exactly one concurrent tap should succeed")
-        XCTAssertEqual(rejected, 1, "The other concurrent tap should be rejected by isSending")
+        XCTAssertEqual(succeeded, 1, "A rapid double-tap of identical content sends once")
+        XCTAssertEqual(rejected, 1, "The duplicate tap is deduped")
         let enqueueCount = await fx.offlineQueue.enqueueCount
         XCTAssertEqual(enqueueCount, 1)
     }
 
-    /// After a serialized concurrent burst settles, a fresh sequential tap
-    /// must still go through — the guard releases on every path via `defer`.
-    func test_third_send_during_pending_enqueue_is_stacked_not_dropped() async throws {
+    /// Three DISTINCT sends — concurrent burst then a sequential one — all reach
+    /// the queue. No coarse lock collapses them into a single survivor.
+    func test_three_distinct_sends_all_enqueue() async throws {
         let fx = try await makeFixture(offlineQueueDelay: .milliseconds(80))
 
         async let a = fx.sut.sendMessage(content: "Tap A")
         async let b = fx.sut.sendMessage(content: "Tap B")
         _ = await [a, b]
-
-        // After the first burst settles, isSending must be cleared by `defer`,
-        // so the next sequential tap proceeds.
         let later = await fx.sut.sendMessage(content: "Tap C")
 
         XCTAssertTrue(later)
         let enqueueCount = await fx.offlineQueue.enqueueCount
-        XCTAssertEqual(enqueueCount, 2, "First burst contributes one, sequential third contributes one")
+        XCTAssertEqual(enqueueCount, 3, "Three distinct messages → three outbox items")
         let contents = await fx.offlineQueue.enqueuedContents
-        XCTAssertTrue(contents.contains("Tap C"))
-        // Stronger ordering check: one of {Tap A, Tap B} must coexist with
-        // Tap C in the queue. Without this, an over-eager defer that cleared
-        // isSending before the GRDB INSERT could let both A and B retry and
-        // still satisfy enqueueCount == 2 with phantom orderings.
-        let burstWinner = contents.contains("Tap A") || contents.contains("Tap B")
-        XCTAssertTrue(burstWinner, "Concurrent burst must contribute exactly one of {Tap A, Tap B}")
+        XCTAssertEqual(Set(contents), ["Tap A", "Tap B", "Tap C"])
     }
 
     /// When the outbox write throws, the optimistic row must be flipped to

@@ -41,9 +41,17 @@ extension ConversationView {
     }
 
     func sendMessageWithAttachments() {
-        guard !composerState.isUploading else { return }
+        let composerTrimmed = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
+        Logger.messages.info("SendTap composer tap convId=\(viewModel.conversationId, privacy: .public) isUploading=\(composerState.isUploading, privacy: .public) textLen=\(composerTrimmed.count, privacy: .public) pendingAttachments=\(composerState.pendingAttachments.count, privacy: .public) vmIsSending=\(viewModel.isSending, privacy: .public)")
+        guard !composerState.isUploading else {
+            Logger.messages.error("SendTap BLOCKED guard=isUploading convId=\(viewModel.conversationId, privacy: .public)")
+            return
+        }
         let text = messageText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty || !composerState.pendingAttachments.isEmpty else { return }
+        guard !text.isEmpty || !composerState.pendingAttachments.isEmpty else {
+            Logger.messages.error("SendTap BLOCKED guard=emptyContent convId=\(viewModel.conversationId, privacy: .public)")
+            return
+        }
 
         let pendingRef = composerState.pendingReplyReference
         let isStory = pendingRef?.isStoryReply == true
@@ -72,6 +80,7 @@ extension ConversationView {
                 .clear(pendingReplyReference: &composerState.pendingReplyReference)
             viewModel.stopTypingEmission()
             HapticFeedback.light()
+            Logger.messages.info("SendTap text-only dispatch convId=\(viewModel.conversationId, privacy: .public) textLen=\(text.count, privacy: .public) — field cleared, launching sendMessage Task")
             Task { await viewModel.sendMessage(content: text, replyToId: replyId, storyReplyToId: storyReplyId, storyReplyReference: storyRef, originalLanguage: lang) }
             return
         }
