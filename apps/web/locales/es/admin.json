@@ -184,7 +184,8 @@
       "edit": "Editar",
       "delete": "Eliminar",
       "deleteConfirmTitle": "¿Eliminar este mensaje?",
-      "deleteConfirmDescription": "Este mensaje no se enviará. Esta acción es irreversible."
+      "deleteConfirmDescription": "Este mensaje no se enviará. Esta acción es irreversible.",
+      "empty": "No hay mensajes pendientes"
     },
     "scanControl": {
       "title": "Controles",
@@ -281,7 +282,11 @@
   "userDetail": {
     "languagePreferences": "Preferencias de Idioma",
     "languagePreferencesSaved": "Preferencias de idioma actualizadas",
-    "languagePreferencesError": "Error al actualizar preferencias"
+    "languagePreferencesError": "Error al actualizar preferencias",
+    "contactUpdated": "Información de contacto actualizada",
+    "contactUpdateError": "Error al actualizar la información de contacto",
+    "personalInfoUpdated": "Información personal actualizada",
+    "personalInfoUpdateError": "Error al actualizar la información personal"
   },
   "translationMonitor": {
     "loadingMetrics": "Cargando métricas...",

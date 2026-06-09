@@ -211,7 +211,19 @@
     "exitFullscreen": "Exit fullscreen",
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out",
-    "rotate": "Rotate"
+    "rotate": "Rotate",
+    "clearSearch": "Clear search",
+    "backToList": "Back to list",
+    "backToConversations": "Back to conversations",
+    "breadcrumb": "Breadcrumb",
+    "home": "Home",
+    "anonymous": "Anonymous",
+    "user": "User",
+    "reactWith": "React with {emoji}",
+    "limitReached": "Limit reached: {limit} {category}s maximum",
+    "filesAdded": "Only {count} file(s) added",
+    "send": "Send",
+    "noTrending": "No trends at the moment"
   },
   "copied": "Copied",
   "never": "Never"

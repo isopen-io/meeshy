@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { useAnimationConfig } from '@/hooks/composer/useAnimationConfig';
 import styles from './ToolbarButtons.module.css';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface ToolbarButtonsProps {
   onMicClick: () => void;
@@ -17,6 +18,7 @@ export const ToolbarButtons: React.FC<ToolbarButtonsProps> = ({
   className = '',
 }) => {
   const config = useAnimationConfig();
+  const { t } = useI18n('conversations');
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -68,7 +70,7 @@ export const ToolbarButtons: React.FC<ToolbarButtonsProps> = ({
         className={styles.toolbarButton}
         onClick={onMicClick}
         disabled={disabled}
-        aria-label="Record voice message"
+        aria-label={t('composer.recordVoice')}
         variants={buttonVariants}
         whileHover="hover"
         whileTap="tap"
@@ -95,7 +97,7 @@ export const ToolbarButtons: React.FC<ToolbarButtonsProps> = ({
         className={styles.toolbarButton}
         onClick={onAttachmentClick}
         disabled={disabled}
-        aria-label="Attach file"
+        aria-label={t('composer.attachFile')}
         variants={buttonVariants}
         whileHover="hover"
         whileTap="tap"

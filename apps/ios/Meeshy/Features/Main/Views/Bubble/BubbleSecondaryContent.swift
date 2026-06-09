@@ -33,9 +33,9 @@ struct BubbleSecondaryContent: View, Equatable {
             VStack(alignment: .leading, spacing: 4) {
                 if let display = display {
                     HStack(spacing: 4) {
-                        Text(display.flag).font(.system(size: 11))
+                        Text(display.flag).font(.caption)
                         Text(display.name)
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.caption2.weight(.semibold))
                             .foregroundColor(langColor)
                     }
                 }

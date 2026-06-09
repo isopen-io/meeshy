@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { ChevronRight, Home } from 'lucide-react';
 import { useMemo } from 'react';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface BreadcrumbSegment {
   label: string;
@@ -45,6 +46,7 @@ const DEFAULT_LABEL_MAP: Record<string, string> = {
 
 export function Breadcrumb({ segments, labelMap, className }: BreadcrumbProps) {
   const pathname = usePathname();
+  const { t } = useI18n('common');
 
   const resolvedSegments = useMemo<BreadcrumbSegment[]>(() => {
     if (segments) {
@@ -66,13 +68,13 @@ export function Breadcrumb({ segments, labelMap, className }: BreadcrumbProps) {
   if (resolvedSegments.length === 0) return null;
 
   return (
-    <nav aria-label="Fil d'Ariane" className={className}>
+    <nav aria-label={t('breadcrumb')} className={className}>
       <ol className="flex flex-wrap items-center gap-1 text-sm text-muted-foreground" role="list">
         <li>
           <Link
             href="/"
             className="flex items-center gap-1 hover:text-foreground transition-colors"
-            aria-label="Accueil"
+            aria-label={t('home')}
           >
             <Home className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           </Link>

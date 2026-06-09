@@ -35,12 +35,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import me.meeshy.feature.notifications.R
 import me.meeshy.sdk.model.ApiNotification
 import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.theme.MeeshySpacing
+import me.meeshy.ui.theme.MeeshyTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,17 +61,18 @@ fun NotificationsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Notifications") },
+                title = { Text(stringResource(R.string.notifications_title)) },
                 actions = {
                     if (state.notifications.any { !it.state.isRead }) {
                         TextButton(onClick = viewModel::markAllRead) {
-                            Text("Mark all read")
+                            Text(stringResource(R.string.notifications_mark_all_read))
                         }
                     }
                 },
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },
+        containerColor = MeeshyTheme.tokens.backgroundPrimary,
     ) { padding ->
         PullToRefreshBox(
             isRefreshing = state.isSyncing,
@@ -84,7 +89,7 @@ fun NotificationsScreen(
                     Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text("No notifications", style = MaterialTheme.typography.bodyLarge)
+                    Text(stringResource(R.string.notifications_empty), style = MaterialTheme.typography.bodyLarge)
                 }
                 else -> LazyColumn {
                     items(state.notifications, key = { it.id }) { notification ->
@@ -114,14 +119,14 @@ private fun NotificationItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .padding(horizontal = MeeshySpacing.lg, vertical = MeeshySpacing.md),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             MeeshyAvatar(
-                displayName = notification.actor?.displayName ?: notification.actor?.username ?: "?",
+                name = notification.actor?.displayName ?: notification.actor?.username ?: "?",
                 modifier = Modifier.size(44.dp),
             )
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(MeeshySpacing.md))
             Column(modifier = Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -130,7 +135,7 @@ private fun NotificationItem(
                         fontWeight = if (isUnread) FontWeight.SemiBold else FontWeight.Normal,
                     )
                     if (isUnread) {
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(MeeshySpacing.sm))
                         Box(
                             Modifier
                                 .size(8.dp)

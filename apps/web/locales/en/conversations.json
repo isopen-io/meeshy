@@ -129,7 +129,8 @@
       "settings": "Settings",
       "encryptionE2EE": "End-to-end encryption",
       "encryptionHybrid": "Hybrid encryption",
-      "encryptionServer": "Server encryption"
+      "encryptionServer": "Server encryption",
+      "reactions": "Reactions"
     },
     "conversationUI": {
       "participants": "Participants",
@@ -453,7 +454,18 @@
       "refreshed": "Statuses refreshed",
       "refreshError": "Error refreshing",
       "roleError": "Error updating role",
-      "addError": "Error adding participant"
+      "addError": "Error adding participant",
+      "roleUpdated": "Role updated successfully: {role}",
+      "invited": "{name} has been invited to the conversation",
+      "added": "{name} added as {role}",
+      "promote": "Promote",
+      "demote": "Demote",
+      "refreshStatuses": "Refresh statuses",
+      "roles": {
+        "MEMBER": "Member",
+        "MODERATOR": "Moderator",
+        "ADMIN": "Administrator"
+      }
     },
     "createLinkButton": {
       "notAuthenticated": "Cannot create link: user not logged in",
@@ -474,7 +486,8 @@
       "searchError": "Error searching for users",
       "inviteSuccess": "{count} user(s) invited successfully",
       "partialError": "{count} invitation(s) failed",
-      "inviteError": "Error inviting users"
+      "inviteError": "Error inviting users",
+      "noUsersFound": "No users found"
     },
     "drawer": {
       "title": "Options",
@@ -552,6 +565,11 @@
       },
       "delete": "Delete conversation"
     },
+    "links": {
+      "noDescription": "No description",
+      "loading": "Loading links...",
+      "empty": "No shared links"
+    },
     "composer": {
       "placeholder": "Write your message...",
       "recording": "Recording...",
@@ -569,7 +587,13 @@
       "tooltipLocation": "Location",
       "tooltipSend": "Send",
       "voiceAttachmentName": "Voice message ({duration})",
-      "locationAttachmentName": "Current location"
+      "locationAttachmentName": "Current location",
+      "replyTo": "Reply to {sender}",
+      "cancelReply": "Cancel reply",
+      "messageInput": "Message input",
+      "attachFiles": "Select files to attach",
+      "recordVoice": "Record voice message",
+      "attachFile": "Attach file"
     }
   }
 }

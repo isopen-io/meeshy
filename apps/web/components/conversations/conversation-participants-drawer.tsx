@@ -78,6 +78,7 @@ export function ConversationParticipantsDrawer({
   onOpenSettings
 }: ConversationParticipantsDrawerProps) {
   const { t } = useI18n('conversations');
+  const { t: tCommon } = useI18n('common');
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -295,13 +296,7 @@ export function ConversationParticipantsDrawer({
       await conversationsService.updateParticipantRole(conversationId, userId, newRole);
       window.location.reload();
 
-      const roleNames: Record<string, string> = {
-        'admin': 'administrateur',
-        'moderator': 'modérateur',
-        'member': 'membre'
-      };
-
-      toast.success(`Rôle mis à jour avec succès: ${roleNames[newRole]}`);
+      toast.success(t('participants.roleUpdated', { role: t(`participants.roles.${newRole.toUpperCase()}`) }));
     } catch (error: unknown) {
       console.error('Erreur lors de la mise à jour du rôle:', error);
       toast.error(error.message || t('participants.roleError'));
@@ -326,7 +321,7 @@ export function ConversationParticipantsDrawer({
 
   const handleUserInvited = (user: unknown) => {
     onParticipantAdded?.(user);
-    toast.success(`${user.displayName || user.username} a été invité à la conversation`);
+    toast.success(t('participants.invited', { name: user.displayName || user.username }));
   };
 
   // Rôles assignables selon le rôle de l'utilisateur courant
@@ -334,18 +329,18 @@ export function ConversationParticipantsDrawer({
     const role = currentUserParticipant?.role;
     if (role === MemberRole.CREATOR || role === MemberRole.ADMIN) {
       return [
-        { value: 'member', label: 'Membre' },
-        { value: 'moderator', label: 'Modérateur' },
-        { value: 'admin', label: 'Administrateur' },
+        { value: 'member', label: t('participants.roles.MEMBER') },
+        { value: 'moderator', label: t('participants.roles.MODERATOR') },
+        { value: 'admin', label: t('participants.roles.ADMIN') },
       ];
     }
     if (role === MemberRole.MODERATOR) {
       return [
-        { value: 'member', label: 'Membre' },
-        { value: 'moderator', label: 'Modérateur' },
+        { value: 'member', label: t('participants.roles.MEMBER') },
+        { value: 'moderator', label: t('participants.roles.MODERATOR') },
       ];
     }
-    return [{ value: 'member', label: 'Membre' }];
+    return [{ value: 'member', label: t('participants.roles.MEMBER') }];
   };
 
   const assignableRoles = getAssignableRoles();
@@ -360,8 +355,7 @@ export function ConversationParticipantsDrawer({
         await conversationsService.updateParticipantRole(conversationId, user.id, role);
       }
       onParticipantAdded?.(user.id);
-      const roleLabels: Record<string, string> = { member: 'membre', moderator: 'modérateur', admin: 'administrateur' };
-      toast.success(`${user.displayName || user.username} ajouté comme ${roleLabels[role]}`);
+      toast.success(t('participants.added', { name: user.displayName || user.username, role: t(`participants.roles.${role.toUpperCase()}`) }));
       setSearchQuery('');
       setPlatformResults([]);
     } catch (error: unknown) {
@@ -479,8 +473,8 @@ export function ConversationParticipantsDrawer({
                     }}
                     disabled={isLoading}
                     className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-900/20"
-                    title="Promouvoir"
-                    aria-label="Promouvoir"
+                    title={t('participants.promote')}
+                    aria-label={t('participants.promote')}
                   >
                     <ChevronUp className="h-4 w-4" />
                   </Button>
@@ -499,8 +493,8 @@ export function ConversationParticipantsDrawer({
                     }}
                     disabled={isLoading}
                     className="h-8 w-8 p-0 text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/20"
-                    title="Rétrograder"
-                    aria-label="Rétrograder"
+                    title={t('participants.demote')}
+                    aria-label={t('participants.demote')}
                   >
                     <ChevronDown className="h-4 w-4" />
                   </Button>
@@ -596,7 +590,7 @@ export function ConversationParticipantsDrawer({
                       type="button"
                       onClick={() => setSearchQuery('')}
                       className="absolute right-3 top-1/2 -translate-y-1/2 h-5 w-5 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                      aria-label="Effacer la recherche"
+                      aria-label={tCommon('clearSearch')}
                     >
                       <X className="h-3.5 w-3.5" />
                     </motion.button>
@@ -609,8 +603,8 @@ export function ConversationParticipantsDrawer({
                     onClick={handleManualRefresh}
                     disabled={isRefreshing}
                     className="h-10 w-10 p-0 flex-shrink-0 backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 hover:bg-blue-500/10"
-                    title="Rafraîchir les statuts"
-                    aria-label="Rafraîchir les statuts"
+                    title={t('participants.refreshStatuses')}
+                    aria-label={t('participants.refreshStatuses')}
                   >
                     <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin text-blue-600' : ''}`} />
                   </Button>
