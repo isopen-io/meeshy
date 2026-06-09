@@ -306,7 +306,7 @@ export class UploadProcessor {
       await fs.unlink(inputAbs).catch(() => {});
       return { filePath: outputRel, fileSize: stat.size, mimeType: 'video/mp4' };
     } catch (error) {
-      console.error('[UploadProcessor] ⚠️ Video transcode failed, keeping original:', error);
+      logger.error('Video transcode failed, keeping original', error as Error);
       await fs.unlink(outputAbs).catch(() => {});
       return null;
     }

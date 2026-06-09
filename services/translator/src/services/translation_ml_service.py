@@ -11,12 +11,14 @@ Architecture modulaire:
 Total: ~290 lignes (vs 1191 lignes God Object original)
 """
 
-import os
 import logging
+import os
 import threading
 from typing import Dict, Any, Optional
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 # CRITIQUE: Charger les variables d'environnement AVANT tout import
 try:
@@ -29,9 +31,9 @@ try:
 
     if env_local_path.exists():
         load_dotenv(env_local_path, override=True)
-        print(f"🔧 [ML-SERVICE] .env.local chargé depuis: {env_local_path}")
+        logger.debug("[ML-SERVICE] .env.local chargé depuis: %s", env_local_path)
 except ImportError:
-    print("⚠️ [ML-SERVICE] python-dotenv non disponible")
+    logger.warning("[ML-SERVICE] python-dotenv non disponible")
 
 # Import des settings
 from config.settings import get_settings
@@ -78,9 +80,7 @@ try:
     warnings.filterwarnings("ignore", message=".*xethub.*")
 except ImportError:
     ML_AVAILABLE = False
-    print("⚠️ Dependencies ML non disponibles")
-
-logger = logging.getLogger(__name__)
+    logger.warning("[ML-SERVICE] ⚠️ Dependencies ML non disponibles")
 
 
 class TranslationMLService:
