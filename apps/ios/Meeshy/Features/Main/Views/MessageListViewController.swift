@@ -654,15 +654,23 @@ final class MessageListViewController: UIViewController {
         // layout before `scrollToItem` runs (apply is asynchronous for the
         // animated diff path).
         PerfSignpost.signposter.endInterval("snapshot.build", _buildState)
+        // N'animer QUE l'insert d'un VRAI nouveau message (petit delta — le joli
+        // slide-in) ou l'apparition du typing. Les bulk-loads / refresh / open /
+        // state-changes ne s'animent PAS : la trace device (iPhone 16 Pro Max)
+        // montre que `dataSource.apply` ANIMÉ est le coût (snapshot.apply = 2136ms
+        // sur 17 applies à la navigation) alors que la prépa (`snapshot.build`)
+        // ne fait que 5ms. Tuer l'animation des bulk supprime le churn sans
+        // perdre le slide d'un message entrant.
+        let effectiveAnimated = animated && ((hasGenuinelyNewMessages && delta <= 2) || typingJustAppeared)
         let _applyState = PerfSignpost.signposter.beginInterval("snapshot.apply", id: PerfSignpost.signposter.makeSignpostID())
-        dataSource.apply(snapshot, animatingDifferences: animated) { [weak self] in
+        dataSource.apply(snapshot, animatingDifferences: effectiveAnimated) { [weak self] in
             PerfSignpost.signposter.endInterval("snapshot.apply", _applyState)
             guard let self else { return }
             // La pill flottante doit refléter le nouveau top du flux dès que
             // les cellules sont en place (insertion d'un nouveau message, etc.).
             self.updateStickyDayLabel()
             if shouldAutoScroll {
-                self.scrollToBottom(animated: animated)
+                self.scrollToBottom(animated: effectiveAnimated)
             }
         }
     }
