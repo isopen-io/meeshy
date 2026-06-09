@@ -163,13 +163,15 @@ final class AttachmentSendService: AttachmentSendServiceProviding {
         token: String,
         userId: String
     ) async throws -> (uploadedId: String, localAttachment: MeeshyMessageAttachment) {
-        let audioData = try? Data(contentsOf: audioURL)
-
         let result = try await uploader.uploadFile(
             fileURL: audioURL, mimeType: "audio/mp4", token: token
         )
 
-        if let audioData {
+        // Seed the audio cache from the file bytes — read OFF the main actor so a
+        // multi-hundred-KB read never stalls the UI on the send path. The file is
+        // still on disk (removed below), and the read is skipped entirely when
+        // the upload throws.
+        if let audioData = await Self.readFileBytes(audioURL) {
             await CacheCoordinator.shared.audio.store(audioData, for: result.fileUrl)
         }
 
@@ -185,14 +187,14 @@ final class AttachmentSendService: AttachmentSendServiceProviding {
         token: String,
         userId: String
     ) async throws -> (uploadedId: String, localAttachment: MeeshyMessageAttachment) {
-        let fileData = try? Data(contentsOf: fileURL)
-
         let thumbHash = thumbnail?.toThumbHash()
         let result = try await uploader.uploadFile(
             fileURL: fileURL, mimeType: mimeType, token: token, thumbHash: thumbHash
         )
 
-        if let fileData {
+        // Read the bytes off the main actor (see uploadAudio) — large media (MB)
+        // would otherwise block the UI on send.
+        if let fileData = await Self.readFileBytes(fileURL) {
             await CacheCoordinator.shared.images.store(fileData, for: result.fileUrl)
             if let thumbUrl = result.thumbnailUrl,
                let thumbnail,
@@ -203,6 +205,13 @@ final class AttachmentSendService: AttachmentSendServiceProviding {
 
         try? FileManager.default.removeItem(at: fileURL)
         return (result.id, result.toMessageAttachment(uploadedBy: userId))
+    }
+
+    /// Read a local file's bytes off the main actor. `Data(contentsOf:)` is a
+    /// synchronous read; on `@MainActor` it would stall the UI for the whole
+    /// read duration on the send path, so hop to a background task.
+    private nonisolated static func readFileBytes(_ url: URL) async -> Data? {
+        await Task.detached(priority: .utility) { try? Data(contentsOf: url) }.value
     }
 }
 
