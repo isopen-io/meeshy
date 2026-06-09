@@ -651,6 +651,89 @@
       "draftDays30": "30 días",
       "draftDays60": "60 días",
       "draftDays90": "90 días"
+    },
+    "document": {
+      "download": {
+        "title": "Configuración de descarga",
+        "description": "Configure cómo se descargan los documentos",
+        "autoDownload": {
+          "label": "Descarga automática",
+          "description": "Descargar automáticamente los documentos enviados en chats"
+        },
+        "preview": {
+          "label": "Vista previa de documentos",
+          "description": "Mostrar vistas previas antes de descargar"
+        },
+        "maxSize": {
+          "label": "Tamaño máximo para descarga automática",
+          "mb10": "10 MB",
+          "mb25": "25 MB",
+          "mb50": "50 MB (Recomendado)",
+          "mb100": "100 MB",
+          "mb500": "500 MB"
+        },
+        "saveLocation": {
+          "label": "Ubicación de guardado predeterminada",
+          "downloads": "Carpeta Descargas",
+          "documents": "Carpeta Documentos",
+          "desktop": "Escritorio",
+          "custom": "Ubicación personalizada"
+        }
+      },
+      "upload": {
+        "title": "Configuración de subida",
+        "description": "Configure las preferencias de subida de documentos",
+        "compress": {
+          "label": "Comprimir subidas",
+          "description": "Comprimir documentos antes de subir para ahorrar ancho de banda"
+        },
+        "keepOriginals": {
+          "label": "Conservar originales",
+          "description": "Conservar archivos originales después de subir versiones comprimidas"
+        },
+        "warnLarge": {
+          "label": "Advertir archivos grandes",
+          "description": "Mostrar advertencia antes de subir archivos de más de 50 MB"
+        },
+        "fileTypes": {
+          "label": "Tipos de archivos permitidos",
+          "all": "Todos los tipos",
+          "documents": "Solo documentos (PDF, DOC, TXT)",
+          "images": "Solo imágenes (PNG, JPG, GIF)",
+          "media": "Archivos multimedia (Imágenes, Video, Audio)",
+          "archives": "Archivos comprimidos (ZIP, RAR, 7Z)"
+        }
+      },
+      "organization": {
+        "title": "Organización",
+        "description": "Mantenga sus documentos organizados automáticamente",
+        "autoOrganize": {
+          "label": "Organizar automáticamente por tipo",
+          "description": "Organizar automáticamente archivos en carpetas por tipo"
+        },
+        "autoDelete": {
+          "label": "Eliminar descargas antiguas",
+          "description": "Eliminar automáticamente los archivos descargados después del período especificado",
+          "never": "Nunca",
+          "after7": "Después de 7 días",
+          "after30": "Después de 30 días",
+          "after90": "Después de 90 días",
+          "after6m": "Después de 6 meses"
+        }
+      },
+      "security": {
+        "title": "Seguridad",
+        "description": "Protéjase de archivos maliciosos",
+        "scanViruses": {
+          "label": "Analizar virus",
+          "description": "Analizar automáticamente los archivos descargados en busca de malware"
+        },
+        "blockExecutables": {
+          "label": "Bloquear ejecutables",
+          "description": "Evitar la descarga de archivos .exe, .bat, .sh y otros ejecutables"
+        },
+        "note": "Nota de seguridad: Siempre tenga precaución al descargar archivos de fuentes desconocidas. Active el análisis antivirus y bloquee los archivos ejecutables para máxima protección."
+      }
     }
   }
 }

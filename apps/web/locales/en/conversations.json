@@ -475,6 +475,25 @@
       "inviteSuccess": "{count} user(s) invited successfully",
       "partialError": "{count} invitation(s) failed",
       "inviteError": "Error inviting users"
+    },
+    "drawer": {
+      "title": "Options",
+      "displayName": "Display name (for you)",
+      "namePlaceholder": "Conversation name",
+      "notifications": "Notifications",
+      "notificationsAll": "All",
+      "notificationsMentions": "Mentions",
+      "notificationsNone": "None",
+      "theme": "Theme",
+      "themeColorLabel": "Theme color {color}",
+      "menuSettings": "Settings",
+      "menuProfile": "View profile",
+      "menuSearch": "Search",
+      "category": "Category",
+      "tags": "Tags",
+      "searchOrCreate": "Search or create...",
+      "block": "Block",
+      "report": "Report"
     }
   }
 }
