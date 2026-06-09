@@ -516,17 +516,15 @@ final class MessageListViewController: UIViewController {
                         currentUserId: myId,
                         userLanguages: userLanguages
                     )
-                    // Gate the bubble's (deep) body behind its comprehensive
-                    // Equatable `==` — same proven pattern the Feed uses on
-                    // `FeedPostCard().equatable()` (FeedView). Without this the
-                    // captured handler closures defeat SwiftUI's default POD
-                    // diff, so every cell reconfiguration / hosting-config reuse
-                    // re-evaluates the whole BubbleStandardLayout graph. The
-                    // `==` covers every appearance-affecting input (relying on
-                    // `updatedAt` for content), and @State changes (flag tap,
-                    // sheets) bypass `==` via their own invalidation — so the
-                    // interactions stay live while idle bubbles stop re-rendering.
-                    .equatable()
+                    // NOTE: do NOT add `.equatable()` here. ThemedMessageBubble
+                    // owns @State (activeDisplayLangCode / secondaryLangCode for
+                    // the flag-tap translation panel, plus sheet/fullscreen
+                    // state). On iOS 18+ an EquatableView re-consults `==` even
+                    // on @State invalidation; since `==` can't see the @State,
+                    // the flag tap would write state but never re-render the
+                    // secondary-translation panel (observed 2026-05-25). The
+                    // comprehensive `==` exists for a future fix that first lifts
+                    // that @State into the ViewModel (indexed by message id).
                 }
                 .environmentObject(host)
                 .environmentObject(stories)
