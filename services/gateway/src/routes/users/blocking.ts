@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
+import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendConflict, sendInternalError } from '../../utils/response.js';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
 import type { AuthenticatedRequest } from './types';
@@ -43,27 +44,18 @@ export async function blockUser(fastify: FastifyInstance) {
     try {
       const authContext = (request as AuthenticatedRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const currentUserId = authContext.userId;
       const targetUserId = request.params.userId;
 
       if (!isValidMongoId(targetUserId)) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Invalid user ID format'
-        });
+        return sendBadRequest(reply, 'Invalid user ID format');
       }
 
       if (currentUserId === targetUserId) {
-        return reply.status(400).send({
-          success: false,
-          error: 'You cannot block yourself'
-        });
+        return sendBadRequest(reply, 'You cannot block yourself');
       }
 
       const targetUser = await fastify.prisma.user.findUnique({
@@ -72,10 +64,7 @@ export async function blockUser(fastify: FastifyInstance) {
       });
 
       if (!targetUser) {
-        return reply.status(404).send({
-          success: false,
-          error: 'User not found'
-        });
+        return sendNotFound(reply, 'User not found');
       }
 
       const currentUser = await fastify.prisma.user.findUnique({
@@ -84,10 +73,7 @@ export async function blockUser(fastify: FastifyInstance) {
       });
 
       if (currentUser?.blockedUserIds.includes(targetUserId)) {
-        return reply.status(409).send({
-          success: false,
-          error: 'User is already blocked'
-        });
+        return sendConflict(reply, 'User is already blocked');
       }
 
       // Idempotent via clientMutationId. The `id` recorded in the
@@ -111,16 +97,10 @@ export async function blockUser(fastify: FastifyInstance) {
         onDuplicate: async () => ({ id: targetUserId }),
       });
 
-      return reply.send({
-        success: true,
-        data: { message: 'User blocked' }
-      });
+      return sendSuccess(reply, { message: 'User blocked' });
     } catch (error) {
       logError(fastify.log, '[BLOCKING] Error blocking user', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Failed to block user'
-      });
+      return sendInternalError(reply, 'Failed to block user');
     }
   });
 }
@@ -162,20 +142,14 @@ export async function unblockUser(fastify: FastifyInstance) {
     try {
       const authContext = (request as AuthenticatedRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const currentUserId = authContext.userId;
       const targetUserId = request.params.userId;
 
       if (!isValidMongoId(targetUserId)) {
-        return reply.status(400).send({
-          success: false,
-          error: 'Invalid user ID format'
-        });
+        return sendBadRequest(reply, 'Invalid user ID format');
       }
 
       const currentUser = await fastify.prisma.user.findUnique({
@@ -184,10 +158,7 @@ export async function unblockUser(fastify: FastifyInstance) {
       });
 
       if (!currentUser?.blockedUserIds.includes(targetUserId)) {
-        return reply.status(404).send({
-          success: false,
-          error: 'User is not in your blocked list'
-        });
+        return sendNotFound(reply, 'User is not in your blocked list');
       }
 
       // Idempotent via clientMutationId. The MutationLog row records
@@ -211,16 +182,10 @@ export async function unblockUser(fastify: FastifyInstance) {
         onDuplicate: async () => ({ id: targetUserId }),
       });
 
-      return reply.send({
-        success: true,
-        data: { message: 'User unblocked' }
-      });
+      return sendSuccess(reply, { message: 'User unblocked' });
     } catch (error) {
       logError(fastify.log, '[BLOCKING] Error unblocking user', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Failed to unblock user'
-      });
+      return sendInternalError(reply, 'Failed to unblock user');
     }
   });
 }
@@ -259,10 +224,7 @@ export async function getBlockedUsers(fastify: FastifyInstance) {
     try {
       const authContext = (request as AuthenticatedRequest).authContext;
       if (!authContext || !authContext.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({
-          success: false,
-          error: 'Authentication required'
-        });
+        return sendUnauthorized(reply, 'Authentication required');
       }
 
       const currentUserId = authContext.userId;
@@ -273,10 +235,7 @@ export async function getBlockedUsers(fastify: FastifyInstance) {
       });
 
       if (!currentUser || currentUser.blockedUserIds.length === 0) {
-        return reply.send({
-          success: true,
-          data: []
-        });
+        return sendSuccess(reply, []);
       }
 
       const blockedUsers = await fastify.prisma.user.findMany({
@@ -289,16 +248,10 @@ export async function getBlockedUsers(fastify: FastifyInstance) {
         }
       });
 
-      return reply.send({
-        success: true,
-        data: blockedUsers
-      });
+      return sendSuccess(reply, blockedUsers);
     } catch (error) {
       logError(fastify.log, '[BLOCKING] Error fetching blocked users', error);
-      return reply.status(500).send({
-        success: false,
-        error: 'Failed to fetch blocked users'
-      });
+      return sendInternalError(reply, 'Failed to fetch blocked users');
     }
   });
 }

@@ -21,6 +21,7 @@ import { ZMQSingleton } from '../services/ZmqSingleton';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import type { VoiceAnalysisType } from '@meeshy/shared/types/voice-api';
 import { enhancedLogger } from '../utils/logger-enhanced.js';
+import { sendSuccess } from '../utils/response.js';
 
 const logger = enhancedLogger.child({ module: 'VoiceAnalysis' });
 
@@ -198,10 +199,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
         persist
       });
 
-      return reply.status(200).send({
-        success: true,
-        data: result
-      });
+      return sendSuccess(reply, result);
     } catch (error: any) {
       fastify.log.error({ error }, '[VoiceAnalysis] Attachment analysis error');
       return reply.status(500).send({
@@ -323,14 +321,11 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
 
       const result = await voiceAnalysisService.analyzeAttachmentsBatch(options);
 
-      return reply.status(200).send({
-        success: true,
-        data: {
-          ...result,
-          total: attachments.length,
-          successCount: result.success.length,
-          failureCount: result.failures.length
-        }
+      return sendSuccess(reply, {
+        ...result,
+        total: attachments.length,
+        successCount: result.success.length,
+        failureCount: result.failures.length
       });
     } catch (error: any) {
       fastify.log.error({ error }, '[VoiceAnalysis] Batch analysis error');
@@ -396,10 +391,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
     try {
       const analysis = await voiceAnalysisService.getAttachmentAnalysis(attachmentId);
 
-      return reply.status(200).send({
-        success: true,
-        data: analysis ? { analysis } : null
-      });
+      return sendSuccess(reply, analysis ? { analysis } : null);
     } catch (error: any) {
       fastify.log.error({ error }, '[VoiceAnalysis] Get attachment analysis error');
       return reply.status(500).send({
@@ -484,10 +476,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
         persist
       });
 
-      return reply.status(200).send({
-        success: true,
-        data: result
-      });
+      return sendSuccess(reply, result);
     } catch (error: any) {
       fastify.log.error({ error }, '[VoiceAnalysis] Profile analysis error');
       return reply.status(500).send({
@@ -540,10 +529,7 @@ export async function voiceAnalysisRoutes(fastify: FastifyInstance) {
     try {
       const analysis = await voiceAnalysisService.getVoiceProfileAnalysis(userId);
 
-      return reply.status(200).send({
-        success: true,
-        data: analysis ? { analysis } : null
-      });
+      return sendSuccess(reply, analysis ? { analysis } : null);
     } catch (error: any) {
       fastify.log.error({ error }, '[VoiceAnalysis] Get profile analysis error');
       return reply.status(500).send({

@@ -11,6 +11,7 @@ import { stat } from 'fs/promises';
 import { resolve as pathResolve, sep as pathSep } from 'path';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../../utils/logger-enhanced';
+import { sendNotFound, sendForbidden, sendInternalError } from '../../utils/response.js';
 import type { AttachmentParams } from './types';
 
 const log = enhancedLogger.child({ module: 'AttachmentDownload' });
@@ -69,27 +70,18 @@ export async function registerDownloadRoutes(
 
         const attachment = await attachmentService.getAttachment(attachmentId);
         if (!attachment) {
-          return reply.status(404).send({
-            success: false,
-            error: 'Attachment not found',
-          });
+          return sendNotFound(reply, 'Attachment not found');
         }
 
         const filePath = await attachmentService.getFilePath(attachmentId);
         if (!filePath) {
-          return reply.status(404).send({
-            success: false,
-            error: 'File not found',
-          });
+          return sendNotFound(reply, 'File not found');
         }
 
         try {
           await stat(filePath);
         } catch {
-          return reply.status(404).send({
-            success: false,
-            error: 'File not found on disk',
-          });
+          return sendNotFound(reply, 'File not found on disk');
         }
 
         reply.header('Content-Type', attachment.mimeType);
@@ -121,10 +113,7 @@ export async function registerDownloadRoutes(
         return reply.send(stream);
       } catch (error: any) {
         log.error('Error serving file', { error: error?.message });
-        return reply.status(500).send({
-          success: false,
-          error: 'Error serving file',
-        });
+        return sendInternalError(reply, 'Error serving file');
       }
     }
   );
@@ -174,19 +163,13 @@ export async function registerDownloadRoutes(
 
         const thumbnailPath = await attachmentService.getThumbnailPath(attachmentId);
         if (!thumbnailPath) {
-          return reply.status(404).send({
-            success: false,
-            error: 'Thumbnail not found',
-          });
+          return sendNotFound(reply, 'Thumbnail not found');
         }
 
         try {
           await stat(thumbnailPath);
         } catch {
-          return reply.status(404).send({
-            success: false,
-            error: 'Thumbnail not found on disk',
-          });
+          return sendNotFound(reply, 'Thumbnail not found on disk');
         }
 
         // WebP thumbnails (sprint D4) advertise image/webp; legacy thumbnails
@@ -201,10 +184,7 @@ export async function registerDownloadRoutes(
         return reply.send(stream);
       } catch (error: any) {
         log.error('Error serving thumbnail', error as Error);
-        return reply.status(500).send({
-          success: false,
-          error: 'Error serving thumbnail',
-        });
+        return sendInternalError(reply, 'Error serving thumbnail');
       }
     }
   );
@@ -275,10 +255,7 @@ export async function registerDownloadRoutes(
         const filePath = pathResolve(uploadBasePath, decodedPath);
         if (filePath !== baseAbs && !filePath.startsWith(baseAbs + pathSep)) {
           log.warn('Path traversal attempt rejected', { decodedPath });
-          return reply.status(403).send({
-            success: false,
-            error: 'Forbidden',
-          });
+          return sendForbidden(reply, 'Forbidden');
         }
 
         // Single stat() — was previously called twice with a race window
@@ -291,10 +268,7 @@ export async function registerDownloadRoutes(
             filePath,
             code: statError?.code,
           });
-          return reply.status(404).send({
-            success: false,
-            error: 'File not found',
-          });
+          return sendNotFound(reply, 'File not found');
         }
         const fileSize = fileStats.size;
 
@@ -398,10 +372,7 @@ export async function registerDownloadRoutes(
         return reply.send(stream);
       } catch (error: any) {
         log.error('Error serving file by path', { error: error?.message });
-        return reply.status(500).send({
-          success: false,
-          error: 'Error serving file',
-        });
+        return sendInternalError(reply, 'Error serving file');
       }
     }
   );

@@ -175,6 +175,16 @@
       "editTitle": "Editar",
       "disableTitle": "Desativar (soft delete)",
       "deleteTitle": "Excluir definitivamente"
+    },
+    "deliveryQueue": {
+      "sending": "Enviando...",
+      "target": "Destino: ",
+      "save": "Salvar",
+      "cancel": "Cancelar",
+      "edit": "Editar",
+      "delete": "Excluir",
+      "deleteConfirmTitle": "Excluir esta mensagem?",
+      "deleteConfirmDescription": "Esta mensagem não será enviada. Esta ação é irreversível."
     }
   },
   "agentLive": {
@@ -236,5 +246,68 @@
     "disabled": "Desativado"
   },
   "logoutSuccess": "Desconexão realizada com sucesso",
-  "logoutError": "Erro ao desconectar"
+  "logoutError": "Erro ao desconectar",
+  "adminSettings": {
+    "implemented": "{count}/{total} implementados",
+    "header": {
+      "title": "Configuração do sistema",
+      "description": "Configurações globais e variáveis de ambiente",
+      "back": "Voltar",
+      "unsavedChanges": "Alterações não salvas",
+      "reset": "Redefinir",
+      "saving": "Salvando...",
+      "save": "Salvar"
+    },
+    "stats": {
+      "title": "Status da configuração",
+      "implemented": "Parâmetros implementados",
+      "toImplement": "A implementar",
+      "security": "Parâmetros de segurança",
+      "categories": "Categorias"
+    },
+    "alerts": {
+      "sensitive": {
+        "title": "Configuração sensível",
+        "description": "Alguns parâmetros requerem reiniciar o servidor para ter efeito."
+      },
+      "env": {
+        "title": "Variáveis de ambiente",
+        "description": "Os parâmetros marcados com um badge ENV são configurados via arquivo .env"
+      }
+    },
+    "sections": {
+      "general": {
+        "title": "Configuração geral",
+        "description": "Configurações globais da aplicação"
+      },
+      "security": {
+        "title": "Segurança",
+        "description": "Configurações de segurança e autenticação"
+      },
+      "features": {
+        "title": "Funcionalidades",
+        "description": "Ativar/desativar funcionalidades"
+      },
+      "uploads": {
+        "title": "Upload e armazenamento",
+        "description": "Configuração de arquivos e mídia"
+      },
+      "database": {
+        "title": "Banco de dados",
+        "description": "Configuração do banco de dados PostgreSQL"
+      },
+      "messages": {
+        "title": "Mensagens e conteúdo",
+        "description": "Configuração de mensagens e traduções"
+      },
+      "rateLimiting": {
+        "title": "Limitação de taxa",
+        "description": "Proteção contra abusos e sobrecarga"
+      },
+      "server": {
+        "title": "Servidor e rede",
+        "description": "Configuração do servidor e dos serviços"
+      }
+    }
+  }
 }
