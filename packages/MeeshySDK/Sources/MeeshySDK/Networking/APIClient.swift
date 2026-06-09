@@ -249,6 +249,41 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         return f
     }()
 
+    // Responses are decoded OFF the main thread. APIClient lives in a module built
+    // with SE-0461 (NonisolatedNonsendingByDefault), so a nonisolated async request
+    // method runs on its caller — typically a @MainActor view model — and the
+    // JSONDecoder work would otherwise land on the main thread for every list
+    // payload (conversations / messages / feed): a real hitch during loads and
+    // pagination. The serial queue + single reused decoder are race-free; the value
+    // is smuggled back through an unchecked box so callers keep plain `Decodable`
+    // (non-Sendable) response types.
+    private nonisolated(unsafe) static let offMainDecoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let dateStr = try container.decode(String.self)
+            if let date = APIClient.isoFormatterWithFractional.date(from: dateStr) { return date }
+            if let date = APIClient.isoFormatter.date(from: dateStr) { return date }
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
+        }
+        return decoder
+    }()
+    private static let decodeQueue = DispatchQueue(label: "me.meeshy.api.decode", qos: .userInitiated)
+    private struct DecodeBox<V>: @unchecked Sendable { let value: V }
+
+    private static func decodeOffMain<T: Decodable>(_ type: T.Type, from data: Data) async throws -> T {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<DecodeBox<T>, Error>) in
+            decodeQueue.async {
+                do {
+                    let decoded = try offMainDecoder.decode(type, from: data)
+                    continuation.resume(returning: DecodeBox(value: decoded))
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }.value
+    }
+
     public var authToken: String?
     public var anonymousSessionToken: String?
 
@@ -454,7 +489,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                                 }
                                 let retryStatusCode = retryHTTPResponse.statusCode
                                 if (200...299).contains(retryStatusCode) {
-                                    let result = try decoder.decode(T.self, from: retryData)
+                                    let result = try await Self.decodeOffMain(T.self, from: retryData)
                                     return result
                                 } else {
                                     if retryStatusCode == 401 {
@@ -499,7 +534,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                     throw MeeshyError.server(statusCode: statusCode, message: errorMsg ?? "Erreur inconnue")
                 }
 
-                let result = try decoder.decode(T.self, from: data)
+                let result = try await Self.decodeOffMain(T.self, from: data)
                 let decodeMs = (CFAbsoluteTimeGetCurrent() - decodeStart) * 1000
                 let totalMs = networkMs + decodeMs
                 if totalMs > 1000 {
