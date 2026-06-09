@@ -105,7 +105,8 @@
           "enterCode": "Code reçu par SMS"
         },
         "resend": "Renvoyer",
-        "sending": "Envoi..."
+        "sending": "Envoi...",
+        "codePlaceholder": "000000"
       },
       "email": {
         "available": "Email disponible",
@@ -128,7 +129,8 @@
         "verificationSent": "Code de vérification envoyé par SMS",
         "error": "Erreur lors du changement",
         "pending": "Changement en attente",
-        "pendingMessage": "Code envoyé à {phone}"
+        "pendingMessage": "Code envoyé à {phone}",
+        "newPhonePlaceholder": "6 12 34 56 78"
       },
       "username": {
         "available": "Nom d'utilisateur disponible",

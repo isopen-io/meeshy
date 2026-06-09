@@ -98,12 +98,16 @@
         "verificationSent": "Código de verificação enviado por SMS",
         "error": "Erro durante a alteração",
         "pending": "Alteração pendente",
-        "pendingMessage": "Código enviado para {phone}"
+        "pendingMessage": "Código enviado para {phone}",
+        "newPhonePlaceholder": "912 345 678"
       },
       "username": {
         "available": "Nome de usuário disponível",
         "alreadyUsed": "Este nome de usuário já está em uso",
         "error": "Erro durante a alteração"
+      },
+      "verification": {
+        "codePlaceholder": "000000"
       }
     },
     "translation": {
