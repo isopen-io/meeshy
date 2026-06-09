@@ -58,6 +58,9 @@ public struct PressableButton: ViewModifier {
 
 public struct ShimmerEffect: ViewModifier {
     @State private var phase: CGFloat = 0
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+    private var reduceMotion: Bool { systemReduceMotion || userForcedReduceMotion }
 
     public func body(content: Content) -> some View {
         content
@@ -78,6 +81,7 @@ public struct ShimmerEffect: ViewModifier {
                 }
             )
             .onAppear {
+                guard !reduceMotion else { return }
                 withAnimation(.linear(duration: 2.0).repeatForever(autoreverses: false)) {
                     phase = 1
                 }
@@ -95,6 +99,9 @@ public struct ShimmerEffect: ViewModifier {
 public struct PulseEffect: ViewModifier {
     public let intensity: CGFloat
     @State private var isPulsing = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+    private var reduceMotion: Bool { systemReduceMotion || userForcedReduceMotion }
 
     public init(intensity: CGFloat = 0.04) {
         self.intensity = intensity
@@ -107,7 +114,7 @@ public struct PulseEffect: ViewModifier {
                 .easeInOut(duration: 1.8).repeatForever(autoreverses: true),
                 value: isPulsing
             )
-            .onAppear { isPulsing = true }
+            .onAppear { guard !reduceMotion else { return }; isPulsing = true }
             .onDisappear {
                 withTransaction(Transaction(animation: nil)) {
                     isPulsing = false
@@ -122,6 +129,9 @@ public struct BreathingGlow: ViewModifier {
     public let color: Color
     public let intensity: Double
     @State private var isGlowing = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+    private var reduceMotion: Bool { systemReduceMotion || userForcedReduceMotion }
 
     public init(color: Color, intensity: Double = 0.5) {
         self.color = color
@@ -139,7 +149,7 @@ public struct BreathingGlow: ViewModifier {
                 .easeInOut(duration: 2.0).repeatForever(autoreverses: true),
                 value: isGlowing
             )
-            .onAppear { isGlowing = true }
+            .onAppear { guard !reduceMotion else { return }; isGlowing = true }
             .onDisappear {
                 withTransaction(Transaction(animation: nil)) {
                     isGlowing = false
@@ -202,6 +212,9 @@ public struct FloatingAnimation: ViewModifier {
     public let offsetRange: CGFloat
     public let duration: Double
     @State private var isFloating = false
+    @Environment(\.accessibilityReduceMotion) private var systemReduceMotion
+    @Environment(\.meeshyForceReduceMotion) private var userForcedReduceMotion
+    private var reduceMotion: Bool { systemReduceMotion || userForcedReduceMotion }
 
     public init(offsetRange: CGFloat = 15, duration: Double = 4.0) {
         self.offsetRange = offsetRange
@@ -211,14 +224,14 @@ public struct FloatingAnimation: ViewModifier {
     public func body(content: Content) -> some View {
         content
             .offset(
-                x: isFloating ? offsetRange : -offsetRange,
-                y: isFloating ? -offsetRange * 0.7 : offsetRange * 0.7
+                x: reduceMotion ? 0 : (isFloating ? offsetRange : -offsetRange),
+                y: reduceMotion ? 0 : (isFloating ? -offsetRange * 0.7 : offsetRange * 0.7)
             )
             .animation(
                 .easeInOut(duration: duration).repeatForever(autoreverses: true),
                 value: isFloating
             )
-            .onAppear { isFloating = true }
+            .onAppear { guard !reduceMotion else { return }; isFloating = true }
             .onDisappear {
                 withTransaction(Transaction(animation: nil)) {
                     isFloating = false
