@@ -156,13 +156,13 @@ const serviceUnavailableResponseSchema = {
 export async function translationJobsRoutes(fastify: FastifyInstance) {
   // Initialize translate service if ZMQ client is available
   let translateService: AttachmentTranslateService | null = null;
-  if ((fastify as any).zmqClient) {
-    // Utiliser le cache multi-niveau partagé depuis le décorateur Fastify
+  const zmqClient = fastify.translationService.getZmqClient();
+  if (zmqClient) {
     const jobMappingCache = fastify.jobMappingCache;
 
     translateService = new AttachmentTranslateService(
       fastify.prisma,
-      (fastify as any).zmqClient,
+      zmqClient,
       jobMappingCache
     );
   }

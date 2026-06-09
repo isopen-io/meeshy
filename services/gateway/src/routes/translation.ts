@@ -265,7 +265,7 @@ const e2eeErrorResponseSchema = {
 
 export async function translationRoutes(fastify: FastifyInstance) {
   // Récupérer le service de traduction depuis les options
-  const translationService = (fastify as any).translationService;
+  const translationService = fastify.translationService;
 
   if (!translationService) {
     throw new Error('MessageTranslationService not provided to translation routes');
