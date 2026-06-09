@@ -501,24 +501,25 @@ struct MessageOverlayMenu: View {
         .frame(maxWidth: 280)
     }
 
-    // MARK: - Dismiss Background (dimmed + accent glow — fluid entry)
+    // MARK: - Dismiss Background (light blur — silhouettes stay readable)
 
     private var dismissBackground: some View {
-        // Voile sombre teinte accent. AVANT : `.thinMaterial` floutait toute la
-        // liste de messages en live (une passe GPU de flou recomposee a chaque
-        // frame pendant l'animation d'entree) double d'un RadialGradient en
-        // `.blendMode` (passe de composition hors-ecran). Ce flou plein-ecran +
-        // le blend etaient le poste GPU le plus lourd a l'ouverture du menu. Un
-        // dim opaque retient l'attention sur le preview tout aussi bien, et la
-        // lueur accent (sans blendMode) garde l'identite Meeshy — l'animation ne
-        // touche plus que des opacites de couleurs plates.
+        // Flou doux (`thinMaterial`) double d'une voile sombre retenue +
+        // une lueur radiale teintee a l'accent de la conversation. Les
+        // silhouettes de bulles restent lisibles derriere, mais le texte
+        // sous-jacent se floute pour ne pas concurrencer le preview. La
+        // lueur indigo/accent ancre l'overlay dans l'identite Meeshy.
         ZStack {
+            Rectangle()
+                .fill(.thinMaterial)
+                .opacity(isVisible ? 1 : 0)
+
             Color.black
-                .opacity(isVisible ? (isDark ? 0.40 : 0.30) : 0)
+                .opacity(isVisible ? 0.22 : 0)
 
             RadialGradient(
                 colors: [
-                    overlayAccent.opacity(isDark ? 0.28 : 0.16),
+                    overlayAccent.opacity(isDark ? 0.30 : 0.20),
                     Color.clear
                 ],
                 center: .bottom,
@@ -526,6 +527,7 @@ struct MessageOverlayMenu: View {
                 endRadius: 520
             )
             .opacity(isVisible ? 1 : 0)
+            .blendMode(isDark ? .screen : .multiply)
         }
         .animation(.easeOut(duration: 0.26), value: isVisible)
         .onTapGesture { dismiss() }
@@ -957,12 +959,8 @@ struct MessageOverlayMenu: View {
                     lineWidth: 0.75
                 )
             )
-            // One depth shadow instead of two. The decorative accent-glow shadow
-            // (radius 26) was a second full off-screen blur pass recomposited
-            // every frame while the panel springs in AND while the user drags it
-            // up/down — the depth shadow below already carries the "rising sheet"
-            // read. Slightly deepened to compensate for the dropped glow.
-            .shadow(color: .black.opacity(isDark ? 0.30 : 0.24), radius: 20, y: -4)
+            .shadow(color: overlayAccent.opacity(0.20), radius: 26, y: -6)
+            .shadow(color: .black.opacity(0.22), radius: 20, y: -4)
     }
 
     // MARK: - Quick Actions for Grid

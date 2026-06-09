@@ -80,7 +80,9 @@ extension UniversalComposerBar {
                 )
                 .shadow(color: focusBounce ? Color(hex: "08D9D6").opacity(0.2) : Color.clear, radius: 8, x: 0, y: 0)
         )
+        .scaleEffect(x: typeWave ? 1.015 : 1.0, y: typeWave ? 0.97 : 1.0)
         .scaleEffect(focusBounce ? 1.02 : 1.0)
+        .animation(.spring(response: 0.2, dampingFraction: 0.35), value: typeWave)
     }
 
     // MARK: - Recording Bar (full-width iMessage-style pill)
