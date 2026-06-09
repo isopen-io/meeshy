@@ -378,5 +378,65 @@
         "description": "Configuration du serveur et des services"
       }
     }
+  },
+  "monitoring": {
+    "title": "Monitoring",
+    "description": "Supervision en temps réel de la plateforme",
+    "refresh": "Actualiser",
+    "autoRefreshOn": "Auto-refresh ON",
+    "autoRefreshOff": "Auto-refresh OFF",
+    "errorRealtime": "Erreur lors du chargement des données temps réel",
+    "errorHealth": "Erreur lors du chargement des données de santé",
+    "errorMetrics": "Erreur lors du chargement des métriques",
+    "tabs": {
+      "realtime": "Temps réel",
+      "health": "Santé",
+      "metrics": "Métriques"
+    },
+    "realtime": {
+      "onlineUsers": "Users en ligne",
+      "onlineUsersDesc": "Connectés maintenant",
+      "messagesLastHour": "Messages dernière heure",
+      "messagesLastHourDesc": "60 dernières minutes",
+      "activeConversations": "Conversations actives",
+      "activeConversationsDesc": "Avec activité récente",
+      "socketConnections": "Connexions Socket.IO",
+      "socketConnectionsDesc": "Connexions WebSocket",
+      "chartTitle": "Activité par heure",
+      "chartSubtitle": "Volume de messages sur les dernières 24h"
+    },
+    "health": {
+      "latency": "Latence",
+      "pingStatus": "Ping status",
+      "operational": "Opérationnel",
+      "error": "Erreur",
+      "excellent": "Excellent",
+      "acceptable": "Acceptable",
+      "slow": "Lent",
+      "allCircuitsOk": "Tous les circuits sont opérationnels"
+    },
+    "metrics": {
+      "periodDescription": "KPIs et tendances sur la période sélectionnée",
+      "7d": "7 jours",
+      "30d": "30 jours",
+      "90d": "90 jours",
+      "engagementRate": "Taux d'engagement",
+      "engagementRateDesc": "Messages lus / envoyés",
+      "growth": "Croissance",
+      "growthDesc": "Nouveaux utilisateurs",
+      "messagesPerUser": "Messages/utilisateur",
+      "messagesPerUserDesc": "Moyenne par utilisateur actif",
+      "activeUserRate": "Taux utilisateurs actifs",
+      "activeUserRateDesc": "Utilisateurs avec activité",
+      "volumeChartTitle": "Volume dans le temps",
+      "volumeChartSubtitle": "Messages et auteurs uniques",
+      "messagesLabel": "Messages",
+      "uniqueAuthorsLabel": "Auteurs uniques",
+      "languageDistTitle": "Distribution des langues",
+      "languageDistSubtitle": "Langues les plus utilisées",
+      "userDistTitle": "Distribution des utilisateurs",
+      "userDistSubtitle": "Par niveau d'activité",
+      "messageTypes": "Types de messages"
+    }
   }
 }

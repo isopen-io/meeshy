@@ -378,5 +378,65 @@
         "description": "Configuração do servidor e dos serviços"
       }
     }
+  },
+  "monitoring": {
+    "title": "Monitoramento",
+    "description": "Supervisão em tempo real da plataforma",
+    "refresh": "Atualizar",
+    "autoRefreshOn": "Auto-refresh ON",
+    "autoRefreshOff": "Auto-refresh OFF",
+    "errorRealtime": "Erro ao carregar dados em tempo real",
+    "errorHealth": "Erro ao carregar dados de saúde",
+    "errorMetrics": "Erro ao carregar métricas",
+    "tabs": {
+      "realtime": "Tempo real",
+      "health": "Saúde",
+      "metrics": "Métricas"
+    },
+    "realtime": {
+      "onlineUsers": "Usuários online",
+      "onlineUsersDesc": "Conectados agora",
+      "messagesLastHour": "Mensagens última hora",
+      "messagesLastHourDesc": "Últimos 60 minutos",
+      "activeConversations": "Conversas ativas",
+      "activeConversationsDesc": "Com atividade recente",
+      "socketConnections": "Conexões Socket.IO",
+      "socketConnectionsDesc": "Conexões WebSocket",
+      "chartTitle": "Atividade por hora",
+      "chartSubtitle": "Volume de mensagens nas últimas 24h"
+    },
+    "health": {
+      "latency": "Latência",
+      "pingStatus": "Status ping",
+      "operational": "Operacional",
+      "error": "Erro",
+      "excellent": "Excelente",
+      "acceptable": "Aceitável",
+      "slow": "Lento",
+      "allCircuitsOk": "Todos os circuitos estão operacionais"
+    },
+    "metrics": {
+      "periodDescription": "KPIs e tendências do período selecionado",
+      "7d": "7 dias",
+      "30d": "30 dias",
+      "90d": "90 dias",
+      "engagementRate": "Taxa de engajamento",
+      "engagementRateDesc": "Mensagens lidas / enviadas",
+      "growth": "Crescimento",
+      "growthDesc": "Novos usuários",
+      "messagesPerUser": "Mensagens/usuário",
+      "messagesPerUserDesc": "Média por usuário ativo",
+      "activeUserRate": "Taxa usuários ativos",
+      "activeUserRateDesc": "Usuários com atividade",
+      "volumeChartTitle": "Volume ao longo do tempo",
+      "volumeChartSubtitle": "Mensagens e autores únicos",
+      "messagesLabel": "Mensagens",
+      "uniqueAuthorsLabel": "Autores únicos",
+      "languageDistTitle": "Distribuição de idiomas",
+      "languageDistSubtitle": "Idiomas mais usados",
+      "userDistTitle": "Distribuição de usuários",
+      "userDistSubtitle": "Por nível de atividade",
+      "messageTypes": "Tipos de mensagens"
+    }
   }
 }
