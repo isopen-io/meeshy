@@ -516,6 +516,17 @@ final class MessageListViewController: UIViewController {
                         currentUserId: myId,
                         userLanguages: userLanguages
                     )
+                    // Gate the bubble's (deep) body behind its comprehensive
+                    // Equatable `==` — same proven pattern the Feed uses on
+                    // `FeedPostCard().equatable()` (FeedView). Without this the
+                    // captured handler closures defeat SwiftUI's default POD
+                    // diff, so every cell reconfiguration / hosting-config reuse
+                    // re-evaluates the whole BubbleStandardLayout graph. The
+                    // `==` covers every appearance-affecting input (relying on
+                    // `updatedAt` for content), and @State changes (flag tap,
+                    // sheets) bypass `==` via their own invalidation — so the
+                    // interactions stay live while idle bubbles stop re-rendering.
+                    .equatable()
                 }
                 .environmentObject(host)
                 .environmentObject(stories)
