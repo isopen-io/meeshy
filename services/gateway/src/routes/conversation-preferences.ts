@@ -638,10 +638,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         };
         broadcastToUser(fastify, userId, SERVER_EVENTS.USER_PREFERENCES_REORDERED, reorderPayload);
 
-        reply.send({
-          success: true,
-          data: { message: 'Conversations reordered successfully' }
-        });
+        return sendSuccess(reply, { message: 'Conversations reordered successfully' });
       } catch (error) {
         logError(fastify.log, 'Error reordering conversations:', error);
         reply.code(500).send({
