@@ -4,12 +4,14 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Lock } from 'lucide-react';
 import { ConfigSection } from '@/types/admin-settings';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface SettingsStatsProps {
   configSections: ConfigSection[];
 }
 
 export function SettingsStats({ configSections }: SettingsStatsProps) {
+  const { t } = useI18n('admin');
   const implementedCount = configSections.reduce(
     (acc, section) => acc + section.settings.filter(s => s.implemented).length,
     0
@@ -32,7 +34,7 @@ export function SettingsStats({ configSections }: SettingsStatsProps) {
       <CardHeader>
         <CardTitle className="flex items-center space-x-2">
           <Lock className="h-5 w-5 text-slate-600" />
-          <span>Statut de la configuration</span>
+          <span>{t('adminSettings.stats.title')}</span>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -42,7 +44,7 @@ export function SettingsStats({ configSections }: SettingsStatsProps) {
               {implementedCount}
             </div>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Paramètres implémentés
+              {t('adminSettings.stats.implemented')}
             </p>
           </div>
           <div className="text-center">
@@ -50,7 +52,7 @@ export function SettingsStats({ configSections }: SettingsStatsProps) {
               {toImplementCount}
             </div>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              À implémenter
+              {t('adminSettings.stats.toImplement')}
             </p>
           </div>
           <div className="text-center">
@@ -58,7 +60,7 @@ export function SettingsStats({ configSections }: SettingsStatsProps) {
               {securityCount}
             </div>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Paramètres sécurité
+              {t('adminSettings.stats.security')}
             </p>
           </div>
           <div className="text-center">
@@ -66,7 +68,7 @@ export function SettingsStats({ configSections }: SettingsStatsProps) {
               {configSections.length}
             </div>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Catégories
+              {t('adminSettings.stats.categories')}
             </p>
           </div>
         </div>

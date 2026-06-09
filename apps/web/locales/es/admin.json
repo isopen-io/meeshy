@@ -175,6 +175,16 @@
       "editTitle": "Editar",
       "disableTitle": "Desactivar (soft delete)",
       "deleteTitle": "Eliminar definitivamente"
+    },
+    "deliveryQueue": {
+      "sending": "Enviando...",
+      "target": "Destino: ",
+      "save": "Guardar",
+      "cancel": "Cancelar",
+      "edit": "Editar",
+      "delete": "Eliminar",
+      "deleteConfirmTitle": "¿Eliminar este mensaje?",
+      "deleteConfirmDescription": "Este mensaje no se enviará. Esta acción es irreversible."
     }
   },
   "agentLive": {
@@ -236,5 +246,68 @@
     "disabled": "Desactivado"
   },
   "logoutSuccess": "Sesión cerrada con éxito",
-  "logoutError": "Error al cerrar sesión"
+  "logoutError": "Error al cerrar sesión",
+  "adminSettings": {
+    "implemented": "{count}/{total} implementados",
+    "header": {
+      "title": "Configuración del sistema",
+      "description": "Ajustes globales y variables de entorno",
+      "back": "Volver",
+      "unsavedChanges": "Cambios sin guardar",
+      "reset": "Restablecer",
+      "saving": "Guardando...",
+      "save": "Guardar"
+    },
+    "stats": {
+      "title": "Estado de la configuración",
+      "implemented": "Parámetros implementados",
+      "toImplement": "Por implementar",
+      "security": "Parámetros de seguridad",
+      "categories": "Categorías"
+    },
+    "alerts": {
+      "sensitive": {
+        "title": "Configuración sensible",
+        "description": "Algunos parámetros requieren reiniciar el servidor para tener efecto."
+      },
+      "env": {
+        "title": "Variables de entorno",
+        "description": "Los parámetros marcados con un badge ENV se configuran mediante el archivo .env"
+      }
+    },
+    "sections": {
+      "general": {
+        "title": "Configuración general",
+        "description": "Ajustes globales de la aplicación"
+      },
+      "security": {
+        "title": "Seguridad",
+        "description": "Configuración de seguridad y autenticación"
+      },
+      "features": {
+        "title": "Funcionalidades",
+        "description": "Activar/desactivar funcionalidades"
+      },
+      "uploads": {
+        "title": "Upload y almacenamiento",
+        "description": "Configuración de archivos y medios"
+      },
+      "database": {
+        "title": "Base de datos",
+        "description": "Configuración de la base de datos PostgreSQL"
+      },
+      "messages": {
+        "title": "Mensajes y contenido",
+        "description": "Configuración de mensajes y traducciones"
+      },
+      "rateLimiting": {
+        "title": "Límite de velocidad",
+        "description": "Protección contra abusos y sobrecarga"
+      },
+      "server": {
+        "title": "Servidor y red",
+        "description": "Configuración del servidor y los servicios"
+      }
+    }
+  }
 }

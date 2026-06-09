@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Save, RotateCcw } from 'lucide-react';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface SettingsHeaderProps {
   hasChanges: boolean;
@@ -20,6 +21,7 @@ export function SettingsHeader({
   onReset,
 }: SettingsHeaderProps) {
   const router = useRouter();
+  const { t } = useI18n('admin');
 
   return (
     <div className="bg-gradient-to-r from-slate-600 to-gray-600 rounded-lg p-6 text-white shadow-lg">
@@ -31,19 +33,19 @@ export function SettingsHeader({
             className="text-white hover:bg-white/20"
           >
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Retour
+            {t('adminSettings.header.back')}
           </Button>
           <div>
-            <h1 className="text-2xl font-bold">Configuration du système</h1>
+            <h1 className="text-2xl font-bold">{t('adminSettings.header.title')}</h1>
             <p className="text-slate-100 mt-1">
-              Paramètres globaux et variables d&apos;environnement
+              {t('adminSettings.header.description')}
             </p>
           </div>
         </div>
         <div className="flex items-center space-x-3">
           {hasChanges && (
             <Badge className="bg-orange-500">
-              Modifications non sauvegardées
+              {t('adminSettings.header.unsavedChanges')}
             </Badge>
           )}
           <Button
@@ -53,7 +55,7 @@ export function SettingsHeader({
             disabled={!hasChanges || isSaving}
           >
             <RotateCcw className="h-4 w-4 mr-2" />
-            Réinitialiser
+            {t('adminSettings.header.reset')}
           </Button>
           <Button
             variant="ghost"
@@ -62,7 +64,7 @@ export function SettingsHeader({
             disabled={!hasChanges || isSaving}
           >
             <Save className="h-4 w-4 mr-2" />
-            {isSaving ? 'Sauvegarde...' : 'Sauvegarder'}
+            {isSaving ? t('adminSettings.header.saving') : t('adminSettings.header.save')}
           </Button>
         </div>
       </div>
