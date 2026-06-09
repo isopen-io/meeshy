@@ -170,10 +170,10 @@ export function RankingFilters({
                   <SelectValue placeholder={t('admin.ranking.resultCountLabel')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="10">Top 10</SelectItem>
-                  <SelectItem value="25">Top 25</SelectItem>
-                  <SelectItem value="50">Top 50</SelectItem>
-                  <SelectItem value="100">Top 100</SelectItem>
+                  <SelectItem value="10">{t('rankingPage.top10')}</SelectItem>
+                  <SelectItem value="25">{t('rankingPage.top25')}</SelectItem>
+                  <SelectItem value="50">{t('rankingPage.top50')}</SelectItem>
+                  <SelectItem value="100">{t('rankingPage.top100')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

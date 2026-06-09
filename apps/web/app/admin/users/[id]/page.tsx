@@ -26,6 +26,8 @@ import {
 import { apiService } from '@/services/api.service';
 import { adminService, type User as AdminUserType } from '@/services/admin.service';
 import { toast } from 'sonner';
+import { useI18n } from '@/hooks/use-i18n';
+import { useCurrentInterfaceLanguage } from '@/stores/language-store';
 
 // Import des composants modulaires
 import { UserPersonalInfoSection } from '@/components/admin/user-detail/UserPersonalInfoSection';
@@ -44,6 +46,8 @@ export default function UserDetailPage() {
   const router = useRouter();
   const params = useParams();
   const userId = params.id as string;
+  const { t } = useI18n('admin');
+  const interfaceLanguage = useCurrentInterfaceLanguage();
 
   const [user, setUser] = useState<AdminUserType | null>(null);
   const [loading, setLoading] = useState(true);
@@ -80,7 +84,7 @@ export default function UserDetailPage() {
       }
     } catch (error) {
       console.error('Erreur chargement utilisateur:', error);
-      toast.error('Erreur lors du chargement de l\'utilisateur');
+      toast.error(t('usersDetail.errorLoadingUser'));
       router.push('/admin/users');
     } finally {
       setLoading(false);
@@ -89,7 +93,7 @@ export default function UserDetailPage() {
 
   const handleUpdateRole = async () => {
     if (!roleEdit.reason || roleEdit.reason.length < 10) {
-      toast.error('Veuillez fournir une raison (min 10 caractères)');
+      toast.error(t('usersDetail.reasonRequired'));
       return;
     }
 
@@ -98,12 +102,12 @@ export default function UserDetailPage() {
       const response = await adminService.updateUserRole(userId, roleEdit.role);
 
       if (response.success) {
-        toast.success('Rôle mis à jour avec succès');
+        toast.success(t('usersDetail.roleUpdatedSuccess'));
         setRoleEdit({ editing: false, role: roleEdit.role, reason: '' });
         loadUserData();
       }
     } catch (error: unknown) {
-      toast.error(error.message || 'Erreur lors de la mise à jour du rôle');
+      toast.error(error.message || t('usersDetail.roleUpdateError'));
     } finally {
       setSaving(false);
     }
@@ -117,17 +121,17 @@ export default function UserDetailPage() {
       const response = await adminService.toggleUserStatus(userId, newStatus);
 
       if (response.success) {
-        toast.success(newStatus ? 'Utilisateur activé' : 'Utilisateur désactivé');
+        toast.success(newStatus ? t('usersDetail.userActivated') : t('usersDetail.userDeactivated'));
         loadUserData();
       }
     } catch (error: unknown) {
-      toast.error(error.message || 'Erreur lors du changement de statut');
+      toast.error(error.message || t('usersDetail.statusChangeError'));
     }
   };
 
   const handleResetPassword = async () => {
     if (passwordReset.newPassword !== passwordReset.confirmPassword) {
-      toast.error('Les mots de passe ne correspondent pas');
+      toast.error(t('usersDetail.passwordMismatch'));
       return;
     }
 
@@ -139,11 +143,11 @@ export default function UserDetailPage() {
       });
 
       if (response.data?.success) {
-        toast.success('Mot de passe réinitialisé avec succès');
+        toast.success(t('usersDetail.passwordResetSuccess'));
         setPasswordReset({ open: false, newPassword: '', confirmPassword: '', reason: '' });
       }
     } catch (error: unknown) {
-      toast.error(error.message || 'Erreur lors de la réinitialisation du mot de passe');
+      toast.error(error.message || t('usersDetail.passwordResetError'));
     } finally {
       setSaving(false);
     }
@@ -159,7 +163,7 @@ export default function UserDetailPage() {
         router.push('/admin/users');
       }
     } catch (error: unknown) {
-      toast.error(error.message || 'Erreur lors de la suppression');
+      toast.error(error.message || t('usersDetail.deleteError'));
     } finally {
       setSaving(false);
     }
@@ -167,7 +171,7 @@ export default function UserDetailPage() {
 
   const formatDate = (date: Date | string) => {
     try {
-      return new Date(date).toLocaleDateString('fr-FR', {
+      return new Date(date).toLocaleDateString(interfaceLanguage || 'en', {
         day: '2-digit',
         month: 'long',
         year: 'numeric',
@@ -210,7 +214,7 @@ export default function UserDetailPage() {
       <AdminLayout currentPage="/admin/users">
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400"></div>
-          <span className="ml-3 text-lg dark:text-gray-200">Chargement...</span>
+          <span className="ml-3 text-lg dark:text-gray-200">{t('usersDetail.loadError')}</span>
         </div>
       </AdminLayout>
     );
@@ -221,9 +225,9 @@ export default function UserDetailPage() {
       <AdminLayout currentPage="/admin/users">
         <div className="text-center py-12">
           <AlertCircle className="h-12 w-12 text-red-500 dark:text-red-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">Utilisateur introuvable</h3>
+          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">{t('usersDetail.userNotFound')}</h3>
           <Button onClick={() => router.push('/admin/users')} className="dark:bg-blue-700 dark:hover:bg-blue-800">
-            Retour à la liste
+            {t('usersDetail.backToList')}
           </Button>
         </div>
       </AdminLayout>
@@ -242,7 +246,7 @@ export default function UserDetailPage() {
               className="flex items-center space-x-2 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 dark:text-gray-200"
             >
               <ArrowLeft className="h-4 w-4" />
-              <span>Retour</span>
+              <span>{t('usersDetail.back')}</span>
             </Button>
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
@@ -256,12 +260,12 @@ export default function UserDetailPage() {
               {user.isActive ? (
                 <>
                   <CheckCircle className="h-4 w-4 mr-1" />
-                  Actif
+                  {t('usersDetail.statusActive')}
                 </>
               ) : (
                 <>
                   <XCircle className="h-4 w-4 mr-1" />
-                  Inactif
+                  {t('usersDetail.statusInactive')}
                 </>
               )}
             </Badge>
@@ -309,14 +313,14 @@ export default function UserDetailPage() {
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2 dark:text-gray-100">
                   <Shield className="h-5 w-5" />
-                  <span>Rôle et permissions</span>
+                  <span>{t('usersDetail.roleAndPermissions')}</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {!roleEdit.editing ? (
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
-                      <span className="text-sm text-gray-600 dark:text-gray-400">Rôle actuel:</span>
+                      <span className="text-sm text-gray-600 dark:text-gray-400">{t('usersDetail.currentRole')}</span>
                       <Badge variant={getRoleBadgeVariant(user.role)}>
                         {getRoleLabel(user.role)}
                       </Badge>
@@ -328,13 +332,13 @@ export default function UserDetailPage() {
                       className="dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700 dark:text-gray-200"
                     >
                       <Edit2 className="h-4 w-4 mr-1" />
-                      Modifier
+                      {t('usersDetail.editButton')}
                     </Button>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium dark:text-gray-200">Nouveau rôle</label>
+                      <label className="text-sm font-medium dark:text-gray-200">{t('usersDetail.newRole')}</label>
                       <select
                         className="w-full p-2 border dark:border-gray-700 rounded-md text-sm bg-white dark:bg-gray-800 dark:text-gray-100"
                         value={roleEdit.role}
@@ -350,11 +354,11 @@ export default function UserDetailPage() {
                     </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium dark:text-gray-200">
-                        Raison du changement (requis)
+                        {t('usersDetail.reasonLabel')}
                       </label>
                       <textarea
                         className="w-full p-2 border dark:border-gray-700 rounded-md text-sm min-h-[60px] dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-500"
-                        placeholder="Expliquez pourquoi vous changez ce rôle..."
+                        placeholder={t('usersDetail.reasonPlaceholder')}
                         value={roleEdit.reason}
                         onChange={(e) => setRoleEdit({ ...roleEdit, reason: e.target.value })}
                       />
@@ -365,10 +369,10 @@ export default function UserDetailPage() {
                         size="sm"
                         onClick={() => setRoleEdit({ editing: false, role: user.role, reason: '' })}
                       >
-                        Annuler
+                        {t('usersDetail.cancelButton')}
                       </Button>
                       <Button size="sm" onClick={handleUpdateRole} disabled={saving}>
-                        Enregistrer
+                        {t('usersDetail.saveButton')}
                       </Button>
                     </div>
                   </div>
@@ -384,49 +388,49 @@ export default function UserDetailPage() {
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2 dark:text-gray-100">
                   <Activity className="h-5 w-5" />
-                  <span>Statistiques</span>
+                  <span>{t('usersDetail.statistics')}</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600 dark:text-gray-400 flex items-center">
                     <MessageSquare className="h-4 w-4 mr-2" />
-                    Messages
+                    {t('usersDetail.statMessages')}
                   </span>
                   <span className="font-medium dark:text-gray-200">{user._count?.sentMessages || 0}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600 dark:text-gray-400 flex items-center">
                     <UsersIcon className="h-4 w-4 mr-2" />
-                    Conversations
+                    {t('usersDetail.statConversations')}
                   </span>
                   <span className="font-medium dark:text-gray-200">{user._count?.conversations || 0}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600 dark:text-gray-400 flex items-center">
                     <Share2 className="h-4 w-4 mr-2" />
-                    Liens de partage
+                    {t('usersDetail.statShareLinks')}
                   </span>
                   <span className="font-medium dark:text-gray-200">{user._count?.createdShareLinks || 0}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600 dark:text-gray-400 flex items-center">
                     <Target className="h-4 w-4 mr-2" />
-                    Liens trackés
+                    {t('usersDetail.statTrackedLinks')}
                   </span>
                   <span className="font-medium dark:text-gray-200">{user._count?.createdTrackingLinks || 0}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600 dark:text-gray-400 flex items-center">
                     <Link2 className="h-4 w-4 mr-2" />
-                    Tokens affiliation
+                    {t('usersDetail.statAffiliationTokens')}
                   </span>
                   <span className="font-medium dark:text-gray-200">{user._count?.createdAffiliateTokens || 0}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-gray-600 dark:text-gray-400 flex items-center">
                     <UserPlus className="h-4 w-4 mr-2" />
-                    Contacts
+                    {t('usersDetail.statContacts')}
                   </span>
                   <span className="font-medium dark:text-gray-200">
                     {(user._count?.sentFriendRequests || 0) + (user._count?.receivedFriendRequests || 0)}
@@ -435,20 +439,20 @@ export default function UserDetailPage() {
                 <div className="flex items-center justify-between text-sm pt-2 border-t dark:border-gray-700">
                   <span className="text-gray-600 dark:text-gray-400 flex items-center">
                     <Calendar className="h-4 w-4 mr-2" />
-                    Membre depuis
+                    {t('usersDetail.statMemberSince')}
                   </span>
                   <span className="font-medium text-xs dark:text-gray-200">{formatDate(user.createdAt)}</span>
                 </div>
                 {user.lastActiveAt && (
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">Dernière activité</span>
+                    <span className="text-gray-600 dark:text-gray-400">{t('usersDetail.statLastActivity')}</span>
                     <span className="font-medium text-xs dark:text-gray-200">{formatDate(user.lastActiveAt)}</span>
                   </div>
                 )}
                 {user.profileCompletionRate !== null && (
                   <div className="pt-2">
                     <div className="flex items-center justify-between text-sm mb-2">
-                      <span className="text-gray-600 dark:text-gray-400">Complétion du profil</span>
+                      <span className="text-gray-600 dark:text-gray-400">{t('usersDetail.statProfileCompletion')}</span>
                       <span className="font-medium dark:text-gray-200">{user.profileCompletionRate}%</span>
                     </div>
                     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
@@ -465,7 +469,7 @@ export default function UserDetailPage() {
             {/* Actions */}
             <Card className="dark:bg-gray-900 dark:border-gray-800">
               <CardHeader>
-                <CardTitle className="dark:text-gray-100">Actions rapides</CardTitle>
+                <CardTitle className="dark:text-gray-100">{t('usersDetail.quickActions')}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <Button
@@ -476,12 +480,12 @@ export default function UserDetailPage() {
                   {user.isActive ? (
                     <>
                       <XCircle className="h-4 w-4 mr-2" />
-                      Désactiver le compte
+                      {t('usersDetail.disableAccount')}
                     </>
                   ) : (
                     <>
                       <CheckCircle className="h-4 w-4 mr-2" />
-                      Activer le compte
+                      {t('usersDetail.enableAccount')}
                     </>
                   )}
                 </Button>
@@ -493,12 +497,12 @@ export default function UserDetailPage() {
                     onClick={() => setDeleteConfirm(true)}
                   >
                     <Trash2 className="h-4 w-4 mr-2" />
-                    Supprimer l&apos;utilisateur
+                    {t('usersDetail.deleteUser')}
                   </Button>
                 ) : (
                   <div className="p-4 border border-red-200 dark:border-red-800 rounded-lg bg-red-50 dark:bg-red-950/30 space-y-3">
                     <p className="text-sm text-red-800 dark:text-red-400 font-medium">
-                      ⚠️ Cette action est irréversible !
+                      {t('usersDetail.warningIrreversible')}
                     </p>
                     <div className="flex space-x-2">
                       <Button
@@ -507,7 +511,7 @@ export default function UserDetailPage() {
                         className="flex-1"
                         onClick={() => setDeleteConfirm(false)}
                       >
-                        Annuler
+                        {t('usersDetail.cancelButton')}
                       </Button>
                       <Button
                         size="sm"
@@ -515,7 +519,7 @@ export default function UserDetailPage() {
                         onClick={handleDeleteUser}
                         disabled={saving}
                       >
-                        Confirmer
+                        {t('usersDetail.confirmButton')}
                       </Button>
                     </div>
                   </div>
@@ -530,11 +534,11 @@ export default function UserDetailPage() {
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <Card className="w-full max-w-md dark:bg-gray-900 dark:border-gray-800">
               <CardHeader>
-                <CardTitle className="dark:text-gray-100">Réinitialiser le mot de passe</CardTitle>
+                <CardTitle className="dark:text-gray-100">{t('usersDetail.resetPasswordTitle')}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium dark:text-gray-200">Nouveau mot de passe</label>
+                  <label className="text-sm font-medium dark:text-gray-200">{t('usersDetail.newPasswordLabel')}</label>
                   <input
                     type="password"
                     value={passwordReset.newPassword}
@@ -545,7 +549,7 @@ export default function UserDetailPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium dark:text-gray-200">Confirmer le mot de passe</label>
+                  <label className="text-sm font-medium dark:text-gray-200">{t('usersDetail.confirmPasswordLabel')}</label>
                   <input
                     type="password"
                     value={passwordReset.confirmPassword}
@@ -556,12 +560,12 @@ export default function UserDetailPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium dark:text-gray-200">Raison</label>
+                  <label className="text-sm font-medium dark:text-gray-200">{t('usersDetail.reasonResetLabel')}</label>
                   <textarea
                     className="w-full p-2 border dark:border-gray-700 rounded-md text-sm min-h-[60px] dark:bg-gray-800 dark:text-gray-100"
                     value={passwordReset.reason}
                     onChange={(e) => setPasswordReset({ ...passwordReset, reason: e.target.value })}
-                    placeholder="Raison de la réinitialisation..."
+                    placeholder={t('usersDetail.reasonResetPlaceholder')}
                   />
                 </div>
                 <div className="flex space-x-2">
@@ -572,10 +576,10 @@ export default function UserDetailPage() {
                     }
                     className="flex-1 dark:bg-gray-800 dark:border-gray-700 dark:hover:bg-gray-700"
                   >
-                    Annuler
+                    {t('usersDetail.cancelButton')}
                   </Button>
                   <Button onClick={handleResetPassword} disabled={saving} className="flex-1 dark:bg-blue-700 dark:hover:bg-blue-800">
-                    Réinitialiser
+                    {t('usersDetail.resetButton')}
                   </Button>
                 </div>
               </CardContent>

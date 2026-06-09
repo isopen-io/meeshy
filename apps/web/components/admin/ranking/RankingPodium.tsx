@@ -5,6 +5,7 @@ import { Trophy, Medal } from 'lucide-react';
 import { RankingItem } from '@/hooks/use-ranking-data';
 import { MEDAL_COLORS } from './constants';
 import { formatCount, getTypeIcon } from './utils';
+import { useI18n } from '@/hooks/use-i18n';
 
 interface RankingPodiumProps {
   rankings: RankingItem[];
@@ -13,6 +14,7 @@ interface RankingPodiumProps {
 }
 
 export function RankingPodium({ rankings, entityType, criterion }: RankingPodiumProps) {
+  const { t } = useI18n('admin');
   if (criterion === 'recent_activity' || entityType === 'messages' || entityType === 'links' || rankings.length < 3) {
     return null;
   }
@@ -61,7 +63,7 @@ export function RankingPodium({ rankings, entityType, criterion }: RankingPodium
       <CardHeader className="bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20">
         <CardTitle className="flex items-center space-x-2">
           <Trophy className="h-5 w-5 text-yellow-600" />
-          <span>Podium des champions</span>
+          <span>{t('rankingPage.podium')}</span>
         </CardTitle>
       </CardHeader>
       <CardContent className="pt-8">
