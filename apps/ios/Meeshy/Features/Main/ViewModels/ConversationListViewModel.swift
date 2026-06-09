@@ -1587,7 +1587,10 @@ class ConversationListViewModel: ObservableObject {
     // MARK: - Mark as Read (local update from ConversationView)
 
     private func observeMarkAsRead() {
-        NotificationCenter.default.addObserver(
+        if let existing = markAsReadObserver {
+            NotificationCenter.default.removeObserver(existing)
+        }
+        markAsReadObserver = NotificationCenter.default.addObserver(
             forName: .conversationMarkedRead,
             object: nil,
             queue: nil
@@ -1609,9 +1612,21 @@ class ConversationListViewModel: ObservableObject {
 
     // MARK: - Lifecycle
 
+    /// Token for the `.conversationMarkedRead` block observer, held so `deinit`
+    /// can remove it. Block-based `NotificationCenter` observers are never
+    /// auto-removed: without this the closure stays registered for the rest of
+    /// the process (firing no-ops through `[weak self]`), accumulating one stale
+    /// observer per VM across login/logout cycles that recreate the `@StateObject`.
+    /// `nonisolated(unsafe)`: set once on the main actor, read once in the
+    /// nonisolated `deinit`, never accessed concurrently.
+    nonisolated(unsafe) private var markAsReadObserver: (any NSObjectProtocol)?
+
     nonisolated deinit {
         storyPrefetchTask?.cancel()
         groupingTask?.cancel()
+        if let markAsReadObserver {
+            NotificationCenter.default.removeObserver(markAsReadObserver)
+        }
     }
 
     // MARK: - Helpers
