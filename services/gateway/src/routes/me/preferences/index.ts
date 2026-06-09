@@ -5,6 +5,7 @@
 
 import { FastifyInstance } from 'fastify';
 import { createUnifiedAuthMiddleware } from '../../../middleware/auth';
+import { sendSuccess } from '../../../utils/response.js';
 import { createPreferenceRouter } from './preference-router-factory';
 import { categoriesRoutes } from './categories';
 import {
@@ -96,17 +97,14 @@ export async function userPreferencesRoutes(fastify: FastifyInstance) {
           where: { userId }
         });
 
-        return reply.send({
-          success: true,
-          data: {
-            privacy: prefs?.privacy || PRIVACY_PREFERENCE_DEFAULTS,
-            audio: prefs?.audio || AUDIO_PREFERENCE_DEFAULTS,
-            message: prefs?.message || MESSAGE_PREFERENCE_DEFAULTS,
-            notification: prefs?.notification || NOTIFICATION_PREFERENCE_DEFAULTS,
-            video: prefs?.video || VIDEO_PREFERENCE_DEFAULTS,
-            document: prefs?.document || DOCUMENT_PREFERENCE_DEFAULTS,
-            application: prefs?.application || APPLICATION_PREFERENCE_DEFAULTS
-          }
+        return sendSuccess(reply, {
+          privacy: prefs?.privacy || PRIVACY_PREFERENCE_DEFAULTS,
+          audio: prefs?.audio || AUDIO_PREFERENCE_DEFAULTS,
+          message: prefs?.message || MESSAGE_PREFERENCE_DEFAULTS,
+          notification: prefs?.notification || NOTIFICATION_PREFERENCE_DEFAULTS,
+          video: prefs?.video || VIDEO_PREFERENCE_DEFAULTS,
+          document: prefs?.document || DOCUMENT_PREFERENCE_DEFAULTS,
+          application: prefs?.application || APPLICATION_PREFERENCE_DEFAULTS
         });
       } catch (error: any) {
         fastify.log.error({ error }, 'Error fetching all preferences');

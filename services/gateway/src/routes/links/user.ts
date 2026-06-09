@@ -6,6 +6,12 @@ import {
   isRegisteredUser
 } from '../../middleware/auth';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import {
+  sendSuccess,
+  sendPaginatedSuccess,
+  sendForbidden,
+  sendInternalError
+} from '../../utils/response.js';
 
 /**
  * Routes de gestion des liens de partage user-scoped
@@ -79,7 +85,7 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       if (!isRegisteredUser(request.authContext)) {
-        return reply.status(403).send({ success: false, error: 'Utilisateur enregistré requis' });
+        return sendForbidden(reply, 'Utilisateur enregistré requis');
       }
 
       const userId = request.authContext.registeredUser!.id;
@@ -110,14 +116,10 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
         conversationTitle: l.conversation?.title ?? null,
       }));
 
-      return reply.send({
-        success: true,
-        data: mapped,
-        pagination: { total, offset, limit },
-      });
+      return sendPaginatedSuccess(reply, mapped, { total, offset, limit });
     } catch (error) {
       logError(fastify.log, 'List user share links error:', error);
-      return reply.status(500).send({ success: false, error: 'Erreur interne du serveur' });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 
@@ -159,7 +161,7 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
   }, async (request: UnifiedAuthRequest, reply: FastifyReply) => {
     try {
       if (!isRegisteredUser(request.authContext)) {
-        return reply.status(403).send({ success: false, error: 'Utilisateur enregistré requis' });
+        return sendForbidden(reply, 'Utilisateur enregistré requis');
       }
 
       const userId = request.authContext.registeredUser!.id;
@@ -173,17 +175,14 @@ export async function registerUserRoutes(fastify: FastifyInstance) {
         }),
       ]);
 
-      return reply.send({
-        success: true,
-        data: {
-          totalLinks,
-          activeLinks,
-          totalUses: totalUsesAgg._sum.currentUses ?? 0,
-        },
+      return sendSuccess(reply, {
+        totalLinks,
+        activeLinks,
+        totalUses: totalUsesAgg._sum.currentUses ?? 0,
       });
     } catch (error) {
       logError(fastify.log, 'Get user share link stats error:', error);
-      return reply.status(500).send({ success: false, error: 'Erreur interne du serveur' });
+      return sendInternalError(reply, 'Erreur interne du serveur');
     }
   });
 }

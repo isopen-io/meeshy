@@ -4,6 +4,7 @@ import { type RankingQuery } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validateQuery } from '../../validation/helpers.js';
 import { RankingsQuerySchema } from '../../validation/admin-schemas.js';
+import { sendSuccess } from '../../utils/response.js';
 
 const requireAdmin = async (request: FastifyRequest, reply: FastifyReply) => {
   const authContext = (request as UnifiedAuthRequest).authContext;
@@ -906,16 +907,7 @@ export async function systemRankingsRoutes(fastify: FastifyInstance) {
           });
       }
 
-      return reply.send({
-        success: true,
-        data: {
-          rankings,
-          entityType,
-          criterion,
-          period,
-          total: rankings.length
-        }
-      });
+      return sendSuccess(reply, { rankings, entityType, criterion, period, total: rankings.length });
     } catch (error) {
       logError(fastify.log, 'Get admin rankings error:', error);
       return reply.status(500).send({

@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../utils/logger';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { sendSuccess } from '../../utils/response.js';
 import { validateQuery } from '../../validation/helpers.js';
 import { AdminMessagesStatsQuerySchema, AdminMessagesEngagementQuerySchema } from '../../validation/admin-schemas.js';
 
@@ -206,9 +207,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         }
       });
 
-      return reply.send({
-        success: true,
-        data: {
+      return sendSuccess(reply, {
           totalMessages,
           deletedMessages,
           editedMessages,
@@ -223,8 +222,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
             ? Math.round((messagesWithAttachments / totalMessages) * 100)
             : 0,
           period
-        }
-      });
+        });
     } catch (error) {
       logError(fastify.log, 'Get message stats error:', error);
       return reply.status(500).send({
@@ -287,9 +285,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         return count > max.count ? { day: parseInt(day), count } : max;
       }, { day: 0, count: 0 });
 
-      return reply.send({
-        success: true,
-        data: {
+      return sendSuccess(reply, {
           peakHour: {
             hour: peakHour.hour,
             label: `${peakHour.hour}h`,
@@ -308,8 +304,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
             day: weekdayNames[parseInt(day)],
             count
           }))
-        }
-      });
+        });
     } catch (error) {
       logError(fastify.log, 'Get message trends error:', error);
       return reply.status(500).send({
@@ -399,9 +394,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
         ? Math.round((messagesWithReplies / totalMessages) * 100)
         : 0;
 
-      return reply.send({
-        success: true,
-        data: {
+      return sendSuccess(reply, {
           totalMessages,
           messagesWithReactions,
           messagesWithReplies,
@@ -415,8 +408,7 @@ export async function messagesRoutes(fastify: FastifyInstance) {
           avgRepliesPerMessage: totalMessages > 0
             ? Math.round((totalReplies / totalMessages) * 10) / 10
             : 0
-        }
-      });
+        });
     } catch (error) {
       logError(fastify.log, 'Get message engagement error:', error);
       return reply.status(500).send({
